@@ -12,11 +12,13 @@ import { CriticalAssetsStep } from "@/components/wizard/CriticalAssetsStep";
 import { WaterSystemsStep } from "@/components/wizard/WaterSystemsStep";
 import { MitigationControlsStep } from "@/components/wizard/MitigationControlsStep";
 import { WaterMitigationGuidelinesStep } from "@/components/wizard/WaterMitigationGuidelinesStep";
+import { FileUploadStep } from "@/components/wizard/FileUploadStep";
 
 const steps = [
   { id: "project-info", label: "Project Info", phase: "DISCOVERY" },
   { id: "project-milestones", label: "Project Milestones", phase: "DISCOVERY" },
   { id: "construction-details", label: "Construction Details", phase: "DISCOVERY" },
+  { id: "file-upload", label: "Upload Documents", phase: "DISCOVERY" },
   { id: "critical-assets", label: "Critical Assets at Risk", phase: "PLANNING" },
   { id: "water-systems", label: "Water Systems at Risk", phase: "PLANNING" },
   { id: "mitigation-controls", label: "Mitigation Controls", phase: "PLANNING" },
@@ -78,6 +80,7 @@ const ProjectWizard = () => {
           .from("projects")
           .insert([{
             user_id: user?.id,
+            name: data.name || "Untitled Project",
             ...data,
             project_data: projectData,
           }])
@@ -131,12 +134,14 @@ const ProjectWizard = () => {
       case 2:
         return <ConstructionDetailsStep data={projectData} onNext={handleNext} onBack={handleBack} />;
       case 3:
-        return <CriticalAssetsStep data={projectData} onNext={handleNext} onBack={handleBack} />;
+        return <FileUploadStep data={projectData} onNext={handleNext} onBack={handleBack} projectId={id} />;
       case 4:
-        return <WaterSystemsStep data={projectData} onNext={handleNext} onBack={handleBack} />;
+        return <CriticalAssetsStep data={projectData} onNext={handleNext} onBack={handleBack} />;
       case 5:
-        return <MitigationControlsStep data={projectData} onNext={handleNext} onBack={handleBack} />;
+        return <WaterSystemsStep data={projectData} onNext={handleNext} onBack={handleBack} />;
       case 6:
+        return <MitigationControlsStep data={projectData} onNext={handleNext} onBack={handleBack} />;
+      case 7:
         return <WaterMitigationGuidelinesStep data={projectData} onBack={handleBack} />;
       default:
         return null;
@@ -161,42 +166,50 @@ const ProjectWizard = () => {
       </header>
 
       <div className="container mx-auto px-6 py-8">
-        {/* Progress tabs */}
+        {/* Phase labels */}
+        <div className="mb-4 relative">
+          <div className="flex items-center">
+            {/* DISCOVERY phase */}
+            <div className={`flex items-center gap-2 text-xs font-semibold ${currentStep <= 3 ? "text-[hsl(217,91%,60%)]" : "text-muted-foreground"}`}>
+              <span>DISCOVERY</span>
+              <div className={`h-0.5 flex-1 ${currentStep <= 3 ? "bg-[hsl(217,91%,60%)]" : "bg-muted"}`} style={{ width: `${(4 * 100) / steps.length}%` }} />
+            </div>
+            
+            {/* PLANNING phase */}
+            <div className={`flex items-center gap-2 text-xs font-semibold ml-4 ${currentStep > 3 && currentStep < 7 ? "text-[hsl(142,71%,45%)]" : "text-muted-foreground"}`}>
+              <span>PLANNING</span>
+              <div className={`h-0.5 flex-1 ${currentStep > 3 && currentStep < 7 ? "bg-[hsl(142,71%,45%)]" : "bg-muted"}`} style={{ width: `${(3 * 100) / steps.length}%` }} />
+            </div>
+            
+            {/* REPORT phase */}
+            <div className={`flex items-center gap-2 text-xs font-semibold ml-4 ${currentStep === 7 ? "text-[hsl(48,96%,53%)]" : "text-muted-foreground"}`}>
+              <span>REPORT</span>
+            </div>
+          </div>
+        </div>
+        
+        {/* Progress tabs - Pill UI */}
         <div className="mb-8">
-          <div className="flex items-center justify-between border-b">
+          <div className="flex items-center gap-2 flex-wrap">
             {steps.map((step, index) => (
               <button
                 key={step.id}
                 onClick={() => setCurrentStep(index)}
-                className={`px-4 py-3 text-sm font-medium border-b-2 transition-colors ${
+                className={`px-4 py-2 rounded-full text-sm font-medium transition-all ${
                   index === currentStep
-                    ? "border-primary text-primary"
+                    ? step.phase === "DISCOVERY"
+                      ? "bg-[hsl(217,91%,60%)] text-white"
+                      : step.phase === "PLANNING"
+                      ? "bg-[hsl(142,71%,45%)] text-white"
+                      : "bg-[hsl(48,96%,53%)] text-black"
                     : index < currentStep
-                    ? "border-transparent text-accent hover:text-accent/80"
-                    : "border-transparent text-muted-foreground hover:text-foreground"
+                    ? "bg-muted text-foreground"
+                    : "bg-muted/50 text-muted-foreground"
                 }`}
               >
                 {step.label}
               </button>
             ))}
-          </div>
-          
-          {/* Phase indicator */}
-          <div className="flex items-center gap-2 mt-4 text-xs text-muted-foreground">
-            <div className="flex items-center gap-12">
-              <div className="flex items-center gap-2">
-                <div className={`h-px w-24 ${currentStep <= 2 ? "bg-foreground" : "bg-muted"}`} />
-                <span className={currentStep <= 2 ? "text-foreground" : ""}>DISCOVERY</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <div className={`h-px w-24 ${currentStep > 2 && currentStep < 6 ? "bg-accent" : "bg-muted"}`} />
-                <span className={currentStep > 2 && currentStep < 6 ? "text-accent" : ""}>PLANNING</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <div className={`h-px w-24 ${currentStep === 6 ? "bg-primary" : "bg-muted"}`} />
-                <span className={currentStep === 6 ? "text-primary" : ""}>REPORT</span>
-              </div>
-            </div>
           </div>
         </div>
 
