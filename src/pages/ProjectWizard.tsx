@@ -188,12 +188,12 @@ const ProjectWizard = () => {
           </div>
           
           {/* Phase indicator bar */}
-          <div className="relative h-1 bg-muted rounded-full overflow-hidden">
+          <div className="relative h-1 bg-muted rounded-full overflow-hidden mb-6">
             <div className="absolute inset-0 flex">
               {/* DISCOVERY segment */}
               <div className="flex-1 flex items-center" style={{ flex: 3 }}>
-                <div className={`h-full w-full transition-colors ${currentStep <= 2 ? "bg-[hsl(217,91%,60%)]" : "bg-muted"}`} />
-                <span className={`absolute left-0 -bottom-5 text-xs font-semibold ${currentStep <= 2 ? "text-[hsl(217,91%,60%)]" : "text-muted-foreground"}`}>
+                <div className={`h-full w-full transition-colors ${currentStep <= 2 ? "bg-[hsl(0,0%,20%)]" : "bg-muted"}`} />
+                <span className={`absolute left-0 -bottom-5 text-xs font-semibold tracking-wide ${currentStep <= 2 ? "text-[hsl(0,0%,20%)]" : "text-muted-foreground"}`}>
                   DISCOVERY
                 </span>
               </div>
@@ -201,15 +201,15 @@ const ProjectWizard = () => {
               {/* PLANNING segment */}
               <div className="flex-1 flex items-center" style={{ flex: 3 }}>
                 <div className={`h-full w-full transition-colors ${currentStep > 2 && currentStep < 6 ? "bg-[hsl(142,71%,45%)]" : "bg-muted"}`} />
-                <span className={`absolute left-1/2 -translate-x-1/2 -bottom-5 text-xs font-semibold ${currentStep > 2 && currentStep < 6 ? "text-[hsl(142,71%,45%)]" : "text-muted-foreground"}`}>
+                <span className={`absolute left-1/2 -translate-x-1/2 -bottom-5 text-xs font-semibold tracking-wide ${currentStep > 2 && currentStep < 6 ? "text-[hsl(142,71%,45%)]" : "text-muted-foreground"}`}>
                   PLANNING
                 </span>
               </div>
               
               {/* REPORT segment */}
               <div className="flex-1 flex items-center" style={{ flex: 1 }}>
-                <div className={`h-full w-full transition-colors ${currentStep === 6 ? "bg-[hsl(48,96%,53%)]" : "bg-muted"}`} />
-                <span className={`absolute right-0 -bottom-5 text-xs font-semibold ${currentStep === 6 ? "text-[hsl(48,96%,53%)]" : "text-muted-foreground"}`}>
+                <div className={`h-full w-full transition-colors ${currentStep === 6 ? "bg-[hsl(217,91%,70%)]" : "bg-muted"}`} />
+                <span className={`absolute right-0 -bottom-5 text-xs font-semibold tracking-wide ${currentStep === 6 ? "text-[hsl(217,91%,70%)]" : "text-muted-foreground"}`}>
                   REPORT
                 </span>
               </div>
