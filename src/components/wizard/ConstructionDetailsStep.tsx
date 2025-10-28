@@ -310,10 +310,10 @@ export const ConstructionDetailsStep = ({ data, onNext, onBack, projectId }: Con
 
               {webhookResponse && (
                 <div className="mt-4 p-4 bg-card rounded-lg border">
-                  <h4 className="font-semibold mb-2 text-sm">Analysis Response:</h4>
-                  <pre className="text-xs overflow-auto max-h-40 bg-muted p-3 rounded">
-                    {JSON.stringify(webhookResponse, null, 2)}
-                  </pre>
+                  <h4 className="font-semibold mb-2 text-sm">Analysis</h4>
+                  <div className="text-sm leading-relaxed whitespace-pre-wrap break-words">
+                    {String(Object.values(webhookResponse)[0])}
+                  </div>
                 </div>
               )}
             </div>
