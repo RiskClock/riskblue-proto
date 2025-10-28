@@ -14,7 +14,123 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      profiles: {
+        Row: {
+          avatar_url: string | null
+          created_at: string
+          display_name: string | null
+          id: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          avatar_url?: string | null
+          created_at?: string
+          display_name?: string | null
+          id?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          avatar_url?: string | null
+          created_at?: string
+          display_name?: string | null
+          id?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      projects: {
+        Row: {
+          above_grade_parking: boolean | null
+          address_1: string | null
+          address_2: string | null
+          building_type: string | null
+          city: string | null
+          construction_end_date: string | null
+          construction_start_date: string | null
+          country: string | null
+          created_at: string
+          has_builders_risk_policy: boolean | null
+          id: string
+          location: string | null
+          name: string
+          project_data: Json | null
+          project_type: string | null
+          state: string | null
+          total_floors: number | null
+          tower_type: string | null
+          typical_floors: number | null
+          typical_floors_end: string | null
+          typical_floors_start: string | null
+          underground_parking: boolean | null
+          underground_parking_end: string | null
+          underground_parking_start: string | null
+          updated_at: string
+          user_id: string
+          zip_code: string | null
+        }
+        Insert: {
+          above_grade_parking?: boolean | null
+          address_1?: string | null
+          address_2?: string | null
+          building_type?: string | null
+          city?: string | null
+          construction_end_date?: string | null
+          construction_start_date?: string | null
+          country?: string | null
+          created_at?: string
+          has_builders_risk_policy?: boolean | null
+          id?: string
+          location?: string | null
+          name: string
+          project_data?: Json | null
+          project_type?: string | null
+          state?: string | null
+          total_floors?: number | null
+          tower_type?: string | null
+          typical_floors?: number | null
+          typical_floors_end?: string | null
+          typical_floors_start?: string | null
+          underground_parking?: boolean | null
+          underground_parking_end?: string | null
+          underground_parking_start?: string | null
+          updated_at?: string
+          user_id: string
+          zip_code?: string | null
+        }
+        Update: {
+          above_grade_parking?: boolean | null
+          address_1?: string | null
+          address_2?: string | null
+          building_type?: string | null
+          city?: string | null
+          construction_end_date?: string | null
+          construction_start_date?: string | null
+          country?: string | null
+          created_at?: string
+          has_builders_risk_policy?: boolean | null
+          id?: string
+          location?: string | null
+          name?: string
+          project_data?: Json | null
+          project_type?: string | null
+          state?: string | null
+          total_floors?: number | null
+          tower_type?: string | null
+          typical_floors?: number | null
+          typical_floors_end?: string | null
+          typical_floors_start?: string | null
+          underground_parking?: boolean | null
+          underground_parking_end?: string | null
+          underground_parking_start?: string | null
+          updated_at?: string
+          user_id?: string
+          zip_code?: string | null
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
