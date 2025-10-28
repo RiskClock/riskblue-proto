@@ -12,13 +12,11 @@ import { CriticalAssetsStep } from "@/components/wizard/CriticalAssetsStep";
 import { WaterSystemsStep } from "@/components/wizard/WaterSystemsStep";
 import { MitigationControlsStep } from "@/components/wizard/MitigationControlsStep";
 import { WaterMitigationGuidelinesStep } from "@/components/wizard/WaterMitigationGuidelinesStep";
-import { FileUploadStep } from "@/components/wizard/FileUploadStep";
 
 const steps = [
   { id: "project-info", label: "Project Info", phase: "DISCOVERY" },
   { id: "project-milestones", label: "Project Milestones", phase: "DISCOVERY" },
   { id: "construction-details", label: "Construction Details", phase: "DISCOVERY" },
-  { id: "file-upload", label: "Upload Documents", phase: "DISCOVERY" },
   { id: "critical-assets", label: "Critical Assets at Risk", phase: "PLANNING" },
   { id: "water-systems", label: "Water Systems at Risk", phase: "PLANNING" },
   { id: "mitigation-controls", label: "Mitigation Controls", phase: "PLANNING" },
@@ -132,16 +130,14 @@ const ProjectWizard = () => {
       case 1:
         return <ProjectMilestonesStep data={projectData} onNext={handleNext} onBack={handleBack} />;
       case 2:
-        return <ConstructionDetailsStep data={projectData} onNext={handleNext} onBack={handleBack} />;
+        return <ConstructionDetailsStep data={projectData} onNext={handleNext} onBack={handleBack} projectId={id} />;
       case 3:
-        return <FileUploadStep data={projectData} onNext={handleNext} onBack={handleBack} projectId={id} />;
-      case 4:
         return <CriticalAssetsStep data={projectData} onNext={handleNext} onBack={handleBack} />;
-      case 5:
+      case 4:
         return <WaterSystemsStep data={projectData} onNext={handleNext} onBack={handleBack} />;
-      case 6:
+      case 5:
         return <MitigationControlsStep data={projectData} onNext={handleNext} onBack={handleBack} />;
-      case 7:
+      case 6:
         return <WaterMitigationGuidelinesStep data={projectData} onBack={handleBack} />;
       default:
         return null;
@@ -165,53 +161,64 @@ const ProjectWizard = () => {
         </div>
       </header>
 
-      <div className="container mx-auto px-6 py-8">
-        {/* Phase labels */}
-        <div className="mb-4 relative">
-          <div className="flex items-center">
-            {/* DISCOVERY phase */}
-            <div className={`flex items-center gap-2 text-xs font-semibold ${currentStep <= 3 ? "text-[hsl(217,91%,60%)]" : "text-muted-foreground"}`}>
-              <span>DISCOVERY</span>
-              <div className={`h-0.5 flex-1 ${currentStep <= 3 ? "bg-[hsl(217,91%,60%)]" : "bg-muted"}`} style={{ width: `${(4 * 100) / steps.length}%` }} />
-            </div>
-            
-            {/* PLANNING phase */}
-            <div className={`flex items-center gap-2 text-xs font-semibold ml-4 ${currentStep > 3 && currentStep < 7 ? "text-[hsl(142,71%,45%)]" : "text-muted-foreground"}`}>
-              <span>PLANNING</span>
-              <div className={`h-0.5 flex-1 ${currentStep > 3 && currentStep < 7 ? "bg-[hsl(142,71%,45%)]" : "bg-muted"}`} style={{ width: `${(3 * 100) / steps.length}%` }} />
-            </div>
-            
-            {/* REPORT phase */}
-            <div className={`flex items-center gap-2 text-xs font-semibold ml-4 ${currentStep === 7 ? "text-[hsl(48,96%,53%)]" : "text-muted-foreground"}`}>
-              <span>REPORT</span>
-            </div>
-          </div>
-        </div>
-        
-        {/* Progress tabs - Pill UI */}
-        <div className="mb-8">
-          <div className="flex items-center gap-2 flex-wrap">
+      {/* Sticky header */}
+      <div className="sticky top-0 z-10 bg-background border-b">
+        <div className="container mx-auto px-6 py-4">
+          {/* Progress tabs - Pill UI */}
+          <div className="flex items-center gap-2 flex-wrap mb-3">
             {steps.map((step, index) => (
               <button
                 key={step.id}
                 onClick={() => setCurrentStep(index)}
-                className={`px-4 py-2 rounded-full text-sm font-medium transition-all ${
+                className={`px-4 py-2 rounded-full text-sm font-medium transition-all border ${
                   index === currentStep
                     ? step.phase === "DISCOVERY"
-                      ? "bg-[hsl(217,91%,60%)] text-white"
+                      ? "bg-card border-[hsl(217,91%,60%)] text-foreground ring-2 ring-[hsl(217,91%,60%)]/20"
                       : step.phase === "PLANNING"
-                      ? "bg-[hsl(142,71%,45%)] text-white"
-                      : "bg-[hsl(48,96%,53%)] text-black"
+                      ? "bg-card border-[hsl(142,71%,45%)] text-foreground ring-2 ring-[hsl(142,71%,45%)]/20"
+                      : "bg-card border-[hsl(48,96%,53%)] text-foreground ring-2 ring-[hsl(48,96%,53%)]/20"
                     : index < currentStep
-                    ? "bg-muted text-foreground"
-                    : "bg-muted/50 text-muted-foreground"
+                    ? "bg-muted/50 border-muted text-muted-foreground"
+                    : "bg-background border-border text-muted-foreground hover:bg-muted/30"
                 }`}
               >
                 {step.label}
               </button>
             ))}
           </div>
+          
+          {/* Phase indicator bar */}
+          <div className="relative h-1 bg-muted rounded-full overflow-hidden">
+            <div className="absolute inset-0 flex">
+              {/* DISCOVERY segment */}
+              <div className="flex-1 flex items-center" style={{ flex: 3 }}>
+                <div className={`h-full w-full transition-colors ${currentStep <= 2 ? "bg-[hsl(217,91%,60%)]" : "bg-muted"}`} />
+                <span className={`absolute left-0 -bottom-5 text-xs font-semibold ${currentStep <= 2 ? "text-[hsl(217,91%,60%)]" : "text-muted-foreground"}`}>
+                  DISCOVERY
+                </span>
+              </div>
+              
+              {/* PLANNING segment */}
+              <div className="flex-1 flex items-center" style={{ flex: 3 }}>
+                <div className={`h-full w-full transition-colors ${currentStep > 2 && currentStep < 6 ? "bg-[hsl(142,71%,45%)]" : "bg-muted"}`} />
+                <span className={`absolute left-1/2 -translate-x-1/2 -bottom-5 text-xs font-semibold ${currentStep > 2 && currentStep < 6 ? "text-[hsl(142,71%,45%)]" : "text-muted-foreground"}`}>
+                  PLANNING
+                </span>
+              </div>
+              
+              {/* REPORT segment */}
+              <div className="flex-1 flex items-center" style={{ flex: 1 }}>
+                <div className={`h-full w-full transition-colors ${currentStep === 6 ? "bg-[hsl(48,96%,53%)]" : "bg-muted"}`} />
+                <span className={`absolute right-0 -bottom-5 text-xs font-semibold ${currentStep === 6 ? "text-[hsl(48,96%,53%)]" : "text-muted-foreground"}`}>
+                  REPORT
+                </span>
+              </div>
+            </div>
+          </div>
         </div>
+      </div>
+
+      <div className="container mx-auto px-6 py-8 pt-12">
 
         {/* Step content */}
         <div className="max-w-5xl mx-auto">
