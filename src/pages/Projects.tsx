@@ -5,7 +5,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { useToast } from "@/hooks/use-toast";
-import riskBlueLogo from "@/assets/riskblue-logo.png";
+import riskBlueLogo from "@/assets/riskblue-logo.jpg";
 import { format } from "date-fns";
 
 interface Project {

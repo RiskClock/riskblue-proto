@@ -6,7 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { useToast } from "@/hooks/use-toast";
-import riskBlueLogo from "@/assets/riskblue-logo.png";
+import riskBlueLogo from "@/assets/riskblue-logo.jpg";
 
 const Auth = () => {
   const [isLogin, setIsLogin] = useState(true);

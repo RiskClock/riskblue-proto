@@ -4,7 +4,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import riskBlueLogo from "@/assets/riskblue-logo.png";
+import riskBlueLogo from "@/assets/riskblue-logo.jpg";
 import { ProjectInfoStep } from "@/components/wizard/ProjectInfoStep";
 import { ProjectMilestonesStep } from "@/components/wizard/ProjectMilestonesStep";
 import { ConstructionDetailsStep } from "@/components/wizard/ConstructionDetailsStep";
