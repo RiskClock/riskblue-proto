@@ -43,19 +43,7 @@ export const ProjectMilestonesStep = ({ data, onNext, onBack }: ProjectMilestone
   };
 
   return (
-    <div>
-      <div className="mb-6">
-        <p className="text-sm text-muted-foreground mb-1">Step 2 of 7</p>
-        <h2 className="text-2xl font-bold text-foreground mb-2">Project Milestones</h2>
-        <p className="text-sm text-muted-foreground">
-          Filling out Project Milestones based on a Level 3 Schedule is essential for accurately assessing
-          the duration of risk exposure for critical assets and water systems throughout the construction
-          timeline. Clearly defined milestones help teams stay ahead of potential delays and unattended
-          risks that could disrupt progress, increase costs, or compromise safety.
-        </p>
-      </div>
-
-      <form onSubmit={handleSubmit} className="space-y-8">
+    <form onSubmit={handleSubmit} className="space-y-8">
         <div>
           <Label className="text-base mb-4 block">What is the construction timeline?</Label>
           <div className="grid grid-cols-2 gap-6">
@@ -80,7 +68,7 @@ export const ProjectMilestonesStep = ({ data, onNext, onBack }: ProjectMilestone
           </div>
         </div>
 
-        <div className="grid md:grid-cols-2 gap-8">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           <div className="bg-muted/30 p-6 rounded-lg space-y-4">
             <div className="h-32 bg-muted rounded flex items-center justify-center overflow-hidden">
               <img src={structuralImg} alt="Structural frame" className="w-full h-full object-contain" />
@@ -244,11 +232,9 @@ export const ProjectMilestonesStep = ({ data, onNext, onBack }: ProjectMilestone
           </div>
         </div>
 
-        <div className="flex justify-between">
-          <Button type="button" variant="outline" onClick={onBack}>Back</Button>
-          <Button type="submit">Continue</Button>
+        <div className="flex justify-end">
+          <Button type="submit">Save</Button>
         </div>
       </form>
-    </div>
   );
 };
