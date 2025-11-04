@@ -56,7 +56,15 @@ const ProjectWizard = () => {
         .single();
 
       if (error) throw error;
-      setProjectData((data.project_data as ProjectData) || {});
+      
+      // Merge table columns with project_data JSONB
+      const { project_data, created_at, updated_at, user_id, id: projectId, ...tableColumns } = data;
+      const mergedData = {
+        ...tableColumns,
+        ...(project_data as ProjectData || {}),
+      };
+      
+      setProjectData(mergedData);
     } catch (error: any) {
       toast({
         title: "Error",
