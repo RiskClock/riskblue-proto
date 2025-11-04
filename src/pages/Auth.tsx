@@ -6,6 +6,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { useToast } from "@/hooks/use-toast";
+import { signUpSchema, signInSchema } from "@/lib/validation";
+import { getUserFriendlyError } from "@/lib/errorHandling";
 import riskBlueLogo from "@/assets/riskblue-logo.jpg";
 
 const Auth = () => {
@@ -23,18 +25,32 @@ const Auth = () => {
     
     try {
       if (isLogin) {
-        const { error } = await signIn(email, password);
-        if (error) throw error;
-        navigate("/projects");
-      } else {
-        if (!displayName.trim()) {
+        // Validate login input
+        const validation = signInSchema.safeParse({ email, password });
+        if (!validation.success) {
           toast({
-            title: "Error",
-            description: "Please enter your name",
+            title: "Validation Error",
+            description: validation.error.errors[0].message,
             variant: "destructive",
           });
           return;
         }
+
+        const { error } = await signIn(email, password);
+        if (error) throw error;
+        navigate("/projects");
+      } else {
+        // Validate signup input
+        const validation = signUpSchema.safeParse({ email, password, displayName });
+        if (!validation.success) {
+          toast({
+            title: "Validation Error",
+            description: validation.error.errors[0].message,
+            variant: "destructive",
+          });
+          return;
+        }
+
         const { error } = await signUp(email, password, displayName);
         if (error) throw error;
         toast({
@@ -46,7 +62,7 @@ const Auth = () => {
     } catch (error: any) {
       toast({
         title: "Error",
-        description: error.message,
+        description: getUserFriendlyError(error),
         variant: "destructive",
       });
     }

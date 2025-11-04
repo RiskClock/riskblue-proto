@@ -3,6 +3,7 @@ import { useNavigate, useParams } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
+import { getUserFriendlyError } from "@/lib/errorHandling";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import riskBlueLogo from "@/assets/riskblue-logo.jpg";
 import { ProjectInfoStep } from "@/components/wizard/ProjectInfoStep";
@@ -55,7 +56,7 @@ const ProjectWizard = () => {
     } catch (error: any) {
       toast({
         title: "Error",
-        description: error.message,
+        description: getUserFriendlyError(error),
         variant: "destructive",
       });
     }
@@ -96,7 +97,7 @@ const ProjectWizard = () => {
     } catch (error: any) {
       toast({
         title: "Error",
-        description: error.message,
+        description: getUserFriendlyError(error),
         variant: "destructive",
       });
     } finally {

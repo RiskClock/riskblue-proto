@@ -3,6 +3,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { useToast } from "@/hooks/use-toast";
+import { projectSchemas } from "@/lib/validation";
 
 interface ProjectInfoStepProps {
   data: any;
@@ -10,6 +12,7 @@ interface ProjectInfoStepProps {
 }
 
 export const ProjectInfoStep = ({ data, onNext }: ProjectInfoStepProps) => {
+  const { toast } = useToast();
   const [formData, setFormData] = useState({
     name: data.name || "",
     address_1: data.address_1 || "",
@@ -23,6 +26,54 @@ export const ProjectInfoStep = ({ data, onNext }: ProjectInfoStepProps) => {
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    
+    // Validate project name
+    const nameValidation = projectSchemas.name.safeParse(formData.name);
+    if (!nameValidation.success) {
+      toast({
+        title: "Validation Error",
+        description: nameValidation.error.errors[0].message,
+        variant: "destructive",
+      });
+      return;
+    }
+
+    // Validate zip code if provided
+    if (formData.zip_code && formData.zip_code.trim() !== "") {
+      const zipValidation = projectSchemas.zipCode.safeParse(formData.zip_code);
+      if (!zipValidation.success) {
+        toast({
+          title: "Validation Error",
+          description: zipValidation.error.errors[0].message,
+          variant: "destructive",
+        });
+        return;
+      }
+    }
+
+    // Validate address fields lengths
+    const fields = [
+      { value: formData.address_1, schema: projectSchemas.address, name: "Address 1" },
+      { value: formData.address_2, schema: projectSchemas.address, name: "Address 2" },
+      { value: formData.city, schema: projectSchemas.city, name: "City" },
+      { value: formData.state, schema: projectSchemas.state, name: "State" },
+      { value: formData.country, schema: projectSchemas.country, name: "Country" },
+    ];
+
+    for (const field of fields) {
+      if (field.value && field.value.trim() !== "") {
+        const validation = field.schema.safeParse(field.value);
+        if (!validation.success) {
+          toast({
+            title: "Validation Error",
+            description: `${field.name}: ${validation.error.errors[0].message}`,
+            variant: "destructive",
+          });
+          return;
+        }
+      }
+    }
+
     onNext(formData);
   };
 
