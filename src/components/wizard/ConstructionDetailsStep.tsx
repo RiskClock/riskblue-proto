@@ -33,8 +33,8 @@ const buildingTypes = [
 
 const towerTypes = [
   { id: "single", label: "Single Tower", disabled: false, image: singleTowerImg },
-  { id: "double", label: "Double Tower", disabled: true, image: doubleTowerImg },
-  { id: "multi", label: "Multi-tower", disabled: true, image: multiTowerImg },
+  { id: "double", label: "Double Tower", disabled: false, image: doubleTowerImg },
+  { id: "multi", label: "Multi-tower", disabled: false, image: multiTowerImg },
 ];
 
 interface ConstructionDetailsStepProps {
