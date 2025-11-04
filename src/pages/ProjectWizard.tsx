@@ -69,11 +69,70 @@ const ProjectWizard = () => {
   const saveProject = async (data: ProjectData) => {
     setLoading(true);
     try {
+      // Extract only the fields that are columns in the projects table
+      const {
+        name,
+        project_type,
+        building_type,
+        tower_type,
+        total_floors,
+        typical_floors,
+        typical_floors_start,
+        typical_floors_end,
+        underground_parking,
+        underground_parking_start,
+        underground_parking_end,
+        above_grade_parking,
+        location,
+        address_1,
+        address_2,
+        city,
+        state,
+        zip_code,
+        country,
+        construction_start_date,
+        construction_end_date,
+        has_builders_risk_policy,
+        ...otherData
+      } = data;
+
+      const tableData = {
+        name,
+        project_type,
+        building_type,
+        tower_type,
+        total_floors: total_floors ? parseInt(total_floors) : null,
+        typical_floors: typical_floors ? parseInt(typical_floors) : null,
+        typical_floors_start,
+        typical_floors_end,
+        underground_parking,
+        underground_parking_start,
+        underground_parking_end,
+        above_grade_parking,
+        location,
+        address_1,
+        address_2,
+        city,
+        state,
+        zip_code,
+        country,
+        construction_start_date,
+        construction_end_date,
+        has_builders_risk_policy,
+      };
+
+      // Remove undefined values
+      Object.keys(tableData).forEach(key => {
+        if (tableData[key as keyof typeof tableData] === undefined) {
+          delete tableData[key as keyof typeof tableData];
+        }
+      });
+
       if (id && id !== "new") {
         const { error } = await supabase
           .from("projects")
           .update({
-            ...data,
+            ...tableData,
             project_data: projectData,
           })
           .eq("id", id);
@@ -83,8 +142,8 @@ const ProjectWizard = () => {
           .from("projects")
           .insert([{
             user_id: user?.id,
-            name: data.name || "Untitled Project",
-            ...data,
+            name: name || "Untitled Project",
+            ...tableData,
             project_data: projectData,
           }])
           .select()
