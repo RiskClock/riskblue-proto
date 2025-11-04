@@ -227,7 +227,7 @@ export const MitigationResponsePlanStep = ({
                             : "bg-card border"
                         }`}
                       >
-                        <p className="text-sm">{msg.content}</p>
+                        <p className="text-sm whitespace-pre-wrap">{msg.content}</p>
                       </div>
                     </div>
                   ))}
