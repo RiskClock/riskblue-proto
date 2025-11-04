@@ -32,7 +32,7 @@ export const WaterMitigationGuidelinesStep = ({ data, onBack, onNext }: WaterMit
   return (
     <div>
       <div className="mb-6">
-        <p className="text-sm text-muted-foreground mb-1">Step 8 of 9</p>
+        <p className="text-sm text-muted-foreground mb-1">Step 7 of 9</p>
         <h2 className="text-2xl font-bold text-foreground mb-2">Water Mitigation Guidelines</h2>
         <p className="text-sm text-muted-foreground">
           Your comprehensive water mitigation plan has been generated. Review the recommendations and

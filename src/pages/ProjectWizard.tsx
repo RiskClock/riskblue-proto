@@ -23,8 +23,8 @@ const steps = [
   { id: "critical-assets", label: "Critical Assets at Risk", phase: "PLANNING" },
   { id: "water-systems", label: "Water Systems at Risk", phase: "PLANNING" },
   { id: "mitigation-controls", label: "Mitigation Controls", phase: "PLANNING" },
-  { id: "mitigation-response", label: "Mitigation Response Plan", phase: "PLANNING" },
   { id: "guidelines", label: "Water Mitigation Guidelines", phase: "REPORT" },
+  { id: "mitigation-response", label: "Mitigation Response Plan", phase: "REPORT" },
   { id: "proposals", label: "Proposals", phase: "REPORT" },
 ];
 
@@ -142,9 +142,9 @@ const ProjectWizard = () => {
       case 5:
         return <MitigationControlsStep data={projectData} onNext={handleNext} onBack={handleBack} />;
       case 6:
-        return <MitigationResponsePlanStep data={projectData} onNext={handleNext} onBack={handleBack} />;
-      case 7:
         return <WaterMitigationGuidelinesStep data={projectData} onBack={handleBack} onNext={handleNext} />;
+      case 7:
+        return <MitigationResponsePlanStep data={projectData} onNext={handleNext} onBack={handleBack} />;
       case 8:
         return <ProposalsStep data={projectData} onBack={handleBack} />;
       default:
@@ -208,16 +208,16 @@ const ProjectWizard = () => {
               
               {/* PLANNING segment */}
               <div className="flex-1 flex items-center" style={{ flex: 3 }}>
-                <div className={`h-full w-full transition-colors ${currentStep > 2 && currentStep < 7 ? "bg-[hsl(142,71%,45%)]" : "bg-muted"}`} />
-                <span className={`absolute left-1/2 -translate-x-1/2 -bottom-5 text-xs font-semibold tracking-wide ${currentStep > 2 && currentStep < 7 ? "text-[hsl(142,71%,45%)]" : "text-muted-foreground"}`}>
+                <div className={`h-full w-full transition-colors ${currentStep > 2 && currentStep < 6 ? "bg-[hsl(142,71%,45%)]" : "bg-muted"}`} />
+                <span className={`absolute left-1/2 -translate-x-1/2 -bottom-5 text-xs font-semibold tracking-wide ${currentStep > 2 && currentStep < 6 ? "text-[hsl(142,71%,45%)]" : "text-muted-foreground"}`}>
                   PLANNING
                 </span>
               </div>
               
               {/* REPORT segment */}
               <div className="flex-1 flex items-center" style={{ flex: 1 }}>
-                <div className={`h-full w-full transition-colors ${currentStep >= 7 ? "bg-[hsl(217,91%,70%)]" : "bg-muted"}`} />
-                <span className={`absolute right-0 -bottom-5 text-xs font-semibold tracking-wide ${currentStep >= 7 ? "text-[hsl(217,91%,70%)]" : "text-muted-foreground"}`}>
+                <div className={`h-full w-full transition-colors ${currentStep >= 6 ? "bg-[hsl(217,91%,70%)]" : "bg-muted"}`} />
+                <span className={`absolute right-0 -bottom-5 text-xs font-semibold tracking-wide ${currentStep >= 6 ? "text-[hsl(217,91%,70%)]" : "text-muted-foreground"}`}>
                   REPORT
                 </span>
               </div>

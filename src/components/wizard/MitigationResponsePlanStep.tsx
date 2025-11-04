@@ -152,6 +152,7 @@ export const MitigationResponsePlanStep = ({
   return (
     <form onSubmit={handleSubmit} className="space-y-6">
       <div>
+        <p className="text-sm text-muted-foreground mb-1">Step 8 of 9</p>
         <h2 className="text-2xl font-bold mb-2">Mitigation Response Plan</h2>
         <p className="text-muted-foreground">
           Upload your mitigation response plan document and ask questions about it
