@@ -5,19 +5,27 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 import { Upload, FileText, Loader2 } from "lucide-react";
+import residentialImg from "@/assets/type1-residential.avif";
+import mixedUseImg from "@/assets/type2-mixeduse.avif";
+import institutionalImg from "@/assets/type3-institutional.avif";
+import commercialImg from "@/assets/type4-commercial.avif";
+import midRiseImg from "@/assets/buildingtype1-mid-rise.avif";
+import highRiseImg from "@/assets/buildingtype2-high-rise.avif";
+import singleHouseImg from "@/assets/buildingtype3-singlehouse.avif";
+import houseComplexImg from "@/assets/buildingtype4-housecomplex.avif";
 
 const constructionTypes = [
-  { id: "residential", label: "Residential", disabled: false },
-  { id: "mixed-use", label: "Mixed Use", disabled: false },
-  { id: "institutional", label: "Institutional", disabled: true },
-  { id: "commercial", label: "Commercial", disabled: true },
+  { id: "residential", label: "Residential", disabled: false, image: residentialImg },
+  { id: "mixed-use", label: "Mixed Use", disabled: false, image: mixedUseImg },
+  { id: "institutional", label: "Institutional", disabled: false, image: institutionalImg },
+  { id: "commercial", label: "Commercial", disabled: false, image: commercialImg },
 ];
 
 const buildingTypes = [
-  { id: "mid-rise", label: "Mid-rise", disabled: false },
-  { id: "high-rise", label: "High-rise", disabled: false },
-  { id: "single-house", label: "Single House", disabled: true },
-  { id: "house-complex", label: "House Complex", disabled: true },
+  { id: "mid-rise", label: "Mid-rise", disabled: false, image: midRiseImg },
+  { id: "high-rise", label: "High-rise", disabled: false, image: highRiseImg },
+  { id: "single-house", label: "Single House", disabled: true, image: singleHouseImg },
+  { id: "house-complex", label: "House Complex", disabled: true, image: houseComplexImg },
 ];
 
 const towerTypes = [
@@ -131,8 +139,8 @@ export const ConstructionDetailsStep = ({ data, onNext, onBack, projectId }: Con
                     : "border-border hover:border-primary/50"
                 } ${type.disabled ? "opacity-50 cursor-not-allowed" : "cursor-pointer"}`}
               >
-                <div className="h-24 bg-muted rounded mb-3 flex items-center justify-center text-muted-foreground text-xs">
-                  {type.label}
+                <div className="h-24 bg-muted rounded mb-3 flex items-center justify-center overflow-hidden">
+                  <img src={type.image} alt={type.label} className="w-full h-full object-contain" />
                 </div>
                 <p className="text-sm text-center">{type.label}</p>
                 {type.disabled && (
@@ -160,8 +168,8 @@ export const ConstructionDetailsStep = ({ data, onNext, onBack, projectId }: Con
                     : "border-border hover:border-primary/50"
                 } ${type.disabled ? "opacity-50 cursor-not-allowed" : "cursor-pointer"}`}
               >
-                <div className="h-24 bg-muted rounded mb-3 flex items-center justify-center text-muted-foreground text-xs">
-                  {type.label}
+                <div className="h-24 bg-muted rounded mb-3 flex items-center justify-center overflow-hidden">
+                  <img src={type.image} alt={type.label} className="w-full h-full object-contain" />
                 </div>
                 <p className="text-sm text-center">{type.label}</p>
                 {type.disabled && (
