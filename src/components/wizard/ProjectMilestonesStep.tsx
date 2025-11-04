@@ -74,7 +74,7 @@ export const ProjectMilestonesStep = ({ data, onNext, onBack }: ProjectMilestone
               <img src={structuralImg} alt="Structural frame" className="w-full h-full object-contain" />
             </div>
             <Label className="text-base font-semibold">Structural Frame</Label>
-            <div className="space-y-4">
+            <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label htmlFor="frame_start" className="text-sm text-muted-foreground">Start date</Label>
                 <Input
@@ -101,7 +101,7 @@ export const ProjectMilestonesStep = ({ data, onNext, onBack }: ProjectMilestone
               <img src={envelopeImg} alt="Building envelope" className="w-full h-full object-contain" />
             </div>
             <Label className="text-base font-semibold">Building Envelope</Label>
-            <div className="space-y-4">
+            <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label htmlFor="enclosure_start" className="text-sm text-muted-foreground">Start date</Label>
                 <Input
@@ -128,7 +128,7 @@ export const ProjectMilestonesStep = ({ data, onNext, onBack }: ProjectMilestone
               <img src={mepImg} alt="MEP rough-ins" className="w-full h-full object-contain" />
             </div>
             <Label className="text-base font-semibold">MEP Rough-ins</Label>
-            <div className="space-y-4">
+            <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label htmlFor="mep_start" className="text-sm text-muted-foreground">Start date</Label>
                 <Input
@@ -155,7 +155,7 @@ export const ProjectMilestonesStep = ({ data, onNext, onBack }: ProjectMilestone
               <img src={elevatorsImg} alt="Building elevators" className="w-full h-full object-contain" />
             </div>
             <Label className="text-base font-semibold">Elevators</Label>
-            <div className="space-y-4">
+            <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label htmlFor="elevators_start" className="text-sm text-muted-foreground">Start date</Label>
                 <Input
@@ -182,7 +182,7 @@ export const ProjectMilestonesStep = ({ data, onNext, onBack }: ProjectMilestone
               <img src={fireImg} alt="Fire suppression system" className="w-full h-full object-contain" />
             </div>
             <Label className="text-base font-semibold">Fire Suppression</Label>
-            <div className="space-y-4">
+            <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label htmlFor="fire_start" className="text-sm text-muted-foreground">Start date</Label>
                 <Input
@@ -209,7 +209,7 @@ export const ProjectMilestonesStep = ({ data, onNext, onBack }: ProjectMilestone
               <img src={interiorImg} alt="Interior finishes" className="w-full h-full object-contain" />
             </div>
             <Label className="text-base font-semibold">Interior Finishes</Label>
-            <div className="space-y-4">
+            <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label htmlFor="interior_start" className="text-sm text-muted-foreground">Start date</Label>
                 <Input
