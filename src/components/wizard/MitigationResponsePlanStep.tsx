@@ -86,6 +86,10 @@ export const MitigationResponsePlanStep = ({
     setQuestion("");
     setSending(true);
 
+    // Add a loading message
+    const loadingMessage: Message = { role: "assistant", content: "Thinking..." };
+    setMessages((prev) => [...prev, loadingMessage]);
+
     try {
       const response = await fetch(
         "https://gyubok.app.n8n.cloud/webhook/e2ac331c-7bba-4517-baa5-28d233d641ca",
@@ -101,16 +105,38 @@ export const MitigationResponsePlanStep = ({
       if (!response.ok) throw new Error("Failed to send question");
 
       const data = await response.json();
-      const assistantMessage: Message = {
-        role: "assistant",
-        content: data.answer || data.response || "No response received",
-      };
-      setMessages((prev) => [...prev, assistantMessage]);
+      console.log("Webhook response:", data);
+      
+      // Handle different response formats
+      let answerContent = "";
+      if (data.output) {
+        answerContent = data.output;
+      } else if (data.answer) {
+        answerContent = data.answer;
+      } else if (data.response) {
+        answerContent = data.response;
+      } else if (data.message && data.message !== "Workflow was started") {
+        answerContent = data.message;
+      } else {
+        answerContent = "Response received but no answer found";
+      }
+
+      // Replace the loading message with the actual response
+      setMessages((prev) => {
+        const newMessages = [...prev];
+        newMessages[newMessages.length - 1] = {
+          role: "assistant",
+          content: answerContent,
+        };
+        return newMessages;
+      });
     } catch (error) {
       console.error("Send question error:", error);
+      // Remove the loading message on error
+      setMessages((prev) => prev.slice(0, -1));
       toast({
         title: "Error",
-        description: "Failed to send question",
+        description: "Failed to get response from webhook",
         variant: "destructive",
       });
     } finally {
