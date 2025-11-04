@@ -52,7 +52,7 @@ export const MitigationResponsePlanStep = ({
       formData.append("file", selectedFile);
 
       const response = await fetch(
-        "https://gyubok.app.n8n.cloud/webhook-test/e2ac331c-7bba-4517-baa5-28d233d641ca",
+        "https://gyubok.app.n8n.cloud/webhook/e2ac331c-7bba-4517-baa5-28d233d641ca",
         {
           method: "POST",
           body: formData,
@@ -88,7 +88,7 @@ export const MitigationResponsePlanStep = ({
 
     try {
       const response = await fetch(
-        "https://gyubok.app.n8n.cloud/webhook-test/e2ac331c-7bba-4517-baa5-28d233d641ca",
+        "https://gyubok.app.n8n.cloud/webhook/e2ac331c-7bba-4517-baa5-28d233d641ca",
         {
           method: "POST",
           headers: {
