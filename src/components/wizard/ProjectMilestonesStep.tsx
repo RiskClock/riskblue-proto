@@ -6,6 +6,12 @@ import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { CalendarIcon } from "lucide-react";
 import { format } from "date-fns";
+import structuralImg from "@/assets/timeline1-structural.avif";
+import envelopeImg from "@/assets/timeline2-envelope.avif";
+import mepImg from "@/assets/timeline3-MEP.avif";
+import elevatorsImg from "@/assets/timeline4-elevators.avif";
+import fireImg from "@/assets/timeline5-fire.avif";
+import interiorImg from "@/assets/timeline6-interior.avif";
 
 interface ProjectMilestonesStepProps {
   data: any;
@@ -21,6 +27,14 @@ export const ProjectMilestonesStep = ({ data, onNext, onBack }: ProjectMilestone
     frame_end_date: data.frame_end_date || "",
     enclosure_start_date: data.enclosure_start_date || "",
     enclosure_end_date: data.enclosure_end_date || "",
+    mep_start_date: data.mep_start_date || "",
+    mep_end_date: data.mep_end_date || "",
+    elevators_start_date: data.elevators_start_date || "",
+    elevators_end_date: data.elevators_end_date || "",
+    fire_start_date: data.fire_start_date || "",
+    fire_end_date: data.fire_end_date || "",
+    interior_start_date: data.interior_start_date || "",
+    interior_end_date: data.interior_end_date || "",
   });
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -68,8 +82,8 @@ export const ProjectMilestonesStep = ({ data, onNext, onBack }: ProjectMilestone
 
         <div className="grid md:grid-cols-2 gap-8">
           <div className="bg-muted/30 p-6 rounded-lg space-y-4">
-            <div className="h-32 bg-muted rounded flex items-center justify-center text-muted-foreground text-sm">
-              Building Frame Icon
+            <div className="h-32 bg-muted rounded flex items-center justify-center overflow-hidden">
+              <img src={structuralImg} alt="Structural frame" className="w-full h-full object-contain" />
             </div>
             <Label className="text-base">What is the estimated start and finish of the building's structural frame?</Label>
             <div className="space-y-4">
@@ -95,8 +109,8 @@ export const ProjectMilestonesStep = ({ data, onNext, onBack }: ProjectMilestone
           </div>
 
           <div className="bg-muted/30 p-6 rounded-lg space-y-4">
-            <div className="h-32 bg-muted rounded flex items-center justify-center text-muted-foreground text-sm">
-              Building Enclosure Icon
+            <div className="h-32 bg-muted rounded flex items-center justify-center overflow-hidden">
+              <img src={envelopeImg} alt="Building envelope" className="w-full h-full object-contain" />
             </div>
             <Label className="text-base">What is the estimated start and finish of the building's enclosures/envelope (dried-in/weatherproofed)?</Label>
             <div className="space-y-4">
@@ -116,6 +130,114 @@ export const ProjectMilestonesStep = ({ data, onNext, onBack }: ProjectMilestone
                   type="date"
                   value={formData.enclosure_end_date}
                   onChange={(e) => setFormData({ ...formData, enclosure_end_date: e.target.value })}
+                />
+              </div>
+            </div>
+          </div>
+
+          <div className="bg-muted/30 p-6 rounded-lg space-y-4">
+            <div className="h-32 bg-muted rounded flex items-center justify-center overflow-hidden">
+              <img src={mepImg} alt="MEP rough-ins" className="w-full h-full object-contain" />
+            </div>
+            <Label className="text-base">What is the estimated start and finish of mechanical, electrical, and plumbing rough-ins?</Label>
+            <div className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="mep_start" className="text-sm text-muted-foreground">Start date</Label>
+                <Input
+                  id="mep_start"
+                  type="date"
+                  value={formData.mep_start_date}
+                  onChange={(e) => setFormData({ ...formData, mep_start_date: e.target.value })}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="mep_end" className="text-sm text-muted-foreground">Est. finish date</Label>
+                <Input
+                  id="mep_end"
+                  type="date"
+                  value={formData.mep_end_date}
+                  onChange={(e) => setFormData({ ...formData, mep_end_date: e.target.value })}
+                />
+              </div>
+            </div>
+          </div>
+
+          <div className="bg-muted/30 p-6 rounded-lg space-y-4">
+            <div className="h-32 bg-muted rounded flex items-center justify-center overflow-hidden">
+              <img src={elevatorsImg} alt="Building elevators" className="w-full h-full object-contain" />
+            </div>
+            <Label className="text-base">What is the estimated start and finish of the building's elevators?</Label>
+            <div className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="elevators_start" className="text-sm text-muted-foreground">Start date</Label>
+                <Input
+                  id="elevators_start"
+                  type="date"
+                  value={formData.elevators_start_date}
+                  onChange={(e) => setFormData({ ...formData, elevators_start_date: e.target.value })}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="elevators_end" className="text-sm text-muted-foreground">Est. finish date</Label>
+                <Input
+                  id="elevators_end"
+                  type="date"
+                  value={formData.elevators_end_date}
+                  onChange={(e) => setFormData({ ...formData, elevators_end_date: e.target.value })}
+                />
+              </div>
+            </div>
+          </div>
+
+          <div className="bg-muted/30 p-6 rounded-lg space-y-4">
+            <div className="h-32 bg-muted rounded flex items-center justify-center overflow-hidden">
+              <img src={fireImg} alt="Fire suppression system" className="w-full h-full object-contain" />
+            </div>
+            <Label className="text-base">What is the estimated start and finish of the building's fire suppression system?</Label>
+            <div className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="fire_start" className="text-sm text-muted-foreground">Start date</Label>
+                <Input
+                  id="fire_start"
+                  type="date"
+                  value={formData.fire_start_date}
+                  onChange={(e) => setFormData({ ...formData, fire_start_date: e.target.value })}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="fire_end" className="text-sm text-muted-foreground">Est. finish date</Label>
+                <Input
+                  id="fire_end"
+                  type="date"
+                  value={formData.fire_end_date}
+                  onChange={(e) => setFormData({ ...formData, fire_end_date: e.target.value })}
+                />
+              </div>
+            </div>
+          </div>
+
+          <div className="bg-muted/30 p-6 rounded-lg space-y-4">
+            <div className="h-32 bg-muted rounded flex items-center justify-center overflow-hidden">
+              <img src={interiorImg} alt="Interior finishes" className="w-full h-full object-contain" />
+            </div>
+            <Label className="text-base">What is the estimated start and finish of the interior finishes?</Label>
+            <div className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="interior_start" className="text-sm text-muted-foreground">Start date</Label>
+                <Input
+                  id="interior_start"
+                  type="date"
+                  value={formData.interior_start_date}
+                  onChange={(e) => setFormData({ ...formData, interior_start_date: e.target.value })}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="interior_end" className="text-sm text-muted-foreground">Est. finish date</Label>
+                <Input
+                  id="interior_end"
+                  type="date"
+                  value={formData.interior_end_date}
+                  onChange={(e) => setFormData({ ...formData, interior_end_date: e.target.value })}
                 />
               </div>
             </div>
