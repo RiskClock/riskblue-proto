@@ -3,18 +3,12 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
 import { Card } from "@/components/ui/card";
-import { ScrollArea } from "@/components/ui/scroll-area";
-import { Upload, Send, Loader2 } from "lucide-react";
+import { Upload, Loader2 } from "lucide-react";
 
 interface MitigationResponsePlanStepProps {
   data: any;
   onNext: (data: any) => void;
   onBack: () => void;
-}
-
-interface Message {
-  role: "user" | "assistant";
-  content: string;
 }
 
 export const MitigationResponsePlanStep = ({
@@ -26,9 +20,6 @@ export const MitigationResponsePlanStep = ({
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [fileUploaded, setFileUploaded] = useState(false);
   const [uploading, setUploading] = useState(false);
-  const [messages, setMessages] = useState<Message[]>([]);
-  const [question, setQuestion] = useState("");
-  const [sending, setSending] = useState(false);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
@@ -78,84 +69,18 @@ export const MitigationResponsePlanStep = ({
     }
   };
 
-  const handleSendQuestion = async () => {
-    if (!question.trim()) return;
-
-    const userMessage: Message = { role: "user", content: question };
-    setMessages((prev) => [...prev, userMessage]);
-    setQuestion("");
-    setSending(true);
-
-    // Add a loading message
-    const loadingMessage: Message = { role: "assistant", content: "Thinking..." };
-    setMessages((prev) => [...prev, loadingMessage]);
-
-    try {
-      const response = await fetch(
-        "https://gyubok.app.n8n.cloud/webhook/e2ac331c-7bba-4517-baa5-28d233d641ca",
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({ question: question }),
-        }
-      );
-
-      if (!response.ok) throw new Error("Failed to send question");
-
-      const data = await response.json();
-      console.log("Webhook response:", data);
-      
-      // Handle different response formats
-      let answerContent = "";
-      if (data.output) {
-        answerContent = data.output;
-      } else if (data.answer) {
-        answerContent = data.answer;
-      } else if (data.response) {
-        answerContent = data.response;
-      } else if (data.message && data.message !== "Workflow was started") {
-        answerContent = data.message;
-      } else {
-        answerContent = "Response received but no answer found";
-      }
-
-      // Replace the loading message with the actual response
-      setMessages((prev) => {
-        const newMessages = [...prev];
-        newMessages[newMessages.length - 1] = {
-          role: "assistant",
-          content: answerContent,
-        };
-        return newMessages;
-      });
-    } catch (error) {
-      console.error("Send question error:", error);
-      // Remove the loading message on error
-      setMessages((prev) => prev.slice(0, -1));
-      toast({
-        title: "Error",
-        description: "Failed to get response from webhook",
-        variant: "destructive",
-      });
-    } finally {
-      setSending(false);
-    }
-  };
-
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    onNext({ mitigationResponsePlan: { fileUploaded, messages } });
+    onNext({ mitigationResponsePlan: { fileUploaded } });
   };
 
   return (
     <form onSubmit={handleSubmit} className="space-y-6">
       <div>
-        <p className="text-sm text-muted-foreground mb-1">Step 8 of 9</p>
+        <p className="text-sm text-muted-foreground mb-1">Step 9 of 9</p>
         <h2 className="text-2xl font-bold mb-2">Mitigation Response Plan</h2>
         <p className="text-muted-foreground">
-          Upload your mitigation response plan document and ask questions about it
+          Upload your mitigation response plan document
         </p>
       </div>
 
@@ -195,69 +120,6 @@ export const MitigationResponsePlanStep = ({
                 Selected: {selectedFile.name}
               </p>
             )}
-          </div>
-        </div>
-      </Card>
-
-      <Card className="p-6">
-        <div className="space-y-4">
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="text-lg font-semibold">Ask Questions</h3>
-          </div>
-
-          <ScrollArea className="h-96 border rounded-lg p-4 bg-muted/30">
-            {messages.length === 0 ? (
-              <p className="text-center text-muted-foreground py-8">
-                Start asking questions {fileUploaded ? 'about your document' : '(upload a document first for better context)'}
-              </p>
-            ) : (
-              <div className="space-y-4">
-                {messages.map((msg, idx) => (
-                  <div
-                    key={idx}
-                    className={`flex ${
-                      msg.role === "user" ? "justify-end" : "justify-start"
-                    }`}
-                  >
-                    <div
-                      className={`max-w-[80%] rounded-lg p-3 ${
-                        msg.role === "user"
-                          ? "bg-primary text-primary-foreground"
-                          : "bg-card border"
-                      }`}
-                    >
-                      <p className="text-sm whitespace-pre-wrap">{msg.content}</p>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </ScrollArea>
-
-          <div className="flex gap-2">
-            <Input
-              value={question}
-              onChange={(e) => setQuestion(e.target.value)}
-              placeholder="Ask a question..."
-              onKeyDown={(e) => {
-                if (e.key === "Enter" && !e.shiftKey) {
-                  e.preventDefault();
-                  handleSendQuestion();
-                }
-              }}
-              disabled={sending}
-            />
-            <Button
-              type="button"
-              onClick={handleSendQuestion}
-              disabled={!question.trim() || sending}
-            >
-              {sending ? (
-                <Loader2 className="w-4 h-4 animate-spin" />
-              ) : (
-                <Send className="w-4 h-4" />
-              )}
-            </Button>
           </div>
         </div>
       </Card>

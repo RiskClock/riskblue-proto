@@ -24,8 +24,8 @@ const steps = [
   { id: "water-systems", label: "Water Systems at Risk", phase: "PLANNING" },
   { id: "mitigation-controls", label: "Mitigation Controls", phase: "PLANNING" },
   { id: "guidelines", label: "Water Mitigation Guidelines", phase: "REPORT" },
-  { id: "mitigation-response", label: "Mitigation Response Plan", phase: "REPORT" },
   { id: "proposals", label: "Proposals", phase: "REPORT" },
+  { id: "mitigation-response", label: "Mitigation Response Plan", phase: "REPORT" },
 ];
 
 interface ProjectData {
@@ -144,9 +144,9 @@ const ProjectWizard = () => {
       case 6:
         return <WaterMitigationGuidelinesStep data={projectData} onBack={handleBack} onNext={handleNext} />;
       case 7:
-        return <MitigationResponsePlanStep data={projectData} onNext={handleNext} onBack={handleBack} />;
+        return <ProposalsStep data={projectData} onBack={handleBack} onNext={handleNext} />;
       case 8:
-        return <ProposalsStep data={projectData} onBack={handleBack} />;
+        return <MitigationResponsePlanStep data={projectData} onNext={handleNext} onBack={handleBack} />;
       default:
         return null;
     }

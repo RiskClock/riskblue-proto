@@ -8,8 +8,9 @@ import { useToast } from "@/hooks/use-toast";
 import { getUserFriendlyError } from "@/lib/errorHandling";
 import riskBlueLogo from "@/assets/riskblue-logo.jpg";
 import { format } from "date-fns";
-import { Trash2 } from "lucide-react";
+import { Trash2, MessageSquare } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
+import { FieldAgentChat } from "@/components/FieldAgentChat";
 
 interface Project {
   id: string;
@@ -25,6 +26,8 @@ const Projects = () => {
   const [loading, setLoading] = useState(true);
   const navigate = useNavigate();
   const { toast } = useToast();
+  const [chatOpen, setChatOpen] = useState(false);
+  const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
 
   useEffect(() => {
     fetchProjects();
@@ -82,6 +85,12 @@ const Projects = () => {
         description: error.message,
       });
     }
+  };
+
+  const handleOpenFieldAgent = (projectId: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    setSelectedProjectId(projectId);
+    setChatOpen(true);
   };
 
   return (
@@ -153,7 +162,7 @@ const Projects = () => {
                   <th className="px-6 py-3 text-sm font-medium text-foreground">Construction Start Date</th>
                   <th className="px-6 py-3 text-sm font-medium text-foreground">Status</th>
                   <th className="px-6 py-3 text-sm font-medium text-foreground">Stakeholders</th>
-                  <th className="px-6 py-3 w-[50px]"></th>
+                  <th className="px-6 py-3 w-[120px]"></th>
                 </tr>
               </thead>
               <tbody>
@@ -186,13 +195,23 @@ const Projects = () => {
                       </div>
                     </td>
                     <td className="px-6 py-4">
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        onClick={(e) => handleDeleteProject(project.id, e)}
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
+                      <div className="flex gap-2">
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={(e) => handleOpenFieldAgent(project.id, e)}
+                          title="Open Field Agent"
+                        >
+                          <MessageSquare className="h-4 w-4" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={(e) => handleDeleteProject(project.id, e)}
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </div>
                     </td>
                   </tr>
                 ))}
@@ -201,6 +220,14 @@ const Projects = () => {
           </div>
         )}
       </main>
+
+      {selectedProjectId && (
+        <FieldAgentChat
+          open={chatOpen}
+          onClose={() => setChatOpen(false)}
+          projectId={selectedProjectId}
+        />
+      )}
     </div>
   );
 };

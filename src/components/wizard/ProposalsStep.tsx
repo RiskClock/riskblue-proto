@@ -11,6 +11,7 @@ import { DollarSign } from "lucide-react";
 interface ProposalsStepProps {
   data: any;
   onBack: () => void;
+  onNext: (data: any) => void;
 }
 
 interface Proposal {
@@ -92,7 +93,7 @@ const MOCK_PROPOSALS: Proposal[] = [
   }
 ];
 
-export const ProposalsStep = ({ data, onBack }: ProposalsStepProps) => {
+export const ProposalsStep = ({ data, onBack, onNext }: ProposalsStepProps) => {
   const [proposals, setProposals] = useState<Proposal[]>(MOCK_PROPOSALS);
   const [selectedProposals, setSelectedProposals] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
@@ -118,7 +119,7 @@ export const ProposalsStep = ({ data, onBack }: ProposalsStepProps) => {
   return (
     <div className="space-y-8">
       <div className="space-y-2">
-        <p className="text-sm text-muted-foreground">Step 9 of 9</p>
+        <p className="text-sm text-muted-foreground">Step 8 of 9</p>
         <h2 className="text-3xl font-bold text-foreground">Proposals</h2>
         <p className="text-muted-foreground">
           Review and select proposals from companies responding to your RFP.
@@ -255,6 +256,7 @@ export const ProposalsStep = ({ data, onBack }: ProposalsStepProps) => {
                 title: "Proposals selected",
                 description: `You've selected ${selectedProposals.length} proposal${selectedProposals.length > 1 ? 's' : ''}.`,
               });
+              onNext({ selectedProposals });
             }}
           >
             Continue with Selected ({selectedProposals.length})
