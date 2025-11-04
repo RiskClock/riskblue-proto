@@ -13,6 +13,9 @@ import midRiseImg from "@/assets/buildingtype1-mid-rise.avif";
 import highRiseImg from "@/assets/buildingtype2-high-rise.avif";
 import singleHouseImg from "@/assets/buildingtype3-singlehouse.avif";
 import houseComplexImg from "@/assets/buildingtype4-housecomplex.avif";
+import singleTowerImg from "@/assets/tower1-single.avif";
+import doubleTowerImg from "@/assets/tower2-double.avif";
+import multiTowerImg from "@/assets/tower3-multi.avif";
 
 const constructionTypes = [
   { id: "residential", label: "Residential", disabled: false, image: residentialImg },
@@ -29,9 +32,9 @@ const buildingTypes = [
 ];
 
 const towerTypes = [
-  { id: "single", label: "Single Tower", disabled: false },
-  { id: "double", label: "Double Tower", disabled: true },
-  { id: "multi", label: "Multi-tower", disabled: true },
+  { id: "single", label: "Single Tower", disabled: false, image: singleTowerImg },
+  { id: "double", label: "Double Tower", disabled: true, image: doubleTowerImg },
+  { id: "multi", label: "Multi-tower", disabled: true, image: multiTowerImg },
 ];
 
 interface ConstructionDetailsStepProps {
@@ -199,8 +202,8 @@ export const ConstructionDetailsStep = ({ data, onNext, onBack, projectId }: Con
                         : "border-border hover:border-primary/50"
                     } ${type.disabled ? "opacity-50 cursor-not-allowed" : "cursor-pointer"}`}
                   >
-                    <div className="h-24 bg-muted rounded mb-3 flex items-center justify-center text-muted-foreground text-xs">
-                      {type.label}
+                    <div className="h-24 bg-muted rounded mb-3 flex items-center justify-center overflow-hidden">
+                      <img src={type.image} alt={type.label} className="w-full h-full object-contain" />
                     </div>
                     <p className="text-sm text-center">{type.label}</p>
                     {type.disabled && (
