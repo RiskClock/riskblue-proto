@@ -59,6 +59,7 @@ export type Database = {
           project_data: Json | null
           project_type: string | null
           state: string | null
+          status: string | null
           total_floors: number | null
           tower_type: string | null
           typical_floors: number | null
@@ -88,6 +89,7 @@ export type Database = {
           project_data?: Json | null
           project_type?: string | null
           state?: string | null
+          status?: string | null
           total_floors?: number | null
           tower_type?: string | null
           typical_floors?: number | null
@@ -117,6 +119,7 @@ export type Database = {
           project_data?: Json | null
           project_type?: string | null
           state?: string | null
+          status?: string | null
           total_floors?: number | null
           tower_type?: string | null
           typical_floors?: number | null
@@ -130,6 +133,56 @@ export type Database = {
           zip_code?: string | null
         }
         Relationships: []
+      }
+      proposals: {
+        Row: {
+          company_name: string
+          contact_email: string
+          contact_phone: string | null
+          created_at: string
+          id: string
+          project_id: string
+          proposal_details: string | null
+          proposed_cost: number
+          status: string | null
+          submitted_at: string
+          updated_at: string
+        }
+        Insert: {
+          company_name: string
+          contact_email: string
+          contact_phone?: string | null
+          created_at?: string
+          id?: string
+          project_id: string
+          proposal_details?: string | null
+          proposed_cost: number
+          status?: string | null
+          submitted_at?: string
+          updated_at?: string
+        }
+        Update: {
+          company_name?: string
+          contact_email?: string
+          contact_phone?: string | null
+          created_at?: string
+          id?: string
+          project_id?: string
+          proposal_details?: string | null
+          proposed_cost?: number
+          status?: string | null
+          submitted_at?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "proposals_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
       }
     }
     Views: {

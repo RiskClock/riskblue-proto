@@ -14,6 +14,7 @@ import { WaterSystemsStep } from "@/components/wizard/WaterSystemsStep";
 import { MitigationControlsStep } from "@/components/wizard/MitigationControlsStep";
 import { MitigationResponsePlanStep } from "@/components/wizard/MitigationResponsePlanStep";
 import { WaterMitigationGuidelinesStep } from "@/components/wizard/WaterMitigationGuidelinesStep";
+import { ProposalsStep } from "@/components/wizard/ProposalsStep";
 
 const steps = [
   { id: "project-info", label: "Project Info", phase: "DISCOVERY" },
@@ -24,6 +25,7 @@ const steps = [
   { id: "mitigation-controls", label: "Mitigation Controls", phase: "PLANNING" },
   { id: "mitigation-response", label: "Mitigation Response Plan", phase: "PLANNING" },
   { id: "guidelines", label: "Water Mitigation Guidelines", phase: "REPORT" },
+  { id: "proposals", label: "Proposals", phase: "REPORT" },
 ];
 
 interface ProjectData {
@@ -107,13 +109,12 @@ const ProjectWizard = () => {
     }
   };
 
-  const handleNext = (stepData: any) => {
+  const handleNext = async (stepData: any) => {
     const updatedData = { ...projectData, ...stepData };
     setProjectData(updatedData);
     
-    if (currentStep === 0) {
-      saveProject(stepData);
-    }
+    // Auto-save on every step
+    await saveProject(updatedData);
     
     if (currentStep < steps.length - 1) {
       setCurrentStep(currentStep + 1);
@@ -143,7 +144,9 @@ const ProjectWizard = () => {
       case 6:
         return <MitigationResponsePlanStep data={projectData} onNext={handleNext} onBack={handleBack} />;
       case 7:
-        return <WaterMitigationGuidelinesStep data={projectData} onBack={handleBack} />;
+        return <WaterMitigationGuidelinesStep data={projectData} onBack={handleBack} onNext={handleNext} />;
+      case 8:
+        return <ProposalsStep data={projectData} onBack={handleBack} />;
       default:
         return null;
     }
@@ -213,8 +216,8 @@ const ProjectWizard = () => {
               
               {/* REPORT segment */}
               <div className="flex-1 flex items-center" style={{ flex: 1 }}>
-                <div className={`h-full w-full transition-colors ${currentStep === 7 ? "bg-[hsl(217,91%,70%)]" : "bg-muted"}`} />
-                <span className={`absolute right-0 -bottom-5 text-xs font-semibold tracking-wide ${currentStep === 7 ? "text-[hsl(217,91%,70%)]" : "text-muted-foreground"}`}>
+                <div className={`h-full w-full transition-colors ${currentStep >= 7 ? "bg-[hsl(217,91%,70%)]" : "bg-muted"}`} />
+                <span className={`absolute right-0 -bottom-5 text-xs font-semibold tracking-wide ${currentStep >= 7 ? "text-[hsl(217,91%,70%)]" : "text-muted-foreground"}`}>
                   REPORT
                 </span>
               </div>

@@ -1,22 +1,38 @@
 import { Button } from "@/components/ui/button";
-import { useNavigate } from "react-router-dom";
+import { Download, Send } from "lucide-react";
+import { useToast } from "@/hooks/use-toast";
 
 interface WaterMitigationGuidelinesStepProps {
   data: any;
   onBack: () => void;
+  onNext: (data: any) => void;
 }
 
-export const WaterMitigationGuidelinesStep = ({ data, onBack }: WaterMitigationGuidelinesStepProps) => {
-  const navigate = useNavigate();
+export const WaterMitigationGuidelinesStep = ({ data, onBack, onNext }: WaterMitigationGuidelinesStepProps) => {
+  const { toast } = useToast();
 
-  const handleFinish = () => {
-    navigate("/projects");
+  const handleContinue = async () => {
+    onNext(data);
+  };
+
+  const handleExportPDF = () => {
+    toast({
+      title: "PDF Export",
+      description: "PDF export functionality will be implemented soon.",
+    });
+  };
+
+  const handleSendRFP = () => {
+    toast({
+      title: "RFP Sent",
+      description: "Your RFP will be sent to selected contractors.",
+    });
   };
 
   return (
     <div>
       <div className="mb-6">
-        <p className="text-sm text-muted-foreground mb-1">Step 7 of 7</p>
+        <p className="text-sm text-muted-foreground mb-1">Step 8 of 9</p>
         <h2 className="text-2xl font-bold text-foreground mb-2">Water Mitigation Guidelines</h2>
         <p className="text-sm text-muted-foreground">
           Your comprehensive water mitigation plan has been generated. Review the recommendations and
@@ -90,11 +106,13 @@ export const WaterMitigationGuidelinesStep = ({ data, onBack }: WaterMitigationG
         </div>
 
         <div className="flex gap-3">
-          <Button variant="outline" className="flex-1">
-            Download Report
+          <Button variant="outline" className="flex-1" onClick={handleExportPDF}>
+            <Download className="h-4 w-4 mr-2" />
+            Export as PDF
           </Button>
-          <Button variant="outline" className="flex-1">
-            Share with Stakeholders
+          <Button variant="outline" className="flex-1" onClick={handleSendRFP}>
+            <Send className="h-4 w-4 mr-2" />
+            Send as RFP
           </Button>
         </div>
 
@@ -102,7 +120,7 @@ export const WaterMitigationGuidelinesStep = ({ data, onBack }: WaterMitigationG
           <Button type="button" variant="outline" onClick={onBack}>
             Back
           </Button>
-          <Button onClick={handleFinish}>Finish</Button>
+          <Button onClick={handleContinue}>Continue to Proposals</Button>
         </div>
       </div>
     </div>

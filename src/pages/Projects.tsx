@@ -8,6 +8,8 @@ import { useToast } from "@/hooks/use-toast";
 import { getUserFriendlyError } from "@/lib/errorHandling";
 import riskBlueLogo from "@/assets/riskblue-logo.jpg";
 import { format } from "date-fns";
+import { Trash2 } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
 
 interface Project {
   id: string;
@@ -50,6 +52,36 @@ const Projects = () => {
 
   const handleNewProject = () => {
     navigate("/project/new");
+  };
+
+  const handleDeleteProject = async (projectId: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    
+    if (!confirm("Are you sure you want to delete this project?")) {
+      return;
+    }
+
+    try {
+      const { error } = await supabase
+        .from("projects")
+        .delete()
+        .eq("id", projectId);
+
+      if (error) throw error;
+
+      toast({
+        title: "Project deleted",
+        description: "The project has been successfully deleted.",
+      });
+
+      fetchProjects();
+    } catch (error: any) {
+      toast({
+        variant: "destructive",
+        title: "Error deleting project",
+        description: error.message,
+      });
+    }
   };
 
   return (
@@ -119,7 +151,9 @@ const Projects = () => {
                   <th className="px-6 py-3 text-sm font-medium text-foreground">Project Type</th>
                   <th className="px-6 py-3 text-sm font-medium text-foreground">Project Location</th>
                   <th className="px-6 py-3 text-sm font-medium text-foreground">Construction Start Date</th>
+                  <th className="px-6 py-3 text-sm font-medium text-foreground">Status</th>
                   <th className="px-6 py-3 text-sm font-medium text-foreground">Stakeholders</th>
+                  <th className="px-6 py-3 w-[50px]"></th>
                 </tr>
               </thead>
               <tbody>
@@ -138,11 +172,27 @@ const Projects = () => {
                         : "—"}
                     </td>
                     <td className="px-6 py-4">
+                      <Badge
+                        variant={(project as any).status === "completed" ? "default" : "secondary"}
+                      >
+                        {(project as any).status || "draft"}
+                      </Badge>
+                    </td>
+                    <td className="px-6 py-4">
                       <div className="flex -space-x-2">
                         <Avatar className="w-8 h-8 border-2 border-background">
                           <AvatarFallback className="text-xs">{user?.email?.[0].toUpperCase()}</AvatarFallback>
                         </Avatar>
                       </div>
+                    </td>
+                    <td className="px-6 py-4">
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={(e) => handleDeleteProject(project.id, e)}
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
                     </td>
                   </tr>
                 ))}
