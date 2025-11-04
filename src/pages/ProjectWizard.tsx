@@ -146,7 +146,7 @@ const ProjectWizard = () => {
 
   return (
     <div className="min-h-screen bg-background">
-      <header className="border-b bg-card">
+      <header className="sticky top-0 z-20 border-b bg-card">
         <div className="container mx-auto px-6 py-4 flex items-center justify-between">
           <img src={riskBlueLogo} alt="RiskBlue" className="h-8" />
           <div className="flex items-center gap-6">
