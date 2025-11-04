@@ -18,86 +18,77 @@ interface Proposal {
   company_name: string;
   contact_email: string;
   contact_phone: string | null;
-  proposed_cost: number;
+  proposed_cost: number | null;
   proposal_details: string | null;
   status: string;
   submitted_at: string;
-  response_time?: string;
-  warranty_years?: number;
-  certifications?: string;
-  availability?: string;
+  domestic_cold_water?: number | null;
+  domestic_hot_water?: number | null;
+  temporary_water?: number | null;
+  main_city_water?: number | null;
+  fire_suppression_system?: number | null;
 }
 
 const MOCK_PROPOSALS: Proposal[] = [
   {
     id: "1",
-    company_name: "AquaGuard Solutions",
-    contact_email: "contact@aquaguard.com",
+    company_name: "FloorSense Inc",
+    contact_email: "contact@floorsense.com",
     contact_phone: "(555) 123-4567",
-    proposed_cost: 245000,
-    proposal_details: "Complete water mitigation system with 24/7 monitoring",
+    proposed_cost: 510000,
+    proposal_details: "Complete water detection and mitigation system",
     status: "pending",
     submitted_at: new Date().toISOString(),
-    response_time: "24 hours",
-    warranty_years: 5,
-    certifications: "ISO 9001, IICRC",
-    availability: "Immediate"
+    domestic_cold_water: 100000,
+    domestic_hot_water: 160000,
+    temporary_water: null,
+    main_city_water: 250000,
+    fire_suppression_system: null
   },
   {
     id: "2",
-    company_name: "WaterShield Pro",
-    contact_email: "info@watershieldpro.com",
+    company_name: "AquaShield Solutions",
+    contact_email: "info@aquashield.com",
     contact_phone: "(555) 234-5678",
-    proposed_cost: 198500,
-    proposal_details: "Advanced detection and response system",
+    proposed_cost: 850000,
+    proposal_details: "Premium water management system",
     status: "pending",
     submitted_at: new Date().toISOString(),
-    response_time: "48 hours",
-    warranty_years: 3,
-    certifications: "IICRC, RIA",
-    availability: "2 weeks"
+    domestic_cold_water: null,
+    domestic_hot_water: 350000,
+    temporary_water: 250000,
+    main_city_water: null,
+    fire_suppression_system: 250000
   },
   {
     id: "3",
-    company_name: "FloodDefense Inc.",
-    contact_email: "sales@flooddefense.com",
+    company_name: "Integrity Water Management",
+    contact_email: "sales@integritywm.com",
     contact_phone: "(555) 345-6789",
-    proposed_cost: 312000,
-    proposal_details: "Premium solution with AI-powered monitoring",
+    proposed_cost: 700000,
+    proposal_details: "Comprehensive water system protection",
     status: "pending",
     submitted_at: new Date().toISOString(),
-    response_time: "12 hours",
-    warranty_years: 10,
-    certifications: "ISO 9001, IICRC, RIA",
-    availability: "Immediate"
+    domestic_cold_water: 380000,
+    domestic_hot_water: null,
+    temporary_water: 100000,
+    main_city_water: 120000,
+    fire_suppression_system: 100000
   },
   {
     id: "4",
-    company_name: "HydroProtect Systems",
-    contact_email: "contact@hydroprotect.com",
+    company_name: "EllisDon",
+    contact_email: "contact@ellisdon.com",
     contact_phone: "(555) 456-7890",
-    proposed_cost: 225000,
-    proposal_details: "Comprehensive water management system",
+    proposed_cost: null,
+    proposal_details: "To be determined - proposal pending",
     status: "pending",
     submitted_at: new Date().toISOString(),
-    response_time: "36 hours",
-    warranty_years: 7,
-    certifications: "IICRC",
-    availability: "1 week"
-  },
-  {
-    id: "5",
-    company_name: "DryZone Technologies",
-    contact_email: "info@dryzone.com",
-    contact_phone: "(555) 567-8901",
-    proposed_cost: 189000,
-    proposal_details: "Cost-effective mitigation solution",
-    status: "pending",
-    submitted_at: new Date().toISOString(),
-    response_time: "72 hours",
-    warranty_years: 2,
-    certifications: "RIA",
-    availability: "3 weeks"
+    domestic_cold_water: null,
+    domestic_hot_water: null,
+    temporary_water: null,
+    main_city_water: null,
+    fire_suppression_system: null
   }
 ];
 
@@ -155,7 +146,7 @@ export const ProposalsStep = ({ data, onBack }: ProposalsStepProps) => {
             </div>
 
             <ScrollArea className="w-full">
-              <div className="relative min-w-[1200px]">
+              <div className="relative min-w-[1400px]">
                 <Table>
                   <TableHeader>
                     <TableRow>
@@ -165,18 +156,17 @@ export const ProposalsStep = ({ data, onBack }: ProposalsStepProps) => {
                           onCheckedChange={toggleSelectAll}
                         />
                       </TableHead>
-                      <TableHead className="sticky left-[50px] z-20 bg-background min-w-[200px]">
-                        Company Name
+                      <TableHead className="sticky left-[50px] z-20 bg-background min-w-[220px]">
+                        Company
                       </TableHead>
-                      <TableHead className="min-w-[150px]">Contact Email</TableHead>
-                      <TableHead className="min-w-[130px]">Phone</TableHead>
-                      <TableHead className="min-w-[120px]">Response Time</TableHead>
-                      <TableHead className="min-w-[100px]">Warranty</TableHead>
-                      <TableHead className="min-w-[150px]">Certifications</TableHead>
-                      <TableHead className="min-w-[120px]">Availability</TableHead>
-                      <TableHead className="sticky right-0 z-20 bg-background min-w-[150px] text-right">
+                      <TableHead className="sticky left-[270px] z-20 bg-background min-w-[140px] text-right">
                         Total Cost
                       </TableHead>
+                      <TableHead className="min-w-[180px] text-right">Domestic Cold Water</TableHead>
+                      <TableHead className="min-w-[180px] text-right">Domestic Hot Water</TableHead>
+                      <TableHead className="min-w-[160px] text-right">Temporary Water</TableHead>
+                      <TableHead className="min-w-[160px] text-right">Main City Water</TableHead>
+                      <TableHead className="min-w-[200px] text-right">Fire Suppression System</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -191,23 +181,60 @@ export const ProposalsStep = ({ data, onBack }: ProposalsStepProps) => {
                         <TableCell className="sticky left-[50px] z-10 bg-background font-semibold">
                           {proposal.company_name}
                         </TableCell>
-                        <TableCell className="text-muted-foreground">
-                          {proposal.contact_email}
+                        <TableCell className="sticky left-[270px] z-10 bg-background text-right">
+                          {proposal.proposed_cost ? (
+                            <div className="flex items-center justify-end gap-1 font-bold text-lg text-primary">
+                              <DollarSign className="h-5 w-5" />
+                              {(proposal.proposed_cost / 1000).toFixed(0)}k
+                            </div>
+                          ) : (
+                            <span className="text-muted-foreground">N/A</span>
+                          )}
                         </TableCell>
-                        <TableCell className="text-muted-foreground">
-                          {proposal.contact_phone || "—"}
+                        <TableCell className="text-right">
+                          {proposal.domestic_cold_water ? (
+                            <span className="font-medium">
+                              ${(proposal.domestic_cold_water / 1000).toFixed(0)}k
+                            </span>
+                          ) : (
+                            <span className="text-muted-foreground">—</span>
+                          )}
                         </TableCell>
-                        <TableCell>{proposal.response_time || "—"}</TableCell>
-                        <TableCell>
-                          {proposal.warranty_years ? `${proposal.warranty_years} years` : "—"}
+                        <TableCell className="text-right">
+                          {proposal.domestic_hot_water ? (
+                            <span className="font-medium">
+                              ${(proposal.domestic_hot_water / 1000).toFixed(0)}k
+                            </span>
+                          ) : (
+                            <span className="text-muted-foreground">—</span>
+                          )}
                         </TableCell>
-                        <TableCell className="text-sm">{proposal.certifications || "—"}</TableCell>
-                        <TableCell>{proposal.availability || "—"}</TableCell>
-                        <TableCell className="sticky right-0 z-10 bg-background text-right">
-                          <div className="flex items-center justify-end gap-1 font-bold text-lg text-primary">
-                            <DollarSign className="h-5 w-5" />
-                            {proposal.proposed_cost.toLocaleString()}
-                          </div>
+                        <TableCell className="text-right">
+                          {proposal.temporary_water ? (
+                            <span className="font-medium">
+                              ${(proposal.temporary_water / 1000).toFixed(0)}k
+                            </span>
+                          ) : (
+                            <span className="text-muted-foreground">—</span>
+                          )}
+                        </TableCell>
+                        <TableCell className="text-right">
+                          {proposal.main_city_water ? (
+                            <span className="font-medium">
+                              ${(proposal.main_city_water / 1000).toFixed(0)}k
+                            </span>
+                          ) : (
+                            <span className="text-muted-foreground">—</span>
+                          )}
+                        </TableCell>
+                        <TableCell className="text-right">
+                          {proposal.fire_suppression_system ? (
+                            <span className="font-medium">
+                              ${(proposal.fire_suppression_system / 1000).toFixed(0)}k
+                            </span>
+                          ) : (
+                            <span className="text-muted-foreground">—</span>
+                          )}
                         </TableCell>
                       </TableRow>
                     ))}
