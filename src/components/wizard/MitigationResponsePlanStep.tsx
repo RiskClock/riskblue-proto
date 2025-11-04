@@ -158,111 +158,108 @@ export const MitigationResponsePlanStep = ({
         </p>
       </div>
 
-      {!fileUploaded ? (
-        <Card className="p-6">
-          <div className="space-y-4">
-            <div>
-              <label className="block text-sm font-medium mb-2">
-                Upload Document
-              </label>
-              <div className="flex gap-4 items-center">
-                <Input
-                  type="file"
-                  onChange={handleFileChange}
-                  accept=".pdf,.doc,.docx,.txt"
-                  className="flex-1"
-                />
-                <Button
-                  type="button"
-                  onClick={handleUpload}
-                  disabled={!selectedFile || uploading}
-                >
-                  {uploading ? (
-                    <>
-                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                      Uploading...
-                    </>
-                  ) : (
-                    <>
-                      <Upload className="w-4 h-4 mr-2" />
-                      Upload
-                    </>
-                  )}
-                </Button>
-              </div>
-              {selectedFile && (
-                <p className="text-sm text-muted-foreground mt-2">
-                  Selected: {selectedFile.name}
-                </p>
-              )}
-            </div>
-          </div>
-        </Card>
-      ) : (
-        <Card className="p-6">
-          <div className="space-y-4">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-lg font-semibold">Ask Questions</h3>
-              <span className="text-sm text-green-600">✓ Document uploaded</span>
-            </div>
-
-            <ScrollArea className="h-96 border rounded-lg p-4 bg-muted/30">
-              {messages.length === 0 ? (
-                <p className="text-center text-muted-foreground py-8">
-                  Start asking questions about your document
-                </p>
-              ) : (
-                <div className="space-y-4">
-                  {messages.map((msg, idx) => (
-                    <div
-                      key={idx}
-                      className={`flex ${
-                        msg.role === "user" ? "justify-end" : "justify-start"
-                      }`}
-                    >
-                      <div
-                        className={`max-w-[80%] rounded-lg p-3 ${
-                          msg.role === "user"
-                            ? "bg-primary text-primary-foreground"
-                            : "bg-card border"
-                        }`}
-                      >
-                        <p className="text-sm whitespace-pre-wrap">{msg.content}</p>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </ScrollArea>
-
-            <div className="flex gap-2">
+      <Card className="p-6 mb-4">
+        <div className="space-y-4">
+          <div>
+            <label className="block text-sm font-medium mb-2">
+              Upload Document {fileUploaded && <span className="text-green-600 ml-2">✓ Uploaded</span>}
+            </label>
+            <div className="flex gap-4 items-center">
               <Input
-                value={question}
-                onChange={(e) => setQuestion(e.target.value)}
-                placeholder="Ask a question about your document..."
-                onKeyDown={(e) => {
-                  if (e.key === "Enter" && !e.shiftKey) {
-                    e.preventDefault();
-                    handleSendQuestion();
-                  }
-                }}
-                disabled={sending}
+                type="file"
+                onChange={handleFileChange}
+                accept=".pdf,.doc,.docx,.txt"
+                className="flex-1"
               />
               <Button
                 type="button"
-                onClick={handleSendQuestion}
-                disabled={!question.trim() || sending}
+                onClick={handleUpload}
+                disabled={!selectedFile || uploading}
               >
-                {sending ? (
-                  <Loader2 className="w-4 h-4 animate-spin" />
+                {uploading ? (
+                  <>
+                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                    Uploading...
+                  </>
                 ) : (
-                  <Send className="w-4 h-4" />
+                  <>
+                    <Upload className="w-4 h-4 mr-2" />
+                    Upload
+                  </>
                 )}
               </Button>
             </div>
+            {selectedFile && (
+              <p className="text-sm text-muted-foreground mt-2">
+                Selected: {selectedFile.name}
+              </p>
+            )}
           </div>
-        </Card>
-      )}
+        </div>
+      </Card>
+
+      <Card className="p-6">
+        <div className="space-y-4">
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-lg font-semibold">Ask Questions</h3>
+          </div>
+
+          <ScrollArea className="h-96 border rounded-lg p-4 bg-muted/30">
+            {messages.length === 0 ? (
+              <p className="text-center text-muted-foreground py-8">
+                Start asking questions {fileUploaded ? 'about your document' : '(upload a document first for better context)'}
+              </p>
+            ) : (
+              <div className="space-y-4">
+                {messages.map((msg, idx) => (
+                  <div
+                    key={idx}
+                    className={`flex ${
+                      msg.role === "user" ? "justify-end" : "justify-start"
+                    }`}
+                  >
+                    <div
+                      className={`max-w-[80%] rounded-lg p-3 ${
+                        msg.role === "user"
+                          ? "bg-primary text-primary-foreground"
+                          : "bg-card border"
+                      }`}
+                    >
+                      <p className="text-sm whitespace-pre-wrap">{msg.content}</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </ScrollArea>
+
+          <div className="flex gap-2">
+            <Input
+              value={question}
+              onChange={(e) => setQuestion(e.target.value)}
+              placeholder="Ask a question..."
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && !e.shiftKey) {
+                  e.preventDefault();
+                  handleSendQuestion();
+                }
+              }}
+              disabled={sending}
+            />
+            <Button
+              type="button"
+              onClick={handleSendQuestion}
+              disabled={!question.trim() || sending}
+            >
+              {sending ? (
+                <Loader2 className="w-4 h-4 animate-spin" />
+              ) : (
+                <Send className="w-4 h-4" />
+              )}
+            </Button>
+          </div>
+        </div>
+      </Card>
 
       <div className="flex gap-4">
         <Button type="button" variant="outline" onClick={onBack}>
