@@ -145,9 +145,8 @@ export const ProposalsStep = ({ data, onBack }: ProposalsStepProps) => {
               </p>
             </div>
 
-            <ScrollArea className="w-full">
-              <div className="relative min-w-[1400px]">
-                <Table>
+            <div className="w-full overflow-x-auto">
+              <Table className="min-w-[1400px]">
                   <TableHeader>
                     <TableRow>
                       <TableHead className="sticky left-0 z-20 bg-background w-[50px]">
@@ -240,8 +239,7 @@ export const ProposalsStep = ({ data, onBack }: ProposalsStepProps) => {
                     ))}
                   </TableBody>
                 </Table>
-              </div>
-            </ScrollArea>
+            </div>
           </div>
         )}
       </Card>
