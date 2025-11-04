@@ -162,8 +162,8 @@ const ProjectWizard = () => {
         </div>
       </header>
 
-      {/* Sticky header */}
-      <div className="sticky top-0 z-10 bg-background border-b">
+      {/* Sticky tabs section */}
+      <div className="sticky top-[4.5rem] z-10 bg-background border-b">
         <div className="container mx-auto px-6 py-4">
           {/* Progress tabs - Pill UI */}
           <div className="flex items-center gap-2 flex-wrap mb-3">
