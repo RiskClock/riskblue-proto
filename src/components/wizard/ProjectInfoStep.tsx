@@ -79,19 +79,14 @@ export const ProjectInfoStep = ({ data, onNext }: ProjectInfoStepProps) => {
 
   return (
     <div>
-      <div className="mb-6">
-        <p className="text-sm text-muted-foreground mb-1">Step 1 of 7</p>
-        <h2 className="text-2xl font-bold text-foreground mb-2">Project Info</h2>
+      <div className="mb-4">
+        <h2 className="text-2xl font-bold text-foreground mb-1">Basic Project Info</h2>
         <p className="text-sm text-muted-foreground">
-          Filling out project and insurance details ensures all critical information is documented,
-          helping to avoid delays and misunderstandings during construction. Inviting other stakeholders
-          to contribute allows for accurate and comprehensive data entry, creating a shared source of
-          truth for the entire team. This collaboration streamlines communication, reduces risks, and
-          ensures the project runs smoothly from start to finish.
+          Enter project details and insurance information for accurate documentation.
         </p>
       </div>
 
-      <form onSubmit={handleSubmit} className="space-y-6">
+      <form onSubmit={handleSubmit} className="space-y-4">
         <div className="space-y-2">
           <Label htmlFor="name">Project name</Label>
           <Input
@@ -105,60 +100,46 @@ export const ProjectInfoStep = ({ data, onNext }: ProjectInfoStepProps) => {
 
         <div className="space-y-2">
           <Label>Project address</Label>
-          <div className="grid grid-cols-2 gap-4">
-            <div className="col-span-2 space-y-2">
-              <Label htmlFor="address_1" className="text-sm text-muted-foreground">Address 1</Label>
-              <Input
-                id="address_1"
-                value={formData.address_1}
-                onChange={(e) => setFormData({ ...formData, address_1: e.target.value })}
-                placeholder="5060 Flagami Blvd"
-              />
-            </div>
-            <div className="col-span-2 space-y-2">
-              <Label htmlFor="address_2" className="text-sm text-muted-foreground">Address 2</Label>
-              <Input
-                id="address_2"
-                value={formData.address_2}
-                onChange={(e) => setFormData({ ...formData, address_2: e.target.value })}
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="city" className="text-sm text-muted-foreground">City</Label>
+          <div className="space-y-3">
+            <Input
+              id="address_1"
+              value={formData.address_1}
+              onChange={(e) => setFormData({ ...formData, address_1: e.target.value })}
+              placeholder="Address 1"
+            />
+            <Input
+              id="address_2"
+              value={formData.address_2}
+              onChange={(e) => setFormData({ ...formData, address_2: e.target.value })}
+              placeholder="Address 2 (optional)"
+              className="text-muted-foreground"
+            />
+            <div className="grid grid-cols-3 gap-3">
               <Input
                 id="city"
                 value={formData.city}
                 onChange={(e) => setFormData({ ...formData, city: e.target.value })}
-                placeholder="Miami"
+                placeholder="City"
               />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="state" className="text-sm text-muted-foreground">State / Province</Label>
               <Input
                 id="state"
                 value={formData.state}
                 onChange={(e) => setFormData({ ...formData, state: e.target.value })}
-                placeholder="Florida"
+                placeholder="State"
               />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="zip_code" className="text-sm text-muted-foreground">Zip / Postal code</Label>
               <Input
                 id="zip_code"
                 value={formData.zip_code}
                 onChange={(e) => setFormData({ ...formData, zip_code: e.target.value })}
-                placeholder="33144"
+                placeholder="Zip"
               />
             </div>
-            <div className="space-y-2">
-              <Label htmlFor="country" className="text-sm text-muted-foreground">Country</Label>
-              <Input
-                id="country"
-                value={formData.country}
-                onChange={(e) => setFormData({ ...formData, country: e.target.value })}
-                placeholder="United States"
-              />
-            </div>
+            <Input
+              id="country"
+              value={formData.country}
+              onChange={(e) => setFormData({ ...formData, country: e.target.value })}
+              placeholder="Country"
+            />
           </div>
         </div>
 
@@ -181,7 +162,7 @@ export const ProjectInfoStep = ({ data, onNext }: ProjectInfoStepProps) => {
         </div>
 
         <div className="flex justify-end">
-          <Button type="submit">Continue</Button>
+          <Button type="submit">Save</Button>
         </div>
       </form>
     </div>
