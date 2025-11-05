@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 
 const assets = [
@@ -51,24 +51,18 @@ export const CriticalAssetsStep = ({ data, onNext, onBack }: CriticalAssetsStepP
     );
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    onNext({ selectedAssets });
-  };
+  // Auto-save with debounce
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      onNext({ selectedAssets });
+    }, 500);
+
+    return () => clearTimeout(timer);
+  }, [selectedAssets, onNext]);
 
   return (
-    <div>
-      <div className="mb-6">
-        <p className="text-sm text-muted-foreground mb-1">Step 4 of 7</p>
-        <h2 className="text-2xl font-bold text-foreground mb-2">Critical Assets at Risk</h2>
-        <p className="text-sm text-muted-foreground">
-          Identify the key assets on your construction site that require priority protection from
-          water-related risks, and carefully select or deselect the critical assets you want to safeguard.
-        </p>
-      </div>
-
-      <form onSubmit={handleSubmit} className="space-y-6">
-        <div className="grid md:grid-cols-2 gap-4">
+    <div className="space-y-6">
+      <div className="grid md:grid-cols-2 gap-4">
           {assets.map((asset) => (
             <div
               key={asset.id}
@@ -130,14 +124,6 @@ export const CriticalAssetsStep = ({ data, onNext, onBack }: CriticalAssetsStepP
             </div>
           ))}
         </div>
-
-        <div className="flex justify-between">
-          <Button type="button" variant="outline" onClick={onBack}>
-            Back
-          </Button>
-          <Button type="submit">Continue</Button>
-        </div>
-      </form>
     </div>
   );
 };

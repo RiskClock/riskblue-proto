@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 
 const mitigationControls = [
@@ -27,25 +27,18 @@ export const MitigationControlsStep = ({ data, onNext, onBack }: MitigationContr
     );
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    onNext({ selectedControls });
-  };
+  // Auto-save with debounce
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      onNext({ selectedControls });
+    }, 500);
+
+    return () => clearTimeout(timer);
+  }, [selectedControls, onNext]);
 
   return (
-    <div>
-      <div className="mb-6">
-        <p className="text-sm text-muted-foreground mb-1">Step 6 of 7</p>
-        <h2 className="text-2xl font-bold text-foreground mb-2">Mitigation Controls</h2>
-        <p className="text-sm text-muted-foreground">
-          Selecting Mitigation Controls is one of the most critical aspects of water risk mitigation planning.
-          In this section, you will identify, select, or deselect the control measures most relevant to your
-          project's needs.
-        </p>
-      </div>
-
-      <form onSubmit={handleSubmit} className="space-y-6">
-        <div className="bg-muted/30 p-6 rounded-lg mb-6">
+    <div className="space-y-6">
+      <div className="bg-muted/30 p-6 rounded-lg mb-6">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-4">
               <div className="text-2xl">⚙️</div>
@@ -126,14 +119,6 @@ export const MitigationControlsStep = ({ data, onNext, onBack }: MitigationContr
               ))}
           </div>
         </div>
-
-        <div className="flex justify-between">
-          <Button type="button" variant="outline" onClick={onBack}>
-            Back
-          </Button>
-          <Button type="submit">Continue</Button>
-        </div>
-      </form>
     </div>
   );
 };

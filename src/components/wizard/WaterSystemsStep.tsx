@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 
 const waterSystems = [
@@ -51,24 +51,18 @@ export const WaterSystemsStep = ({ data, onNext, onBack }: WaterSystemsStepProps
     );
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    onNext({ selectedSystems });
-  };
+  // Auto-save with debounce
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      onNext({ selectedSystems });
+    }, 500);
+
+    return () => clearTimeout(timer);
+  }, [selectedSystems, onNext]);
 
   return (
-    <div>
-      <div className="mb-6">
-        <p className="text-sm text-muted-foreground mb-1">Step 5 of 7</p>
-        <h2 className="text-2xl font-bold text-foreground mb-2">Water Systems at Risk</h2>
-        <p className="text-sm text-muted-foreground">
-          Identify the water systems on your construction site that require priority protection, and carefully
-          select or deselect the critical systems you want to safeguard.
-        </p>
-      </div>
-
-      <form onSubmit={handleSubmit} className="space-y-6">
-        <div className="grid md:grid-cols-2 gap-4">
+    <div className="space-y-6">
+      <div className="grid md:grid-cols-2 gap-4">
           {waterSystems.map((system) => (
             <div
               key={system.id}
@@ -136,14 +130,6 @@ export const WaterSystemsStep = ({ data, onNext, onBack }: WaterSystemsStepProps
             </div>
           ))}
         </div>
-
-        <div className="flex justify-between">
-          <Button type="button" variant="outline" onClick={onBack}>
-            Back
-          </Button>
-          <Button type="submit">Continue</Button>
-        </div>
-      </form>
     </div>
   );
 };

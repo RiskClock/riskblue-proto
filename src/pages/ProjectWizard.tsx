@@ -216,15 +216,15 @@ const ProjectWizard = () => {
 
               <AccordionItem value="assets-systems" className="border rounded-lg px-6">
                 <AccordionTrigger className="text-lg font-semibold">
-                  Assets and Systems
+                  Assets & Systems
                 </AccordionTrigger>
                 <AccordionContent className="space-y-8 pt-4">
                   <div className="space-y-6">
-                    <h3 className="text-md font-medium">Critical Assets at Risk</h3>
+                    <h3 className="text-md font-medium">Critical Assets</h3>
                     <CriticalAssetsStep data={projectData} onNext={handleStepUpdate} onBack={() => {}} />
                   </div>
                   <div className="space-y-6 pt-6 border-t">
-                    <h3 className="text-md font-medium">Water Systems at Risk</h3>
+                    <h3 className="text-md font-medium">Water Systems</h3>
                     <WaterSystemsStep data={projectData} onNext={handleStepUpdate} onBack={() => {}} />
                   </div>
                 </AccordionContent>
