@@ -34,7 +34,7 @@ export const DocumentUploadChat = ({ projectId }: DocumentUploadChatProps) => {
 
     try {
       const response = await fetch(
-        "https://gyubok.app.n8n.cloud/webhook/e2fe8425-b13f-46a9-b7c6-064c5425cf06",
+        "https://gyubok.app.n8n.cloud/webhook-test/e2fe8425-b13f-46a9-b7c6-064c5425cf06",
         {
           method: "POST",
           body: formData,
@@ -78,7 +78,7 @@ export const DocumentUploadChat = ({ projectId }: DocumentUploadChatProps) => {
 
     try {
       const response = await fetch(
-        "https://gyubok.app.n8n.cloud/webhook/e2fe8425-b13f-46a9-b7c6-064c5425cf06",
+        "https://gyubok.app.n8n.cloud/webhook-test/e2fe8425-b13f-46a9-b7c6-064c5425cf06",
         {
           method: "POST",
           headers: {
