@@ -48,7 +48,6 @@ export const ProjectMilestonesStep = ({ data, onNext, onBack }: ProjectMilestone
   return (
     <div className="space-y-8">
         <div>
-          <Label className="text-base mb-4 block">Construction Timeline</Label>
           <div className="grid grid-cols-2 gap-6">
             <div className="space-y-2">
               <Label htmlFor="start_date" className="text-sm text-muted-foreground">Start date</Label>

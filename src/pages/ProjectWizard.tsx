@@ -205,7 +205,7 @@ const ProjectWizard = () => {
                     <ProjectInfoStep data={projectData} onNext={handleStepUpdate} />
                   </div>
                   <div className="space-y-6 pt-6 border-t">
-                    <h3 className="text-md font-medium">Milestones</h3>
+                    <h3 className="text-md font-medium">Milestones & Timelines</h3>
                     <ProjectMilestonesStep data={projectData} onNext={handleStepUpdate} onBack={() => {}} />
                   </div>
                   <div className="space-y-6 pt-6 border-t">
