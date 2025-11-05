@@ -6,9 +6,10 @@ import { useToast } from "@/hooks/use-toast";
 
 interface DocumentUploadChatProps {
   projectId: string;
+  onDataExtracted?: (data: any) => void;
 }
 
-export const DocumentUploadChat = ({ projectId }: DocumentUploadChatProps) => {
+export const DocumentUploadChat = ({ projectId, onDataExtracted }: DocumentUploadChatProps) => {
   const { toast } = useToast();
   const [uploadedFile, setUploadedFile] = useState<File | null>(null);
   const [uploading, setUploading] = useState(false);
@@ -41,10 +42,25 @@ export const DocumentUploadChat = ({ projectId }: DocumentUploadChatProps) => {
       const data = await response.text();
       setUploadedFile(file);
       setResponseData(data);
-      toast({
-        title: "File uploaded",
-        description: "Document processed successfully",
-      });
+      
+      // Parse the response and extract data for auto-fill
+      try {
+        const parsedData = JSON.parse(data);
+        if (onDataExtracted) {
+          onDataExtracted(parsedData);
+        }
+        toast({
+          title: "Success",
+          description: "File uploaded and analyzed. Information has been pre-filled.",
+        });
+      } catch (e) {
+        // If not JSON, just continue without auto-fill
+        console.log("Response is not JSON, skipping auto-fill");
+        toast({
+          title: "File uploaded",
+          description: "Document processed successfully",
+        });
+      }
     } catch (error) {
       console.error("Upload error:", error);
       toast({
