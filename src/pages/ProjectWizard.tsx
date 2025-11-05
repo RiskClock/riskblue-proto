@@ -17,6 +17,7 @@ import { MitigationControlsStep } from "@/components/wizard/MitigationControlsSt
 import { MitigationResponsePlanStep } from "@/components/wizard/MitigationResponsePlanStep";
 import { WaterMitigationGuidelinesStep } from "@/components/wizard/WaterMitigationGuidelinesStep";
 import { ProposalsStep } from "@/components/wizard/ProposalsStep";
+import { DocumentUploadChat } from "@/components/DocumentUploadChat";
 
 interface ProjectData {
   [key: string]: any;
@@ -195,6 +196,7 @@ const ProjectWizard = () => {
           </TabsList>
 
           <TabsContent value="guideline" className="max-w-5xl mx-auto">
+            <DocumentUploadChat projectId={id || "new"} />
             <Accordion type="single" collapsible className="space-y-4">
               <AccordionItem value="basic-info" className="border rounded-lg px-6">
                 <AccordionTrigger className="text-lg font-semibold">
