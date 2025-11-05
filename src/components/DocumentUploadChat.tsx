@@ -41,8 +41,13 @@ export const DocumentUploadChat = ({ projectId }: DocumentUploadChatProps) => {
         }
       );
 
-      if (!response.ok) throw new Error("Failed to upload file");
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error("Upload failed:", errorText);
+        throw new Error("Failed to upload file");
+      }
 
+      const data = await response.json();
       setUploadedFile(file);
       toast({
         title: "File uploaded",
@@ -52,7 +57,7 @@ export const DocumentUploadChat = ({ projectId }: DocumentUploadChatProps) => {
       console.error("Upload error:", error);
       toast({
         title: "Error",
-        description: "Failed to upload file",
+        description: error instanceof Error ? error.message : "Failed to upload file",
         variant: "destructive",
       });
     } finally {
