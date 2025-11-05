@@ -202,15 +202,13 @@ const ProjectWizard = () => {
                 </AccordionTrigger>
                 <AccordionContent className="space-y-8 pt-4">
                   <div className="space-y-6">
-                    <h3 className="text-md font-medium">Project Information</h3>
                     <ProjectInfoStep data={projectData} onNext={handleStepUpdate} />
                   </div>
                   <div className="space-y-6 pt-6 border-t">
-                    <h3 className="text-md font-medium">Project Milestones</h3>
+                    <h3 className="text-md font-medium">Milestones</h3>
                     <ProjectMilestonesStep data={projectData} onNext={handleStepUpdate} onBack={() => {}} />
                   </div>
                   <div className="space-y-6 pt-6 border-t">
-                    <h3 className="text-md font-medium">Construction Details</h3>
                     <ConstructionDetailsStep data={projectData} onNext={handleStepUpdate} onBack={() => {}} projectId={id} />
                   </div>
                 </AccordionContent>
