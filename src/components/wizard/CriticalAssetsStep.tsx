@@ -112,7 +112,7 @@ export const CriticalAssetsStep = ({ data, onNext, onBack }: CriticalAssetsStepP
               onClick={() => toggleAsset(asset.id)}
             >
               <div className="h-24 bg-muted rounded mb-3 flex items-center justify-center overflow-hidden">
-                <img src={asset.image} alt={asset.name} className="w-full h-full object-cover" />
+                <img src={asset.image} alt={asset.name} className="w-full h-full object-contain" />
               </div>
               <h3 className="font-semibold mb-2 text-sm">{asset.name}</h3>
               <div className="space-y-1.5 text-xs">

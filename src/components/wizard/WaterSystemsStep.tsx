@@ -1,5 +1,11 @@
 import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
+import domesticColdWaterImg from "@/assets/water_system_domestic_cold_water.avif";
+import domesticHotWaterImg from "@/assets/water_system_domestic_hot_water.avif";
+import temporaryWaterRunImg from "@/assets/water_system_temporary_water_run.avif";
+import mainWaterEntryImg from "@/assets/water_system_main_water_entry.avif";
+import hydronicsImg from "@/assets/water_system_hydronics.avif";
+import fireSuppressionImg from "@/assets/water_system_fire_suppression.avif";
 
 const waterSystems = [
   {
@@ -9,6 +15,7 @@ const waterSystems = [
     riskLevel: "Very High Risk",
     duration: "0 months",
     cost: "$$$",
+    image: domesticColdWaterImg,
   },
   {
     id: "domestic-hot",
@@ -17,22 +24,43 @@ const waterSystems = [
     riskLevel: "High Risk",
     duration: "0 months",
     cost: "$$$$",
+    image: domesticHotWaterImg,
   },
   {
-    id: "fire-sprinkler",
-    name: "Fire Sprinkler System",
-    threat: "Design, Damage, Cold Temperature",
-    riskLevel: "High Risk",
-    duration: "2 months",
-    cost: "$$",
-  },
-  {
-    id: "storm-drainage",
-    name: "Storm Drainage",
-    threat: "Environmental",
-    riskLevel: "Medium Risk",
+    id: "temporary-water",
+    name: "Temporary Water Run",
+    threat: "Design, Damage, Vandalism, Cold Temperature",
+    riskLevel: "Very High Risk",
     duration: "0 months",
     cost: "$",
+    image: temporaryWaterRunImg,
+  },
+  {
+    id: "main-water-entry",
+    name: "Main City Water Supply",
+    threat: "Design, Damage, Vandalism, Cold Temperature",
+    riskLevel: "Moderate Risk",
+    duration: "0 months",
+    cost: "$",
+    image: mainWaterEntryImg,
+  },
+  {
+    id: "hydronics",
+    name: "Hydronics",
+    threat: "Design, Damage, Vandalism, Cold Temperature",
+    riskLevel: "Moderate Risk",
+    duration: "0 months",
+    cost: "$$$$$",
+    image: hydronicsImg,
+  },
+  {
+    id: "fire-suppression",
+    name: "Fire Suppression System",
+    threat: "Design, Damage, Vandalism, Cold Temperature",
+    riskLevel: "Very High Risk",
+    duration: "0 months",
+    cost: "$",
+    image: fireSuppressionImg,
   },
 ];
 
@@ -62,38 +90,38 @@ export const WaterSystemsStep = ({ data, onNext, onBack }: WaterSystemsStepProps
 
   return (
     <div className="space-y-6">
-      <div className="grid md:grid-cols-2 gap-4">
+      <div className="grid md:grid-cols-3 gap-3">
           {waterSystems.map((system) => (
             <div
               key={system.id}
-              className={`p-6 rounded-lg border-2 cursor-pointer transition-all ${
+              className={`p-4 rounded-lg border-2 cursor-pointer transition-all ${
                 selectedSystems.includes(system.id)
                   ? "border-primary bg-primary/5"
                   : "border-border hover:border-primary/50"
               }`}
               onClick={() => toggleSystem(system.id)}
             >
-              <div className="h-32 bg-muted rounded mb-4 flex items-center justify-center text-muted-foreground text-sm">
-                {system.name} Icon
+              <div className="h-24 bg-muted rounded mb-3 flex items-center justify-center overflow-hidden">
+                <img src={system.image} alt={system.name} className="w-full h-full object-contain" />
               </div>
-              <h3 className="font-semibold mb-3">{system.name}</h3>
-              <div className="space-y-2 text-sm">
-                <div className="flex justify-between">
+              <h3 className="font-semibold mb-2 text-sm">{system.name}</h3>
+              <div className="space-y-1.5 text-xs">
+                <div className="flex justify-between items-start gap-2">
                   <span className="text-muted-foreground">Threat</span>
                   <span
-                    className={
+                    className={`font-medium text-right ${
                       system.riskLevel.includes("Very High")
-                        ? "text-destructive font-medium"
+                        ? "text-destructive"
                         : system.riskLevel.includes("High")
-                        ? "text-warning font-medium"
-                        : "text-accent font-medium"
-                    }
+                        ? "text-orange-500"
+                        : "text-warning"
+                    }`}
                   >
                     {system.riskLevel}
                   </span>
                 </div>
-                <p className="text-muted-foreground">{system.threat}</p>
-                <div className="flex justify-between pt-2">
+                <p className="text-muted-foreground text-xs">{system.threat}</p>
+                <div className="flex justify-between pt-1.5">
                   <div>
                     <p className="text-muted-foreground">Risk Duration</p>
                     <p className="font-medium">{system.duration}</p>
@@ -104,29 +132,18 @@ export const WaterSystemsStep = ({ data, onNext, onBack }: WaterSystemsStepProps
                   </div>
                 </div>
               </div>
-              <div className="flex gap-2 mt-4">
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  className="flex-1"
-                  onClick={(e) => e.stopPropagation()}
-                >
-                  Additional Details
-                </Button>
-                <Button
-                  type="button"
-                  variant={selectedSystems.includes(system.id) ? "default" : "outline"}
-                  size="sm"
-                  className="flex-1"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    toggleSystem(system.id);
-                  }}
-                >
-                  {selectedSystems.includes(system.id) ? "Selected" : "Unselect"}
-                </Button>
-              </div>
+              <Button
+                type="button"
+                variant={selectedSystems.includes(system.id) ? "default" : "outline"}
+                size="sm"
+                className="w-full mt-3"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  toggleSystem(system.id);
+                }}
+              >
+                {selectedSystems.includes(system.id) ? "Selected" : "Select"}
+              </Button>
             </div>
           ))}
         </div>
