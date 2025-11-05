@@ -151,10 +151,7 @@ const ProjectWizard = () => {
         navigate(`/project/${newProject.id}`, { replace: true });
       }
       
-      toast({
-        title: "Success",
-        description: "Project saved successfully",
-      });
+      // Auto-save silently - no success toast needed
     } catch (error: any) {
       toast({
         title: "Error",
