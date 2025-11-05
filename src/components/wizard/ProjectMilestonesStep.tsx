@@ -1,5 +1,4 @@
-import { useState } from "react";
-import { Button } from "@/components/ui/button";
+import { useState, useEffect } from "react";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Calendar } from "@/components/ui/calendar";
@@ -37,15 +36,19 @@ export const ProjectMilestonesStep = ({ data, onNext, onBack }: ProjectMilestone
     interior_end_date: data.interior_end_date || "",
   });
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    onNext(formData);
-  };
+  // Auto-save with debounce
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      onNext(formData);
+    }, 500);
+
+    return () => clearTimeout(timer);
+  }, [formData, onNext]);
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-8">
+    <div className="space-y-8">
         <div>
-          <Label className="text-base mb-4 block">What is the construction timeline?</Label>
+          <Label className="text-base mb-4 block">Construction Timeline</Label>
           <div className="grid grid-cols-2 gap-6">
             <div className="space-y-2">
               <Label htmlFor="start_date" className="text-sm text-muted-foreground">Start date</Label>
@@ -232,9 +235,6 @@ export const ProjectMilestonesStep = ({ data, onNext, onBack }: ProjectMilestone
           </div>
         </div>
 
-        <div className="flex justify-end">
-          <Button type="submit">Save</Button>
-        </div>
-      </form>
+      </div>
   );
 };

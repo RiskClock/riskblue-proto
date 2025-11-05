@@ -1,5 +1,4 @@
-import { useState } from "react";
-import { Button } from "@/components/ui/button";
+import { useState, useEffect } from "react";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -24,69 +23,50 @@ export const ProjectInfoStep = ({ data, onNext }: ProjectInfoStepProps) => {
     has_builders_risk_policy: data.has_builders_risk_policy || false,
   });
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    
-    // Validate project name
-    const nameValidation = projectSchemas.name.safeParse(formData.name);
-    if (!nameValidation.success) {
-      toast({
-        title: "Validation Error",
-        description: nameValidation.error.errors[0].message,
-        variant: "destructive",
-      });
-      return;
-    }
+  // Auto-save with debounce
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      // Validate project name
+      const nameValidation = projectSchemas.name.safeParse(formData.name);
+      if (!nameValidation.success) return;
 
-    // Validate zip code if provided
-    if (formData.zip_code && formData.zip_code.trim() !== "") {
-      const zipValidation = projectSchemas.zipCode.safeParse(formData.zip_code);
-      if (!zipValidation.success) {
-        toast({
-          title: "Validation Error",
-          description: zipValidation.error.errors[0].message,
-          variant: "destructive",
-        });
-        return;
+      // Validate zip code if provided
+      if (formData.zip_code && formData.zip_code.trim() !== "") {
+        const zipValidation = projectSchemas.zipCode.safeParse(formData.zip_code);
+        if (!zipValidation.success) return;
       }
-    }
 
-    // Validate address fields lengths
-    const fields = [
-      { value: formData.address_1, schema: projectSchemas.address, name: "Address 1" },
-      { value: formData.address_2, schema: projectSchemas.address, name: "Address 2" },
-      { value: formData.city, schema: projectSchemas.city, name: "City" },
-      { value: formData.state, schema: projectSchemas.state, name: "State" },
-      { value: formData.country, schema: projectSchemas.country, name: "Country" },
-    ];
+      // Validate address fields lengths
+      const fields = [
+        { value: formData.address_1, schema: projectSchemas.address, name: "Address 1" },
+        { value: formData.address_2, schema: projectSchemas.address, name: "Address 2" },
+        { value: formData.city, schema: projectSchemas.city, name: "City" },
+        { value: formData.state, schema: projectSchemas.state, name: "State" },
+        { value: formData.country, schema: projectSchemas.country, name: "Country" },
+      ];
 
-    for (const field of fields) {
-      if (field.value && field.value.trim() !== "") {
-        const validation = field.schema.safeParse(field.value);
-        if (!validation.success) {
-          toast({
-            title: "Validation Error",
-            description: `${field.name}: ${validation.error.errors[0].message}`,
-            variant: "destructive",
-          });
-          return;
+      for (const field of fields) {
+        if (field.value && field.value.trim() !== "") {
+          const validation = field.schema.safeParse(field.value);
+          if (!validation.success) return;
         }
       }
-    }
 
-    onNext(formData);
-  };
+      onNext(formData);
+    }, 500);
+
+    return () => clearTimeout(timer);
+  }, [formData, onNext]);
 
   return (
     <div>
       <div className="mb-4">
-        <h2 className="text-2xl font-bold text-foreground mb-1">Basic Project Info</h2>
-        <p className="text-sm text-muted-foreground">
-          Enter project details and insurance information for accurate documentation.
-        </p>
+        <h2 className="text-2xl font-bold text-foreground mb-1">
+          Project Info <span className="text-sm font-normal text-muted-foreground ml-2">Enter project details and insurance information</span>
+        </h2>
       </div>
 
-      <form onSubmit={handleSubmit} className="space-y-4">
+      <div className="space-y-4">
         <div className="space-y-2">
           <Label htmlFor="name">Project name</Label>
           <Input
@@ -99,7 +79,6 @@ export const ProjectInfoStep = ({ data, onNext }: ProjectInfoStepProps) => {
         </div>
 
         <div className="space-y-2">
-          <Label>Project address</Label>
           <div className="space-y-3">
             <Input
               id="address_1"
@@ -161,10 +140,7 @@ export const ProjectInfoStep = ({ data, onNext }: ProjectInfoStepProps) => {
           </Select>
         </div>
 
-        <div className="flex justify-end">
-          <Button type="submit">Save</Button>
-        </div>
-      </form>
+      </div>
     </div>
   );
 };

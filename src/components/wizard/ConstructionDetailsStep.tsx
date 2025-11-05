@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -108,27 +108,20 @@ export const ConstructionDetailsStep = ({ data, onNext, onBack, projectId }: Con
     }
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    onNext({ ...formData, uploadedFiles, webhookResponse });
-  };
+  // Auto-save with debounce
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      onNext({ ...formData, uploadedFiles, webhookResponse });
+    }, 500);
+
+    return () => clearTimeout(timer);
+  }, [formData, uploadedFiles, webhookResponse, onNext]);
 
   return (
     <div>
-      <div className="mb-6">
-        <p className="text-sm text-muted-foreground mb-1">Step 3 of 7</p>
-        <h2 className="text-2xl font-bold text-foreground mb-2">Construction Details</h2>
-        <p className="text-sm text-muted-foreground">
-          RiskBlue will recommend appropriate Mitigation Controls tailored to the building type and size,
-          ensuring effective water risk management. Key structural elements such as the typical floors,
-          parking level depth, podium, and above-grade parking play a crucial role in shaping mitigation
-          strategies.
-        </p>
-      </div>
-
-      <form onSubmit={handleSubmit} className="space-y-8">
+      <div className="space-y-8">
         <div>
-          <Label className="text-base mb-4 block">What type of construction is this project?</Label>
+          <Label className="text-base mb-4 block">Construction Type</Label>
           <div className="grid grid-cols-4 gap-4">
             {constructionTypes.map((type) => (
               <button
@@ -157,7 +150,7 @@ export const ConstructionDetailsStep = ({ data, onNext, onBack, projectId }: Con
         </div>
 
         <div>
-          <Label className="text-base mb-4 block">What is the building type of this project?</Label>
+          <Label className="text-base mb-4 block">Building Type</Label>
           <div className="grid grid-cols-4 gap-4">
             {buildingTypes.map((type) => (
               <button
@@ -217,11 +210,11 @@ export const ConstructionDetailsStep = ({ data, onNext, onBack, projectId }: Con
             </div>
 
             <div>
-              <Label className="text-base mb-4 block">Additional construction questions</Label>
+              <Label className="text-base mb-4 block">Building Details</Label>
               <div className="grid md:grid-cols-2 gap-6">
                 <div className="space-y-2">
                   <Label htmlFor="total_floors" className="text-sm">
-                    How many total floors does the building have?
+                    Total Floors
                   </Label>
                   <Input
                     id="total_floors"
@@ -233,7 +226,7 @@ export const ConstructionDetailsStep = ({ data, onNext, onBack, projectId }: Con
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="typical_floors" className="text-sm">
-                    How many typical floors does the building have?
+                    Typical Floors
                   </Label>
                   <Input
                     id="typical_floors"
@@ -244,7 +237,7 @@ export const ConstructionDetailsStep = ({ data, onNext, onBack, projectId }: Con
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label className="text-sm">What level do your typical floors cover?</Label>
+                  <Label className="text-sm">Typical Floor Range</Label>
                   <div className="flex items-center gap-2">
                     <Input
                       value={formData.typical_floors_start}
@@ -260,7 +253,7 @@ export const ConstructionDetailsStep = ({ data, onNext, onBack, projectId }: Con
                   </div>
                 </div>
                 <div className="space-y-2">
-                  <Label className="text-sm">Is there an underground parking garage?</Label>
+                  <Label className="text-sm">Underground Parking</Label>
                   <Select
                     value={formData.underground_parking.toString()}
                     onValueChange={(value) =>
@@ -280,7 +273,7 @@ export const ConstructionDetailsStep = ({ data, onNext, onBack, projectId }: Con
             </div>
 
             <div className="bg-muted/30 p-6 rounded-lg space-y-4">
-              <Label className="text-base mb-4 block">Please upload the Mechanical and Electrical drawings</Label>
+              <Label className="text-base mb-4 block">Mechanical & Electrical Drawings</Label>
               <div className="border-2 border-dashed border-border rounded-lg p-8 text-center">
                 <Upload className="mx-auto h-10 w-10 text-muted-foreground mb-3" />
                 <Input
@@ -331,11 +324,7 @@ export const ConstructionDetailsStep = ({ data, onNext, onBack, projectId }: Con
           </>
         )}
 
-        <div className="flex justify-between">
-          <Button type="button" variant="outline" onClick={onBack}>Back</Button>
-          <Button type="submit">Continue</Button>
-        </div>
-      </form>
+      </div>
     </div>
   );
 };
