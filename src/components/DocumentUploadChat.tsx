@@ -38,7 +38,7 @@ export const DocumentUploadChat = ({ projectId }: DocumentUploadChatProps) => {
         throw new Error("Failed to upload file");
       }
 
-      const data = await response.json();
+      const data = await response.text();
       setUploadedFile(file);
       setResponseData(data);
       toast({
@@ -83,7 +83,7 @@ export const DocumentUploadChat = ({ projectId }: DocumentUploadChatProps) => {
         <div className="space-y-2 pt-4 border-t">
           <label className="text-sm font-medium">Response</label>
           <pre className="bg-muted/30 rounded-lg p-4 overflow-auto max-h-[400px] text-xs">
-            {JSON.stringify(responseData, null, 2)}
+            {responseData}
           </pre>
         </div>
       )}
