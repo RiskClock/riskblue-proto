@@ -1,5 +1,12 @@
 import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
+import mechanicalRoomsImg from "@/assets/critical_assets_mechanical_rooms.avif";
+import electricalRoomsImg from "@/assets/critical_assets_electrical_rooms.avif";
+import mainElectricalRisersImg from "@/assets/critical_assets_main_electrical_risers.avif";
+import sumpPitsImg from "@/assets/critical_assets_sump_pits.avif";
+import mechanicalRisersImg from "@/assets/critical_assets_mechanical_risers.avif";
+import elevatorPitsImg from "@/assets/critical_assets_elevator_pits.avif";
+import suitesImg from "@/assets/critical_assets_suites.avif";
 
 const assets = [
   {
@@ -7,32 +14,63 @@ const assets = [
     name: "Mechanical Rooms",
     threat: "Building water source",
     riskLevel: "Very High Risk",
-    duration: "2 months",
+    duration: "0 months",
     cost: "$",
+    image: mechanicalRoomsImg,
   },
   {
     id: "electrical",
     name: "Electrical Rooms",
-    threat: "Environmental and building water target",
+    threat: "Environmental and Building water target",
     riskLevel: "High Risk",
     duration: "0 months",
     cost: "$",
+    image: electricalRoomsImg,
   },
   {
-    id: "elevators",
-    name: "Elevator Pits",
-    threat: "Building water target",
-    riskLevel: "Medium Risk",
-    duration: "1 month",
-    cost: "$$",
-  },
-  {
-    id: "stairwells",
-    name: "Stairwells",
-    threat: "Building water pathway",
-    riskLevel: "Low Risk",
+    id: "mainElectricalRisers",
+    name: "Main Electrical Risers",
+    threat: "Environmental and Building water target",
+    riskLevel: "Moderate Risk",
     duration: "0 months",
     cost: "$",
+    image: mainElectricalRisersImg,
+  },
+  {
+    id: "sumpPits",
+    name: "Sump Pits",
+    threat: "Environmental, Underground, and water source",
+    riskLevel: "Moderate Risk",
+    duration: "0 months",
+    cost: "$$$",
+    image: sumpPitsImg,
+  },
+  {
+    id: "mechanicalRisers",
+    name: "Mechanical Risers",
+    threat: "Building water source",
+    riskLevel: "Extreme Risk",
+    duration: "0 months",
+    cost: "$$$$",
+    image: mechanicalRisersImg,
+  },
+  {
+    id: "elevatorPits",
+    name: "Elevator Pits",
+    threat: "Environmental, Underground, and Building water target",
+    riskLevel: "High Risk",
+    duration: "0 months",
+    cost: "$$$",
+    image: elevatorPitsImg,
+  },
+  {
+    id: "suites",
+    name: "Suites",
+    threat: "Environmental and Building water target",
+    riskLevel: "Very High Risk",
+    duration: "0 months",
+    cost: "$$$$$",
+    image: suitesImg,
   },
 ];
 
@@ -62,30 +100,35 @@ export const CriticalAssetsStep = ({ data, onNext, onBack }: CriticalAssetsStepP
 
   return (
     <div className="space-y-6">
-      <div className="grid md:grid-cols-2 gap-4">
+      <div className="grid md:grid-cols-3 gap-3">
           {assets.map((asset) => (
             <div
               key={asset.id}
-              className={`p-6 rounded-lg border-2 cursor-pointer transition-all ${
+              className={`p-4 rounded-lg border-2 cursor-pointer transition-all ${
                 selectedAssets.includes(asset.id)
                   ? "border-primary bg-primary/5"
                   : "border-border hover:border-primary/50"
               }`}
               onClick={() => toggleAsset(asset.id)}
             >
-              <div className="h-32 bg-muted rounded mb-4 flex items-center justify-center text-muted-foreground text-sm">
-                {asset.name} Icon
+              <div className="h-24 bg-muted rounded mb-3 flex items-center justify-center overflow-hidden">
+                <img src={asset.image} alt={asset.name} className="w-full h-full object-cover" />
               </div>
-              <h3 className="font-semibold mb-3">{asset.name}</h3>
-              <div className="space-y-2 text-sm">
-                <div className="flex justify-between">
+              <h3 className="font-semibold mb-2 text-sm">{asset.name}</h3>
+              <div className="space-y-1.5 text-xs">
+                <div className="flex justify-between items-start gap-2">
                   <span className="text-muted-foreground">Threat</span>
-                  <span className={asset.riskLevel.includes("Very High") ? "text-destructive font-medium" : "text-warning font-medium"}>
+                  <span className={`font-medium text-right ${
+                    asset.riskLevel.includes("Extreme") ? "text-destructive" :
+                    asset.riskLevel.includes("Very High") ? "text-destructive" : 
+                    asset.riskLevel.includes("High") ? "text-orange-500" : 
+                    "text-warning"
+                  }`}>
                     {asset.riskLevel}
                   </span>
                 </div>
-                <p className="text-muted-foreground">{asset.threat}</p>
-                <div className="flex justify-between pt-2">
+                <p className="text-muted-foreground text-xs">{asset.threat}</p>
+                <div className="flex justify-between pt-1.5">
                   <div>
                     <p className="text-muted-foreground">Risk Duration</p>
                     <p className="font-medium">{asset.duration}</p>
@@ -96,31 +139,18 @@ export const CriticalAssetsStep = ({ data, onNext, onBack }: CriticalAssetsStepP
                   </div>
                 </div>
               </div>
-              <div className="flex gap-2 mt-4">
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  className="flex-1"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                  }}
-                >
-                  Additional Details
-                </Button>
-                <Button
-                  type="button"
-                  variant={selectedAssets.includes(asset.id) ? "default" : "outline"}
-                  size="sm"
-                  className="flex-1"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    toggleAsset(asset.id);
-                  }}
-                >
-                  {selectedAssets.includes(asset.id) ? "Selected" : "Unselect"}
-                </Button>
-              </div>
+              <Button
+                type="button"
+                variant={selectedAssets.includes(asset.id) ? "default" : "outline"}
+                size="sm"
+                className="w-full mt-3"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  toggleAsset(asset.id);
+                }}
+              >
+                {selectedAssets.includes(asset.id) ? "Selected" : "Select"}
+              </Button>
             </div>
           ))}
         </div>
