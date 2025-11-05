@@ -198,7 +198,7 @@ const ProjectWizard = () => {
             <Accordion type="single" collapsible className="space-y-4">
               <AccordionItem value="basic-info" className="border rounded-lg px-6">
                 <AccordionTrigger className="text-lg font-semibold">
-                  Basic Project Info
+                  Project Info
                 </AccordionTrigger>
                 <AccordionContent className="space-y-8 pt-4">
                   <div className="space-y-6">

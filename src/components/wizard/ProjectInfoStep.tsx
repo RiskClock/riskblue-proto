@@ -60,12 +60,6 @@ export const ProjectInfoStep = ({ data, onNext }: ProjectInfoStepProps) => {
 
   return (
     <div>
-      <div className="mb-4">
-        <h2 className="text-2xl font-bold text-foreground mb-1">
-          Project Info <span className="text-sm font-normal text-muted-foreground ml-2">Enter project details and insurance information</span>
-        </h2>
-      </div>
-
       <div className="space-y-4">
         <div className="space-y-2">
           <Label htmlFor="name">Project name</Label>
