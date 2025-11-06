@@ -211,10 +211,13 @@ const ProjectWizard = () => {
       construction_end_date: extractedData.project_end_date || projectData.construction_end_date,
       
       // Building details - map webhook building_type to project_type (construction type)
-      project_type: extractedData.building_details?.building_type 
-        ? extractedData.building_details.building_type.charAt(0).toUpperCase() + extractedData.building_details.building_type.slice(1)
+      // Convert webhook values to match component IDs (e.g., "mixed use" -> "mixed-use")
+      project_type: extractedData.building_details?.building_type
+        ? extractedData.building_details.building_type.toLowerCase().replace(/ /g, '-')
         : projectData.project_type,
-      building_type: extractedData.building_details?.height_category || projectData.building_type,
+      building_type: extractedData.building_details?.height_category
+        ? extractedData.building_details.height_category.toLowerCase().replace(/ /g, '-')
+        : projectData.building_type,
       has_podium: extractedData.has_podium !== undefined ? extractedData.has_podium : projectData.has_podium,
       tower_type: extractedData.tower_configuration === "single_tower" ? "single" : 
                   extractedData.tower_configuration === "multi_tower" ? "multi" : 
