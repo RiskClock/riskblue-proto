@@ -128,7 +128,7 @@ export const DocumentUploadChat = ({ projectId, onDataExtracted }: DocumentUploa
 
   return (
     <Card className="p-6 space-y-4 mb-6">
-      <div className="space-y-4">
+      <div className="space-y-3">
         <label className="text-sm font-medium">Upload Project Schedule (in PDF)</label>
         
         {/* Hidden file input */}
@@ -142,30 +142,30 @@ export const DocumentUploadChat = ({ projectId, onDataExtracted }: DocumentUploa
         />
         
         {/* Visual upload zone */}
-        <div className="flex gap-3">
+        <div className="flex gap-2">
           <button
             onClick={() => fileInputRef.current?.click()}
             disabled={uploading}
-            className="flex-1 border-2 border-dashed border-primary/30 rounded-lg p-6 hover:border-primary/50 hover:bg-primary/5 transition-all cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed group"
+            className="flex-1 border-2 border-dashed border-muted-foreground/30 rounded-lg p-4 hover:border-primary hover:bg-accent transition-all cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed group"
           >
-            <div className="flex flex-col items-center gap-3 text-center">
-              <div className="p-3 rounded-full bg-primary/10 group-hover:bg-primary/20 transition-colors">
+            <div className="flex items-center gap-3">
+              <div className="p-2 rounded-md bg-muted group-hover:bg-primary/10 transition-colors">
                 {uploadedFile ? (
-                  <FileText className="w-6 h-6 text-primary" />
+                  <FileText className="w-5 h-5 text-muted-foreground group-hover:text-primary" />
                 ) : (
-                  <Upload className="w-6 h-6 text-primary" />
+                  <Upload className="w-5 h-5 text-muted-foreground group-hover:text-primary" />
                 )}
               </div>
-              <div>
+              <div className="text-left flex-1">
                 {uploadedFile ? (
                   <>
-                    <p className="text-sm font-medium text-foreground">{uploadedFile.name}</p>
-                    <p className="text-xs text-muted-foreground mt-1">Click to change file</p>
+                    <p className="text-sm font-medium text-foreground truncate">{uploadedFile.name}</p>
+                    <p className="text-xs text-muted-foreground">Click to change file</p>
                   </>
                 ) : (
                   <>
-                    <p className="text-sm font-medium text-foreground">Click to select PDF file</p>
-                    <p className="text-xs text-muted-foreground mt-1">Choose your project schedule document</p>
+                    <p className="text-sm font-medium text-foreground">Click to select PDF</p>
+                    <p className="text-xs text-muted-foreground">Choose your project schedule</p>
                   </>
                 )}
               </div>
@@ -175,8 +175,6 @@ export const DocumentUploadChat = ({ projectId, onDataExtracted }: DocumentUploa
           <Button 
             onClick={handleUpload} 
             disabled={!uploadedFile || uploading}
-            size="lg"
-            className="h-auto"
           >
             {uploading ? (
               <>
@@ -184,10 +182,7 @@ export const DocumentUploadChat = ({ projectId, onDataExtracted }: DocumentUploa
                 Stop
               </>
             ) : (
-              <>
-                <Upload className="w-4 h-4 mr-2" />
-                Upload
-              </>
+              "Upload"
             )}
           </Button>
         </div>
