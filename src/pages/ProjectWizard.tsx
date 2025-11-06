@@ -67,6 +67,12 @@ const ProjectWizard = () => {
   };
 
   const saveProject = async (data: ProjectData) => {
+    // Prevent saving if we're on "new" route and there's no name yet
+    // This prevents duplicate empty projects from being created
+    if (id === "new" && (!data.name || data.name.trim() === "" || data.name === "Untitled Project")) {
+      return;
+    }
+    
     setLoading(true);
     try {
       // Extract only the fields that are columns in the projects table
@@ -175,7 +181,11 @@ const ProjectWizard = () => {
   }, [projectData]);
 
   const handleDocumentDataExtracted = async (extractedData: any) => {
+    // Set flag immediately to prevent any auto-saves from starting
     setIsProcessingWebhook(true);
+    
+    // Wait a brief moment to allow any in-flight saves to complete
+    await new Promise(resolve => setTimeout(resolve, 100));
     
     // Map the extracted data to project fields based on webhook schema
     const mappedData = {
@@ -246,14 +256,24 @@ const ProjectWizard = () => {
     };
 
     setProjectData(mappedData);
-    await saveProject(mappedData);
     
-    setIsProcessingWebhook(false);
-    
-    toast({
-      title: "Data Pre-filled",
-      description: "Project information has been automatically filled from the uploaded document.",
-    });
+    try {
+      await saveProject(mappedData);
+      
+      toast({
+        title: "Data Pre-filled",
+        description: "Project information has been automatically filled from the uploaded document.",
+      });
+    } catch (error) {
+      console.error("Error saving webhook data:", error);
+      toast({
+        title: "Error",
+        description: "Failed to save extracted data. Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsProcessingWebhook(false);
+    }
   };
 
   return (

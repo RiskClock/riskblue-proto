@@ -104,6 +104,7 @@ export const DocumentUploadChat = ({ projectId, onDataExtracted, setIsProcessing
     formData.append("projectId", projectId);
 
     const webhookPromise = (async () => {
+      // Set processing flag at the very start
       if (setIsProcessingWebhook) {
         setIsProcessingWebhook(true);
       }
@@ -121,6 +122,9 @@ export const DocumentUploadChat = ({ projectId, onDataExtracted, setIsProcessing
       if (!response.ok) {
         const errorText = await response.text();
         console.error("Upload failed:", errorText);
+        if (setIsProcessingWebhook) {
+          setIsProcessingWebhook(false);
+        }
         throw new Error("Failed to upload file");
       }
 
