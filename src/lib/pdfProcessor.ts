@@ -25,10 +25,16 @@ export const formatFileSize = (bytes: number): string => {
 
 export const extractPDFData = async (
   file: File,
-  onProgress?: (progress: number, pageNumber: number) => void
+  onProgress?: (progress: number, pageNumber: number) => void,
+  onPageCountKnown?: (pageCount: number) => void
 ): Promise<PDFMetadata> => {
   const arrayBuffer = await file.arrayBuffer();
   const pdf = await pdfjsLib.getDocument(arrayBuffer).promise;
+  
+  // Notify page count immediately
+  if (onPageCountKnown) {
+    onPageCountKnown(pdf.numPages);
+  }
   
   const pages: PDFPageData[] = [];
   

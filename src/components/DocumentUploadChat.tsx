@@ -4,7 +4,7 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Loader2, Upload, FileText } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
-import { extractPDFData, extractKeyInformation, PDFMetadata } from "@/lib/pdfProcessor";
+import { extractPDFData, extractKeyInformation, PDFMetadata, formatFileSize } from "@/lib/pdfProcessor";
 import { PDFAnalysisAnimation } from "./PDFAnalysisAnimation";
 
 interface DocumentUploadChatProps {
@@ -50,6 +50,14 @@ export const DocumentUploadChat = ({ projectId, onDataExtracted }: DocumentUploa
       uploadedFile,
       (progress, pageNumber) => {
         setCurrentPage(pageNumber);
+      },
+      (pageCount) => {
+        // Set initial metadata as soon as we know the page count
+        setPdfMetadata({
+          pageCount,
+          fileSize: formatFileSize(uploadedFile.size),
+          pages: []
+        });
       }
     ).then((metadata) => {
       setPdfMetadata(metadata);
