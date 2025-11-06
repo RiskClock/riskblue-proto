@@ -15,6 +15,7 @@ interface DocumentUploadChatProps {
 export const DocumentUploadChat = ({ projectId, onDataExtracted }: DocumentUploadChatProps) => {
   const { toast } = useToast();
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const abortControllerRef = useRef<AbortController | null>(null);
   const [uploadedFile, setUploadedFile] = useState<File | null>(null);
   const [uploading, setUploading] = useState(false);
   const [responseData, setResponseData] = useState<any>(null);
@@ -26,6 +27,7 @@ export const DocumentUploadChat = ({ projectId, onDataExtracted }: DocumentUploa
   const [extractedDates, setExtractedDates] = useState<string[]>([]);
   const [extractedMilestones, setExtractedMilestones] = useState<string[]>([]);
   const [extractedText, setExtractedText] = useState<string[]>([]);
+  const [webhookComplete, setWebhookComplete] = useState(false);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -34,11 +36,29 @@ export const DocumentUploadChat = ({ projectId, onDataExtracted }: DocumentUploa
     }
   };
 
+  const handleStop = () => {
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+    }
+    setUploading(false);
+    setAnalyzing(false);
+    setWebhookComplete(false);
+    setPdfMetadata(null);
+    toast({
+      title: "Upload cancelled",
+      description: "The file upload has been stopped.",
+    });
+  };
+
   const handleUpload = async () => {
     if (!uploadedFile) return;
 
+    // Create new abort controller
+    abortControllerRef.current = new AbortController();
+
     setUploading(true);
     setAnalyzing(true);
+    setWebhookComplete(false);
     setPdfMetadata(null);
     setCurrentPage(0);
     setExtractedDates([]);
@@ -65,15 +85,15 @@ export const DocumentUploadChat = ({ projectId, onDataExtracted }: DocumentUploa
       setExtractedDates(dates);
       setExtractedMilestones(milestones);
       setExtractedText(metadata.pages.map(p => p.text).filter(t => t.length > 50));
-      setAnalyzing(false);
+      // Don't set analyzing to false - keep animation running until webhook completes
     }).catch((error) => {
+      if (error.name === 'AbortError') return;
       console.error("PDF processing error:", error);
       toast({
         title: "Warning",
         description: "Could not analyze PDF locally, but upload continues.",
         variant: "destructive",
       });
-      setAnalyzing(false);
     });
 
     // Start webhook upload
@@ -88,6 +108,7 @@ export const DocumentUploadChat = ({ projectId, onDataExtracted }: DocumentUploa
         {
           method: "POST",
           body: formData,
+          signal: abortControllerRef.current?.signal,
         }
       );
 
@@ -119,18 +140,24 @@ export const DocumentUploadChat = ({ projectId, onDataExtracted }: DocumentUploa
         });
       }
       } catch (error) {
+        if (error instanceof Error && error.name === 'AbortError') {
+          return; // Upload was cancelled
+        }
         console.error("Upload error:", error);
         toast({
           title: "Error",
           description: error instanceof Error ? error.message : "Failed to upload file",
           variant: "destructive",
         });
+      } finally {
+        setWebhookComplete(true);
       }
     })();
 
     // Wait for both to complete
     await Promise.all([pdfProcessingPromise, webhookPromise]);
     setUploading(false);
+    setAnalyzing(false);
   };
 
 
@@ -181,8 +208,9 @@ export const DocumentUploadChat = ({ projectId, onDataExtracted }: DocumentUploa
           </button>
           
           <Button 
-            onClick={handleUpload} 
-            disabled={!uploadedFile || uploading}
+            onClick={uploading ? handleStop : handleUpload} 
+            disabled={!uploadedFile && !uploading}
+            variant={uploading ? "destructive" : "default"}
           >
             {uploading ? (
               <>
@@ -204,7 +232,7 @@ export const DocumentUploadChat = ({ projectId, onDataExtracted }: DocumentUploa
           extractedText={extractedText}
           extractedDates={extractedDates}
           extractedMilestones={extractedMilestones}
-          isComplete={!analyzing && currentPage === pdfMetadata.pageCount}
+          isComplete={webhookComplete}
         />
       )}
 

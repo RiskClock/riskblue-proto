@@ -52,11 +52,15 @@ export const PDFAnalysisAnimation = ({
       setStageProgress(prev => {
         const newProgress = prev + (100 / (currentStage.duration / 100));
         if (newProgress >= 100) {
+          // Loop back to beginning if we reach the end but not complete
           if (currentStageIndex < analysisStages.length - 1) {
             setCurrentStageIndex(currentStageIndex + 1);
             return 0;
+          } else {
+            // Loop back to start
+            setCurrentStageIndex(0);
+            return 0;
           }
-          return 100;
         }
         return newProgress;
       });
