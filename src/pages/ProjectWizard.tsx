@@ -115,14 +115,15 @@ const ProjectWizard = () => {
         state,
         zip_code,
         country,
-        construction_start_date,
-        construction_end_date,
+        construction_start_date: construction_start_date || null,
+        construction_end_date: construction_end_date || null,
         has_builders_risk_policy,
       };
 
-      // Remove undefined values
+      // Remove undefined values and empty strings for date fields
       Object.keys(tableData).forEach(key => {
-        if (tableData[key as keyof typeof tableData] === undefined) {
+        const value = tableData[key as keyof typeof tableData];
+        if (value === undefined || value === "") {
           delete tableData[key as keyof typeof tableData];
         }
       });
