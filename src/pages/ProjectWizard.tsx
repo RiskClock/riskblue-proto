@@ -32,6 +32,7 @@ const ProjectWizard = () => {
   const [projectData, setProjectData] = useState<ProjectData>({});
   const [loading, setLoading] = useState(false);
   const [isProcessingWebhook, setIsProcessingWebhook] = useState(false);
+  const [isSavingNewProject, setIsSavingNewProject] = useState(false);
 
   useEffect(() => {
     if (id && id !== "new") {
@@ -71,6 +72,17 @@ const ProjectWizard = () => {
     // This prevents duplicate empty projects from being created
     if (id === "new" && (!data.name || data.name.trim() === "" || data.name === "Untitled Project")) {
       return;
+    }
+    
+    // Prevent concurrent project creation - only one "new" project can be created at a time
+    if (id === "new" && isSavingNewProject) {
+      console.log("Preventing duplicate project creation - save already in progress");
+      return;
+    }
+    
+    const isCreatingNew = id === "new";
+    if (isCreatingNew) {
+      setIsSavingNewProject(true);
     }
     
     setLoading(true);
@@ -171,6 +183,9 @@ const ProjectWizard = () => {
       });
     } finally {
       setLoading(false);
+      if (isCreatingNew) {
+        setIsSavingNewProject(false);
+      }
     }
   };
 
