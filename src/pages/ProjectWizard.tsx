@@ -199,8 +199,23 @@ const ProjectWizard = () => {
     // Set flag immediately to prevent any auto-saves from starting
     setIsProcessingWebhook(true);
     
+    console.log("Webhook data received:", extractedData);
+    console.log("Building details:", extractedData.building_details);
+    console.log("Tower configuration:", extractedData.tower_configuration);
+    
     // Wait a brief moment to allow any in-flight saves to complete
     await new Promise(resolve => setTimeout(resolve, 100));
+    
+    // Helper function to extract tower type from webhook data
+    const getTowerType = (towerConfig: string | undefined) => {
+      if (!towerConfig) return projectData.tower_type;
+      const lower = towerConfig.toLowerCase().trim();
+      // Extract first word: "single tower" -> "single", "double tower" -> "double"
+      if (lower.includes("single")) return "single";
+      if (lower.includes("double")) return "double";
+      if (lower.includes("multi")) return "multi";
+      return projectData.tower_type;
+    };
     
     // Map the extracted data to project fields based on webhook schema
     const mappedData = {
@@ -218,10 +233,10 @@ const ProjectWizard = () => {
       building_type: extractedData.building_details?.height_category
         ? extractedData.building_details.height_category.toLowerCase().replace(/ /g, '-')
         : projectData.building_type,
-      has_podium: extractedData.has_podium !== undefined ? extractedData.has_podium : projectData.has_podium,
-      tower_type: extractedData.tower_configuration === "single_tower" ? "single" : 
-                  extractedData.tower_configuration === "multi_tower" ? "multi" : 
-                  projectData.tower_type,
+      has_podium: extractedData.building_details?.has_podium !== undefined 
+        ? extractedData.building_details.has_podium 
+        : projectData.has_podium,
+      tower_type: getTowerType(extractedData.building_details?.tower_configuration),
       
       // Map milestones to flat field structure
       frame_start_date: extractedData.milestones?.structural_framing?.start || projectData.frame_start_date,
