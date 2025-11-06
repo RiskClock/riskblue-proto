@@ -200,8 +200,6 @@ const ProjectWizard = () => {
     setIsProcessingWebhook(true);
     
     console.log("Webhook data received:", extractedData);
-    console.log("Building details:", extractedData.building_details);
-    console.log("Tower configuration:", extractedData.tower_configuration);
     
     // Wait a brief moment to allow any in-flight saves to complete
     await new Promise(resolve => setTimeout(resolve, 100));
@@ -209,12 +207,8 @@ const ProjectWizard = () => {
     // Helper function to extract tower type from webhook data
     const getTowerType = (towerConfig: string | undefined) => {
       if (!towerConfig) return projectData.tower_type;
-      const lower = towerConfig.toLowerCase().trim();
-      // Extract first word: "single tower" -> "single", "double tower" -> "double"
-      if (lower.includes("single")) return "single";
-      if (lower.includes("double")) return "double";
-      if (lower.includes("multi")) return "multi";
-      return projectData.tower_type;
+      // "single_tower" -> "single", "double_tower" -> "double", "multi_tower" -> "multi"
+      return towerConfig.replace("_tower", "");
     };
     
     // Map the extracted data to project fields based on webhook schema
@@ -225,18 +219,20 @@ const ProjectWizard = () => {
       construction_start_date: extractedData.project_start_date || projectData.construction_start_date,
       construction_end_date: extractedData.project_end_date || projectData.construction_end_date,
       
-      // Building details - map webhook building_type to project_type (construction type)
-      // Convert webhook values to match component IDs (e.g., "mixed use" -> "mixed-use")
-      project_type: extractedData.building_details?.building_type
-        ? extractedData.building_details.building_type.toLowerCase().replace(/ /g, '-')
+      // Building details - map webhook keys to project fields
+      // construction_type: "commercial", "residential", "mixed use", "institutional" -> project_type
+      project_type: extractedData.construction_type
+        ? extractedData.construction_type.toLowerCase().replace(/ /g, '-')
         : projectData.project_type,
-      building_type: extractedData.building_details?.height_category
-        ? extractedData.building_details.height_category.toLowerCase().replace(/ /g, '-')
-        : projectData.building_type,
-      has_podium: extractedData.building_details?.has_podium !== undefined 
-        ? extractedData.building_details.has_podium 
+      // building_type: "mid-rise", "high-rise" -> building_type
+      building_type: extractedData.building_type || projectData.building_type,
+      has_podium: extractedData.has_podium !== undefined 
+        ? extractedData.has_podium 
         : projectData.has_podium,
-      tower_type: getTowerType(extractedData.building_details?.tower_configuration),
+      // tower_configuration: "single_tower", "double_tower", "multi_tower" -> tower_type
+      tower_type: extractedData.tower_configuration 
+        ? getTowerType(extractedData.tower_configuration)
+        : projectData.tower_type,
       
       // Map milestones to flat field structure
       frame_start_date: extractedData.milestones?.structural_framing?.start || projectData.frame_start_date,
