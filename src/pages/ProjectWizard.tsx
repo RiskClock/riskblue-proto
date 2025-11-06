@@ -18,6 +18,9 @@ import { MitigationResponsePlanStep } from "@/components/wizard/MitigationRespon
 import { WaterMitigationGuidelinesStep } from "@/components/wizard/WaterMitigationGuidelinesStep";
 import { ProposalsStep } from "@/components/wizard/ProposalsStep";
 import { DocumentUploadChat } from "@/components/DocumentUploadChat";
+import { ResponsePlanUploadChat } from "@/components/ResponsePlanUploadChat";
+import { Download } from "lucide-react";
+import { Button } from "@/components/ui/button";
 
 interface ProjectData {
   [key: string]: any;
@@ -328,9 +331,9 @@ const ProjectWizard = () => {
       <div className="container mx-auto px-6 py-8">
         <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
           <TabsList className="w-full justify-start mb-8">
-            <TabsTrigger value="guideline">Water Mitigation Guideline</TabsTrigger>
-            <TabsTrigger value="plan">Water Mitigation Plan</TabsTrigger>
-            <TabsTrigger value="response">Water Response</TabsTrigger>
+            <TabsTrigger value="guideline">Water Risk Discovery</TabsTrigger>
+            <TabsTrigger value="plan">Water Mitigation Planning</TabsTrigger>
+            <TabsTrigger value="response">Water Mitigation Execution</TabsTrigger>
           </TabsList>
 
           <TabsContent value="guideline" className="max-w-5xl mx-auto">
@@ -404,24 +407,35 @@ const ProjectWizard = () => {
                 </AccordionContent>
               </AccordionItem>
             </Accordion>
+            
+            {/* Export Button */}
+            <div className="flex justify-end pt-6">
+              <Button variant="outline" onClick={() => {
+                toast({
+                  title: "PDF Export",
+                  description: "PDF export functionality will be implemented soon.",
+                });
+              }}>
+                <Download className="h-4 w-4 mr-2" />
+                Export
+              </Button>
+            </div>
           </TabsContent>
 
           <TabsContent value="plan" className="max-w-5xl mx-auto space-y-8">
             <div className="space-y-6">
-              <h2 className="text-2xl font-bold">Water Mitigation Guidelines</h2>
               <WaterMitigationGuidelinesStep data={projectData} onBack={() => {}} onNext={handleStepUpdate} />
             </div>
             <div className="space-y-6 pt-8 border-t">
-              <h2 className="text-2xl font-bold">Proposals</h2>
               <ProposalsStep data={projectData} onBack={() => {}} onNext={handleStepUpdate} />
             </div>
           </TabsContent>
 
           <TabsContent value="response" className="max-w-5xl mx-auto">
-            <div className="space-y-6">
-              <h2 className="text-2xl font-bold">Mitigation Response Plan</h2>
-              <MitigationResponsePlanStep data={projectData} onNext={handleStepUpdate} onBack={() => {}} />
-            </div>
+            <ResponsePlanUploadChat 
+              projectId={id || "new"} 
+              onDataExtracted={handleDocumentDataExtracted}
+            />
           </TabsContent>
         </Tabs>
       </div>
