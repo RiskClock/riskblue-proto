@@ -4,7 +4,6 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
-import { Upload, FileText, Loader2 } from "lucide-react";
 import residentialImg from "@/assets/type1-residential.avif";
 import mixedUseImg from "@/assets/type2-mixeduse.avif";
 import institutionalImg from "@/assets/type3-institutional.avif";
@@ -60,9 +59,6 @@ export const ConstructionDetailsStep = ({ data, onNext, onBack, projectId }: Con
     underground_parking_end: data.underground_parking_end || "",
     above_grade_parking: data.above_grade_parking || false,
   });
-  const [uploadedFiles, setUploadedFiles] = useState<File[]>([]);
-  const [uploading, setUploading] = useState(false);
-  const [webhookResponse, setWebhookResponse] = useState<any>(null);
 
   // Sync props to state when data changes (e.g., from webhook) - only if different
   useEffect(() => {
@@ -91,56 +87,12 @@ export const ConstructionDetailsStep = ({ data, onNext, onBack, projectId }: Con
     }
   }, [data]);
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files) {
-      setUploadedFiles(Array.from(e.target.files));
-    }
-  };
-
-  const handleFileUpload = async () => {
-    if (uploadedFiles.length === 0) return;
-
-    setUploading(true);
-    try {
-      const formDataUpload = new FormData();
-      uploadedFiles.forEach((file) => {
-        formDataUpload.append("files", file);
-      });
-      formDataUpload.append("projectId", projectId || "");
-
-      const response = await fetch(
-        "https://gyubok.app.n8n.cloud/webhook/8fa778fd-3139-48d2-85af-b5c406186380",
-        {
-          method: "POST",
-          body: formDataUpload,
-        }
-      );
-
-      if (!response.ok) throw new Error("Upload failed");
-
-      const result = await response.json();
-      setWebhookResponse(result);
-
-      toast({
-        title: "Success",
-        description: "Files uploaded and analyzed successfully",
-      });
-    } catch (error: any) {
-      toast({
-        title: "Error",
-        description: error.message,
-        variant: "destructive",
-      });
-    } finally {
-      setUploading(false);
-    }
-  };
 
   // Update parent immediately on change
   const updateFormData = (updates: Partial<typeof formData>) => {
     const newFormData = { ...formData, ...updates };
     setFormData(newFormData);
-    onNext({ ...newFormData, uploadedFiles, webhookResponse });
+    onNext(newFormData);
   };
 
   return (
@@ -204,21 +156,6 @@ export const ConstructionDetailsStep = ({ data, onNext, onBack, projectId }: Con
           </div>
         </div>
 
-        <div>
-          <Label className="text-base mb-4 block">Podium</Label>
-          <Select
-            value={formData.has_podium.toString()}
-            onValueChange={(value) => updateFormData({ has_podium: value === "true" })}
-          >
-            <SelectTrigger className="max-w-xs">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="false">No</SelectItem>
-              <SelectItem value="true">Yes</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
 
         {formData.building_type === "high-rise" && (
           <div>
@@ -254,6 +191,21 @@ export const ConstructionDetailsStep = ({ data, onNext, onBack, projectId }: Con
         <div>
           <Label className="text-base mb-4 block">Building Details</Label>
               <div className="grid md:grid-cols-2 gap-6">
+                <div className="space-y-2">
+                  <Label className="text-sm">Podium</Label>
+                  <Select
+                    value={formData.has_podium.toString()}
+                    onValueChange={(value) => updateFormData({ has_podium: value === "true" })}
+                  >
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="false">No</SelectItem>
+                      <SelectItem value="true">Yes</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
                 <div className="space-y-2">
                   <Label htmlFor="total_floors" className="text-sm">
                     Total Floors
@@ -314,55 +266,6 @@ export const ConstructionDetailsStep = ({ data, onNext, onBack, projectId }: Con
               </div>
             </div>
 
-        <div className="bg-muted/30 p-6 rounded-lg space-y-4">
-              <Label className="text-base mb-4 block">Mechanical & Electrical Drawings</Label>
-              <div className="border-2 border-dashed border-border rounded-lg p-8 text-center">
-                <Upload className="mx-auto h-10 w-10 text-muted-foreground mb-3" />
-                <Input
-                  type="file"
-                  multiple
-                  onChange={handleFileChange}
-                  className="max-w-xs mx-auto mb-3"
-                  accept=".pdf,.dwg,.dxf,.jpg,.png"
-                />
-                <p className="text-sm text-muted-foreground">Supported formats: PDF, DWG, DXF, JPG, PNG</p>
-                
-                {uploadedFiles.length > 0 && (
-                  <div className="mt-4 space-y-2">
-                    {uploadedFiles.map((file, index) => (
-                      <div key={index} className="flex items-center gap-2 justify-center text-sm">
-                        <FileText className="h-4 w-4" />
-                        <span>{file.name}</span>
-                      </div>
-                    ))}
-                    <Button 
-                      type="button" 
-                      onClick={handleFileUpload} 
-                      disabled={uploading}
-                      className="mt-4"
-                    >
-                      {uploading ? (
-                        <>
-                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                          Uploading & Analyzing...
-                        </>
-                      ) : (
-                        "Upload & Analyze"
-                      )}
-                    </Button>
-                  </div>
-                )}
-              </div>
-
-              {webhookResponse && (
-                <div className="mt-4 p-4 bg-card rounded-lg border">
-                  <h4 className="font-semibold mb-2 text-sm">Analysis</h4>
-                  <div className="text-sm leading-relaxed whitespace-pre-wrap break-words">
-                    {String(Object.values(webhookResponse)[0])}
-                  </div>
-                </div>
-              )}
-            </div>
       </div>
     </div>
   );
