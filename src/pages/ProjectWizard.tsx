@@ -195,8 +195,11 @@ const ProjectWizard = () => {
       construction_start_date: extractedData.project_start_date || projectData.construction_start_date,
       construction_end_date: extractedData.project_end_date || projectData.construction_end_date,
       
-      // Building details
-      building_type: extractedData.height_category || extractedData.building_type || projectData.building_type,
+      // Building details - map webhook building_type to project_type (construction type)
+      project_type: extractedData.building_details?.building_type 
+        ? extractedData.building_details.building_type.charAt(0).toUpperCase() + extractedData.building_details.building_type.slice(1)
+        : projectData.project_type,
+      building_type: extractedData.building_details?.height_category || projectData.building_type,
       has_podium: extractedData.has_podium !== undefined ? extractedData.has_podium : projectData.has_podium,
       tower_type: extractedData.tower_configuration === "single_tower" ? "single" : 
                   extractedData.tower_configuration === "multi_tower" ? "multi" : 
