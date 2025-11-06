@@ -171,44 +171,103 @@ const ProjectWizard = () => {
   };
 
   const handleDocumentDataExtracted = async (extractedData: any) => {
-    // Map the extracted data to project fields
+    // Map the extracted data to project fields based on webhook schema
     const mappedData = {
       ...projectData,
       // Basic project info
-      name: extractedData.project_name || extractedData.name || projectData.name,
-      location: extractedData.location || extractedData.address || projectData.location,
-      address_1: extractedData.address_1 || extractedData.street_address || projectData.address_1,
-      city: extractedData.city || projectData.city,
-      state: extractedData.state || extractedData.province || projectData.state,
-      zip_code: extractedData.zip_code || extractedData.postal_code || projectData.zip_code,
-      country: extractedData.country || projectData.country,
+      name: extractedData.project_name || projectData.name,
+      construction_start_date: extractedData.project_start_date || projectData.construction_start_date,
+      construction_end_date: extractedData.project_end_date || projectData.construction_end_date,
       
-      // Construction details
-      project_type: extractedData.project_type || extractedData.construction_type || projectData.project_type,
-      building_type: extractedData.building_type || projectData.building_type,
-      tower_type: extractedData.tower_type || extractedData.tower_configuration || projectData.tower_type,
-      total_floors: extractedData.total_floors || extractedData.floors || projectData.total_floors,
-      typical_floors: extractedData.typical_floors || projectData.typical_floors,
-      typical_floors_start: extractedData.typical_floors_start || projectData.typical_floors_start,
-      typical_floors_end: extractedData.typical_floors_end || projectData.typical_floors_end,
-      underground_parking: extractedData.underground_parking || extractedData.has_underground_parking || projectData.underground_parking,
-      underground_parking_start: extractedData.underground_parking_start || projectData.underground_parking_start,
-      underground_parking_end: extractedData.underground_parking_end || projectData.underground_parking_end,
-      above_grade_parking: extractedData.above_grade_parking || extractedData.has_above_grade_parking || projectData.above_grade_parking,
+      // Building details
+      building_type: extractedData.height_category || extractedData.building_type || projectData.building_type,
+      tower_type: extractedData.tower_configuration === "single_tower" ? "single" : 
+                  extractedData.tower_configuration === "multi_tower" ? "multi" : 
+                  projectData.tower_type,
       
-      // Dates
-      construction_start_date: extractedData.construction_start_date || extractedData.start_date || projectData.construction_start_date,
-      construction_end_date: extractedData.construction_end_date || extractedData.end_date || extractedData.completion_date || projectData.construction_end_date,
+      // Map critical assets from boolean object to selected array
+      selectedAssets: extractedData.critical_assets_present ? 
+        Object.entries(extractedData.critical_assets_present)
+          .filter(([_, value]) => value === true)
+          .map(([key]) => {
+            // Map schema keys to our asset IDs
+            const assetMap: Record<string, string> = {
+              "mechanical_rooms": "mechanical",
+              "electrical_rooms": "electrical",
+              "main_electrical_risers": "mainElectricalRisers",
+              "sump_pits": "sumpPits",
+              "mechanical_risers": "mechanicalRisers",
+              "elevator_pits": "elevatorPits",
+              "suites/guest_rooms": "suites"
+            };
+            return assetMap[key] || key;
+          }) : projectData.selectedAssets,
       
-      // Selections
-      selectedAssets: extractedData.critical_assets || extractedData.selectedAssets || projectData.selectedAssets,
-      selectedSystems: extractedData.water_systems || extractedData.selectedSystems || projectData.selectedSystems,
+      // Map water systems from boolean object to selected array
+      selectedSystems: extractedData.water_systems_present ? 
+        Object.entries(extractedData.water_systems_present)
+          .filter(([_, value]) => value === true)
+          .map(([key]) => {
+            // Map schema keys to our system IDs
+            const systemMap: Record<string, string> = {
+              "domestic_cold_water": "domesticCold",
+              "domestic_hot_water": "domesticHot",
+              "temporary_water_run": "temporaryRun",
+              "main_city_water_supply": "mainEntry",
+              "hydronics": "hydronics",
+              "fire_suppression_systems": "fireSuppression"
+            };
+            return systemMap[key] || key;
+          }) : projectData.selectedSystems,
       
-      // Milestones
-      milestones: extractedData.milestones || projectData.milestones,
+      // Map mitigation controls - assume all are present if not specified
+      selectedControls: extractedData.mitigation_controls || projectData.selectedControls,
       
-      // Any other data from the webhook
-      ...extractedData,
+      // Map milestones with their dates
+      milestones: extractedData.milestones ? [
+        {
+          id: "structural",
+          name: "Structural Framing",
+          startDate: extractedData.milestones.structural_framing?.start || "",
+          endDate: extractedData.milestones.structural_framing?.finish || "",
+          notes: extractedData.milestones.structural_framing?.notes || ""
+        },
+        {
+          id: "envelope",
+          name: "Envelope",
+          startDate: extractedData.milestones.envelope?.start || "",
+          endDate: extractedData.milestones.envelope?.finish || "",
+          notes: extractedData.milestones.envelope?.notes || ""
+        },
+        {
+          id: "mep",
+          name: "MEP",
+          startDate: extractedData.milestones.MEP?.start || "",
+          endDate: extractedData.milestones.MEP?.finish || "",
+          notes: extractedData.milestones.MEP?.notes || ""
+        },
+        {
+          id: "elevators",
+          name: "Elevators",
+          startDate: extractedData.milestones.elevators?.start || "",
+          endDate: extractedData.milestones.elevators?.finish || "",
+          notes: extractedData.milestones.elevators?.notes || ""
+        },
+        {
+          id: "fire",
+          name: "Fire Suppression Systems",
+          startDate: extractedData.milestones.fire_suppression_systems?.start || "",
+          endDate: extractedData.milestones.fire_suppression_systems?.finish || "",
+          notes: extractedData.milestones.fire_suppression_systems?.notes || ""
+        },
+        {
+          id: "interior",
+          name: "Interior Finishes",
+          startDate: extractedData.milestones.interior_finishes?.start || "",
+          endDate: extractedData.milestones.interior_finishes?.finish || "",
+          notes: extractedData.milestones.interior_finishes?.notes || ""
+        }
+      ] : projectData.milestones,
     };
 
     setProjectData(mappedData);
@@ -247,7 +306,7 @@ const ProjectWizard = () => {
 
           <TabsContent value="guideline" className="max-w-5xl mx-auto">
             <DocumentUploadChat projectId={id || "new"} onDataExtracted={handleDocumentDataExtracted} />
-            <Accordion type="single" collapsible className="space-y-4">
+            <Accordion type="single" collapsible defaultValue="basic-info" className="space-y-4">
               <AccordionItem value="basic-info" className="border rounded-lg px-6">
                 <AccordionTrigger className="text-lg font-semibold">
                   Project Info
