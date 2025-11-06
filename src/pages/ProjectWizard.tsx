@@ -135,7 +135,7 @@ const ProjectWizard = () => {
           .from("projects")
           .update({
             ...tableData,
-            project_data: projectData,
+            project_data: data,
           })
           .eq("id", id);
         if (error) throw error;
@@ -146,7 +146,7 @@ const ProjectWizard = () => {
             user_id: user?.id,
             name: name || "Untitled Project",
             ...tableData,
-            project_data: projectData,
+            project_data: data,
           }])
           .select()
           .single();
