@@ -1,7 +1,8 @@
 import { useState } from "react";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { Loader2, FileText } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Loader2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
 interface DocumentUploadChatProps {
@@ -15,13 +16,19 @@ export const DocumentUploadChat = ({ projectId, onDataExtracted }: DocumentUploa
   const [uploading, setUploading] = useState(false);
   const [responseData, setResponseData] = useState<any>(null);
 
-  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (!file) return;
+    if (file) {
+      setUploadedFile(file);
+    }
+  };
+
+  const handleUpload = async () => {
+    if (!uploadedFile) return;
 
     setUploading(true);
     const formData = new FormData();
-    formData.append("file", file);
+    formData.append("file", uploadedFile);
     formData.append("projectId", projectId);
 
     try {
@@ -40,7 +47,6 @@ export const DocumentUploadChat = ({ projectId, onDataExtracted }: DocumentUploa
       }
 
       const data = await response.text();
-      setUploadedFile(file);
       setResponseData(data);
       
       // Parse the response and extract data for auto-fill
@@ -77,22 +83,29 @@ export const DocumentUploadChat = ({ projectId, onDataExtracted }: DocumentUploa
   return (
     <Card className="p-6 space-y-4 mb-6">
       <div className="space-y-2">
-        <label className="text-sm font-medium">Upload Document</label>
+        <label className="text-sm font-medium">Upload Project Schedule (in PDF)</label>
         <div className="flex gap-2">
           <Input
             type="file"
-            onChange={handleFileUpload}
+            onChange={handleFileChange}
             disabled={uploading}
             className="flex-1"
+            accept=".pdf"
           />
-          {uploading && <Loader2 className="w-4 h-4 animate-spin" />}
+          <Button 
+            onClick={handleUpload} 
+            disabled={!uploadedFile || uploading}
+          >
+            {uploading ? (
+              <>
+                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                Stop
+              </>
+            ) : (
+              "Upload"
+            )}
+          </Button>
         </div>
-        {uploadedFile && (
-          <div className="flex items-center gap-2 text-sm text-muted-foreground">
-            <FileText className="w-4 h-4" />
-            <span>{uploadedFile.name}</span>
-          </div>
-        )}
       </div>
 
       {responseData && (
