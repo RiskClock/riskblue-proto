@@ -49,6 +49,7 @@ export const ConstructionDetailsStep = ({ data, onNext, onBack, projectId }: Con
   const [formData, setFormData] = useState({
     project_type: data.project_type || "",
     building_type: data.building_type || "",
+    has_podium: data.has_podium || false,
     tower_type: data.tower_type || "",
     total_floors: data.total_floors || "",
     typical_floors: data.typical_floors || "",
@@ -63,11 +64,12 @@ export const ConstructionDetailsStep = ({ data, onNext, onBack, projectId }: Con
   const [uploading, setUploading] = useState(false);
   const [webhookResponse, setWebhookResponse] = useState<any>(null);
 
-  // Sync props to state when data changes (e.g., from webhook)
+  // Sync props to state when data changes (e.g., from webhook) - only if different
   useEffect(() => {
-    setFormData({
+    const newFormData = {
       project_type: data.project_type || "",
       building_type: data.building_type || "",
+      has_podium: data.has_podium || false,
       tower_type: data.tower_type || "",
       total_floors: data.total_floors || "",
       typical_floors: data.typical_floors || "",
@@ -77,7 +79,16 @@ export const ConstructionDetailsStep = ({ data, onNext, onBack, projectId }: Con
       underground_parking_start: data.underground_parking_start || "",
       underground_parking_end: data.underground_parking_end || "",
       above_grade_parking: data.above_grade_parking || false,
-    });
+    };
+    
+    // Only update if values actually changed (to prevent overwriting user input)
+    const hasChanges = Object.keys(newFormData).some(
+      key => newFormData[key as keyof typeof newFormData] !== formData[key as keyof typeof formData]
+    );
+    
+    if (hasChanges) {
+      setFormData(newFormData);
+    }
   }, [data]);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -125,14 +136,12 @@ export const ConstructionDetailsStep = ({ data, onNext, onBack, projectId }: Con
     }
   };
 
-  // Auto-save with debounce
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      onNext({ ...formData, uploadedFiles, webhookResponse });
-    }, 500);
-
-    return () => clearTimeout(timer);
-  }, [formData, uploadedFiles, webhookResponse, onNext]);
+  // Update parent immediately on change
+  const updateFormData = (updates: Partial<typeof formData>) => {
+    const newFormData = { ...formData, ...updates };
+    setFormData(newFormData);
+    onNext({ ...newFormData, uploadedFiles, webhookResponse });
+  };
 
   return (
     <div>
@@ -145,7 +154,7 @@ export const ConstructionDetailsStep = ({ data, onNext, onBack, projectId }: Con
                 key={type.id}
                 type="button"
                 disabled={type.disabled}
-                onClick={() => setFormData({ ...formData, project_type: type.id })}
+                onClick={() => updateFormData({ project_type: type.id })}
                 className={`relative p-6 rounded-lg border-2 transition-all ${
                   formData.project_type === type.id
                     ? "border-primary bg-primary/5"
@@ -174,7 +183,7 @@ export const ConstructionDetailsStep = ({ data, onNext, onBack, projectId }: Con
                 key={type.id}
                 type="button"
                 disabled={type.disabled}
-                onClick={() => setFormData({ ...formData, building_type: type.id })}
+                onClick={() => updateFormData({ building_type: type.id })}
                 className={`relative p-6 rounded-lg border-2 transition-all ${
                   formData.building_type === type.id
                     ? "border-primary bg-primary/5"
@@ -195,23 +204,38 @@ export const ConstructionDetailsStep = ({ data, onNext, onBack, projectId }: Con
           </div>
         </div>
 
+        <div>
+          <Label className="text-base mb-4 block">Podium</Label>
+          <Select
+            value={formData.has_podium.toString()}
+            onValueChange={(value) => updateFormData({ has_podium: value === "true" })}
+          >
+            <SelectTrigger className="max-w-xs">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="false">No</SelectItem>
+              <SelectItem value="true">Yes</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+
         {formData.building_type === "high-rise" && (
-          <>
-            <div>
-              <Label className="text-base mb-4 block">Tower Configuration</Label>
+          <div>
+            <Label className="text-base mb-4 block">Tower Configuration</Label>
               <div className="grid grid-cols-3 gap-4">
                 {towerTypes.map((type) => (
-                  <button
-                    key={type.id}
-                    type="button"
-                    disabled={type.disabled}
-                    onClick={() => setFormData({ ...formData, tower_type: type.id })}
-                    className={`relative p-6 rounded-lg border-2 transition-all ${
-                      formData.tower_type === type.id
-                        ? "border-primary bg-primary/5"
-                        : "border-border hover:border-primary/50"
-                    } ${type.disabled ? "opacity-50 cursor-not-allowed" : "cursor-pointer"}`}
-                  >
+                <button
+                  key={type.id}
+                  type="button"
+                  disabled={type.disabled}
+                  onClick={() => updateFormData({ tower_type: type.id })}
+                  className={`relative p-6 rounded-lg border-2 transition-all ${
+                    formData.tower_type === type.id
+                      ? "border-primary bg-primary/5"
+                      : "border-border hover:border-primary/50"
+                  } ${type.disabled ? "opacity-50 cursor-not-allowed" : "cursor-pointer"}`}
+                >
                     <div className="h-24 bg-muted rounded mb-3 flex items-center justify-center overflow-hidden">
                       <img src={type.image} alt={type.label} className="w-full h-full object-contain" />
                     </div>
@@ -225,9 +249,10 @@ export const ConstructionDetailsStep = ({ data, onNext, onBack, projectId }: Con
                 ))}
               </div>
             </div>
+        )}
 
-            <div>
-              <Label className="text-base mb-4 block">Building Details</Label>
+        <div>
+          <Label className="text-base mb-4 block">Building Details</Label>
               <div className="grid md:grid-cols-2 gap-6">
                 <div className="space-y-2">
                   <Label htmlFor="total_floors" className="text-sm">
@@ -237,7 +262,7 @@ export const ConstructionDetailsStep = ({ data, onNext, onBack, projectId }: Con
                     id="total_floors"
                     type="number"
                     value={formData.total_floors}
-                    onChange={(e) => setFormData({ ...formData, total_floors: e.target.value })}
+                    onChange={(e) => updateFormData({ total_floors: e.target.value })}
                     placeholder="20"
                   />
                 </div>
@@ -249,7 +274,7 @@ export const ConstructionDetailsStep = ({ data, onNext, onBack, projectId }: Con
                     id="typical_floors"
                     type="number"
                     value={formData.typical_floors}
-                    onChange={(e) => setFormData({ ...formData, typical_floors: e.target.value })}
+                    onChange={(e) => updateFormData({ typical_floors: e.target.value })}
                     placeholder="15"
                   />
                 </div>
@@ -258,13 +283,13 @@ export const ConstructionDetailsStep = ({ data, onNext, onBack, projectId }: Con
                   <div className="flex items-center gap-2">
                     <Input
                       value={formData.typical_floors_start}
-                      onChange={(e) => setFormData({ ...formData, typical_floors_start: e.target.value })}
+                      onChange={(e) => updateFormData({ typical_floors_start: e.target.value })}
                       placeholder="P8"
                     />
                     <span>to</span>
                     <Input
                       value={formData.typical_floors_end}
-                      onChange={(e) => setFormData({ ...formData, typical_floors_end: e.target.value })}
+                      onChange={(e) => updateFormData({ typical_floors_end: e.target.value })}
                       placeholder="9"
                     />
                   </div>
@@ -274,7 +299,7 @@ export const ConstructionDetailsStep = ({ data, onNext, onBack, projectId }: Con
                   <Select
                     value={formData.underground_parking.toString()}
                     onValueChange={(value) =>
-                      setFormData({ ...formData, underground_parking: value === "true" })
+                      updateFormData({ underground_parking: value === "true" })
                     }
                   >
                     <SelectTrigger>
@@ -289,7 +314,7 @@ export const ConstructionDetailsStep = ({ data, onNext, onBack, projectId }: Con
               </div>
             </div>
 
-            <div className="bg-muted/30 p-6 rounded-lg space-y-4">
+        <div className="bg-muted/30 p-6 rounded-lg space-y-4">
               <Label className="text-base mb-4 block">Mechanical & Electrical Drawings</Label>
               <div className="border-2 border-dashed border-border rounded-lg p-8 text-center">
                 <Upload className="mx-auto h-10 w-10 text-muted-foreground mb-3" />
@@ -338,9 +363,6 @@ export const ConstructionDetailsStep = ({ data, onNext, onBack, projectId }: Con
                 </div>
               )}
             </div>
-          </>
-        )}
-
       </div>
     </div>
   );

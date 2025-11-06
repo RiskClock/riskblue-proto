@@ -92,6 +92,8 @@ const ProjectWizard = () => {
         construction_start_date,
         construction_end_date,
         has_builders_risk_policy,
+        uploadedFiles,
+        webhookResponse,
         ...otherData
       } = data;
 
@@ -182,6 +184,7 @@ const ProjectWizard = () => {
       
       // Building details
       building_type: extractedData.height_category || extractedData.building_type || projectData.building_type,
+      has_podium: extractedData.has_podium !== undefined ? extractedData.has_podium : projectData.has_podium,
       tower_type: extractedData.tower_configuration === "single_tower" ? "single" : 
                   extractedData.tower_configuration === "multi_tower" ? "multi" : 
                   projectData.tower_type,
