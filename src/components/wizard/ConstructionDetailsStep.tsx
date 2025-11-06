@@ -157,36 +157,34 @@ export const ConstructionDetailsStep = ({ data, onNext, onBack, projectId }: Con
         </div>
 
 
-        {formData.building_type === "high-rise" && (
-          <div>
-            <Label className="text-base mb-4 block">Tower Configuration</Label>
-              <div className="grid grid-cols-3 gap-4">
-                {towerTypes.map((type) => (
-                <button
-                  key={type.id}
-                  type="button"
-                  disabled={type.disabled}
-                  onClick={() => updateFormData({ tower_type: type.id })}
-                  className={`relative p-6 rounded-lg border-2 transition-all ${
-                    formData.tower_type === type.id
-                      ? "border-primary bg-primary/5"
-                      : "border-border hover:border-primary/50"
-                  } ${type.disabled ? "opacity-50 cursor-not-allowed" : "cursor-pointer"}`}
-                >
-                    <div className="h-24 bg-muted rounded mb-3 flex items-center justify-center overflow-hidden">
-                      <img src={type.image} alt={type.label} className="w-full h-full object-contain" />
+        <div>
+          <Label className="text-base mb-4 block">Tower Configuration</Label>
+            <div className="grid grid-cols-3 gap-4">
+              {towerTypes.map((type) => (
+              <button
+                key={type.id}
+                type="button"
+                disabled={type.disabled}
+                onClick={() => updateFormData({ tower_type: type.id })}
+                className={`relative p-6 rounded-lg border-2 transition-all ${
+                  formData.tower_type === type.id
+                    ? "border-primary bg-primary/5"
+                    : "border-border hover:border-primary/50"
+                } ${type.disabled ? "opacity-50 cursor-not-allowed" : "cursor-pointer"}`}
+              >
+                  <div className="h-24 bg-muted rounded mb-3 flex items-center justify-center overflow-hidden">
+                    <img src={type.image} alt={type.label} className="w-full h-full object-contain" />
+                  </div>
+                  <p className="text-sm text-center">{type.label}</p>
+                  {type.disabled && (
+                    <div className="absolute top-2 right-2 text-xs bg-muted px-2 py-1 rounded">
+                      Coming Soon
                     </div>
-                    <p className="text-sm text-center">{type.label}</p>
-                    {type.disabled && (
-                      <div className="absolute top-2 right-2 text-xs bg-muted px-2 py-1 rounded">
-                        Coming Soon
-                      </div>
-                    )}
-                  </button>
-                ))}
-              </div>
+                  )}
+                </button>
+              ))}
             </div>
-        )}
+          </div>
 
         <div>
           <Label className="text-base mb-4 block">Building Details</Label>
