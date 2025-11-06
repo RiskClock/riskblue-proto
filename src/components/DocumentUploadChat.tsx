@@ -142,18 +142,18 @@ export const DocumentUploadChat = ({ projectId, onDataExtracted }: DocumentUploa
         />
         
         {/* Visual upload zone */}
-        <div className="flex gap-2">
+        <div className="flex gap-2 items-center">
           <button
             onClick={() => fileInputRef.current?.click()}
             disabled={uploading}
-            className="flex-1 border-2 border-dashed border-muted-foreground/30 rounded-lg p-4 hover:border-primary hover:bg-accent transition-all cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed group"
+            className="flex-1 border-2 border-dashed border-muted-foreground/30 rounded-lg p-4 hover:border-muted-foreground/50 hover:bg-accent transition-all cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
           >
             <div className="flex items-center gap-3">
-              <div className="p-2 rounded-md bg-muted group-hover:bg-primary/10 transition-colors">
+              <div className="p-2 rounded-md bg-muted transition-colors">
                 {uploadedFile ? (
-                  <FileText className="w-5 h-5 text-muted-foreground group-hover:text-primary" />
+                  <FileText className="w-5 h-5 text-muted-foreground" />
                 ) : (
-                  <Upload className="w-5 h-5 text-muted-foreground group-hover:text-primary" />
+                  <Upload className="w-5 h-5 text-muted-foreground" />
                 )}
               </div>
               <div className="text-left flex-1">
