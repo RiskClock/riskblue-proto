@@ -146,7 +146,7 @@ export const DocumentUploadChat = ({ projectId, onDataExtracted }: DocumentUploa
           <button
             onClick={() => fileInputRef.current?.click()}
             disabled={uploading}
-            className="flex-1 border-2 border-dashed border-muted-foreground/30 rounded-lg p-4 hover:border-muted-foreground/50 hover:bg-accent transition-all cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+            className="flex-1 border-2 border-dashed border-muted-foreground/30 rounded-lg p-4 hover:border-muted-foreground/50 hover:bg-muted/50 transition-all cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
           >
             <div className="flex items-center gap-3">
               <div className="p-2 rounded-md bg-muted transition-colors">
