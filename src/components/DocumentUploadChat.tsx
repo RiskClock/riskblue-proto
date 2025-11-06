@@ -4,6 +4,8 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Loader2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { extractPDFData, extractKeyInformation, PDFMetadata } from "@/lib/pdfProcessor";
+import { PDFAnalysisAnimation } from "./PDFAnalysisAnimation";
 
 interface DocumentUploadChatProps {
   projectId: string;
@@ -15,6 +17,14 @@ export const DocumentUploadChat = ({ projectId, onDataExtracted }: DocumentUploa
   const [uploadedFile, setUploadedFile] = useState<File | null>(null);
   const [uploading, setUploading] = useState(false);
   const [responseData, setResponseData] = useState<any>(null);
+  
+  // PDF Analysis states
+  const [analyzing, setAnalyzing] = useState(false);
+  const [pdfMetadata, setPdfMetadata] = useState<PDFMetadata | null>(null);
+  const [currentPage, setCurrentPage] = useState(0);
+  const [extractedDates, setExtractedDates] = useState<string[]>([]);
+  const [extractedMilestones, setExtractedMilestones] = useState<string[]>([]);
+  const [extractedText, setExtractedText] = useState<string[]>([]);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -27,12 +37,44 @@ export const DocumentUploadChat = ({ projectId, onDataExtracted }: DocumentUploa
     if (!uploadedFile) return;
 
     setUploading(true);
+    setAnalyzing(true);
+    setPdfMetadata(null);
+    setCurrentPage(0);
+    setExtractedDates([]);
+    setExtractedMilestones([]);
+    setExtractedText([]);
+
+    // Start local PDF processing
+    const pdfProcessingPromise = extractPDFData(
+      uploadedFile,
+      (progress, pageNumber) => {
+        setCurrentPage(pageNumber);
+      }
+    ).then((metadata) => {
+      setPdfMetadata(metadata);
+      const { dates, milestones } = extractKeyInformation(metadata.pages);
+      setExtractedDates(dates);
+      setExtractedMilestones(milestones);
+      setExtractedText(metadata.pages.map(p => p.text).filter(t => t.length > 50));
+      setAnalyzing(false);
+    }).catch((error) => {
+      console.error("PDF processing error:", error);
+      toast({
+        title: "Warning",
+        description: "Could not analyze PDF locally, but upload continues.",
+        variant: "destructive",
+      });
+      setAnalyzing(false);
+    });
+
+    // Start webhook upload
     const formData = new FormData();
     formData.append("file", uploadedFile);
     formData.append("projectId", projectId);
 
-    try {
-      const response = await fetch(
+    const webhookPromise = (async () => {
+      try {
+        const response = await fetch(
         "https://gyubok.app.n8n.cloud/webhook/8fa778fd-3139-48d2-85af-b5c406186380",
         {
           method: "POST",
@@ -67,16 +109,19 @@ export const DocumentUploadChat = ({ projectId, onDataExtracted }: DocumentUploa
           description: "Document processed successfully",
         });
       }
-    } catch (error) {
-      console.error("Upload error:", error);
-      toast({
-        title: "Error",
-        description: error instanceof Error ? error.message : "Failed to upload file",
-        variant: "destructive",
-      });
-    } finally {
-      setUploading(false);
-    }
+      } catch (error) {
+        console.error("Upload error:", error);
+        toast({
+          title: "Error",
+          description: error instanceof Error ? error.message : "Failed to upload file",
+          variant: "destructive",
+        });
+      }
+    })();
+
+    // Wait for both to complete
+    await Promise.all([pdfProcessingPromise, webhookPromise]);
+    setUploading(false);
   };
 
 
@@ -107,6 +152,18 @@ export const DocumentUploadChat = ({ projectId, onDataExtracted }: DocumentUploa
           </Button>
         </div>
       </div>
+
+      {/* PDF Analysis Animation */}
+      {analyzing && pdfMetadata && (
+        <PDFAnalysisAnimation
+          pageCount={pdfMetadata.pageCount}
+          currentPage={currentPage}
+          extractedText={extractedText}
+          extractedDates={extractedDates}
+          extractedMilestones={extractedMilestones}
+          isComplete={!analyzing && currentPage === pdfMetadata.pageCount}
+        />
+      )}
 
       {responseData && (
         <div className="space-y-2 pt-4 border-t">
