@@ -140,7 +140,20 @@ export const ResponsePlanUploadChat = ({ projectId, onDataExtracted }: ResponseP
       if (!response.ok) throw new Error("Failed to send question");
 
       const data = await response.text();
-      setMessages((prev) => prev.slice(0, -1).concat({ role: "assistant", content: data }));
+      
+      // Try to parse JSON and extract output field
+      let formattedContent = data;
+      try {
+        const parsed = JSON.parse(data);
+        if (parsed.output) {
+          formattedContent = parsed.output;
+        }
+      } catch (e) {
+        // If not JSON, use raw text
+        console.log("Response is not JSON, using raw text");
+      }
+      
+      setMessages((prev) => prev.slice(0, -1).concat({ role: "assistant", content: formattedContent }));
     } catch (error) {
       console.error("Error sending question:", error);
       setMessages((prev) => prev.slice(0, -1).concat({ 
