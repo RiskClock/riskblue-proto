@@ -185,6 +185,20 @@ const ProjectWizard = () => {
                   extractedData.tower_configuration === "multi_tower" ? "multi" : 
                   projectData.tower_type,
       
+      // Map milestones to flat field structure
+      frame_start_date: extractedData.milestones?.structural_framing?.start || projectData.frame_start_date,
+      frame_end_date: extractedData.milestones?.structural_framing?.finish || projectData.frame_end_date,
+      enclosure_start_date: extractedData.milestones?.envelope?.start || projectData.enclosure_start_date,
+      enclosure_end_date: extractedData.milestones?.envelope?.finish || projectData.enclosure_end_date,
+      mep_start_date: extractedData.milestones?.MEP?.start || projectData.mep_start_date,
+      mep_end_date: extractedData.milestones?.MEP?.finish || projectData.mep_end_date,
+      elevators_start_date: extractedData.milestones?.elevators?.start || projectData.elevators_start_date,
+      elevators_end_date: extractedData.milestones?.elevators?.finish || projectData.elevators_end_date,
+      fire_start_date: extractedData.milestones?.fire_suppression_systems?.start || projectData.fire_start_date,
+      fire_end_date: extractedData.milestones?.fire_suppression_systems?.finish || projectData.fire_end_date,
+      interior_start_date: extractedData.milestones?.interior_finishes?.start || projectData.interior_start_date,
+      interior_end_date: extractedData.milestones?.interior_finishes?.finish || projectData.interior_end_date,
+      
       // Map critical assets from boolean object to selected array
       selectedAssets: extractedData.critical_assets_present ? 
         Object.entries(extractedData.critical_assets_present)
@@ -220,54 +234,8 @@ const ProjectWizard = () => {
             return systemMap[key] || key;
           }) : projectData.selectedSystems,
       
-      // Map mitigation controls - assume all are present if not specified
+      // Map mitigation controls if present
       selectedControls: extractedData.mitigation_controls || projectData.selectedControls,
-      
-      // Map milestones with their dates
-      milestones: extractedData.milestones ? [
-        {
-          id: "structural",
-          name: "Structural Framing",
-          startDate: extractedData.milestones.structural_framing?.start || "",
-          endDate: extractedData.milestones.structural_framing?.finish || "",
-          notes: extractedData.milestones.structural_framing?.notes || ""
-        },
-        {
-          id: "envelope",
-          name: "Envelope",
-          startDate: extractedData.milestones.envelope?.start || "",
-          endDate: extractedData.milestones.envelope?.finish || "",
-          notes: extractedData.milestones.envelope?.notes || ""
-        },
-        {
-          id: "mep",
-          name: "MEP",
-          startDate: extractedData.milestones.MEP?.start || "",
-          endDate: extractedData.milestones.MEP?.finish || "",
-          notes: extractedData.milestones.MEP?.notes || ""
-        },
-        {
-          id: "elevators",
-          name: "Elevators",
-          startDate: extractedData.milestones.elevators?.start || "",
-          endDate: extractedData.milestones.elevators?.finish || "",
-          notes: extractedData.milestones.elevators?.notes || ""
-        },
-        {
-          id: "fire",
-          name: "Fire Suppression Systems",
-          startDate: extractedData.milestones.fire_suppression_systems?.start || "",
-          endDate: extractedData.milestones.fire_suppression_systems?.finish || "",
-          notes: extractedData.milestones.fire_suppression_systems?.notes || ""
-        },
-        {
-          id: "interior",
-          name: "Interior Finishes",
-          startDate: extractedData.milestones.interior_finishes?.start || "",
-          endDate: extractedData.milestones.interior_finishes?.finish || "",
-          notes: extractedData.milestones.interior_finishes?.notes || ""
-        }
-      ] : projectData.milestones,
     };
 
     setProjectData(mappedData);
