@@ -78,9 +78,10 @@ interface CriticalAssetsStepProps {
   data: any;
   onNext: (data: any) => void;
   onBack: () => void;
+  isProcessingWebhook?: boolean;
 }
 
-export const CriticalAssetsStep = ({ data, onNext, onBack }: CriticalAssetsStepProps) => {
+export const CriticalAssetsStep = ({ data, onNext, onBack, isProcessingWebhook }: CriticalAssetsStepProps) => {
   const [selectedAssets, setSelectedAssets] = useState<string[]>(data.selectedAssets || []);
 
   // Sync props to state when data changes (e.g., from webhook)
@@ -96,14 +97,16 @@ export const CriticalAssetsStep = ({ data, onNext, onBack }: CriticalAssetsStepP
     );
   };
 
-  // Auto-save with debounce
+  // Auto-save with debounce - don't save while webhook is processing
   useEffect(() => {
+    if (isProcessingWebhook) return;
+    
     const timer = setTimeout(() => {
       onNext({ selectedAssets });
     }, 500);
 
     return () => clearTimeout(timer);
-  }, [selectedAssets, onNext]);
+  }, [selectedAssets, isProcessingWebhook]);
 
   return (
     <div className="space-y-6">

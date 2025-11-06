@@ -16,9 +16,10 @@ interface ProjectMilestonesStepProps {
   data: any;
   onNext: (data: any) => void;
   onBack: () => void;
+  isProcessingWebhook?: boolean;
 }
 
-export const ProjectMilestonesStep = ({ data, onNext, onBack }: ProjectMilestonesStepProps) => {
+export const ProjectMilestonesStep = ({ data, onNext, onBack, isProcessingWebhook }: ProjectMilestonesStepProps) => {
   const [formData, setFormData] = useState({
     construction_start_date: data.construction_start_date || "",
     construction_end_date: data.construction_end_date || "",
@@ -56,14 +57,16 @@ export const ProjectMilestonesStep = ({ data, onNext, onBack }: ProjectMilestone
     });
   }, [data]);
 
-  // Auto-save with debounce
+  // Auto-save with debounce - don't save while webhook is processing
   useEffect(() => {
+    if (isProcessingWebhook) return;
+    
     const timer = setTimeout(() => {
       onNext(formData);
     }, 500);
 
     return () => clearTimeout(timer);
-  }, [formData, onNext]);
+  }, [formData, isProcessingWebhook]);
 
   return (
     <div className="space-y-8">

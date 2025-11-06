@@ -10,9 +10,11 @@ import { PDFAnalysisAnimation } from "./PDFAnalysisAnimation";
 interface DocumentUploadChatProps {
   projectId: string;
   onDataExtracted?: (data: any) => void;
+  isProcessingWebhook?: boolean;
+  setIsProcessingWebhook?: (value: boolean) => void;
 }
 
-export const DocumentUploadChat = ({ projectId, onDataExtracted }: DocumentUploadChatProps) => {
+export const DocumentUploadChat = ({ projectId, onDataExtracted, setIsProcessingWebhook }: DocumentUploadChatProps) => {
   const { toast } = useToast();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
@@ -102,6 +104,10 @@ export const DocumentUploadChat = ({ projectId, onDataExtracted }: DocumentUploa
     formData.append("projectId", projectId);
 
     const webhookPromise = (async () => {
+      if (setIsProcessingWebhook) {
+        setIsProcessingWebhook(true);
+      }
+      
       try {
         const response = await fetch(
         "https://gyubok.app.n8n.cloud/webhook/8fa778fd-3139-48d2-85af-b5c406186380",
@@ -151,6 +157,9 @@ export const DocumentUploadChat = ({ projectId, onDataExtracted }: DocumentUploa
         });
       } finally {
         setWebhookComplete(true);
+        if (setIsProcessingWebhook) {
+          setIsProcessingWebhook(false);
+        }
       }
     })();
 

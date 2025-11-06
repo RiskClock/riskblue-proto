@@ -68,9 +68,10 @@ interface WaterSystemsStepProps {
   data: any;
   onNext: (data: any) => void;
   onBack: () => void;
+  isProcessingWebhook?: boolean;
 }
 
-export const WaterSystemsStep = ({ data, onNext, onBack }: WaterSystemsStepProps) => {
+export const WaterSystemsStep = ({ data, onNext, onBack, isProcessingWebhook }: WaterSystemsStepProps) => {
   const [selectedSystems, setSelectedSystems] = useState<string[]>(data.selectedSystems || []);
 
   // Sync props to state when data changes (e.g., from webhook)
@@ -86,14 +87,16 @@ export const WaterSystemsStep = ({ data, onNext, onBack }: WaterSystemsStepProps
     );
   };
 
-  // Auto-save with debounce
+  // Auto-save with debounce - don't save while webhook is processing
   useEffect(() => {
+    if (isProcessingWebhook) return;
+    
     const timer = setTimeout(() => {
       onNext({ selectedSystems });
     }, 500);
 
     return () => clearTimeout(timer);
-  }, [selectedSystems, onNext]);
+  }, [selectedSystems, isProcessingWebhook]);
 
   return (
     <div className="space-y-6">

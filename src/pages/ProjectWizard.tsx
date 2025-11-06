@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
@@ -31,6 +31,7 @@ const ProjectWizard = () => {
   const [activeTab, setActiveTab] = useState("guideline");
   const [projectData, setProjectData] = useState<ProjectData>({});
   const [loading, setLoading] = useState(false);
+  const [isProcessingWebhook, setIsProcessingWebhook] = useState(false);
 
   useEffect(() => {
     if (id && id !== "new") {
@@ -167,13 +168,15 @@ const ProjectWizard = () => {
     }
   };
 
-  const handleStepUpdate = async (stepData: any) => {
+  const handleStepUpdate = useCallback(async (stepData: any) => {
     const updatedData = { ...projectData, ...stepData };
     setProjectData(updatedData);
     await saveProject(updatedData);
-  };
+  }, [projectData]);
 
   const handleDocumentDataExtracted = async (extractedData: any) => {
+    setIsProcessingWebhook(true);
+    
     // Map the extracted data to project fields based on webhook schema
     const mappedData = {
       ...projectData,
@@ -245,6 +248,8 @@ const ProjectWizard = () => {
     setProjectData(mappedData);
     await saveProject(mappedData);
     
+    setIsProcessingWebhook(false);
+    
     toast({
       title: "Data Pre-filled",
       description: "Project information has been automatically filled from the uploaded document.",
@@ -277,7 +282,12 @@ const ProjectWizard = () => {
           </TabsList>
 
           <TabsContent value="guideline" className="max-w-5xl mx-auto">
-            <DocumentUploadChat projectId={id || "new"} onDataExtracted={handleDocumentDataExtracted} />
+            <DocumentUploadChat 
+              projectId={id || "new"} 
+              onDataExtracted={handleDocumentDataExtracted}
+              isProcessingWebhook={isProcessingWebhook}
+              setIsProcessingWebhook={setIsProcessingWebhook}
+            />
             <Accordion type="multiple" defaultValue={["basic-info", "assets-systems", "mitigation-controls"]} className="space-y-4">
               <AccordionItem value="basic-info" className="border rounded-lg px-6">
                 <AccordionTrigger className="text-lg font-semibold">
@@ -289,7 +299,12 @@ const ProjectWizard = () => {
                   </div>
                   <div className="space-y-6 pt-6 border-t">
                     <h3 className="text-md font-medium">Milestones & Timelines</h3>
-                    <ProjectMilestonesStep data={projectData} onNext={handleStepUpdate} onBack={() => {}} />
+                    <ProjectMilestonesStep 
+                      data={projectData} 
+                      onNext={handleStepUpdate} 
+                      onBack={() => {}} 
+                      isProcessingWebhook={isProcessingWebhook}
+                    />
                   </div>
                   <div className="space-y-6 pt-6 border-t">
                     <ConstructionDetailsStep data={projectData} onNext={handleStepUpdate} onBack={() => {}} projectId={id} />
@@ -304,11 +319,21 @@ const ProjectWizard = () => {
                 <AccordionContent className="space-y-8 pt-4">
                   <div className="space-y-6">
                     <h3 className="text-md font-medium">Critical Assets</h3>
-                    <CriticalAssetsStep data={projectData} onNext={handleStepUpdate} onBack={() => {}} />
+                    <CriticalAssetsStep 
+                      data={projectData} 
+                      onNext={handleStepUpdate} 
+                      onBack={() => {}} 
+                      isProcessingWebhook={isProcessingWebhook}
+                    />
                   </div>
                   <div className="space-y-6 pt-6 border-t">
                     <h3 className="text-md font-medium">Water Systems</h3>
-                    <WaterSystemsStep data={projectData} onNext={handleStepUpdate} onBack={() => {}} />
+                    <WaterSystemsStep 
+                      data={projectData} 
+                      onNext={handleStepUpdate} 
+                      onBack={() => {}} 
+                      isProcessingWebhook={isProcessingWebhook}
+                    />
                   </div>
                 </AccordionContent>
               </AccordionItem>
@@ -318,7 +343,12 @@ const ProjectWizard = () => {
                   Mitigation Controls
                 </AccordionTrigger>
                 <AccordionContent className="pt-4">
-                  <MitigationControlsStep data={projectData} onNext={handleStepUpdate} onBack={() => {}} />
+                  <MitigationControlsStep 
+                    data={projectData} 
+                    onNext={handleStepUpdate} 
+                    onBack={() => {}} 
+                    isProcessingWebhook={isProcessingWebhook}
+                  />
                 </AccordionContent>
               </AccordionItem>
             </Accordion>

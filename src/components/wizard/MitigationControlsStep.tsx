@@ -16,9 +16,10 @@ interface MitigationControlsStepProps {
   data: any;
   onNext: (data: any) => void;
   onBack: () => void;
+  isProcessingWebhook?: boolean;
 }
 
-export const MitigationControlsStep = ({ data, onNext, onBack }: MitigationControlsStepProps) => {
+export const MitigationControlsStep = ({ data, onNext, onBack, isProcessingWebhook }: MitigationControlsStepProps) => {
   const [selectedControls, setSelectedControls] = useState<string[]>(data.selectedControls || []);
 
   // Sync props to state when data changes (e.g., from webhook)
@@ -34,14 +35,16 @@ export const MitigationControlsStep = ({ data, onNext, onBack }: MitigationContr
     );
   };
 
-  // Auto-save with debounce
+  // Auto-save with debounce - don't save while webhook is processing
   useEffect(() => {
+    if (isProcessingWebhook) return;
+    
     const timer = setTimeout(() => {
       onNext({ selectedControls });
     }, 500);
 
     return () => clearTimeout(timer);
-  }, [selectedControls, onNext]);
+  }, [selectedControls, isProcessingWebhook]);
 
   return (
     <div className="space-y-6">
