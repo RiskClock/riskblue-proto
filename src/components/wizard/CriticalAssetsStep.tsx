@@ -83,6 +83,13 @@ interface CriticalAssetsStepProps {
 export const CriticalAssetsStep = ({ data, onNext, onBack }: CriticalAssetsStepProps) => {
   const [selectedAssets, setSelectedAssets] = useState<string[]>(data.selectedAssets || []);
 
+  // Sync props to state when data changes (e.g., from webhook)
+  useEffect(() => {
+    if (data.selectedAssets) {
+      setSelectedAssets(data.selectedAssets);
+    }
+  }, [data.selectedAssets]);
+
   const toggleAsset = (assetId: string) => {
     setSelectedAssets((prev) =>
       prev.includes(assetId) ? prev.filter((id) => id !== assetId) : [...prev, assetId]

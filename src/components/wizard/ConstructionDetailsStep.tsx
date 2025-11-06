@@ -63,6 +63,23 @@ export const ConstructionDetailsStep = ({ data, onNext, onBack, projectId }: Con
   const [uploading, setUploading] = useState(false);
   const [webhookResponse, setWebhookResponse] = useState<any>(null);
 
+  // Sync props to state when data changes (e.g., from webhook)
+  useEffect(() => {
+    setFormData({
+      project_type: data.project_type || "",
+      building_type: data.building_type || "",
+      tower_type: data.tower_type || "",
+      total_floors: data.total_floors || "",
+      typical_floors: data.typical_floors || "",
+      typical_floors_start: data.typical_floors_start || "",
+      typical_floors_end: data.typical_floors_end || "",
+      underground_parking: data.underground_parking || false,
+      underground_parking_start: data.underground_parking_start || "",
+      underground_parking_end: data.underground_parking_end || "",
+      above_grade_parking: data.above_grade_parking || false,
+    });
+  }, [data]);
+
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files) {
       setUploadedFiles(Array.from(e.target.files));

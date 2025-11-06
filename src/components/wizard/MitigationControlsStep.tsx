@@ -21,6 +21,13 @@ interface MitigationControlsStepProps {
 export const MitigationControlsStep = ({ data, onNext, onBack }: MitigationControlsStepProps) => {
   const [selectedControls, setSelectedControls] = useState<string[]>(data.selectedControls || []);
 
+  // Sync props to state when data changes (e.g., from webhook)
+  useEffect(() => {
+    if (data.selectedControls) {
+      setSelectedControls(data.selectedControls);
+    }
+  }, [data.selectedControls]);
+
   const toggleControl = (controlId: string) => {
     setSelectedControls((prev) =>
       prev.includes(controlId) ? prev.filter((id) => id !== controlId) : [...prev, controlId]

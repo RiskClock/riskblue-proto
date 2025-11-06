@@ -23,6 +23,20 @@ export const ProjectInfoStep = ({ data, onNext }: ProjectInfoStepProps) => {
     has_builders_risk_policy: data.has_builders_risk_policy || false,
   });
 
+  // Sync props to state when data changes (e.g., from webhook)
+  useEffect(() => {
+    setFormData({
+      name: data.name || "",
+      address_1: data.address_1 || "",
+      address_2: data.address_2 || "",
+      city: data.city || "",
+      state: data.state || "",
+      zip_code: data.zip_code || "",
+      country: data.country || "United States",
+      has_builders_risk_policy: data.has_builders_risk_policy || false,
+    });
+  }, [data]);
+
   // Auto-save with debounce
   useEffect(() => {
     const timer = setTimeout(() => {

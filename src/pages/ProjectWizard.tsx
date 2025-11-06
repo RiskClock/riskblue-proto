@@ -225,12 +225,12 @@ const ProjectWizard = () => {
           .map(([key]) => {
             // Map schema keys to our system IDs
             const systemMap: Record<string, string> = {
-              "domestic_cold_water": "domesticCold",
-              "domestic_hot_water": "domesticHot",
-              "temporary_water_run": "temporaryRun",
-              "main_city_water_supply": "mainEntry",
+              "domestic_cold_water": "domestic-cold",
+              "domestic_hot_water": "domestic-hot",
+              "temporary_water_run": "temporary-water",
+              "main_city_water_supply": "main-water-entry",
               "hydronics": "hydronics",
-              "fire_suppression_systems": "fireSuppression"
+              "fire_suppression_systems": "fire-suppression"
             };
             return systemMap[key] || key;
           }) : projectData.selectedSystems,

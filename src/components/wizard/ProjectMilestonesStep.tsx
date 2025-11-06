@@ -36,6 +36,26 @@ export const ProjectMilestonesStep = ({ data, onNext, onBack }: ProjectMilestone
     interior_end_date: data.interior_end_date || "",
   });
 
+  // Sync props to state when data changes (e.g., from webhook)
+  useEffect(() => {
+    setFormData({
+      construction_start_date: data.construction_start_date || "",
+      construction_end_date: data.construction_end_date || "",
+      frame_start_date: data.frame_start_date || "",
+      frame_end_date: data.frame_end_date || "",
+      enclosure_start_date: data.enclosure_start_date || "",
+      enclosure_end_date: data.enclosure_end_date || "",
+      mep_start_date: data.mep_start_date || "",
+      mep_end_date: data.mep_end_date || "",
+      elevators_start_date: data.elevators_start_date || "",
+      elevators_end_date: data.elevators_end_date || "",
+      fire_start_date: data.fire_start_date || "",
+      fire_end_date: data.fire_end_date || "",
+      interior_start_date: data.interior_start_date || "",
+      interior_end_date: data.interior_end_date || "",
+    });
+  }, [data]);
+
   // Auto-save with debounce
   useEffect(() => {
     const timer = setTimeout(() => {

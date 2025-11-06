@@ -73,6 +73,13 @@ interface WaterSystemsStepProps {
 export const WaterSystemsStep = ({ data, onNext, onBack }: WaterSystemsStepProps) => {
   const [selectedSystems, setSelectedSystems] = useState<string[]>(data.selectedSystems || []);
 
+  // Sync props to state when data changes (e.g., from webhook)
+  useEffect(() => {
+    if (data.selectedSystems) {
+      setSelectedSystems(data.selectedSystems);
+    }
+  }, [data.selectedSystems]);
+
   const toggleSystem = (systemId: string) => {
     setSelectedSystems((prev) =>
       prev.includes(systemId) ? prev.filter((id) => id !== systemId) : [...prev, systemId]
