@@ -275,7 +275,7 @@ const ProjectWizard = () => {
 
           <TabsContent value="guideline" className="max-w-5xl mx-auto">
             <DocumentUploadChat projectId={id || "new"} onDataExtracted={handleDocumentDataExtracted} />
-            <Accordion type="single" collapsible defaultValue="basic-info" className="space-y-4">
+            <Accordion type="multiple" defaultValue={["basic-info", "assets-systems", "mitigation-controls"]} className="space-y-4">
               <AccordionItem value="basic-info" className="border rounded-lg px-6">
                 <AccordionTrigger className="text-lg font-semibold">
                   Project Info
