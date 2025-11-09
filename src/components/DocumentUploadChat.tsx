@@ -111,7 +111,7 @@ export const DocumentUploadChat = ({ projectId, onDataExtracted, setIsProcessing
       
       try {
         const response = await fetch(
-        "https://gyubok.app.n8n.cloud/webhook/8fa778fd-3139-48d2-85af-b5c406186380",
+        "https://riskclock.app.n8n.cloud/webhook/478b15fa-6098-4d3d-b51d-77ae4d0a1b4e",
         {
           method: "POST",
           body: formData,

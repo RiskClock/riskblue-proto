@@ -43,7 +43,7 @@ export const MitigationResponsePlanStep = ({
       formData.append("file", selectedFile);
 
       const response = await fetch(
-        "https://gyubok.app.n8n.cloud/webhook/e2ac331c-7bba-4517-baa5-28d233d641ca",
+        "https://riskclock.app.n8n.cloud/webhook/e04019c5-849b-4da8-81f0-b96dad78a5af",
         {
           method: "POST",
           body: formData,
