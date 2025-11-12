@@ -7,7 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
-import { UserPlus, Trash2, Building2 } from "lucide-react";
+import { UserPlus, Trash2, Building2, X } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { z } from "zod";
 
@@ -47,11 +47,9 @@ export const CollaboratorManagementStep = ({ projectId }: CollaboratorManagement
   const [collaboratorToDelete, setCollaboratorToDelete] = useState<string | null>(null);
   const [showInviteForm, setShowInviteForm] = useState(false);
   
-  const [formData, setFormData] = useState({
-    name: "",
-    email: "",
-    company: "",
-  });
+  const [inviteRows, setInviteRows] = useState([
+    { id: 1, name: "", email: "", company: "" }
+  ]);
 
   useEffect(() => {
     if (projectId && projectId !== "new") {
@@ -108,47 +106,73 @@ export const CollaboratorManagementStep = ({ projectId }: CollaboratorManagement
     }
   };
 
-  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setFormData({
-      ...formData,
-      [e.target.name]: e.target.value,
-    });
+  const handleInputChange = (id: number, field: string, value: string) => {
+    setInviteRows(rows =>
+      rows.map(row => row.id === id ? { ...row, [field]: value } : row)
+    );
   };
 
-  const handleAddCollaborator = async (e: React.FormEvent) => {
+  const addRow = () => {
+    const newId = Math.max(...inviteRows.map(r => r.id)) + 1;
+    setInviteRows([...inviteRows, { id: newId, name: "", email: "", company: "" }]);
+  };
+
+  const removeRow = (id: number) => {
+    if (inviteRows.length > 1) {
+      setInviteRows(rows => rows.filter(row => row.id !== id));
+    }
+  };
+
+  const handleAddCollaborators = async (e: React.FormEvent) => {
     e.preventDefault();
     
     if (projectId === "new") {
       toast({
         title: "Project Not Saved",
-        description: "Please save the project first before adding collaborators.",
+        description: "Please save the project first before inviting solution providers.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    // Filter out empty rows
+    const validRows = inviteRows.filter(row => 
+      row.name.trim() && row.email.trim() && row.company.trim()
+    );
+
+    if (validRows.length === 0) {
+      toast({
+        title: "Validation Error",
+        description: "Please fill in at least one complete row",
         variant: "destructive",
       });
       return;
     }
 
     try {
-      // Validate form data
-      collaboratorSchema.parse(formData);
+      // Validate all rows
+      validRows.forEach(row => {
+        collaboratorSchema.parse(row);
+      });
       
       setLoading(true);
 
       const { error } = await supabase
         .from("project_collaborators")
-        .insert([
-          {
+        .insert(
+          validRows.map(row => ({
             project_id: projectId,
-            name: formData.name,
-            email: formData.email,
-            company: formData.company,
-          },
-        ]);
+            name: row.name.trim(),
+            email: row.email.trim().toLowerCase(),
+            company: row.company.trim(),
+          }))
+        );
 
       if (error) {
         if (error.code === "23505") {
           toast({
             title: "Error",
-            description: "This email has already been invited to this project.",
+            description: "One or more emails have already been invited to this project.",
             variant: "destructive",
           });
           return;
@@ -157,12 +181,12 @@ export const CollaboratorManagementStep = ({ projectId }: CollaboratorManagement
       }
 
       toast({
-        title: "Collaborator Invited",
-        description: `${formData.name} has been invited to the project.`,
+        title: "Invitations Sent",
+        description: `${validRows.length} solution provider${validRows.length > 1 ? 's' : ''} invited to the project.`,
       });
 
       // Reset form
-      setFormData({ name: "", email: "", company: "" });
+      setInviteRows([{ id: 1, name: "", email: "", company: "" }]);
       setShowInviteForm(false);
       
       // Refresh list
@@ -177,7 +201,7 @@ export const CollaboratorManagementStep = ({ projectId }: CollaboratorManagement
       } else {
         toast({
           title: "Error",
-          description: "Failed to invite collaborator. Please try again.",
+          description: "Failed to send invitations. Please try again.",
           variant: "destructive",
         });
       }
@@ -230,9 +254,9 @@ export const CollaboratorManagementStep = ({ projectId }: CollaboratorManagement
         <CardHeader>
           <div className="flex items-center justify-between">
             <div>
-              <CardTitle>Invited Collaborators</CardTitle>
+              <CardTitle>Solution Providers</CardTitle>
               <CardDescription>
-                Invite team members to review water mitigation guidelines and submit proposals
+                Invite solution providers to review guidelines and submit cost proposals
               </CardDescription>
             </div>
             <Button
@@ -246,46 +270,50 @@ export const CollaboratorManagementStep = ({ projectId }: CollaboratorManagement
         </CardHeader>
         <CardContent className="space-y-6">
           {showInviteForm && (
-            <form onSubmit={handleAddCollaborator} className="space-y-4 p-4 border rounded-lg bg-muted/50">
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <div className="space-y-2">
-                  <Label htmlFor="name">Name *</Label>
-                  <Input
-                    id="name"
-                    name="name"
-                    value={formData.name}
-                    onChange={handleInputChange}
-                    placeholder="John Doe"
-                    required
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="email">Email *</Label>
-                  <Input
-                    id="email"
-                    name="email"
-                    type="email"
-                    value={formData.email}
-                    onChange={handleInputChange}
-                    placeholder="john@company.com"
-                    required
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="company">Company *</Label>
-                  <Input
-                    id="company"
-                    name="company"
-                    value={formData.company}
-                    onChange={handleInputChange}
-                    placeholder="ABC Construction"
-                    required
-                  />
-                </div>
+            <form onSubmit={handleAddCollaborators} className="space-y-4 p-4 border rounded-lg bg-muted/50">
+              <div className="space-y-3">
+                {inviteRows.map((row, index) => (
+                  <div key={row.id} className="flex gap-3 items-start">
+                    <div className="flex-1 grid grid-cols-1 md:grid-cols-3 gap-3">
+                      <Input
+                        value={row.name}
+                        onChange={(e) => handleInputChange(row.id, "name", e.target.value)}
+                        placeholder="Name"
+                      />
+                      <Input
+                        type="email"
+                        value={row.email}
+                        onChange={(e) => handleInputChange(row.id, "email", e.target.value)}
+                        placeholder="Email"
+                      />
+                      <Input
+                        value={row.company}
+                        onChange={(e) => handleInputChange(row.id, "company", e.target.value)}
+                        placeholder="Company"
+                      />
+                    </div>
+                    {inviteRows.length > 1 && (
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => removeRow(row.id)}
+                      >
+                        <X className="h-4 w-4" />
+                      </Button>
+                    )}
+                  </div>
+                ))}
               </div>
-              <Button type="submit" disabled={loading} className="w-full">
-                {loading ? "Sending..." : "Send Invitation"}
-              </Button>
+              <div className="flex gap-2">
+                <Button type="button" variant="outline" onClick={addRow} className="flex-1">
+                  <UserPlus className="h-4 w-4 mr-2" />
+                  Add Another
+                </Button>
+                <Button type="submit" disabled={loading} className="flex-1">
+                  {loading ? "Sending..." : `Send ${inviteRows.length} Invitation${inviteRows.length > 1 ? 's' : ''}`}
+                </Button>
+              </div>
             </form>
           )}
 
@@ -326,8 +354,8 @@ export const CollaboratorManagementStep = ({ projectId }: CollaboratorManagement
           ) : (
             <div className="text-center py-8 text-muted-foreground">
               <UserPlus className="h-12 w-12 mx-auto mb-4 opacity-50" />
-              <p>No collaborators invited yet</p>
-              <p className="text-sm">Click "Invite" to add team members to this project</p>
+              <p>No solution providers invited yet</p>
+              <p className="text-sm">Click "Invite" to add solution providers to this project</p>
             </div>
           )}
         </CardContent>
