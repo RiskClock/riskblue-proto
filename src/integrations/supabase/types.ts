@@ -14,6 +14,47 @@ export type Database = {
   }
   public: {
     Tables: {
+      company_proposals: {
+        Row: {
+          company: string
+          created_at: string
+          details: string | null
+          id: string
+          project_id: string
+          system_cost: number
+          system_name: string
+          updated_at: string
+        }
+        Insert: {
+          company: string
+          created_at?: string
+          details?: string | null
+          id?: string
+          project_id: string
+          system_cost?: number
+          system_name: string
+          updated_at?: string
+        }
+        Update: {
+          company?: string
+          created_at?: string
+          details?: string | null
+          id?: string
+          project_id?: string
+          system_cost?: number
+          system_name?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "company_proposals_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       profiles: {
         Row: {
           avatar_url: string | null
@@ -40,6 +81,44 @@ export type Database = {
           user_id?: string
         }
         Relationships: []
+      }
+      project_collaborators: {
+        Row: {
+          company: string
+          created_at: string
+          email: string
+          id: string
+          name: string
+          project_id: string
+          updated_at: string
+        }
+        Insert: {
+          company: string
+          created_at?: string
+          email: string
+          id?: string
+          name: string
+          project_id: string
+          updated_at?: string
+        }
+        Update: {
+          company?: string
+          created_at?: string
+          email?: string
+          id?: string
+          name?: string
+          project_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "project_collaborators_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       projects: {
         Row: {

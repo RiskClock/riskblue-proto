@@ -16,7 +16,7 @@ import { WaterSystemsStep } from "@/components/wizard/WaterSystemsStep";
 import { MitigationControlsStep } from "@/components/wizard/MitigationControlsStep";
 import { MitigationResponsePlanStep } from "@/components/wizard/MitigationResponsePlanStep";
 import { WaterMitigationGuidelinesStep } from "@/components/wizard/WaterMitigationGuidelinesStep";
-import { ProposalsStep } from "@/components/wizard/ProposalsStep";
+import { CollaboratorManagementStep } from "@/components/wizard/CollaboratorManagementStep";
 import { DocumentUploadChat } from "@/components/DocumentUploadChat";
 import { ResponsePlanUploadChat } from "@/components/ResponsePlanUploadChat";
 import { Download } from "lucide-react";
@@ -429,7 +429,7 @@ const ProjectWizard = () => {
               <WaterMitigationGuidelinesStep data={projectData} onBack={() => {}} onNext={handleStepUpdate} />
             </div>
             <div className="space-y-6 pt-8 border-t">
-              <ProposalsStep data={projectData} onBack={() => {}} onNext={handleStepUpdate} />
+              <CollaboratorManagementStep projectId={id || "new"} />
             </div>
           </TabsContent>
 
