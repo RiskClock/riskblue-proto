@@ -7,6 +7,7 @@ import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Send } from "lucide-react";
 import electricalRoomImg from "@/assets/control_Electrical_Room_Presence_of_Water_Monitoring.avif";
 import mechanicalRoomImg from "@/assets/control_Mechanical_Room_Presence_of_Water_Monitoring.avif";
 import mainElectricalRiserImg from "@/assets/control_Main_Electrical_Riser_Presence_of_Water_Monitoring.avif";
@@ -272,12 +273,38 @@ export const SolutionProviderPortal = ({
         description: "Your cost estimates have been saved.",
       });
 
-      onOpenChange(true); // Pass true to trigger refresh
+      // Trigger parent refresh
+      setTimeout(() => {
+        onOpenChange(true);
+      }, 500);
     } catch (error) {
       console.error("Error saving proposals:", error);
       toast({
         title: "Error",
         description: "Failed to save cost estimates. Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleSubmitProposal = async () => {
+    try {
+      setSaving(true);
+      
+      // First save all current data
+      await handleSave();
+      
+      toast({
+        title: "Proposal Submitted",
+        description: "Your proposal has been submitted successfully and marked as complete.",
+      });
+    } catch (error) {
+      console.error("Error submitting proposal:", error);
+      toast({
+        title: "Error",
+        description: "Failed to submit proposal. Please try again.",
         variant: "destructive",
       });
     } finally {
@@ -559,8 +586,15 @@ export const SolutionProviderPortal = ({
           <Button variant="outline" onClick={() => onOpenChange(false)}>
             Cancel
           </Button>
-          <Button onClick={handleSave} disabled={saving}>
+          <Button onClick={handleSave} disabled={saving} variant="outline">
             {saving ? "Saving..." : "Save Cost Estimates"}
+          </Button>
+          <Button 
+            onClick={handleSubmitProposal} 
+            disabled={saving || Object.keys(costs).filter(k => costs[k] && parseFloat(costs[k]) > 0).length === 0}
+          >
+            <Send className="h-4 w-4 mr-2" />
+            {saving ? "Submitting..." : "Submit Proposal"}
           </Button>
         </div>
       </DialogContent>

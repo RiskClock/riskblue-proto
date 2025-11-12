@@ -574,9 +574,8 @@ export const CollaboratorManagementStep = ({ projectId }: CollaboratorManagement
 
   const handlePortalClose = (shouldRefresh: boolean) => {
     setPortalOpen(false);
-    if (shouldRefresh) {
-      fetchCompanyProposals();
-    }
+    // Always refresh proposals when portal closes
+    fetchCompanyProposals();
   };
 
   return (
@@ -618,7 +617,7 @@ export const CollaboratorManagementStep = ({ projectId }: CollaboratorManagement
                         
                         return (
                           <div key={partner.name} className="border rounded-lg">
-                            <div className="flex items-center gap-3 p-3">
+                            <label className="flex items-center gap-3 p-3 cursor-pointer hover:bg-muted/30 transition-colors">
                               <Checkbox
                                 checked={selectionState === "all"}
                                 indeterminate={selectionState === "partial"}
@@ -641,7 +640,7 @@ export const CollaboratorManagementStep = ({ projectId }: CollaboratorManagement
                                   {selectedCount}/{partner.contacts.length}
                                 </Badge>
                               </Button>
-                            </div>
+                            </label>
                             
                             {isExpanded && (
                               <div className="border-t bg-muted/20">

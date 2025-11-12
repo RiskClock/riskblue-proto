@@ -7,9 +7,8 @@ import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { format } from "date-fns";
-import { FileText, Send } from "lucide-react";
+import { Send } from "lucide-react";
 import electricalRoomImg from "@/assets/control_Electrical_Room_Presence_of_Water_Monitoring.avif";
 import mechanicalRoomImg from "@/assets/control_Mechanical_Room_Presence_of_Water_Monitoring.avif";
 import mainElectricalRiserImg from "@/assets/control_Main_Electrical_Riser_Presence_of_Water_Monitoring.avif";
@@ -138,7 +137,6 @@ export const SolutionProviderPortalContent = ({
   const [projectData, setProjectData] = useState<any>(null);
   const [editorInfo, setEditorInfo] = useState<Record<string, { name: string; time: string }>>({});
   const [isLoadingData, setIsLoadingData] = useState(true);
-  const [showGuidelinesDialog, setShowGuidelinesDialog] = useState(false);
 
   useEffect(() => {
     if (projectId && companyName) {
@@ -377,9 +375,12 @@ export const SolutionProviderPortalContent = ({
         description: "Your proposal has been submitted successfully and marked as complete.",
       });
 
-      if (onRefresh) {
-        onRefresh();
-      }
+      // Call onRefresh after a short delay to ensure data is saved
+      setTimeout(() => {
+        if (onRefresh) {
+          onRefresh();
+        }
+      }, 500);
     } catch (error) {
       console.error("Error submitting proposal:", error);
       toast({
@@ -401,149 +402,6 @@ export const SolutionProviderPortalContent = ({
       <div className="border-b pb-4">
         <h1 className="text-2xl font-bold">Water Mitigation Planning - {companyName}</h1>
         <p className="text-sm text-muted-foreground">Viewing as: {providerName}</p>
-      </div>
-      
-      {/* Water Mitigation Guideline Button */}
-      <div className="flex justify-center">
-        <Dialog open={showGuidelinesDialog} onOpenChange={setShowGuidelinesDialog}>
-          <DialogTrigger asChild>
-            <Button variant="outline" size="lg">
-              <FileText className="h-4 w-4 mr-2" />
-              Water Mitigation Guideline
-            </Button>
-          </DialogTrigger>
-          <DialogContent className="max-w-5xl max-h-[80vh] overflow-y-auto">
-            <DialogHeader>
-              <DialogTitle>Water Risk Discovery</DialogTitle>
-            </DialogHeader>
-            <div className="py-4">
-              {/* Project Details Card */}
-              <Card className="mb-6">
-                <CardHeader>
-                  <CardTitle>Project Information</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="grid md:grid-cols-2 gap-4">
-                    <div>
-                      <Label className="text-muted-foreground">Project Name</Label>
-                      <p className="text-sm font-medium mt-1">{projectData.name || "N/A"}</p>
-                    </div>
-                    <div>
-                      <Label className="text-muted-foreground">Location</Label>
-                      <p className="text-sm font-medium mt-1">{projectData.location || "N/A"}</p>
-                    </div>
-                    <div>
-                      <Label className="text-muted-foreground">Construction Start</Label>
-                      <p className="text-sm font-medium mt-1">
-                        {projectData.construction_start_date 
-                          ? format(new Date(projectData.construction_start_date), "MMM dd, yyyy")
-                          : "N/A"}
-                      </p>
-                    </div>
-                    <div>
-                      <Label className="text-muted-foreground">Construction End</Label>
-                      <p className="text-sm font-medium mt-1">
-                        {projectData.construction_end_date 
-                          ? format(new Date(projectData.construction_end_date), "MMM dd, yyyy")
-                          : "N/A"}
-                      </p>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-
-              {/* Critical Assets */}
-              {projectData.project_data?.selectedAssets && projectData.project_data.selectedAssets.length > 0 && (
-                <Card className="mb-6">
-                  <CardHeader>
-                    <CardTitle>Critical Assets</CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="grid md:grid-cols-4 gap-3">
-                      {projectData.project_data.selectedAssets.map((assetId: string) => {
-                        const asset = assets.find(a => a.id === assetId);
-                        return asset ? (
-                          <div key={assetId} className="p-4 rounded-lg border-2 border-primary bg-primary/5">
-                            <div className="h-24 bg-muted rounded mb-3 flex items-center justify-center overflow-hidden">
-                              <img src={asset.image} alt={asset.name} className="w-full h-full object-contain" />
-                            </div>
-                            <h3 className="font-semibold mb-2 text-sm">{asset.name}</h3>
-                            <div className="space-y-1.5 text-xs">
-                              <div className="flex justify-between items-start gap-2">
-                                <span className="text-muted-foreground">Risk</span>
-                                <Badge variant={asset.riskLevel.includes("Extreme") || asset.riskLevel.includes("Very High") ? "destructive" : "secondary"}>
-                                  {asset.riskLevel}
-                                </Badge>
-                              </div>
-                              <p className="text-muted-foreground text-xs">{asset.threat}</p>
-                            </div>
-                          </div>
-                        ) : null;
-                      })}
-                    </div>
-                  </CardContent>
-                </Card>
-              )}
-
-              {/* Water Systems */}
-              {projectData.project_data?.selectedSystems && projectData.project_data.selectedSystems.length > 0 && (
-                <Card className="mb-6">
-                  <CardHeader>
-                    <CardTitle>Water Systems</CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="grid md:grid-cols-4 gap-3">
-                      {projectData.project_data.selectedSystems.map((systemId: string) => {
-                        const system = waterSystems.find(s => s.id === systemId);
-                        return system ? (
-                          <div key={systemId} className="p-4 rounded-lg border-2 border-primary bg-primary/5">
-                            <div className="h-24 bg-muted rounded mb-3 flex items-center justify-center overflow-hidden">
-                              <img src={system.image} alt={system.name} className="w-full h-full object-contain" />
-                            </div>
-                            <h3 className="font-semibold mb-2 text-sm">{system.name}</h3>
-                            <div className="space-y-1.5 text-xs">
-                              <div className="flex justify-between items-start gap-2">
-                                <span className="text-muted-foreground">Risk</span>
-                                <Badge variant={system.riskLevel.includes("Very High") || system.riskLevel.includes("High") ? "destructive" : "secondary"}>
-                                  {system.riskLevel}
-                                </Badge>
-                              </div>
-                              <p className="text-muted-foreground text-xs">{system.threat}</p>
-                            </div>
-                          </div>
-                        ) : null;
-                      })}
-                    </div>
-                  </CardContent>
-                </Card>
-              )}
-
-              {/* Mitigation Controls */}
-              {projectData.project_data?.selectedControls && projectData.project_data.selectedControls.length > 0 && (
-                <Card>
-                  <CardHeader>
-                    <CardTitle>Selected Mitigation Controls</CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="grid md:grid-cols-4 gap-3">
-                      {projectData.project_data.selectedControls.map((controlId: string) => {
-                        const control = mitigationControls.find(c => c.id === controlId);
-                        return control ? (
-                          <div key={controlId} className="p-4 rounded-lg border-2 border-primary bg-primary/5">
-                            <div className="h-32 bg-muted rounded mb-3 overflow-hidden flex items-center justify-center">
-                              <img src={control.image} alt={control.name} className="w-full h-full object-contain" />
-                            </div>
-                            <p className="text-sm text-center">{control.name}</p>
-                          </div>
-                        ) : null;
-                      })}
-                    </div>
-                  </CardContent>
-                </Card>
-              )}
-            </div>
-          </DialogContent>
-        </Dialog>
       </div>
 
       <Tabs defaultValue="project" className="w-full">

@@ -8,6 +8,7 @@ import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import riskBlueLogo from "@/assets/riskblue-logo.jpg";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { ProjectInfoStep } from "@/components/wizard/ProjectInfoStep";
 import { ProjectMilestonesStep } from "@/components/wizard/ProjectMilestonesStep";
 import { ConstructionDetailsStep } from "@/components/wizard/ConstructionDetailsStep";
@@ -19,10 +20,14 @@ import { WaterMitigationGuidelinesStep } from "@/components/wizard/WaterMitigati
 import { CollaboratorManagementStep } from "@/components/wizard/CollaboratorManagementStep";
 import { DocumentUploadChat } from "@/components/DocumentUploadChat";
 import { ResponsePlanUploadChat } from "@/components/ResponsePlanUploadChat";
-import { Download, LogOut } from "lucide-react";
+import { Download, LogOut, FileText } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { ProviderSelectionDialog } from "@/components/ProviderSelectionDialog";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Label } from "@/components/ui/label";
+import { Badge } from "@/components/ui/badge";
+import { format } from "date-fns";
 
 interface ProjectData {
   [key: string]: any;
@@ -39,6 +44,7 @@ const ProjectWizard = () => {
   const [isProcessingWebhook, setIsProcessingWebhook] = useState(false);
   const [isSavingNewProject, setIsSavingNewProject] = useState(false);
   const [showProviderDialog, setShowProviderDialog] = useState(false);
+  const [showGuidelinesDialog, setShowGuidelinesDialog] = useState(false);
 
   useEffect(() => {
     if (id && id !== "new") {
@@ -440,6 +446,28 @@ const ProjectWizard = () => {
           </TabsContent>
 
           <TabsContent value="plan" className="max-w-5xl mx-auto">
+            {/* Water Mitigation Guideline Button */}
+            <div className="flex justify-center mb-6">
+              <Dialog open={showGuidelinesDialog} onOpenChange={setShowGuidelinesDialog}>
+                <DialogTrigger asChild>
+                  <Button variant="outline" size="lg">
+                    <FileText className="h-4 w-4 mr-2" />
+                    Water Mitigation Guideline
+                  </Button>
+                </DialogTrigger>
+                <DialogContent className="max-w-5xl max-h-[80vh] overflow-y-auto">
+                  <DialogHeader>
+                    <DialogTitle>Water Risk Discovery</DialogTitle>
+                  </DialogHeader>
+                  <WaterMitigationGuidelinesStep 
+                    data={projectData}
+                    onBack={() => {}}
+                    onNext={() => {}}
+                  />
+                </DialogContent>
+              </Dialog>
+            </div>
+            
             <CollaboratorManagementStep projectId={id || "new"} />
           </TabsContent>
 
