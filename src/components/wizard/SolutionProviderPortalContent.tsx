@@ -44,56 +44,31 @@ import fireImg from "@/assets/timeline5-fire.avif";
 import interiorImg from "@/assets/timeline6-interior.avif";
 
 const mitigationControls = [
-  { 
-    id: "electrical-room-monitoring", 
-    name: "Electrical Room Presence of Water Monitoring",
-    category: "Presence of Water Monitoring",
-  },
-  { 
-    id: "mechanical-risers-monitoring", 
-    name: "Mechanical Risers Presence of Water Monitoring",
-    category: "Presence of Water Monitoring",
-  },
-  { 
-    id: "mechanical-room-monitoring", 
-    name: "Mechanical Room Presence of Water Monitoring",
-    category: "Presence of Water Monitoring",
-  },
-  { 
-    id: "cold-domestic-flow-monitoring", 
-    name: "Cold Domestic Water Abnormal Flow Monitoring",
-    category: "Abnormal Flow Valve and Pump Automation",
-  },
-  { 
-    id: "temporary-water-flow-monitoring", 
-    name: "Temporary Water Run Abnormal Flow Monitoring",
-    category: "Abnormal Flow Valve and Pump Automation",
-  },
-  { 
-    id: "fire-suppression-flow-monitoring", 
-    name: "Fire Suppression System Abnormal Flow Monitoring",
-    category: "Abnormal Flow Valve and Pump Automation",
-  },
-  { 
-    id: "automatic-shutoff-temp-water", 
-    name: "Automatic Shut Off Temporary Water Run",
-    category: "Abnormal Flow Valve and Pump Automation",
-  },
-  { 
-    id: "suite-drains", 
-    name: "Suite Drains",
-    category: "Design Incorporated",
-  },
-  { 
-    id: "flood-control", 
-    name: "Flood Control Measures",
-    category: "Design Incorporated",
-  },
-  { 
-    id: "heat-trace-insulation", 
-    name: "Heat Trace and Insulation",
-    category: "Design Incorporated",
-  },
+  { id: "electrical-room-monitoring", name: "Electrical Room Presence of Water Monitoring", category: "Presence of Water Monitoring" },
+  { id: "mechanical-risers-monitoring", name: "Mechanical Risers Presence of Water Monitoring", category: "Presence of Water Monitoring" },
+  { id: "mechanical-room-monitoring", name: "Mechanical Room Presence of Water Monitoring", category: "Presence of Water Monitoring" },
+  { id: "cold-domestic-flow-monitoring", name: "Cold Domestic Water Abnormal Flow Monitoring", category: "Abnormal Flow Valve and Pump Automation" },
+  { id: "temporary-water-flow-monitoring", name: "Temporary Water Run Abnormal Flow Monitoring", category: "Abnormal Flow Valve and Pump Automation" },
+  { id: "fire-suppression-flow-monitoring", name: "Fire Suppression System Abnormal Flow Monitoring", category: "Abnormal Flow Valve and Pump Automation" },
+  { id: "automatic-shutoff-temp-water", name: "Automatic Shut Off Temporary Water Run", category: "Abnormal Flow Valve and Pump Automation" },
+  { id: "main-riser-shutoff", name: "Main Riser Section Automatic Shut Open/Close Cold Domestic Water", category: "Abnormal Flow Valve and Pump Automation" },
+  { id: "suite-drains", name: "Suite Drains", category: "Design Incorporated" },
+  { id: "flood-control", name: "Flood Control Measures", category: "Design Incorporated" },
+  { id: "envelope-prequalification", name: "Pre-qualification of Envelope Systems", category: "Design Incorporated" },
+  { id: "heat-trace-insulation", name: "Heat Trace and Insulation", category: "Design Incorporated" },
+  { id: "prv-maintenance", name: "Pressure Reducing Valve Maintenance Plan: Safeguarding System Performance", category: "Design Incorporated" },
+  { id: "proper-zoning", name: "Proper Zoning Configuration: Optimizing Pressure Systems", category: "Design Incorporated" },
+  { id: "floor-penetrations", name: "Floor Penetrations Water Seals", category: "Design Incorporated" },
+  { id: "incident-reports", name: "Historical Project Water Incident Reports", category: "Water Response Strategy" },
+  { id: "flood-wind-report", name: "100-Year Flood and Wind Storm Report", category: "Water Response Strategy" },
+  { id: "warranties-insurance", name: "Water Mitigation Components Warranties and Insurance", category: "Process Inspections and Documentation" },
+  { id: "equipment-labeling", name: "Water Mitigation Equipment Labeling", category: "Process Inspections and Documentation" },
+  { id: "acceptance-test", name: "Water Mitigation Equipment Acceptance Test", category: "Process Inspections and Documentation" },
+  { id: "installation-integrity", name: "Installation Integrity: Joints, Bolts, and Piping", category: "Process Inspections and Documentation" },
+  { id: "fill-tests", name: "Additional Fill Tests: Ensuring Water System Integrity", category: "Process Inspections and Documentation" },
+  { id: "air-pressure-tests", name: "Air Pressure or Water Tests in Plumbing System", category: "Tests Expansions and Maintenance" },
+  { id: "spill-kit", name: "Spill Kit", category: "Tests Expansions and Maintenance" },
+  { id: "temporary-enclosures", name: "Temporary Enclosures Plan", category: "Tests Expansions and Maintenance" },
 ];
 
 const assets = [
@@ -854,6 +829,147 @@ export const SolutionProviderPortalContent = ({
                 <div className="grid md:grid-cols-4 gap-4">
                   {mitigationControls
                     .filter((c) => c.category === "Design Incorporated")
+                    .map((control) => (
+                      <div
+                        key={control.id}
+                        className="p-4 rounded-lg border-2 border-border"
+                      >
+                        <p className="text-sm font-medium mb-3">{control.name}</p>
+                        
+                        <div className="space-y-3">
+                          <div>
+                            <Label htmlFor={`cost-${control.id}`}>Cost Estimate ($)</Label>
+                            <Input
+                              id={`cost-${control.id}`}
+                              type="number"
+                              placeholder="Enter cost"
+                              value={costs[control.id] || ""}
+                              onChange={(e) => handleCostChange(control.id, e.target.value)}
+                              min="0"
+                              step="0.01"
+                            />
+                          </div>
+                          <div>
+                            <Label htmlFor={`details-${control.id}`}>Details (Optional)</Label>
+                            <Input
+                              id={`details-${control.id}`}
+                              placeholder="Additional notes"
+                              value={details[control.id] || ""}
+                              onChange={(e) => handleDetailsChange(control.id, e.target.value)}
+                            />
+                          </div>
+                          {editorInfo[control.id] && (
+                            <div className="text-xs text-muted-foreground pt-2 border-t">
+                              <p>Edited by: {editorInfo[control.id].name}</p>
+                              <p>{editorInfo[control.id].time}</p>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                </div>
+              </div>
+
+              {/* Water Response Strategy */}
+              <div>
+                <h3 className="text-lg font-semibold mb-4">Water Response Strategy</h3>
+                <div className="grid md:grid-cols-4 gap-4">
+                  {mitigationControls
+                    .filter((c) => c.category === "Water Response Strategy")
+                    .map((control) => (
+                      <div
+                        key={control.id}
+                        className="p-4 rounded-lg border-2 border-border"
+                      >
+                        <p className="text-sm font-medium mb-3">{control.name}</p>
+                        
+                        <div className="space-y-3">
+                          <div>
+                            <Label htmlFor={`cost-${control.id}`}>Cost Estimate ($)</Label>
+                            <Input
+                              id={`cost-${control.id}`}
+                              type="number"
+                              placeholder="Enter cost"
+                              value={costs[control.id] || ""}
+                              onChange={(e) => handleCostChange(control.id, e.target.value)}
+                              min="0"
+                              step="0.01"
+                            />
+                          </div>
+                          <div>
+                            <Label htmlFor={`details-${control.id}`}>Details (Optional)</Label>
+                            <Input
+                              id={`details-${control.id}`}
+                              placeholder="Additional notes"
+                              value={details[control.id] || ""}
+                              onChange={(e) => handleDetailsChange(control.id, e.target.value)}
+                            />
+                          </div>
+                          {editorInfo[control.id] && (
+                            <div className="text-xs text-muted-foreground pt-2 border-t">
+                              <p>Edited by: {editorInfo[control.id].name}</p>
+                              <p>{editorInfo[control.id].time}</p>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                </div>
+              </div>
+
+              {/* Process Inspections and Documentation */}
+              <div>
+                <h3 className="text-lg font-semibold mb-4">Process Inspections and Documentation</h3>
+                <div className="grid md:grid-cols-4 gap-4">
+                  {mitigationControls
+                    .filter((c) => c.category === "Process Inspections and Documentation")
+                    .map((control) => (
+                      <div
+                        key={control.id}
+                        className="p-4 rounded-lg border-2 border-border"
+                      >
+                        <p className="text-sm font-medium mb-3">{control.name}</p>
+                        
+                        <div className="space-y-3">
+                          <div>
+                            <Label htmlFor={`cost-${control.id}`}>Cost Estimate ($)</Label>
+                            <Input
+                              id={`cost-${control.id}`}
+                              type="number"
+                              placeholder="Enter cost"
+                              value={costs[control.id] || ""}
+                              onChange={(e) => handleCostChange(control.id, e.target.value)}
+                              min="0"
+                              step="0.01"
+                            />
+                          </div>
+                          <div>
+                            <Label htmlFor={`details-${control.id}`}>Details (Optional)</Label>
+                            <Input
+                              id={`details-${control.id}`}
+                              placeholder="Additional notes"
+                              value={details[control.id] || ""}
+                              onChange={(e) => handleDetailsChange(control.id, e.target.value)}
+                            />
+                          </div>
+                          {editorInfo[control.id] && (
+                            <div className="text-xs text-muted-foreground pt-2 border-t">
+                              <p>Edited by: {editorInfo[control.id].name}</p>
+                              <p>{editorInfo[control.id].time}</p>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                </div>
+              </div>
+
+              {/* Tests Expansions and Maintenance */}
+              <div>
+                <h3 className="text-lg font-semibold mb-4">Tests Expansions and Maintenance</h3>
+                <div className="grid md:grid-cols-4 gap-4">
+                  {mitigationControls
+                    .filter((c) => c.category === "Tests Expansions and Maintenance")
                     .map((control) => (
                       <div
                         key={control.id}

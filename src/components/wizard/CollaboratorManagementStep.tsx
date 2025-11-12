@@ -139,17 +139,42 @@ export const CollaboratorManagementStep = ({ projectId }: CollaboratorManagement
 
       const selectedControls = (projectData?.project_data as any)?.selectedControls || [];
       
-      // Define all controls based on selected controls in the project
-      const allControlNames = selectedControls.map((controlId: string) => {
-        const control = [
-          { id: "electrical-room-monitoring", name: "Electrical Room Presence of Water Monitoring" },
-          { id: "mechanical-room-monitoring", name: "Mechanical Room Presence of Water Monitoring" },
-          { id: "main-electrical-monitoring", name: "Main Electrical Room Presence of Water Monitoring" },
-          { id: "cold-domestic-flow-monitoring", name: "Cold Domestic Water Abnormal Flow Monitoring" },
-          { id: "temporary-water-flow-monitoring", name: "Temporary Water Run Abnormal Flow Monitoring" },
-        ].find(c => c.id === controlId);
-        return control?.name;
-      }).filter(Boolean);
+      // Define all 25 controls
+      const allControlsList = [
+        "Electrical Room Presence of Water Monitoring",
+        "Mechanical Risers Presence of Water Monitoring",
+        "Mechanical Room Presence of Water Monitoring",
+        "Cold Domestic Water Abnormal Flow Monitoring",
+        "Temporary Water Run Abnormal Flow Monitoring",
+        "Fire Suppression System Abnormal Flow Monitoring",
+        "Automatic Shut Off Temporary Water Run",
+        "Main Riser Section Automatic Shut Open/Close Cold Domestic Water",
+        "Suite Drains",
+        "Flood Control Measures",
+        "Pre-qualification of Envelope Systems",
+        "Heat Trace and Insulation",
+        "Pressure Reducing Valve Maintenance Plan: Safeguarding System Performance",
+        "Proper Zoning Configuration: Optimizing Pressure Systems",
+        "Floor Penetrations Water Seals",
+        "Historical Project Water Incident Reports",
+        "100-Year Flood and Wind Storm Report",
+        "Water Mitigation Components Warranties and Insurance",
+        "Water Mitigation Equipment Labeling",
+        "Water Mitigation Equipment Acceptance Test",
+        "Installation Integrity: Joints, Bolts, and Piping",
+        "Additional Fill Tests: Ensuring Water System Integrity",
+        "Air Pressure or Water Tests in Plumbing System",
+        "Spill Kit",
+        "Temporary Enclosures Plan",
+      ];
+      
+      // Filter to only controls that are selected in the project
+      const allControlNames = allControlsList.filter(controlName => 
+        selectedControls.some((id: string) => {
+          // Match by control name from selectedControls (which are now control names, not IDs)
+          return id === controlName;
+        })
+      );
 
       const { data, error } = await supabase
         .from("company_proposals")
@@ -476,7 +501,7 @@ export const CollaboratorManagementStep = ({ projectId }: CollaboratorManagement
           .eq("company", row.company.trim())
           .limit(1);
 
-        // If no proposals exist for this company, create empty proposals
+        // If no proposals exist for this company, create empty proposals for all 25 controls
         if (!existingProposals || existingProposals.length === 0) {
           const emptyProposals = [
             "Electrical Room Presence of Water Monitoring",
@@ -486,9 +511,24 @@ export const CollaboratorManagementStep = ({ projectId }: CollaboratorManagement
             "Temporary Water Run Abnormal Flow Monitoring",
             "Fire Suppression System Abnormal Flow Monitoring",
             "Automatic Shut Off Temporary Water Run",
+            "Main Riser Section Automatic Shut Open/Close Cold Domestic Water",
             "Suite Drains",
             "Flood Control Measures",
+            "Pre-qualification of Envelope Systems",
             "Heat Trace and Insulation",
+            "Pressure Reducing Valve Maintenance Plan: Safeguarding System Performance",
+            "Proper Zoning Configuration: Optimizing Pressure Systems",
+            "Floor Penetrations Water Seals",
+            "Historical Project Water Incident Reports",
+            "100-Year Flood and Wind Storm Report",
+            "Water Mitigation Components Warranties and Insurance",
+            "Water Mitigation Equipment Labeling",
+            "Water Mitigation Equipment Acceptance Test",
+            "Installation Integrity: Joints, Bolts, and Piping",
+            "Additional Fill Tests: Ensuring Water System Integrity",
+            "Air Pressure or Water Tests in Plumbing System",
+            "Spill Kit",
+            "Temporary Enclosures Plan",
           ].map((systemName) => ({
             project_id: projectId,
             company: row.company.trim(),
