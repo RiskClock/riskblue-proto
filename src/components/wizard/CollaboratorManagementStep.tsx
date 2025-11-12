@@ -831,31 +831,46 @@ export const CollaboratorManagementStep = ({ projectId }: CollaboratorManagement
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead className="min-w-[200px]">Company</TableHead>
-                    <TableHead className="text-right min-w-[120px]">Total Cost</TableHead>
-                    {allControlNames.map((controlName) => (
-                      <TableHead key={controlName} className="text-right min-w-[150px]">
-                        {controlName}
+                    <TableHead className="min-w-[200px]">Control / System</TableHead>
+                    {companyProposals.map((proposal) => (
+                      <TableHead key={proposal.company} className="text-center min-w-[150px]">
+                        <div className="flex flex-col gap-1 items-center">
+                          <span className="font-semibold">{proposal.company}</span>
+                          <Badge variant={
+                            proposal.systems.length === allControlNames.length ? "default" : 
+                            proposal.systems.length > 0 ? "secondary" : 
+                            "outline"
+                          } className="text-xs">
+                            {proposal.systems.length === allControlNames.length ? "Complete ✅" : 
+                             proposal.systems.length > 0 ? "In Progress" : 
+                             "Invited"}
+                          </Badge>
+                        </div>
                       </TableHead>
                     ))}
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {companyProposals.map((proposal) => (
-                    <TableRow key={proposal.company}>
-                      <TableCell className="font-medium">{proposal.company}</TableCell>
-                      <TableCell className="text-right font-semibold">
+                  <TableRow className="bg-muted/50 font-bold">
+                    <TableCell>Total Cost</TableCell>
+                    {companyProposals.map((proposal) => (
+                      <TableCell key={proposal.company} className="text-center">
                         ${proposal.total.toLocaleString('en-US', { 
                           minimumFractionDigits: 0, 
                           maximumFractionDigits: 0 
                         })}
                       </TableCell>
-                      {allControlNames.map((controlName) => {
+                    ))}
+                  </TableRow>
+                  {allControlNames.map((controlName) => (
+                    <TableRow key={controlName}>
+                      <TableCell className="font-medium">{controlName}</TableCell>
+                      {companyProposals.map((proposal) => {
                         const system = proposal.systems.find(
                           (s) => s.system_name === controlName
                         );
                         return (
-                          <TableCell key={controlName} className="text-right">
+                          <TableCell key={proposal.company} className="text-center">
                             {system && system.system_cost > 0 ? (
                               <div>
                                 <p className="font-medium">
