@@ -88,7 +88,7 @@ export const CollaboratorManagementStep = ({ projectId }: CollaboratorManagement
 
       if (projectError) throw projectError;
 
-      const selectedControls = projectData?.project_data?.selectedControls || [];
+      const selectedControls = (projectData?.project_data as any)?.selectedControls || [];
       
       // Define all controls based on selected controls in the project
       const allControlNames = selectedControls.map((controlId: string) => {
@@ -129,7 +129,7 @@ export const CollaboratorManagementStep = ({ projectId }: CollaboratorManagement
 
       // Store both the proposals and the list of all controls
       setCompanyProposals(Object.values(groupedByCompany));
-      setAllControlNames(allControlNames);
+      setAllControlNames(allControlNames as string[]);
     } catch (error: any) {
       console.error("Error fetching company proposals:", error);
     }
