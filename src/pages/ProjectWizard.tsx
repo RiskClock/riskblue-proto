@@ -22,6 +22,7 @@ import { ResponsePlanUploadChat } from "@/components/ResponsePlanUploadChat";
 import { Download, LogOut } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { ProviderSelectionDialog } from "@/components/ProviderSelectionDialog";
 
 interface ProjectData {
   [key: string]: any;
@@ -37,6 +38,7 @@ const ProjectWizard = () => {
   const [loading, setLoading] = useState(false);
   const [isProcessingWebhook, setIsProcessingWebhook] = useState(false);
   const [isSavingNewProject, setIsSavingNewProject] = useState(false);
+  const [showProviderDialog, setShowProviderDialog] = useState(false);
 
   useEffect(() => {
     if (id && id !== "new") {
@@ -321,7 +323,7 @@ const ProjectWizard = () => {
             <button onClick={() => navigate("/projects")} className="text-foreground hover:text-primary">
               Projects
             </button>
-            <button onClick={() => navigate("/solution-provider-portal")} className="text-foreground hover:text-primary">
+            <button onClick={() => setShowProviderDialog(true)} className="text-foreground hover:text-primary">
               Solution Provider Portal
             </button>
             <DropdownMenu>
