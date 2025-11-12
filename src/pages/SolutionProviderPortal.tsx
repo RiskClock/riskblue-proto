@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
-import { ArrowLeft, Building2, LogOut } from "lucide-react";
+import { Building2, LogOut } from "lucide-react";
 import riskBlueLogo from "@/assets/riskblue-logo.jpg";
 import { SolutionProviderPortalContent } from "@/components/wizard/SolutionProviderPortalContent";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
