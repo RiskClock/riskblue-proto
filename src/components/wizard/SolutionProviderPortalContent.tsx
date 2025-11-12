@@ -43,15 +43,23 @@ import elevatorsImg from "@/assets/timeline4-elevators.avif";
 import fireImg from "@/assets/timeline5-fire.avif";
 import interiorImg from "@/assets/timeline6-interior.avif";
 
+const controlImages: Record<string, string> = {
+  "electrical-room-monitoring": electricalRoomImg,
+  "mechanical-room-monitoring": mechanicalRoomImg,
+  "main-riser-shutoff": mainElectricalRiserImg,
+  "temporary-water-flow-monitoring": tempWaterRunImg,
+  "automatic-shutoff-temp-water": triggerValveImg,
+};
+
 const mitigationControls = [
-  { id: "electrical-room-monitoring", name: "Electrical Room Presence of Water Monitoring", category: "Presence of Water Monitoring" },
+  { id: "electrical-room-monitoring", name: "Electrical Room Presence of Water Monitoring", category: "Presence of Water Monitoring", image: controlImages["electrical-room-monitoring"] },
   { id: "mechanical-risers-monitoring", name: "Mechanical Risers Presence of Water Monitoring", category: "Presence of Water Monitoring" },
-  { id: "mechanical-room-monitoring", name: "Mechanical Room Presence of Water Monitoring", category: "Presence of Water Monitoring" },
+  { id: "mechanical-room-monitoring", name: "Mechanical Room Presence of Water Monitoring", category: "Presence of Water Monitoring", image: controlImages["mechanical-room-monitoring"] },
   { id: "cold-domestic-flow-monitoring", name: "Cold Domestic Water Abnormal Flow Monitoring", category: "Abnormal Flow Valve and Pump Automation" },
-  { id: "temporary-water-flow-monitoring", name: "Temporary Water Run Abnormal Flow Monitoring", category: "Abnormal Flow Valve and Pump Automation" },
+  { id: "temporary-water-flow-monitoring", name: "Temporary Water Run Abnormal Flow Monitoring", category: "Abnormal Flow Valve and Pump Automation", image: controlImages["temporary-water-flow-monitoring"] },
   { id: "fire-suppression-flow-monitoring", name: "Fire Suppression System Abnormal Flow Monitoring", category: "Abnormal Flow Valve and Pump Automation" },
-  { id: "automatic-shutoff-temp-water", name: "Automatic Shut Off Temporary Water Run", category: "Abnormal Flow Valve and Pump Automation" },
-  { id: "main-riser-shutoff", name: "Main Riser Section Automatic Shut Open/Close Cold Domestic Water", category: "Abnormal Flow Valve and Pump Automation" },
+  { id: "automatic-shutoff-temp-water", name: "Automatic Shut Off Temporary Water Run", category: "Abnormal Flow Valve and Pump Automation", image: controlImages["automatic-shutoff-temp-water"] },
+  { id: "main-riser-shutoff", name: "Main Riser Section Automatic Shut Open/Close Cold Domestic Water", category: "Abnormal Flow Valve and Pump Automation", image: controlImages["main-riser-shutoff"] },
   { id: "suite-drains", name: "Suite Drains", category: "Design Incorporated" },
   { id: "flood-control", name: "Flood Control Measures", category: "Design Incorporated" },
   { id: "envelope-prequalification", name: "Pre-qualification of Envelope Systems", category: "Design Incorporated" },
@@ -740,6 +748,19 @@ export const SolutionProviderPortalContent = ({
                         key={control.id}
                         className="p-4 rounded-lg border-2 border-border"
                       >
+                        <div className="h-24 bg-muted rounded mb-3 overflow-hidden flex items-center justify-center">
+                          {control.image ? (
+                            <img 
+                              src={control.image} 
+                              alt={control.name}
+                              className="w-full h-full object-contain"
+                            />
+                          ) : (
+                            <div className="w-full h-full border-2 border-dashed border-border flex items-center justify-center text-muted-foreground text-xs">
+                              No Image
+                            </div>
+                          )}
+                        </div>
                         <p className="text-sm font-medium mb-3">{control.name}</p>
                         
                         <div className="space-y-3">
@@ -787,6 +808,19 @@ export const SolutionProviderPortalContent = ({
                         key={control.id}
                         className="p-4 rounded-lg border-2 border-border"
                       >
+                        <div className="h-24 bg-muted rounded mb-3 overflow-hidden flex items-center justify-center">
+                          {control.image ? (
+                            <img 
+                              src={control.image} 
+                              alt={control.name}
+                              className="w-full h-full object-contain"
+                            />
+                          ) : (
+                            <div className="w-full h-full border-2 border-dashed border-border flex items-center justify-center text-muted-foreground text-xs">
+                              No Image
+                            </div>
+                          )}
+                        </div>
                         <p className="text-sm font-medium mb-3">{control.name}</p>
                         
                         <div className="space-y-3">
@@ -834,6 +868,19 @@ export const SolutionProviderPortalContent = ({
                         key={control.id}
                         className="p-4 rounded-lg border-2 border-border"
                       >
+                        <div className="h-24 bg-muted rounded mb-3 overflow-hidden flex items-center justify-center">
+                          {control.image ? (
+                            <img 
+                              src={control.image} 
+                              alt={control.name}
+                              className="w-full h-full object-contain"
+                            />
+                          ) : (
+                            <div className="w-full h-full border-2 border-dashed border-border flex items-center justify-center text-muted-foreground text-xs">
+                              No Image
+                            </div>
+                          )}
+                        </div>
                         <p className="text-sm font-medium mb-3">{control.name}</p>
                         
                         <div className="space-y-3">
@@ -881,6 +928,19 @@ export const SolutionProviderPortalContent = ({
                         key={control.id}
                         className="p-4 rounded-lg border-2 border-border"
                       >
+                        <div className="h-24 bg-muted rounded mb-3 overflow-hidden flex items-center justify-center">
+                          {control.image ? (
+                            <img 
+                              src={control.image} 
+                              alt={control.name}
+                              className="w-full h-full object-contain"
+                            />
+                          ) : (
+                            <div className="w-full h-full border-2 border-dashed border-border flex items-center justify-center text-muted-foreground text-xs">
+                              No Image
+                            </div>
+                          )}
+                        </div>
                         <p className="text-sm font-medium mb-3">{control.name}</p>
                         
                         <div className="space-y-3">
@@ -928,6 +988,19 @@ export const SolutionProviderPortalContent = ({
                         key={control.id}
                         className="p-4 rounded-lg border-2 border-border"
                       >
+                        <div className="h-24 bg-muted rounded mb-3 overflow-hidden flex items-center justify-center">
+                          {control.image ? (
+                            <img 
+                              src={control.image} 
+                              alt={control.name}
+                              className="w-full h-full object-contain"
+                            />
+                          ) : (
+                            <div className="w-full h-full border-2 border-dashed border-border flex items-center justify-center text-muted-foreground text-xs">
+                              No Image
+                            </div>
+                          )}
+                        </div>
                         <p className="text-sm font-medium mb-3">{control.name}</p>
                         
                         <div className="space-y-3">
@@ -975,6 +1048,19 @@ export const SolutionProviderPortalContent = ({
                         key={control.id}
                         className="p-4 rounded-lg border-2 border-border"
                       >
+                        <div className="h-24 bg-muted rounded mb-3 overflow-hidden flex items-center justify-center">
+                          {control.image ? (
+                            <img 
+                              src={control.image} 
+                              alt={control.name}
+                              className="w-full h-full object-contain"
+                            />
+                          ) : (
+                            <div className="w-full h-full border-2 border-dashed border-border flex items-center justify-center text-muted-foreground text-xs">
+                              No Image
+                            </div>
+                          )}
+                        </div>
                         <p className="text-sm font-medium mb-3">{control.name}</p>
                         
                         <div className="space-y-3">

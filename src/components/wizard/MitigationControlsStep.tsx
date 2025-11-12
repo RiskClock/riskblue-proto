@@ -413,7 +413,10 @@ export const MitigationControlsStep = ({ data, onNext, onBack, isProcessingWebho
                     : "border-border hover:border-primary/50"
                 }`}
               >
-                <div className="h-32 bg-muted rounded mb-3 overflow-hidden flex items-center justify-center">
+                <div 
+                  className="h-32 bg-muted rounded mb-3 overflow-hidden flex items-center justify-center cursor-pointer"
+                  onClick={() => toggleControl(control.name)}
+                >
                   {control.image ? (
                     <img 
                       src={control.image} 

@@ -118,34 +118,49 @@ export const CollaboratorManagementStep = ({ projectId }: CollaboratorManagement
 
   const fetchCompanyProposals = async () => {
     try {
-      // Define all 25 controls - use all of them for the comparison table
-      const allControlNames = [
-        "Electrical Room Presence of Water Monitoring",
-        "Mechanical Risers Presence of Water Monitoring",
-        "Mechanical Room Presence of Water Monitoring",
-        "Cold Domestic Water Abnormal Flow Monitoring",
-        "Temporary Water Run Abnormal Flow Monitoring",
-        "Fire Suppression System Abnormal Flow Monitoring",
-        "Automatic Shut Off Temporary Water Run",
-        "Main Riser Section Automatic Shut Open/Close Cold Domestic Water",
-        "Suite Drains",
-        "Flood Control Measures",
-        "Pre-qualification of Envelope Systems",
-        "Heat Trace and Insulation",
-        "Pressure Reducing Valve Maintenance Plan: Safeguarding System Performance",
-        "Proper Zoning Configuration: Optimizing Pressure Systems",
-        "Floor Penetrations Water Seals",
-        "Historical Project Water Incident Reports",
-        "100-Year Flood and Wind Storm Report",
-        "Water Mitigation Components Warranties and Insurance",
-        "Water Mitigation Equipment Labeling",
-        "Water Mitigation Equipment Acceptance Test",
-        "Installation Integrity: Joints, Bolts, and Piping",
-        "Additional Fill Tests: Ensuring Water System Integrity",
-        "Air Pressure or Water Tests in Plumbing System",
-        "Spill Kit",
-        "Temporary Enclosures Plan",
-      ];
+      // Map of control IDs to names
+      const controlIdToNameMap: Record<string, string> = {
+        "electrical-room-monitoring": "Electrical Room Presence of Water Monitoring",
+        "mechanical-risers-monitoring": "Mechanical Risers Presence of Water Monitoring",
+        "mechanical-room-monitoring": "Mechanical Room Presence of Water Monitoring",
+        "cold-domestic-flow-monitoring": "Cold Domestic Water Abnormal Flow Monitoring",
+        "temporary-water-flow-monitoring": "Temporary Water Run Abnormal Flow Monitoring",
+        "fire-suppression-flow-monitoring": "Fire Suppression System Abnormal Flow Monitoring",
+        "automatic-shutoff-temp-water": "Automatic Shut Off Temporary Water Run",
+        "main-riser-shutoff": "Main Riser Section Automatic Shut Open/Close Cold Domestic Water",
+        "suite-drains": "Suite Drains",
+        "flood-control": "Flood Control Measures",
+        "envelope-prequalification": "Pre-qualification of Envelope Systems",
+        "heat-trace-insulation": "Heat Trace and Insulation",
+        "prv-maintenance": "Pressure Reducing Valve Maintenance Plan: Safeguarding System Performance",
+        "proper-zoning": "Proper Zoning Configuration: Optimizing Pressure Systems",
+        "floor-penetrations": "Floor Penetrations Water Seals",
+        "incident-reports": "Historical Project Water Incident Reports",
+        "flood-wind-report": "100-Year Flood and Wind Storm Report",
+        "warranties-insurance": "Water Mitigation Components Warranties and Insurance",
+        "equipment-labeling": "Water Mitigation Equipment Labeling",
+        "acceptance-test": "Water Mitigation Equipment Acceptance Test",
+        "installation-integrity": "Installation Integrity: Joints, Bolts, and Piping",
+        "fill-tests": "Additional Fill Tests: Ensuring Water System Integrity",
+        "air-pressure-tests": "Air Pressure or Water Tests in Plumbing System",
+        "spill-kit": "Spill Kit",
+        "temporary-enclosures": "Temporary Enclosures Plan",
+      };
+
+      // Fetch project data to get selected controls
+      const { data: projectData, error: projectError } = await supabase
+        .from("projects")
+        .select("project_data")
+        .eq("id", projectId)
+        .single();
+
+      if (projectError) throw projectError;
+
+      // Get selected control names from project data
+      const selectedControlIds = (projectData?.project_data as any)?.selectedControls || [];
+      const selectedControlNames = selectedControlIds
+        .map((id: string) => controlIdToNameMap[id])
+        .filter(Boolean);
 
       const { data, error } = await supabase
         .from("company_proposals")
@@ -172,9 +187,9 @@ export const CollaboratorManagementStep = ({ projectId }: CollaboratorManagement
         return acc;
       }, {} as Record<string, CompanyProposal>);
 
-      // Store both the proposals and the list of all controls
+      // Store both the proposals and the list of selected controls
       setCompanyProposals(Object.values(groupedByCompany));
-      setAllControlNames(allControlNames);
+      setAllControlNames(selectedControlNames);
     } catch (error: any) {
       console.error("Error fetching company proposals:", error);
     }
@@ -859,9 +874,9 @@ export const CollaboratorManagementStep = ({ projectId }: CollaboratorManagement
                 <TableBody>
                   {/* Status Row */}
                   <TableRow className="bg-muted/30">
-                    <TableCell className="font-medium">Status</TableCell>
+                    <TableCell className="font-medium py-2">Status</TableCell>
                     {companyProposals.map((proposal) => (
-                      <TableCell key={proposal.company} className="text-center">
+                      <TableCell key={proposal.company} className="text-center py-2">
                         <Badge variant={
                           proposal.systems.length === allControlNames.length ? "default" : 
                           proposal.systems.length > 0 ? "secondary" : 
@@ -877,9 +892,9 @@ export const CollaboratorManagementStep = ({ projectId }: CollaboratorManagement
                   
                   {/* Total Cost Row */}
                   <TableRow className="bg-muted/50 font-bold">
-                    <TableCell>Total Cost</TableCell>
+                    <TableCell className="py-2">Total Cost</TableCell>
                     {companyProposals.map((proposal) => (
-                      <TableCell key={proposal.company} className="text-center">
+                      <TableCell key={proposal.company} className="text-center py-2">
                         ${proposal.total.toLocaleString('en-US', { 
                           minimumFractionDigits: 0, 
                           maximumFractionDigits: 0 
@@ -891,13 +906,13 @@ export const CollaboratorManagementStep = ({ projectId }: CollaboratorManagement
                   {/* Control Rows */}
                   {allControlNames.map((controlName) => (
                     <TableRow key={controlName}>
-                      <TableCell className="font-medium">{controlName}</TableCell>
+                      <TableCell className="font-medium py-2">{controlName}</TableCell>
                       {companyProposals.map((proposal) => {
                         const system = proposal.systems.find(
                           (s) => s.system_name === controlName
                         );
                         return (
-                          <TableCell key={proposal.company} className="text-center">
+                          <TableCell key={proposal.company} className="text-center py-2">
                             {system && system.system_cost > 0 ? (
                               <div>
                                 <p className="font-medium">
@@ -923,13 +938,13 @@ export const CollaboratorManagementStep = ({ projectId }: CollaboratorManagement
                   
                   {/* Selection Row */}
                   <TableRow className="bg-muted/30">
-                    <TableCell className="font-medium">Select</TableCell>
+                    <TableCell className="font-medium py-2">Select</TableCell>
                     {companyProposals.map((proposal) => {
                       const isInProgress = proposal.systems.length > 0 && proposal.systems.length < allControlNames.length;
                       const isSelected = selectedCompanies.has(proposal.company);
                       
                       return (
-                        <TableCell key={proposal.company} className="text-center">
+                        <TableCell key={proposal.company} className="text-center py-2">
                           <div className="flex justify-center">
                             <Checkbox
                               checked={isSelected}
