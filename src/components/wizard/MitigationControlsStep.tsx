@@ -122,11 +122,11 @@ export const MitigationControlsStep = ({ data, onNext, onBack, isProcessingWebho
                       : "border-border hover:border-primary/50"
                   }`}
                 >
-                  <div className="h-32 bg-muted rounded mb-3 overflow-hidden">
+                  <div className="h-32 bg-muted rounded mb-3 overflow-hidden flex items-center justify-center">
                     <img 
                       src={control.image} 
                       alt={control.name}
-                      className="w-full h-full object-cover"
+                      className="w-full h-full object-contain"
                     />
                   </div>
                   <p className="text-sm text-center">{control.name}</p>
@@ -159,11 +159,11 @@ export const MitigationControlsStep = ({ data, onNext, onBack, isProcessingWebho
                       : "border-border hover:border-primary/50"
                   }`}
                 >
-                  <div className="h-32 bg-muted rounded mb-3 overflow-hidden">
+                  <div className="h-32 bg-muted rounded mb-3 overflow-hidden flex items-center justify-center">
                     <img 
                       src={control.image} 
                       alt={control.name}
-                      className="w-full h-full object-cover"
+                      className="w-full h-full object-contain"
                     />
                   </div>
                   <p className="text-sm text-center">{control.name}</p>
