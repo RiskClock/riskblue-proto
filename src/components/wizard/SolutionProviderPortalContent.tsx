@@ -48,31 +48,51 @@ const mitigationControls = [
     id: "electrical-room-monitoring", 
     name: "Electrical Room Presence of Water Monitoring",
     category: "Presence of Water Monitoring",
-    image: electricalRoomImg
+  },
+  { 
+    id: "mechanical-risers-monitoring", 
+    name: "Mechanical Risers Presence of Water Monitoring",
+    category: "Presence of Water Monitoring",
   },
   { 
     id: "mechanical-room-monitoring", 
     name: "Mechanical Room Presence of Water Monitoring",
     category: "Presence of Water Monitoring",
-    image: mechanicalRoomImg
-  },
-  { 
-    id: "main-electrical-monitoring", 
-    name: "Main Electrical Room Presence of Water Monitoring",
-    category: "Presence of Water Monitoring",
-    image: mainElectricalRiserImg
   },
   { 
     id: "cold-domestic-flow-monitoring", 
     name: "Cold Domestic Water Abnormal Flow Monitoring",
-    category: "Abnormal Flow, Valve and Pump Automation",
-    image: triggerValveImg
+    category: "Abnormal Flow Valve and Pump Automation",
   },
   { 
     id: "temporary-water-flow-monitoring", 
     name: "Temporary Water Run Abnormal Flow Monitoring",
-    category: "Abnormal Flow, Valve and Pump Automation",
-    image: tempWaterRunImg
+    category: "Abnormal Flow Valve and Pump Automation",
+  },
+  { 
+    id: "fire-suppression-flow-monitoring", 
+    name: "Fire Suppression System Abnormal Flow Monitoring",
+    category: "Abnormal Flow Valve and Pump Automation",
+  },
+  { 
+    id: "automatic-shutoff-temp-water", 
+    name: "Automatic Shut Off Temporary Water Run",
+    category: "Abnormal Flow Valve and Pump Automation",
+  },
+  { 
+    id: "suite-drains", 
+    name: "Suite Drains",
+    category: "Design Incorporated",
+  },
+  { 
+    id: "flood-control", 
+    name: "Flood Control Measures",
+    category: "Design Incorporated",
+  },
+  { 
+    id: "heat-trace-insulation", 
+    name: "Heat Trace and Insulation",
+    category: "Design Incorporated",
   },
 ];
 
@@ -367,8 +387,27 @@ export const SolutionProviderPortalContent = ({
     try {
       setSaving(true);
       
-      // First save all current data
-      await handleSave();
+      // Create proposals for ALL controls to mark as complete
+      const now = new Date().toISOString();
+      const allProposals = mitigationControls.map((control) => ({
+        project_id: projectId,
+        company: companyName,
+        system_name: control.name,
+        system_cost: parseFloat(costs[control.id] || "0"),
+        details: details[control.id] || "",
+        editor_name: providerName,
+        edited_at: now,
+      }));
+
+      // UPSERT all proposals (insert or update)
+      const { error } = await supabase
+        .from("company_proposals")
+        .upsert(allProposals, {
+          onConflict: "project_id,company,system_name",
+          ignoreDuplicates: false,
+        });
+
+      if (error) throw error;
       
       toast({
         title: "Proposal Submitted",
@@ -699,10 +738,7 @@ export const SolutionProviderPortalContent = ({
                     const control = mitigationControls.find(c => c.id === controlId);
                     return control ? (
                       <div key={controlId} className="p-4 rounded-lg border-2 border-primary bg-primary/5">
-                        <div className="h-32 bg-muted rounded mb-3 overflow-hidden flex items-center justify-center">
-                          <img src={control.image} alt={control.name} className="w-full h-full object-contain" />
-                        </div>
-                        <p className="text-sm text-center">{control.name}</p>
+                        <p className="text-sm font-medium text-center">{control.name}</p>
                       </div>
                     ) : null;
                   })}
@@ -729,13 +765,6 @@ export const SolutionProviderPortalContent = ({
                         key={control.id}
                         className="p-4 rounded-lg border-2 border-border"
                       >
-                        <div className="h-32 bg-muted rounded mb-3 overflow-hidden flex items-center justify-center">
-                          <img
-                            src={control.image}
-                            alt={control.name}
-                            className="w-full h-full object-contain"
-                          />
-                        </div>
                         <p className="text-sm font-medium mb-3">{control.name}</p>
                         
                         <div className="space-y-3">
@@ -777,19 +806,59 @@ export const SolutionProviderPortalContent = ({
                 <h3 className="text-lg font-semibold mb-4">Abnormal Flow, Valve and Pump Automation</h3>
                 <div className="grid md:grid-cols-4 gap-4">
                   {mitigationControls
-                    .filter((c) => c.category === "Abnormal Flow, Valve and Pump Automation")
+                    .filter((c) => c.category === "Abnormal Flow Valve and Pump Automation")
                     .map((control) => (
                       <div
                         key={control.id}
                         className="p-4 rounded-lg border-2 border-border"
                       >
-                        <div className="h-32 bg-muted rounded mb-3 overflow-hidden flex items-center justify-center">
-                          <img
-                            src={control.image}
-                            alt={control.name}
-                            className="w-full h-full object-contain"
-                          />
+                        <p className="text-sm font-medium mb-3">{control.name}</p>
+                        
+                        <div className="space-y-3">
+                          <div>
+                            <Label htmlFor={`cost-${control.id}`}>Cost Estimate ($)</Label>
+                            <Input
+                              id={`cost-${control.id}`}
+                              type="number"
+                              placeholder="Enter cost"
+                              value={costs[control.id] || ""}
+                              onChange={(e) => handleCostChange(control.id, e.target.value)}
+                              min="0"
+                              step="0.01"
+                            />
+                          </div>
+                          <div>
+                            <Label htmlFor={`details-${control.id}`}>Details (Optional)</Label>
+                            <Input
+                              id={`details-${control.id}`}
+                              placeholder="Additional notes"
+                              value={details[control.id] || ""}
+                              onChange={(e) => handleDetailsChange(control.id, e.target.value)}
+                            />
+                          </div>
+                          {editorInfo[control.id] && (
+                            <div className="text-xs text-muted-foreground pt-2 border-t">
+                              <p>Edited by: {editorInfo[control.id].name}</p>
+                              <p>{editorInfo[control.id].time}</p>
+                            </div>
+                          )}
                         </div>
+                      </div>
+                    ))}
+                </div>
+              </div>
+
+              {/* Design Incorporated */}
+              <div>
+                <h3 className="text-lg font-semibold mb-4">Design Incorporated</h3>
+                <div className="grid md:grid-cols-4 gap-4">
+                  {mitigationControls
+                    .filter((c) => c.category === "Design Incorporated")
+                    .map((control) => (
+                      <div
+                        key={control.id}
+                        className="p-4 rounded-lg border-2 border-border"
+                      >
                         <p className="text-sm font-medium mb-3">{control.name}</p>
                         
                         <div className="space-y-3">
@@ -836,7 +905,7 @@ export const SolutionProviderPortalContent = ({
         </Button>
         <Button 
           onClick={handleSubmitProposal} 
-          disabled={saving || Object.keys(costs).filter(k => costs[k] && parseFloat(costs[k]) > 0).length === 0}
+          disabled={saving}
         >
           <Send className="h-4 w-4 mr-2" />
           {saving ? "Submitting..." : "Submit Proposal"}

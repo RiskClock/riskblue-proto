@@ -480,10 +480,15 @@ export const CollaboratorManagementStep = ({ projectId }: CollaboratorManagement
         if (!existingProposals || existingProposals.length === 0) {
           const emptyProposals = [
             "Electrical Room Presence of Water Monitoring",
+            "Mechanical Risers Presence of Water Monitoring",
             "Mechanical Room Presence of Water Monitoring",
-            "Main Electrical Room Presence of Water Monitoring",
             "Cold Domestic Water Abnormal Flow Monitoring",
             "Temporary Water Run Abnormal Flow Monitoring",
+            "Fire Suppression System Abnormal Flow Monitoring",
+            "Automatic Shut Off Temporary Water Run",
+            "Suite Drains",
+            "Flood Control Measures",
+            "Heat Trace and Insulation",
           ].map((systemName) => ({
             project_id: projectId,
             company: row.company.trim(),
@@ -615,32 +620,32 @@ export const CollaboratorManagementStep = ({ projectId }: CollaboratorManagement
                         const isExpanded = expandedPartners.has(partner.name);
                         const selectedCount = selectedPartnerContacts[partner.name]?.size || 0;
                         
-                        return (
-                          <div key={partner.name} className="border rounded-lg">
-                            <label className="flex items-center gap-3 p-3 cursor-pointer hover:bg-muted/30 transition-colors">
-                              <Checkbox
-                                checked={selectionState === "all"}
-                                indeterminate={selectionState === "partial"}
-                                onCheckedChange={() => togglePartner(partner.name)}
-                              />
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                onClick={() => togglePartnerExpanded(partner.name)}
-                                className="flex-1 justify-start gap-2 h-auto py-0"
-                              >
-                                {isExpanded ? (
-                                  <ChevronDown className="h-4 w-4" />
-                                ) : (
-                                  <ChevronRight className="h-4 w-4" />
-                                )}
-                                <Building2 className="h-4 w-4" />
-                                <span className="font-medium">{partner.name}</span>
-                                <Badge variant="secondary" className="ml-auto">
-                                  {selectedCount}/{partner.contacts.length}
-                                </Badge>
-                              </Button>
-                            </label>
+                          return (
+                            <div key={partner.name} className="border rounded-lg">
+                              <div className="flex items-center gap-3 p-3">
+                                <Checkbox
+                                  checked={selectionState === "all"}
+                                  indeterminate={selectionState === "partial"}
+                                  onCheckedChange={() => togglePartner(partner.name)}
+                                />
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() => togglePartnerExpanded(partner.name)}
+                                  className="flex-1 justify-start gap-2 h-auto py-0"
+                                >
+                                  {isExpanded ? (
+                                    <ChevronDown className="h-4 w-4" />
+                                  ) : (
+                                    <ChevronRight className="h-4 w-4" />
+                                  )}
+                                  <Building2 className="h-4 w-4" />
+                                  <span className="font-medium">{partner.name}</span>
+                                  <Badge variant="secondary" className="ml-auto">
+                                    {selectedCount}/{partner.contacts.length}
+                                  </Badge>
+                                </Button>
+                              </div>
                             
                             {isExpanded && (
                               <div className="border-t bg-muted/20">
@@ -648,13 +653,14 @@ export const CollaboratorManagementStep = ({ projectId }: CollaboratorManagement
                                   const isSelected = selectedPartnerContacts[partner.name]?.has(contact.email) || false;
                                   
                                   return (
-                           <label
+                                    <label
                                       key={contact.email}
-                                      className="flex items-center gap-3 p-3 pl-12 cursor-pointer hover:bg-muted/30 transition-colors"
+                                      className="flex items-center gap-3 p-3 pl-12 cursor-pointer"
                                     >
                                       <Checkbox
                                         checked={isSelected}
                                         onCheckedChange={() => toggleContact(partner.name, contact.email)}
+                                        className="pointer-events-none"
                                       />
                                       <div className="flex-1">
                                         <div className="font-medium text-sm">{contact.name}</div>
