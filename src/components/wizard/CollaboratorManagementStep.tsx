@@ -56,29 +56,19 @@ const PREDEFINED_PARTNERS: Partner[] = [
   {
     name: "EHAB",
     contacts: [
-      { name: "Sarah Johnson", email: "sarah.johnson@ehab.com" },
-      { name: "Michael Chen", email: "michael.chen@ehab.com" },
+      { name: "Josh Graham", email: "josh.graham@ehab.co" },
     ]
   },
   {
-    name: "Plumtech",
+    name: "Plumb-Tech",
     contacts: [
-      { name: "David Martinez", email: "david.martinez@plumtech.com" },
-      { name: "Emily Rodriguez", email: "emily.rodriguez@plumtech.com" },
-      { name: "James Wilson", email: "james.wilson@plumtech.com" },
+      { name: "Ron George", email: "Ron@Plumb-TechLLC.com" },
     ]
   },
   {
-    name: "Wint.ai",
+    name: "Wint",
     contacts: [
-      { name: "Rachel Green", email: "rachel.green@wint.ai" },
-    ]
-  },
-  {
-    name: "EllisDon",
-    contacts: [
-      { name: "Thomas Anderson", email: "thomas.anderson@ellisdon.com" },
-      { name: "Jennifer Lee", email: "jennifer.lee@ellisdon.com" },
+      { name: "Wint Sales", email: "sales@wint.ai" },
     ]
   },
 ];
@@ -128,19 +118,8 @@ export const CollaboratorManagementStep = ({ projectId }: CollaboratorManagement
 
   const fetchCompanyProposals = async () => {
     try {
-      // First, get the project data to find selected controls
-      const { data: projectData, error: projectError } = await supabase
-        .from("projects")
-        .select("project_data")
-        .eq("id", projectId)
-        .single();
-
-      if (projectError) throw projectError;
-
-      const selectedControls = (projectData?.project_data as any)?.selectedControls || [];
-      
-      // Define all 25 controls
-      const allControlsList = [
+      // Define all 25 controls - use all of them for the comparison table
+      const allControlNames = [
         "Electrical Room Presence of Water Monitoring",
         "Mechanical Risers Presence of Water Monitoring",
         "Mechanical Room Presence of Water Monitoring",
@@ -167,14 +146,6 @@ export const CollaboratorManagementStep = ({ projectId }: CollaboratorManagement
         "Spill Kit",
         "Temporary Enclosures Plan",
       ];
-      
-      // Filter to only controls that are selected in the project
-      const allControlNames = allControlsList.filter(controlName => 
-        selectedControls.some((id: string) => {
-          // Match by control name from selectedControls (which are now control names, not IDs)
-          return id === controlName;
-        })
-      );
 
       const { data, error } = await supabase
         .from("company_proposals")
@@ -203,7 +174,7 @@ export const CollaboratorManagementStep = ({ projectId }: CollaboratorManagement
 
       // Store both the proposals and the list of all controls
       setCompanyProposals(Object.values(groupedByCompany));
-      setAllControlNames(allControlNames as string[]);
+      setAllControlNames(allControlNames);
     } catch (error: any) {
       console.error("Error fetching company proposals:", error);
     }

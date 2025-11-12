@@ -323,13 +323,19 @@ interface MitigationControlsStepProps {
 }
 
 export const MitigationControlsStep = ({ data, onNext, onBack, isProcessingWebhook }: MitigationControlsStepProps) => {
-  const [selectedControls, setSelectedControls] = useState<string[]>(data.selectedControls || []);
+  // Default to all controls selected
+  const allControlNames = mitigationControls.map(c => c.name);
+  const [selectedControls, setSelectedControls] = useState<string[]>(
+    data.selectedControls && data.selectedControls.length > 0 
+      ? data.selectedControls 
+      : allControlNames
+  );
   const [selectedControl, setSelectedControl] = useState<Control | null>(null);
   const [dialogOpen, setDialogOpen] = useState(false);
 
   // Sync props to state when data changes (e.g., from webhook)
   useEffect(() => {
-    if (data.selectedControls) {
+    if (data.selectedControls && data.selectedControls.length > 0) {
       setSelectedControls(data.selectedControls);
     }
   }, [data.selectedControls]);
@@ -397,7 +403,7 @@ export const MitigationControlsStep = ({ data, onNext, onBack, isProcessingWebho
             {selectedControls.filter((name) => controls.some(c => c.name === name)).length} of{" "}
             {controls.length} controls selected
           </p>
-          <div className="grid md:grid-cols-3 gap-4">
+          <div className="grid md:grid-cols-4 gap-4">
             {controls.map((control) => (
               <div
                 key={control.name}
@@ -407,16 +413,20 @@ export const MitigationControlsStep = ({ data, onNext, onBack, isProcessingWebho
                     : "border-border hover:border-primary/50"
                 }`}
               >
-                {control.image && (
-                  <div className="h-32 bg-muted rounded mb-3 overflow-hidden flex items-center justify-center">
+                <div className="h-32 bg-muted rounded mb-3 overflow-hidden flex items-center justify-center">
+                  {control.image ? (
                     <img 
                       src={control.image} 
                       alt={control.name}
                       className="w-full h-full object-contain"
                     />
-                  </div>
-                )}
-                <div 
+                  ) : (
+                    <div className="w-full h-full border-2 border-dashed border-border flex items-center justify-center text-muted-foreground text-xs">
+                      No Image
+                    </div>
+                  )}
+                </div>
+                <div
                   onClick={() => toggleControl(control.name)}
                   className="cursor-pointer"
                 >
