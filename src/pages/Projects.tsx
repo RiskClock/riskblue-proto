@@ -109,13 +109,16 @@ const Projects = () => {
       </header>
 
       <main className="container mx-auto px-6 py-8">
-        <div className="mb-8">
+          <div className="mb-8">
           <div className="flex items-center justify-between mb-4">
             <div>
               <h1 className="text-3xl font-bold text-foreground">Projects</h1>
               <p className="text-muted-foreground">{projects.length} result{projects.length !== 1 ? 's' : ''}</p>
             </div>
             <div className="flex gap-3">
+              <Button variant="outline" onClick={() => navigate("/solution-provider-portal")}>
+                Solution Provider Portal
+              </Button>
               <Button variant="outline">Sort</Button>
               <Button variant="outline">Filter</Button>
               <Button onClick={handleNewProject}>New</Button>

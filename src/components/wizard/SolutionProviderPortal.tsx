@@ -108,12 +108,14 @@ export const SolutionProviderPortal = ({
   const [autoSaving, setAutoSaving] = useState(false);
   const [projectData, setProjectData] = useState<any>(null);
   const [editorInfo, setEditorInfo] = useState<Record<string, { name: string; time: string }>>({});
+  const [isLoadingData, setIsLoadingData] = useState(false);
 
   // Load project data (read-only)
   useEffect(() => {
     if (open && projectId) {
+      setIsLoadingData(true);
       fetchProjectData();
-      loadExistingProposals();
+      loadExistingProposals().finally(() => setIsLoadingData(false));
     }
   }, [open, projectId]);
 
@@ -183,9 +185,10 @@ export const SolutionProviderPortal = ({
 
   // Auto-save with debounce
   useEffect(() => {
+    // Skip auto-save during initial data loading
+    if (isLoadingData || Object.keys(costs).length === 0) return;
+    
     const timer = setTimeout(async () => {
-      if (Object.keys(costs).length === 0) return;
-      
       setAutoSaving(true);
       try {
         await supabase

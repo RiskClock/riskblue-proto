@@ -387,6 +387,14 @@ export const CollaboratorManagementStep = ({ projectId }: CollaboratorManagement
                       <TableCell>
                         <div className="flex items-center gap-2">
                           <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => openDeleteDialog(collaborator.id)}
+                            disabled={loading}
+                          >
+                            <Trash2 className="h-4 w-4 text-destructive" />
+                          </Button>
+                          <Button
                             variant="outline"
                             size="sm"
                             onClick={() => handleOpenPortal(collaborator)}
@@ -394,14 +402,6 @@ export const CollaboratorManagementStep = ({ projectId }: CollaboratorManagement
                             title="Open Guideline Portal"
                           >
                             <FileText className="h-4 w-4" />
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            onClick={() => openDeleteDialog(collaborator.id)}
-                            disabled={loading}
-                          >
-                            <Trash2 className="h-4 w-4 text-destructive" />
                           </Button>
                         </div>
                       </TableCell>
@@ -420,65 +420,85 @@ export const CollaboratorManagementStep = ({ projectId }: CollaboratorManagement
         </CardContent>
       </Card>
 
-      {/* Company Proposals Section */}
-      {collaborators.length > 0 && (
+      {/* Company Proposals Comparison Table */}
+      {collaborators.length > 0 && companyProposals.length > 0 && (
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <Building2 className="h-5 w-5" />
-              Company Proposals
+              Company Proposals Comparison
             </CardTitle>
             <CardDescription>
-              Cost breakdowns by company for water mitigation systems
+              Compare cost estimates from all solution providers
             </CardDescription>
           </CardHeader>
-          <CardContent className="space-y-6">
-            {companyProposals.length > 0 ? (
-              companyProposals.map((proposal) => (
-                <div key={proposal.company} className="border rounded-lg p-4 space-y-4">
-                  <div className="flex items-center justify-between">
-                    <h3 className="text-lg font-semibold">{proposal.company}</h3>
-                    <div className="text-right">
-                      <p className="text-sm text-muted-foreground">Total Cost</p>
-                      <p className="text-2xl font-bold text-primary">
-                        ${proposal.total.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                      </p>
-                    </div>
-                  </div>
-                  
-                  <div className="border rounded-lg overflow-hidden">
-                    <Table>
-                      <TableHeader>
-                        <TableRow>
-                          <TableHead>System</TableHead>
-                          <TableHead>Details</TableHead>
-                          <TableHead className="text-right">Cost</TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {proposal.systems.map((system, idx) => (
-                          <TableRow key={idx}>
-                            <TableCell className="font-medium">{system.system_name}</TableCell>
-                            <TableCell className="text-muted-foreground">
-                              {system.details || "—"}
-                            </TableCell>
-                            <TableCell className="text-right font-medium">
-                              ${system.system_cost.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                            </TableCell>
-                          </TableRow>
-                        ))}
-                      </TableBody>
-                    </Table>
-                  </div>
-                </div>
-              ))
-            ) : (
-              <div className="text-center py-8 text-muted-foreground">
-                <Building2 className="h-12 w-12 mx-auto mb-4 opacity-50" />
-                <p>No proposals submitted yet</p>
-                <p className="text-sm">Invited companies will submit their proposals here</p>
-              </div>
-            )}
+          <CardContent>
+            <div className="overflow-x-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead className="min-w-[200px]">System / Control</TableHead>
+                    {companyProposals.map((proposal) => (
+                      <TableHead key={proposal.company} className="text-right min-w-[150px]">
+                        {proposal.company}
+                      </TableHead>
+                    ))}
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {/* Get unique system names */}
+                  {Array.from(
+                    new Set(
+                      companyProposals.flatMap((p) => p.systems.map((s) => s.system_name))
+                    )
+                  ).map((systemName) => (
+                    <TableRow key={systemName}>
+                      <TableCell className="font-medium">{systemName}</TableCell>
+                      {companyProposals.map((proposal) => {
+                        const system = proposal.systems.find(
+                          (s) => s.system_name === systemName
+                        );
+                        return (
+                          <TableCell key={proposal.company} className="text-right">
+                            {system ? (
+                              <div>
+                                <p className="font-medium">
+                                  ${system.system_cost.toLocaleString('en-US', { 
+                                    minimumFractionDigits: 2, 
+                                    maximumFractionDigits: 2 
+                                  })}
+                                </p>
+                                {system.details && (
+                                  <p className="text-xs text-muted-foreground truncate max-w-[150px]">
+                                    {system.details}
+                                  </p>
+                                )}
+                              </div>
+                            ) : (
+                              <span className="text-muted-foreground">—</span>
+                            )}
+                          </TableCell>
+                        );
+                      })}
+                    </TableRow>
+                  ))}
+                  {/* Total Row */}
+                  <TableRow className="bg-muted/50 font-semibold">
+                    <TableCell>Total Cost</TableCell>
+                    {companyProposals.map((proposal) => (
+                      <TableCell key={proposal.company} className="text-right">
+                        <p className="text-lg font-bold text-primary">
+                          ${proposal.total.toLocaleString('en-US', { 
+                            minimumFractionDigits: 2, 
+                            maximumFractionDigits: 2 
+                          })}
+                        </p>
+                      </TableCell>
+                    ))}
+                  </TableRow>
+                </TableBody>
+              </Table>
+            </div>
           </CardContent>
         </Card>
       )}
