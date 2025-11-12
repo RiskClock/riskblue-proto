@@ -231,37 +231,37 @@ export const ProposalsStep = ({ data, onBack, onNext }: ProposalsStepProps) => {
                         onCheckedChange={toggleSelectAll}
                       />
                     </TableHead>
-                    <TableHead className="min-w-[200px] font-bold">Control / System</TableHead>
-                    {proposals.map((proposal) => (
-                      <TableHead key={proposal.id} className="min-w-[140px] text-center">
-                        <div className="flex flex-col gap-1">
-                          <span className="font-semibold">{proposal.company_name}</span>
-                          <Badge variant={
-                            proposal.status === "Complete ✅" ? "default" : 
-                            proposal.status === "In Progress" ? "secondary" : 
-                            "outline"
-                          } className="text-xs">
-                            {proposal.status}
-                          </Badge>
-                        </div>
+                    <TableHead className="min-w-[180px]">Company</TableHead>
+                    <TableHead className="min-w-[120px]">Status</TableHead>
+                    {controls.map((control) => (
+                      <TableHead key={control} className="min-w-[140px] text-right">
+                        {control}
                       </TableHead>
                     ))}
+                    <TableHead className="min-w-[140px] text-right font-bold">Total Cost</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {controls.map((control, idx) => (
-                    <TableRow key={control}>
+                  {proposals.map((proposal) => (
+                    <TableRow key={proposal.id}>
                       <TableCell>
-                        {idx === 0 && (
-                          <Checkbox
-                            checked={selectedProposals.length === proposals.length}
-                            onCheckedChange={toggleSelectAll}
-                          />
-                        )}
+                        <Checkbox
+                          checked={selectedProposals.includes(proposal.id)}
+                          onCheckedChange={() => toggleSelection(proposal.id)}
+                        />
                       </TableCell>
-                      <TableCell className="font-medium">{control}</TableCell>
-                      {proposals.map((proposal) => (
-                        <TableCell key={proposal.id} className="text-center">
+                      <TableCell className="font-semibold">{proposal.company_name}</TableCell>
+                      <TableCell>
+                        <Badge variant={
+                          proposal.status === "Complete ✅" ? "default" : 
+                          proposal.status === "In Progress" ? "secondary" : 
+                          "outline"
+                        }>
+                          {proposal.status}
+                        </Badge>
+                      </TableCell>
+                      {controls.map((control) => (
+                        <TableCell key={control} className="text-right">
                           {proposal.systems[control] ? (
                             <span className="font-medium">
                               ${(proposal.systems[control] / 1000).toFixed(0)}k
@@ -271,20 +271,14 @@ export const ProposalsStep = ({ data, onBack, onNext }: ProposalsStepProps) => {
                           )}
                         </TableCell>
                       ))}
-                    </TableRow>
-                  ))}
-                  <TableRow className="bg-muted/50 font-bold">
-                    <TableCell></TableCell>
-                    <TableCell>Total Cost</TableCell>
-                    {proposals.map((proposal) => (
-                      <TableCell key={proposal.id} className="text-center">
-                        <div className="flex items-center justify-center gap-1 font-bold text-lg text-primary">
+                      <TableCell className="text-right">
+                        <div className="flex items-center justify-end gap-1 font-bold text-lg text-primary">
                           <DollarSign className="h-5 w-5" />
                           {(proposal.proposed_cost / 1000).toFixed(0)}k
                         </div>
                       </TableCell>
-                    ))}
-                  </TableRow>
+                    </TableRow>
+                  ))}
                 </TableBody>
               </Table>
             </div>
