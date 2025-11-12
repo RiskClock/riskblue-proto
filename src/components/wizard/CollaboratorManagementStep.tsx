@@ -7,7 +7,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
-import { Plus, Trash2 } from "lucide-react";
+import { UserPlus, Trash2, Building2 } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
 import { z } from "zod";
 
 interface CollaboratorManagementStepProps {
@@ -44,6 +45,7 @@ export const CollaboratorManagementStep = ({ projectId }: CollaboratorManagement
   const [loading, setLoading] = useState(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [collaboratorToDelete, setCollaboratorToDelete] = useState<string | null>(null);
+  const [showInviteForm, setShowInviteForm] = useState(false);
   
   const [formData, setFormData] = useState({
     name: "",
@@ -161,6 +163,7 @@ export const CollaboratorManagementStep = ({ projectId }: CollaboratorManagement
 
       // Reset form
       setFormData({ name: "", email: "", company: "" });
+      setShowInviteForm(false);
       
       // Refresh list
       fetchCollaborators();
@@ -222,148 +225,173 @@ export const CollaboratorManagementStep = ({ projectId }: CollaboratorManagement
 
   return (
     <div className="space-y-8">
-      {/* Invite Collaborators Section */}
+      {/* Collaborators Section */}
       <Card>
         <CardHeader>
-          <CardTitle>Invite Collaborators</CardTitle>
-          <CardDescription>
-            Invite others to review the water mitigation guidelines and provide cost estimates for each system.
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <form onSubmit={handleAddCollaborator} className="space-y-4">
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <div className="space-y-2">
-                <Label htmlFor="name">Name</Label>
-                <Input
-                  id="name"
-                  name="name"
-                  value={formData.name}
-                  onChange={handleInputChange}
-                  placeholder="John Doe"
-                  required
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="email">Email</Label>
-                <Input
-                  id="email"
-                  name="email"
-                  type="email"
-                  value={formData.email}
-                  onChange={handleInputChange}
-                  placeholder="john@company.com"
-                  required
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="company">Company</Label>
-                <Input
-                  id="company"
-                  name="company"
-                  value={formData.company}
-                  onChange={handleInputChange}
-                  placeholder="Company Name"
-                  required
-                />
-              </div>
+          <div className="flex items-center justify-between">
+            <div>
+              <CardTitle>Invited Collaborators</CardTitle>
+              <CardDescription>
+                Invite team members to review water mitigation guidelines and submit proposals
+              </CardDescription>
             </div>
-            <Button type="submit" disabled={loading}>
-              <Plus className="h-4 w-4 mr-2" />
-              Invite Collaborator
+            <Button
+              onClick={() => setShowInviteForm(!showInviteForm)}
+              variant={showInviteForm ? "outline" : "default"}
+            >
+              <UserPlus className="h-4 w-4 mr-2" />
+              {showInviteForm ? "Cancel" : "Invite"}
             </Button>
-          </form>
+          </div>
+        </CardHeader>
+        <CardContent className="space-y-6">
+          {showInviteForm && (
+            <form onSubmit={handleAddCollaborator} className="space-y-4 p-4 border rounded-lg bg-muted/50">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="name">Name *</Label>
+                  <Input
+                    id="name"
+                    name="name"
+                    value={formData.name}
+                    onChange={handleInputChange}
+                    placeholder="John Doe"
+                    required
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="email">Email *</Label>
+                  <Input
+                    id="email"
+                    name="email"
+                    type="email"
+                    value={formData.email}
+                    onChange={handleInputChange}
+                    placeholder="john@company.com"
+                    required
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="company">Company *</Label>
+                  <Input
+                    id="company"
+                    name="company"
+                    value={formData.company}
+                    onChange={handleInputChange}
+                    placeholder="ABC Construction"
+                    required
+                  />
+                </div>
+              </div>
+              <Button type="submit" disabled={loading} className="w-full">
+                {loading ? "Sending..." : "Send Invitation"}
+              </Button>
+            </form>
+          )}
+
+          {collaborators.length > 0 ? (
+            <div className="border rounded-lg">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Name</TableHead>
+                    <TableHead>Email</TableHead>
+                    <TableHead>Company</TableHead>
+                    <TableHead className="w-[100px]">Actions</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {collaborators.map((collaborator) => (
+                    <TableRow key={collaborator.id}>
+                      <TableCell className="font-medium">{collaborator.name}</TableCell>
+                      <TableCell>{collaborator.email}</TableCell>
+                      <TableCell>
+                        <Badge variant="secondary">{collaborator.company}</Badge>
+                      </TableCell>
+                      <TableCell>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => openDeleteDialog(collaborator.id)}
+                          disabled={loading}
+                        >
+                          <Trash2 className="h-4 w-4 text-destructive" />
+                        </Button>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+          ) : (
+            <div className="text-center py-8 text-muted-foreground">
+              <UserPlus className="h-12 w-12 mx-auto mb-4 opacity-50" />
+              <p>No collaborators invited yet</p>
+              <p className="text-sm">Click "Invite" to add team members to this project</p>
+            </div>
+          )}
         </CardContent>
       </Card>
 
-      {/* Invited Collaborators List */}
+      {/* Company Proposals Section */}
       {collaborators.length > 0 && (
         <Card>
           <CardHeader>
-            <CardTitle>Invited Collaborators</CardTitle>
+            <CardTitle className="flex items-center gap-2">
+              <Building2 className="h-5 w-5" />
+              Company Proposals
+            </CardTitle>
             <CardDescription>
-              Manage the list of people invited to provide proposals.
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Name</TableHead>
-                  <TableHead>Email</TableHead>
-                  <TableHead>Company</TableHead>
-                  <TableHead className="text-right">Actions</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {collaborators.map((collaborator) => (
-                  <TableRow key={collaborator.id}>
-                    <TableCell className="font-medium">{collaborator.name}</TableCell>
-                    <TableCell>{collaborator.email}</TableCell>
-                    <TableCell>{collaborator.company}</TableCell>
-                    <TableCell className="text-right">
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        onClick={() => openDeleteDialog(collaborator.id)}
-                        disabled={loading}
-                      >
-                        <Trash2 className="h-4 w-4 text-destructive" />
-                      </Button>
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </CardContent>
-        </Card>
-      )}
-
-      {/* Company Proposals Section */}
-      {companyProposals.length > 0 && (
-        <Card>
-          <CardHeader>
-            <CardTitle>Company Proposals</CardTitle>
-            <CardDescription>
-              Cost breakdown by company for each water system.
+              Cost breakdowns by company for water mitigation systems
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-6">
-            {companyProposals.map((proposal) => (
-              <div key={proposal.company} className="border rounded-lg p-4 space-y-4">
-                <div className="flex items-center justify-between">
-                  <h3 className="text-lg font-semibold">{proposal.company}</h3>
-                  <div className="text-right">
-                    <p className="text-sm text-muted-foreground">Total Cost</p>
-                    <p className="text-2xl font-bold text-primary">
-                      ${proposal.total.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                    </p>
+            {companyProposals.length > 0 ? (
+              companyProposals.map((proposal) => (
+                <div key={proposal.company} className="border rounded-lg p-4 space-y-4">
+                  <div className="flex items-center justify-between">
+                    <h3 className="text-lg font-semibold">{proposal.company}</h3>
+                    <div className="text-right">
+                      <p className="text-sm text-muted-foreground">Total Cost</p>
+                      <p className="text-2xl font-bold text-primary">
+                        ${proposal.total.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                      </p>
+                    </div>
+                  </div>
+                  
+                  <div className="border rounded-lg overflow-hidden">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>System</TableHead>
+                          <TableHead>Details</TableHead>
+                          <TableHead className="text-right">Cost</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {proposal.systems.map((system, idx) => (
+                          <TableRow key={idx}>
+                            <TableCell className="font-medium">{system.system_name}</TableCell>
+                            <TableCell className="text-muted-foreground">
+                              {system.details || "—"}
+                            </TableCell>
+                            <TableCell className="text-right font-medium">
+                              ${system.system_cost.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
                   </div>
                 </div>
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>System</TableHead>
-                      <TableHead>Details</TableHead>
-                      <TableHead className="text-right">Cost</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {proposal.systems.map((system, idx) => (
-                      <TableRow key={idx}>
-                        <TableCell className="font-medium">{system.system_name}</TableCell>
-                        <TableCell className="text-muted-foreground">
-                          {system.details || "—"}
-                        </TableCell>
-                        <TableCell className="text-right">
-                          ${system.system_cost.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
+              ))
+            ) : (
+              <div className="text-center py-8 text-muted-foreground">
+                <Building2 className="h-12 w-12 mx-auto mb-4 opacity-50" />
+                <p>No proposals submitted yet</p>
+                <p className="text-sm">Invited companies will submit their proposals here</p>
               </div>
-            ))}
+            )}
           </CardContent>
         </Card>
       )}

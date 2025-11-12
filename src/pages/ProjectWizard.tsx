@@ -424,13 +424,8 @@ const ProjectWizard = () => {
             </div>
           </TabsContent>
 
-          <TabsContent value="plan" className="max-w-5xl mx-auto space-y-8">
-            <div className="space-y-6">
-              <WaterMitigationGuidelinesStep data={projectData} onBack={() => {}} onNext={handleStepUpdate} />
-            </div>
-            <div className="space-y-6 pt-8 border-t">
-              <CollaboratorManagementStep projectId={id || "new"} />
-            </div>
+          <TabsContent value="plan" className="max-w-5xl mx-auto">
+            <CollaboratorManagementStep projectId={id || "new"} />
           </TabsContent>
 
           <TabsContent value="response" className="max-w-5xl mx-auto">
