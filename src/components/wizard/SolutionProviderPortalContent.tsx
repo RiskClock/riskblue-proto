@@ -240,7 +240,7 @@ export const SolutionProviderPortalContent = ({
     setSaving(true);
 
     try {
-      // Fetch existing proposals to preserve unchanged editor info
+      // Fetch existing proposals to check what changed
       const { data: existingProposals, error: fetchError } = await supabase
         .from("company_proposals")
         .select("*")
@@ -254,51 +254,67 @@ export const SolutionProviderPortalContent = ({
         (existingProposals || []).map(p => [p.system_name, p])
       );
 
-      await supabase
-        .from("company_proposals")
-        .delete()
-        .eq("project_id", projectId)
-        .eq("company", companyName);
-
       const now = new Date().toISOString();
-      const proposals = mitigationControls
-        .filter((control) => costs[control.id] && parseFloat(costs[control.id]) > 0)
-        .map((control) => {
-          const currentCost = costs[control.id];
-          const currentDetails = details[control.id] || "";
-          const originalCost = originalCosts[control.id];
-          const originalDetail = originalDetails[control.id] || "";
-          
-          // Check if this control has actually changed
-          const hasChanged = currentCost !== originalCost || currentDetails !== originalDetail;
-          
-          // Get existing proposal data
-          const existingProposal = existingProposalsMap.get(control.name);
-          
-          // Only update editor_name and edited_at if the values changed
-          const editorName = hasChanged ? providerName : (existingProposal?.editor_name || providerName);
-          const editedAt = hasChanged ? now : (existingProposal?.edited_at || now);
+      const controlsWithCosts = mitigationControls.filter(
+        (control) => costs[control.id] && parseFloat(costs[control.id]) > 0
+      );
 
-          return {
-            project_id: projectId,
-            company: companyName,
-            system_name: control.name,
-            system_cost: parseFloat(currentCost),
-            details: currentDetails,
-            editor_name: editorName,
-            edited_at: editedAt,
-          };
-        });
+      // Build proposals for UPSERT
+      const proposals = controlsWithCosts.map((control) => {
+        const currentCost = costs[control.id];
+        const currentDetails = details[control.id] || "";
+        const originalCost = originalCosts[control.id];
+        const originalDetail = originalDetails[control.id] || "";
+        
+        // Check if this control has actually changed
+        const hasChanged = currentCost !== originalCost || currentDetails !== originalDetail;
+        
+        // Get existing proposal data
+        const existingProposal = existingProposalsMap.get(control.name);
+        
+        // Only update editor_name and edited_at if the values changed
+        const editorName = hasChanged ? providerName : (existingProposal?.editor_name || providerName);
+        const editedAt = hasChanged ? now : (existingProposal?.edited_at || now);
 
+        return {
+          project_id: projectId,
+          company: companyName,
+          system_name: control.name,
+          system_cost: parseFloat(currentCost),
+          details: currentDetails,
+          editor_name: editorName,
+          edited_at: editedAt,
+        };
+      });
+
+      // UPSERT proposals (insert or update based on unique constraint)
       if (proposals.length > 0) {
         const { error } = await supabase
           .from("company_proposals")
-          .insert(proposals);
+          .upsert(proposals, {
+            onConflict: "project_id,company,system_name",
+            ignoreDuplicates: false,
+          });
 
         if (error) throw error;
       }
 
-      // Update local editor info and original values
+      // Delete proposals that no longer have costs
+      const controlsWithCostsSet = new Set(controlsWithCosts.map(c => c.name));
+      const proposalsToDelete = (existingProposals || [])
+        .filter(p => !controlsWithCostsSet.has(p.system_name))
+        .map(p => p.id);
+
+      if (proposalsToDelete.length > 0) {
+        const { error: deleteError } = await supabase
+          .from("company_proposals")
+          .delete()
+          .in("id", proposalsToDelete);
+
+        if (deleteError) throw deleteError;
+      }
+
+      // Update local state with saved values
       const newEditorInfo: Record<string, { name: string; time: string }> = {};
       const newOriginalCosts: Record<string, string> = {};
       const newOriginalDetails: Record<string, string> = {};
