@@ -109,7 +109,7 @@ export const MitigationControlsStep = ({ data, onNext, onBack, isProcessingWebho
             }).length} of{" "}
             {mitigationControls.filter((c) => c.category === "monitoring").length} controls selected
           </p>
-          <div className="grid md:grid-cols-3 gap-4">
+          <div className="grid md:grid-cols-4 gap-4">
             {mitigationControls
               .filter((c) => c.category === "monitoring")
               .map((control) => (
@@ -146,7 +146,7 @@ export const MitigationControlsStep = ({ data, onNext, onBack, isProcessingWebho
             }).length} of{" "}
             {mitigationControls.filter((c) => c.category === "automation").length} controls selected
           </p>
-          <div className="grid md:grid-cols-3 gap-4">
+          <div className="grid md:grid-cols-4 gap-4">
             {mitigationControls
               .filter((c) => c.category === "automation")
               .map((control) => (
