@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
-import { ArrowLeft, Building2, LogOut } from "lucide-react";
+import { Building2, LogOut } from "lucide-react";
 import riskBlueLogo from "@/assets/riskblue-logo.jpg";
 import { SolutionProviderPortalContent } from "@/components/wizard/SolutionProviderPortalContent";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -40,7 +40,7 @@ export default function SolutionProviderPortal() {
   const [loading, setLoading] = useState(false);
   const [showProviderDialog, setShowProviderDialog] = useState(false);
 
-  // Check if coming from URL params or open provider selection
+  // Auto-open dialog on mount if no params
   useEffect(() => {
     const collaboratorId = searchParams.get("collaborator");
     const projectId = searchParams.get("project");
@@ -51,7 +51,7 @@ export default function SolutionProviderPortal() {
       fetchAllCollaborators();
       setShowProviderDialog(true);
     }
-  }, [searchParams]);
+  }, []);
 
   const loadCollaboratorAndProject = async (collaboratorId: string, projectId: string) => {
     try {
@@ -135,47 +135,32 @@ export default function SolutionProviderPortal() {
   };
 
   const handleBack = () => {
-    if (selectedProject) {
-      setSelectedProject(null);
-      setSearchParams({ collaborator: selectedCollaborator!.id });
-    } else if (selectedCollaborator) {
-      setSelectedCollaborator(null);
-      setProjects([]);
-      setSearchParams({});
-    } else {
-      navigate(-1);
-    }
+    navigate(-1);
+  };
+
+  const handleExitPortal = () => {
+    setSelectedProject(null);
+    setSelectedCollaborator(null);
+    setProjects([]);
+    setSearchParams({});
+    navigate(-1);
   };
 
   const handleProviderSelection = (collaboratorId: string) => {
     handleCollaboratorSelect(collaboratorId);
-    // Don't close dialog yet - wait for project selection
   };
 
   return (
     <div className="min-h-screen bg-background">
       <header className="sticky top-0 z-20 border-b bg-card">
         <div className="container mx-auto px-6 py-4 flex items-center justify-between">
-          <div className="flex items-center gap-4">
-            <Button variant="ghost" size="icon" onClick={handleBack}>
-              <ArrowLeft className="h-5 w-5" />
-            </Button>
-            <img src={riskBlueLogo} alt="RiskBlue" className="h-8" />
-          </div>
+          <img src={riskBlueLogo} alt="RiskBlue" className="h-8 cursor-pointer" onClick={() => navigate("/projects")} />
           <div className="flex items-center gap-6">
             <button onClick={() => navigate("/projects")} className="text-foreground hover:text-primary">
               Projects
             </button>
-            <button onClick={() => {
-              if (selectedProject && selectedCollaborator) {
-                // Exit portal view
-                setSelectedProject(null);
-                setSelectedCollaborator(null);
-                setProjects([]);
-                setSearchParams({});
-              }
-            }} className="text-foreground hover:text-primary">
-              {selectedProject && selectedCollaborator ? "Exit Portal" : "Solution Provider Portal"}
+            <button onClick={handleExitPortal} className="text-foreground hover:text-primary">
+              Exit Portal
             </button>
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
@@ -195,7 +180,7 @@ export default function SolutionProviderPortal() {
       </header>
 
       <main className="container mx-auto px-6 py-8">
-        {selectedProject && selectedCollaborator ? (
+        {selectedProject && selectedCollaborator && (
           <div className="max-w-6xl mx-auto">
             <div className="mb-4">
               <p className="text-sm text-muted-foreground">
@@ -208,22 +193,17 @@ export default function SolutionProviderPortal() {
               companyName={selectedCollaborator.company}
             />
           </div>
-        ) : (
-          <div className="max-w-2xl mx-auto text-center py-12">
-            <Building2 className="h-16 w-16 mx-auto mb-4 text-muted-foreground" />
-            <h2 className="text-2xl font-bold mb-2">Solution Provider Portal</h2>
-            <p className="text-muted-foreground mb-6">
-              Select a solution provider to view their project access
-            </p>
-            <Button onClick={() => setShowProviderDialog(true)}>
-              Select Provider
-            </Button>
-          </div>
         )}
       </main>
 
       {/* Provider Selection Dialog */}
-      <Dialog open={showProviderDialog} onOpenChange={setShowProviderDialog}>
+      <Dialog open={showProviderDialog} onOpenChange={(open) => {
+        setShowProviderDialog(open);
+        if (!open && !selectedProject && !selectedCollaborator) {
+          // If dialog is closed without selection, navigate back
+          navigate(-1);
+        }
+      }}>
         <DialogContent className="max-w-3xl max-h-[80vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Select Solution Provider & Project</DialogTitle>
