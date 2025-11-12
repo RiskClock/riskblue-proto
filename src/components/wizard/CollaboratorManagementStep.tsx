@@ -43,6 +43,7 @@ export const CollaboratorManagementStep = ({ projectId }: CollaboratorManagement
   const { toast } = useToast();
   const [collaborators, setCollaborators] = useState<Collaborator[]>([]);
   const [companyProposals, setCompanyProposals] = useState<CompanyProposal[]>([]);
+  const [allControlNames, setAllControlNames] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [collaboratorToDelete, setCollaboratorToDelete] = useState<string | null>(null);
@@ -78,6 +79,29 @@ export const CollaboratorManagementStep = ({ projectId }: CollaboratorManagement
 
   const fetchCompanyProposals = async () => {
     try {
+      // First, get the project data to find selected controls
+      const { data: projectData, error: projectError } = await supabase
+        .from("projects")
+        .select("project_data")
+        .eq("id", projectId)
+        .single();
+
+      if (projectError) throw projectError;
+
+      const selectedControls = (projectData?.project_data as any)?.selectedControls || [];
+      
+      // Define all controls based on selected controls in the project
+      const allControlNames = selectedControls.map((controlId: string) => {
+        const control = [
+          { id: "electrical-room-monitoring", name: "Electrical Room Presence of Water Monitoring" },
+          { id: "mechanical-room-monitoring", name: "Mechanical Room Presence of Water Monitoring" },
+          { id: "main-electrical-monitoring", name: "Main Electrical Room Presence of Water Monitoring" },
+          { id: "cold-domestic-flow-monitoring", name: "Cold Domestic Water Abnormal Flow Monitoring" },
+          { id: "temporary-water-flow-monitoring", name: "Temporary Water Run Abnormal Flow Monitoring" },
+        ].find(c => c.id === controlId);
+        return control?.name;
+      }).filter(Boolean);
+
       const { data, error } = await supabase
         .from("company_proposals")
         .select("*")
@@ -103,7 +127,9 @@ export const CollaboratorManagementStep = ({ projectId }: CollaboratorManagement
         return acc;
       }, {} as Record<string, CompanyProposal>);
 
+      // Store both the proposals and the list of all controls
       setCompanyProposals(Object.values(groupedByCompany));
+      setAllControlNames(allControlNames as string[]);
     } catch (error: any) {
       console.error("Error fetching company proposals:", error);
     }
@@ -439,14 +465,9 @@ export const CollaboratorManagementStep = ({ projectId }: CollaboratorManagement
                   <TableRow>
                     <TableHead className="min-w-[200px]">Company</TableHead>
                     <TableHead className="text-right min-w-[120px]">Total Cost</TableHead>
-                    {/* Get unique system names from all proposals */}
-                    {Array.from(
-                      new Set(
-                        companyProposals.flatMap((p) => p.systems.map((s) => s.system_name))
-                      )
-                    ).map((systemName) => (
-                      <TableHead key={systemName} className="text-right min-w-[150px]">
-                        {systemName}
+                    {allControlNames.map((controlName) => (
+                      <TableHead key={controlName} className="text-right min-w-[150px]">
+                        {controlName}
                       </TableHead>
                     ))}
                   </TableRow>
@@ -461,16 +482,12 @@ export const CollaboratorManagementStep = ({ projectId }: CollaboratorManagement
                           maximumFractionDigits: 0 
                         })}
                       </TableCell>
-                      {Array.from(
-                        new Set(
-                          companyProposals.flatMap((p) => p.systems.map((s) => s.system_name))
-                        )
-                      ).map((systemName) => {
+                      {allControlNames.map((controlName) => {
                         const system = proposal.systems.find(
-                          (s) => s.system_name === systemName
+                          (s) => s.system_name === controlName
                         );
                         return (
-                          <TableCell key={systemName} className="text-right">
+                          <TableCell key={controlName} className="text-right">
                             {system && system.system_cost > 0 ? (
                               <div>
                                 <p className="font-medium">

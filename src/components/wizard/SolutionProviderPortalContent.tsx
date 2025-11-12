@@ -140,8 +140,15 @@ export const SolutionProviderPortalContent = ({
   useEffect(() => {
     if (projectId && companyName) {
       setIsLoadingData(true);
+      // Reset state first to prevent stale data
+      setCosts({});
+      setDetails({});
+      setEditorInfo({});
+      setOriginalCosts({});
+      setOriginalDetails({});
+      setOriginalEditorInfo({});
+      
       Promise.all([fetchProjectData(), loadExistingProposals()]).finally(() => {
-        // Wait a bit longer to ensure initial render is complete
         setTimeout(() => setIsLoadingData(false), 300);
       });
     }
