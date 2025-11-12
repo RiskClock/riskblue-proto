@@ -128,6 +128,9 @@ export const SolutionProviderPortalContent = ({
   const { toast } = useToast();
   const [costs, setCosts] = useState<Record<string, string>>({});
   const [details, setDetails] = useState<Record<string, string>>({});
+  const [originalCosts, setOriginalCosts] = useState<Record<string, string>>({});
+  const [originalDetails, setOriginalDetails] = useState<Record<string, string>>({});
+  const [originalEditorInfo, setOriginalEditorInfo] = useState<Record<string, { name: string; time: string; timestamp: string }>>({});
   const [saving, setSaving] = useState(false);
   const [autoSaving, setAutoSaving] = useState(false);
   const [projectData, setProjectData] = useState<any>(null);
@@ -173,6 +176,7 @@ export const SolutionProviderPortalContent = ({
         const existingCosts: Record<string, string> = {};
         const existingDetails: Record<string, string> = {};
         const existingEditorInfo: Record<string, { name: string; time: string }> = {};
+        const existingOriginalEditorInfo: Record<string, { name: string; time: string; timestamp: string }> = {};
         
         data.forEach((proposal: any) => {
           const control = mitigationControls.find(c => c.name === proposal.system_name);
@@ -186,13 +190,22 @@ export const SolutionProviderPortalContent = ({
                 name: proposal.editor_name,
                 time: new Date(proposal.edited_at).toLocaleString(),
               };
+              existingOriginalEditorInfo[control.id] = {
+                name: proposal.editor_name,
+                time: new Date(proposal.edited_at).toLocaleString(),
+                timestamp: proposal.edited_at,
+              };
             }
           }
         });
 
+        // Store both current and original values
         setCosts(existingCosts);
         setDetails(existingDetails);
         setEditorInfo(existingEditorInfo);
+        setOriginalCosts(existingCosts);
+        setOriginalDetails(existingDetails);
+        setOriginalEditorInfo(existingOriginalEditorInfo);
       }
     } catch (error) {
       console.error("Error loading proposals:", error);
@@ -216,23 +229,55 @@ export const SolutionProviderPortalContent = ({
     setSaving(true);
 
     try {
+      // Fetch existing proposals to preserve unchanged editor info
+      const { data: existingProposals, error: fetchError } = await supabase
+        .from("company_proposals")
+        .select("*")
+        .eq("project_id", projectId)
+        .eq("company", companyName);
+
+      if (fetchError) throw fetchError;
+
+      // Create a map of existing proposals for easy lookup
+      const existingProposalsMap = new Map(
+        (existingProposals || []).map(p => [p.system_name, p])
+      );
+
       await supabase
         .from("company_proposals")
         .delete()
         .eq("project_id", projectId)
         .eq("company", companyName);
 
+      const now = new Date().toISOString();
       const proposals = mitigationControls
         .filter((control) => costs[control.id] && parseFloat(costs[control.id]) > 0)
-        .map((control) => ({
-          project_id: projectId,
-          company: companyName,
-          system_name: control.name,
-          system_cost: parseFloat(costs[control.id]),
-          details: details[control.id] || "",
-          editor_name: providerName,
-          edited_at: new Date().toISOString(),
-        }));
+        .map((control) => {
+          const currentCost = costs[control.id];
+          const currentDetails = details[control.id] || "";
+          const originalCost = originalCosts[control.id];
+          const originalDetail = originalDetails[control.id] || "";
+          
+          // Check if this control has actually changed
+          const hasChanged = currentCost !== originalCost || currentDetails !== originalDetail;
+          
+          // Get existing proposal data
+          const existingProposal = existingProposalsMap.get(control.name);
+          
+          // Only update editor_name and edited_at if the values changed
+          const editorName = hasChanged ? providerName : (existingProposal?.editor_name || providerName);
+          const editedAt = hasChanged ? now : (existingProposal?.edited_at || now);
+
+          return {
+            project_id: projectId,
+            company: companyName,
+            system_name: control.name,
+            system_cost: parseFloat(currentCost),
+            details: currentDetails,
+            editor_name: editorName,
+            edited_at: editedAt,
+          };
+        });
 
       if (proposals.length > 0) {
         const { error } = await supabase
@@ -242,18 +287,33 @@ export const SolutionProviderPortalContent = ({
         if (error) throw error;
       }
 
-      // Update local editor info
+      // Update local editor info and original values
       const newEditorInfo: Record<string, { name: string; time: string }> = {};
+      const newOriginalCosts: Record<string, string> = {};
+      const newOriginalDetails: Record<string, string> = {};
+      const newOriginalEditorInfo: Record<string, { name: string; time: string; timestamp: string }> = {};
+      
       proposals.forEach((proposal) => {
         const control = mitigationControls.find(c => c.name === proposal.system_name);
         if (control) {
           newEditorInfo[control.id] = {
-            name: providerName,
-            time: new Date().toLocaleString(),
+            name: proposal.editor_name,
+            time: new Date(proposal.edited_at).toLocaleString(),
+          };
+          newOriginalCosts[control.id] = proposal.system_cost.toString();
+          newOriginalDetails[control.id] = proposal.details;
+          newOriginalEditorInfo[control.id] = {
+            name: proposal.editor_name,
+            time: new Date(proposal.edited_at).toLocaleString(),
+            timestamp: proposal.edited_at,
           };
         }
       });
+      
       setEditorInfo(newEditorInfo);
+      setOriginalCosts(newOriginalCosts);
+      setOriginalDetails(newOriginalDetails);
+      setOriginalEditorInfo(newOriginalEditorInfo);
 
       toast({
         title: "Success",
