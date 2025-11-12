@@ -19,6 +19,8 @@ export type Database = {
           company: string
           created_at: string
           details: string | null
+          edited_at: string | null
+          editor_name: string | null
           id: string
           project_id: string
           system_cost: number
@@ -29,6 +31,8 @@ export type Database = {
           company: string
           created_at?: string
           details?: string | null
+          edited_at?: string | null
+          editor_name?: string | null
           id?: string
           project_id: string
           system_cost?: number
@@ -39,6 +43,8 @@ export type Database = {
           company?: string
           created_at?: string
           details?: string | null
+          edited_at?: string | null
+          editor_name?: string | null
           id?: string
           project_id?: string
           system_cost?: number

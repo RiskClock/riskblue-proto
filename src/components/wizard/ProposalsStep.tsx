@@ -94,10 +94,77 @@ const MOCK_PROPOSALS: Proposal[] = [
 ];
 
 export const ProposalsStep = ({ data, onBack, onNext }: ProposalsStepProps) => {
-  const [proposals, setProposals] = useState<Proposal[]>(MOCK_PROPOSALS);
+  const [proposals, setProposals] = useState<Proposal[]>([]);
   const [selectedProposals, setSelectedProposals] = useState<string[]>([]);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
   const { toast } = useToast();
+
+  useEffect(() => {
+    if (data.projectId) {
+      fetchProposals();
+    }
+  }, [data.projectId]);
+
+  const fetchProposals = async () => {
+    try {
+      const { data: companyProposals, error } = await supabase
+        .from("company_proposals")
+        .select("*")
+        .eq("project_id", data.projectId);
+
+      if (error) throw error;
+
+      // Group by company and aggregate costs
+      const companyMap = new Map<string, any>();
+      
+      companyProposals?.forEach((proposal) => {
+        if (!companyMap.has(proposal.company)) {
+          companyMap.set(proposal.company, {
+            id: proposal.company,
+            company_name: proposal.company,
+            contact_email: "N/A",
+            contact_phone: null,
+            proposed_cost: 0,
+            proposal_details: null,
+            status: "pending",
+            submitted_at: proposal.created_at,
+            domestic_cold_water: null,
+            domestic_hot_water: null,
+            temporary_water: null,
+            main_city_water: null,
+            fire_suppression_system: null,
+          });
+        }
+
+        const company = companyMap.get(proposal.company);
+        company.proposed_cost += Number(proposal.system_cost) || 0;
+
+        // Map system names to columns
+        if (proposal.system_name.includes("Cold Domestic Water")) {
+          company.domestic_cold_water = (company.domestic_cold_water || 0) + Number(proposal.system_cost);
+        } else if (proposal.system_name.includes("Electrical Room")) {
+          company.domestic_hot_water = (company.domestic_hot_water || 0) + Number(proposal.system_cost);
+        } else if (proposal.system_name.includes("Temporary Water")) {
+          company.temporary_water = (company.temporary_water || 0) + Number(proposal.system_cost);
+        } else if (proposal.system_name.includes("Main Electrical")) {
+          company.main_city_water = (company.main_city_water || 0) + Number(proposal.system_cost);
+        } else if (proposal.system_name.includes("Mechanical Room")) {
+          company.fire_suppression_system = (company.fire_suppression_system || 0) + Number(proposal.system_cost);
+        }
+      });
+
+      setProposals(Array.from(companyMap.values()));
+    } catch (error) {
+      console.error("Error fetching proposals:", error);
+      toast({
+        title: "Error",
+        description: "Failed to load proposals.",
+        variant: "destructive",
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const toggleSelection = (proposalId: string) => {
     setSelectedProposals(prev =>

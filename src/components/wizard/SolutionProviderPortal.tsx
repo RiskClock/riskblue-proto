@@ -106,9 +106,13 @@ export const SolutionProviderPortal = ({
         const existingDetails: Record<string, string> = {};
         
         data.forEach((proposal) => {
-          existingCosts[proposal.system_name] = proposal.system_cost.toString();
-          if (proposal.details) {
-            existingDetails[proposal.system_name] = proposal.details;
+          // Map system_name back to control ID
+          const control = mitigationControls.find(c => c.name === proposal.system_name);
+          if (control) {
+            existingCosts[control.id] = proposal.system_cost.toString();
+            if (proposal.details) {
+              existingDetails[control.id] = proposal.details;
+            }
           }
         });
 
@@ -149,6 +153,8 @@ export const SolutionProviderPortal = ({
             system_name: control.name,
             system_cost: parseFloat(costs[control.id]),
             details: details[control.id] || "",
+            editor_name: providerName,
+            edited_at: new Date().toISOString(),
           }));
 
         if (proposals.length > 0) {
@@ -162,7 +168,7 @@ export const SolutionProviderPortal = ({
     }, 1000);
 
     return () => clearTimeout(timer);
-  }, [costs, details, projectId, companyName]);
+  }, [costs, details, projectId, companyName, providerName]);
 
   const handleSave = async () => {
     setSaving(true);
@@ -184,6 +190,8 @@ export const SolutionProviderPortal = ({
           system_name: control.name,
           system_cost: parseFloat(costs[control.id]),
           details: details[control.id] || "",
+          editor_name: providerName,
+          edited_at: new Date().toISOString(),
         }));
 
       if (proposals.length > 0) {
