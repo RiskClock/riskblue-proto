@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { UserPlus, Trash2, Building2, X, FileText, ChevronDown, ChevronRight } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -90,8 +91,7 @@ export const CollaboratorManagementStep = ({ projectId }: CollaboratorManagement
   const [loading, setLoading] = useState(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [collaboratorToDelete, setCollaboratorToDelete] = useState<string | null>(null);
-  const [showPartnerInvite, setShowPartnerInvite] = useState(false);
-  const [showIndividualInvite, setShowIndividualInvite] = useState(false);
+  const [inviteDialogOpen, setInviteDialogOpen] = useState(false);
   const [portalOpen, setPortalOpen] = useState(false);
   const [selectedProvider, setSelectedProvider] = useState<{ name: string; company: string } | null>(null);
   
@@ -377,7 +377,7 @@ export const CollaboratorManagementStep = ({ projectId }: CollaboratorManagement
 
       // Reset selection
       setSelectedPartnerContacts({});
-      setShowPartnerInvite(false);
+      setInviteDialogOpen(false);
       
       // Refresh lists
       fetchCollaborators();
@@ -502,7 +502,7 @@ export const CollaboratorManagementStep = ({ projectId }: CollaboratorManagement
 
       // Reset form
       setInviteRows([{ id: 1, name: "", email: "", company: "" }]);
-      setShowIndividualInvite(false);
+      setInviteDialogOpen(false);
       
       // Refresh lists
       fetchCollaborators();
@@ -590,172 +590,175 @@ export const CollaboratorManagementStep = ({ projectId }: CollaboratorManagement
                 Invite solution providers to review guidelines and submit cost proposals
               </CardDescription>
             </div>
-            <div className="flex gap-2">
-              <Button
-                onClick={() => {
-                  setShowPartnerInvite(!showPartnerInvite);
-                  setShowIndividualInvite(false);
-                }}
-                variant={showPartnerInvite ? "outline" : "default"}
-              >
-                <Building2 className="h-4 w-4 mr-2" />
-                {showPartnerInvite ? "Cancel" : "Partner Network"}
-              </Button>
-              <Button
-                onClick={() => {
-                  setShowIndividualInvite(!showIndividualInvite);
-                  setShowPartnerInvite(false);
-                }}
-                variant={showIndividualInvite ? "outline" : "default"}
-              >
-                <UserPlus className="h-4 w-4 mr-2" />
-                {showIndividualInvite ? "Cancel" : "Individual"}
-              </Button>
-            </div>
+            <Dialog open={inviteDialogOpen} onOpenChange={setInviteDialogOpen}>
+              <DialogTrigger asChild>
+                <Button>
+                  <UserPlus className="h-4 w-4 mr-2" />
+                  Invite
+                </Button>
+              </DialogTrigger>
+              <DialogContent className="max-w-3xl max-h-[80vh] overflow-y-auto">
+                <DialogHeader>
+                  <DialogTitle>Invite Solution Providers</DialogTitle>
+                </DialogHeader>
+                <div className="space-y-6 py-4">
+                  {/* Partner Network Section */}
+                  <div className="space-y-4">
+                    <div>
+                      <h4 className="font-medium text-lg">RiskBlue Partner Network</h4>
+                      <p className="text-sm text-muted-foreground">Select partners and contacts to invite</p>
+                    </div>
+                    
+                    <div className="space-y-2">
+                      {PREDEFINED_PARTNERS.map((partner) => {
+                        const selectionState = getPartnerSelectionState(partner.name);
+                        const isExpanded = expandedPartners.has(partner.name);
+                        const selectedCount = selectedPartnerContacts[partner.name]?.size || 0;
+                        
+                        return (
+                          <div key={partner.name} className="border rounded-lg">
+                            <div className="flex items-center gap-3 p-3">
+                              <Checkbox
+                                checked={selectionState === "all"}
+                                indeterminate={selectionState === "partial"}
+                                onCheckedChange={() => togglePartner(partner.name)}
+                              />
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => togglePartnerExpanded(partner.name)}
+                                className="flex-1 justify-start gap-2 h-auto py-0"
+                              >
+                                {isExpanded ? (
+                                  <ChevronDown className="h-4 w-4" />
+                                ) : (
+                                  <ChevronRight className="h-4 w-4" />
+                                )}
+                                <Building2 className="h-4 w-4" />
+                                <span className="font-medium">{partner.name}</span>
+                                <Badge variant="secondary" className="ml-auto">
+                                  {selectedCount}/{partner.contacts.length}
+                                </Badge>
+                              </Button>
+                            </div>
+                            
+                            {isExpanded && (
+                              <div className="border-t bg-muted/20">
+                                {partner.contacts.map((contact) => {
+                                  const isSelected = selectedPartnerContacts[partner.name]?.has(contact.email) || false;
+                                  
+                                  return (
+                                    <div
+                                      key={contact.email}
+                                      className="flex items-center gap-3 p-3 pl-12"
+                                    >
+                                      <Checkbox
+                                        checked={isSelected}
+                                        onCheckedChange={() => toggleContact(partner.name, contact.email)}
+                                      />
+                                      <div className="flex-1">
+                                        <div className="font-medium text-sm">{contact.name}</div>
+                                        <div className="text-xs text-muted-foreground">{contact.email}</div>
+                                      </div>
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                    
+                    <Button
+                      onClick={handleInvitePartnerContacts}
+                      disabled={loading || Object.values(selectedPartnerContacts).every(set => set.size === 0)}
+                      className="w-full"
+                    >
+                      Invite Selected Contacts
+                    </Button>
+                  </div>
+
+                  {/* Separator */}
+                  <div className="relative">
+                    <div className="absolute inset-0 flex items-center">
+                      <span className="w-full border-t" />
+                    </div>
+                    <div className="relative flex justify-center text-xs uppercase">
+                      <span className="bg-background px-2 text-muted-foreground">Or</span>
+                    </div>
+                  </div>
+
+                  {/* Individual Invite Section */}
+                  <div className="space-y-4">
+                    <div>
+                      <h4 className="font-medium text-lg">Invite Individual Providers</h4>
+                      <p className="text-sm text-muted-foreground">Add providers not in the partner network</p>
+                    </div>
+                    
+                    <div className="space-y-3">
+                      {inviteRows.map((row, index) => (
+                        <div key={row.id} className="flex gap-3 items-start">
+                          <div className="flex-1 grid grid-cols-3 gap-3">
+                            <div className="space-y-1.5">
+                              {index === 0 && <Label htmlFor={`name-${row.id}`}>Name</Label>}
+                              <Input
+                                id={`name-${row.id}`}
+                                placeholder="Name"
+                                value={row.name}
+                                onChange={(e) => handleInputChange(row.id, "name", e.target.value)}
+                              />
+                            </div>
+                            <div className="space-y-1.5">
+                              {index === 0 && <Label htmlFor={`email-${row.id}`}>Email</Label>}
+                              <Input
+                                id={`email-${row.id}`}
+                                type="email"
+                                placeholder="Email"
+                                value={row.email}
+                                onChange={(e) => handleInputChange(row.id, "email", e.target.value)}
+                              />
+                            </div>
+                            <div className="space-y-1.5">
+                              {index === 0 && <Label htmlFor={`company-${row.id}`}>Company</Label>}
+                              <Input
+                                id={`company-${row.id}`}
+                                placeholder="Company"
+                                value={row.company}
+                                onChange={(e) => handleInputChange(row.id, "company", e.target.value)}
+                              />
+                            </div>
+                          </div>
+                          {inviteRows.length > 1 && (
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              onClick={() => removeRow(row.id)}
+                              className={index === 0 ? "mt-8" : "mt-0"}
+                            >
+                              <X className="h-4 w-4" />
+                            </Button>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                    
+                    <div className="flex gap-2">
+                      <Button variant="outline" onClick={addRow} className="flex-1">
+                        <UserPlus className="h-4 w-4 mr-2" />
+                        Add Another Provider
+                      </Button>
+                      <Button onClick={handleAddCollaborators} disabled={loading} className="flex-1">
+                        Send Invitations
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+              </DialogContent>
+            </Dialog>
           </div>
         </CardHeader>
         <CardContent className="space-y-6">
-          {/* Partner Network Invite */}
-          {showPartnerInvite && (
-            <div className="space-y-4 p-4 border rounded-lg bg-muted/50">
-              <div className="flex items-center justify-between mb-4">
-                <div>
-                  <h4 className="font-medium">RiskBlue Partner Network</h4>
-                  <p className="text-sm text-muted-foreground">Select partners and contacts to invite</p>
-                </div>
-              </div>
-              
-              <div className="space-y-2">
-                {PREDEFINED_PARTNERS.map((partner) => {
-                  const selectionState = getPartnerSelectionState(partner.name);
-                  const isExpanded = expandedPartners.has(partner.name);
-                  const selectedCount = selectedPartnerContacts[partner.name]?.size || 0;
-                  
-                  return (
-                    <div key={partner.name} className="border rounded-lg">
-                      <div className="flex items-center gap-3 p-3 hover:bg-muted/50 transition-colors">
-                        <Checkbox
-                          checked={selectionState === "all"}
-                          ref={(el) => {
-                            if (el) {
-                              const input = el.querySelector('input');
-                              if (input) {
-                                input.indeterminate = selectionState === "partial";
-                              }
-                            }
-                          }}
-                          onCheckedChange={() => togglePartner(partner.name)}
-                        />
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => togglePartnerExpanded(partner.name)}
-                          className="flex-1 justify-start gap-2 h-auto py-0"
-                        >
-                          {isExpanded ? (
-                            <ChevronDown className="h-4 w-4" />
-                          ) : (
-                            <ChevronRight className="h-4 w-4" />
-                          )}
-                          <Building2 className="h-4 w-4" />
-                          <span className="font-medium">{partner.name}</span>
-                          <Badge variant="secondary" className="ml-auto">
-                            {selectedCount}/{partner.contacts.length}
-                          </Badge>
-                        </Button>
-                      </div>
-                      
-                      {isExpanded && (
-                        <div className="border-t bg-background/50">
-                          {partner.contacts.map((contact) => {
-                            const isSelected = selectedPartnerContacts[partner.name]?.has(contact.email) || false;
-                            
-                            return (
-                              <div
-                                key={contact.email}
-                                className="flex items-center gap-3 p-3 pl-12 hover:bg-muted/50 transition-colors"
-                              >
-                                <Checkbox
-                                  checked={isSelected}
-                                  onCheckedChange={() => toggleContact(partner.name, contact.email)}
-                                />
-                                <div className="flex-1">
-                                  <div className="font-medium text-sm">{contact.name}</div>
-                                  <div className="text-xs text-muted-foreground">{contact.email}</div>
-                                </div>
-                              </div>
-                            );
-                          })}
-                        </div>
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
-              
-              <Button
-                onClick={handleInvitePartnerContacts}
-                disabled={loading || Object.values(selectedPartnerContacts).every(set => set.size === 0)}
-                className="w-full"
-              >
-                {loading ? "Sending..." : `Invite Selected Contacts`}
-              </Button>
-            </div>
-          )}
-
-          {/* Individual Invite Form */}
-          {showIndividualInvite && (
-            <form onSubmit={handleAddCollaborators} className="space-y-4 p-4 border rounded-lg bg-muted/50">
-              <div>
-                <h4 className="font-medium mb-2">Invite Individual Providers</h4>
-                <p className="text-sm text-muted-foreground mb-4">For providers outside the partner network</p>
-              </div>
-              <div className="space-y-3">
-                {inviteRows.map((row, index) => (
-                  <div key={row.id} className="flex gap-3 items-start">
-                    <div className="flex-1 grid grid-cols-1 md:grid-cols-3 gap-3">
-                      <Input
-                        value={row.name}
-                        onChange={(e) => handleInputChange(row.id, "name", e.target.value)}
-                        placeholder="Name"
-                      />
-                      <Input
-                        type="email"
-                        value={row.email}
-                        onChange={(e) => handleInputChange(row.id, "email", e.target.value)}
-                        placeholder="Email"
-                      />
-                      <Input
-                        value={row.company}
-                        onChange={(e) => handleInputChange(row.id, "company", e.target.value)}
-                        placeholder="Company"
-                      />
-                    </div>
-                    {inviteRows.length > 1 && (
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="icon"
-                        onClick={() => removeRow(row.id)}
-                      >
-                        <X className="h-4 w-4" />
-                      </Button>
-                    )}
-                  </div>
-                ))}
-              </div>
-              <div className="flex gap-2">
-                <Button type="button" variant="outline" onClick={addRow} className="flex-1">
-                  <UserPlus className="h-4 w-4 mr-2" />
-                  Add Another
-                </Button>
-                <Button type="submit" disabled={loading} className="flex-1">
-                  {loading ? "Sending..." : `Send ${inviteRows.length} Invitation${inviteRows.length > 1 ? 's' : ''}`}
-                </Button>
-              </div>
-            </form>
-          )}
-
           {collaborators.length > 0 ? (
             <div className="border rounded-lg">
               <Table>

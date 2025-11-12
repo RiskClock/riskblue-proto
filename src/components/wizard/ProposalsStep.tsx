@@ -6,6 +6,7 @@ import { useToast } from "@/hooks/use-toast";
 import { Checkbox } from "@/components/ui/checkbox";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Badge } from "@/components/ui/badge";
 import { DollarSign } from "lucide-react";
 
 interface ProposalsStepProps {
@@ -21,13 +22,9 @@ interface Proposal {
   contact_phone: string | null;
   proposed_cost: number | null;
   proposal_details: string | null;
-  status: string;
+  status: "Invited" | "In Progress" | "Complete ✅";
   submitted_at: string;
-  domestic_cold_water?: number | null;
-  domestic_hot_water?: number | null;
-  temporary_water?: number | null;
-  main_city_water?: number | null;
-  fire_suppression_system?: number | null;
+  systems: Record<string, number | null>;
 }
 
 const MOCK_PROPOSALS: Proposal[] = [
@@ -38,13 +35,15 @@ const MOCK_PROPOSALS: Proposal[] = [
     contact_phone: "(555) 123-4567",
     proposed_cost: 510000,
     proposal_details: "Complete water detection and mitigation system",
-    status: "pending",
+    status: "Complete ✅",
     submitted_at: new Date().toISOString(),
-    domestic_cold_water: 100000,
-    domestic_hot_water: 160000,
-    temporary_water: null,
-    main_city_water: 250000,
-    fire_suppression_system: null
+    systems: {
+      "Domestic Cold Water": 100000,
+      "Domestic Hot Water": 160000,
+      "Temporary Water": null,
+      "Main City Water": 250000,
+      "Fire Suppression System": null
+    }
   },
   {
     id: "2",
@@ -53,13 +52,15 @@ const MOCK_PROPOSALS: Proposal[] = [
     contact_phone: "(555) 234-5678",
     proposed_cost: 850000,
     proposal_details: "Premium water management system",
-    status: "pending",
+    status: "In Progress",
     submitted_at: new Date().toISOString(),
-    domestic_cold_water: null,
-    domestic_hot_water: 350000,
-    temporary_water: 250000,
-    main_city_water: null,
-    fire_suppression_system: 250000
+    systems: {
+      "Domestic Cold Water": null,
+      "Domestic Hot Water": 350000,
+      "Temporary Water": 250000,
+      "Main City Water": null,
+      "Fire Suppression System": 250000
+    }
   },
   {
     id: "3",
@@ -68,13 +69,15 @@ const MOCK_PROPOSALS: Proposal[] = [
     contact_phone: "(555) 345-6789",
     proposed_cost: 700000,
     proposal_details: "Comprehensive water system protection",
-    status: "pending",
+    status: "In Progress",
     submitted_at: new Date().toISOString(),
-    domestic_cold_water: 380000,
-    domestic_hot_water: null,
-    temporary_water: 100000,
-    main_city_water: 120000,
-    fire_suppression_system: 100000
+    systems: {
+      "Domestic Cold Water": 380000,
+      "Domestic Hot Water": null,
+      "Temporary Water": 100000,
+      "Main City Water": 120000,
+      "Fire Suppression System": 100000
+    }
   },
   {
     id: "4",
@@ -83,13 +86,15 @@ const MOCK_PROPOSALS: Proposal[] = [
     contact_phone: "(555) 456-7890",
     proposed_cost: 20000,
     proposal_details: "Partial proposal for domestic cold water system",
-    status: "pending",
+    status: "Invited",
     submitted_at: new Date().toISOString(),
-    domestic_cold_water: 20000,
-    domestic_hot_water: null,
-    temporary_water: null,
-    main_city_water: null,
-    fire_suppression_system: null
+    systems: {
+      "Domestic Cold Water": 20000,
+      "Domestic Hot Water": null,
+      "Temporary Water": null,
+      "Main City Water": null,
+      "Fire Suppression System": null
+    }
   }
 ];
 
@@ -97,6 +102,7 @@ export const ProposalsStep = ({ data, onBack, onNext }: ProposalsStepProps) => {
   const [proposals, setProposals] = useState<Proposal[]>([]);
   const [selectedProposals, setSelectedProposals] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
+  const [controls, setControls] = useState<string[]>([]);
   const { toast } = useToast();
 
   useEffect(() => {
@@ -114,7 +120,14 @@ export const ProposalsStep = ({ data, onBack, onNext }: ProposalsStepProps) => {
 
       if (error) throw error;
 
-      // Group by company and aggregate costs
+      // Get unique control names
+      const uniqueControls = new Set<string>();
+      companyProposals?.forEach((proposal) => {
+        uniqueControls.add(proposal.system_name);
+      });
+      setControls(Array.from(uniqueControls));
+
+      // Group by company
       const companyMap = new Map<string, any>();
       
       companyProposals?.forEach((proposal) => {
@@ -126,30 +139,25 @@ export const ProposalsStep = ({ data, onBack, onNext }: ProposalsStepProps) => {
             contact_phone: null,
             proposed_cost: 0,
             proposal_details: null,
-            status: "pending",
+            status: "In Progress" as const,
             submitted_at: proposal.created_at,
-            domestic_cold_water: null,
-            domestic_hot_water: null,
-            temporary_water: null,
-            main_city_water: null,
-            fire_suppression_system: null,
+            systems: {},
           });
         }
 
         const company = companyMap.get(proposal.company);
         company.proposed_cost += Number(proposal.system_cost) || 0;
-
-        // Map system names to columns
-        if (proposal.system_name.includes("Cold Domestic Water")) {
-          company.domestic_cold_water = (company.domestic_cold_water || 0) + Number(proposal.system_cost);
-        } else if (proposal.system_name.includes("Electrical Room")) {
-          company.domestic_hot_water = (company.domestic_hot_water || 0) + Number(proposal.system_cost);
-        } else if (proposal.system_name.includes("Temporary Water")) {
-          company.temporary_water = (company.temporary_water || 0) + Number(proposal.system_cost);
-        } else if (proposal.system_name.includes("Main Electrical")) {
-          company.main_city_water = (company.main_city_water || 0) + Number(proposal.system_cost);
-        } else if (proposal.system_name.includes("Mechanical Room")) {
-          company.fire_suppression_system = (company.fire_suppression_system || 0) + Number(proposal.system_cost);
+        company.systems[proposal.system_name] = Number(proposal.system_cost) || 0;
+        
+        // Determine status based on completeness
+        const totalControls = uniqueControls.size;
+        const filledControls = Object.keys(company.systems).length;
+        if (filledControls === totalControls && totalControls > 0) {
+          company.status = "Complete ✅";
+        } else if (filledControls > 0) {
+          company.status = "In Progress";
+        } else {
+          company.status = "Invited";
         }
       });
 
@@ -214,99 +222,71 @@ export const ProposalsStep = ({ data, onBack, onNext }: ProposalsStepProps) => {
             </div>
 
             <div className="w-full overflow-x-auto">
-              <Table className="min-w-[1400px]">
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead className="sticky left-0 z-20 bg-background w-[50px]">
-                        <Checkbox
-                          checked={selectedProposals.length === proposals.length}
-                          onCheckedChange={toggleSelectAll}
-                        />
-                      </TableHead>
-                      <TableHead className="sticky left-[50px] z-20 bg-background min-w-[220px]">
-                        Company
-                      </TableHead>
-                      <TableHead className="sticky left-[270px] z-20 bg-background min-w-[140px] text-right">
-                        Total Cost
-                      </TableHead>
-                      <TableHead className="min-w-[180px] text-right">Domestic Cold Water</TableHead>
-                      <TableHead className="min-w-[180px] text-right">Domestic Hot Water</TableHead>
-                      <TableHead className="min-w-[160px] text-right">Temporary Water</TableHead>
-                      <TableHead className="min-w-[160px] text-right">Main City Water</TableHead>
-                      <TableHead className="min-w-[200px] text-right">Fire Suppression System</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead className="w-[50px]">
+                      <Checkbox
+                        checked={selectedProposals.length === proposals.length}
+                        onCheckedChange={toggleSelectAll}
+                      />
+                    </TableHead>
+                    <TableHead className="min-w-[200px] font-bold">Control / System</TableHead>
                     {proposals.map((proposal) => (
-                      <TableRow key={proposal.id} className="h-20">
-                        <TableCell className="sticky left-0 z-10 bg-background">
-                          <Checkbox
-                            checked={selectedProposals.includes(proposal.id)}
-                            onCheckedChange={() => toggleSelection(proposal.id)}
-                          />
-                        </TableCell>
-                        <TableCell className="sticky left-[50px] z-10 bg-background font-semibold">
-                          {proposal.company_name}
-                        </TableCell>
-                        <TableCell className="sticky left-[270px] z-10 bg-background text-right">
-                          {proposal.proposed_cost ? (
-                            <div className="flex items-center justify-end gap-1 font-bold text-lg text-primary">
-                              <DollarSign className="h-5 w-5" />
-                              {(proposal.proposed_cost / 1000).toFixed(0)}k
-                            </div>
-                          ) : (
-                            <span className="text-muted-foreground">N/A</span>
-                          )}
-                        </TableCell>
-                        <TableCell className="text-right">
-                          {proposal.domestic_cold_water ? (
-                            <span className="font-medium">
-                              ${(proposal.domestic_cold_water / 1000).toFixed(0)}k
-                            </span>
-                          ) : (
-                            <span className="text-muted-foreground">—</span>
-                          )}
-                        </TableCell>
-                        <TableCell className="text-right">
-                          {proposal.domestic_hot_water ? (
-                            <span className="font-medium">
-                              ${(proposal.domestic_hot_water / 1000).toFixed(0)}k
-                            </span>
-                          ) : (
-                            <span className="text-muted-foreground">—</span>
-                          )}
-                        </TableCell>
-                        <TableCell className="text-right">
-                          {proposal.temporary_water ? (
-                            <span className="font-medium">
-                              ${(proposal.temporary_water / 1000).toFixed(0)}k
-                            </span>
-                          ) : (
-                            <span className="text-muted-foreground">—</span>
-                          )}
-                        </TableCell>
-                        <TableCell className="text-right">
-                          {proposal.main_city_water ? (
-                            <span className="font-medium">
-                              ${(proposal.main_city_water / 1000).toFixed(0)}k
-                            </span>
-                          ) : (
-                            <span className="text-muted-foreground">—</span>
-                          )}
-                        </TableCell>
-                        <TableCell className="text-right">
-                          {proposal.fire_suppression_system ? (
-                            <span className="font-medium">
-                              ${(proposal.fire_suppression_system / 1000).toFixed(0)}k
-                            </span>
-                          ) : (
-                            <span className="text-muted-foreground">—</span>
-                          )}
-                        </TableCell>
-                      </TableRow>
+                      <TableHead key={proposal.id} className="min-w-[140px] text-center">
+                        <div className="flex flex-col gap-1">
+                          <span className="font-semibold">{proposal.company_name}</span>
+                          <Badge variant={
+                            proposal.status === "Complete ✅" ? "default" : 
+                            proposal.status === "In Progress" ? "secondary" : 
+                            "outline"
+                          } className="text-xs">
+                            {proposal.status}
+                          </Badge>
+                        </div>
+                      </TableHead>
                     ))}
-                  </TableBody>
-                </Table>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {controls.map((control, idx) => (
+                    <TableRow key={control}>
+                      <TableCell>
+                        {idx === 0 && (
+                          <Checkbox
+                            checked={selectedProposals.length === proposals.length}
+                            onCheckedChange={toggleSelectAll}
+                          />
+                        )}
+                      </TableCell>
+                      <TableCell className="font-medium">{control}</TableCell>
+                      {proposals.map((proposal) => (
+                        <TableCell key={proposal.id} className="text-center">
+                          {proposal.systems[control] ? (
+                            <span className="font-medium">
+                              ${(proposal.systems[control] / 1000).toFixed(0)}k
+                            </span>
+                          ) : (
+                            <span className="text-muted-foreground">—</span>
+                          )}
+                        </TableCell>
+                      ))}
+                    </TableRow>
+                  ))}
+                  <TableRow className="bg-muted/50 font-bold">
+                    <TableCell></TableCell>
+                    <TableCell>Total Cost</TableCell>
+                    {proposals.map((proposal) => (
+                      <TableCell key={proposal.id} className="text-center">
+                        <div className="flex items-center justify-center gap-1 font-bold text-lg text-primary">
+                          <DollarSign className="h-5 w-5" />
+                          {(proposal.proposed_cost / 1000).toFixed(0)}k
+                        </div>
+                      </TableCell>
+                    ))}
+                  </TableRow>
+                </TableBody>
+              </Table>
             </div>
           </div>
         )}
