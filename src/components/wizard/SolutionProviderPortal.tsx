@@ -12,6 +12,19 @@ import mechanicalRoomImg from "@/assets/control_Mechanical_Room_Presence_of_Wate
 import mainElectricalRiserImg from "@/assets/control_Main_Electrical_Riser_Presence_of_Water_Monitoring.avif";
 import tempWaterRunImg from "@/assets/control_Temporary_Water_Run_Abnormal_Flow_Monitoring.avif";
 import triggerValveImg from "@/assets/control_Trigger_Valve_Shut_Off_on_Abnormal_Flow_Detection.avif";
+import mechanicalRoomsAssetImg from "@/assets/critical_assets_mechanical_rooms.avif";
+import electricalRoomsAssetImg from "@/assets/critical_assets_electrical_rooms.avif";
+import mainElectricalRisersAssetImg from "@/assets/critical_assets_main_electrical_risers.avif";
+import sumpPitsAssetImg from "@/assets/critical_assets_sump_pits.avif";
+import mechanicalRisersAssetImg from "@/assets/critical_assets_mechanical_risers.avif";
+import elevatorPitsAssetImg from "@/assets/critical_assets_elevator_pits.avif";
+import suitesAssetImg from "@/assets/critical_assets_suites.avif";
+import domesticColdWaterImg from "@/assets/water_system_domestic_cold_water.avif";
+import domesticHotWaterImg from "@/assets/water_system_domestic_hot_water.avif";
+import temporaryWaterRunSystemImg from "@/assets/water_system_temporary_water_run.avif";
+import mainWaterEntryImg from "@/assets/water_system_main_water_entry.avif";
+import hydronicsImg from "@/assets/water_system_hydronics.avif";
+import fireSuppressionImg from "@/assets/water_system_fire_suppression.avif";
 
 const mitigationControls = [
   { 
@@ -46,12 +59,39 @@ const mitigationControls = [
   },
 ];
 
+const assets = [
+  { id: "mechanical", name: "Mechanical Rooms", threat: "Building water source", riskLevel: "Very High Risk", duration: "0 months", cost: "$", image: mechanicalRoomsAssetImg },
+  { id: "electrical", name: "Electrical Rooms", threat: "Environmental and Building water target", riskLevel: "High Risk", duration: "0 months", cost: "$", image: electricalRoomsAssetImg },
+  { id: "mainElectricalRisers", name: "Main Electrical Risers", threat: "Environmental and Building water target", riskLevel: "Moderate Risk", duration: "0 months", cost: "$", image: mainElectricalRisersAssetImg },
+  { id: "sumpPits", name: "Sump Pits", threat: "Environmental, Underground, and water source", riskLevel: "Moderate Risk", duration: "0 months", cost: "$$$", image: sumpPitsAssetImg },
+  { id: "mechanicalRisers", name: "Mechanical Risers", threat: "Building water source", riskLevel: "Extreme Risk", duration: "0 months", cost: "$$$$", image: mechanicalRisersAssetImg },
+  { id: "elevatorPits", name: "Elevator Pits", threat: "Environmental, Underground, and Building water target", riskLevel: "High Risk", duration: "0 months", cost: "$$$", image: elevatorPitsAssetImg },
+  { id: "suites", name: "Suites", threat: "Environmental and Building water target", riskLevel: "Very High Risk", duration: "0 months", cost: "$$$$$", image: suitesAssetImg },
+];
+
+const waterSystems = [
+  { id: "domestic-cold", name: "Domestic Cold Water", threat: "Design, Damage, Vandalism, Cold Temperature", riskLevel: "Very High Risk", duration: "0 months", cost: "$$$", image: domesticColdWaterImg },
+  { id: "domestic-hot", name: "Domestic Hot Water", threat: "Design, Damage, Vandalism", riskLevel: "High Risk", duration: "0 months", cost: "$$$$", image: domesticHotWaterImg },
+  { id: "temporary-water", name: "Temporary Water Run", threat: "Design, Damage, Vandalism, Cold Temperature", riskLevel: "Very High Risk", duration: "0 months", cost: "$", image: temporaryWaterRunSystemImg },
+  { id: "main-water-entry", name: "Main City Water Supply", threat: "Design, Damage, Vandalism, Cold Temperature", riskLevel: "Moderate Risk", duration: "0 months", cost: "$", image: mainWaterEntryImg },
+  { id: "hydronics", name: "Hydronics", threat: "Design, Damage, Vandalism, Cold Temperature", riskLevel: "Moderate Risk", duration: "0 months", cost: "$$$$$", image: hydronicsImg },
+  { id: "fire-suppression", name: "Fire Suppression System", threat: "Design, Damage, Vandalism, Cold Temperature", riskLevel: "Very High Risk", duration: "0 months", cost: "$", image: fireSuppressionImg },
+];
+
 interface SolutionProviderPortalProps {
   open: boolean;
-  onOpenChange: (open: boolean) => void;
+  onOpenChange: (shouldRefresh: boolean) => void;
   projectId: string;
   providerName: string;
   companyName: string;
+}
+
+interface ProposalWithEditor {
+  system_name: string;
+  system_cost: number;
+  details: string;
+  editor_name: string;
+  edited_at: string;
 }
 
 export const SolutionProviderPortal = ({
@@ -67,6 +107,7 @@ export const SolutionProviderPortal = ({
   const [saving, setSaving] = useState(false);
   const [autoSaving, setAutoSaving] = useState(false);
   const [projectData, setProjectData] = useState<any>(null);
+  const [editorInfo, setEditorInfo] = useState<Record<string, { name: string; time: string }>>({});
 
   // Load project data (read-only)
   useEffect(() => {
@@ -104,8 +145,9 @@ export const SolutionProviderPortal = ({
       if (data && data.length > 0) {
         const existingCosts: Record<string, string> = {};
         const existingDetails: Record<string, string> = {};
+        const existingEditorInfo: Record<string, { name: string; time: string }> = {};
         
-        data.forEach((proposal) => {
+        data.forEach((proposal: ProposalWithEditor) => {
           // Map system_name back to control ID
           const control = mitigationControls.find(c => c.name === proposal.system_name);
           if (control) {
@@ -113,11 +155,18 @@ export const SolutionProviderPortal = ({
             if (proposal.details) {
               existingDetails[control.id] = proposal.details;
             }
+            if (proposal.editor_name && proposal.edited_at) {
+              existingEditorInfo[control.id] = {
+                name: proposal.editor_name,
+                time: new Date(proposal.edited_at).toLocaleString(),
+              };
+            }
           }
         });
 
         setCosts(existingCosts);
         setDetails(existingDetails);
+        setEditorInfo(existingEditorInfo);
       }
     } catch (error) {
       console.error("Error loading proposals:", error);
@@ -160,6 +209,19 @@ export const SolutionProviderPortal = ({
         if (proposals.length > 0) {
           await supabase.from("company_proposals").insert(proposals);
         }
+        
+        // Update local editor info
+        const newEditorInfo: Record<string, { name: string; time: string }> = {};
+        proposals.forEach((proposal) => {
+          const control = mitigationControls.find(c => c.name === proposal.system_name);
+          if (control) {
+            newEditorInfo[control.id] = {
+              name: providerName,
+              time: new Date().toLocaleString(),
+            };
+          }
+        });
+        setEditorInfo(newEditorInfo);
       } catch (error) {
         console.error("Auto-save error:", error);
       } finally {
@@ -207,7 +269,7 @@ export const SolutionProviderPortal = ({
         description: "Your cost estimates have been saved.",
       });
 
-      onOpenChange(false);
+      onOpenChange(true); // Pass true to trigger refresh
     } catch (error) {
       console.error("Error saving proposals:", error);
       toast({
@@ -221,22 +283,156 @@ export const SolutionProviderPortal = ({
   };
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog open={open} onOpenChange={() => onOpenChange(false)}>
       <DialogContent className="max-w-6xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>
-            Water Mitigation Guideline - {companyName}
+            Water Mitigation Planning - {companyName}
           </DialogTitle>
           <p className="text-sm text-muted-foreground">
-            Viewing as: {providerName} | Enter your cost estimates for each control {autoSaving && "(Auto-saving...)"}
+            Viewing as: {providerName} {autoSaving && "| Auto-saving..."}
           </p>
         </DialogHeader>
 
-        <Tabs defaultValue="controls" className="w-full">
+        <Tabs defaultValue="project" className="w-full">
           <TabsList className="grid w-full grid-cols-2">
-            <TabsTrigger value="controls">Mitigation Controls</TabsTrigger>
             <TabsTrigger value="project">Project Details (Read-Only)</TabsTrigger>
+            <TabsTrigger value="controls">Mitigation Controls</TabsTrigger>
           </TabsList>
+
+          <TabsContent value="project" className="space-y-6">
+            {projectData ? (
+              <>
+                {/* Basic Project Info */}
+                <Card>
+                  <CardHeader>
+                    <CardTitle>Project Information</CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                    <div className="grid md:grid-cols-2 gap-4">
+                      <div>
+                        <Label className="text-muted-foreground">Project Name</Label>
+                        <p className="text-sm font-medium mt-1">{projectData.name || "N/A"}</p>
+                      </div>
+                      <div>
+                        <Label className="text-muted-foreground">Location</Label>
+                        <p className="text-sm font-medium mt-1">{projectData.location || "N/A"}</p>
+                      </div>
+                      <div>
+                        <Label className="text-muted-foreground">Building Type</Label>
+                        <p className="text-sm font-medium mt-1">{projectData.building_type || "N/A"}</p>
+                      </div>
+                      <div>
+                        <Label className="text-muted-foreground">Project Type</Label>
+                        <p className="text-sm font-medium mt-1">{projectData.project_type || "N/A"}</p>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+
+                {/* Critical Assets */}
+                {projectData.project_data?.selectedAssets && projectData.project_data.selectedAssets.length > 0 && (
+                  <Card>
+                    <CardHeader>
+                      <CardTitle>Critical Assets</CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="grid md:grid-cols-4 gap-3">
+                        {projectData.project_data.selectedAssets.map((assetId: string) => {
+                          const asset = assets.find(a => a.id === assetId);
+                          return asset ? (
+                            <div key={assetId} className="p-4 rounded-lg border-2 border-primary bg-primary/5">
+                              <div className="h-24 bg-muted rounded mb-3 flex items-center justify-center overflow-hidden">
+                                <img src={asset.image} alt={asset.name} className="w-full h-full object-contain" />
+                              </div>
+                              <h3 className="font-semibold mb-2 text-sm">{asset.name}</h3>
+                              <div className="space-y-1.5 text-xs">
+                                <div className="flex justify-between items-start gap-2">
+                                  <span className="text-muted-foreground">Threat</span>
+                                  <span className={`font-medium text-right ${
+                                    asset.riskLevel.includes("Extreme") ? "text-destructive" :
+                                    asset.riskLevel.includes("Very High") ? "text-destructive" : 
+                                    asset.riskLevel.includes("High") ? "text-orange-500" : 
+                                    "text-warning"
+                                  }`}>
+                                    {asset.riskLevel}
+                                  </span>
+                                </div>
+                                <p className="text-muted-foreground text-xs">{asset.threat}</p>
+                              </div>
+                            </div>
+                          ) : null;
+                        })}
+                      </div>
+                    </CardContent>
+                  </Card>
+                )}
+
+                {/* Water Systems */}
+                {projectData.project_data?.selectedSystems && projectData.project_data.selectedSystems.length > 0 && (
+                  <Card>
+                    <CardHeader>
+                      <CardTitle>Water Systems</CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="grid md:grid-cols-4 gap-3">
+                        {projectData.project_data.selectedSystems.map((systemId: string) => {
+                          const system = waterSystems.find(s => s.id === systemId);
+                          return system ? (
+                            <div key={systemId} className="p-4 rounded-lg border-2 border-primary bg-primary/5">
+                              <div className="h-24 bg-muted rounded mb-3 flex items-center justify-center overflow-hidden">
+                                <img src={system.image} alt={system.name} className="w-full h-full object-contain" />
+                              </div>
+                              <h3 className="font-semibold mb-2 text-sm">{system.name}</h3>
+                              <div className="space-y-1.5 text-xs">
+                                <div className="flex justify-between items-start gap-2">
+                                  <span className="text-muted-foreground">Threat</span>
+                                  <span className={`font-medium text-right ${
+                                    system.riskLevel.includes("Very High") ? "text-destructive" :
+                                    system.riskLevel.includes("High") ? "text-orange-500" : 
+                                    "text-warning"
+                                  }`}>
+                                    {system.riskLevel}
+                                  </span>
+                                </div>
+                                <p className="text-muted-foreground text-xs">{system.threat}</p>
+                              </div>
+                            </div>
+                          ) : null;
+                        })}
+                      </div>
+                    </CardContent>
+                  </Card>
+                )}
+
+                {/* Mitigation Controls */}
+                {projectData.project_data?.selectedControls && projectData.project_data.selectedControls.length > 0 && (
+                  <Card>
+                    <CardHeader>
+                      <CardTitle>Selected Mitigation Controls</CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="grid md:grid-cols-4 gap-3">
+                        {projectData.project_data.selectedControls.map((controlId: string) => {
+                          const control = mitigationControls.find(c => c.id === controlId);
+                          return control ? (
+                            <div key={controlId} className="p-4 rounded-lg border-2 border-primary bg-primary/5">
+                              <div className="h-32 bg-muted rounded mb-3 overflow-hidden flex items-center justify-center">
+                                <img src={control.image} alt={control.name} className="w-full h-full object-contain" />
+                              </div>
+                              <p className="text-sm text-center">{control.name}</p>
+                            </div>
+                          ) : null;
+                        })}
+                      </div>
+                    </CardContent>
+                  </Card>
+                )}
+              </>
+            ) : (
+              <p className="text-sm text-muted-foreground">Loading project details...</p>
+            )}
+          </TabsContent>
 
           <TabsContent value="controls" className="space-y-6">
             <Card>
@@ -286,6 +482,12 @@ export const SolutionProviderPortal = ({
                                 onChange={(e) => handleDetailsChange(control.id, e.target.value)}
                               />
                             </div>
+                            {editorInfo[control.id] && (
+                              <div className="text-xs text-muted-foreground pt-2 border-t">
+                                <p>Edited by: {editorInfo[control.id].name}</p>
+                                <p>{editorInfo[control.id].time}</p>
+                              </div>
+                            )}
                           </div>
                         </div>
                       ))}
@@ -334,103 +536,17 @@ export const SolutionProviderPortal = ({
                                 onChange={(e) => handleDetailsChange(control.id, e.target.value)}
                               />
                             </div>
+                            {editorInfo[control.id] && (
+                              <div className="text-xs text-muted-foreground pt-2 border-t">
+                                <p>Edited by: {editorInfo[control.id].name}</p>
+                                <p>{editorInfo[control.id].time}</p>
+                              </div>
+                            )}
                           </div>
                         </div>
                       ))}
                   </div>
                 </div>
-              </CardContent>
-            </Card>
-          </TabsContent>
-
-          <TabsContent value="project" className="space-y-4">
-            <Card>
-              <CardHeader>
-                <CardTitle>Water Risk Discovery (Read-Only)</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-6">
-                {projectData ? (
-                  <>
-                    {/* Basic Project Info */}
-                    <div>
-                      <h3 className="text-lg font-semibold mb-3">Project Information</h3>
-                      <div className="grid md:grid-cols-2 gap-4">
-                        <div>
-                          <Label>Project Name</Label>
-                          <p className="text-sm mt-1">{projectData.name || "N/A"}</p>
-                        </div>
-                        <div>
-                          <Label>Location</Label>
-                          <p className="text-sm mt-1">{projectData.location || "N/A"}</p>
-                        </div>
-                        <div>
-                          <Label>Building Type</Label>
-                          <p className="text-sm mt-1">{projectData.building_type || "N/A"}</p>
-                        </div>
-                        <div>
-                          <Label>Project Type</Label>
-                          <p className="text-sm mt-1">{projectData.project_type || "N/A"}</p>
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Critical Assets */}
-                    {projectData.project_data?.selectedAssets && projectData.project_data.selectedAssets.length > 0 && (
-                      <div>
-                        <h3 className="text-lg font-semibold mb-3">Critical Assets</h3>
-                        <p className="text-sm text-muted-foreground mb-3">
-                          {projectData.project_data.selectedAssets.length} assets selected
-                        </p>
-                        <div className="grid md:grid-cols-4 gap-3">
-                          {projectData.project_data.selectedAssets.map((assetId: string) => (
-                            <div key={assetId} className="p-3 rounded-lg border-2 border-primary bg-primary/5">
-                              <p className="text-sm text-center">{assetId.replace(/-/g, ' ').replace(/\b\w/g, (l: string) => l.toUpperCase())}</p>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-
-                    {/* Water Systems */}
-                    {projectData.project_data?.selectedSystems && projectData.project_data.selectedSystems.length > 0 && (
-                      <div>
-                        <h3 className="text-lg font-semibold mb-3">Water Systems</h3>
-                        <p className="text-sm text-muted-foreground mb-3">
-                          {projectData.project_data.selectedSystems.length} systems selected
-                        </p>
-                        <div className="grid md:grid-cols-4 gap-3">
-                          {projectData.project_data.selectedSystems.map((systemId: string) => (
-                            <div key={systemId} className="p-3 rounded-lg border-2 border-primary bg-primary/5">
-                              <p className="text-sm text-center">{systemId.replace(/-/g, ' ').replace(/\b\w/g, (l: string) => l.toUpperCase())}</p>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-
-                    {/* Mitigation Controls */}
-                    {projectData.project_data?.selectedControls && projectData.project_data.selectedControls.length > 0 && (
-                      <div>
-                        <h3 className="text-lg font-semibold mb-3">Selected Mitigation Controls</h3>
-                        <p className="text-sm text-muted-foreground mb-3">
-                          {projectData.project_data.selectedControls.length} controls selected
-                        </p>
-                        <div className="grid md:grid-cols-4 gap-3">
-                          {projectData.project_data.selectedControls.map((controlId: string) => {
-                            const control = mitigationControls.find(c => c.id === controlId);
-                            return control ? (
-                              <div key={controlId} className="p-3 rounded-lg border-2 border-primary bg-primary/5">
-                                <p className="text-sm text-center">{control.name}</p>
-                              </div>
-                            ) : null;
-                          })}
-                        </div>
-                      </div>
-                    )}
-                  </>
-                ) : (
-                  <p className="text-sm text-muted-foreground">Loading project details...</p>
-                )}
               </CardContent>
             </Card>
           </TabsContent>

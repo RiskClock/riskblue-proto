@@ -183,6 +183,35 @@ export const CollaboratorManagementStep = ({ projectId }: CollaboratorManagement
         throw error;
       }
 
+      // Check and create empty proposals for new companies
+      for (const row of validRows) {
+        const { data: existingProposals } = await supabase
+          .from("company_proposals")
+          .select("id")
+          .eq("project_id", projectId)
+          .eq("company", row.company.trim())
+          .limit(1);
+
+        // If no proposals exist for this company, create empty proposals
+        if (!existingProposals || existingProposals.length === 0) {
+          const emptyProposals = [
+            "Electrical Room Presence of Water Monitoring",
+            "Mechanical Room Presence of Water Monitoring",
+            "Main Electrical Room Presence of Water Monitoring",
+            "Cold Domestic Water Abnormal Flow Monitoring",
+            "Temporary Water Run Abnormal Flow Monitoring",
+          ].map((systemName) => ({
+            project_id: projectId,
+            company: row.company.trim(),
+            system_name: systemName,
+            system_cost: 0,
+            details: "",
+          }));
+
+          await supabase.from("company_proposals").insert(emptyProposals);
+        }
+      }
+
       toast({
         title: "Invitations Sent",
         description: `${validRows.length} solution provider${validRows.length > 1 ? 's' : ''} invited to the project.`,
@@ -192,8 +221,9 @@ export const CollaboratorManagementStep = ({ projectId }: CollaboratorManagement
       setInviteRows([{ id: 1, name: "", email: "", company: "" }]);
       setShowInviteForm(false);
       
-      // Refresh list
+      // Refresh lists
       fetchCollaborators();
+      fetchCompanyProposals();
     } catch (error: any) {
       if (error instanceof z.ZodError) {
         toast({
@@ -256,6 +286,13 @@ export const CollaboratorManagementStep = ({ projectId }: CollaboratorManagement
       company: collaborator.company,
     });
     setPortalOpen(true);
+  };
+
+  const handlePortalClose = (shouldRefresh: boolean) => {
+    setPortalOpen(false);
+    if (shouldRefresh) {
+      fetchCompanyProposals();
+    }
   };
 
   return (
@@ -468,7 +505,7 @@ export const CollaboratorManagementStep = ({ projectId }: CollaboratorManagement
       {selectedProvider && (
         <SolutionProviderPortal
           open={portalOpen}
-          onOpenChange={setPortalOpen}
+          onOpenChange={handlePortalClose}
           projectId={projectId}
           providerName={selectedProvider.name}
           companyName={selectedProvider.company}
