@@ -12,6 +12,7 @@ import { Trash2, MessageSquare, LogOut } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { FieldAgentChat } from "@/components/FieldAgentChat";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { ProviderSelectionDialog } from "@/components/ProviderSelectionDialog";
 
 interface Project {
   id: string;
@@ -29,6 +30,7 @@ const Projects = () => {
   const { toast } = useToast();
   const [chatOpen, setChatOpen] = useState(false);
   const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
+  const [showProviderDialog, setShowProviderDialog] = useState(false);
 
   useEffect(() => {
     fetchProjects();
@@ -101,7 +103,7 @@ const Projects = () => {
           <img src={riskBlueLogo} alt="RiskBlue" className="h-8" />
           <div className="flex items-center gap-6">
             <button className="text-foreground hover:text-primary">Projects</button>
-            <button onClick={() => navigate("/solution-provider-portal")} className="text-foreground hover:text-primary">
+            <button onClick={() => setShowProviderDialog(true)} className="text-foreground hover:text-primary">
               Solution Provider Portal
             </button>
             <DropdownMenu>
@@ -241,6 +243,11 @@ const Projects = () => {
           projectId={selectedProjectId}
         />
       )}
+
+      <ProviderSelectionDialog 
+        open={showProviderDialog} 
+        onOpenChange={setShowProviderDialog} 
+      />
     </div>
   );
 };
