@@ -2,12 +2,13 @@ import { useState, useEffect } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { ArrowLeft, Building2 } from "lucide-react";
 import riskBlueLogo from "@/assets/riskblue-logo.jpg";
 import { SolutionProviderPortalContent } from "@/components/wizard/SolutionProviderPortalContent";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
 
@@ -34,8 +35,9 @@ export default function SolutionProviderPortal() {
   const [projects, setProjects] = useState<Project[]>([]);
   const [selectedProject, setSelectedProject] = useState<Project | null>(null);
   const [loading, setLoading] = useState(false);
+  const [showProviderDialog, setShowProviderDialog] = useState(false);
 
-  // Check if coming from URL params
+  // Check if coming from URL params or open provider selection
   useEffect(() => {
     const collaboratorId = searchParams.get("collaborator");
     const projectId = searchParams.get("project");
@@ -44,6 +46,7 @@ export default function SolutionProviderPortal() {
       loadCollaboratorAndProject(collaboratorId, projectId);
     } else {
       fetchAllCollaborators();
+      setShowProviderDialog(true);
     }
   }, [searchParams]);
 
@@ -124,6 +127,7 @@ export default function SolutionProviderPortal() {
     if (project) {
       setSelectedProject(project);
       setSearchParams({ collaborator: selectedCollaborator!.id, project: projectId });
+      setShowProviderDialog(false);
     }
   };
 
@@ -136,8 +140,13 @@ export default function SolutionProviderPortal() {
       setProjects([]);
       setSearchParams({});
     } else {
-      navigate("/projects");
+      navigate(-1);
     }
+  };
+
+  const handleProviderSelection = (collaboratorId: string) => {
+    handleCollaboratorSelect(collaboratorId);
+    // Don't close dialog yet - wait for project selection
   };
 
   return (
@@ -154,6 +163,17 @@ export default function SolutionProviderPortal() {
             <button onClick={() => navigate("/projects")} className="text-foreground hover:text-primary">
               Projects
             </button>
+            <button onClick={() => {
+              if (selectedProject && selectedCollaborator) {
+                // Exit portal view
+                setSelectedProject(null);
+                setSelectedCollaborator(null);
+                setProjects([]);
+                setSearchParams({});
+              }
+            }} className="text-foreground hover:text-primary">
+              {selectedProject && selectedCollaborator ? "Exit Portal" : "Solution Provider Portal"}
+            </button>
             <Avatar className="cursor-pointer">
               <AvatarFallback>SP</AvatarFallback>
             </Avatar>
@@ -162,24 +182,46 @@ export default function SolutionProviderPortal() {
       </header>
 
       <main className="container mx-auto px-6 py-8">
-        {!selectedCollaborator ? (
-          // Step 1: Select Collaborator
-          <div className="max-w-2xl mx-auto space-y-6">
-            <div>
-              <h1 className="text-3xl font-bold mb-2">Solution Provider Portal</h1>
-              <p className="text-muted-foreground">
-                Select a solution provider to view their project access
+        {selectedProject && selectedCollaborator ? (
+          <div className="max-w-6xl mx-auto">
+            <div className="mb-4">
+              <p className="text-sm text-muted-foreground">
+                Viewing as: {selectedCollaborator.name} ({selectedCollaborator.email}) • {selectedCollaborator.company}
               </p>
             </div>
+            <SolutionProviderPortalContent
+              projectId={selectedProject.id}
+              providerName={selectedCollaborator.name}
+              companyName={selectedCollaborator.company}
+            />
+          </div>
+        ) : (
+          <div className="max-w-2xl mx-auto text-center py-12">
+            <Building2 className="h-16 w-16 mx-auto mb-4 text-muted-foreground" />
+            <h2 className="text-2xl font-bold mb-2">Solution Provider Portal</h2>
+            <p className="text-muted-foreground mb-6">
+              Select a solution provider to view their project access
+            </p>
+            <Button onClick={() => setShowProviderDialog(true)}>
+              Select Provider
+            </Button>
+          </div>
+        )}
+      </main>
 
-            <Card>
-              <CardHeader>
-                <CardTitle>Select Solution Provider</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
+      {/* Provider Selection Dialog */}
+      <Dialog open={showProviderDialog} onOpenChange={setShowProviderDialog}>
+        <DialogContent className="max-w-3xl max-h-[80vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Select Solution Provider & Project</DialogTitle>
+          </DialogHeader>
+          
+          <div className="space-y-6 py-4">
+            {!selectedCollaborator ? (
+              <div className="space-y-4">
                 <div>
-                  <Label>Provider</Label>
-                  <Select onValueChange={handleCollaboratorSelect}>
+                  <Label>Solution Provider</Label>
+                  <Select onValueChange={handleProviderSelection}>
                     <SelectTrigger>
                       <SelectValue placeholder="Choose a provider..." />
                     </SelectTrigger>
@@ -197,57 +239,62 @@ export default function SolutionProviderPortal() {
                     </SelectContent>
                   </Select>
                 </div>
-              </CardContent>
-            </Card>
-          </div>
-        ) : !selectedProject ? (
-          // Step 2: Select Project
-          <div className="max-w-4xl mx-auto space-y-6">
-            <div>
-              <h1 className="text-3xl font-bold mb-2">
-                Projects for {selectedCollaborator.company}
-              </h1>
-              <p className="text-muted-foreground">
-                Viewing as: {selectedCollaborator.name} ({selectedCollaborator.email})
-              </p>
-            </div>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm font-medium">Selected Provider:</p>
+                    <p className="text-sm text-muted-foreground">
+                      {selectedCollaborator.name} • {selectedCollaborator.company}
+                    </p>
+                  </div>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      setSelectedCollaborator(null);
+                      setProjects([]);
+                    }}
+                  >
+                    Change
+                  </Button>
+                </div>
 
-            <div className="grid gap-4">
-              {projects.map((project) => (
-                <Card
-                  key={project.id}
-                  className="cursor-pointer hover:border-primary transition-colors"
-                  onClick={() => handleProjectSelect(project.id)}
-                >
-                  <CardContent className="flex items-center justify-between p-6">
-                    <div className="flex items-center gap-4">
-                      <div className="h-12 w-12 bg-primary/10 rounded-lg flex items-center justify-center">
-                        <Building2 className="h-6 w-6 text-primary" />
-                      </div>
-                      <div>
-                        <h3 className="font-semibold text-lg">{project.name}</h3>
-                        <p className="text-sm text-muted-foreground">
-                          {project.location || "No location specified"}
-                        </p>
-                      </div>
-                    </div>
-                    <Badge variant="secondary">{project.project_type || "N/A"}</Badge>
-                  </CardContent>
-                </Card>
-              ))}
-            </div>
+                <div>
+                  <Label className="mb-2 block">Select Project</Label>
+                  <div className="grid gap-3">
+                    {projects.map((project) => (
+                      <Card
+                        key={project.id}
+                        className="cursor-pointer hover:border-primary transition-colors"
+                        onClick={() => handleProjectSelect(project.id)}
+                      >
+                        <CardContent className="flex items-center justify-between p-4">
+                          <div className="flex items-center gap-3">
+                            <div className="h-10 w-10 bg-primary/10 rounded-lg flex items-center justify-center">
+                              <Building2 className="h-5 w-5 text-primary" />
+                            </div>
+                            <div>
+                              <h3 className="font-semibold">{project.name}</h3>
+                              <p className="text-xs text-muted-foreground">
+                                {project.location || "No location specified"}
+                              </p>
+                            </div>
+                          </div>
+                          <Badge variant="secondary" className="text-xs">
+                            {project.project_type || "N/A"}
+                          </Badge>
+                        </CardContent>
+                      </Card>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
-        ) : (
-          // Step 3: Show Portal Content
-          <div className="max-w-6xl mx-auto">
-            <SolutionProviderPortalContent
-              projectId={selectedProject.id}
-              providerName={selectedCollaborator.name}
-              companyName={selectedCollaborator.company}
-            />
-          </div>
-        )}
-      </main>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

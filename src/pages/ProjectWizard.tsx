@@ -320,6 +320,9 @@ const ProjectWizard = () => {
             <button onClick={() => navigate("/projects")} className="text-foreground hover:text-primary">
               Projects
             </button>
+            <button onClick={() => navigate("/solution-provider-portal")} className="text-foreground hover:text-primary">
+              Solution Provider Portal
+            </button>
             <button className="text-muted-foreground hover:text-foreground">Home</button>
             <Avatar className="cursor-pointer" onClick={signOut}>
               <AvatarFallback>{user?.email?.[0].toUpperCase()}</AvatarFallback>

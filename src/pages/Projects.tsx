@@ -100,6 +100,9 @@ const Projects = () => {
           <img src={riskBlueLogo} alt="RiskBlue" className="h-8" />
           <div className="flex items-center gap-6">
             <button className="text-foreground hover:text-primary">Projects</button>
+            <button onClick={() => navigate("/solution-provider-portal")} className="text-foreground hover:text-primary">
+              Solution Provider Portal
+            </button>
             <button className="text-muted-foreground hover:text-foreground">Home</button>
             <Avatar className="cursor-pointer" onClick={signOut}>
               <AvatarFallback>{user?.email?.[0].toUpperCase()}</AvatarFallback>
@@ -116,9 +119,6 @@ const Projects = () => {
               <p className="text-muted-foreground">{projects.length} result{projects.length !== 1 ? 's' : ''}</p>
             </div>
             <div className="flex gap-3">
-              <Button variant="outline" onClick={() => navigate("/solution-provider-portal")}>
-                Solution Provider Portal
-              </Button>
               <Button variant="outline">Sort</Button>
               <Button variant="outline">Filter</Button>
               <Button onClick={handleNewProject}>New</Button>

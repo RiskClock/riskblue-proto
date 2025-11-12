@@ -135,13 +135,14 @@ export const SolutionProviderPortalContent = ({
   const [isLoadingData, setIsLoadingData] = useState(true);
 
   useEffect(() => {
-    if (projectId) {
+    if (projectId && companyName) {
       setIsLoadingData(true);
       Promise.all([fetchProjectData(), loadExistingProposals()]).finally(() => {
-        setIsLoadingData(false);
+        // Wait a bit longer to ensure initial render is complete
+        setTimeout(() => setIsLoadingData(false), 300);
       });
     }
-  }, [projectId]);
+  }, [projectId, companyName]);
 
   const fetchProjectData = async () => {
     try {
@@ -206,17 +207,10 @@ export const SolutionProviderPortalContent = ({
     setDetails((prev) => ({ ...prev, [controlId]: value }));
   };
 
-  // Auto-save with debounce (only when not loading)
+  // Disable auto-save completely - only manual save should update data
   useEffect(() => {
-    if (isLoadingData || Object.keys(costs).length === 0) return;
-    
-    const timer = setTimeout(() => {
-      // Auto-save is disabled - only manual save updates timestamps
-      setAutoSaving(false);
-    }, 1000);
-
-    return () => clearTimeout(timer);
-  }, [costs, details, isLoadingData]);
+    // No auto-saving logic - removed to prevent timestamp updates
+  }, [costs, details]);
 
   const handleSave = async () => {
     setSaving(true);

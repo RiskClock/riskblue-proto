@@ -437,39 +437,50 @@ export const CollaboratorManagementStep = ({ projectId }: CollaboratorManagement
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead className="min-w-[200px]">System / Control</TableHead>
-                    {companyProposals.map((proposal) => (
-                      <TableHead key={proposal.company} className="text-right min-w-[150px]">
-                        {proposal.company}
+                    <TableHead className="min-w-[200px]">Company</TableHead>
+                    <TableHead className="text-right min-w-[120px]">Total Cost</TableHead>
+                    {/* Get unique system names from all proposals */}
+                    {Array.from(
+                      new Set(
+                        companyProposals.flatMap((p) => p.systems.map((s) => s.system_name))
+                      )
+                    ).map((systemName) => (
+                      <TableHead key={systemName} className="text-right min-w-[150px]">
+                        {systemName}
                       </TableHead>
                     ))}
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {/* Get unique system names */}
-                  {Array.from(
-                    new Set(
-                      companyProposals.flatMap((p) => p.systems.map((s) => s.system_name))
-                    )
-                  ).map((systemName) => (
-                    <TableRow key={systemName}>
-                      <TableCell className="font-medium">{systemName}</TableCell>
-                      {companyProposals.map((proposal) => {
+                  {companyProposals.map((proposal) => (
+                    <TableRow key={proposal.company}>
+                      <TableCell className="font-medium">{proposal.company}</TableCell>
+                      <TableCell className="text-right font-semibold">
+                        ${proposal.total.toLocaleString('en-US', { 
+                          minimumFractionDigits: 0, 
+                          maximumFractionDigits: 0 
+                        })}
+                      </TableCell>
+                      {Array.from(
+                        new Set(
+                          companyProposals.flatMap((p) => p.systems.map((s) => s.system_name))
+                        )
+                      ).map((systemName) => {
                         const system = proposal.systems.find(
                           (s) => s.system_name === systemName
                         );
                         return (
-                          <TableCell key={proposal.company} className="text-right">
-                            {system ? (
+                          <TableCell key={systemName} className="text-right">
+                            {system && system.system_cost > 0 ? (
                               <div>
                                 <p className="font-medium">
                                   ${system.system_cost.toLocaleString('en-US', { 
-                                    minimumFractionDigits: 2, 
-                                    maximumFractionDigits: 2 
+                                    minimumFractionDigits: 0, 
+                                    maximumFractionDigits: 0 
                                   })}
                                 </p>
                                 {system.details && (
-                                  <p className="text-xs text-muted-foreground truncate max-w-[150px]">
+                                  <p className="text-xs text-muted-foreground truncate max-w-[150px]" title={system.details}>
                                     {system.details}
                                   </p>
                                 )}
@@ -482,20 +493,6 @@ export const CollaboratorManagementStep = ({ projectId }: CollaboratorManagement
                       })}
                     </TableRow>
                   ))}
-                  {/* Total Row */}
-                  <TableRow className="bg-muted/50 font-semibold">
-                    <TableCell>Total Cost</TableCell>
-                    {companyProposals.map((proposal) => (
-                      <TableCell key={proposal.company} className="text-right">
-                        <p className="text-lg font-bold text-primary">
-                          ${proposal.total.toLocaleString('en-US', { 
-                            minimumFractionDigits: 2, 
-                            maximumFractionDigits: 2 
-                          })}
-                        </p>
-                      </TableCell>
-                    ))}
-                  </TableRow>
                 </TableBody>
               </Table>
             </div>
