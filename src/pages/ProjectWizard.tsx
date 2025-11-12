@@ -451,6 +451,11 @@ const ProjectWizard = () => {
           </TabsContent>
         </Tabs>
       </div>
+
+      <ProviderSelectionDialog 
+        open={showProviderDialog} 
+        onOpenChange={setShowProviderDialog} 
+      />
     </div>
   );
 };
