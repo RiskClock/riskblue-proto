@@ -192,15 +192,19 @@ export const SolutionProviderPortalContent = ({
             if (proposal.details) {
               existingDetails[control.id] = proposal.details;
             }
+            // Store the original timestamp string without converting to Date
             if (proposal.editor_name && proposal.edited_at) {
+              const timestamp = proposal.edited_at;
+              const formattedTime = new Date(timestamp).toLocaleString();
+              
               existingEditorInfo[control.id] = {
                 name: proposal.editor_name,
-                time: new Date(proposal.edited_at).toLocaleString(),
+                time: formattedTime,
               };
               existingOriginalEditorInfo[control.id] = {
                 name: proposal.editor_name,
-                time: new Date(proposal.edited_at).toLocaleString(),
-                timestamp: proposal.edited_at,
+                time: formattedTime,
+                timestamp: timestamp,
               };
             }
           }
