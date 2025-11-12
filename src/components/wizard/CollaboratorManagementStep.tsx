@@ -7,9 +7,10 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
-import { UserPlus, Trash2, Building2, X } from "lucide-react";
+import { UserPlus, Trash2, Building2, X, FileText } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { z } from "zod";
+import { SolutionProviderPortal } from "./SolutionProviderPortal";
 
 interface CollaboratorManagementStepProps {
   projectId: string;
@@ -46,6 +47,8 @@ export const CollaboratorManagementStep = ({ projectId }: CollaboratorManagement
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [collaboratorToDelete, setCollaboratorToDelete] = useState<string | null>(null);
   const [showInviteForm, setShowInviteForm] = useState(false);
+  const [portalOpen, setPortalOpen] = useState(false);
+  const [selectedProvider, setSelectedProvider] = useState<{ name: string; company: string } | null>(null);
   
   const [inviteRows, setInviteRows] = useState([
     { id: 1, name: "", email: "", company: "" }
@@ -247,6 +250,14 @@ export const CollaboratorManagementStep = ({ projectId }: CollaboratorManagement
     setDeleteDialogOpen(true);
   };
 
+  const handleOpenPortal = (collaborator: Collaborator) => {
+    setSelectedProvider({
+      name: collaborator.name,
+      company: collaborator.company,
+    });
+    setPortalOpen(true);
+  };
+
   return (
     <div className="space-y-8">
       {/* Collaborators Section */}
@@ -325,7 +336,7 @@ export const CollaboratorManagementStep = ({ projectId }: CollaboratorManagement
                     <TableHead>Name</TableHead>
                     <TableHead>Email</TableHead>
                     <TableHead>Company</TableHead>
-                    <TableHead className="w-[100px]">Actions</TableHead>
+                    <TableHead className="w-[150px]">Actions</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -337,14 +348,25 @@ export const CollaboratorManagementStep = ({ projectId }: CollaboratorManagement
                         <Badge variant="secondary">{collaborator.company}</Badge>
                       </TableCell>
                       <TableCell>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          onClick={() => openDeleteDialog(collaborator.id)}
-                          disabled={loading}
-                        >
-                          <Trash2 className="h-4 w-4 text-destructive" />
-                        </Button>
+                        <div className="flex items-center gap-2">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => handleOpenPortal(collaborator)}
+                            disabled={loading}
+                            title="Open Guideline Portal"
+                          >
+                            <FileText className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => openDeleteDialog(collaborator.id)}
+                            disabled={loading}
+                          >
+                            <Trash2 className="h-4 w-4 text-destructive" />
+                          </Button>
+                        </div>
                       </TableCell>
                     </TableRow>
                   ))}
@@ -441,6 +463,17 @@ export const CollaboratorManagementStep = ({ projectId }: CollaboratorManagement
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Solution Provider Portal */}
+      {selectedProvider && (
+        <SolutionProviderPortal
+          open={portalOpen}
+          onOpenChange={setPortalOpen}
+          projectId={projectId}
+          providerName={selectedProvider.name}
+          companyName={selectedProvider.company}
+        />
+      )}
     </div>
   );
 };

@@ -61,7 +61,14 @@ export const DocumentUploadChat = ({ projectId, onDataExtracted, setIsProcessing
     setUploading(true);
     setAnalyzing(true);
     setWebhookComplete(false);
-    setPdfMetadata(null);
+    
+    // Set initial metadata immediately to start animation
+    setPdfMetadata({
+      pageCount: 0, // Will be updated when PDF is loaded
+      fileSize: formatFileSize(uploadedFile.size),
+      pages: []
+    });
+    
     setCurrentPage(0);
     setExtractedDates([]);
     setExtractedMilestones([]);
