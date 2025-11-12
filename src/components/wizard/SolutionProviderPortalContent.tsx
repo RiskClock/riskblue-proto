@@ -8,6 +8,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import { format } from "date-fns";
+import { Download } from "lucide-react";
 import electricalRoomImg from "@/assets/control_Electrical_Room_Presence_of_Water_Monitoring.avif";
 import mechanicalRoomImg from "@/assets/control_Mechanical_Room_Presence_of_Water_Monitoring.avif";
 import mainElectricalRiserImg from "@/assets/control_Main_Electrical_Riser_Presence_of_Water_Monitoring.avif";
@@ -359,6 +360,62 @@ export const SolutionProviderPortalContent = ({
       });
     } finally {
       setSaving(false);
+    }
+  };
+
+  const handleExport = () => {
+    try {
+      // Prepare CSV data
+      const headers = ["Control Name", "Category", "Cost Estimate ($)", "Details", "Edited By", "Edited At"];
+      const rows = mitigationControls
+        .filter((control) => costs[control.id] && parseFloat(costs[control.id]) > 0)
+        .map((control) => {
+          return [
+            control.name,
+            control.category,
+            costs[control.id] || "0",
+            details[control.id] || "",
+            editorInfo[control.id]?.name || "",
+            editorInfo[control.id]?.time || "",
+          ];
+        });
+
+      // Convert to CSV format
+      const csvContent = [
+        headers.join(","),
+        ...rows.map(row => 
+          row.map(cell => {
+            // Escape quotes and wrap in quotes if contains comma or quote
+            const escaped = String(cell).replace(/"/g, '""');
+            return /[",\n]/.test(escaped) ? `"${escaped}"` : escaped;
+          }).join(",")
+        )
+      ].join("\n");
+
+      // Create blob and download
+      const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+      const link = document.createElement("a");
+      const url = URL.createObjectURL(blob);
+      
+      link.setAttribute("href", url);
+      link.setAttribute("download", `${companyName}_Cost_Estimates_${format(new Date(), "yyyy-MM-dd")}.csv`);
+      link.style.visibility = "hidden";
+      
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+
+      toast({
+        title: "Success",
+        description: "Cost estimates exported successfully.",
+      });
+    } catch (error) {
+      console.error("Error exporting data:", error);
+      toast({
+        title: "Error",
+        description: "Failed to export cost estimates. Please try again.",
+        variant: "destructive",
+      });
     }
   };
 
@@ -800,6 +857,14 @@ export const SolutionProviderPortalContent = ({
       </Tabs>
 
       <div className="flex justify-end gap-2 pt-4 border-t">
+        <Button 
+          onClick={handleExport} 
+          variant="outline"
+          disabled={Object.keys(costs).filter(k => costs[k] && parseFloat(costs[k]) > 0).length === 0}
+        >
+          <Download className="h-4 w-4 mr-2" />
+          Export to CSV
+        </Button>
         <Button onClick={handleSave} disabled={saving}>
           {saving ? "Saving..." : "Save Cost Estimates"}
         </Button>
