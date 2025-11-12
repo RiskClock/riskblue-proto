@@ -19,8 +19,9 @@ import { WaterMitigationGuidelinesStep } from "@/components/wizard/WaterMitigati
 import { CollaboratorManagementStep } from "@/components/wizard/CollaboratorManagementStep";
 import { DocumentUploadChat } from "@/components/DocumentUploadChat";
 import { ResponsePlanUploadChat } from "@/components/ResponsePlanUploadChat";
-import { Download } from "lucide-react";
+import { Download, LogOut } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 
 interface ProjectData {
   [key: string]: any;
@@ -323,10 +324,19 @@ const ProjectWizard = () => {
             <button onClick={() => navigate("/solution-provider-portal")} className="text-foreground hover:text-primary">
               Solution Provider Portal
             </button>
-            <button className="text-muted-foreground hover:text-foreground">Home</button>
-            <Avatar className="cursor-pointer" onClick={signOut}>
-              <AvatarFallback>{user?.email?.[0].toUpperCase()}</AvatarFallback>
-            </Avatar>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Avatar className="cursor-pointer">
+                  <AvatarFallback>{user?.email?.[0].toUpperCase()}</AvatarFallback>
+                </Avatar>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-48">
+                <DropdownMenuItem onClick={signOut} className="cursor-pointer">
+                  <LogOut className="h-4 w-4 mr-2" />
+                  Logout
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
           </div>
         </div>
       </header>

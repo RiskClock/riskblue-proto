@@ -5,12 +5,14 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
-import { ArrowLeft, Building2 } from "lucide-react";
+import { ArrowLeft, Building2, LogOut } from "lucide-react";
 import riskBlueLogo from "@/assets/riskblue-logo.jpg";
 import { SolutionProviderPortalContent } from "@/components/wizard/SolutionProviderPortalContent";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { useAuth } from "@/contexts/AuthContext";
 
 interface Collaborator {
   id: string;
@@ -29,6 +31,7 @@ interface Project {
 
 export default function SolutionProviderPortal() {
   const navigate = useNavigate();
+  const { user, signOut } = useAuth();
   const [searchParams, setSearchParams] = useSearchParams();
   const [collaborators, setCollaborators] = useState<Collaborator[]>([]);
   const [selectedCollaborator, setSelectedCollaborator] = useState<Collaborator | null>(null);
@@ -174,9 +177,19 @@ export default function SolutionProviderPortal() {
             }} className="text-foreground hover:text-primary">
               {selectedProject && selectedCollaborator ? "Exit Portal" : "Solution Provider Portal"}
             </button>
-            <Avatar className="cursor-pointer">
-              <AvatarFallback>SP</AvatarFallback>
-            </Avatar>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Avatar className="cursor-pointer">
+                  <AvatarFallback>{user?.email?.[0].toUpperCase()}</AvatarFallback>
+                </Avatar>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-48">
+                <DropdownMenuItem onClick={signOut} className="cursor-pointer">
+                  <LogOut className="h-4 w-4 mr-2" />
+                  Logout
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
           </div>
         </div>
       </header>

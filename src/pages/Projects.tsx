@@ -8,9 +8,10 @@ import { useToast } from "@/hooks/use-toast";
 import { getUserFriendlyError } from "@/lib/errorHandling";
 import riskBlueLogo from "@/assets/riskblue-logo.jpg";
 import { format } from "date-fns";
-import { Trash2, MessageSquare } from "lucide-react";
+import { Trash2, MessageSquare, LogOut } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { FieldAgentChat } from "@/components/FieldAgentChat";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 
 interface Project {
   id: string;
@@ -103,10 +104,19 @@ const Projects = () => {
             <button onClick={() => navigate("/solution-provider-portal")} className="text-foreground hover:text-primary">
               Solution Provider Portal
             </button>
-            <button className="text-muted-foreground hover:text-foreground">Home</button>
-            <Avatar className="cursor-pointer" onClick={signOut}>
-              <AvatarFallback>{user?.email?.[0].toUpperCase()}</AvatarFallback>
-            </Avatar>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Avatar className="cursor-pointer">
+                  <AvatarFallback>{user?.email?.[0].toUpperCase()}</AvatarFallback>
+                </Avatar>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-48">
+                <DropdownMenuItem onClick={signOut} className="cursor-pointer">
+                  <LogOut className="h-4 w-4 mr-2" />
+                  Logout
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
           </div>
         </div>
       </header>
