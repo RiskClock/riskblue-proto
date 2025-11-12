@@ -1,15 +1,42 @@
 import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
+import electricalRoomImg from "@/assets/control_Electrical_Room_Presence_of_Water_Monitoring.avif";
+import mechanicalRoomImg from "@/assets/control_Mechanical_Room_Presence_of_Water_Monitoring.avif";
+import mainElectricalRiserImg from "@/assets/control_Main_Electrical_Riser_Presence_of_Water_Monitoring.avif";
+import tempWaterRunImg from "@/assets/control_Temporary_Water_Run_Abnormal_Flow_Monitoring.avif";
+import triggerValveImg from "@/assets/control_Trigger_Valve_Shut_Off_on_Abnormal_Flow_Detection.avif";
 
 const mitigationControls = [
-  { id: "mechanical-monitoring", name: "Mechanical Room Presence of Water Monitoring" },
-  { id: "electrical-monitoring", name: "Main Electrical Riser Presence of Water Monitoring" },
-  { id: "elevator-monitoring", name: "Elevator Pits Presence of Water Monitoring" },
-  { id: "mechanical-riser-monitoring", name: "Mechanical Risers Presence of Water Monitoring" },
-  { id: "domestic-cold-shutoff", name: "Domestic Cold Water Automatic Shutoff Valve" },
-  { id: "domestic-hot-shutoff", name: "Domestic Hot Water Automatic Shutoff Valve" },
-  { id: "fire-sprinkler-monitoring", name: "Fire Sprinkler System Water Flow Monitoring" },
-  { id: "temporary-heat", name: "Temporary Heat During Cold Weather" },
+  { 
+    id: "electrical-room-monitoring", 
+    name: "Electrical Room Presence of Water Monitoring",
+    category: "monitoring",
+    image: electricalRoomImg
+  },
+  { 
+    id: "mechanical-room-monitoring", 
+    name: "Mechanical Room Presence of Water Monitoring",
+    category: "monitoring",
+    image: mechanicalRoomImg
+  },
+  { 
+    id: "main-electrical-monitoring", 
+    name: "Main Electrical Room Presence of Water Monitoring",
+    category: "monitoring",
+    image: mainElectricalRiserImg
+  },
+  { 
+    id: "cold-domestic-flow-monitoring", 
+    name: "Cold Domestic Water Abnormal Flow Monitoring",
+    category: "automation",
+    image: triggerValveImg
+  },
+  { 
+    id: "temporary-water-flow-monitoring", 
+    name: "Temporary Water Run Abnormal Flow Monitoring",
+    category: "automation",
+    image: tempWaterRunImg
+  },
 ];
 
 interface MitigationControlsStepProps {
@@ -74,17 +101,17 @@ export const MitigationControlsStep = ({ data, onNext, onBack, isProcessingWebho
         <div>
           <div className="flex items-center justify-between mb-4">
             <h3 className="text-lg font-semibold">Presence of Water Monitoring</h3>
-            <Button type="button" variant="ghost" size="sm">
-              Hide controls
-            </Button>
           </div>
           <p className="text-sm text-muted-foreground mb-4">
-            {selectedControls.filter((id) => id.includes("monitoring")).length} of{" "}
-            {mitigationControls.filter((c) => c.id.includes("monitoring")).length} controls selected
+            {selectedControls.filter((id) => {
+              const control = mitigationControls.find(c => c.id === id);
+              return control?.category === "monitoring";
+            }).length} of{" "}
+            {mitigationControls.filter((c) => c.category === "monitoring").length} controls selected
           </p>
-          <div className="grid md:grid-cols-4 gap-4">
+          <div className="grid md:grid-cols-3 gap-4">
             {mitigationControls
-              .filter((c) => c.id.includes("monitoring"))
+              .filter((c) => c.category === "monitoring")
               .map((control) => (
                 <div
                   key={control.id}
@@ -95,8 +122,12 @@ export const MitigationControlsStep = ({ data, onNext, onBack, isProcessingWebho
                       : "border-border hover:border-primary/50"
                   }`}
                 >
-                  <div className="h-24 bg-muted rounded mb-3 flex items-center justify-center text-muted-foreground text-xs">
-                    Monitor Icon
+                  <div className="h-32 bg-muted rounded mb-3 overflow-hidden">
+                    <img 
+                      src={control.image} 
+                      alt={control.name}
+                      className="w-full h-full object-cover"
+                    />
                   </div>
                   <p className="text-sm text-center">{control.name}</p>
                 </div>
@@ -106,11 +137,18 @@ export const MitigationControlsStep = ({ data, onNext, onBack, isProcessingWebho
 
         <div>
           <div className="flex items-center justify-between mb-4">
-            <h3 className="text-lg font-semibold">Automatic Shutoff Systems</h3>
+            <h3 className="text-lg font-semibold">Abnormal Flow, Valve and Pump Automation</h3>
           </div>
-          <div className="grid md:grid-cols-4 gap-4">
+          <p className="text-sm text-muted-foreground mb-4">
+            {selectedControls.filter((id) => {
+              const control = mitigationControls.find(c => c.id === id);
+              return control?.category === "automation";
+            }).length} of{" "}
+            {mitigationControls.filter((c) => c.category === "automation").length} controls selected
+          </p>
+          <div className="grid md:grid-cols-3 gap-4">
             {mitigationControls
-              .filter((c) => c.id.includes("shutoff") || c.id.includes("heat"))
+              .filter((c) => c.category === "automation")
               .map((control) => (
                 <div
                   key={control.id}
@@ -121,8 +159,12 @@ export const MitigationControlsStep = ({ data, onNext, onBack, isProcessingWebho
                       : "border-border hover:border-primary/50"
                   }`}
                 >
-                  <div className="h-24 bg-muted rounded mb-3 flex items-center justify-center text-muted-foreground text-xs">
-                    Control Icon
+                  <div className="h-32 bg-muted rounded mb-3 overflow-hidden">
+                    <img 
+                      src={control.image} 
+                      alt={control.name}
+                      className="w-full h-full object-cover"
+                    />
                   </div>
                   <p className="text-sm text-center">{control.name}</p>
                 </div>
