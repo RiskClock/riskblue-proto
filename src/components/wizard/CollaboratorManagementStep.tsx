@@ -270,6 +270,22 @@ export const CollaboratorManagementStep = ({ projectId }: CollaboratorManagement
       return;
     }
 
+    // Verify project exists in database
+    const { data: projectExists, error: projectError } = await supabase
+      .from("projects")
+      .select("id")
+      .eq("id", projectId)
+      .single();
+
+    if (projectError || !projectExists) {
+      toast({
+        title: "Project Not Found",
+        description: "Please save the project before inviting solution providers.",
+        variant: "destructive",
+      });
+      return;
+    }
+
     // Collect all selected contacts
     const contactsToInvite: { name: string; email: string; company: string }[] = [];
     
@@ -384,6 +400,22 @@ export const CollaboratorManagementStep = ({ projectId }: CollaboratorManagement
       toast({
         title: "Project Not Saved",
         description: "Please save the project first before inviting solution providers.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    // Verify project exists in database
+    const { data: projectExists, error: projectError } = await supabase
+      .from("projects")
+      .select("id")
+      .eq("id", projectId)
+      .single();
+
+    if (projectError || !projectExists) {
+      toast({
+        title: "Project Not Found",
+        description: "Please save the project before inviting solution providers.",
         variant: "destructive",
       });
       return;
@@ -604,8 +636,15 @@ export const CollaboratorManagementStep = ({ projectId }: CollaboratorManagement
                       <div className="flex items-center gap-3 p-3 hover:bg-muted/50 transition-colors">
                         <Checkbox
                           checked={selectionState === "all"}
+                          ref={(el) => {
+                            if (el) {
+                              const input = el.querySelector('input');
+                              if (input) {
+                                input.indeterminate = selectionState === "partial";
+                              }
+                            }
+                          }}
                           onCheckedChange={() => togglePartner(partner.name)}
-                          className={selectionState === "partial" ? "data-[state=checked]:bg-primary/50" : ""}
                         />
                         <Button
                           variant="ghost"
