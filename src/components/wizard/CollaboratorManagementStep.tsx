@@ -118,35 +118,6 @@ export const CollaboratorManagementStep = ({ projectId }: CollaboratorManagement
 
   const fetchCompanyProposals = async () => {
     try {
-      // Map of control IDs to names
-      const controlIdToNameMap: Record<string, string> = {
-        "electrical-room-monitoring": "Electrical Room Presence of Water Monitoring",
-        "mechanical-risers-monitoring": "Mechanical Risers Presence of Water Monitoring",
-        "mechanical-room-monitoring": "Mechanical Room Presence of Water Monitoring",
-        "cold-domestic-flow-monitoring": "Cold Domestic Water Abnormal Flow Monitoring",
-        "temporary-water-flow-monitoring": "Temporary Water Run Abnormal Flow Monitoring",
-        "fire-suppression-flow-monitoring": "Fire Suppression System Abnormal Flow Monitoring",
-        "automatic-shutoff-temp-water": "Automatic Shut Off Temporary Water Run",
-        "main-riser-shutoff": "Main Riser Section Automatic Shut Open/Close Cold Domestic Water",
-        "suite-drains": "Suite Drains",
-        "flood-control": "Flood Control Measures",
-        "envelope-prequalification": "Pre-qualification of Envelope Systems",
-        "heat-trace-insulation": "Heat Trace and Insulation",
-        "prv-maintenance": "Pressure Reducing Valve Maintenance Plan: Safeguarding System Performance",
-        "proper-zoning": "Proper Zoning Configuration: Optimizing Pressure Systems",
-        "floor-penetrations": "Floor Penetrations Water Seals",
-        "incident-reports": "Historical Project Water Incident Reports",
-        "flood-wind-report": "100-Year Flood and Wind Storm Report",
-        "warranties-insurance": "Water Mitigation Components Warranties and Insurance",
-        "equipment-labeling": "Water Mitigation Equipment Labeling",
-        "acceptance-test": "Water Mitigation Equipment Acceptance Test",
-        "installation-integrity": "Installation Integrity: Joints, Bolts, and Piping",
-        "fill-tests": "Additional Fill Tests: Ensuring Water System Integrity",
-        "air-pressure-tests": "Air Pressure or Water Tests in Plumbing System",
-        "spill-kit": "Spill Kit",
-        "temporary-enclosures": "Temporary Enclosures Plan",
-      };
-
       // Fetch project data to get selected controls
       const { data: projectData, error: projectError } = await supabase
         .from("projects")
@@ -157,10 +128,8 @@ export const CollaboratorManagementStep = ({ projectId }: CollaboratorManagement
       if (projectError) throw projectError;
 
       // Get selected control names from project data
-      const selectedControlIds = (projectData?.project_data as any)?.selectedControls || [];
-      const selectedControlNames = selectedControlIds
-        .map((id: string) => controlIdToNameMap[id])
-        .filter(Boolean);
+      // selectedControls are stored as control NAMES, not IDs
+      const selectedControlNames = ((projectData?.project_data as any)?.selectedControls || []) as string[];
 
       const { data, error } = await supabase
         .from("company_proposals")

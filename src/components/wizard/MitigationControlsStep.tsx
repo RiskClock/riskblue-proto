@@ -378,7 +378,7 @@ export const MitigationControlsStep = ({ data, onNext, onBack, isProcessingWebho
             <div>
               <p className="font-semibold">Controls</p>
               <p className="text-sm text-muted-foreground">
-                {selectedControls.length} / {mitigationControls.length} Selected
+                {selectedControls.filter(name => mitigationControls.some(c => c.name === name)).length} / {mitigationControls.length} Selected
               </p>
             </div>
           </div>
