@@ -7,8 +7,10 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
-import { UserPlus, Trash2, Building2, X, FileText } from "lucide-react";
+import { UserPlus, Trash2, Building2, X, FileText, ChevronDown, ChevronRight } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { z } from "zod";
 import { SolutionProviderPortal } from "./SolutionProviderPortal";
 
@@ -39,6 +41,47 @@ const collaboratorSchema = z.object({
   company: z.string().trim().min(1, "Company is required").max(100),
 });
 
+interface PartnerContact {
+  name: string;
+  email: string;
+}
+
+interface Partner {
+  name: string;
+  contacts: PartnerContact[];
+}
+
+const PREDEFINED_PARTNERS: Partner[] = [
+  {
+    name: "EHAB",
+    contacts: [
+      { name: "Sarah Johnson", email: "sarah.johnson@ehab.com" },
+      { name: "Michael Chen", email: "michael.chen@ehab.com" },
+    ]
+  },
+  {
+    name: "Plumtech",
+    contacts: [
+      { name: "David Martinez", email: "david.martinez@plumtech.com" },
+      { name: "Emily Rodriguez", email: "emily.rodriguez@plumtech.com" },
+      { name: "James Wilson", email: "james.wilson@plumtech.com" },
+    ]
+  },
+  {
+    name: "Wint.ai",
+    contacts: [
+      { name: "Rachel Green", email: "rachel.green@wint.ai" },
+    ]
+  },
+  {
+    name: "EllisDon",
+    contacts: [
+      { name: "Thomas Anderson", email: "thomas.anderson@ellisdon.com" },
+      { name: "Jennifer Lee", email: "jennifer.lee@ellisdon.com" },
+    ]
+  },
+];
+
 export const CollaboratorManagementStep = ({ projectId }: CollaboratorManagementStepProps) => {
   const { toast } = useToast();
   const [collaborators, setCollaborators] = useState<Collaborator[]>([]);
@@ -47,9 +90,14 @@ export const CollaboratorManagementStep = ({ projectId }: CollaboratorManagement
   const [loading, setLoading] = useState(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [collaboratorToDelete, setCollaboratorToDelete] = useState<string | null>(null);
-  const [showInviteForm, setShowInviteForm] = useState(false);
+  const [showPartnerInvite, setShowPartnerInvite] = useState(false);
+  const [showIndividualInvite, setShowIndividualInvite] = useState(false);
   const [portalOpen, setPortalOpen] = useState(false);
   const [selectedProvider, setSelectedProvider] = useState<{ name: string; company: string } | null>(null);
+  
+  // Partner selection state
+  const [selectedPartnerContacts, setSelectedPartnerContacts] = useState<Record<string, Set<string>>>({});
+  const [expandedPartners, setExpandedPartners] = useState<Set<string>>(new Set());
   
   const [inviteRows, setInviteRows] = useState([
     { id: 1, name: "", email: "", company: "" }
@@ -152,6 +200,183 @@ export const CollaboratorManagementStep = ({ projectId }: CollaboratorManagement
     }
   };
 
+  // Partner selection handlers
+  const togglePartner = (partnerName: string) => {
+    const partner = PREDEFINED_PARTNERS.find(p => p.name === partnerName);
+    if (!partner) return;
+
+    const currentSelection = selectedPartnerContacts[partnerName] || new Set();
+    const allContactEmails = new Set(partner.contacts.map(c => c.email));
+
+    if (currentSelection.size === partner.contacts.length) {
+      // Deselect all
+      setSelectedPartnerContacts(prev => ({
+        ...prev,
+        [partnerName]: new Set(),
+      }));
+    } else {
+      // Select all
+      setSelectedPartnerContacts(prev => ({
+        ...prev,
+        [partnerName]: allContactEmails,
+      }));
+    }
+  };
+
+  const toggleContact = (partnerName: string, contactEmail: string) => {
+    setSelectedPartnerContacts(prev => {
+      const currentSelection = new Set(prev[partnerName] || []);
+      if (currentSelection.has(contactEmail)) {
+        currentSelection.delete(contactEmail);
+      } else {
+        currentSelection.add(contactEmail);
+      }
+      return {
+        ...prev,
+        [partnerName]: currentSelection,
+      };
+    });
+  };
+
+  const togglePartnerExpanded = (partnerName: string) => {
+    setExpandedPartners(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(partnerName)) {
+        newSet.delete(partnerName);
+      } else {
+        newSet.add(partnerName);
+      }
+      return newSet;
+    });
+  };
+
+  const getPartnerSelectionState = (partnerName: string) => {
+    const partner = PREDEFINED_PARTNERS.find(p => p.name === partnerName);
+    if (!partner) return "none";
+    
+    const selected = selectedPartnerContacts[partnerName] || new Set();
+    if (selected.size === 0) return "none";
+    if (selected.size === partner.contacts.length) return "all";
+    return "partial";
+  };
+
+  const handleInvitePartnerContacts = async () => {
+    if (projectId === "new") {
+      toast({
+        title: "Project Not Saved",
+        description: "Please save the project first before inviting solution providers.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    // Collect all selected contacts
+    const contactsToInvite: { name: string; email: string; company: string }[] = [];
+    
+    Object.entries(selectedPartnerContacts).forEach(([partnerName, emails]) => {
+      const partner = PREDEFINED_PARTNERS.find(p => p.name === partnerName);
+      if (!partner) return;
+      
+      emails.forEach(email => {
+        const contact = partner.contacts.find(c => c.email === email);
+        if (contact) {
+          contactsToInvite.push({
+            name: contact.name,
+            email: contact.email,
+            company: partnerName,
+          });
+        }
+      });
+    });
+
+    if (contactsToInvite.length === 0) {
+      toast({
+        title: "No Contacts Selected",
+        description: "Please select at least one contact to invite.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    try {
+      setLoading(true);
+
+      const { error } = await supabase
+        .from("project_collaborators")
+        .insert(
+          contactsToInvite.map(contact => ({
+            project_id: projectId,
+            name: contact.name,
+            email: contact.email.toLowerCase(),
+            company: contact.company,
+          }))
+        );
+
+      if (error) {
+        if (error.code === "23505") {
+          toast({
+            title: "Error",
+            description: "One or more contacts have already been invited to this project.",
+            variant: "destructive",
+          });
+          return;
+        }
+        throw error;
+      }
+
+      // Create empty proposals for new companies
+      const uniqueCompanies = Array.from(new Set(contactsToInvite.map(c => c.company)));
+      
+      for (const company of uniqueCompanies) {
+        const { data: existingProposals } = await supabase
+          .from("company_proposals")
+          .select("id")
+          .eq("project_id", projectId)
+          .eq("company", company)
+          .limit(1);
+
+        if (!existingProposals || existingProposals.length === 0) {
+          const emptyProposals = [
+            "Electrical Room Presence of Water Monitoring",
+            "Mechanical Room Presence of Water Monitoring",
+            "Main Electrical Room Presence of Water Monitoring",
+            "Cold Domestic Water Abnormal Flow Monitoring",
+            "Temporary Water Run Abnormal Flow Monitoring",
+          ].map((systemName) => ({
+            project_id: projectId,
+            company: company,
+            system_name: systemName,
+            system_cost: 0,
+            details: "",
+          }));
+
+          await supabase.from("company_proposals").insert(emptyProposals);
+        }
+      }
+
+      toast({
+        title: "Invitations Sent",
+        description: `${contactsToInvite.length} contact${contactsToInvite.length > 1 ? 's' : ''} invited successfully.`,
+      });
+
+      // Reset selection
+      setSelectedPartnerContacts({});
+      setShowPartnerInvite(false);
+      
+      // Refresh lists
+      fetchCollaborators();
+      fetchCompanyProposals();
+    } catch (error: any) {
+      toast({
+        title: "Error",
+        description: "Failed to send invitations. Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const handleAddCollaborators = async (e: React.FormEvent) => {
     e.preventDefault();
     
@@ -245,7 +470,7 @@ export const CollaboratorManagementStep = ({ projectId }: CollaboratorManagement
 
       // Reset form
       setInviteRows([{ id: 1, name: "", email: "", company: "" }]);
-      setShowInviteForm(false);
+      setShowIndividualInvite(false);
       
       // Refresh lists
       fetchCollaborators();
@@ -333,18 +558,119 @@ export const CollaboratorManagementStep = ({ projectId }: CollaboratorManagement
                 Invite solution providers to review guidelines and submit cost proposals
               </CardDescription>
             </div>
-            <Button
-              onClick={() => setShowInviteForm(!showInviteForm)}
-              variant={showInviteForm ? "outline" : "default"}
-            >
-              <UserPlus className="h-4 w-4 mr-2" />
-              {showInviteForm ? "Cancel" : "Invite"}
-            </Button>
+            <div className="flex gap-2">
+              <Button
+                onClick={() => {
+                  setShowPartnerInvite(!showPartnerInvite);
+                  setShowIndividualInvite(false);
+                }}
+                variant={showPartnerInvite ? "outline" : "default"}
+              >
+                <Building2 className="h-4 w-4 mr-2" />
+                {showPartnerInvite ? "Cancel" : "Partner Network"}
+              </Button>
+              <Button
+                onClick={() => {
+                  setShowIndividualInvite(!showIndividualInvite);
+                  setShowPartnerInvite(false);
+                }}
+                variant={showIndividualInvite ? "outline" : "default"}
+              >
+                <UserPlus className="h-4 w-4 mr-2" />
+                {showIndividualInvite ? "Cancel" : "Individual"}
+              </Button>
+            </div>
           </div>
         </CardHeader>
         <CardContent className="space-y-6">
-          {showInviteForm && (
+          {/* Partner Network Invite */}
+          {showPartnerInvite && (
+            <div className="space-y-4 p-4 border rounded-lg bg-muted/50">
+              <div className="flex items-center justify-between mb-4">
+                <div>
+                  <h4 className="font-medium">RiskBlue Partner Network</h4>
+                  <p className="text-sm text-muted-foreground">Select partners and contacts to invite</p>
+                </div>
+              </div>
+              
+              <div className="space-y-2">
+                {PREDEFINED_PARTNERS.map((partner) => {
+                  const selectionState = getPartnerSelectionState(partner.name);
+                  const isExpanded = expandedPartners.has(partner.name);
+                  const selectedCount = selectedPartnerContacts[partner.name]?.size || 0;
+                  
+                  return (
+                    <div key={partner.name} className="border rounded-lg">
+                      <div className="flex items-center gap-3 p-3 hover:bg-muted/50 transition-colors">
+                        <Checkbox
+                          checked={selectionState === "all"}
+                          onCheckedChange={() => togglePartner(partner.name)}
+                          className={selectionState === "partial" ? "data-[state=checked]:bg-primary/50" : ""}
+                        />
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => togglePartnerExpanded(partner.name)}
+                          className="flex-1 justify-start gap-2 h-auto py-0"
+                        >
+                          {isExpanded ? (
+                            <ChevronDown className="h-4 w-4" />
+                          ) : (
+                            <ChevronRight className="h-4 w-4" />
+                          )}
+                          <Building2 className="h-4 w-4" />
+                          <span className="font-medium">{partner.name}</span>
+                          <Badge variant="secondary" className="ml-auto">
+                            {selectedCount}/{partner.contacts.length}
+                          </Badge>
+                        </Button>
+                      </div>
+                      
+                      {isExpanded && (
+                        <div className="border-t bg-background/50">
+                          {partner.contacts.map((contact) => {
+                            const isSelected = selectedPartnerContacts[partner.name]?.has(contact.email) || false;
+                            
+                            return (
+                              <div
+                                key={contact.email}
+                                className="flex items-center gap-3 p-3 pl-12 hover:bg-muted/50 transition-colors"
+                              >
+                                <Checkbox
+                                  checked={isSelected}
+                                  onCheckedChange={() => toggleContact(partner.name, contact.email)}
+                                />
+                                <div className="flex-1">
+                                  <div className="font-medium text-sm">{contact.name}</div>
+                                  <div className="text-xs text-muted-foreground">{contact.email}</div>
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+              
+              <Button
+                onClick={handleInvitePartnerContacts}
+                disabled={loading || Object.values(selectedPartnerContacts).every(set => set.size === 0)}
+                className="w-full"
+              >
+                {loading ? "Sending..." : `Invite Selected Contacts`}
+              </Button>
+            </div>
+          )}
+
+          {/* Individual Invite Form */}
+          {showIndividualInvite && (
             <form onSubmit={handleAddCollaborators} className="space-y-4 p-4 border rounded-lg bg-muted/50">
+              <div>
+                <h4 className="font-medium mb-2">Invite Individual Providers</h4>
+                <p className="text-sm text-muted-foreground mb-4">For providers outside the partner network</p>
+              </div>
               <div className="space-y-3">
                 {inviteRows.map((row, index) => (
                   <div key={row.id} className="flex gap-3 items-start">
