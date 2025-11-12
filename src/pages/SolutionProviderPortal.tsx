@@ -175,11 +175,7 @@ export default function SolutionProviderPortal() {
   };
 
   const handleExitPortal = () => {
-    setSelectedProject(null);
-    setSelectedCollaborator(null);
-    setProjects([]);
-    setSearchParams({});
-    navigate(-1);
+    navigate("/projects");
   };
 
   const handleProviderSelection = (collaboratorId: string) => {

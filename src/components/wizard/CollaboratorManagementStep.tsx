@@ -98,6 +98,7 @@ export const CollaboratorManagementStep = ({ projectId }: CollaboratorManagement
   // Partner selection state
   const [selectedPartnerContacts, setSelectedPartnerContacts] = useState<Record<string, Set<string>>>({});
   const [expandedPartners, setExpandedPartners] = useState<Set<string>>(new Set());
+  const [selectedCompanies, setSelectedCompanies] = useState<Set<string>>(new Set());
   
   const [inviteRows, setInviteRows] = useState([
     { id: 1, name: "", email: "", company: "" }
@@ -648,9 +649,9 @@ export const CollaboratorManagementStep = ({ projectId }: CollaboratorManagement
                                   const isSelected = selectedPartnerContacts[partner.name]?.has(contact.email) || false;
                                   
                                   return (
-                                    <div
+                           <label
                                       key={contact.email}
-                                      className="flex items-center gap-3 p-3 pl-12"
+                                      className="flex items-center gap-3 p-3 pl-12 cursor-pointer hover:bg-muted/30 transition-colors"
                                     >
                                       <Checkbox
                                         checked={isSelected}
@@ -660,7 +661,7 @@ export const CollaboratorManagementStep = ({ projectId }: CollaboratorManagement
                                         <div className="font-medium text-sm">{contact.name}</div>
                                         <div className="text-xs text-muted-foreground">{contact.email}</div>
                                       </div>
-                                    </div>
+                                    </label>
                                   );
                                 })}
                               </div>
@@ -834,23 +835,31 @@ export const CollaboratorManagementStep = ({ projectId }: CollaboratorManagement
                     <TableHead className="min-w-[200px]">Control / System</TableHead>
                     {companyProposals.map((proposal) => (
                       <TableHead key={proposal.company} className="text-center min-w-[150px]">
-                        <div className="flex flex-col gap-1 items-center">
-                          <span className="font-semibold">{proposal.company}</span>
-                          <Badge variant={
-                            proposal.systems.length === allControlNames.length ? "default" : 
-                            proposal.systems.length > 0 ? "secondary" : 
-                            "outline"
-                          } className="text-xs">
-                            {proposal.systems.length === allControlNames.length ? "Complete ✅" : 
-                             proposal.systems.length > 0 ? "In Progress" : 
-                             "Invited"}
-                          </Badge>
-                        </div>
+                        <span className="font-semibold">{proposal.company}</span>
                       </TableHead>
                     ))}
                   </TableRow>
                 </TableHeader>
                 <TableBody>
+                  {/* Status Row */}
+                  <TableRow className="bg-muted/30">
+                    <TableCell className="font-medium">Status</TableCell>
+                    {companyProposals.map((proposal) => (
+                      <TableCell key={proposal.company} className="text-center">
+                        <Badge variant={
+                          proposal.systems.length === allControlNames.length ? "default" : 
+                          proposal.systems.length > 0 ? "secondary" : 
+                          "outline"
+                        } className="text-xs">
+                          {proposal.systems.length === allControlNames.length ? "Complete ✅" : 
+                           proposal.systems.length > 0 ? "In Progress" : 
+                           "Invited"}
+                        </Badge>
+                      </TableCell>
+                    ))}
+                  </TableRow>
+                  
+                  {/* Total Cost Row */}
                   <TableRow className="bg-muted/50 font-bold">
                     <TableCell>Total Cost</TableCell>
                     {companyProposals.map((proposal) => (
@@ -862,6 +871,8 @@ export const CollaboratorManagementStep = ({ projectId }: CollaboratorManagement
                       </TableCell>
                     ))}
                   </TableRow>
+                  
+                  {/* Control Rows */}
                   {allControlNames.map((controlName) => (
                     <TableRow key={controlName}>
                       <TableCell className="font-medium">{controlName}</TableCell>
@@ -893,6 +904,37 @@ export const CollaboratorManagementStep = ({ projectId }: CollaboratorManagement
                       })}
                     </TableRow>
                   ))}
+                  
+                  {/* Selection Row */}
+                  <TableRow className="bg-muted/30">
+                    <TableCell className="font-medium">Select</TableCell>
+                    {companyProposals.map((proposal) => {
+                      const isInProgress = proposal.systems.length > 0 && proposal.systems.length < allControlNames.length;
+                      const isSelected = selectedCompanies.has(proposal.company);
+                      
+                      return (
+                        <TableCell key={proposal.company} className="text-center">
+                          <div className="flex justify-center">
+                            <Checkbox
+                              checked={isSelected}
+                              disabled={isInProgress}
+                              onCheckedChange={(checked) => {
+                                setSelectedCompanies(prev => {
+                                  const newSet = new Set(prev);
+                                  if (checked) {
+                                    newSet.add(proposal.company);
+                                  } else {
+                                    newSet.delete(proposal.company);
+                                  }
+                                  return newSet;
+                                });
+                              }}
+                            />
+                          </div>
+                        </TableCell>
+                      );
+                    })}
+                  </TableRow>
                 </TableBody>
               </Table>
             </div>
