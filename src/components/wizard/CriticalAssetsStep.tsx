@@ -110,7 +110,7 @@ export const CriticalAssetsStep = ({ data, onNext, onBack, isProcessingWebhook }
 
   return (
     <div className="space-y-6">
-      <div className="grid md:grid-cols-3 gap-3">
+      <div className="grid md:grid-cols-4 gap-3">
           {assets.map((asset) => (
             <div
               key={asset.id}

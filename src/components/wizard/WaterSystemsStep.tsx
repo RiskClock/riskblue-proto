@@ -100,7 +100,7 @@ export const WaterSystemsStep = ({ data, onNext, onBack, isProcessingWebhook }: 
 
   return (
     <div className="space-y-6">
-      <div className="grid md:grid-cols-3 gap-3">
+      <div className="grid md:grid-cols-4 gap-3">
           {waterSystems.map((system) => (
             <div
               key={system.id}
