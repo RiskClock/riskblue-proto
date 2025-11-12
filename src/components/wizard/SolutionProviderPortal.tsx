@@ -65,6 +65,7 @@ export const SolutionProviderPortal = ({
   const [costs, setCosts] = useState<Record<string, string>>({});
   const [details, setDetails] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState(false);
+  const [autoSaving, setAutoSaving] = useState(false);
   const [projectData, setProjectData] = useState<any>(null);
 
   // Load project data (read-only)
@@ -127,6 +128,42 @@ export const SolutionProviderPortal = ({
     setDetails((prev) => ({ ...prev, [controlId]: value }));
   };
 
+  // Auto-save with debounce
+  useEffect(() => {
+    const timer = setTimeout(async () => {
+      if (Object.keys(costs).length === 0) return;
+      
+      setAutoSaving(true);
+      try {
+        await supabase
+          .from("company_proposals")
+          .delete()
+          .eq("project_id", projectId)
+          .eq("company", companyName);
+
+        const proposals = mitigationControls
+          .filter((control) => costs[control.id] && parseFloat(costs[control.id]) > 0)
+          .map((control) => ({
+            project_id: projectId,
+            company: companyName,
+            system_name: control.name,
+            system_cost: parseFloat(costs[control.id]),
+            details: details[control.id] || "",
+          }));
+
+        if (proposals.length > 0) {
+          await supabase.from("company_proposals").insert(proposals);
+        }
+      } catch (error) {
+        console.error("Auto-save error:", error);
+      } finally {
+        setAutoSaving(false);
+      }
+    }, 1000);
+
+    return () => clearTimeout(timer);
+  }, [costs, details, projectId, companyName]);
+
   const handleSave = async () => {
     setSaving(true);
 
@@ -183,17 +220,17 @@ export const SolutionProviderPortal = ({
             Water Mitigation Guideline - {companyName}
           </DialogTitle>
           <p className="text-sm text-muted-foreground">
-            Viewing as: {providerName} | Enter your cost estimates for each control
+            Viewing as: {providerName} | Enter your cost estimates for each control {autoSaving && "(Auto-saving...)"}
           </p>
         </DialogHeader>
 
-        <Tabs defaultValue="guidelines" className="w-full">
+        <Tabs defaultValue="controls" className="w-full">
           <TabsList className="grid w-full grid-cols-2">
-            <TabsTrigger value="guidelines">Water Mitigation Guidelines</TabsTrigger>
+            <TabsTrigger value="controls">Mitigation Controls</TabsTrigger>
             <TabsTrigger value="project">Project Details (Read-Only)</TabsTrigger>
           </TabsList>
 
-          <TabsContent value="guidelines" className="space-y-6">
+          <TabsContent value="controls" className="space-y-6">
             <Card>
               <CardHeader>
                 <CardTitle>Mitigation Controls - Enter Your Costs</CardTitle>
@@ -202,7 +239,7 @@ export const SolutionProviderPortal = ({
                 {/* Presence of Water Monitoring */}
                 <div>
                   <h3 className="text-lg font-semibold mb-4">Presence of Water Monitoring</h3>
-                  <div className="grid md:grid-cols-2 gap-4">
+                  <div className="grid md:grid-cols-4 gap-4">
                     {mitigationControls
                       .filter((c) => c.category === "Presence of Water Monitoring")
                       .map((control) => (
@@ -250,7 +287,7 @@ export const SolutionProviderPortal = ({
                 {/* Abnormal Flow, Valve and Pump Automation */}
                 <div>
                   <h3 className="text-lg font-semibold mb-4">Abnormal Flow, Valve and Pump Automation</h3>
-                  <div className="grid md:grid-cols-2 gap-4">
+                  <div className="grid md:grid-cols-4 gap-4">
                     {mitigationControls
                       .filter((c) => c.category === "Abnormal Flow, Valve and Pump Automation")
                       .map((control) => (
@@ -301,28 +338,88 @@ export const SolutionProviderPortal = ({
           <TabsContent value="project" className="space-y-4">
             <Card>
               <CardHeader>
-                <CardTitle>Project Information (Read-Only)</CardTitle>
+                <CardTitle>Water Risk Discovery (Read-Only)</CardTitle>
               </CardHeader>
-              <CardContent className="space-y-4">
+              <CardContent className="space-y-6">
                 {projectData ? (
-                  <div className="grid md:grid-cols-2 gap-4">
+                  <>
+                    {/* Basic Project Info */}
                     <div>
-                      <Label>Project Name</Label>
-                      <p className="text-sm mt-1">{projectData.name || "N/A"}</p>
+                      <h3 className="text-lg font-semibold mb-3">Project Information</h3>
+                      <div className="grid md:grid-cols-2 gap-4">
+                        <div>
+                          <Label>Project Name</Label>
+                          <p className="text-sm mt-1">{projectData.name || "N/A"}</p>
+                        </div>
+                        <div>
+                          <Label>Location</Label>
+                          <p className="text-sm mt-1">{projectData.location || "N/A"}</p>
+                        </div>
+                        <div>
+                          <Label>Building Type</Label>
+                          <p className="text-sm mt-1">{projectData.building_type || "N/A"}</p>
+                        </div>
+                        <div>
+                          <Label>Project Type</Label>
+                          <p className="text-sm mt-1">{projectData.project_type || "N/A"}</p>
+                        </div>
+                      </div>
                     </div>
-                    <div>
-                      <Label>Location</Label>
-                      <p className="text-sm mt-1">{projectData.location || "N/A"}</p>
-                    </div>
-                    <div>
-                      <Label>Building Type</Label>
-                      <p className="text-sm mt-1">{projectData.building_type || "N/A"}</p>
-                    </div>
-                    <div>
-                      <Label>Project Type</Label>
-                      <p className="text-sm mt-1">{projectData.project_type || "N/A"}</p>
-                    </div>
-                  </div>
+
+                    {/* Critical Assets */}
+                    {projectData.project_data?.selectedAssets && projectData.project_data.selectedAssets.length > 0 && (
+                      <div>
+                        <h3 className="text-lg font-semibold mb-3">Critical Assets</h3>
+                        <p className="text-sm text-muted-foreground mb-3">
+                          {projectData.project_data.selectedAssets.length} assets selected
+                        </p>
+                        <div className="grid md:grid-cols-4 gap-3">
+                          {projectData.project_data.selectedAssets.map((assetId: string) => (
+                            <div key={assetId} className="p-3 rounded-lg border-2 border-primary bg-primary/5">
+                              <p className="text-sm text-center">{assetId.replace(/-/g, ' ').replace(/\b\w/g, (l: string) => l.toUpperCase())}</p>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Water Systems */}
+                    {projectData.project_data?.selectedSystems && projectData.project_data.selectedSystems.length > 0 && (
+                      <div>
+                        <h3 className="text-lg font-semibold mb-3">Water Systems</h3>
+                        <p className="text-sm text-muted-foreground mb-3">
+                          {projectData.project_data.selectedSystems.length} systems selected
+                        </p>
+                        <div className="grid md:grid-cols-4 gap-3">
+                          {projectData.project_data.selectedSystems.map((systemId: string) => (
+                            <div key={systemId} className="p-3 rounded-lg border-2 border-primary bg-primary/5">
+                              <p className="text-sm text-center">{systemId.replace(/-/g, ' ').replace(/\b\w/g, (l: string) => l.toUpperCase())}</p>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Mitigation Controls */}
+                    {projectData.project_data?.selectedControls && projectData.project_data.selectedControls.length > 0 && (
+                      <div>
+                        <h3 className="text-lg font-semibold mb-3">Selected Mitigation Controls</h3>
+                        <p className="text-sm text-muted-foreground mb-3">
+                          {projectData.project_data.selectedControls.length} controls selected
+                        </p>
+                        <div className="grid md:grid-cols-4 gap-3">
+                          {projectData.project_data.selectedControls.map((controlId: string) => {
+                            const control = mitigationControls.find(c => c.id === controlId);
+                            return control ? (
+                              <div key={controlId} className="p-3 rounded-lg border-2 border-primary bg-primary/5">
+                                <p className="text-sm text-center">{control.name}</p>
+                              </div>
+                            ) : null;
+                          })}
+                        </div>
+                      </div>
+                    )}
+                  </>
                 ) : (
                   <p className="text-sm text-muted-foreground">Loading project details...</p>
                 )}
