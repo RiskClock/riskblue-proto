@@ -351,7 +351,7 @@ const ProjectWizard = () => {
 
       <div className="container mx-auto px-6 py-8">
         <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-          <div className="sticky top-[73px] z-10 bg-background pb-4 -mx-6 px-6 -mt-8 pt-8 mb-4 border-b">
+          <div className="sticky top-[73px] z-10 bg-background pb-2 -mx-6 px-6 -mt-4 pt-4 mb-4 border-b">
             <TabsList className="w-full justify-start">
               <TabsTrigger value="guideline">Water Risk Discovery</TabsTrigger>
               <TabsTrigger value="plan">Water Mitigation Planning</TabsTrigger>
