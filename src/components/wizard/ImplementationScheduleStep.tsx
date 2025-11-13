@@ -33,36 +33,6 @@ export const ImplementationScheduleStep = ({ data }: ImplementationScheduleStepP
     "fire-suppression": "Fire Suppression System",
   };
 
-  // Control names mapping
-  const controlNames: Record<string, string> = {
-    "mechanical-water-monitoring": "Mechanical Room Presence of Water Monitoring",
-    "electrical-water-monitoring": "Electrical Room Presence of Water Monitoring",
-    "main-riser-monitoring": "Main Electrical Riser Presence of Water Monitoring",
-    "mechanical-riser-monitoring": "Mechanical Risers Presence of Water Monitoring",
-    "suite-drains": "Suite Drains",
-    "fire-suppression-monitoring": "Fire Suppression System Abnormal Flow Monitoring",
-    "cold-water-monitoring": "Cold Domestic Water Abnormal Flow Monitoring",
-    "hot-water-monitoring": "Hot Domestic Water Abnormal Flow Monitoring",
-    "temp-water-auto-shutoff": "Automatic Shut Off Temporary Water Run",
-    "trigger-valve": "Trigger Valve Shut Off on Abnormal Flow Detection",
-    "flood-control": "Flood Control Measures",
-    "envelope-prequalification": "Pre-qualification of Envelope Systems",
-    "heat-trace": "Heat trace and Insulation",
-    "prv-maintenance": "Pressure Reducing Valve Maintenance Plan",
-    "zoning-config": "Proper Zoning Configuration Optimizing Pressure System",
-    "floor-penetrations": "Floor Penetrations Water Seals",
-    "incident-reports": "Historical Project Water Incident Reports",
-    "flood-wind-report": "100-Year Flood and Wind Storm Report",
-    "warranties-insurance": "Water Mitigation Components Warranties and Insurance",
-    "equipment-labeling": "Water Mitigation Equipment Labeling",
-    "installation-integrity": "Installation Integrity Joints Bolts and Piping",
-    "fill-tests": "Additional Fill Tests Ensuring Water System Integrity",
-    "air-pressure-tests": "Air Pressure or Water Tests in Plumbing System",
-    "spill-kit": "Spill Kit",
-    "equipment-acceptance": "Water Mitigation Equipment Acceptance Test",
-    "temporary-enclosures": "Temporary Enclosures Plan",
-  };
-
   // Get milestone phases
   const milestones = [
     {
@@ -103,46 +73,49 @@ export const ImplementationScheduleStep = ({ data }: ImplementationScheduleStepP
   ].filter((m) => m.start); // Only include milestones with dates
 
   // Map controls to assets/systems and milestones
-  const scheduleItems = selectedControls.map((controlId: string) => {
+  const scheduleItems = selectedControls.map((controlName: string) => {
     // Determine which assets/systems this control applies to
     const applicableAssets: string[] = [];
     const applicableSystems: string[] = [];
     
+    // Convert to lowercase for case-insensitive matching
+    const controlLower = controlName.toLowerCase();
+    
     // Logic to map controls to assets/systems
-    if (controlId.includes("mechanical") && selectedAssets.includes("mechanical")) {
+    if (controlLower.includes("mechanical room") && selectedAssets.includes("mechanical")) {
       applicableAssets.push("mechanical");
     }
-    if (controlId.includes("electrical") && selectedAssets.includes("electrical")) {
+    if (controlLower.includes("electrical room") && selectedAssets.includes("electrical")) {
       applicableAssets.push("electrical");
     }
-    if (controlId.includes("riser")) {
+    if (controlLower.includes("riser")) {
       if (selectedAssets.includes("mainElectricalRisers")) applicableAssets.push("mainElectricalRisers");
       if (selectedAssets.includes("mechanicalRisers")) applicableAssets.push("mechanicalRisers");
     }
-    if (controlId.includes("suite") && selectedAssets.includes("suites")) {
+    if (controlLower.includes("suite") && selectedAssets.includes("suites")) {
       applicableAssets.push("suites");
     }
-    if (controlId.includes("elevator") && selectedAssets.includes("elevatorPits")) {
+    if (controlLower.includes("elevator") && selectedAssets.includes("elevatorPits")) {
       applicableAssets.push("elevatorPits");
     }
-    if (controlId.includes("sump") && selectedAssets.includes("sumpPits")) {
+    if (controlLower.includes("sump") && selectedAssets.includes("sumpPits")) {
       applicableAssets.push("sumpPits");
     }
     
     // Map to water systems
-    if (controlId.includes("fire-suppression") && selectedSystems.includes("fire-suppression")) {
+    if (controlLower.includes("fire suppression") && selectedSystems.includes("fire-suppression")) {
       applicableSystems.push("fire-suppression");
     }
-    if (controlId.includes("cold-water") && selectedSystems.includes("domestic-cold")) {
+    if (controlLower.includes("cold") && controlLower.includes("water") && selectedSystems.includes("domestic-cold")) {
       applicableSystems.push("domestic-cold");
     }
-    if (controlId.includes("hot-water") && selectedSystems.includes("domestic-hot")) {
+    if (controlLower.includes("hot") && controlLower.includes("water") && selectedSystems.includes("domestic-hot")) {
       applicableSystems.push("domestic-hot");
     }
-    if (controlId.includes("temp-water") && selectedSystems.includes("temporary-water")) {
+    if (controlLower.includes("temporary water") && selectedSystems.includes("temporary-water")) {
       applicableSystems.push("temporary-water");
     }
-    if (controlId.includes("hydronics") && selectedSystems.includes("hydronics")) {
+    if (controlLower.includes("hydronics") && selectedSystems.includes("hydronics")) {
       applicableSystems.push("hydronics");
     }
 
@@ -152,21 +125,22 @@ export const ImplementationScheduleStep = ({ data }: ImplementationScheduleStepP
       applicableSystems.push(...selectedSystems);
     }
 
-    // Determine milestone phase
-    let milestone = milestones[0]; // Default to first milestone
-    if (controlId.includes("envelope") || controlId.includes("flood")) {
-      milestone = milestones.find((m) => m.name === "Building Envelope") || milestone;
-    } else if (controlId.includes("fire")) {
-      milestone = milestones.find((m) => m.name === "Fire Suppression") || milestone;
-    } else if (controlId.includes("mep") || controlId.includes("water") || controlId.includes("pressure")) {
-      milestone = milestones.find((m) => m.name === "MEP Rough-ins") || milestone;
-    } else if (controlId.includes("interior") || controlId.includes("suite")) {
-      milestone = milestones.find((m) => m.name === "Interior Finishes") || milestone;
+    // Determine milestone phase - with safety check
+    const defaultMilestone = milestones[0] || { name: "Construction Start", start: null, end: null };
+    let milestone = defaultMilestone;
+    
+    if (controlLower.includes("envelope") || controlLower.includes("flood")) {
+      milestone = milestones.find((m) => m?.name === "Building Envelope") || defaultMilestone;
+    } else if (controlLower.includes("fire")) {
+      milestone = milestones.find((m) => m?.name === "Fire Suppression") || defaultMilestone;
+    } else if (controlLower.includes("water") || controlLower.includes("pressure") || controlLower.includes("monitoring")) {
+      milestone = milestones.find((m) => m?.name === "MEP Rough-ins") || defaultMilestone;
+    } else if (controlLower.includes("interior") || controlLower.includes("suite")) {
+      milestone = milestones.find((m) => m?.name === "Interior Finishes") || defaultMilestone;
     }
 
     return {
-      controlId,
-      controlName: controlNames[controlId] || controlId,
+      controlName,
       applicableAssets,
       applicableSystems,
       milestone,
