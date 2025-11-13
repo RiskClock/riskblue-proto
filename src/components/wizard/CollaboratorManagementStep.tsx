@@ -151,7 +151,7 @@ export const CollaboratorManagementStep = ({ projectId }: CollaboratorManagement
           };
         }
         // Update status to 'submitted' if any proposal from this company has submitted status
-        if (proposal.status === 'submitted') {
+        if ((proposal as any).status === 'submitted') {
           acc[proposal.company].status = 'submitted';
         }
         acc[proposal.company].systems.push({

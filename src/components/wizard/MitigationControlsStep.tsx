@@ -39,7 +39,7 @@ export const MitigationControlsStep = ({ data, onNext, onBack, isProcessingWebho
     queryKey: ['mitigation-controls'],
     queryFn: async () => {
       const { data: controls, error: controlsError } = await supabase
-        .from('mitigation_controls')
+        .from('mitigation_controls' as any)
         .select('*')
         .eq('is_active', true)
         .order('display_order');
@@ -48,27 +48,28 @@ export const MitigationControlsStep = ({ data, onNext, onBack, isProcessingWebho
 
       // Fetch relationships
       const { data: assetRelations, error: assetsError } = await supabase
-        .from('control_assets')
+        .from('control_assets' as any)
         .select('control_id, asset_name');
       
       if (assetsError) throw assetsError;
 
       const { data: systemRelations, error: systemsError } = await supabase
-        .from('control_systems')
+        .from('control_systems' as any)
         .select('control_id, system_name');
       
       if (systemsError) throw systemsError;
 
       // Combine data
-      return controls.map(control => ({
+      const controlsData = (controls as any[]).map((control: any) => ({
         ...control,
-        assets: assetRelations
-          .filter(r => r.control_id === control.id)
-          .map(r => r.asset_name),
-        systems: systemRelations
-          .filter(r => r.control_id === control.id)
-          .map(r => r.system_name),
-      })) as Control[];
+        assets: (assetRelations as any[])
+          .filter((r: any) => r.control_id === control.id)
+          .map((r: any) => r.asset_name),
+        systems: (systemRelations as any[])
+          .filter((r: any) => r.control_id === control.id)
+          .map((r: any) => r.system_name),
+      }));
+      return controlsData as Control[];
     },
   });
 
