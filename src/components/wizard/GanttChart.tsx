@@ -12,6 +12,7 @@ interface GanttItem {
   name: string;
   startDate: Date;
   endDate: Date;
+  calculatedFrom?: string;
 }
 
 interface GanttControl {
@@ -28,14 +29,22 @@ export const GanttChart = ({ data }: GanttChartProps) => {
   const [zoom, setZoom] = useState(1);
   const [searchQuery, setSearchQuery] = useState("");
 
-  // Filter data based on search query
+  // Filter and sort data based on search query
   const filteredData = useMemo(() => {
-    if (!searchQuery.trim()) return data;
-    const query = searchQuery.toLowerCase();
-    return data.filter(control => 
-      control.controlName.toLowerCase().includes(query) ||
-      control.items.some(item => item.name.toLowerCase().includes(query))
-    );
+    let filtered = data;
+    if (searchQuery.trim()) {
+      const query = searchQuery.toLowerCase();
+      filtered = data.filter(control => 
+        control.controlName.toLowerCase().includes(query) ||
+        control.items.some(item => item.name.toLowerCase().includes(query))
+      );
+    }
+    // Sort by earliest start date
+    return [...filtered].sort((a, b) => {
+      const aStart = Math.min(...a.items.map(i => i.startDate.getTime()));
+      const bStart = Math.min(...b.items.map(i => i.startDate.getTime()));
+      return aStart - bStart;
+    });
   }, [data, searchQuery]);
 
   // Calculate the overall timeline range
@@ -146,7 +155,7 @@ export const GanttChart = ({ data }: GanttChartProps) => {
   return (
     <TooltipProvider>
       <div className="overflow-hidden w-full bg-background border-y border-border py-6">
-        <div className="container mx-auto px-6">
+        <div className="w-full px-6">
           <div className="mb-4 flex items-center justify-between gap-4">
             <div className="flex-1">
               <h3 className="text-lg font-semibold mb-1">Implementation Schedule Gantt Chart</h3>
@@ -155,15 +164,6 @@ export const GanttChart = ({ data }: GanttChartProps) => {
               </p>
             </div>
             <div className="flex gap-2 items-center">
-              <div className="relative">
-                <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                <Input
-                  placeholder="Search controls..."
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  className="pl-8 w-64"
-                />
-              </div>
               <Button 
                 variant="outline" 
                 size="sm"
@@ -186,6 +186,16 @@ export const GanttChart = ({ data }: GanttChartProps) => {
           <div className="flex">
             {/* Fixed control names column */}
             <div className="w-[280px] shrink-0">
+              {/* Search box */}
+              <div className="mb-2 relative">
+                <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                <Input
+                  placeholder="Search controls..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="pl-8 h-8 text-sm"
+                />
+              </div>
               {/* Year header spacer */}
               <div className="h-6 border-b border-border" />
               {/* Month header spacer */}
@@ -322,6 +332,11 @@ export const GanttChart = ({ data }: GanttChartProps) => {
                                     <p className="text-xs">
                                       {format(item.startDate, "MMM d, yyyy")} - {format(item.endDate, "MMM d, yyyy")}
                                     </p>
+                                    {item.calculatedFrom && (
+                                      <p className="text-xs text-muted-foreground italic">
+                                        {item.calculatedFrom}
+                                      </p>
+                                    )}
                                   </div>
                                 </TooltipContent>
                               </Tooltip>

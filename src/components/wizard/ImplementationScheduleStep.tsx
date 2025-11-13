@@ -85,19 +85,22 @@ export const ImplementationScheduleStep = ({ data }: ImplementationScheduleStepP
       ? control.systems_at_risk.split(',').map(s => s.trim()).filter(Boolean)
       : [];
 
+    type ItemType = { name: string; startDate: Date; endDate: Date; calculatedFrom?: string };
+    
     const items = systemsAndAssets
-      .map((systemOrAsset) => {
+      .map((systemOrAsset): ItemType | null => {
         const dates = calculateSystemOrAssetDates(systemOrAsset, timeline);
         if (dates.startDate && dates.endDate) {
           return {
             name: systemOrAsset,
             startDate: dates.startDate,
             endDate: dates.endDate,
+            ...(dates.calculatedFrom && { calculatedFrom: dates.calculatedFrom }),
           };
         }
         return null;
       })
-      .filter((item): item is { name: string; startDate: Date; endDate: Date } => item !== null);
+      .filter((item): item is ItemType => item !== null);
 
     return {
       controlName: control.name,
@@ -109,7 +112,7 @@ export const ImplementationScheduleStep = ({ data }: ImplementationScheduleStepP
     <>
       {/* Gantt Chart */}
       {ganttData.length > 0 && (
-        <div className="w-full -mx-6">
+        <div className="w-screen -ml-[50vw] left-1/2 relative">
           <GanttChart data={ganttData} />
         </div>
       )}
