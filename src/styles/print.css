@@ -103,6 +103,11 @@
   display: none;
 }
 
+/* Hide print header on screen */
+.print-header {
+  display: none;
+}
+
 @media screen {
   .print-report {
     display: none;
