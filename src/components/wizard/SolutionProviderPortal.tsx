@@ -13,6 +13,7 @@ import mechanicalRoomImg from "@/assets/control_Mechanical_Room_Presence_of_Wate
 import mainElectricalRiserImg from "@/assets/control_Main_Electrical_Riser_Presence_of_Water_Monitoring.avif";
 import tempWaterRunImg from "@/assets/control_Temporary_Water_Run_Abnormal_Flow_Monitoring.avif";
 import triggerValveImg from "@/assets/control_Trigger_Valve_Shut_Off_on_Abnormal_Flow_Detection.avif";
+import tempWaterRunAutomaticImg from "@/assets/control_Temporary_Water_Run.avif";
 import mechanicalRisersImg from "@/assets/control_Mechanical_Risers_Presence_of_Water_Monitoring.avif";
 import fireSuppressionFlowImg from "@/assets/control_Fire_Suppression_System_Abnormal_Flow_Monitoring.avif";
 import suiteDrainsImg from "@/assets/control_Suite_Drains.avif";
