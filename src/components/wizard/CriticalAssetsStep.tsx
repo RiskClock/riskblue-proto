@@ -6,6 +6,7 @@ import { Label } from "@/components/ui/label";
 import { Info } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useQuery } from "@tanstack/react-query";
+import { calculateCriticalAssetDuration } from "@/lib/durationCalculator";
 interface Asset {
   id: string;
   name: string;
@@ -123,7 +124,7 @@ export const CriticalAssetsStep = ({
               </p>
               
               <div className="flex justify-between text-xs text-muted-foreground">
-                <span><strong>Duration:</strong> {asset.duration}</span>
+                <span><strong>Duration:</strong> {calculateCriticalAssetDuration(asset.name, data)}</span>
                 <span><strong>Cost:</strong> {asset.cost}</span>
               </div>
               

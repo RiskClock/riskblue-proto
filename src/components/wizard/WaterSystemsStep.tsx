@@ -6,6 +6,7 @@ import { Label } from "@/components/ui/label";
 import { Info } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useQuery } from "@tanstack/react-query";
+import { calculateWaterSystemDuration } from "@/lib/durationCalculator";
 interface WaterSystem {
   id: string;
   name: string;
@@ -123,7 +124,7 @@ export const WaterSystemsStep = ({
               </p>
               
               <div className="flex justify-between text-xs text-muted-foreground">
-                <span><strong>Duration:</strong> {system.duration}</span>
+                <span><strong>Duration:</strong> {calculateWaterSystemDuration(system.name, data)}</span>
                 <span><strong>Cost:</strong> {system.cost}</span>
               </div>
               
