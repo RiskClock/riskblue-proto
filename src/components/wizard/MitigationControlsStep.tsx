@@ -125,16 +125,7 @@ export const MitigationControlsStep = ({ data, onNext, onBack, isProcessingWebho
     setDialogOpen(true);
   };
 
-  // Group controls by category with specific order
-  const categoryOrder = [
-    'Presence of Water Monitoring',
-    'Abnormal Flow Valve and Pump Automation',
-    'Water System Design',
-    'Design Incorporated',
-    'Process Inspections and Documentation',
-    'Water Response Strategy'
-  ];
-
+  // Group controls by category, maintaining order from CSV data
   const groupedControls = mitigationControls.reduce((acc, control) => {
     if (!acc[control.category]) {
       acc[control.category] = [];
@@ -143,11 +134,10 @@ export const MitigationControlsStep = ({ data, onNext, onBack, isProcessingWebho
     return acc;
   }, {} as Record<string, Control[]>);
 
-  // Sort grouped controls by category order
+  // Extract unique categories in order they appear (based on display_order from CSV)
   const sortedGroupedControls = Object.fromEntries(
-    categoryOrder
-      .filter(cat => groupedControls[cat])
-      .map(cat => [cat, groupedControls[cat]])
+    Array.from(new Set(mitigationControls.map(c => c.category)))
+      .map(category => [category, groupedControls[category]])
   );
 
   if (isLoading) {
