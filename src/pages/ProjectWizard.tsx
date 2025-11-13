@@ -283,13 +283,13 @@ const ProjectWizard = () => {
           .map(([key]) => {
             // Map schema keys to our asset IDs
             const assetMap: Record<string, string> = {
-              "mechanical_rooms": "mechanical",
-              "electrical_rooms": "electrical",
-              "main_electrical_risers": "mainElectricalRisers",
-              "sump_pits": "sumpPits",
-              "mechanical_risers": "mechanicalRisers",
-              "elevator_pits": "elevatorPits",
-              "suites/guest_rooms": "suites"
+              "mechanical_rooms": "Mechanical Rooms",
+              "electrical_rooms": "Electrical Rooms",
+              "main_electrical_risers": "Main Electrical Risers",
+              "sump_pits": "Sump Pits",
+              "mechanical_risers": "Mechanical Risers",
+              "elevator_pits": "Elevator Pits",
+              "suites/guest_rooms": "Suites"
             };
             return assetMap[key] || key;
           }) : projectData.selectedAssets,
@@ -301,12 +301,12 @@ const ProjectWizard = () => {
           .map(([key]) => {
             // Map schema keys to our system IDs
             const systemMap: Record<string, string> = {
-              "domestic_cold_water": "domestic-cold",
-              "domestic_hot_water": "domestic-hot",
-              "temporary_water_run": "temporary-water",
-              "main_city_water_supply": "main-water-entry",
-              "hydronics": "hydronics",
-              "fire_suppression_systems": "fire-suppression"
+              "domestic_cold_water": "Domestic Cold Water",
+              "domestic_hot_water": "Domestic Hot Water",
+              "temporary_water_run": "Temporary Water Run",
+              "main_city_water_supply": "Main City Water Supply",
+              "hydronics": "Hydronics",
+              "fire_suppression_systems": "Fire Suppression System"
             };
             return systemMap[key] || key;
           }) : projectData.selectedSystems,
