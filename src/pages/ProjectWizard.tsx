@@ -567,13 +567,15 @@ const ProjectWizard = () => {
             </div>
           </TabsContent>
 
-          <TabsContent value="response" className="max-w-5xl mx-auto">
+          <TabsContent value="response">
             <ImplementationScheduleStep data={projectData} />
             
-            <ResponsePlanUploadChat 
-              projectId={id || "new"} 
-              onDataExtracted={handleDocumentDataExtracted}
-            />
+            <div className="max-w-5xl mx-auto">
+              <ResponsePlanUploadChat 
+                projectId={id || "new"} 
+                onDataExtracted={handleDocumentDataExtracted}
+              />
+            </div>
           </TabsContent>
         </Tabs>
       </div>

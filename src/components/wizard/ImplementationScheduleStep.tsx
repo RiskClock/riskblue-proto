@@ -112,7 +112,7 @@ export const ImplementationScheduleStep = ({ data }: ImplementationScheduleStepP
     <>
       {/* Gantt Chart */}
       {ganttData.length > 0 && (
-        <div className="w-screen -ml-[50vw] left-1/2 relative">
+        <div className="w-full mb-6">
           <GanttChart data={ganttData} />
         </div>
       )}
