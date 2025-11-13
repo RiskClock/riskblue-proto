@@ -253,7 +253,7 @@ export const MitigationControlsStep = ({ data, onNext, onBack, isProcessingWebho
                   <img 
                     src={selectedControl.image_url} 
                     alt={selectedControl.name}
-                    className="w-full h-48 object-cover rounded-md mb-4"
+                    className="w-full h-64 object-contain rounded-md mb-4"
                   />
                   <div className="space-y-2">
                     <p><strong>Description:</strong></p>
