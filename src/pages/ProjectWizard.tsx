@@ -18,6 +18,7 @@ import { MitigationControlsStep } from "@/components/wizard/MitigationControlsSt
 import { MitigationResponsePlanStep } from "@/components/wizard/MitigationResponsePlanStep";
 import { WaterMitigationGuidelinesStep } from "@/components/wizard/WaterMitigationGuidelinesStep";
 import { CollaboratorManagementStep } from "@/components/wizard/CollaboratorManagementStep";
+import { ImplementationScheduleStep } from "@/components/wizard/ImplementationScheduleStep";
 import { DocumentUploadChat } from "@/components/DocumentUploadChat";
 import { ResponsePlanUploadChat } from "@/components/ResponsePlanUploadChat";
 import { Download, LogOut, FileText, Check } from "lucide-react";
@@ -567,6 +568,8 @@ const ProjectWizard = () => {
           </TabsContent>
 
           <TabsContent value="response" className="max-w-5xl mx-auto">
+            <ImplementationScheduleStep data={projectData} />
+            
             <ResponsePlanUploadChat 
               projectId={id || "new"} 
               onDataExtracted={handleDocumentDataExtracted}
