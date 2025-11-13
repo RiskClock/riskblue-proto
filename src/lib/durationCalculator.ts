@@ -128,3 +128,69 @@ export const calculateCriticalAssetDuration = (
     return "Error";
   }
 };
+
+export const calculateSystemOrAssetDates = (
+  name: string,
+  timeline: TimelineData
+): { startDate: Date | null; endDate: Date | null } => {
+  try {
+    const { 
+      construction_end_date, 
+      enclosure_end_date, 
+      mep_start_date, 
+      mep_end_date, 
+      elevators_start_date,
+      interior_start_date,
+      interior_end_date
+    } = timeline;
+
+    if (!construction_end_date) return { startDate: null, endDate: null };
+
+    let startDate: Date | null = null;
+    let endDate: Date | null = null;
+
+    // Water Systems
+    if (name === "Domestic Cold Water") {
+      if (mep_start_date) {
+        startDate = addDays(parseISO(mep_start_date), 120);
+        endDate = parseISO(construction_end_date);
+      }
+    } else if (["Domestic Hot Water", "Main City Water Supply", "Hydronics", "Fire Suppression System"].includes(name)) {
+      if (mep_end_date) {
+        startDate = parseISO(mep_end_date);
+        endDate = parseISO(construction_end_date);
+      }
+    } else if (name === "Temporary Water Run") {
+      if (interior_start_date && interior_end_date) {
+        startDate = parseISO(interior_start_date);
+        endDate = parseISO(interior_end_date);
+      }
+    }
+    // Critical Assets
+    else if (["Mechanical Rooms", "Mechanical Risers"].includes(name)) {
+      if (mep_end_date) {
+        startDate = addDays(parseISO(mep_end_date), -60);
+        endDate = parseISO(construction_end_date);
+      }
+    } else if (["Electrical Rooms", "Main Electrical Risers"].includes(name)) {
+      if (enclosure_end_date && mep_start_date) {
+        startDate = parseISO(mep_start_date);
+        endDate = parseISO(enclosure_end_date);
+      }
+    } else if (["Sump Pits", "Elevator Pits"].includes(name)) {
+      if (elevators_start_date) {
+        startDate = addDays(parseISO(elevators_start_date), -30);
+        endDate = parseISO(construction_end_date);
+      }
+    } else if (name === "Suites") {
+      if (interior_start_date) {
+        startDate = addDays(parseISO(interior_start_date), -30);
+        endDate = parseISO(construction_end_date);
+      }
+    }
+
+    return { startDate, endDate };
+  } catch (error) {
+    return { startDate: null, endDate: null };
+  }
+};
