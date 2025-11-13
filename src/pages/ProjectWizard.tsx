@@ -202,11 +202,15 @@ const ProjectWizard = () => {
   }, [id, isSavingNewProject, user?.id, navigate, toast]);
 
   const handleStepUpdate = useCallback(async (stepData: any) => {
+    let dataToSave: ProjectData;
+    
     setProjectData(prevData => {
-      const updatedData = { ...prevData, ...stepData };
-      saveProject(updatedData);
-      return updatedData;
+      dataToSave = { ...prevData, ...stepData };
+      return dataToSave;
     });
+    
+    // Save after state is updated
+    await saveProject(dataToSave!);
   }, [saveProject]);
 
   const handleDocumentDataExtracted = async (extractedData: any) => {
