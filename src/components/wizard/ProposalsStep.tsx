@@ -8,6 +8,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { DollarSign } from "lucide-react";
+import { normalizeControlName } from "@/lib/utils";
 
 interface ProposalsStepProps {
   data: any;
@@ -257,7 +258,7 @@ export const ProposalsStep = ({ data, onBack, onNext }: ProposalsStepProps) => {
                           onCheckedChange={toggleSelectAll}
                         />
                       </TableCell>
-                      <TableCell className="font-medium">{control}</TableCell>
+                      <TableCell className="font-medium">{normalizeControlName(control)}</TableCell>
                       {proposals.map((proposal) => (
                         <TableCell key={proposal.id} className="text-center">
                           {proposal.systems[control] ? (
