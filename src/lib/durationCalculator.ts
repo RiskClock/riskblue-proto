@@ -149,35 +149,18 @@ export const calculateSystemOrAssetDates = (
     let startDate: Date | null = null;
     let endDate: Date | null = null;
 
-    // Water Systems
-    if (name === "Domestic Cold Water") {
-      if (mep_start_date) {
-        startDate = addDays(parseISO(mep_start_date), 120);
-        endDate = parseISO(construction_end_date);
-      }
-    } else if (["Domestic Hot Water", "Main City Water Supply", "Hydronics", "Fire Suppression System"].includes(name)) {
-      if (mep_end_date) {
-        startDate = parseISO(mep_end_date);
-        endDate = parseISO(construction_end_date);
-      }
-    } else if (name === "Temporary Water Run") {
-      if (interior_start_date && interior_end_date) {
-        startDate = parseISO(interior_start_date);
-        endDate = parseISO(interior_end_date);
-      }
-    }
     // Critical Assets
-    else if (["Mechanical Rooms", "Mechanical Risers"].includes(name)) {
+    if (name === "Mechanical Rooms" || name === "Mechanical Risers") {
       if (mep_end_date) {
         startDate = addDays(parseISO(mep_end_date), -60);
         endDate = parseISO(construction_end_date);
       }
-    } else if (["Electrical Rooms", "Main Electrical Risers"].includes(name)) {
-      if (enclosure_end_date && mep_start_date) {
+    } else if (name === "Electrical Rooms" || name === "Main Electrical Risers") {
+      if (mep_start_date && enclosure_end_date) {
         startDate = parseISO(mep_start_date);
         endDate = parseISO(enclosure_end_date);
       }
-    } else if (["Sump Pits", "Elevator Pits"].includes(name)) {
+    } else if (name === "Sump Pits" || name === "Elevator Pits") {
       if (elevators_start_date) {
         startDate = addDays(parseISO(elevators_start_date), -30);
         endDate = parseISO(construction_end_date);
@@ -186,6 +169,23 @@ export const calculateSystemOrAssetDates = (
       if (interior_start_date) {
         startDate = addDays(parseISO(interior_start_date), -30);
         endDate = parseISO(construction_end_date);
+      }
+    }
+    // Water Systems
+    else if (name === "Domestic Cold Water") {
+      if (mep_start_date) {
+        startDate = addDays(parseISO(mep_start_date), 120);
+        endDate = parseISO(construction_end_date);
+      }
+    } else if (name === "Domestic Hot Water" || name === "Main City Water Supply" || name === "Hydronics" || name === "Fire Suppression System") {
+      if (mep_end_date) {
+        startDate = parseISO(mep_end_date);
+        endDate = parseISO(construction_end_date);
+      }
+    } else if (name === "Temporary Water Run") {
+      if (interior_start_date && interior_end_date) {
+        startDate = parseISO(interior_start_date);
+        endDate = parseISO(interior_end_date);
       }
     }
 
