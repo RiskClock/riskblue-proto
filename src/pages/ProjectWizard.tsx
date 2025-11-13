@@ -363,8 +363,12 @@ const ProjectWizard = () => {
               </h2>
             </div>
             <TabsList className="w-full justify-start">
-              <TabsTrigger value="guideline">Water Risk Discovery</TabsTrigger>
-              <TabsTrigger value="plan">Water Mitigation Planning</TabsTrigger>
+              <TabsTrigger value="guideline">
+                Water Risk Discovery {projectData.waterRiskDiscoveryComplete && "✅"}
+              </TabsTrigger>
+              <TabsTrigger value="plan">
+                Water Mitigation Planning {projectData.waterMitigationPlanningComplete && "✅"}
+              </TabsTrigger>
               <TabsTrigger value="response">Water Mitigation Execution</TabsTrigger>
             </TabsList>
           </div>
@@ -478,7 +482,11 @@ const ProjectWizard = () => {
             <div className="flex justify-center mb-6">
               <Dialog open={showGuidelinesDialog} onOpenChange={setShowGuidelinesDialog}>
                 <DialogTrigger asChild>
-                  <Button variant="outline" size="lg">
+                  <Button 
+                    variant="outline" 
+                    size="lg"
+                    disabled={!projectData.waterRiskDiscoveryComplete}
+                  >
                     <FileText className="h-4 w-4 mr-2" />
                     Water Mitigation Guideline
                   </Button>
@@ -497,6 +505,27 @@ const ProjectWizard = () => {
             </div>
             
             <CollaboratorManagementStep projectId={id || "new"} />
+            
+            {/* Bottom Controls */}
+            <div className="flex justify-between items-center pt-6">
+              <div />
+              
+              <div className="flex items-center gap-4">
+                <div className="flex items-center gap-2">
+                  <input
+                    type="checkbox"
+                    id="mark-plan-complete"
+                    checked={projectData.waterMitigationPlanningComplete || false}
+                    onChange={(e) => handleStepUpdate({ waterMitigationPlanningComplete: e.target.checked })}
+                    className="h-4 w-4 rounded border-input"
+                  />
+                  <Label htmlFor="mark-plan-complete" className="cursor-pointer">Mark as Complete</Label>
+                </div>
+                <Button onClick={() => setActiveTab("response")}>
+                  Continue
+                </Button>
+              </div>
+            </div>
           </TabsContent>
 
           <TabsContent value="response" className="max-w-5xl mx-auto">
