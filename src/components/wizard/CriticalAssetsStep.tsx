@@ -3,7 +3,7 @@ import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { MapPin } from "lucide-react";
+import { Info } from "lucide-react";
 import mechanicalRoomsImg from "@/assets/critical_assets_mechanical_rooms.avif";
 import electricalRoomsImg from "@/assets/critical_assets_electrical_rooms.avif";
 import mainElectricalRisersImg from "@/assets/critical_assets_main_electrical_risers.avif";
@@ -136,63 +136,54 @@ export const CriticalAssetsStep = ({ data, onNext, onBack, isProcessingWebhook }
           {assets.map((asset) => (
             <div
               key={asset.id}
-              className={`p-4 rounded-lg border-2 transition-all ${
+              className={`p-4 rounded-lg border-2 transition-all relative ${
                 selectedAssets.includes(asset.id)
                   ? "border-primary bg-primary/5"
                   : "border-border hover:border-primary/50"
               }`}
+              onClick={() => toggleAsset(asset.id)}
             >
-              <div 
-                className="h-24 bg-muted rounded mb-3 flex items-center justify-center overflow-hidden cursor-pointer"
-                onClick={() => toggleAsset(asset.id)}
-              >
+              <Dialog open={dialogOpen === asset.id} onOpenChange={(open) => !open && setDialogOpen(null)}>
+                <DialogTrigger asChild>
+                  <Button
+                    variant="default"
+                    size="sm"
+                    className="absolute top-2 right-2 h-8 w-8 p-0 rounded-md bg-green-600 hover:bg-green-700 z-10"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleOpenFloorDialog(asset.id);
+                    }}
+                  >
+                    <Info className="h-4 w-4 text-white" />
+                  </Button>
+                </DialogTrigger>
+                <DialogContent onClick={(e) => e.stopPropagation()}>
+                  <DialogHeader>
+                    <DialogTitle>Floors for {asset.name}</DialogTitle>
+                  </DialogHeader>
+                  <div className="space-y-4 py-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="floors">Enter floors (e.g., "B1, 1-5, 10")</Label>
+                      <Input
+                        id="floors"
+                        value={tempFloors}
+                        onChange={(e) => setTempFloors(e.target.value)}
+                        placeholder="e.g., B1, 1-5, 10"
+                      />
+                    </div>
+                    <Button onClick={handleSaveFloors} className="w-full">
+                      Save Floors
+                    </Button>
+                  </div>
+                </DialogContent>
+              </Dialog>
+              
+              <div className="h-24 bg-muted rounded mb-3 flex items-center justify-center overflow-hidden">
                 <img src={asset.image} alt={asset.name} className="w-full h-full object-contain" />
               </div>
-              <div className="flex items-start justify-between mb-2">
-                <h3 
-                  className="font-semibold text-sm flex-1 cursor-pointer"
-                  onClick={() => toggleAsset(asset.id)}
-                >
-                  {asset.name}
-                </h3>
-                <Dialog open={dialogOpen === asset.id} onOpenChange={(open) => !open && setDialogOpen(null)}>
-                  <DialogTrigger asChild>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="h-6 w-6 p-0"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleOpenFloorDialog(asset.id);
-                      }}
-                    >
-                      <MapPin className="h-4 w-4" />
-                    </Button>
-                  </DialogTrigger>
-                  <DialogContent onClick={(e) => e.stopPropagation()}>
-                    <DialogHeader>
-                      <DialogTitle>Floors for {asset.name}</DialogTitle>
-                    </DialogHeader>
-                    <div className="space-y-4 py-4">
-                      <div className="space-y-2">
-                        <Label htmlFor="floors">Enter floors (e.g., "B1, 1-5, 10")</Label>
-                        <Input
-                          id="floors"
-                          value={tempFloors}
-                          onChange={(e) => setTempFloors(e.target.value)}
-                          placeholder="e.g., B1, 1-5, 10"
-                        />
-                      </div>
-                      <Button onClick={handleSaveFloors} className="w-full">
-                        Save Floors
-                      </Button>
-                    </div>
-                  </DialogContent>
-                </Dialog>
-              </div>
+              <h3 className="font-semibold mb-2 text-sm">{asset.name}</h3>
               {assetFloors[asset.id] && (
-                <div className="text-xs text-muted-foreground mb-2 flex items-center gap-1">
-                  <MapPin className="h-3 w-3" />
+                <div className="text-xs text-muted-foreground mb-2">
                   <span>Floors: {assetFloors[asset.id]}</span>
                 </div>
               )}
