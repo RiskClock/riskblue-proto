@@ -40,20 +40,20 @@ export const ImplementationScheduleStep = ({ data }: ImplementationScheduleStepP
 
   // Build timeline object for date calculations
   const timeline = {
-    construction_start_date: data.constructionStartDate,
-    construction_end_date: data.constructionEndDate,
-    frame_start_date: data.structuralFrameStartDate,
-    frame_end_date: data.structuralFrameEndDate,
-    enclosure_start_date: data.buildingEnvelopeStartDate,
-    enclosure_end_date: data.buildingEnvelopeEndDate,
-    mep_start_date: data.mepRoughinsStartDate,
-    mep_end_date: data.mepRoughinsEndDate,
-    elevators_start_date: data.elevatorsStartDate,
-    elevators_end_date: data.elevatorsEndDate,
-    fire_start_date: data.fireSuppressionStartDate,
-    fire_end_date: data.fireSuppressionEndDate,
-    interior_start_date: data.interiorFinishesStartDate,
-    interior_end_date: data.interiorFinishesEndDate,
+    construction_start_date: data.construction_start_date,
+    construction_end_date: data.construction_end_date,
+    frame_start_date: data.frame_start_date,
+    frame_end_date: data.frame_end_date,
+    enclosure_start_date: data.enclosure_start_date,
+    enclosure_end_date: data.enclosure_end_date,
+    mep_start_date: data.mep_start_date,
+    mep_end_date: data.mep_end_date,
+    elevators_start_date: data.elevators_start_date,
+    elevators_end_date: data.elevators_end_date,
+    fire_start_date: data.fire_start_date,
+    fire_end_date: data.fire_end_date,
+    interior_start_date: data.interior_start_date,
+    interior_end_date: data.interior_end_date,
   };
 
   if (isLoading) {
