@@ -79,7 +79,7 @@ const ProjectWizard = () => {
     }
   };
 
-  const saveProject = async (data: ProjectData) => {
+  const saveProject = useCallback(async (data: ProjectData) => {
     // Prevent saving if we're on "new" route and there's no name yet
     // This prevents duplicate empty projects from being created
     if (id === "new" && (!data.name || data.name.trim() === "" || data.name === "Untitled Project")) {
@@ -199,13 +199,15 @@ const ProjectWizard = () => {
         setIsSavingNewProject(false);
       }
     }
-  };
+  }, [id, isSavingNewProject, user?.id, navigate, toast]);
 
   const handleStepUpdate = useCallback(async (stepData: any) => {
-    const updatedData = { ...projectData, ...stepData };
-    setProjectData(updatedData);
-    await saveProject(updatedData);
-  }, [projectData]);
+    setProjectData(prevData => {
+      const updatedData = { ...prevData, ...stepData };
+      saveProject(updatedData);
+      return updatedData;
+    });
+  }, [saveProject]);
 
   const handleDocumentDataExtracted = async (extractedData: any) => {
     // Set flag immediately to prevent any auto-saves from starting
