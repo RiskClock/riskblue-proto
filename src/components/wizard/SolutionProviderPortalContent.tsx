@@ -14,6 +14,25 @@ import mechanicalRoomImg from "@/assets/control_Mechanical_Room_Presence_of_Wate
 import mainElectricalRiserImg from "@/assets/control_Main_Electrical_Riser_Presence_of_Water_Monitoring.avif";
 import tempWaterRunImg from "@/assets/control_Temporary_Water_Run_Abnormal_Flow_Monitoring.avif";
 import triggerValveImg from "@/assets/control_Trigger_Valve_Shut_Off_on_Abnormal_Flow_Detection.avif";
+import mechanicalRisersImg from "@/assets/control_Mechanical_Risers_Presence_of_Water_Monitoring.avif";
+import fireSuppressionFlowImg from "@/assets/control_Fire_Suppression_System_Abnormal_Flow_Monitoring.avif";
+import suiteDrainsImg from "@/assets/control_Suite_Drains.avif";
+import floodControlImg from "@/assets/control_Flood_Control_Measures.avif";
+import envelopePrequalificationImg from "@/assets/control_Pre-qualification_of_Envelope_Systems.avif";
+import heatTraceImg from "@/assets/control_Heat_trace_and_Insulation.avif";
+import prvMaintenanceImg from "@/assets/control_Pressure_Reducing_Valve_Maintenance_Plan_Safeguarding_System_Performance.avif";
+import properZoningImg from "@/assets/control_Proper_Zoning_Configuration_Optimizing_Pressure_System.avif";
+import floorPenetrationsImg from "@/assets/control_Floor_Penetrations_Water_Seals.avif";
+import historicalReportsImg from "@/assets/control_Historical_Project_Water_Incident_Reports.avif";
+import floodWindReportImg from "@/assets/control_100-Year_Flood_and_Wind_Storm_Report.avif";
+import warrantiesInsuranceImg from "@/assets/control_Water_Mitigation_Components_Warranties_and_Insurance.avif";
+import equipmentLabelingImg from "@/assets/control_Water_Mitigation_Equipment_Labeling.avif";
+import acceptanceTestImg from "@/assets/control_Water_Mitigation_Equipment_Acceptance_Test.avif";
+import installationIntegrityImg from "@/assets/control_Installation_Integrity_Joints_Bolts_and_Piping.avif";
+import fillTestsImg from "@/assets/control_Additional_Fill_Tests_Ensuring_Water_System_Integrity.avif";
+import airPressureTestsImg from "@/assets/control_Air_Pressure_or_Water_Tests_in_Plumbing_System.avif";
+import spillKitImg from "@/assets/control_Spill_Kit.avif";
+import temporaryEnclosuresImg from "@/assets/control_Temporary_Enclosures_Plan.avif";
 import mechanicalRoomsAssetImg from "@/assets/critical_assets_mechanical_rooms.avif";
 import electricalRoomsAssetImg from "@/assets/critical_assets_electrical_rooms.avif";
 import mainElectricalRisersAssetImg from "@/assets/critical_assets_main_electrical_risers.avif";
@@ -46,37 +65,56 @@ import interiorImg from "@/assets/timeline6-interior.avif";
 const controlImages: Record<string, string> = {
   "electrical-room-monitoring": electricalRoomImg,
   "mechanical-room-monitoring": mechanicalRoomImg,
+  "mechanical-risers-monitoring": mechanicalRisersImg,
   "main-riser-shutoff": mainElectricalRiserImg,
   "temporary-water-flow-monitoring": tempWaterRunImg,
+  "fire-suppression-flow-monitoring": fireSuppressionFlowImg,
   "automatic-shutoff-temp-water": triggerValveImg,
+  "suite-drains": suiteDrainsImg,
+  "flood-control": floodControlImg,
+  "envelope-prequalification": envelopePrequalificationImg,
+  "heat-trace-insulation": heatTraceImg,
+  "prv-maintenance": prvMaintenanceImg,
+  "proper-zoning": properZoningImg,
+  "floor-penetrations": floorPenetrationsImg,
+  "incident-reports": historicalReportsImg,
+  "flood-wind-report": floodWindReportImg,
+  "warranties-insurance": warrantiesInsuranceImg,
+  "equipment-labeling": equipmentLabelingImg,
+  "acceptance-test": acceptanceTestImg,
+  "installation-integrity": installationIntegrityImg,
+  "fill-tests": fillTestsImg,
+  "air-pressure-tests": airPressureTestsImg,
+  "spill-kit": spillKitImg,
+  "temporary-enclosures": temporaryEnclosuresImg,
 };
 
 const mitigationControls = [
   { id: "electrical-room-monitoring", name: "Electrical Room Presence of Water Monitoring", category: "Presence of Water Monitoring", image: controlImages["electrical-room-monitoring"] },
-  { id: "mechanical-risers-monitoring", name: "Mechanical Risers Presence of Water Monitoring", category: "Presence of Water Monitoring" },
+  { id: "mechanical-risers-monitoring", name: "Mechanical Risers Presence of Water Monitoring", category: "Presence of Water Monitoring", image: controlImages["mechanical-risers-monitoring"] },
   { id: "mechanical-room-monitoring", name: "Mechanical Room Presence of Water Monitoring", category: "Presence of Water Monitoring", image: controlImages["mechanical-room-monitoring"] },
   { id: "cold-domestic-flow-monitoring", name: "Cold Domestic Water Abnormal Flow Monitoring", category: "Abnormal Flow Valve and Pump Automation" },
   { id: "temporary-water-flow-monitoring", name: "Temporary Water Run Abnormal Flow Monitoring", category: "Abnormal Flow Valve and Pump Automation", image: controlImages["temporary-water-flow-monitoring"] },
-  { id: "fire-suppression-flow-monitoring", name: "Fire Suppression System Abnormal Flow Monitoring", category: "Abnormal Flow Valve and Pump Automation" },
+  { id: "fire-suppression-flow-monitoring", name: "Fire Suppression System Abnormal Flow Monitoring", category: "Abnormal Flow Valve and Pump Automation", image: controlImages["fire-suppression-flow-monitoring"] },
   { id: "automatic-shutoff-temp-water", name: "Automatic Shut Off Temporary Water Run", category: "Abnormal Flow Valve and Pump Automation", image: controlImages["automatic-shutoff-temp-water"] },
   { id: "main-riser-shutoff", name: "Main Riser Section Automatic Shut Open/Close Cold Domestic Water", category: "Abnormal Flow Valve and Pump Automation", image: controlImages["main-riser-shutoff"] },
-  { id: "suite-drains", name: "Suite Drains", category: "Design Incorporated" },
-  { id: "flood-control", name: "Flood Control Measures", category: "Design Incorporated" },
-  { id: "envelope-prequalification", name: "Pre-qualification of Envelope Systems", category: "Design Incorporated" },
-  { id: "heat-trace-insulation", name: "Heat Trace and Insulation", category: "Design Incorporated" },
-  { id: "prv-maintenance", name: "Pressure Reducing Valve Maintenance Plan: Safeguarding System Performance", category: "Design Incorporated" },
-  { id: "proper-zoning", name: "Proper Zoning Configuration: Optimizing Pressure Systems", category: "Design Incorporated" },
-  { id: "floor-penetrations", name: "Floor Penetrations Water Seals", category: "Design Incorporated" },
-  { id: "incident-reports", name: "Historical Project Water Incident Reports", category: "Water Response Strategy" },
-  { id: "flood-wind-report", name: "100-Year Flood and Wind Storm Report", category: "Water Response Strategy" },
-  { id: "warranties-insurance", name: "Water Mitigation Components Warranties and Insurance", category: "Process Inspections and Documentation" },
-  { id: "equipment-labeling", name: "Water Mitigation Equipment Labeling", category: "Process Inspections and Documentation" },
-  { id: "acceptance-test", name: "Water Mitigation Equipment Acceptance Test", category: "Process Inspections and Documentation" },
-  { id: "installation-integrity", name: "Installation Integrity: Joints, Bolts, and Piping", category: "Process Inspections and Documentation" },
-  { id: "fill-tests", name: "Additional Fill Tests: Ensuring Water System Integrity", category: "Process Inspections and Documentation" },
-  { id: "air-pressure-tests", name: "Air Pressure or Water Tests in Plumbing System", category: "Tests Expansions and Maintenance" },
-  { id: "spill-kit", name: "Spill Kit", category: "Tests Expansions and Maintenance" },
-  { id: "temporary-enclosures", name: "Temporary Enclosures Plan", category: "Tests Expansions and Maintenance" },
+  { id: "suite-drains", name: "Suite Drains", category: "Design Incorporated", image: controlImages["suite-drains"] },
+  { id: "flood-control", name: "Flood Control Measures", category: "Design Incorporated", image: controlImages["flood-control"] },
+  { id: "envelope-prequalification", name: "Pre-qualification of Envelope Systems", category: "Design Incorporated", image: controlImages["envelope-prequalification"] },
+  { id: "heat-trace-insulation", name: "Heat Trace and Insulation", category: "Design Incorporated", image: controlImages["heat-trace-insulation"] },
+  { id: "prv-maintenance", name: "Pressure Reducing Valve Maintenance Plan: Safeguarding System Performance", category: "Design Incorporated", image: controlImages["prv-maintenance"] },
+  { id: "proper-zoning", name: "Proper Zoning Configuration: Optimizing Pressure Systems", category: "Design Incorporated", image: controlImages["proper-zoning"] },
+  { id: "floor-penetrations", name: "Floor Penetrations Water Seals", category: "Design Incorporated", image: controlImages["floor-penetrations"] },
+  { id: "incident-reports", name: "Historical Project Water Incident Reports", category: "Water Response Strategy", image: controlImages["incident-reports"] },
+  { id: "flood-wind-report", name: "100-Year Flood and Wind Storm Report", category: "Water Response Strategy", image: controlImages["flood-wind-report"] },
+  { id: "warranties-insurance", name: "Water Mitigation Components Warranties and Insurance", category: "Process Inspections and Documentation", image: controlImages["warranties-insurance"] },
+  { id: "equipment-labeling", name: "Water Mitigation Equipment Labeling", category: "Process Inspections and Documentation", image: controlImages["equipment-labeling"] },
+  { id: "acceptance-test", name: "Water Mitigation Equipment Acceptance Test", category: "Process Inspections and Documentation", image: controlImages["acceptance-test"] },
+  { id: "installation-integrity", name: "Installation Integrity: Joints, Bolts, and Piping", category: "Process Inspections and Documentation", image: controlImages["installation-integrity"] },
+  { id: "fill-tests", name: "Additional Fill Tests: Ensuring Water System Integrity", category: "Process Inspections and Documentation", image: controlImages["fill-tests"] },
+  { id: "air-pressure-tests", name: "Air Pressure or Water Tests in Plumbing System", category: "Tests Expansions and Maintenance", image: controlImages["air-pressure-tests"] },
+  { id: "spill-kit", name: "Spill Kit", category: "Tests Expansions and Maintenance", image: controlImages["spill-kit"] },
+  { id: "temporary-enclosures", name: "Temporary Enclosures Plan", category: "Tests Expansions and Maintenance", image: controlImages["temporary-enclosures"] },
 ];
 
 const assets = [

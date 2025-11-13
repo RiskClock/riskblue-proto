@@ -9,6 +9,25 @@ import mechanicalRoomImg from "@/assets/control_Mechanical_Room_Presence_of_Wate
 import mainElectricalRiserImg from "@/assets/control_Main_Electrical_Riser_Presence_of_Water_Monitoring.avif";
 import tempWaterRunImg from "@/assets/control_Temporary_Water_Run_Abnormal_Flow_Monitoring.avif";
 import triggerValveImg from "@/assets/control_Trigger_Valve_Shut_Off_on_Abnormal_Flow_Detection.avif";
+import mechanicalRisersImg from "@/assets/control_Mechanical_Risers_Presence_of_Water_Monitoring.avif";
+import fireSuppressionFlowImg from "@/assets/control_Fire_Suppression_System_Abnormal_Flow_Monitoring.avif";
+import suiteDrainsImg from "@/assets/control_Suite_Drains.avif";
+import floodControlImg from "@/assets/control_Flood_Control_Measures.avif";
+import envelopePrequalificationImg from "@/assets/control_Pre-qualification_of_Envelope_Systems.avif";
+import heatTraceImg from "@/assets/control_Heat_trace_and_Insulation.avif";
+import prvMaintenanceImg from "@/assets/control_Pressure_Reducing_Valve_Maintenance_Plan_Safeguarding_System_Performance.avif";
+import properZoningImg from "@/assets/control_Proper_Zoning_Configuration_Optimizing_Pressure_System.avif";
+import floorPenetrationsImg from "@/assets/control_Floor_Penetrations_Water_Seals.avif";
+import historicalReportsImg from "@/assets/control_Historical_Project_Water_Incident_Reports.avif";
+import floodWindReportImg from "@/assets/control_100-Year_Flood_and_Wind_Storm_Report.avif";
+import warrantiesInsuranceImg from "@/assets/control_Water_Mitigation_Components_Warranties_and_Insurance.avif";
+import equipmentLabelingImg from "@/assets/control_Water_Mitigation_Equipment_Labeling.avif";
+import acceptanceTestImg from "@/assets/control_Water_Mitigation_Equipment_Acceptance_Test.avif";
+import installationIntegrityImg from "@/assets/control_Installation_Integrity_Joints_Bolts_and_Piping.avif";
+import fillTestsImg from "@/assets/control_Additional_Fill_Tests_Ensuring_Water_System_Integrity.avif";
+import airPressureTestsImg from "@/assets/control_Air_Pressure_or_Water_Tests_in_Plumbing_System.avif";
+import spillKitImg from "@/assets/control_Spill_Kit.avif";
+import temporaryEnclosuresImg from "@/assets/control_Temporary_Enclosures_Plan.avif";
 
 interface Control {
   name: string;
@@ -45,7 +64,8 @@ const mitigationControls: Control[] = [
     points: 6,
     popularity: 5,
     responsibleRole: "Developer",
-    systemsAndAssets: "Domestic Cold Water, Domestic Hot Water, Fire Suppression System, Mechanical Risers, Mechanical Rooms"
+    systemsAndAssets: "Domestic Cold Water, Domestic Hot Water, Fire Suppression System, Mechanical Risers, Mechanical Rooms",
+    image: mechanicalRisersImg
   },
   {
     name: "Mechanical Room Presence of Water Monitoring",
@@ -91,7 +111,8 @@ const mitigationControls: Control[] = [
     points: 9,
     popularity: 5,
     responsibleRole: "Developer",
-    systemsAndAssets: "Fire Suppression System"
+    systemsAndAssets: "Fire Suppression System",
+    image: fireSuppressionFlowImg
   },
   {
     name: "Automatic Shut Off Temporary Water Run",
@@ -126,7 +147,8 @@ const mitigationControls: Control[] = [
     points: 5,
     popularity: 3,
     responsibleRole: "Developer",
-    systemsAndAssets: "Suites"
+    systemsAndAssets: "Suites",
+    image: suiteDrainsImg
   },
   {
     name: "Flood Control Measures",
@@ -137,7 +159,8 @@ const mitigationControls: Control[] = [
     points: 5,
     popularity: 5,
     responsibleRole: "Contractor",
-    systemsAndAssets: "Electrical Rooms, Elevator Pits, Entire Project, Mechanical Rooms, Sump Pits"
+    systemsAndAssets: "Electrical Rooms, Elevator Pits, Entire Project, Mechanical Rooms, Sump Pits",
+    image: floodControlImg
   },
   {
     name: "Pre-qualification of Envelope Systems",
@@ -148,7 +171,8 @@ const mitigationControls: Control[] = [
     points: 2,
     popularity: 3,
     responsibleRole: "Engineering",
-    systemsAndAssets: "Elevator Pits, Main Electrical Risers, Mechanical Risers, Mechanical Rooms, Suites, Sump Pits"
+    systemsAndAssets: "Elevator Pits, Main Electrical Risers, Mechanical Risers, Mechanical Rooms, Suites, Sump Pits",
+    image: envelopePrequalificationImg
   },
   {
     name: "Heat Trace and Insulation",
@@ -159,7 +183,8 @@ const mitigationControls: Control[] = [
     points: 1,
     popularity: 3,
     responsibleRole: "Contractor",
-    systemsAndAssets: "Domestic Cold Water, Domestic Hot Water, Fire Suppression System, Hydronics, Temporary Water Run"
+    systemsAndAssets: "Domestic Cold Water, Domestic Hot Water, Fire Suppression System, Hydronics, Temporary Water Run",
+    image: heatTraceImg
   },
   {
     name: "Pressure Reducing Valve Maintenance Plan: Safeguarding System Performance",
@@ -170,7 +195,8 @@ const mitigationControls: Control[] = [
     points: 15,
     popularity: 3,
     responsibleRole: "Engineering",
-    systemsAndAssets: "Domestic Cold Water, Fire Suppression System, Mechanical Risers, Mechanical Rooms"
+    systemsAndAssets: "Domestic Cold Water, Fire Suppression System, Mechanical Risers, Mechanical Rooms",
+    image: prvMaintenanceImg
   },
   {
     name: "Proper Zoning Configuration: Optimizing Pressure Systems",
@@ -181,7 +207,8 @@ const mitigationControls: Control[] = [
     points: 23,
     popularity: 4,
     responsibleRole: "Engineering",
-    systemsAndAssets: "Domestic Cold Water, Mechanical Risers, Mechanical Rooms"
+    systemsAndAssets: "Domestic Cold Water, Mechanical Risers, Mechanical Rooms",
+    image: properZoningImg
   },
   {
     name: "Floor Penetrations Water Seals",
@@ -192,7 +219,8 @@ const mitigationControls: Control[] = [
     points: 4,
     popularity: 5,
     responsibleRole: "Engineering",
-    systemsAndAssets: "Entire Project"
+    systemsAndAssets: "Entire Project",
+    image: floorPenetrationsImg
   },
   {
     name: "Historical Project Water Incident Reports",
@@ -203,7 +231,8 @@ const mitigationControls: Control[] = [
     points: 2,
     popularity: 4,
     responsibleRole: "Developer",
-    systemsAndAssets: "Entire Project"
+    systemsAndAssets: "Entire Project",
+    image: historicalReportsImg
   },
   {
     name: "100-Year Flood and Wind Storm Report",
@@ -214,7 +243,8 @@ const mitigationControls: Control[] = [
     points: 5,
     popularity: 4,
     responsibleRole: "Developer",
-    systemsAndAssets: "Entire Project"
+    systemsAndAssets: "Entire Project",
+    image: floodWindReportImg
   },
   {
     name: "Water Mitigation Components Warranties and Insurance",
@@ -225,7 +255,8 @@ const mitigationControls: Control[] = [
     points: 1,
     popularity: 4,
     responsibleRole: "Water Mitigation Solution Provider",
-    systemsAndAssets: "Entire Project"
+    systemsAndAssets: "Entire Project",
+    image: warrantiesInsuranceImg
   },
   {
     name: "Water Mitigation Equipment Labeling",
@@ -236,7 +267,8 @@ const mitigationControls: Control[] = [
     points: 3,
     popularity: 5,
     responsibleRole: "Water Mitigation Solution Provider",
-    systemsAndAssets: "Entire Project"
+    systemsAndAssets: "Entire Project",
+    image: equipmentLabelingImg
   },
   {
     name: "Water Mitigation Equipment Acceptance Test",
@@ -247,7 +279,8 @@ const mitigationControls: Control[] = [
     points: 7,
     popularity: 2,
     responsibleRole: "Contractor",
-    systemsAndAssets: "Entire Project"
+    systemsAndAssets: "Entire Project",
+    image: acceptanceTestImg
   },
   {
     name: "Installation Integrity: Joints, Bolts, and Piping",
@@ -258,7 +291,8 @@ const mitigationControls: Control[] = [
     points: 15,
     popularity: 5,
     responsibleRole: "Contractor",
-    systemsAndAssets: "Domestic Cold Water, Domestic Hot Water, Fire Suppression System, Hydronics, Main City Water Supply, Mechanical Risers, Mechanical Rooms, Suites, Sump Pits, Temporary Water Run"
+    systemsAndAssets: "Domestic Cold Water, Domestic Hot Water, Fire Suppression System, Hydronics, Main City Water Supply, Mechanical Risers, Mechanical Rooms, Suites, Sump Pits, Temporary Water Run",
+    image: installationIntegrityImg
   },
   {
     name: "Additional Fill Tests: Ensuring Water System Integrity",
@@ -269,7 +303,8 @@ const mitigationControls: Control[] = [
     points: 15,
     popularity: 5,
     responsibleRole: "Mechanical Contractor",
-    systemsAndAssets: "Domestic Cold Water, Domestic Hot Water, Fire Suppression System, Hydronics, Main City Water Supply, Mechanical Risers, Mechanical Rooms, Suites, Temporary Water Run"
+    systemsAndAssets: "Domestic Cold Water, Domestic Hot Water, Fire Suppression System, Hydronics, Main City Water Supply, Mechanical Risers, Mechanical Rooms, Suites, Temporary Water Run",
+    image: fillTestsImg
   },
   {
     name: "Air Pressure or Water Tests in Plumbing System",
@@ -280,7 +315,8 @@ const mitigationControls: Control[] = [
     points: 20,
     popularity: 5,
     responsibleRole: "Mechanical Contractor",
-    systemsAndAssets: "Domestic Cold Water, Domestic Hot Water, Fire Suppression System, Hydronics, Main City Water Supply, Sump Pits, Temporary Water Run"
+    systemsAndAssets: "Domestic Cold Water, Domestic Hot Water, Fire Suppression System, Hydronics, Main City Water Supply, Sump Pits, Temporary Water Run",
+    image: airPressureTestsImg
   },
   {
     name: "Spill Kit",
@@ -291,7 +327,8 @@ const mitigationControls: Control[] = [
     points: 2,
     popularity: 5,
     responsibleRole: "Contractor",
-    systemsAndAssets: "Entire Project"
+    systemsAndAssets: "Entire Project",
+    image: spillKitImg
   },
   {
     name: "Temporary Enclosures Plan",
@@ -302,7 +339,8 @@ const mitigationControls: Control[] = [
     points: 3,
     popularity: 4,
     responsibleRole: "Contractor",
-    systemsAndAssets: "Electrical Rooms, Elevator Pits, Entire Project, Main Electrical Risers, Mechanical Risers, Suites"
+    systemsAndAssets: "Electrical Rooms, Elevator Pits, Entire Project, Main Electrical Risers, Mechanical Risers, Suites",
+    image: temporaryEnclosuresImg
   },
 ];
 
