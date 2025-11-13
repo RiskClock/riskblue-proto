@@ -83,7 +83,7 @@ export const ImplementationScheduleStep = ({ data }: ImplementationScheduleStepP
       <div className="mb-6">
         <h3 className="text-lg font-semibold mb-2">Implementation Schedule (Control Installation & Service)</h3>
         <p className="text-sm text-muted-foreground mb-4">
-          Below is the schedule for installing and servicing each selected mitigation control based on the systems and assets they protect.
+          Below is the schedule for installing and servicing each selected mitigation control. The dates are calculated based on your project timeline and the specific systems/assets each control protects. Formulas indicate which construction phase determines the start and end dates.
         </p>
       </div>
 
@@ -106,23 +106,49 @@ export const ImplementationScheduleStep = ({ data }: ImplementationScheduleStepP
                 {systemsAndAssets.map((systemOrAsset, idx) => {
                   const dates = calculateSystemOrAssetDates(systemOrAsset, timeline);
                   
+                  // Get description of date calculation
+                  const getDateDescription = (name: string) => {
+                    if (name === "Entire Project") return "Construction start to end";
+                    if (name === "Mechanical Rooms" || name === "Mechanical Risers") return "60 days before MEP end to construction end";
+                    if (name === "Electrical Rooms" || name === "Main Electrical Risers") return "MEP start to envelope end";
+                    if (name === "Sump Pits" || name === "Elevator Pits") return "30 days before elevators start to construction end";
+                    if (name === "Suites") return "30 days before interior start to construction end";
+                    if (name === "Domestic Cold Water") return "120 days after MEP start to construction end";
+                    if (name === "Domestic Hot Water" || name === "Main City Water Supply" || name === "Hydronics" || name === "Fire Suppression System") return "MEP end to construction end";
+                    if (name === "Temporary Water Run") return "Interior start to interior end";
+                    return "Custom timeline";
+                  };
+                  
                   return (
-                    <div key={idx} className="flex items-start gap-3 text-sm">
-                      <Badge variant="secondary" className="mt-0.5 shrink-0">
-                        {systemOrAsset}
-                      </Badge>
+                    <div key={idx} className="border-l-2 border-primary/20 pl-3 py-2">
+                      <div className="flex items-start gap-3 mb-1">
+                        <Badge variant="secondary" className="shrink-0">
+                          {systemOrAsset}
+                        </Badge>
+                      </div>
                       
                       {dates.startDate && dates.endDate ? (
-                        <div className="flex items-center gap-2 text-muted-foreground">
-                          <Calendar className="h-4 w-4 shrink-0" />
-                          <span>
-                            {format(dates.startDate, "MMM d, yyyy")} - {format(dates.endDate, "MMM d, yyyy")}
-                          </span>
+                        <div className="space-y-1">
+                          <div className="flex items-center gap-2 text-sm">
+                            <Calendar className="h-4 w-4 shrink-0 text-primary" />
+                            <span className="font-medium">
+                              Start: {format(dates.startDate, "MMM d, yyyy")}
+                            </span>
+                          </div>
+                          <div className="flex items-center gap-2 text-sm">
+                            <Calendar className="h-4 w-4 shrink-0 text-primary" />
+                            <span className="font-medium">
+                              End: {format(dates.endDate, "MMM d, yyyy")}
+                            </span>
+                          </div>
+                          <div className="text-xs text-muted-foreground italic pl-6">
+                            {getDateDescription(systemOrAsset)}
+                          </div>
                         </div>
                       ) : (
-                        <div className="flex items-center gap-2 text-muted-foreground">
+                        <div className="flex items-center gap-2 text-muted-foreground pl-6">
                           <Calendar className="h-4 w-4 shrink-0" />
-                          <span className="italic">Dates not available</span>
+                          <span className="italic text-sm">Dates not available - missing required timeline data</span>
                         </div>
                       )}
                     </div>

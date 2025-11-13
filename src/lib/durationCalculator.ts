@@ -149,8 +149,15 @@ export const calculateSystemOrAssetDates = (
     let startDate: Date | null = null;
     let endDate: Date | null = null;
 
+    // Special case: Entire Project
+    if (name === "Entire Project") {
+      if (timeline.construction_start_date) {
+        startDate = parseISO(timeline.construction_start_date);
+        endDate = parseISO(construction_end_date);
+      }
+    }
     // Critical Assets
-    if (name === "Mechanical Rooms" || name === "Mechanical Risers") {
+    else if (name === "Mechanical Rooms" || name === "Mechanical Risers") {
       if (mep_end_date) {
         startDate = addDays(parseISO(mep_end_date), -60);
         endDate = parseISO(construction_end_date);
