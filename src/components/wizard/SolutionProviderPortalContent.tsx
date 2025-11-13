@@ -14,6 +14,7 @@ import mechanicalRoomImg from "@/assets/control_Mechanical_Room_Presence_of_Wate
 import mainElectricalRiserImg from "@/assets/control_Main_Electrical_Riser_Presence_of_Water_Monitoring.avif";
 import tempWaterRunImg from "@/assets/control_Temporary_Water_Run_Abnormal_Flow_Monitoring.avif";
 import triggerValveImg from "@/assets/control_Trigger_Valve_Shut_Off_on_Abnormal_Flow_Detection.avif";
+import tempWaterRunAutomaticImg from "@/assets/control_Temporary_Water_Run.avif";
 import mechanicalRisersImg from "@/assets/control_Mechanical_Risers_Presence_of_Water_Monitoring.avif";
 import fireSuppressionFlowImg from "@/assets/control_Fire_Suppression_System_Abnormal_Flow_Monitoring.avif";
 import suiteDrainsImg from "@/assets/control_Suite_Drains.avif";
@@ -69,7 +70,8 @@ const controlImages: Record<string, string> = {
   "main-riser-shutoff": mainElectricalRiserImg,
   "temporary-water-flow-monitoring": tempWaterRunImg,
   "fire-suppression-flow-monitoring": fireSuppressionFlowImg,
-  "automatic-shutoff-temp-water": triggerValveImg,
+  "cold-domestic-flow-monitoring": triggerValveImg,
+  "automatic-shutoff-temp-water": tempWaterRunAutomaticImg,
   "suite-drains": suiteDrainsImg,
   "flood-control": floodControlImg,
   "envelope-prequalification": envelopePrequalificationImg,
@@ -93,7 +95,7 @@ const mitigationControls = [
   { id: "electrical-room-monitoring", name: "Electrical Room Presence of Water Monitoring", category: "Presence of Water Monitoring", image: controlImages["electrical-room-monitoring"] },
   { id: "mechanical-risers-monitoring", name: "Mechanical Risers Presence of Water Monitoring", category: "Presence of Water Monitoring", image: controlImages["mechanical-risers-monitoring"] },
   { id: "mechanical-room-monitoring", name: "Mechanical Room Presence of Water Monitoring", category: "Presence of Water Monitoring", image: controlImages["mechanical-room-monitoring"] },
-  { id: "cold-domestic-flow-monitoring", name: "Cold Domestic Water Abnormal Flow Monitoring", category: "Abnormal Flow Valve and Pump Automation" },
+  { id: "cold-domestic-flow-monitoring", name: "Cold Domestic Water Abnormal Flow Monitoring", category: "Abnormal Flow Valve and Pump Automation", image: controlImages["cold-domestic-flow-monitoring"] },
   { id: "temporary-water-flow-monitoring", name: "Temporary Water Run Abnormal Flow Monitoring", category: "Abnormal Flow Valve and Pump Automation", image: controlImages["temporary-water-flow-monitoring"] },
   { id: "fire-suppression-flow-monitoring", name: "Fire Suppression System Abnormal Flow Monitoring", category: "Abnormal Flow Valve and Pump Automation", image: controlImages["fire-suppression-flow-monitoring"] },
   { id: "automatic-shutoff-temp-water", name: "Automatic Shut Off Temporary Water Run", category: "Abnormal Flow Valve and Pump Automation", image: controlImages["automatic-shutoff-temp-water"] },
