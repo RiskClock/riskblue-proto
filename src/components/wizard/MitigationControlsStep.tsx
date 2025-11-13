@@ -230,14 +230,6 @@ export const MitigationControlsStep = ({ data, onNext, onBack, isProcessingWebho
                   }}
                 />
                 
-                {control.description_summary && (
-                  <p className="text-xs text-muted-foreground leading-relaxed">
-                    {control.description_summary}
-                  </p>
-                )}
-                
-                <p className="text-xs text-muted-foreground mb-3 line-clamp-3">{control.description}</p>
-                
                 <div className="flex justify-between text-xs text-muted-foreground">
                   <span><strong>Author:</strong> {control.author}</span>
                 </div>
