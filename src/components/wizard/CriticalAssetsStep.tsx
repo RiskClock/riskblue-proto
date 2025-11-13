@@ -211,18 +211,6 @@ export const CriticalAssetsStep = ({ data, onNext, onBack, isProcessingWebhook }
                   </div>
                 </div>
               </div>
-              <Button
-                type="button"
-                variant={selectedAssets.includes(asset.id) ? "default" : "outline"}
-                size="sm"
-                className="w-full mt-3"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  toggleAsset(asset.id);
-                }}
-              >
-                {selectedAssets.includes(asset.id) ? "Selected" : "Select"}
-              </Button>
             </div>
           ))}
         </div>

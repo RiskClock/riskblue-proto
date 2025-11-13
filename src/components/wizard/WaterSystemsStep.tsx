@@ -204,18 +204,6 @@ export const WaterSystemsStep = ({ data, onNext, onBack, isProcessingWebhook }: 
                   </div>
                 </div>
               </div>
-              <Button
-                type="button"
-                variant={selectedSystems.includes(system.id) ? "default" : "outline"}
-                size="sm"
-                className="w-full mt-3"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  toggleSystem(system.id);
-                }}
-              >
-                {selectedSystems.includes(system.id) ? "Selected" : "Select"}
-              </Button>
             </div>
           ))}
         </div>
