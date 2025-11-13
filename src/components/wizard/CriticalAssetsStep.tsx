@@ -146,15 +146,15 @@ export const CriticalAssetsStep = ({ data, onNext, onBack, isProcessingWebhook }
               <Dialog open={dialogOpen === asset.id} onOpenChange={(open) => !open && setDialogOpen(null)}>
                 <DialogTrigger asChild>
                   <Button
-                    variant="default"
+                    variant="outline"
                     size="sm"
-                    className="absolute top-2 right-2 h-8 w-8 p-0 rounded-md bg-green-600 hover:bg-green-700 z-10"
+                    className="absolute top-2 right-2 h-8 w-8 p-0 rounded-md bg-background hover:bg-green-600 border-border hover:border-green-600 z-10 group"
                     onClick={(e) => {
                       e.stopPropagation();
                       handleOpenFloorDialog(asset.id);
                     }}
                   >
-                    <Info className="h-4 w-4 text-white" />
+                    <Info className="h-4 w-4 text-foreground group-hover:text-white" />
                   </Button>
                 </DialogTrigger>
                 <DialogContent onClick={(e) => e.stopPropagation()}>
