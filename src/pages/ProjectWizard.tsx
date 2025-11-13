@@ -28,6 +28,8 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { format } from "date-fns";
+import { WaterRiskReport } from "@/components/reports/WaterRiskReport";
+import { generateReportFilename } from "@/lib/reportGenerator";
 
 interface ProjectData {
   [key: string]: any;
@@ -461,12 +463,35 @@ const ProjectWizard = () => {
             {/* Bottom Controls */}
             <div className="flex justify-between items-center pt-6">
               <Button variant="outline" onClick={() => {
-                const projectName = projectData.name || "unnamed_project";
-                const timestamp = format(new Date(), "yyyyMMddHHmmss");
                 const originalTitle = document.title;
-                document.title = `riskblue_wmg_${projectName.replace(/\s+/g, '_')}_${timestamp}`;
-                window.print();
-                document.title = originalTitle;
+                document.title = generateReportFilename(projectData.name || "unnamed_project", "WaterRiskDiscovery");
+                
+                // Create a temporary container for the report
+                const reportContainer = document.createElement('div');
+                reportContainer.className = 'print-report-container';
+                document.body.appendChild(reportContainer);
+                
+                // Render the report (we'll do this via React portal in next step)
+                const root = document.createElement('div');
+                reportContainer.appendChild(root);
+                
+                // Import and render
+                import('react-dom/client').then(({ createRoot }) => {
+                  const reactRoot = createRoot(root);
+                  reactRoot.render(<WaterRiskReport data={projectData} />);
+                  
+                  // Wait a bit for rendering, then print
+                  setTimeout(() => {
+                    window.print();
+                    document.title = originalTitle;
+                    
+                    // Cleanup after print
+                    setTimeout(() => {
+                      reactRoot.unmount();
+                      document.body.removeChild(reportContainer);
+                    }, 100);
+                  }, 500);
+                });
               }}>
                 <Download className="h-4 w-4 mr-2" />
                 Export

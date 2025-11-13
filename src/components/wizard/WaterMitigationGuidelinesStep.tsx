@@ -1,6 +1,8 @@
 import { Button } from "@/components/ui/button";
 import { Download, Send } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { WaterRiskReport } from "@/components/reports/WaterRiskReport";
+import { generateReportFilename } from "@/lib/reportGenerator";
 
 interface WaterMitigationGuidelinesStepProps {
   data: any;
@@ -16,9 +18,39 @@ export const WaterMitigationGuidelinesStep = ({ data, onBack, onNext }: WaterMit
   };
 
   const handleExportPDF = () => {
-    toast({
-      title: "PDF Export",
-      description: "PDF export functionality will be implemented soon.",
+    const originalTitle = document.title;
+    document.title = generateReportFilename(data.name || "unnamed_project", "WaterMitigationGuidelines");
+    
+    // Create a temporary container for the report
+    const reportContainer = document.createElement('div');
+    reportContainer.className = 'print-report-container';
+    document.body.appendChild(reportContainer);
+    
+    // Render the report
+    const root = document.createElement('div');
+    reportContainer.appendChild(root);
+    
+    // Import and render
+    import('react-dom/client').then(({ createRoot }) => {
+      const reactRoot = createRoot(root);
+      reactRoot.render(<WaterRiskReport data={data} />);
+      
+      // Wait for rendering, then print
+      setTimeout(() => {
+        window.print();
+        document.title = originalTitle;
+        
+        toast({
+          title: "Export Ready",
+          description: "Your report is ready to save as PDF.",
+        });
+        
+        // Cleanup after print
+        setTimeout(() => {
+          reactRoot.unmount();
+          document.body.removeChild(reportContainer);
+        }, 100);
+      }, 500);
     });
   };
 
