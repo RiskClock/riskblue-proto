@@ -19,6 +19,8 @@ interface Control {
   responsible: string;
   image_url: string;
   display_order: number;
+  description_summary?: string;
+  systems_at_risk?: string;
   assets?: string[];
   systems?: string[];
 }
@@ -227,6 +229,12 @@ export const MitigationControlsStep = ({ data, onNext, onBack, isProcessingWebho
                     e.currentTarget.src = 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" width="200" height="200"><rect fill="%23ddd" width="200" height="200"/><text x="50%" y="50%" text-anchor="middle" fill="%23999" font-size="14">No Image</text></svg>';
                   }}
                 />
+                
+                {control.description_summary && (
+                  <p className="text-xs text-muted-foreground leading-relaxed">
+                    {control.description_summary}
+                  </p>
+                )}
                 
                 <p className="text-xs text-muted-foreground mb-3 line-clamp-3">{control.description}</p>
                 
