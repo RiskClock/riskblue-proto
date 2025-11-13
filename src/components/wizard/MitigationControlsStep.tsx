@@ -222,6 +222,10 @@ export const MitigationControlsStep = ({ data, onNext, onBack, isProcessingWebho
                   src={control.image_url} 
                   alt={control.name}
                   className="w-full h-32 object-contain rounded-md mb-3 bg-muted/30"
+                  onError={(e) => {
+                    console.error(`Failed to load image for ${control.name}:`, control.image_url);
+                    e.currentTarget.src = 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" width="200" height="200"><rect fill="%23ddd" width="200" height="200"/><text x="50%" y="50%" text-anchor="middle" fill="%23999" font-size="14">No Image</text></svg>';
+                  }}
                 />
                 
                 <p className="text-xs text-muted-foreground mb-3 line-clamp-3">{control.description}</p>
