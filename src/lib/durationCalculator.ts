@@ -132,7 +132,7 @@ export const calculateCriticalAssetDuration = (
 export const calculateSystemOrAssetDates = (
   name: string,
   timeline: TimelineData
-): { startDate: Date | null; endDate: Date | null } => {
+): { startDate: Date | null; endDate: Date | null; calculatedFrom?: string } => {
   try {
     const { 
       construction_end_date, 
@@ -148,12 +148,14 @@ export const calculateSystemOrAssetDates = (
 
     let startDate: Date | null = null;
     let endDate: Date | null = null;
+    let calculatedFrom: string | undefined = undefined;
 
     // Special case: Entire Project
     if (name === "Entire Project") {
       if (timeline.construction_start_date) {
         startDate = parseISO(timeline.construction_start_date);
         endDate = parseISO(construction_end_date);
+        calculatedFrom = "Construction start to Construction end";
       }
     }
     // Critical Assets
@@ -161,21 +163,25 @@ export const calculateSystemOrAssetDates = (
       if (mep_end_date) {
         startDate = addDays(parseISO(mep_end_date), -60);
         endDate = parseISO(construction_end_date);
+        calculatedFrom = "MEP end (-60 days) to Construction end";
       }
     } else if (name === "Electrical Rooms" || name === "Main Electrical Risers") {
       if (mep_start_date && enclosure_end_date) {
         startDate = parseISO(mep_start_date);
         endDate = parseISO(enclosure_end_date);
+        calculatedFrom = "MEP start to Enclosure end";
       }
     } else if (name === "Sump Pits" || name === "Elevator Pits") {
       if (elevators_start_date) {
         startDate = addDays(parseISO(elevators_start_date), -30);
         endDate = parseISO(construction_end_date);
+        calculatedFrom = "Elevators start (-30 days) to Construction end";
       }
     } else if (name === "Suites") {
       if (interior_start_date) {
         startDate = addDays(parseISO(interior_start_date), -30);
         endDate = parseISO(construction_end_date);
+        calculatedFrom = "Interior start (-30 days) to Construction end";
       }
     }
     // Water Systems
@@ -183,20 +189,23 @@ export const calculateSystemOrAssetDates = (
       if (mep_start_date) {
         startDate = addDays(parseISO(mep_start_date), 120);
         endDate = parseISO(construction_end_date);
+        calculatedFrom = "MEP start (+120 days) to Construction end";
       }
     } else if (name === "Domestic Hot Water" || name === "Main City Water Supply" || name === "Hydronics" || name === "Fire Suppression System") {
       if (mep_end_date) {
         startDate = parseISO(mep_end_date);
         endDate = parseISO(construction_end_date);
+        calculatedFrom = "MEP end to Construction end";
       }
     } else if (name === "Temporary Water Run") {
       if (interior_start_date && interior_end_date) {
         startDate = parseISO(interior_start_date);
         endDate = parseISO(interior_end_date);
+        calculatedFrom = "Interior start to Interior end";
       }
     }
 
-    return { startDate, endDate };
+    return { startDate, endDate, calculatedFrom };
   } catch (error) {
     return { startDate: null, endDate: null };
   }
