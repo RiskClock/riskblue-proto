@@ -200,7 +200,7 @@ export const MitigationControlsStep = ({ data, onNext, onBack, isProcessingWebho
                 <img 
                   src={control.image_url} 
                   alt={control.name}
-                  className="w-full h-32 object-cover rounded-md mb-3 cursor-pointer"
+                  className="w-full h-32 object-contain rounded-md mb-3 cursor-pointer bg-muted/30"
                   onClick={() => handleMoreInfo(control)}
                 />
                 
@@ -218,14 +218,14 @@ export const MitigationControlsStep = ({ data, onNext, onBack, isProcessingWebho
                       <Info className="h-4 w-4 mr-1" />
                       Details
                     </Button>
-                    <input
-                      type="checkbox"
-                      checked={selectedControls.includes(control.name)}
-                      onChange={() => toggleControl(control.name)}
-                      className="h-5 w-5 cursor-pointer"
-                      onClick={(e) => e.stopPropagation()}
-                    />
                   </div>
+                  <input
+                    type="checkbox"
+                    checked={selectedControls.includes(control.name)}
+                    onChange={() => toggleControl(control.name)}
+                    className="absolute top-4 right-4 h-5 w-5 cursor-pointer"
+                    onClick={(e) => e.stopPropagation()}
+                  />
                 </div>
               </div>
             ))}
@@ -283,15 +283,6 @@ export const MitigationControlsStep = ({ data, onNext, onBack, isProcessingWebho
           </ScrollArea>
         </DialogContent>
       </Dialog>
-
-      <div className="flex justify-between pt-6">
-        <Button variant="outline" onClick={onBack}>
-          Back
-        </Button>
-        <Button onClick={() => onNext({ selectedControls })}>
-          Continue
-        </Button>
-      </div>
     </div>
   );
 };

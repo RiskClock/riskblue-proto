@@ -105,104 +105,84 @@ export const CriticalAssetsStep = ({ data, onNext, onBack, isProcessingWebhook }
         </p>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
         {assets.map((asset) => {
           const isSelected = selectedAssets.includes(asset.name);
           return (
-            <div key={asset.id} className="flex flex-col">
-              <div
-                onClick={() => toggleAsset(asset.name)}
-                className={`flex flex-col h-full p-4 rounded-lg border-2 cursor-pointer transition-all ${
-                  isSelected
-                    ? "border-primary bg-primary/5"
-                    : "border-border hover:border-primary/50"
-                }`}
-              >
-                <div className="flex items-start justify-between mb-3">
-                  <div className="flex-1">
-                    <h3 className="font-semibold text-base mb-1">{asset.name}</h3>
-                    <span className="inline-block px-2 py-0.5 text-xs bg-secondary text-secondary-foreground rounded">{asset.risk_level}</span>
-                  </div>
-                  <input
-                    type="checkbox"
-                    checked={isSelected}
-                    onChange={() => {}}
-                    className="h-5 w-5 mt-1"
-                  />
+            <div
+              key={asset.id}
+              onClick={() => toggleAsset(asset.name)}
+              className={`p-4 rounded-lg border-2 cursor-pointer transition-all ${
+                isSelected
+                  ? "border-primary bg-primary/5"
+                  : "border-border hover:border-primary/50"
+              }`}
+            >
+              <div className="flex items-start justify-between mb-3">
+                <div className="flex-1">
+                  <h3 className="font-semibold text-sm mb-1">{asset.name}</h3>
+                  <span className="inline-block px-2 py-0.5 text-xs bg-secondary text-secondary-foreground rounded">{asset.risk_level}</span>
                 </div>
-                
-                <img 
-                  src={asset.image_url} 
-                  alt={asset.name}
-                  className="w-full h-40 object-cover rounded-md mb-3"
-                />
-                
-                <p className="text-sm text-muted-foreground mb-3 flex-grow">
-                  <strong>Threat:</strong> {asset.threat}
-                </p>
-                
-                <div className="flex justify-between text-xs text-muted-foreground pb-3 border-b">
-                  <span><strong>Duration:</strong> {asset.duration}</span>
-                  <span><strong>Cost:</strong> {asset.cost}</span>
-                </div>
-
-                {isSelected && (
-                  <div className="mt-3">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="w-full"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleOpenFloorDialog(asset.name);
-                      }}
-                    >
-                      <Info className="mr-2 h-4 w-4" />
-                      {assetFloors[asset.name] ? `Floors: ${assetFloors[asset.name]}` : "Add Floors"}
-                    </Button>
-                  </div>
-                )}
               </div>
               
+              <img 
+                src={asset.image_url} 
+                alt={asset.name}
+                className="w-full h-32 object-contain rounded-md mb-3 bg-muted/30"
+              />
+              
+              <p className="text-xs text-muted-foreground mb-3">
+                <strong>Threat:</strong> {asset.threat}
+              </p>
+              
+              <div className="flex justify-between text-xs text-muted-foreground pb-3 border-b">
+                <span><strong>Duration:</strong> {asset.duration}</span>
+                <span><strong>Cost:</strong> {asset.cost}</span>
+              </div>
+
               {isSelected && (
-                <Dialog open={dialogOpen === asset.name} onOpenChange={(open) => !open && setDialogOpen(null)}>
-                  <DialogContent onClick={(e) => e.stopPropagation()}>
-                    <DialogHeader>
-                      <DialogTitle>Specify Floors for {asset.name}</DialogTitle>
-                    </DialogHeader>
-                    <div className="space-y-4 py-4">
-                      <div>
-                        <Label htmlFor="floors">Floors (e.g., 1-5, 10, 15-20)</Label>
-                        <Input
-                          id="floors"
-                          value={tempFloors}
-                          onChange={(e) => setTempFloors(e.target.value)}
-                          placeholder="Enter floor numbers or ranges"
-                        />
-                      </div>
-                      <Button onClick={handleSaveFloors} className="w-full">
-                        Save Floors
-                      </Button>
-                    </div>
-                  </DialogContent>
-                </Dialog>
+                <div className="mt-3">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="w-full"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleOpenFloorDialog(asset.name);
+                    }}
+                  >
+                    <Info className="mr-2 h-4 w-4" />
+                    {assetFloors[asset.name] ? `Floors: ${assetFloors[asset.name]}` : "Add Floors"}
+                  </Button>
+                </div>
               )}
+              
+              <Dialog open={dialogOpen === asset.name} onOpenChange={(open) => !open && setDialogOpen(null)}>
+                <DialogContent onClick={(e) => e.stopPropagation()}>
+                  <DialogHeader>
+                    <DialogTitle>Specify Floors for {asset.name}</DialogTitle>
+                  </DialogHeader>
+                  <div className="space-y-4 py-4">
+                    <div>
+                      <Label htmlFor="floors">Floors (e.g., 1-5, 10, 15-20)</Label>
+                      <Input
+                        id="floors"
+                        value={tempFloors}
+                        onChange={(e) => setTempFloors(e.target.value)}
+                        placeholder="Enter floor numbers or ranges"
+                      />
+                    </div>
+                    <Button onClick={handleSaveFloors} className="w-full">
+                      Save Floors
+                    </Button>
+                  </div>
+                </DialogContent>
+              </Dialog>
             </div>
           );
         })}
       </div>
 
-      <div className="flex justify-between pt-6">
-        <Button variant="outline" onClick={onBack}>
-          Back
-        </Button>
-        <Button 
-          onClick={() => onNext({ selectedAssets, assetFloors })}
-          disabled={selectedAssets.length === 0}
-        >
-          Continue
-        </Button>
-      </div>
     </div>
   );
 };
