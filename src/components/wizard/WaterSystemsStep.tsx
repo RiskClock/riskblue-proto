@@ -6,7 +6,6 @@ import { Label } from "@/components/ui/label";
 import { Info } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useQuery } from "@tanstack/react-query";
-
 interface WaterSystem {
   id: string;
   name: string;
@@ -17,33 +16,37 @@ interface WaterSystem {
   image_url: string;
   display_order: number;
 }
-
 interface WaterSystemsStepProps {
   data: any;
   onNext: (data: any) => void;
   onBack: () => void;
   isProcessingWebhook?: boolean;
 }
-
-export const WaterSystemsStep = ({ data, onNext, onBack, isProcessingWebhook }: WaterSystemsStepProps) => {
+export const WaterSystemsStep = ({
+  data,
+  onNext,
+  onBack,
+  isProcessingWebhook
+}: WaterSystemsStepProps) => {
   const [selectedSystems, setSelectedSystems] = useState<string[]>(data.selectedSystems || []);
   const [systemFloors, setSystemFloors] = useState<Record<string, string>>(data.systemFloors || {});
   const [dialogOpen, setDialogOpen] = useState<string | null>(null);
   const [tempFloors, setTempFloors] = useState("");
 
   // Fetch water systems from database
-  const { data: waterSystems = [], isLoading } = useQuery({
+  const {
+    data: waterSystems = [],
+    isLoading
+  } = useQuery({
     queryKey: ['water-systems'],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from('water_systems' as any)
-        .select('*')
-        .eq('is_active', true)
-        .order('display_order');
-      
+      const {
+        data,
+        error
+      } = await supabase.from('water_systems' as any).select('*').eq('is_active', true).order('display_order');
       if (error) throw error;
-      return (data as any) as WaterSystem[];
-    },
+      return data as any as WaterSystem[];
+    }
   });
 
   // Sync props to state when data changes (e.g., from webhook)
@@ -55,21 +58,19 @@ export const WaterSystemsStep = ({ data, onNext, onBack, isProcessingWebhook }: 
       setSystemFloors(data.systemFloors);
     }
   }, [data.selectedSystems, data.systemFloors]);
-
   const toggleSystem = (systemName: string) => {
-    setSelectedSystems((prev) =>
-      prev.includes(systemName) ? prev.filter((name) => name !== systemName) : [...prev, systemName]
-    );
+    setSelectedSystems(prev => prev.includes(systemName) ? prev.filter(name => name !== systemName) : [...prev, systemName]);
   };
-
   const handleOpenFloorDialog = (systemName: string) => {
     setTempFloors(systemFloors[systemName] || "");
     setDialogOpen(systemName);
   };
-
   const handleSaveFloors = () => {
     if (dialogOpen) {
-      setSystemFloors((prev) => ({ ...prev, [dialogOpen]: tempFloors }));
+      setSystemFloors(prev => ({
+        ...prev,
+        [dialogOpen]: tempFloors
+      }));
       setDialogOpen(null);
     }
   };
@@ -77,54 +78,36 @@ export const WaterSystemsStep = ({ data, onNext, onBack, isProcessingWebhook }: 
   // Auto-save with debounce - don't save while webhook is processing
   useEffect(() => {
     if (isProcessingWebhook) return;
-    
     const timer = setTimeout(() => {
-      onNext({ selectedSystems, systemFloors });
+      onNext({
+        selectedSystems,
+        systemFloors
+      });
     }, 500);
-
     return () => clearTimeout(timer);
   }, [selectedSystems, systemFloors, onNext, isProcessingWebhook]);
-
   if (isLoading) {
-    return (
-      <div className="flex items-center justify-center py-12">
+    return <div className="flex items-center justify-center py-12">
         <div className="text-center">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-4"></div>
           <p className="text-muted-foreground">Loading water systems...</p>
         </div>
-      </div>
-    );
+      </div>;
   }
-
-  return (
-    <div className="space-y-6">
+  return <div className="space-y-6">
       <div>
-        <h2 className="text-2xl font-bold mb-2">Water Systems</h2>
-        <p className="text-muted-foreground">
-          Select the water systems in your building and specify which floors they apply to.
-        </p>
+        
+        
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-        {waterSystems.map((system) => {
-          const isSelected = selectedSystems.includes(system.name);
-          return (
-            <div
-              key={system.id}
-              onClick={() => toggleSystem(system.name)}
-              className={`p-4 rounded-lg border-2 cursor-pointer transition-all relative ${
-                isSelected
-                  ? "border-primary bg-primary/5"
-                  : "border-border hover:border-primary/50"
-              }`}
-            >
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  handleOpenFloorDialog(system.name);
-                }}
-                className="absolute top-2 right-2 p-1 hover:bg-muted rounded-full transition-colors"
-              >
+        {waterSystems.map(system => {
+        const isSelected = selectedSystems.includes(system.name);
+        return <div key={system.id} onClick={() => toggleSystem(system.name)} className={`p-4 rounded-lg border-2 cursor-pointer transition-all relative ${isSelected ? "border-primary bg-primary/5" : "border-border hover:border-primary/50"}`}>
+              <button onClick={e => {
+            e.stopPropagation();
+            handleOpenFloorDialog(system.name);
+          }} className="absolute top-2 right-2 p-1 hover:bg-muted rounded-full transition-colors">
                 <Info className="h-4 w-4 text-muted-foreground" />
               </button>
 
@@ -133,11 +116,7 @@ export const WaterSystemsStep = ({ data, onNext, onBack, isProcessingWebhook }: 
                 <span className="inline-block px-2 py-0.5 text-xs bg-secondary text-secondary-foreground rounded">{system.risk_level}</span>
               </div>
               
-              <img 
-                src={system.image_url} 
-                alt={system.name}
-                className="w-full h-32 object-contain rounded-md mb-3 bg-muted/30"
-              />
+              <img src={system.image_url} alt={system.name} className="w-full h-32 object-contain rounded-md mb-3 bg-muted/30" />
               
               <p className="text-xs text-muted-foreground mb-3">
                 <strong>Threat:</strong> {system.threat}
@@ -148,20 +127,15 @@ export const WaterSystemsStep = ({ data, onNext, onBack, isProcessingWebhook }: 
                 <span><strong>Cost:</strong> {system.cost}</span>
               </div>
               
-              <Dialog open={dialogOpen === system.name} onOpenChange={(open) => !open && setDialogOpen(null)}>
-                <DialogContent onClick={(e) => e.stopPropagation()}>
+              <Dialog open={dialogOpen === system.name} onOpenChange={open => !open && setDialogOpen(null)}>
+                <DialogContent onClick={e => e.stopPropagation()}>
                   <DialogHeader>
                     <DialogTitle>Specify Floors for {system.name}</DialogTitle>
                   </DialogHeader>
                   <div className="space-y-4 py-4">
                     <div>
                       <Label htmlFor="floors">Floors (e.g., 1-5, 10, 15-20)</Label>
-                      <Input
-                        id="floors"
-                        value={tempFloors}
-                        onChange={(e) => setTempFloors(e.target.value)}
-                        placeholder="Enter floor numbers or ranges"
-                      />
+                      <Input id="floors" value={tempFloors} onChange={e => setTempFloors(e.target.value)} placeholder="Enter floor numbers or ranges" />
                     </div>
                     <Button onClick={handleSaveFloors} className="w-full">
                       Save Floors
@@ -169,11 +143,9 @@ export const WaterSystemsStep = ({ data, onNext, onBack, isProcessingWebhook }: 
                   </div>
                 </DialogContent>
               </Dialog>
-            </div>
-          );
-        })}
+            </div>;
+      })}
       </div>
 
-    </div>
-  );
+    </div>;
 };
