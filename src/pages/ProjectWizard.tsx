@@ -20,7 +20,7 @@ import { WaterMitigationGuidelinesStep } from "@/components/wizard/WaterMitigati
 import { CollaboratorManagementStep } from "@/components/wizard/CollaboratorManagementStep";
 import { DocumentUploadChat } from "@/components/DocumentUploadChat";
 import { ResponsePlanUploadChat } from "@/components/ResponsePlanUploadChat";
-import { Download, LogOut, FileText } from "lucide-react";
+import { Download, LogOut, FileText, Check } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { ProviderSelectionDialog } from "@/components/ProviderSelectionDialog";
@@ -322,7 +322,12 @@ const ProjectWizard = () => {
 
   return (
     <div className="min-h-screen bg-background">
-      <header className="sticky top-0 z-20 border-b bg-card">
+      {/* Print-only header */}
+      <div className="print-header">
+        <img src={riskBlueLogo} alt="RiskBlue" />
+      </div>
+      
+      <header className="sticky top-0 z-20 border-b bg-card no-print">
         <div className="container mx-auto px-6 py-4 flex items-center justify-between">
           <img src={riskBlueLogo} alt="RiskBlue" className="h-8" />
           <div className="flex items-center gap-6">
@@ -352,6 +357,11 @@ const ProjectWizard = () => {
       <div className="container mx-auto px-6 py-8">
         <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
           <div className="sticky top-[73px] z-10 bg-background pb-2 -mx-6 px-6 -mt-4 pt-4 mb-4 border-b">
+            <div className="flex items-center gap-6 mb-2">
+              <h2 className="text-md font-medium text-foreground">
+                {projectData.name || "Unnamed Project"}
+              </h2>
+            </div>
             <TabsList className="w-full justify-start">
               <TabsTrigger value="guideline">Water Risk Discovery</TabsTrigger>
               <TabsTrigger value="plan">Water Mitigation Planning</TabsTrigger>
@@ -431,17 +441,35 @@ const ProjectWizard = () => {
               </AccordionItem>
             </Accordion>
             
-            {/* Export Button */}
-            <div className="flex justify-end pt-6">
+            {/* Bottom Controls */}
+            <div className="flex justify-between items-center pt-6">
               <Button variant="outline" onClick={() => {
-                toast({
-                  title: "PDF Export",
-                  description: "PDF export functionality will be implemented soon.",
-                });
+                const projectName = projectData.name || "unnamed_project";
+                const timestamp = format(new Date(), "yyyyMMddHHmmss");
+                const originalTitle = document.title;
+                document.title = `riskblue_wmg_${projectName.replace(/\s+/g, '_')}_${timestamp}`;
+                window.print();
+                document.title = originalTitle;
               }}>
                 <Download className="h-4 w-4 mr-2" />
                 Export
               </Button>
+              
+              <div className="flex items-center gap-4">
+                <div className="flex items-center gap-2">
+                  <input
+                    type="checkbox"
+                    id="mark-complete"
+                    checked={projectData.waterRiskDiscoveryComplete || false}
+                    onChange={(e) => handleStepUpdate({ waterRiskDiscoveryComplete: e.target.checked })}
+                    className="h-4 w-4 rounded border-input"
+                  />
+                  <Label htmlFor="mark-complete" className="cursor-pointer">Mark as Complete</Label>
+                </div>
+                <Button onClick={() => setActiveTab("plan")}>
+                  Continue
+                </Button>
+              </div>
             </div>
           </TabsContent>
 

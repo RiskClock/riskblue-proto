@@ -1,0 +1,71 @@
+@media print {
+  /* Hide non-printable elements */
+  header,
+  button,
+  .no-print {
+    display: none !important;
+  }
+
+  /* Show print-only elements */
+  .print-only {
+    display: block !important;
+  }
+
+  /* Page setup */
+  @page {
+    margin: 1.5cm;
+    size: A4;
+  }
+
+  body {
+    print-color-adjust: exact;
+    -webkit-print-color-adjust: exact;
+  }
+
+  /* Prevent page breaks inside elements */
+  .accordion-item,
+  .card,
+  table,
+  .grid {
+    page-break-inside: avoid;
+    break-inside: avoid;
+  }
+
+  /* Add RiskBlue logo to top right */
+  .print-header {
+    display: flex !important;
+    justify-content: flex-end;
+    margin-bottom: 2rem;
+  }
+
+  .print-header img {
+    height: 40px;
+  }
+
+  /* Ensure images print */
+  img {
+    max-width: 100%;
+    page-break-inside: avoid;
+  }
+
+  /* Table styling for print */
+  table {
+    width: 100%;
+    border-collapse: collapse;
+  }
+
+  th, td {
+    border: 1px solid #ddd;
+    padding: 8px;
+  }
+
+  /* Expand all accordions for print */
+  [data-state="closed"] > [data-radix-collection-item] {
+    display: block !important;
+  }
+}
+
+/* Hide print header by default */
+.print-header {
+  display: none;
+}
