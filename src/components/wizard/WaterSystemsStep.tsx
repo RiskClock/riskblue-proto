@@ -1,72 +1,22 @@
 import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Info } from "lucide-react";
-import domesticColdWaterImg from "@/assets/water_system_domestic_cold_water.avif";
-import domesticHotWaterImg from "@/assets/water_system_domestic_hot_water.avif";
-import temporaryWaterRunImg from "@/assets/water_system_temporary_water_run.avif";
-import mainWaterEntryImg from "@/assets/water_system_main_water_entry.avif";
-import hydronicsImg from "@/assets/water_system_hydronics.avif";
-import fireSuppressionImg from "@/assets/water_system_fire_suppression.avif";
+import { supabase } from "@/integrations/supabase/client";
+import { useQuery } from "@tanstack/react-query";
 
-const waterSystems = [
-  {
-    id: "domestic-cold",
-    name: "Domestic Cold Water",
-    threat: "Design, Damage, Vandalism, Cold Temperature",
-    riskLevel: "Very High Risk",
-    duration: "0 months",
-    cost: "$$$",
-    image: domesticColdWaterImg,
-  },
-  {
-    id: "domestic-hot",
-    name: "Domestic Hot Water",
-    threat: "Design, Damage, Vandalism",
-    riskLevel: "High Risk",
-    duration: "0 months",
-    cost: "$$$$",
-    image: domesticHotWaterImg,
-  },
-  {
-    id: "temporary-water",
-    name: "Temporary Water Run",
-    threat: "Design, Damage, Vandalism, Cold Temperature",
-    riskLevel: "Very High Risk",
-    duration: "0 months",
-    cost: "$",
-    image: temporaryWaterRunImg,
-  },
-  {
-    id: "main-water-entry",
-    name: "Main City Water Supply",
-    threat: "Design, Damage, Vandalism, Cold Temperature",
-    riskLevel: "Moderate Risk",
-    duration: "0 months",
-    cost: "$",
-    image: mainWaterEntryImg,
-  },
-  {
-    id: "hydronics",
-    name: "Hydronics",
-    threat: "Design, Damage, Vandalism, Cold Temperature",
-    riskLevel: "Moderate Risk",
-    duration: "0 months",
-    cost: "$$$$$",
-    image: hydronicsImg,
-  },
-  {
-    id: "fire-suppression",
-    name: "Fire Suppression System",
-    threat: "Design, Damage, Vandalism, Cold Temperature",
-    riskLevel: "Very High Risk",
-    duration: "0 months",
-    cost: "$",
-    image: fireSuppressionImg,
-  },
-];
+interface WaterSystem {
+  id: string;
+  name: string;
+  threat: string;
+  risk_level: string;
+  duration: string;
+  cost: string;
+  image_url: string;
+  display_order: number;
+}
 
 interface WaterSystemsStepProps {
   data: any;
@@ -81,6 +31,21 @@ export const WaterSystemsStep = ({ data, onNext, onBack, isProcessingWebhook }: 
   const [dialogOpen, setDialogOpen] = useState<string | null>(null);
   const [tempFloors, setTempFloors] = useState("");
 
+  // Fetch water systems from database
+  const { data: waterSystems = [], isLoading } = useQuery({
+    queryKey: ['water-systems'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('water_systems')
+        .select('*')
+        .eq('is_active', true)
+        .order('display_order');
+      
+      if (error) throw error;
+      return data as WaterSystem[];
+    },
+  });
+
   // Sync props to state when data changes (e.g., from webhook)
   useEffect(() => {
     if (data.selectedSystems) {
@@ -91,15 +56,15 @@ export const WaterSystemsStep = ({ data, onNext, onBack, isProcessingWebhook }: 
     }
   }, [data.selectedSystems, data.systemFloors]);
 
-  const toggleSystem = (systemId: string) => {
+  const toggleSystem = (systemName: string) => {
     setSelectedSystems((prev) =>
-      prev.includes(systemId) ? prev.filter((id) => id !== systemId) : [...prev, systemId]
+      prev.includes(systemName) ? prev.filter((name) => name !== systemName) : [...prev, systemName]
     );
   };
 
-  const handleOpenFloorDialog = (systemId: string) => {
-    setTempFloors(systemFloors[systemId] || "");
-    setDialogOpen(systemId);
+  const handleOpenFloorDialog = (systemName: string) => {
+    setTempFloors(systemFloors[systemName] || "");
+    setDialogOpen(systemName);
   };
 
   const handleSaveFloors = () => {
@@ -118,95 +83,120 @@ export const WaterSystemsStep = ({ data, onNext, onBack, isProcessingWebhook }: 
     }, 500);
 
     return () => clearTimeout(timer);
-  }, [selectedSystems, systemFloors, isProcessingWebhook]);
+  }, [selectedSystems, systemFloors, onNext, isProcessingWebhook]);
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center py-12">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-4"></div>
+          <p className="text-muted-foreground">Loading water systems...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
-      <div className="grid md:grid-cols-4 gap-3">
-          {waterSystems.map((system) => (
+      <div>
+        <h2 className="text-2xl font-bold mb-2">Water Systems</h2>
+        <p className="text-muted-foreground">
+          Select the water systems in your building and specify which floors they apply to.
+        </p>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        {waterSystems.map((system) => {
+          const isSelected = selectedSystems.includes(system.name);
+          return (
             <div
               key={system.id}
-              className={`p-4 rounded-lg border-2 transition-all relative ${
-                selectedSystems.includes(system.id)
+              onClick={() => toggleSystem(system.name)}
+              className={`p-4 rounded-lg border-2 cursor-pointer transition-all ${
+                isSelected
                   ? "border-primary bg-primary/5"
                   : "border-border hover:border-primary/50"
               }`}
-              onClick={() => toggleSystem(system.id)}
             >
-              <Dialog open={dialogOpen === system.id} onOpenChange={(open) => !open && setDialogOpen(null)}>
-                <DialogTrigger asChild>
+              <div className="flex items-start justify-between mb-3">
+                <div>
+                  <h3 className="font-semibold">{system.name}</h3>
+                  <span className="text-xs text-muted-foreground">{system.risk_level}</span>
+                </div>
+                <input
+                  type="checkbox"
+                  checked={isSelected}
+                  onChange={() => {}}
+                  className="h-5 w-5"
+                />
+              </div>
+              
+              <img 
+                src={system.image_url} 
+                alt={system.name}
+                className="w-full h-32 object-cover rounded-md mb-3"
+              />
+              
+              <p className="text-sm text-muted-foreground mb-2">
+                <strong>Threat:</strong> {system.threat}
+              </p>
+              
+              <div className="flex justify-between text-xs text-muted-foreground mb-3">
+                <span>Duration: {system.duration}</span>
+                <span>Cost: {system.cost}</span>
+              </div>
+
+              {isSelected && (
+                <Dialog open={dialogOpen === system.name} onOpenChange={(open) => !open && setDialogOpen(null)}>
                   <Button
-                    variant="ghost"
+                    variant="outline"
                     size="sm"
-                    className="absolute top-2 right-2 h-8 w-8 p-0"
+                    className="w-full"
                     onClick={(e) => {
                       e.stopPropagation();
-                      handleOpenFloorDialog(system.id);
+                      handleOpenFloorDialog(system.name);
                     }}
                   >
-                    <Info className="h-4 w-4" />
+                    <Info className="mr-2 h-4 w-4" />
+                    {systemFloors[system.name] ? "Edit Floors" : "Add Floors"}
                   </Button>
-                </DialogTrigger>
-                <DialogContent onClick={(e) => e.stopPropagation()}>
-                  <DialogHeader>
-                    <DialogTitle>Floors for {system.name}</DialogTitle>
-                  </DialogHeader>
-                  <div className="space-y-4 py-4">
-                    <div className="space-y-2">
-                      <Label htmlFor="floors">Enter floors (e.g., "B1, 1-5, 10")</Label>
-                      <Input
-                        id="floors"
-                        value={tempFloors}
-                        onChange={(e) => setTempFloors(e.target.value)}
-                        placeholder="e.g., B1, 1-5, 10"
-                      />
+                  <DialogContent onClick={(e) => e.stopPropagation()}>
+                    <DialogHeader>
+                      <DialogTitle>Specify Floors for {system.name}</DialogTitle>
+                    </DialogHeader>
+                    <div className="space-y-4 py-4">
+                      <div>
+                        <Label htmlFor="floors">Floors (e.g., 1-5, 10, 15-20)</Label>
+                        <Input
+                          id="floors"
+                          value={tempFloors}
+                          onChange={(e) => setTempFloors(e.target.value)}
+                          placeholder="Enter floor numbers or ranges"
+                        />
+                      </div>
+                      <Button onClick={handleSaveFloors} className="w-full">
+                        Save Floors
+                      </Button>
                     </div>
-                    <Button onClick={handleSaveFloors} className="w-full">
-                      Save Floors
-                    </Button>
-                  </div>
-                </DialogContent>
-              </Dialog>
-              
-              <div className="h-24 bg-muted rounded mb-3 flex items-center justify-center overflow-hidden">
-                <img src={system.image} alt={system.name} className="w-full h-full object-contain" />
-              </div>
-              <h3 className="font-semibold mb-2 text-sm">{system.name}</h3>
-              {systemFloors[system.id] && (
-                <div className="text-xs text-muted-foreground mb-2">
-                  <span>Floors: {systemFloors[system.id]}</span>
-                </div>
+                  </DialogContent>
+                </Dialog>
               )}
-              <div className="space-y-1.5 text-xs">
-                <div className="flex justify-between items-start gap-2">
-                  <span className="text-muted-foreground">Threat</span>
-                  <span
-                    className={`font-medium text-right ${
-                      system.riskLevel.includes("Very High")
-                        ? "text-destructive"
-                        : system.riskLevel.includes("High")
-                        ? "text-orange-500"
-                        : "text-warning"
-                    }`}
-                  >
-                    {system.riskLevel}
-                  </span>
-                </div>
-                <p className="text-muted-foreground text-xs">{system.threat}</p>
-                <div className="flex justify-between pt-1.5">
-                  <div>
-                    <p className="text-muted-foreground">Risk Duration</p>
-                    <p className="font-medium">{system.duration}</p>
-                  </div>
-                  <div>
-                    <p className="text-muted-foreground">Protection Cost</p>
-                    <p className="font-medium">{system.cost}</p>
-                  </div>
-                </div>
-              </div>
             </div>
-          ))}
-        </div>
+          );
+        })}
+      </div>
+
+      <div className="flex justify-between pt-6">
+        <Button variant="outline" onClick={onBack}>
+          Back
+        </Button>
+        <Button 
+          onClick={() => onNext({ selectedSystems, systemFloors })}
+          disabled={selectedSystems.length === 0}
+        >
+          Continue
+        </Button>
+      </div>
     </div>
   );
 };
