@@ -46,38 +46,38 @@ const ProjectWizard = () => {
   const [showProviderDialog, setShowProviderDialog] = useState(false);
   const [showGuidelinesDialog, setShowGuidelinesDialog] = useState(false);
 
-  const fetchProject = useCallback(async () => {
-    try {
-      const { data, error } = await supabase
-        .from("projects")
-        .select("*")
-        .eq("id", id)
-        .single();
-
-      if (error) throw error;
-      
-      // Merge table columns with project_data JSONB
-      const { project_data, created_at, updated_at, user_id, id: projectId, ...tableColumns } = data;
-      const mergedData = {
-        ...tableColumns,
-        ...(project_data as ProjectData || {}),
-      };
-      
-      setProjectData(mergedData);
-    } catch (error: any) {
-      toast({
-        title: "Error",
-        description: getUserFriendlyError(error),
-        variant: "destructive",
-      });
-    }
-  }, [id, toast]);
-
   useEffect(() => {
-    if (id && id !== "new") {
-      fetchProject();
-    }
-  }, [id, fetchProject]);
+    const fetchProject = async () => {
+      if (!id || id === "new") return;
+      
+      try {
+        const { data, error } = await supabase
+          .from("projects")
+          .select("*")
+          .eq("id", id)
+          .single();
+
+        if (error) throw error;
+        
+        // Merge table columns with project_data JSONB
+        const { project_data, created_at, updated_at, user_id, id: projectId, ...tableColumns } = data;
+        const mergedData = {
+          ...tableColumns,
+          ...(project_data as ProjectData || {}),
+        };
+        
+        setProjectData(mergedData);
+      } catch (error: any) {
+        toast({
+          title: "Error",
+          description: getUserFriendlyError(error),
+          variant: "destructive",
+        });
+      }
+    };
+
+    fetchProject();
+  }, [id, toast]);
 
   const saveProject = useCallback(async (data: ProjectData) => {
     // Prevent saving if we're on "new" route and there's no name yet
