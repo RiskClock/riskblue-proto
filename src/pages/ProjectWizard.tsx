@@ -371,24 +371,22 @@ const ProjectWizard = () => {
       </header>
 
       <div className="container mx-auto px-6 pb-8">
-        <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full -mx-6">
-          <div className="sticky top-[73px] z-10 bg-background pt-8 pb-4 border-b w-screen relative left-1/2 -ml-[50vw]">
-            <div className="container mx-auto px-6">
-              <div className="flex items-center gap-6 mb-2">
-                <h2 className="text-md font-medium text-foreground">
-                  {projectData.name || "Unnamed Project"}
-                </h2>
-              </div>
-              <TabsList className="w-full justify-start">
-                <TabsTrigger value="guideline">
-                  Water Risk Discovery {projectData.waterRiskDiscoveryComplete && "✅"}
-                </TabsTrigger>
-                <TabsTrigger value="plan">
-                  Water Mitigation Planning {projectData.waterMitigationPlanningComplete && "✅"}
-                </TabsTrigger>
-                <TabsTrigger value="response">Water Mitigation Execution</TabsTrigger>
-              </TabsList>
+        <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+          <div className="sticky top-[73px] z-10 bg-background pt-8 pb-4 -mx-6 px-6 border-b">
+            <div className="flex items-center gap-6 mb-2">
+              <h2 className="text-md font-medium text-foreground">
+                {projectData.name || "Unnamed Project"}
+              </h2>
             </div>
+            <TabsList className="w-full justify-start">
+              <TabsTrigger value="guideline">
+                Water Risk Discovery {projectData.waterRiskDiscoveryComplete && "✅"}
+              </TabsTrigger>
+              <TabsTrigger value="plan">
+                Water Mitigation Planning {projectData.waterMitigationPlanningComplete && "✅"}
+              </TabsTrigger>
+              <TabsTrigger value="response">Water Mitigation Execution</TabsTrigger>
+            </TabsList>
           </div>
 
           <TabsContent value="guideline" className="max-w-5xl mx-auto">
