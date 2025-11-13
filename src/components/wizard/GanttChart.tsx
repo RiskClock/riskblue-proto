@@ -241,6 +241,9 @@ export const GanttChart = ({ data }: GanttChartProps) => {
             {/* Scrollable timeline */}
             <ScrollArea className="flex-1">
               <div style={{ width: `${timelineWidth}px` }}>
+                {/* Search spacer - matches search input height + margin */}
+                <div className="h-8 mb-2" />
+                
                 {/* Year labels */}
                 <div className="relative h-6 border-b border-border">
                   {yearLabels.map((yearLabel, idx) => (
@@ -287,10 +290,11 @@ export const GanttChart = ({ data }: GanttChartProps) => {
                           <Tooltip>
                             <TooltipTrigger asChild>
                               <div
-                                className="absolute h-6 bg-primary/80 rounded border border-primary hover:bg-primary transition-colors cursor-pointer"
+                                className="absolute h-6 rounded border border-primary hover:opacity-90 transition-opacity cursor-pointer"
                                 style={{
                                   left: `${(differenceInDays(controlRange.startDate, overallStart) / totalDays) * timelineWidth}px`,
-                                  width: `${(differenceInDays(controlRange.endDate, controlRange.startDate) / totalDays) * timelineWidth}px`
+                                  width: `${(differenceInDays(controlRange.endDate, controlRange.startDate) / totalDays) * timelineWidth}px`,
+                                  background: 'linear-gradient(to right, hsl(var(--primary)), hsl(var(--primary) / 0.6))'
                                 }}
                               />
                             </TooltipTrigger>
@@ -319,10 +323,11 @@ export const GanttChart = ({ data }: GanttChartProps) => {
                               <Tooltip>
                                 <TooltipTrigger asChild>
                                   <div
-                                    className="absolute h-5 bg-muted-foreground/60 rounded border border-muted-foreground/40 hover:bg-muted-foreground/70 transition-colors cursor-pointer"
+                                    className="absolute h-5 rounded border border-muted-foreground/40 hover:opacity-80 transition-opacity cursor-pointer"
                                     style={{
                                       left: `${(differenceInDays(item.startDate, overallStart) / totalDays) * timelineWidth}px`,
-                                      width: `${(differenceInDays(item.endDate, item.startDate) / totalDays) * timelineWidth}px`
+                                      width: `${(differenceInDays(item.endDate, item.startDate) / totalDays) * timelineWidth}px`,
+                                      background: 'linear-gradient(to right, hsl(var(--muted-foreground) / 0.7), hsl(var(--muted-foreground) / 0.4))'
                                     }}
                                   />
                                 </TooltipTrigger>
