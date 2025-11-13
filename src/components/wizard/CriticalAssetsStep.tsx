@@ -1,82 +1,22 @@
 import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Info } from "lucide-react";
-import mechanicalRoomsImg from "@/assets/critical_assets_mechanical_rooms.avif";
-import electricalRoomsImg from "@/assets/critical_assets_electrical_rooms.avif";
-import mainElectricalRisersImg from "@/assets/critical_assets_main_electrical_risers.avif";
-import sumpPitsImg from "@/assets/critical_assets_sump_pits.avif";
-import mechanicalRisersImg from "@/assets/critical_assets_mechanical_risers.avif";
-import elevatorPitsImg from "@/assets/critical_assets_elevator_pits.avif";
-import suitesImg from "@/assets/critical_assets_suites.avif";
+import { supabase } from "@/integrations/supabase/client";
+import { useQuery } from "@tanstack/react-query";
 
-const assets = [
-  {
-    id: "mechanical",
-    name: "Mechanical Rooms",
-    threat: "Building water source",
-    riskLevel: "Very High Risk",
-    duration: "0 months",
-    cost: "$",
-    image: mechanicalRoomsImg,
-  },
-  {
-    id: "electrical",
-    name: "Electrical Rooms",
-    threat: "Environmental and Building water target",
-    riskLevel: "High Risk",
-    duration: "0 months",
-    cost: "$",
-    image: electricalRoomsImg,
-  },
-  {
-    id: "mainElectricalRisers",
-    name: "Main Electrical Risers",
-    threat: "Environmental and Building water target",
-    riskLevel: "Moderate Risk",
-    duration: "0 months",
-    cost: "$",
-    image: mainElectricalRisersImg,
-  },
-  {
-    id: "sumpPits",
-    name: "Sump Pits",
-    threat: "Environmental, Underground, and water source",
-    riskLevel: "Moderate Risk",
-    duration: "0 months",
-    cost: "$$$",
-    image: sumpPitsImg,
-  },
-  {
-    id: "mechanicalRisers",
-    name: "Mechanical Risers",
-    threat: "Building water source",
-    riskLevel: "Extreme Risk",
-    duration: "0 months",
-    cost: "$$$$",
-    image: mechanicalRisersImg,
-  },
-  {
-    id: "elevatorPits",
-    name: "Elevator Pits",
-    threat: "Environmental, Underground, and Building water target",
-    riskLevel: "High Risk",
-    duration: "0 months",
-    cost: "$$$",
-    image: elevatorPitsImg,
-  },
-  {
-    id: "suites",
-    name: "Suites",
-    threat: "Environmental and Building water target",
-    riskLevel: "Very High Risk",
-    duration: "0 months",
-    cost: "$$$$$",
-    image: suitesImg,
-  },
-];
+interface Asset {
+  id: string;
+  name: string;
+  threat: string;
+  risk_level: string;
+  duration: string;
+  cost: string;
+  image_url: string;
+  display_order: number;
+}
 
 interface CriticalAssetsStepProps {
   data: any;
@@ -91,6 +31,21 @@ export const CriticalAssetsStep = ({ data, onNext, onBack, isProcessingWebhook }
   const [dialogOpen, setDialogOpen] = useState<string | null>(null);
   const [tempFloors, setTempFloors] = useState("");
 
+  // Fetch assets from database
+  const { data: assets = [], isLoading } = useQuery({
+    queryKey: ['critical-assets'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('critical_assets')
+        .select('*')
+        .eq('is_active', true)
+        .order('display_order');
+      
+      if (error) throw error;
+      return data as Asset[];
+    },
+  });
+
   // Sync props to state when data changes (e.g., from webhook)
   useEffect(() => {
     if (data.selectedAssets) {
@@ -101,15 +56,15 @@ export const CriticalAssetsStep = ({ data, onNext, onBack, isProcessingWebhook }
     }
   }, [data.selectedAssets, data.assetFloors]);
 
-  const toggleAsset = (assetId: string) => {
+  const toggleAsset = (assetName: string) => {
     setSelectedAssets((prev) =>
-      prev.includes(assetId) ? prev.filter((id) => id !== assetId) : [...prev, assetId]
+      prev.includes(assetName) ? prev.filter((name) => name !== assetName) : [...prev, assetName]
     );
   };
 
-  const handleOpenFloorDialog = (assetId: string) => {
-    setTempFloors(assetFloors[assetId] || "");
-    setDialogOpen(assetId);
+  const handleOpenFloorDialog = (assetName: string) => {
+    setTempFloors(assetFloors[assetName] || "");
+    setDialogOpen(assetName);
   };
 
   const handleSaveFloors = () => {
@@ -128,92 +83,120 @@ export const CriticalAssetsStep = ({ data, onNext, onBack, isProcessingWebhook }
     }, 500);
 
     return () => clearTimeout(timer);
-  }, [selectedAssets, assetFloors, isProcessingWebhook]);
+  }, [selectedAssets, assetFloors, onNext, isProcessingWebhook]);
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center py-12">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-4"></div>
+          <p className="text-muted-foreground">Loading critical assets...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
-      <div className="grid md:grid-cols-4 gap-3">
-          {assets.map((asset) => (
+      <div>
+        <h2 className="text-2xl font-bold mb-2">Critical Assets</h2>
+        <p className="text-muted-foreground">
+          Select the critical assets in your building that require water mitigation monitoring.
+        </p>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        {assets.map((asset) => {
+          const isSelected = selectedAssets.includes(asset.name);
+          return (
             <div
               key={asset.id}
-              className={`p-4 rounded-lg border-2 transition-all relative ${
-                selectedAssets.includes(asset.id)
+              onClick={() => toggleAsset(asset.name)}
+              className={`p-4 rounded-lg border-2 cursor-pointer transition-all ${
+                isSelected
                   ? "border-primary bg-primary/5"
                   : "border-border hover:border-primary/50"
               }`}
-              onClick={() => toggleAsset(asset.id)}
             >
-              <Dialog open={dialogOpen === asset.id} onOpenChange={(open) => !open && setDialogOpen(null)}>
-                <DialogTrigger asChild>
+              <div className="flex items-start justify-between mb-3">
+                <div>
+                  <h3 className="font-semibold">{asset.name}</h3>
+                  <span className="text-xs text-muted-foreground">{asset.risk_level}</span>
+                </div>
+                <input
+                  type="checkbox"
+                  checked={isSelected}
+                  onChange={() => {}}
+                  className="h-5 w-5"
+                />
+              </div>
+              
+              <img 
+                src={asset.image_url} 
+                alt={asset.name}
+                className="w-full h-32 object-cover rounded-md mb-3"
+              />
+              
+              <p className="text-sm text-muted-foreground mb-2">
+                <strong>Threat:</strong> {asset.threat}
+              </p>
+              
+              <div className="flex justify-between text-xs text-muted-foreground mb-3">
+                <span>Duration: {asset.duration}</span>
+                <span>Cost: {asset.cost}</span>
+              </div>
+
+              {isSelected && (
+                <Dialog open={dialogOpen === asset.name} onOpenChange={(open) => !open && setDialogOpen(null)}>
                   <Button
-                    variant="ghost"
+                    variant="outline"
                     size="sm"
-                    className="absolute top-2 right-2 h-8 w-8 p-0"
+                    className="w-full"
                     onClick={(e) => {
                       e.stopPropagation();
-                      handleOpenFloorDialog(asset.id);
+                      handleOpenFloorDialog(asset.name);
                     }}
                   >
-                    <Info className="h-4 w-4" />
+                    <Info className="mr-2 h-4 w-4" />
+                    {assetFloors[asset.name] ? "Edit Floors" : "Add Floors"}
                   </Button>
-                </DialogTrigger>
-                <DialogContent onClick={(e) => e.stopPropagation()}>
-                  <DialogHeader>
-                    <DialogTitle>Floors for {asset.name}</DialogTitle>
-                  </DialogHeader>
-                  <div className="space-y-4 py-4">
-                    <div className="space-y-2">
-                      <Label htmlFor="floors">Enter floors (e.g., "B1, 1-5, 10")</Label>
-                      <Input
-                        id="floors"
-                        value={tempFloors}
-                        onChange={(e) => setTempFloors(e.target.value)}
-                        placeholder="e.g., B1, 1-5, 10"
-                      />
+                  <DialogContent onClick={(e) => e.stopPropagation()}>
+                    <DialogHeader>
+                      <DialogTitle>Specify Floors for {asset.name}</DialogTitle>
+                    </DialogHeader>
+                    <div className="space-y-4 py-4">
+                      <div>
+                        <Label htmlFor="floors">Floors (e.g., 1-5, 10, 15-20)</Label>
+                        <Input
+                          id="floors"
+                          value={tempFloors}
+                          onChange={(e) => setTempFloors(e.target.value)}
+                          placeholder="Enter floor numbers or ranges"
+                        />
+                      </div>
+                      <Button onClick={handleSaveFloors} className="w-full">
+                        Save Floors
+                      </Button>
                     </div>
-                    <Button onClick={handleSaveFloors} className="w-full">
-                      Save Floors
-                    </Button>
-                  </div>
-                </DialogContent>
-              </Dialog>
-              
-              <div className="h-24 bg-muted rounded mb-3 flex items-center justify-center overflow-hidden">
-                <img src={asset.image} alt={asset.name} className="w-full h-full object-contain" />
-              </div>
-              <h3 className="font-semibold mb-2 text-sm">{asset.name}</h3>
-              {assetFloors[asset.id] && (
-                <div className="text-xs text-muted-foreground mb-2">
-                  <span>Floors: {assetFloors[asset.id]}</span>
-                </div>
+                  </DialogContent>
+                </Dialog>
               )}
-              <div className="space-y-1.5 text-xs">
-                <div className="flex justify-between items-start gap-2">
-                  <span className="text-muted-foreground">Threat</span>
-                  <span className={`font-medium text-right ${
-                    asset.riskLevel.includes("Extreme") ? "text-destructive" :
-                    asset.riskLevel.includes("Very High") ? "text-destructive" : 
-                    asset.riskLevel.includes("High") ? "text-orange-500" : 
-                    "text-warning"
-                  }`}>
-                    {asset.riskLevel}
-                  </span>
-                </div>
-                <p className="text-muted-foreground text-xs">{asset.threat}</p>
-                <div className="flex justify-between pt-1.5">
-                  <div>
-                    <p className="text-muted-foreground">Risk Duration</p>
-                    <p className="font-medium">{asset.duration}</p>
-                  </div>
-                  <div>
-                    <p className="text-muted-foreground">Protection Cost</p>
-                    <p className="font-medium">{asset.cost}</p>
-                  </div>
-                </div>
-              </div>
             </div>
-          ))}
-        </div>
+          );
+        })}
+      </div>
+
+      <div className="flex justify-between pt-6">
+        <Button variant="outline" onClick={onBack}>
+          Back
+        </Button>
+        <Button 
+          onClick={() => onNext({ selectedAssets, assetFloors })}
+          disabled={selectedAssets.length === 0}
+        >
+          Continue
+        </Button>
+      </div>
     </div>
   );
 };
