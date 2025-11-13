@@ -36,13 +36,13 @@ export const WaterSystemsStep = ({ data, onNext, onBack, isProcessingWebhook }: 
     queryKey: ['water-systems'],
     queryFn: async () => {
       const { data, error } = await supabase
-        .from('water_systems')
+        .from('water_systems' as any)
         .select('*')
         .eq('is_active', true)
         .order('display_order');
       
       if (error) throw error;
-      return data as WaterSystem[];
+      return (data as any) as WaterSystem[];
     },
   });
 
@@ -105,61 +105,67 @@ export const WaterSystemsStep = ({ data, onNext, onBack, isProcessingWebhook }: 
         </p>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         {waterSystems.map((system) => {
           const isSelected = selectedSystems.includes(system.name);
           return (
-            <div
-              key={system.id}
-              onClick={() => toggleSystem(system.name)}
-              className={`p-4 rounded-lg border-2 cursor-pointer transition-all ${
-                isSelected
-                  ? "border-primary bg-primary/5"
-                  : "border-border hover:border-primary/50"
-              }`}
-            >
-              <div className="flex items-start justify-between mb-3">
-                <div>
-                  <h3 className="font-semibold">{system.name}</h3>
-                  <span className="text-xs text-muted-foreground">{system.risk_level}</span>
+            <div key={system.id} className="flex flex-col">
+              <div
+                onClick={() => toggleSystem(system.name)}
+                className={`flex flex-col h-full p-4 rounded-lg border-2 cursor-pointer transition-all ${
+                  isSelected
+                    ? "border-primary bg-primary/5"
+                    : "border-border hover:border-primary/50"
+                }`}
+              >
+                <div className="flex items-start justify-between mb-3">
+                  <div className="flex-1">
+                    <h3 className="font-semibold text-base mb-1">{system.name}</h3>
+                    <span className="inline-block px-2 py-0.5 text-xs bg-secondary text-secondary-foreground rounded">{system.risk_level}</span>
+                  </div>
+                  <input
+                    type="checkbox"
+                    checked={isSelected}
+                    onChange={() => {}}
+                    className="h-5 w-5 mt-1"
+                  />
                 </div>
-                <input
-                  type="checkbox"
-                  checked={isSelected}
-                  onChange={() => {}}
-                  className="h-5 w-5"
+                
+                <img 
+                  src={system.image_url} 
+                  alt={system.name}
+                  className="w-full h-40 object-cover rounded-md mb-3"
                 />
-              </div>
-              
-              <img 
-                src={system.image_url} 
-                alt={system.name}
-                className="w-full h-32 object-cover rounded-md mb-3"
-              />
-              
-              <p className="text-sm text-muted-foreground mb-2">
-                <strong>Threat:</strong> {system.threat}
-              </p>
-              
-              <div className="flex justify-between text-xs text-muted-foreground mb-3">
-                <span>Duration: {system.duration}</span>
-                <span>Cost: {system.cost}</span>
-              </div>
+                
+                <p className="text-sm text-muted-foreground mb-3 flex-grow">
+                  <strong>Threat:</strong> {system.threat}
+                </p>
+                
+                <div className="flex justify-between text-xs text-muted-foreground pb-3 border-b">
+                  <span><strong>Duration:</strong> {system.duration}</span>
+                  <span><strong>Cost:</strong> {system.cost}</span>
+                </div>
 
+                {isSelected && (
+                  <div className="mt-3">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="w-full"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleOpenFloorDialog(system.name);
+                      }}
+                    >
+                      <Info className="mr-2 h-4 w-4" />
+                      {systemFloors[system.name] ? `Floors: ${systemFloors[system.name]}` : "Add Floors"}
+                    </Button>
+                  </div>
+                )}
+              </div>
+              
               {isSelected && (
                 <Dialog open={dialogOpen === system.name} onOpenChange={(open) => !open && setDialogOpen(null)}>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="w-full"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      handleOpenFloorDialog(system.name);
-                    }}
-                  >
-                    <Info className="mr-2 h-4 w-4" />
-                    {systemFloors[system.name] ? "Edit Floors" : "Add Floors"}
-                  </Button>
                   <DialogContent onClick={(e) => e.stopPropagation()}>
                     <DialogHeader>
                       <DialogTitle>Specify Floors for {system.name}</DialogTitle>

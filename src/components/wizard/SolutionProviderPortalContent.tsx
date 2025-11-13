@@ -328,7 +328,7 @@ export const SolutionProviderPortalContent = ({
           details: currentDetails,
           editor_name: editorName,
           edited_at: editedAt,
-          status: existingProposal?.status || 'draft',
+          status: (existingProposal as any)?.status || 'draft',
         };
       });
 
