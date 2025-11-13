@@ -14,6 +14,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { z } from "zod";
 import { SolutionProviderPortal } from "./SolutionProviderPortal";
+import { normalizeControlName } from "@/lib/utils";
 
 interface CollaboratorManagementStepProps {
   projectId: string;
@@ -875,7 +876,7 @@ export const CollaboratorManagementStep = ({ projectId }: CollaboratorManagement
                   {/* Control Rows */}
                   {allControlNames.map((controlName) => (
                     <TableRow key={controlName}>
-                      <TableCell className="font-medium py-2">{controlName}</TableCell>
+                      <TableCell className="font-medium py-2">{normalizeControlName(controlName)}</TableCell>
                       {companyProposals.map((proposal) => {
                         const system = proposal.systems.find(
                           (s) => s.system_name === controlName
