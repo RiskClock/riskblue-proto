@@ -108,9 +108,11 @@ export const ImplementationScheduleStep = ({ data }: ImplementationScheduleStepP
   return (
     <>
       {/* Gantt Chart */}
-      <div className="w-full max-w-none">
-        <GanttChart data={ganttData} />
-      </div>
+      {ganttData.length > 0 && (
+        <div className="w-full -mx-6">
+          <GanttChart data={ganttData} />
+        </div>
+      )}
 
       {/* Detailed Schedule List */}
       <Card className="p-6 mb-6 mt-6">
