@@ -367,9 +367,9 @@ const ProjectWizard = () => {
         </div>
       </header>
 
-      <div className="container mx-auto px-6 py-8">
+      <div className="container mx-auto px-6 pb-8">
         <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-          <div className="sticky top-[73px] z-10 bg-background pb-4 -mx-6 px-6 border-b">
+          <div className="sticky top-[73px] z-10 bg-background pt-8 pb-4 -mx-6 px-6 border-b">
             <div className="flex items-center gap-6 mb-2">
               <h2 className="text-md font-medium text-foreground">
                 {projectData.name || "Unnamed Project"}
