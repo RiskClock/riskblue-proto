@@ -1,13 +1,29 @@
 @media print {
-  /* Hide non-printable elements */
+  /* Hide all UI elements */
   header,
   button,
-  .no-print {
+  nav,
+  .no-print,
+  [role="tablist"],
+  input[type="checkbox"],
+  label[for="mark-complete"],
+  label[for="mark-plan-complete"],
+  .tabs-trigger,
+  aside {
     display: none !important;
   }
 
-  /* Show print-only elements */
-  .print-only {
+  /* Hide everything except the report */
+  body > *:not(.print-report-container) {
+    display: none !important;
+  }
+
+  /* Show only the report */
+  .print-report-container {
+    display: block !important;
+  }
+
+  .print-report {
     display: block !important;
   }
 
@@ -20,26 +36,31 @@
   body {
     print-color-adjust: exact;
     -webkit-print-color-adjust: exact;
+    background: white;
   }
 
   /* Prevent page breaks inside elements */
+  .page-break-avoid,
   .accordion-item,
   .card,
-  table,
-  .grid {
+  table {
     page-break-inside: avoid;
     break-inside: avoid;
   }
 
-  /* Add RiskBlue logo to top right */
+  /* Print header styling */
   .print-header {
     display: flex !important;
-    justify-content: flex-end;
+    justify-content: space-between;
+    align-items: start;
     margin-bottom: 2rem;
+    padding-bottom: 1rem;
+    border-bottom: 2px solid #333;
   }
 
   .print-header img {
-    height: 40px;
+    height: 48px;
+    max-height: 48px;
   }
 
   /* Ensure images print */
@@ -59,13 +80,31 @@
     padding: 8px;
   }
 
-  /* Expand all accordions for print */
-  [data-state="closed"] > [data-radix-collection-item] {
-    display: block !important;
+  /* Force colors to print */
+  * {
+    color-adjust: exact;
+    -webkit-print-color-adjust: exact;
+  }
+
+  /* Ensure backgrounds print */
+  .bg-gray-50,
+  .bg-blue-50,
+  .bg-red-100,
+  .bg-yellow-100,
+  .bg-orange-100,
+  .bg-green-100 {
+    print-color-adjust: exact;
+    -webkit-print-color-adjust: exact;
   }
 }
 
-/* Hide print header by default */
-.print-header {
+/* Hide print report by default on screen */
+.print-report-container {
   display: none;
+}
+
+@media screen {
+  .print-report {
+    display: none;
+  }
 }
