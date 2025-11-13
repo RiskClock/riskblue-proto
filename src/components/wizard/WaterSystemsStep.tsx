@@ -1,5 +1,9 @@
 import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { MapPin } from "lucide-react";
 import domesticColdWaterImg from "@/assets/water_system_domestic_cold_water.avif";
 import domesticHotWaterImg from "@/assets/water_system_domestic_hot_water.avif";
 import temporaryWaterRunImg from "@/assets/water_system_temporary_water_run.avif";
@@ -73,13 +77,19 @@ interface WaterSystemsStepProps {
 
 export const WaterSystemsStep = ({ data, onNext, onBack, isProcessingWebhook }: WaterSystemsStepProps) => {
   const [selectedSystems, setSelectedSystems] = useState<string[]>(data.selectedSystems || []);
+  const [systemFloors, setSystemFloors] = useState<Record<string, string>>(data.systemFloors || {});
+  const [dialogOpen, setDialogOpen] = useState<string | null>(null);
+  const [tempFloors, setTempFloors] = useState("");
 
   // Sync props to state when data changes (e.g., from webhook)
   useEffect(() => {
     if (data.selectedSystems) {
       setSelectedSystems(data.selectedSystems);
     }
-  }, [data.selectedSystems]);
+    if (data.systemFloors) {
+      setSystemFloors(data.systemFloors);
+    }
+  }, [data.selectedSystems, data.systemFloors]);
 
   const toggleSystem = (systemId: string) => {
     setSelectedSystems((prev) =>
@@ -87,16 +97,28 @@ export const WaterSystemsStep = ({ data, onNext, onBack, isProcessingWebhook }: 
     );
   };
 
+  const handleOpenFloorDialog = (systemId: string) => {
+    setTempFloors(systemFloors[systemId] || "");
+    setDialogOpen(systemId);
+  };
+
+  const handleSaveFloors = () => {
+    if (dialogOpen) {
+      setSystemFloors((prev) => ({ ...prev, [dialogOpen]: tempFloors }));
+      setDialogOpen(null);
+    }
+  };
+
   // Auto-save with debounce - don't save while webhook is processing
   useEffect(() => {
     if (isProcessingWebhook) return;
     
     const timer = setTimeout(() => {
-      onNext({ selectedSystems });
+      onNext({ selectedSystems, systemFloors });
     }, 500);
 
     return () => clearTimeout(timer);
-  }, [selectedSystems, isProcessingWebhook]);
+  }, [selectedSystems, systemFloors, isProcessingWebhook]);
 
   return (
     <div className="space-y-6">
@@ -104,17 +126,66 @@ export const WaterSystemsStep = ({ data, onNext, onBack, isProcessingWebhook }: 
           {waterSystems.map((system) => (
             <div
               key={system.id}
-              className={`p-4 rounded-lg border-2 cursor-pointer transition-all ${
+              className={`p-4 rounded-lg border-2 transition-all ${
                 selectedSystems.includes(system.id)
                   ? "border-primary bg-primary/5"
                   : "border-border hover:border-primary/50"
               }`}
-              onClick={() => toggleSystem(system.id)}
             >
-              <div className="h-24 bg-muted rounded mb-3 flex items-center justify-center overflow-hidden">
+              <div 
+                className="h-24 bg-muted rounded mb-3 flex items-center justify-center overflow-hidden cursor-pointer"
+                onClick={() => toggleSystem(system.id)}
+              >
                 <img src={system.image} alt={system.name} className="w-full h-full object-contain" />
               </div>
-              <h3 className="font-semibold mb-2 text-sm">{system.name}</h3>
+              <div className="flex items-start justify-between mb-2">
+                <h3 
+                  className="font-semibold text-sm flex-1 cursor-pointer"
+                  onClick={() => toggleSystem(system.id)}
+                >
+                  {system.name}
+                </h3>
+                <Dialog open={dialogOpen === system.id} onOpenChange={(open) => !open && setDialogOpen(null)}>
+                  <DialogTrigger asChild>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-6 w-6 p-0"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleOpenFloorDialog(system.id);
+                      }}
+                    >
+                      <MapPin className="h-4 w-4" />
+                    </Button>
+                  </DialogTrigger>
+                  <DialogContent onClick={(e) => e.stopPropagation()}>
+                    <DialogHeader>
+                      <DialogTitle>Floors for {system.name}</DialogTitle>
+                    </DialogHeader>
+                    <div className="space-y-4 py-4">
+                      <div className="space-y-2">
+                        <Label htmlFor="floors">Enter floors (e.g., "B1, 1-5, 10")</Label>
+                        <Input
+                          id="floors"
+                          value={tempFloors}
+                          onChange={(e) => setTempFloors(e.target.value)}
+                          placeholder="e.g., B1, 1-5, 10"
+                        />
+                      </div>
+                      <Button onClick={handleSaveFloors} className="w-full">
+                        Save Floors
+                      </Button>
+                    </div>
+                  </DialogContent>
+                </Dialog>
+              </div>
+              {systemFloors[system.id] && (
+                <div className="text-xs text-muted-foreground mb-2 flex items-center gap-1">
+                  <MapPin className="h-3 w-3" />
+                  <span>Floors: {systemFloors[system.id]}</span>
+                </div>
+              )}
               <div className="space-y-1.5 text-xs">
                 <div className="flex justify-between items-start gap-2">
                   <span className="text-muted-foreground">Threat</span>
