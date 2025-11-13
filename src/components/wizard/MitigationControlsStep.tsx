@@ -182,50 +182,45 @@ export const MitigationControlsStep = ({ data, onNext, onBack, isProcessingWebho
             {controls.map((control) => (
               <div
                 key={control.name}
-                className={`p-4 rounded-lg border-2 transition-all relative ${
+                onClick={() => toggleControl(control.name)}
+                className={`p-4 rounded-lg border-2 cursor-pointer transition-all relative ${
                   selectedControls.includes(control.name)
                     ? "border-primary bg-primary/5"
                     : "border-border hover:border-primary/50"
                 }`}
               >
-                <div className="absolute top-2 right-2 flex gap-2">
-                  <Badge variant="secondary" className="text-xs">
-                    {control.points} pts
-                  </Badge>
-                  <Badge variant="outline" className="text-xs">
-                    {"⭐".repeat(control.popularity)}
-                  </Badge>
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleMoreInfo(control);
+                  }}
+                  className="absolute top-2 right-2 p-1 hover:bg-muted rounded-full transition-colors"
+                >
+                  <Info className="h-4 w-4 text-muted-foreground" />
+                </button>
+
+                <div className="mb-3">
+                  <h4 className="font-semibold text-sm mb-1">{control.name}</h4>
+                  <div className="flex gap-2">
+                    <Badge variant="secondary" className="text-xs">
+                      {control.points} pts
+                    </Badge>
+                    <Badge variant="outline" className="text-xs">
+                      {"⭐".repeat(control.popularity)}
+                    </Badge>
+                  </div>
                 </div>
                 
                 <img 
                   src={control.image_url} 
                   alt={control.name}
-                  className="w-full h-32 object-contain rounded-md mb-3 cursor-pointer bg-muted/30"
-                  onClick={() => handleMoreInfo(control)}
+                  className="w-full h-32 object-contain rounded-md mb-3 bg-muted/30"
                 />
                 
-                <div className="space-y-2">
-                  <h4 className="font-semibold text-sm leading-tight min-h-[40px]">{control.name}</h4>
-                  <p className="text-xs text-muted-foreground line-clamp-2">{control.description}</p>
-                  
-                  <div className="flex items-center justify-between pt-2">
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => handleMoreInfo(control)}
-                      className="h-8 px-2"
-                    >
-                      <Info className="h-4 w-4 mr-1" />
-                      Details
-                    </Button>
-                  </div>
-                  <input
-                    type="checkbox"
-                    checked={selectedControls.includes(control.name)}
-                    onChange={() => toggleControl(control.name)}
-                    className="absolute top-4 right-4 h-5 w-5 cursor-pointer"
-                    onClick={(e) => e.stopPropagation()}
-                  />
+                <p className="text-xs text-muted-foreground mb-3 line-clamp-3">{control.description}</p>
+                
+                <div className="flex justify-between text-xs text-muted-foreground">
+                  <span><strong>Author:</strong> {control.author}</span>
                 </div>
               </div>
             ))}

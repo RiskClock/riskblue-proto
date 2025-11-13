@@ -112,17 +112,25 @@ export const WaterSystemsStep = ({ data, onNext, onBack, isProcessingWebhook }: 
             <div
               key={system.id}
               onClick={() => toggleSystem(system.name)}
-              className={`p-4 rounded-lg border-2 cursor-pointer transition-all ${
+              className={`p-4 rounded-lg border-2 cursor-pointer transition-all relative ${
                 isSelected
                   ? "border-primary bg-primary/5"
                   : "border-border hover:border-primary/50"
               }`}
             >
-              <div className="flex items-start justify-between mb-3">
-                <div className="flex-1">
-                  <h3 className="font-semibold text-sm mb-1">{system.name}</h3>
-                  <span className="inline-block px-2 py-0.5 text-xs bg-secondary text-secondary-foreground rounded">{system.risk_level}</span>
-                </div>
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  handleOpenFloorDialog(system.name);
+                }}
+                className="absolute top-2 right-2 p-1 hover:bg-muted rounded-full transition-colors"
+              >
+                <Info className="h-4 w-4 text-muted-foreground" />
+              </button>
+
+              <div className="mb-3">
+                <h3 className="font-semibold text-sm mb-1">{system.name}</h3>
+                <span className="inline-block px-2 py-0.5 text-xs bg-secondary text-secondary-foreground rounded">{system.risk_level}</span>
               </div>
               
               <img 
@@ -135,27 +143,10 @@ export const WaterSystemsStep = ({ data, onNext, onBack, isProcessingWebhook }: 
                 <strong>Threat:</strong> {system.threat}
               </p>
               
-              <div className="flex justify-between text-xs text-muted-foreground pb-3 border-b">
+              <div className="flex justify-between text-xs text-muted-foreground">
                 <span><strong>Duration:</strong> {system.duration}</span>
                 <span><strong>Cost:</strong> {system.cost}</span>
               </div>
-
-              {isSelected && (
-                <div className="mt-3">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="w-full"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      handleOpenFloorDialog(system.name);
-                    }}
-                  >
-                    <Info className="mr-2 h-4 w-4" />
-                    {systemFloors[system.name] ? `Floors: ${systemFloors[system.name]}` : "Add Floors"}
-                  </Button>
-                </div>
-              )}
               
               <Dialog open={dialogOpen === system.name} onOpenChange={(open) => !open && setDialogOpen(null)}>
                 <DialogContent onClick={(e) => e.stopPropagation()}>
