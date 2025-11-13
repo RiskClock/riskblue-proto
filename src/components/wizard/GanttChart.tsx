@@ -1,8 +1,10 @@
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { ScrollArea, ScrollBar } from "@/components/ui/scroll-area";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
-import { ChevronDown, ChevronRight } from "lucide-react";
-import { format, differenceInDays } from "date-fns";
+import { ChevronDown, ChevronRight, ZoomIn, ZoomOut } from "lucide-react";
+import { format, differenceInDays, startOfMonth, addMonths } from "date-fns";
 import { useState } from "react";
 
 interface GanttItem {
@@ -22,6 +24,7 @@ interface GanttChartProps {
 
 export const GanttChart = ({ data }: GanttChartProps) => {
   const [expandedControls, setExpandedControls] = useState<Set<string>>(new Set());
+  const [zoom, setZoom] = useState(1);
 
   // Calculate the overall timeline range
   const allDates = data.flatMap(control => 
@@ -39,6 +42,8 @@ export const GanttChart = ({ data }: GanttChartProps) => {
   const overallStart = new Date(Math.min(...allDates.map(d => d.getTime())));
   const overallEnd = new Date(Math.max(...allDates.map(d => d.getTime())));
   const totalDays = differenceInDays(overallEnd, overallStart);
+  
+  const timelineWidth = Math.max(800, totalDays * 2 * zoom);
 
   // Calculate position and width for a date range
   const getBarStyle = (startDate: Date, endDate: Date) => {
@@ -73,113 +78,208 @@ export const GanttChart = ({ data }: GanttChartProps) => {
     });
   };
 
-  // Generate month markers for the timeline
-  const generateMonthMarkers = () => {
-    const markers: { label: string; position: number }[] = [];
-    const current = new Date(overallStart);
-    current.setDate(1); // Start of month
+  // Generate month/year markers based on zoom level
+  const generateTimeMarkers = () => {
+    let interval = 1; // months
+    if (zoom < 0.3) interval = 12; // yearly
+    else if (zoom < 0.5) interval = 6; // every 6 months
+    else if (zoom < 0.8) interval = 3; // every 3 months
+    
+    const markers: { month: string; year: string; position: number }[] = [];
+    const current = startOfMonth(overallStart);
     
     while (current <= overallEnd) {
       const offsetDays = differenceInDays(current, overallStart);
-      const position = (offsetDays / totalDays) * 100;
+      const position = (offsetDays / totalDays) * timelineWidth;
       
       markers.push({
-        label: format(current, "MMM yyyy"),
+        month: interval === 12 ? format(current, "yyyy") : format(current, "MMM"),
+        year: format(current, "yyyy"),
         position
       });
       
-      // Move to next month
-      current.setMonth(current.getMonth() + 1);
+      current.setMonth(current.getMonth() + interval);
     }
     
     return markers;
   };
 
-  const monthMarkers = generateMonthMarkers();
+  const timeMarkers = generateTimeMarkers();
+  
+  // Get unique years for year labels
+  const getYearLabels = () => {
+    const years = new Map<string, { year: string; startPos: number; endPos: number }>();
+    
+    timeMarkers.forEach((marker, idx) => {
+      if (!years.has(marker.year)) {
+        years.set(marker.year, { 
+          year: marker.year, 
+          startPos: marker.position,
+          endPos: marker.position 
+        });
+      } else {
+        const existing = years.get(marker.year)!;
+        existing.endPos = marker.position;
+      }
+    });
+    
+    return Array.from(years.values());
+  };
+  
+  const yearLabels = getYearLabels();
 
   return (
-    <Card className="p-6 overflow-hidden">
-      <div className="mb-6">
-        <h3 className="text-lg font-semibold mb-2">Implementation Schedule Gantt Chart</h3>
-        <p className="text-sm text-muted-foreground">
-          Timeline from {format(overallStart, "MMM d, yyyy")} to {format(overallEnd, "MMM d, yyyy")}
-        </p>
-      </div>
-
-      {/* Timeline header */}
-      <div className="mb-4">
-        <div className="flex" style={{ marginLeft: "280px" }}>
-          <div className="relative w-full h-8 border-b border-border">
-            {monthMarkers.map((marker, idx) => (
-              <div
-                key={idx}
-                className="absolute text-xs text-muted-foreground"
-                style={{ left: `${marker.position}%`, transform: "translateX(-50%)" }}
-              >
-                {marker.label}
-              </div>
-            ))}
-          </div>
+    <Card className="p-6 overflow-hidden w-full">
+      <div className="mb-4 flex items-center justify-between">
+        <div>
+          <h3 className="text-lg font-semibold mb-1">Implementation Schedule Gantt Chart</h3>
+          <p className="text-sm text-muted-foreground">
+            Timeline from {format(overallStart, "MMM d, yyyy")} to {format(overallEnd, "MMM d, yyyy")}
+          </p>
+        </div>
+        <div className="flex gap-2">
+          <Button 
+            variant="outline" 
+            size="sm"
+            onClick={() => setZoom(z => Math.max(0.2, z - 0.2))}
+            disabled={zoom <= 0.2}
+          >
+            <ZoomOut className="h-4 w-4" />
+          </Button>
+          <Button 
+            variant="outline" 
+            size="sm"
+            onClick={() => setZoom(z => Math.min(3, z + 0.2))}
+            disabled={zoom >= 3}
+          >
+            <ZoomIn className="h-4 w-4" />
+          </Button>
         </div>
       </div>
 
-      {/* Gantt rows */}
-      <div className="space-y-2">
-        {data.map((control, controlIdx) => {
-          const controlRange = getControlRange(control.items);
-          const isExpanded = expandedControls.has(control.controlName);
+      <div className="flex">
+        {/* Fixed control names column */}
+        <div className="w-[280px] shrink-0">
+          {/* Year header spacer */}
+          <div className="h-6 border-b border-border" />
+          {/* Month header spacer */}
+          <div className="h-6 border-b border-border mb-2" />
           
-          return (
-            <Collapsible
-              key={controlIdx}
-              open={isExpanded}
-              onOpenChange={() => toggleControl(control.controlName)}
-            >
-              {/* Control row */}
-              <div className="flex items-center group">
-                <CollapsibleTrigger asChild>
-                  <button className="w-[280px] flex items-center gap-2 px-3 py-2 text-left hover:bg-muted/50 rounded transition-colors">
-                    {isExpanded ? (
-                      <ChevronDown className="h-4 w-4 shrink-0 text-muted-foreground" />
-                    ) : (
-                      <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" />
-                    )}
-                    <span className="font-medium text-sm truncate">{control.controlName}</span>
-                  </button>
-                </CollapsibleTrigger>
-                
-                <div className="flex-1 relative h-10">
-                  <div
-                    className="absolute h-8 bg-primary/80 rounded border border-primary hover:bg-primary transition-colors cursor-pointer"
-                    style={getBarStyle(controlRange.startDate, controlRange.endDate)}
-                    title={`${format(controlRange.startDate, "MMM d, yyyy")} - ${format(controlRange.endDate, "MMM d, yyyy")}`}
-                  />
-                </div>
-              </div>
+          {/* Control names */}
+          <div className="space-y-1">
+            {data.map((control, controlIdx) => {
+              const isExpanded = expandedControls.has(control.controlName);
+              
+              return (
+                <Collapsible
+                  key={controlIdx}
+                  open={isExpanded}
+                  onOpenChange={() => toggleControl(control.controlName)}
+                >
+                  <CollapsibleTrigger asChild>
+                    <button className="w-full flex items-center gap-2 px-3 py-1.5 text-left hover:bg-muted/50 rounded transition-colors h-7">
+                      {isExpanded ? (
+                        <ChevronDown className="h-3 w-3 shrink-0 text-muted-foreground" />
+                      ) : (
+                        <ChevronRight className="h-3 w-3 shrink-0 text-muted-foreground" />
+                      )}
+                      <span className="font-medium text-xs truncate">{control.controlName}</span>
+                    </button>
+                  </CollapsibleTrigger>
+                  
+                  <CollapsibleContent className="space-y-0.5 mt-0.5">
+                    {control.items.map((item, itemIdx) => (
+                      <div key={itemIdx} className="h-6 flex items-center pl-8 pr-3">
+                        <Badge variant="outline" className="text-xs py-0 h-5">
+                          {item.name}
+                        </Badge>
+                      </div>
+                    ))}
+                  </CollapsibleContent>
+                </Collapsible>
+              );
+            })}
+          </div>
+        </div>
 
-              {/* Expanded items */}
-              <CollapsibleContent className="space-y-1 mt-1">
-                {control.items.map((item, itemIdx) => (
-                  <div key={itemIdx} className="flex items-center">
-                    <div className="w-[280px] pl-10 pr-3 py-1">
-                      <Badge variant="outline" className="text-xs">
-                        {item.name}
-                      </Badge>
-                    </div>
-                    
-                    <div className="flex-1 relative h-8">
+        {/* Scrollable timeline */}
+        <ScrollArea className="flex-1">
+          <div style={{ width: `${timelineWidth}px` }}>
+            {/* Year labels */}
+            <div className="relative h-6 border-b border-border">
+              {yearLabels.map((yearLabel, idx) => (
+                <div
+                  key={idx}
+                  className="absolute text-xs font-semibold text-muted-foreground"
+                  style={{ 
+                    left: `${yearLabel.startPos}px`,
+                    width: `${yearLabel.endPos - yearLabel.startPos}px`,
+                  }}
+                >
+                  {yearLabel.year}
+                </div>
+              ))}
+            </div>
+            
+            {/* Month labels */}
+            <div className="relative h-6 border-b border-border mb-2">
+              {timeMarkers.map((marker, idx) => (
+                <div
+                  key={idx}
+                  className="absolute text-xs text-muted-foreground"
+                  style={{ left: `${marker.position}px`, transform: "translateX(-50%)" }}
+                >
+                  {marker.month}
+                </div>
+              ))}
+            </div>
+
+            {/* Timeline bars */}
+            <div className="space-y-1">
+              {data.map((control, controlIdx) => {
+                const controlRange = getControlRange(control.items);
+                const isExpanded = expandedControls.has(control.controlName);
+                
+                return (
+                  <Collapsible
+                    key={controlIdx}
+                    open={isExpanded}
+                    onOpenChange={() => toggleControl(control.controlName)}
+                  >
+                    {/* Control bar */}
+                    <div className="relative h-7">
                       <div
-                        className="absolute h-6 bg-muted-foreground/60 rounded border border-muted-foreground/40 hover:bg-muted-foreground/70 transition-colors"
-                        style={getBarStyle(item.startDate, item.endDate)}
-                        title={`${format(item.startDate, "MMM d, yyyy")} - ${format(item.endDate, "MMM d, yyyy")}`}
+                        className="absolute h-6 bg-primary/80 rounded border border-primary hover:bg-primary transition-colors cursor-pointer"
+                        style={{
+                          left: `${(differenceInDays(controlRange.startDate, overallStart) / totalDays) * timelineWidth}px`,
+                          width: `${(differenceInDays(controlRange.endDate, controlRange.startDate) / totalDays) * timelineWidth}px`
+                        }}
+                        title={`${format(controlRange.startDate, "MMM d, yyyy")} - ${format(controlRange.endDate, "MMM d, yyyy")}`}
                       />
                     </div>
-                  </div>
-                ))}
-              </CollapsibleContent>
-            </Collapsible>
-          );
-        })}
+
+                    {/* Expanded items */}
+                    <CollapsibleContent className="space-y-0.5 mt-0.5">
+                      {control.items.map((item, itemIdx) => (
+                        <div key={itemIdx} className="relative h-6">
+                          <div
+                            className="absolute h-5 bg-muted-foreground/60 rounded border border-muted-foreground/40 hover:bg-muted-foreground/70 transition-colors"
+                            style={{
+                              left: `${(differenceInDays(item.startDate, overallStart) / totalDays) * timelineWidth}px`,
+                              width: `${(differenceInDays(item.endDate, item.startDate) / totalDays) * timelineWidth}px`
+                            }}
+                            title={`${format(item.startDate, "MMM d, yyyy")} - ${format(item.endDate, "MMM d, yyyy")}`}
+                          />
+                        </div>
+                      ))}
+                    </CollapsibleContent>
+                  </Collapsible>
+                );
+              })}
+            </div>
+          </div>
+          <ScrollBar orientation="horizontal" />
+        </ScrollArea>
       </div>
     </Card>
   );
