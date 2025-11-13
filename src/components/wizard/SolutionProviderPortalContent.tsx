@@ -328,6 +328,7 @@ export const SolutionProviderPortalContent = ({
           details: currentDetails,
           editor_name: editorName,
           edited_at: editedAt,
+          status: existingProposal?.status || 'draft',
         };
       });
 
@@ -410,22 +411,28 @@ export const SolutionProviderPortalContent = ({
     try {
       setSaving(true);
       
-      // Create proposals for ALL controls to mark as complete
+      // Get the selected controls from project data
+      const selectedControls = projectData?.project_data?.selectedControls || [];
+      
+      // Create proposals ONLY for selected controls to mark as complete
       const now = new Date().toISOString();
-      const allProposals = mitigationControls.map((control) => ({
-        project_id: projectId,
-        company: companyName,
-        system_name: control.name,
-        system_cost: parseFloat(costs[control.id] || "0"),
-        details: details[control.id] || "",
-        editor_name: providerName,
-        edited_at: now,
-      }));
+      const selectedProposals = mitigationControls
+        .filter((control) => selectedControls.includes(control.name) || selectedControls.includes(control.id))
+        .map((control) => ({
+          project_id: projectId,
+          company: companyName,
+          system_name: control.name,
+          system_cost: parseFloat(costs[control.id] || "0"),
+          details: details[control.id] || "",
+          editor_name: providerName,
+          edited_at: now,
+          status: 'submitted',
+        }));
 
       // UPSERT all proposals (insert or update)
       const { error } = await supabase
         .from("company_proposals")
-        .upsert(allProposals, {
+        .upsert(selectedProposals, {
           onConflict: "project_id,company,system_name",
           ignoreDuplicates: false,
         });

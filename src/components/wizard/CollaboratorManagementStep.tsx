@@ -35,6 +35,7 @@ interface CompanyProposal {
     details?: string;
   }[];
   total: number;
+  status: string;
 }
 
 const collaboratorSchema = z.object({
@@ -146,7 +147,12 @@ export const CollaboratorManagementStep = ({ projectId }: CollaboratorManagement
             company: proposal.company,
             systems: [],
             total: 0,
+            status: 'draft',
           };
+        }
+        // Update status to 'submitted' if any proposal from this company has submitted status
+        if (proposal.status === 'submitted') {
+          acc[proposal.company].status = 'submitted';
         }
         acc[proposal.company].systems.push({
           system_name: proposal.system_name,
@@ -848,11 +854,11 @@ export const CollaboratorManagementStep = ({ projectId }: CollaboratorManagement
                     {companyProposals.map((proposal) => (
                       <TableCell key={proposal.company} className="text-center py-2">
                         <Badge variant={
-                          proposal.systems.length === allControlNames.length ? "default" : 
+                          proposal.status === 'submitted' ? "default" : 
                           proposal.systems.length > 0 ? "secondary" : 
                           "outline"
                         } className="text-xs">
-                          {proposal.systems.length === allControlNames.length ? "Complete ✅" : 
+                          {proposal.status === 'submitted' ? "Complete ✅" : 
                            proposal.systems.length > 0 ? "In Progress" : 
                            "Invited"}
                         </Badge>
