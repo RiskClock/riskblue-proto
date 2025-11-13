@@ -46,13 +46,7 @@ const ProjectWizard = () => {
   const [showProviderDialog, setShowProviderDialog] = useState(false);
   const [showGuidelinesDialog, setShowGuidelinesDialog] = useState(false);
 
-  useEffect(() => {
-    if (id && id !== "new") {
-      fetchProject();
-    }
-  }, [id]);
-
-  const fetchProject = async () => {
+  const fetchProject = useCallback(async () => {
     try {
       const { data, error } = await supabase
         .from("projects")
@@ -77,7 +71,13 @@ const ProjectWizard = () => {
         variant: "destructive",
       });
     }
-  };
+  }, [id, toast]);
+
+  useEffect(() => {
+    if (id && id !== "new") {
+      fetchProject();
+    }
+  }, [id, fetchProject]);
 
   const saveProject = useCallback(async (data: ProjectData) => {
     // Prevent saving if we're on "new" route and there's no name yet
@@ -202,15 +202,22 @@ const ProjectWizard = () => {
   }, [id, isSavingNewProject, user?.id, navigate, toast]);
 
   const handleStepUpdate = useCallback(async (stepData: any) => {
-    let dataToSave: ProjectData;
-    
-    setProjectData(prevData => {
-      dataToSave = { ...prevData, ...stepData };
-      return dataToSave;
-    });
-    
-    // Save after state is updated
-    await saveProject(dataToSave!);
+    try {
+      let dataToSave: ProjectData | undefined;
+      
+      setProjectData(prevData => {
+        dataToSave = { ...prevData, ...stepData };
+        return dataToSave;
+      });
+      
+      // Only save if we have data
+      if (dataToSave) {
+        await saveProject(dataToSave);
+      }
+    } catch (error) {
+      // Silently handle errors - saveProject already shows error toasts
+      console.error("Error in handleStepUpdate:", error);
+    }
   }, [saveProject]);
 
   const handleDocumentDataExtracted = async (extractedData: any) => {
