@@ -42,6 +42,7 @@ export const MitigationControlsStep = ({ data, onNext, onBack, isProcessingWebho
         .from('mitigation_controls' as any)
         .select('*')
         .eq('is_active', true)
+        .order('category')
         .order('display_order');
       
       if (controlsError) throw controlsError;
@@ -124,7 +125,16 @@ export const MitigationControlsStep = ({ data, onNext, onBack, isProcessingWebho
     setDialogOpen(true);
   };
 
-  // Group controls by category
+  // Group controls by category with specific order
+  const categoryOrder = [
+    'Presence of Water Monitoring',
+    'Abnormal Flow Valve and Pump Automation',
+    'Water System Design',
+    'Design Incorporated',
+    'Process Inspections and Documentation',
+    'Water Response Strategy'
+  ];
+
   const groupedControls = mitigationControls.reduce((acc, control) => {
     if (!acc[control.category]) {
       acc[control.category] = [];
@@ -132,6 +142,13 @@ export const MitigationControlsStep = ({ data, onNext, onBack, isProcessingWebho
     acc[control.category].push(control);
     return acc;
   }, {} as Record<string, Control[]>);
+
+  // Sort grouped controls by category order
+  const sortedGroupedControls = Object.fromEntries(
+    categoryOrder
+      .filter(cat => groupedControls[cat])
+      .map(cat => [cat, groupedControls[cat]])
+  );
 
   if (isLoading) {
     return (
@@ -169,7 +186,7 @@ export const MitigationControlsStep = ({ data, onNext, onBack, isProcessingWebho
         </div>
       </div>
 
-      {Object.entries(groupedControls).map(([category, controls]) => (
+      {Object.entries(sortedGroupedControls).map(([category, controls]) => (
         <div key={category}>
           <div className="flex items-center justify-between mb-4">
             <h3 className="text-lg font-semibold">{category}</h3>
