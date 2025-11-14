@@ -112,11 +112,6 @@ export const DocumentUploadChat = ({ projectId, onDataExtracted, setIsProcessing
     formData.append("projectId", projectId);
 
     const webhookPromise = (async () => {
-      // Set processing flag at the very start
-      if (setIsProcessingWebhook) {
-        setIsProcessingWebhook(true);
-      }
-      
       try {
         const response = await fetch(
         "https://riskclock.app.n8n.cloud/webhook/478b15fa-6098-4d3d-b51d-77ae4d0a1b4e",
@@ -130,9 +125,6 @@ export const DocumentUploadChat = ({ projectId, onDataExtracted, setIsProcessing
       if (!response.ok) {
         const errorText = await response.text();
         console.error("Upload failed:", errorText);
-        if (setIsProcessingWebhook) {
-          setIsProcessingWebhook(false);
-        }
         throw new Error("Failed to upload file");
       }
 
@@ -169,9 +161,6 @@ export const DocumentUploadChat = ({ projectId, onDataExtracted, setIsProcessing
         });
       } finally {
         setWebhookComplete(true);
-        if (setIsProcessingWebhook) {
-          setIsProcessingWebhook(false);
-        }
       }
     })();
 

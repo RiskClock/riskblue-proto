@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
@@ -46,6 +46,7 @@ const ProjectWizard = () => {
   const [loading, setLoading] = useState(false);
   const [isProcessingWebhook, setIsProcessingWebhook] = useState(false);
   const [isSavingNewProject, setIsSavingNewProject] = useState(false);
+  const isWebhookCreatingProject = useRef(false);
   const [showProviderDialog, setShowProviderDialog] = useState(false);
   const [showGuidelinesDialog, setShowGuidelinesDialog] = useState(false);
 
@@ -90,7 +91,7 @@ const ProjectWizard = () => {
     }
     
     // Prevent concurrent project creation - only one "new" project can be created at a time
-    if (id === "new" && isSavingNewProject) {
+    if (id === "new" && (isSavingNewProject || isWebhookCreatingProject.current)) {
       console.log("Preventing duplicate project creation - save already in progress");
       return;
     }
@@ -226,6 +227,7 @@ const ProjectWizard = () => {
   const handleDocumentDataExtracted = async (extractedData: any) => {
     // Set flag immediately to prevent any auto-saves from starting
     setIsProcessingWebhook(true);
+    isWebhookCreatingProject.current = true;
     
     console.log("Webhook data received:", extractedData);
     
@@ -332,6 +334,7 @@ const ProjectWizard = () => {
         variant: "destructive",
       });
     } finally {
+      isWebhookCreatingProject.current = false;
       setIsProcessingWebhook(false);
     }
   };
