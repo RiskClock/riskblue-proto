@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -35,6 +35,7 @@ interface MitigationControlsStepProps {
 export const MitigationControlsStep = ({ data, onNext, onBack, isProcessingWebhook }: MitigationControlsStepProps) => {
   const [selectedControl, setSelectedControl] = useState<Control | null>(null);
   const [dialogOpen, setDialogOpen] = useState(false);
+  const hasPendingSave = useRef(false);
 
   // Fetch mitigation controls from database
   const { data: mitigationControls = [], isLoading } = useQuery({
@@ -88,6 +89,7 @@ export const MitigationControlsStep = ({ data, onNext, onBack, isProcessingWebho
   useEffect(() => {
     if (mitigationControls.length > 0 && (!data.selectedControls || data.selectedControls.length === 0)) {
       setSelectedControls(allControlNames);
+      hasPendingSave.current = true; // Mark that we have unsaved changes
     }
   }, [mitigationControls, allControlNames, data.selectedControls]);
 
@@ -106,13 +108,20 @@ export const MitigationControlsStep = ({ data, onNext, onBack, isProcessingWebho
 
   // Effect 2: Auto-save with debounce (blocked during webhook processing)
   useEffect(() => {
-    if (isProcessingWebhook) return;
+    if (isProcessingWebhook) {
+      hasPendingSave.current = true; // Mark pending if blocked
+      return;
+    }
     
-    const timer = setTimeout(() => {
-      onNext({ selectedControls });
-    }, 500);
+    // If we have pending changes OR selectedControls changed, save
+    if (hasPendingSave.current || selectedControls.length > 0) {
+      const timer = setTimeout(() => {
+        onNext({ selectedControls });
+        hasPendingSave.current = false; // Clear pending flag after save
+      }, 500);
 
-    return () => clearTimeout(timer);
+      return () => clearTimeout(timer);
+    }
   }, [selectedControls, onNext, isProcessingWebhook]);
 
   const totalPoints = selectedControls.reduce((sum, controlName) => {
