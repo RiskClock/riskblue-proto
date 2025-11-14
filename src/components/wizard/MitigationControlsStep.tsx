@@ -201,10 +201,10 @@ export const MitigationControlsStep = ({ data, onNext, onBack, isProcessingWebho
               <div
                 key={control.name}
                 onClick={() => toggleControl(control.name)}
-                className={`p-4 rounded-lg border-2 cursor-pointer transition-all relative ${
+                className={`p-4 rounded-lg cursor-pointer transition-all relative ${
                   selectedControls.includes(control.name)
-                    ? "border-primary bg-primary/5"
-                    : "border-border hover:border-primary/50"
+                    ? "border-4 border-primary bg-primary/5"
+                    : "border-2 border-border hover:border-primary/50"
                 }`}
               >
                 <button
