@@ -23,6 +23,7 @@ export type Database = {
           editor_name: string | null
           id: string
           project_id: string
+          status: string | null
           system_cost: number
           system_name: string
           updated_at: string
@@ -35,6 +36,7 @@ export type Database = {
           editor_name?: string | null
           id?: string
           project_id: string
+          status?: string | null
           system_cost?: number
           system_name: string
           updated_at?: string
@@ -47,6 +49,7 @@ export type Database = {
           editor_name?: string | null
           id?: string
           project_id?: string
+          status?: string | null
           system_cost?: number
           system_name?: string
           updated_at?: string
@@ -60,6 +63,151 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      control_assets: {
+        Row: {
+          asset_name: string
+          control_id: string
+        }
+        Insert: {
+          asset_name: string
+          control_id: string
+        }
+        Update: {
+          asset_name?: string
+          control_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "control_assets_control_id_fkey"
+            columns: ["control_id"]
+            isOneToOne: false
+            referencedRelation: "mitigation_controls"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      control_systems: {
+        Row: {
+          control_id: string
+          system_name: string
+        }
+        Insert: {
+          control_id: string
+          system_name: string
+        }
+        Update: {
+          control_id?: string
+          system_name?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "control_systems_control_id_fkey"
+            columns: ["control_id"]
+            isOneToOne: false
+            referencedRelation: "mitigation_controls"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      critical_assets: {
+        Row: {
+          cost: string
+          created_at: string
+          display_order: number
+          duration: string
+          id: string
+          image_url: string
+          is_active: boolean
+          name: string
+          risk_level: string
+          threat: string
+          updated_at: string
+        }
+        Insert: {
+          cost: string
+          created_at?: string
+          display_order?: number
+          duration: string
+          id?: string
+          image_url: string
+          is_active?: boolean
+          name: string
+          risk_level: string
+          threat: string
+          updated_at?: string
+        }
+        Update: {
+          cost?: string
+          created_at?: string
+          display_order?: number
+          duration?: string
+          id?: string
+          image_url?: string
+          is_active?: boolean
+          name?: string
+          risk_level?: string
+          threat?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      mitigation_controls: {
+        Row: {
+          action: string
+          author: string
+          category: string
+          created_at: string
+          description: string
+          description_summary: string | null
+          display_order: number
+          id: string
+          image_url: string
+          is_active: boolean
+          name: string
+          points: number
+          popularity: number
+          responsible: string
+          systems_at_risk: string | null
+          updated_at: string
+        }
+        Insert: {
+          action: string
+          author: string
+          category: string
+          created_at?: string
+          description: string
+          description_summary?: string | null
+          display_order?: number
+          id?: string
+          image_url: string
+          is_active?: boolean
+          name: string
+          points?: number
+          popularity?: number
+          responsible: string
+          systems_at_risk?: string | null
+          updated_at?: string
+        }
+        Update: {
+          action?: string
+          author?: string
+          category?: string
+          created_at?: string
+          description?: string
+          description_summary?: string | null
+          display_order?: number
+          id?: string
+          image_url?: string
+          is_active?: boolean
+          name?: string
+          points?: number
+          popularity?: number
+          responsible?: string
+          systems_at_risk?: string | null
+          updated_at?: string
+        }
+        Relationships: []
       }
       profiles: {
         Row: {
@@ -268,6 +416,48 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      water_systems: {
+        Row: {
+          cost: string
+          created_at: string
+          display_order: number
+          duration: string
+          id: string
+          image_url: string
+          is_active: boolean
+          name: string
+          risk_level: string
+          threat: string
+          updated_at: string
+        }
+        Insert: {
+          cost: string
+          created_at?: string
+          display_order?: number
+          duration: string
+          id?: string
+          image_url: string
+          is_active?: boolean
+          name: string
+          risk_level: string
+          threat: string
+          updated_at?: string
+        }
+        Update: {
+          cost?: string
+          created_at?: string
+          display_order?: number
+          duration?: string
+          id?: string
+          image_url?: string
+          is_active?: boolean
+          name?: string
+          risk_level?: string
+          threat?: string
+          updated_at?: string
+        }
+        Relationships: []
       }
     }
     Views: {

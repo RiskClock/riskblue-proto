@@ -54,6 +54,13 @@ const ProjectWizard = () => {
     const fetchProject = async () => {
       if (!id || id === "new") return;
       
+      // Skip fetching if we're currently processing webhook data
+      // The saveProject function will have already loaded the data
+      if (isProcessingWebhook) {
+        console.log("Skipping fetch - webhook processing in progress");
+        return;
+      }
+      
       try {
         const { data, error } = await supabase
           .from("projects")
@@ -81,7 +88,7 @@ const ProjectWizard = () => {
     };
 
     fetchProject();
-  }, [id, toast]);
+  }, [id, toast, isProcessingWebhook]);
 
   const saveProject = useCallback(async (data: ProjectData) => {
     // Prevent saving if we're on "new" route and there's no name yet
@@ -187,6 +194,18 @@ const ProjectWizard = () => {
           .single();
         
         if (error) throw error;
+        
+        // Merge the returned data properly
+        const { project_data, created_at, updated_at, user_id: userId, id: projectId, ...tableColumns } = newProject;
+        const mergedData = {
+          ...tableColumns,
+          ...(project_data as ProjectData || {}),
+        };
+        
+        // Update state with the saved data BEFORE navigation
+        setProjectData(mergedData);
+        
+        // Navigate with replace to avoid back button issues
         navigate(`/project/${newProject.id}`, { replace: true });
       }
       
