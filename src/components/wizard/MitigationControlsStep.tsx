@@ -91,13 +91,12 @@ export const MitigationControlsStep = ({ data, onNext, onBack, isProcessingWebho
     }
   }, [mitigationControls, allControlNames, data.selectedControls]);
 
-  // Sync props to state when data changes (e.g., from webhook)
+  // Effect 1: Always sync incoming data to local state
   useEffect(() => {
-    if (!isProcessingWebhook) return;
     if (data.selectedControls && data.selectedControls.length > 0) {
       setSelectedControls(data.selectedControls);
     }
-  }, [data.selectedControls, isProcessingWebhook]);
+  }, [data.selectedControls]);
 
   const toggleControl = (controlName: string) => {
     setSelectedControls((prev) =>
@@ -105,7 +104,7 @@ export const MitigationControlsStep = ({ data, onNext, onBack, isProcessingWebho
     );
   };
 
-  // Auto-save with debounce - don't save while webhook is processing
+  // Effect 2: Auto-save with debounce (blocked during webhook processing)
   useEffect(() => {
     if (isProcessingWebhook) return;
     
@@ -114,7 +113,7 @@ export const MitigationControlsStep = ({ data, onNext, onBack, isProcessingWebho
     }, 500);
 
     return () => clearTimeout(timer);
-  }, [selectedControls, isProcessingWebhook]);
+  }, [selectedControls, onNext, isProcessingWebhook]);
 
   const totalPoints = selectedControls.reduce((sum, controlName) => {
     const control = mitigationControls.find(c => c.name === controlName);

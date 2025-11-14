@@ -61,11 +61,9 @@ export const ConstructionDetailsStep = ({ data, onNext, onBack, projectId, isPro
     above_grade_parking: data.above_grade_parking || false,
   });
 
-  // Sync props to state when data changes (e.g., from webhook) - only if different
+  // Effect 1: Always sync incoming data to local state
   useEffect(() => {
-    if (!isProcessingWebhook) return;
-    
-    const newFormData = {
+    setFormData({
       project_type: data.project_type || "",
       building_type: data.building_type || "",
       has_podium: data.has_podium || false,
@@ -78,17 +76,8 @@ export const ConstructionDetailsStep = ({ data, onNext, onBack, projectId, isPro
       underground_parking_start: data.underground_parking_start || "",
       underground_parking_end: data.underground_parking_end || "",
       above_grade_parking: data.above_grade_parking || false,
-    };
-    
-    // Only update if values actually changed (to prevent overwriting user input)
-    const hasChanges = Object.keys(newFormData).some(
-      key => newFormData[key as keyof typeof newFormData] !== formData[key as keyof typeof formData]
-    );
-    
-    if (hasChanges) {
-      setFormData(newFormData);
-    }
-  }, [data, isProcessingWebhook]);
+    });
+  }, [data]);
 
 
   // Update parent immediately on change

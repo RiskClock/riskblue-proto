@@ -37,10 +37,8 @@ export const ProjectMilestonesStep = ({ data, onNext, onBack, isProcessingWebhoo
     interior_end_date: data.interior_end_date || "",
   });
 
-  // Sync props to state when data changes (e.g., from webhook)
+  // Effect 1: Always sync incoming data to local state
   useEffect(() => {
-    if (!isProcessingWebhook) return;
-    
     setFormData({
       construction_start_date: data.construction_start_date || "",
       construction_end_date: data.construction_end_date || "",
@@ -57,9 +55,9 @@ export const ProjectMilestonesStep = ({ data, onNext, onBack, isProcessingWebhoo
       interior_start_date: data.interior_start_date || "",
       interior_end_date: data.interior_end_date || "",
     });
-  }, [data, isProcessingWebhook]);
+  }, [data]);
 
-  // Auto-save with debounce - don't save while webhook is processing
+  // Effect 2: Auto-save with debounce (blocked during webhook processing)
   useEffect(() => {
     if (isProcessingWebhook) return;
     
@@ -68,7 +66,7 @@ export const ProjectMilestonesStep = ({ data, onNext, onBack, isProcessingWebhoo
     }, 500);
 
     return () => clearTimeout(timer);
-  }, [formData, isProcessingWebhook]);
+  }, [formData, onNext, isProcessingWebhook]);
 
   return (
     <div className="space-y-8">
