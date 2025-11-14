@@ -24,10 +24,8 @@ export const ProjectInfoStep = ({ data, onNext, isProcessingWebhook }: ProjectIn
     has_builders_risk_policy: data.has_builders_risk_policy || false,
   });
 
-  // Sync props to state when data changes (e.g., from webhook)
+  // Effect 1: Always sync incoming data to local state
   useEffect(() => {
-    if (!isProcessingWebhook) return;
-    
     setFormData({
       name: data.name || "",
       address_1: data.address_1 || "",
@@ -38,10 +36,12 @@ export const ProjectInfoStep = ({ data, onNext, isProcessingWebhook }: ProjectIn
       country: data.country || "United States",
       has_builders_risk_policy: data.has_builders_risk_policy || false,
     });
-  }, [data, isProcessingWebhook]);
+  }, [data]);
 
-  // Auto-save with debounce
+  // Effect 2: Auto-save with debounce (blocked during webhook processing)
   useEffect(() => {
+    if (isProcessingWebhook) return;
+    
     const timer = setTimeout(() => {
       // Validate project name
       const nameValidation = projectSchemas.name.safeParse(formData.name);
@@ -73,7 +73,7 @@ export const ProjectInfoStep = ({ data, onNext, isProcessingWebhook }: ProjectIn
     }, 500);
 
     return () => clearTimeout(timer);
-  }, [formData, onNext]);
+  }, [formData, onNext, isProcessingWebhook]);
 
   return (
     <div>
