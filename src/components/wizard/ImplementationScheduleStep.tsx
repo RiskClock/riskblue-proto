@@ -113,7 +113,7 @@ export const ImplementationScheduleStep = ({ data }: ImplementationScheduleStepP
       {/* Gantt Chart */}
       {ganttData.length > 0 && (
         <div className="w-full mb-6">
-          <GanttChart data={ganttData} />
+          <GanttChart data={ganttData} selectedControls={data.selectedControls || []} />
         </div>
       )}
     </>

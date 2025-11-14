@@ -41,9 +41,10 @@ interface ConstructionDetailsStepProps {
   onNext: (data: any) => void;
   onBack: () => void;
   projectId?: string;
+  isProcessingWebhook?: boolean;
 }
 
-export const ConstructionDetailsStep = ({ data, onNext, onBack, projectId }: ConstructionDetailsStepProps) => {
+export const ConstructionDetailsStep = ({ data, onNext, onBack, projectId, isProcessingWebhook }: ConstructionDetailsStepProps) => {
   const { toast } = useToast();
   const [formData, setFormData] = useState({
     project_type: data.project_type || "",
@@ -62,6 +63,8 @@ export const ConstructionDetailsStep = ({ data, onNext, onBack, projectId }: Con
 
   // Sync props to state when data changes (e.g., from webhook) - only if different
   useEffect(() => {
+    if (!isProcessingWebhook) return;
+    
     const newFormData = {
       project_type: data.project_type || "",
       building_type: data.building_type || "",
@@ -85,7 +88,7 @@ export const ConstructionDetailsStep = ({ data, onNext, onBack, projectId }: Con
     if (hasChanges) {
       setFormData(newFormData);
     }
-  }, [data]);
+  }, [data, isProcessingWebhook]);
 
 
   // Update parent immediately on change

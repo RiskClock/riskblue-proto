@@ -39,6 +39,8 @@ export const ProjectMilestonesStep = ({ data, onNext, onBack, isProcessingWebhoo
 
   // Sync props to state when data changes (e.g., from webhook)
   useEffect(() => {
+    if (!isProcessingWebhook) return;
+    
     setFormData({
       construction_start_date: data.construction_start_date || "",
       construction_end_date: data.construction_end_date || "",
@@ -55,7 +57,7 @@ export const ProjectMilestonesStep = ({ data, onNext, onBack, isProcessingWebhoo
       interior_start_date: data.interior_start_date || "",
       interior_end_date: data.interior_end_date || "",
     });
-  }, [data]);
+  }, [data, isProcessingWebhook]);
 
   // Auto-save with debounce - don't save while webhook is processing
   useEffect(() => {

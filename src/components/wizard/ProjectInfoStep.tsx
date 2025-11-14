@@ -8,9 +8,10 @@ import { projectSchemas } from "@/lib/validation";
 interface ProjectInfoStepProps {
   data: any;
   onNext: (data: any) => void;
+  isProcessingWebhook?: boolean;
 }
 
-export const ProjectInfoStep = ({ data, onNext }: ProjectInfoStepProps) => {
+export const ProjectInfoStep = ({ data, onNext, isProcessingWebhook }: ProjectInfoStepProps) => {
   const { toast } = useToast();
   const [formData, setFormData] = useState({
     name: data.name || "",
@@ -25,6 +26,8 @@ export const ProjectInfoStep = ({ data, onNext }: ProjectInfoStepProps) => {
 
   // Sync props to state when data changes (e.g., from webhook)
   useEffect(() => {
+    if (!isProcessingWebhook) return;
+    
     setFormData({
       name: data.name || "",
       address_1: data.address_1 || "",
@@ -35,7 +38,7 @@ export const ProjectInfoStep = ({ data, onNext }: ProjectInfoStepProps) => {
       country: data.country || "United States",
       has_builders_risk_policy: data.has_builders_risk_policy || false,
     });
-  }, [data]);
+  }, [data, isProcessingWebhook]);
 
   // Auto-save with debounce
   useEffect(() => {
