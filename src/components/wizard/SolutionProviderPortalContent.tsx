@@ -523,7 +523,7 @@ export const SolutionProviderPortalContent = ({
             <CardContent>
               <div className="grid md:grid-cols-3 gap-4">
                 {projectData.project_type && (
-                  <div className="p-4 border-2 border-primary rounded-lg bg-primary/5">
+                  <div className="p-4 border-4 border-primary rounded-lg bg-primary/5">
                     <div className="h-32 bg-muted rounded mb-3 overflow-hidden flex items-center justify-center">
                       <img 
                         src={projectTypeImages[projectData.project_type]} 
@@ -538,7 +538,7 @@ export const SolutionProviderPortalContent = ({
                   </div>
                 )}
                 {projectData.building_type && (
-                  <div className="p-4 border-2 border-primary rounded-lg bg-primary/5">
+                  <div className="p-4 border-4 border-primary rounded-lg bg-primary/5">
                     <div className="h-32 bg-muted rounded mb-3 overflow-hidden flex items-center justify-center">
                       <img 
                         src={buildingTypeImages[projectData.building_type]} 
@@ -553,7 +553,7 @@ export const SolutionProviderPortalContent = ({
                   </div>
                 )}
                 {projectData.tower_type && (
-                  <div className="p-4 border-2 border-primary rounded-lg bg-primary/5">
+                  <div className="p-4 border-4 border-primary rounded-lg bg-primary/5">
                     <div className="h-32 bg-muted rounded mb-3 overflow-hidden flex items-center justify-center">
                       <img 
                         src={towerTypeImages[projectData.tower_type]} 
@@ -701,7 +701,7 @@ export const SolutionProviderPortalContent = ({
                   {projectData.project_data.selectedAssets.map((assetId: string) => {
                     const asset = assets.find(a => a.id === assetId);
                     return asset ? (
-                      <div key={assetId} className="p-4 rounded-lg border-2 border-primary bg-primary/5">
+                      <div key={assetId} className="p-4 rounded-lg border-4 border-primary bg-primary/5">
                         <div className="h-24 bg-muted rounded mb-3 flex items-center justify-center overflow-hidden">
                           <img src={asset.image} alt={asset.name} className="w-full h-full object-contain" />
                         </div>
@@ -734,7 +734,7 @@ export const SolutionProviderPortalContent = ({
                   {projectData.project_data.selectedSystems.map((systemId: string) => {
                     const system = waterSystems.find(s => s.id === systemId);
                     return system ? (
-                      <div key={systemId} className="p-4 rounded-lg border-2 border-primary bg-primary/5">
+                      <div key={systemId} className="p-4 rounded-lg border-4 border-primary bg-primary/5">
                         <div className="h-24 bg-muted rounded mb-3 flex items-center justify-center overflow-hidden">
                           <img src={system.image} alt={system.name} className="w-full h-full object-contain" />
                         </div>
@@ -767,7 +767,7 @@ export const SolutionProviderPortalContent = ({
                   {projectData.project_data.selectedControls.map((controlId: string) => {
                     const control = mitigationControls.find(c => c.id === controlId);
                     return control ? (
-                      <div key={controlId} className="p-4 rounded-lg border-2 border-primary bg-primary/5">
+                      <div key={controlId} className="p-4 rounded-lg border-4 border-primary bg-primary/5">
                         <p className="text-sm font-medium text-center">{control.name}</p>
                       </div>
                     ) : null;
