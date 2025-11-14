@@ -104,7 +104,7 @@ export const WaterSystemsStep = ({
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
         {waterSystems.map(system => {
         const isSelected = selectedSystems.includes(system.name);
-        return <div key={system.id} onClick={() => toggleSystem(system.name)} className={`p-4 rounded-lg border-2 cursor-pointer transition-all relative ${isSelected ? "border-primary bg-primary/5" : "border-border hover:border-primary/50"}`}>
+        return <div key={system.id} onClick={() => toggleSystem(system.name)} className={`p-4 rounded-lg cursor-pointer transition-all relative ${isSelected ? "border-4 border-primary bg-primary/5" : "border-2 border-border hover:border-primary/50"}`}>
               <button onClick={e => {
             e.stopPropagation();
             handleOpenFloorDialog(system.name);

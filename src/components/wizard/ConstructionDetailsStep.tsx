@@ -99,10 +99,10 @@ export const ConstructionDetailsStep = ({ data, onNext, onBack, projectId, isPro
                 type="button"
                 disabled={type.disabled}
                 onClick={() => updateFormData({ project_type: type.id })}
-                className={`relative p-6 rounded-lg border-2 transition-all ${
+                className={`relative p-6 rounded-lg transition-all ${
                   formData.project_type === type.id
-                    ? "border-primary bg-primary/5"
-                    : "border-border hover:border-primary/50"
+                    ? "border-4 border-primary bg-primary/5"
+                    : "border-2 border-border hover:border-primary/50"
                 } ${type.disabled ? "opacity-50 cursor-not-allowed" : "cursor-pointer"}`}
               >
                 <div className="h-24 bg-muted rounded mb-3 flex items-center justify-center overflow-hidden">
@@ -128,10 +128,10 @@ export const ConstructionDetailsStep = ({ data, onNext, onBack, projectId, isPro
                 type="button"
                 disabled={type.disabled}
                 onClick={() => updateFormData({ building_type: type.id })}
-                className={`relative p-6 rounded-lg border-2 transition-all ${
+                className={`relative p-6 rounded-lg transition-all ${
                   formData.building_type === type.id
-                    ? "border-primary bg-primary/5"
-                    : "border-border hover:border-primary/50"
+                    ? "border-4 border-primary bg-primary/5"
+                    : "border-2 border-border hover:border-primary/50"
                 } ${type.disabled ? "opacity-50 cursor-not-allowed" : "cursor-pointer"}`}
               >
                 <div className="h-24 bg-muted rounded mb-3 flex items-center justify-center overflow-hidden">
@@ -158,10 +158,10 @@ export const ConstructionDetailsStep = ({ data, onNext, onBack, projectId, isPro
                 type="button"
                 disabled={type.disabled}
                 onClick={() => updateFormData({ tower_type: type.id })}
-                className={`relative p-6 rounded-lg border-2 transition-all ${
+                className={`relative p-6 rounded-lg transition-all ${
                   formData.tower_type === type.id
-                    ? "border-primary bg-primary/5"
-                    : "border-border hover:border-primary/50"
+                    ? "border-4 border-primary bg-primary/5"
+                    : "border-2 border-border hover:border-primary/50"
                 } ${type.disabled ? "opacity-50 cursor-not-allowed" : "cursor-pointer"}`}
               >
                   <div className="h-24 bg-muted rounded mb-3 flex items-center justify-center overflow-hidden">
