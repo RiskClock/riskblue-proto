@@ -208,8 +208,19 @@ export const PDFAnalysisAnimation = ({
                 ))
               )}
             </div>
-          ) : (
+          ) : isComplete ? (
             <Skeleton className="h-12 w-full" />
+          ) : (
+            <div className="space-y-2">
+              <div className="text-xs text-muted-foreground animate-pulse">
+                Scanning for dates...
+              </div>
+              <div className="space-y-1 text-xs text-muted-foreground/60">
+                <p>• MM/DD/YYYY</p>
+                <p>• DD-MMM-YY</p>
+                <p>• Month Day, Year</p>
+              </div>
+            </div>
           )}
         </Card>
 

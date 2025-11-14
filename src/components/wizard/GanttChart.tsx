@@ -22,19 +22,27 @@ interface GanttControl {
 
 interface GanttChartProps {
   data: GanttControl[];
+  selectedControls?: string[];
 }
 
-export const GanttChart = ({ data }: GanttChartProps) => {
+export const GanttChart = ({ data, selectedControls = [] }: GanttChartProps) => {
   const [expandedControls, setExpandedControls] = useState<Set<string>>(new Set());
   const [zoom, setZoom] = useState(1);
   const [searchQuery, setSearchQuery] = useState("");
 
-  // Filter and sort data based on search query
+  // Filter and sort data based on search query and selectedControls
   const filteredData = useMemo(() => {
     let filtered = data;
+    
+    // Filter by selected controls if provided
+    if (selectedControls.length > 0) {
+      filtered = filtered.filter(control => selectedControls.includes(control.controlName));
+    }
+    
+    // Filter by search query
     if (searchQuery.trim()) {
       const query = searchQuery.toLowerCase();
-      filtered = data.filter(control => 
+      filtered = filtered.filter(control => 
         control.controlName.toLowerCase().includes(query) ||
         control.items.some(item => item.name.toLowerCase().includes(query))
       );
@@ -45,7 +53,7 @@ export const GanttChart = ({ data }: GanttChartProps) => {
       const bStart = Math.min(...b.items.map(i => i.startDate.getTime()));
       return aStart - bStart;
     });
-  }, [data, searchQuery]);
+  }, [data, searchQuery, selectedControls]);
 
   // Calculate the overall timeline range
   const allDates = filteredData.flatMap(control => 

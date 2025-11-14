@@ -21,6 +21,7 @@ export const DocumentUploadChat = ({ projectId, onDataExtracted, setIsProcessing
   const [uploadedFile, setUploadedFile] = useState<File | null>(null);
   const [uploading, setUploading] = useState(false);
   const [responseData, setResponseData] = useState<any>(null);
+  const [showDebugInfo, setShowDebugInfo] = useState(false);
   
   // PDF Analysis states
   const [analyzing, setAnalyzing] = useState(false);
@@ -184,7 +185,13 @@ export const DocumentUploadChat = ({ projectId, onDataExtracted, setIsProcessing
   return (
     <Card className="p-6 space-y-4 mb-6">
       <div className="space-y-3">
-        <label className="text-sm font-medium">Upload Project Schedule (in PDF)</label>
+        <button
+          onClick={() => setShowDebugInfo(!showDebugInfo)}
+          className="text-sm font-medium hover:text-primary transition-colors cursor-pointer text-left"
+        >
+          Upload Project Schedule (in PDF)
+          {showDebugInfo && <span className="ml-2 text-xs text-muted-foreground">(Debug Mode)</span>}
+        </button>
         
         {/* Hidden file input */}
         <Input
@@ -256,7 +263,7 @@ export const DocumentUploadChat = ({ projectId, onDataExtracted, setIsProcessing
         />
       )}
 
-      {responseData && (
+      {showDebugInfo && responseData && (
         <div className="space-y-2 pt-4 border-t">
           <label className="text-sm font-medium">Response</label>
           <pre className="bg-muted/30 rounded-lg p-4 overflow-auto max-h-[400px] text-xs">

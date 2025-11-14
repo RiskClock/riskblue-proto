@@ -403,7 +403,11 @@ const ProjectWizard = () => {
                 </AccordionTrigger>
                 <AccordionContent className="space-y-8 pt-4">
                   <div className="space-y-6">
-                    <ProjectInfoStep data={projectData} onNext={handleStepUpdate} />
+                    <ProjectInfoStep 
+                      data={projectData} 
+                      onNext={handleStepUpdate}
+                      isProcessingWebhook={isProcessingWebhook}
+                    />
                   </div>
                   <div className="space-y-6 pt-6 border-t">
                     <h3 className="text-md font-medium">Milestones & Timelines</h3>
@@ -415,7 +419,13 @@ const ProjectWizard = () => {
                     />
                   </div>
                   <div className="space-y-6 pt-6 border-t">
-                    <ConstructionDetailsStep data={projectData} onNext={handleStepUpdate} onBack={() => {}} projectId={id} />
+                    <ConstructionDetailsStep 
+                      data={projectData} 
+                      onNext={handleStepUpdate} 
+                      onBack={() => {}} 
+                      projectId={id}
+                      isProcessingWebhook={isProcessingWebhook}
+                    />
                   </div>
                 </AccordionContent>
               </AccordionItem>

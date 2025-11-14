@@ -93,10 +93,11 @@ export const MitigationControlsStep = ({ data, onNext, onBack, isProcessingWebho
 
   // Sync props to state when data changes (e.g., from webhook)
   useEffect(() => {
+    if (!isProcessingWebhook) return;
     if (data.selectedControls && data.selectedControls.length > 0) {
       setSelectedControls(data.selectedControls);
     }
-  }, [data.selectedControls]);
+  }, [data.selectedControls, isProcessingWebhook]);
 
   const toggleControl = (controlName: string) => {
     setSelectedControls((prev) =>

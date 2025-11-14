@@ -121,9 +121,15 @@ export const ProposalsStep = ({ data, onBack, onNext }: ProposalsStepProps) => {
 
       if (error) throw error;
 
-      // Get unique control names
+      // Filter by selected controls
+      const selectedControls = data.selectedControls || [];
+      const filteredProposals = companyProposals?.filter((proposal) => 
+        selectedControls.length === 0 || selectedControls.includes(proposal.system_name)
+      );
+
+      // Get unique control names (only selected ones)
       const uniqueControls = new Set<string>();
-      companyProposals?.forEach((proposal) => {
+      filteredProposals?.forEach((proposal) => {
         uniqueControls.add(proposal.system_name);
       });
       setControls(Array.from(uniqueControls));
@@ -131,7 +137,7 @@ export const ProposalsStep = ({ data, onBack, onNext }: ProposalsStepProps) => {
       // Group by company
       const companyMap = new Map<string, any>();
       
-      companyProposals?.forEach((proposal) => {
+      filteredProposals?.forEach((proposal) => {
         if (!companyMap.has(proposal.company)) {
           companyMap.set(proposal.company, {
             id: proposal.company,
