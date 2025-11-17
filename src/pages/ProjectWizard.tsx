@@ -18,6 +18,7 @@ import { MitigationControlsStep } from "@/components/wizard/MitigationControlsSt
 import { MitigationResponsePlanStep } from "@/components/wizard/MitigationResponsePlanStep";
 import { WaterMitigationGuidelinesStep } from "@/components/wizard/WaterMitigationGuidelinesStep";
 import { CollaboratorManagementStep } from "@/components/wizard/CollaboratorManagementStep";
+import { ProposalsStep } from "@/components/wizard/ProposalsStep";
 import { ImplementationScheduleStep } from "@/components/wizard/ImplementationScheduleStep";
 import { DocumentUploadChat } from "@/components/DocumentUploadChat";
 import { ResponsePlanUploadChat } from "@/components/ResponsePlanUploadChat";
@@ -562,6 +563,14 @@ const ProjectWizard = () => {
             </div>
             
             <CollaboratorManagementStep projectId={id || "new"} />
+            
+            <div className="mt-8">
+              <ProposalsStep 
+                data={{ ...projectData, projectId: id, userName: user?.email }}
+                onBack={() => {}}
+                onNext={(data) => handleStepUpdate(data)}
+              />
+            </div>
             
             {/* Bottom Controls */}
             <div className="flex justify-between items-center pt-6">

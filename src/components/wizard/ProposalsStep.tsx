@@ -109,13 +109,6 @@ export const ProposalsStep = ({ data, onBack, onNext }: ProposalsStepProps) => {
   const [selectedControlForConvo, setSelectedControlForConvo] = useState<string>("");
   const { toast } = useToast();
 
-  console.log("ProposalsStep rendered", { 
-    proposalsCount: proposals.length, 
-    controlsCount: controls.length,
-    loading,
-    convoDialogOpen 
-  });
-
   useEffect(() => {
     if (data.projectId) {
       fetchProposals();
@@ -275,33 +268,27 @@ export const ProposalsStep = ({ data, onBack, onNext }: ProposalsStepProps) => {
                         />
                       </TableCell>
                       <TableCell className="font-medium">{normalizeControlName(control)}</TableCell>
-                      {proposals.map((proposal) => {
-                        console.log("Rendering cell button for:", { control, company: proposal.company_name });
-                        return (
-                          <TableCell key={proposal.id} className="text-center p-0">
-                            <button
-                              type="button"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                console.log("Button clicked!", { control, proposal: proposal.company_name });
-                                console.log("Setting state:", { control, dialogOpen: true });
-                                setSelectedControlForConvo(control);
-                                setConvoDialogOpen(true);
-                                console.log("State set - convoDialogOpen should be true");
-                              }}
-                              className="w-full h-full px-4 py-4 hover:bg-muted/50 transition-colors cursor-pointer flex items-center justify-center relative z-10"
-                            >
-                              {proposal.systems[control] ? (
-                                <span className="font-medium">
-                                  ${(proposal.systems[control] / 1000).toFixed(0)}k
-                                </span>
-                              ) : (
-                                <span className="text-muted-foreground">—</span>
-                              )}
-                            </button>
-                          </TableCell>
-                        );
-                      })}
+                      {proposals.map((proposal) => (
+                        <TableCell key={proposal.id} className="text-center p-0">
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setSelectedControlForConvo(control);
+                              setConvoDialogOpen(true);
+                            }}
+                            className="w-full h-full px-4 py-4 hover:bg-muted/50 transition-colors cursor-pointer flex items-center justify-center relative z-10"
+                          >
+                            {proposal.systems[control] ? (
+                              <span className="font-medium">
+                                ${(proposal.systems[control] / 1000).toFixed(0)}k
+                              </span>
+                            ) : (
+                              <span className="text-muted-foreground">—</span>
+                            )}
+                          </button>
+                        </TableCell>
+                      ))}
                     </TableRow>
                   ))}
                   <TableRow className="bg-muted/50 font-bold">
