@@ -278,11 +278,11 @@ export const ProposalsStep = ({ data, onBack, onNext }: ProposalsStepProps) => {
                           }}
                         >
                           {proposal.systems[control] ? (
-                            <span className="font-medium">
+                            <span className="font-medium pointer-events-none">
                               ${(proposal.systems[control] / 1000).toFixed(0)}k
                             </span>
                           ) : (
-                            <span className="text-muted-foreground">—</span>
+                            <span className="text-muted-foreground pointer-events-none">—</span>
                           )}
                         </TableCell>
                       ))}
