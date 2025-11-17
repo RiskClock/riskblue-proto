@@ -231,81 +231,83 @@ export const ProposalsStep = ({ data, onBack, onNext }: ProposalsStepProps) => {
               </p>
             </div>
 
-            <div className="w-full overflow-x-auto">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead className="w-[50px]">
-                      <Checkbox
-                        checked={selectedProposals.length === proposals.length}
-                        onCheckedChange={toggleSelectAll}
-                      />
-                    </TableHead>
-                    <TableHead className="min-w-[200px]">Control / System</TableHead>
-                    {proposals.map((proposal) => (
-                      <TableHead key={proposal.id} className="min-w-[140px] text-center">
-                        <div className="flex flex-col gap-1 items-center">
-                          <span className="font-semibold">{proposal.company_name}</span>
-                          <Badge variant={
-                            proposal.status === "Complete ✅" ? "default" : 
-                            proposal.status === "In Progress" ? "secondary" : 
-                            "outline"
-                          } className="text-xs">
-                            {proposal.status}
-                          </Badge>
-                        </div>
-                      </TableHead>
-                    ))}
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {controls.map((control) => (
-                    <TableRow key={control}>
-                      <TableCell>
-                        <Checkbox
-                          checked={selectedProposals.length === proposals.length}
-                          onCheckedChange={toggleSelectAll}
-                        />
-                      </TableCell>
-                      <TableCell className="font-medium">{normalizeControlName(control)}</TableCell>
+            <ScrollArea className="h-[500px] w-full">
+              <div className="w-full overflow-x-auto">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead className="min-w-[200px]">Control / System</TableHead>
                       {proposals.map((proposal) => (
-                        <TableCell key={proposal.id} className="text-center p-0">
-                          <button
-                            type="button"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setSelectedControlForConvo(control);
-                              setConvoDialogOpen(true);
-                            }}
-                            className="w-full h-full px-4 py-4 hover:bg-muted/50 transition-colors cursor-pointer flex items-center justify-center relative z-10"
-                          >
-                            {proposal.systems[control] ? (
-                              <span className="font-medium">
-                                ${(proposal.systems[control] / 1000).toFixed(0)}k
-                              </span>
-                            ) : (
-                              <span className="text-muted-foreground">—</span>
-                            )}
-                          </button>
+                        <TableHead key={proposal.id} className="min-w-[140px] text-center">
+                          <div className="flex flex-col gap-1 items-center">
+                            <span className="font-semibold">{proposal.company_name}</span>
+                            <Badge variant={
+                              proposal.status === "Complete ✅" ? "default" : 
+                              proposal.status === "In Progress" ? "secondary" : 
+                              "outline"
+                            } className="text-xs">
+                              {proposal.status}
+                            </Badge>
+                          </div>
+                        </TableHead>
+                      ))}
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    <TableRow className="bg-muted/50 font-bold">
+                      <TableCell>Total Cost</TableCell>
+                      {proposals.map((proposal) => (
+                        <TableCell key={proposal.id} className="text-center">
+                          <div className="flex items-center justify-center gap-1 font-bold text-lg text-primary">
+                            <DollarSign className="h-5 w-5" />
+                            {(proposal.proposed_cost / 1000).toFixed(0)}k
+                          </div>
                         </TableCell>
                       ))}
                     </TableRow>
-                  ))}
-                  <TableRow className="bg-muted/50 font-bold">
-                    <TableCell></TableCell>
-                    <TableCell>Total Cost</TableCell>
-                    {proposals.map((proposal) => (
-                      <TableCell key={proposal.id} className="text-center">
-                        <div className="flex items-center justify-center gap-1 font-bold text-lg text-primary">
-                          <DollarSign className="h-5 w-5" />
-                          {(proposal.proposed_cost / 1000).toFixed(0)}k
-                        </div>
-                      </TableCell>
+                    {controls.map((control) => (
+                      <TableRow key={control}>
+                        <TableCell className="font-medium">{normalizeControlName(control)}</TableCell>
+                        {proposals.map((proposal) => (
+                          <TableCell key={proposal.id} className="text-center p-0">
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setSelectedControlForConvo(control);
+                                setConvoDialogOpen(true);
+                              }}
+                              className="w-full h-full px-4 py-4 hover:bg-muted/50 transition-colors cursor-pointer flex items-center justify-center relative z-10"
+                            >
+                              {proposal.systems[control] ? (
+                                <span className="font-medium">
+                                  ${(proposal.systems[control] / 1000).toFixed(0)}k
+                                </span>
+                              ) : (
+                                <span className="text-muted-foreground">—</span>
+                              )}
+                            </button>
+                          </TableCell>
+                        ))}
+                      </TableRow>
                     ))}
-                  </TableRow>
-                </TableBody>
-              </Table>
-            </div>
+                    <TableRow className="bg-muted/30">
+                      <TableCell className="font-medium">Select Proposal</TableCell>
+                      {proposals.map((proposal) => (
+                        <TableCell key={proposal.id} className="text-center">
+                          <div className="flex items-center justify-center">
+                            <Checkbox
+                              checked={selectedProposals.includes(proposal.id)}
+                              onCheckedChange={() => toggleSelection(proposal.id)}
+                            />
+                          </div>
+                        </TableCell>
+                      ))}
+                    </TableRow>
+                  </TableBody>
+                </Table>
+              </div>
+            </ScrollArea>
           </div>
         )}
       </Card>
