@@ -269,21 +269,23 @@ export const ProposalsStep = ({ data, onBack, onNext }: ProposalsStepProps) => {
                       </TableCell>
                       <TableCell className="font-medium">{normalizeControlName(control)}</TableCell>
                       {proposals.map((proposal) => (
-                        <TableCell 
-                          key={proposal.id} 
-                          className="text-center cursor-pointer hover:bg-muted/50 transition-colors"
-                          onClick={() => {
-                            setSelectedControlForConvo(control);
-                            setConvoDialogOpen(true);
-                          }}
-                        >
-                          {proposal.systems[control] ? (
-                            <span className="font-medium pointer-events-none">
-                              ${(proposal.systems[control] / 1000).toFixed(0)}k
-                            </span>
-                          ) : (
-                            <span className="text-muted-foreground pointer-events-none">—</span>
-                          )}
+                        <TableCell key={proposal.id} className="text-center p-0">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setSelectedControlForConvo(control);
+                              setConvoDialogOpen(true);
+                            }}
+                            className="w-full h-full px-4 py-4 hover:bg-muted/50 transition-colors cursor-pointer flex items-center justify-center"
+                          >
+                            {proposal.systems[control] ? (
+                              <span className="font-medium">
+                                ${(proposal.systems[control] / 1000).toFixed(0)}k
+                              </span>
+                            ) : (
+                              <span className="text-muted-foreground">—</span>
+                            )}
+                          </button>
                         </TableCell>
                       ))}
                     </TableRow>
