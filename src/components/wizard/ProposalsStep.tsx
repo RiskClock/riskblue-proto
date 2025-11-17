@@ -126,9 +126,9 @@ export const ProposalsStep = ({ data, onBack, onNext }: ProposalsStepProps) => {
 
       // Filter by selected controls
       const selectedControls = data.selectedControls || [];
-      const filteredProposals = companyProposals?.filter((proposal) => 
-        selectedControls.length === 0 || selectedControls.includes(proposal.system_name)
-      );
+      const filteredProposals = selectedControls.length === 0 
+        ? companyProposals 
+        : companyProposals?.filter((proposal) => selectedControls.includes(proposal.system_name));
 
       // Get unique control names (only selected ones)
       const uniqueControls = new Set<string>();
