@@ -190,18 +190,6 @@ export const WaterSystemsStep = ({
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-        {/* Add New System Card */}
-        <div
-          onClick={() => setAddSystemDialogOpen(true)}
-          className="p-4 rounded-lg cursor-pointer transition-all border-2 border-dashed border-border hover:border-primary/50 flex flex-col items-center justify-center min-h-[280px]"
-        >
-          <Plus className="h-12 w-12 text-muted-foreground mb-2" />
-          <h3 className="font-semibold text-sm text-center">Add Custom System</h3>
-          <p className="text-xs text-muted-foreground text-center mt-1">
-            Add a water system specific to your project
-          </p>
-        </div>
-
         {allSystems.map(system => {
         const isSelected = selectedSystems.includes(system.name);
         return <div key={system.id} onClick={() => toggleSystem(system.name)} className={`p-4 rounded-lg cursor-pointer transition-all relative ${isSelected ? "border-4 border-primary bg-primary/5" : "border-2 border-border hover:border-primary/50"}`}>
@@ -246,6 +234,18 @@ export const WaterSystemsStep = ({
               </Dialog>
             </div>;
       })}
+        
+        {/* Add New System Card */}
+        <div
+          onClick={() => setAddSystemDialogOpen(true)}
+          className="p-4 rounded-lg cursor-pointer transition-all border-2 border-dashed border-border hover:border-primary/50 flex flex-col items-center justify-center min-h-[280px]"
+        >
+          <Plus className="h-12 w-12 text-muted-foreground mb-2" />
+          <h3 className="font-semibold text-sm text-center">Add Custom System</h3>
+          <p className="text-xs text-muted-foreground text-center mt-1">
+            Add a water system specific to your project
+          </p>
+        </div>
       </div>
 
       {/* Add Custom System Dialog */}

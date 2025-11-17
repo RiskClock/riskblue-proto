@@ -190,18 +190,6 @@ export const CriticalAssetsStep = ({
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-        {/* Add New Asset Card */}
-        <div
-          onClick={() => setAddAssetDialogOpen(true)}
-          className="p-4 rounded-lg cursor-pointer transition-all border-2 border-dashed border-border hover:border-primary/50 flex flex-col items-center justify-center min-h-[280px]"
-        >
-          <Plus className="h-12 w-12 text-muted-foreground mb-2" />
-          <h3 className="font-semibold text-sm text-center">Add Custom Asset</h3>
-          <p className="text-xs text-muted-foreground text-center mt-1">
-            Add an asset specific to your project
-          </p>
-        </div>
-
         {allAssets.map(asset => {
         const isSelected = selectedAssets.includes(asset.name);
         return <div key={asset.id} onClick={() => toggleAsset(asset.name)} className={`p-4 rounded-lg cursor-pointer transition-all relative ${isSelected ? "border-4 border-primary bg-primary/5" : "border-2 border-border hover:border-primary/50"}`}>
@@ -246,6 +234,18 @@ export const CriticalAssetsStep = ({
               </Dialog>
             </div>;
       })}
+        
+        {/* Add New Asset Card */}
+        <div
+          onClick={() => setAddAssetDialogOpen(true)}
+          className="p-4 rounded-lg cursor-pointer transition-all border-2 border-dashed border-border hover:border-primary/50 flex flex-col items-center justify-center min-h-[280px]"
+        >
+          <Plus className="h-12 w-12 text-muted-foreground mb-2" />
+          <h3 className="font-semibold text-sm text-center">Add Custom Asset</h3>
+          <p className="text-xs text-muted-foreground text-center mt-1">
+            Add an asset specific to your project
+          </p>
+        </div>
       </div>
 
       {/* Add Custom Asset Dialog */}
