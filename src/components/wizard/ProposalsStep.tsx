@@ -272,11 +272,15 @@ export const ProposalsStep = ({ data, onBack, onNext }: ProposalsStepProps) => {
                         <TableCell key={proposal.id} className="text-center p-0">
                           <button
                             type="button"
-                            onClick={() => {
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              console.log("Button clicked!", { control, proposal: proposal.company_name });
+                              console.log("Setting state:", { control, dialogOpen: true });
                               setSelectedControlForConvo(control);
                               setConvoDialogOpen(true);
+                              console.log("State set - convoDialogOpen should be true");
                             }}
-                            className="w-full h-full px-4 py-4 hover:bg-muted/50 transition-colors cursor-pointer flex items-center justify-center"
+                            className="w-full h-full px-4 py-4 hover:bg-muted/50 transition-colors cursor-pointer flex items-center justify-center relative z-10"
                           >
                             {proposal.systems[control] ? (
                               <span className="font-medium">
