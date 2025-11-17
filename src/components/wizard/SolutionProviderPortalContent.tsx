@@ -9,6 +9,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import { format } from "date-fns";
 import { Send } from "lucide-react";
+import { ControlConversationDialog } from "./ControlConversationDialog";
 import electricalRoomImg from "@/assets/control_Electrical_Room_Presence_of_Water_Monitoring.avif";
 import mechanicalRoomImg from "@/assets/control_Mechanical_Room_Presence_of_Water_Monitoring.avif";
 import mainElectricalRiserImg from "@/assets/control_Main_Electrical_Riser_Presence_of_Water_Monitoring.avif";
@@ -180,6 +181,8 @@ export const SolutionProviderPortalContent = ({
   const [projectData, setProjectData] = useState<any>(null);
   const [editorInfo, setEditorInfo] = useState<Record<string, { name: string; time: string }>>({});
   const [isLoadingData, setIsLoadingData] = useState(true);
+  const [convoDialogOpen, setConvoDialogOpen] = useState(false);
+  const [selectedControlForConvo, setSelectedControlForConvo] = useState("");
 
   useEffect(() => {
     if (projectId && companyName) {
@@ -851,9 +854,13 @@ export const SolutionProviderPortalContent = ({
                   {mitigationControls
                     .filter((c) => c.category === "Abnormal Flow Valve and Pump Automation")
                     .map((control) => (
-                      <div
+                        <div
                         key={control.id}
-                        className="p-4 rounded-lg border-2 border-border"
+                        className="p-4 rounded-lg border-2 border-border cursor-pointer hover:border-primary/50 transition-colors"
+                        onClick={() => {
+                          setSelectedControlForConvo(control.name);
+                          setConvoDialogOpen(true);
+                        }}
                       >
                         <div className="h-24 bg-muted rounded mb-3 overflow-hidden flex items-center justify-center">
                           {control.image ? (
