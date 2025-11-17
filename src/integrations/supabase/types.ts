@@ -87,6 +87,41 @@ export type Database = {
           },
         ]
       }
+      control_comments: {
+        Row: {
+          comment: string
+          control_name: string
+          created_at: string
+          id: string
+          project_id: string
+          user_name: string
+        }
+        Insert: {
+          comment: string
+          control_name: string
+          created_at?: string
+          id?: string
+          project_id: string
+          user_name: string
+        }
+        Update: {
+          comment?: string
+          control_name?: string
+          created_at?: string
+          id?: string
+          project_id?: string
+          user_name?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "control_comments_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       control_systems: {
         Row: {
           control_id: string
@@ -151,6 +186,88 @@ export type Database = {
           updated_at?: string
         }
         Relationships: []
+      }
+      custom_critical_assets: {
+        Row: {
+          cost: string
+          created_at: string
+          duration: string
+          id: string
+          name: string
+          project_id: string
+          risk_level: string
+          updated_at: string
+        }
+        Insert: {
+          cost: string
+          created_at?: string
+          duration: string
+          id?: string
+          name: string
+          project_id: string
+          risk_level: string
+          updated_at?: string
+        }
+        Update: {
+          cost?: string
+          created_at?: string
+          duration?: string
+          id?: string
+          name?: string
+          project_id?: string
+          risk_level?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "custom_critical_assets_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      custom_water_systems: {
+        Row: {
+          cost: string
+          created_at: string
+          duration: string
+          id: string
+          name: string
+          project_id: string
+          risk_level: string
+          updated_at: string
+        }
+        Insert: {
+          cost: string
+          created_at?: string
+          duration: string
+          id?: string
+          name: string
+          project_id: string
+          risk_level: string
+          updated_at?: string
+        }
+        Update: {
+          cost?: string
+          created_at?: string
+          duration?: string
+          id?: string
+          name?: string
+          project_id?: string
+          risk_level?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "custom_water_systems_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       mitigation_controls: {
         Row: {
