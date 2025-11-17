@@ -448,7 +448,7 @@ const ProjectWizard = () => {
                       onNext={handleStepUpdate} 
                       onBack={() => {}} 
                       isProcessingWebhook={isProcessingWebhook}
-                      projectId={projectId}
+                      projectId={id}
                     />
                   </div>
                   <div className="space-y-6 pt-6 border-t">
@@ -458,7 +458,7 @@ const ProjectWizard = () => {
                       onNext={handleStepUpdate} 
                       onBack={() => {}} 
                       isProcessingWebhook={isProcessingWebhook}
-                      projectId={projectId}
+                      projectId={id}
                     />
                   </div>
                 </AccordionContent>
