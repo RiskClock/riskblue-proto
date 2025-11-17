@@ -9,6 +9,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Badge } from "@/components/ui/badge";
 import { DollarSign } from "lucide-react";
 import { normalizeControlName } from "@/lib/utils";
+import { ControlConversationDialog } from "./ControlConversationDialog";
 
 interface ProposalsStepProps {
   data: any;
@@ -104,6 +105,8 @@ export const ProposalsStep = ({ data, onBack, onNext }: ProposalsStepProps) => {
   const [selectedProposals, setSelectedProposals] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
   const [controls, setControls] = useState<string[]>([]);
+  const [convoDialogOpen, setConvoDialogOpen] = useState(false);
+  const [selectedControlForConvo, setSelectedControlForConvo] = useState<string>("");
   const { toast } = useToast();
 
   useEffect(() => {
@@ -266,7 +269,14 @@ export const ProposalsStep = ({ data, onBack, onNext }: ProposalsStepProps) => {
                       </TableCell>
                       <TableCell className="font-medium">{normalizeControlName(control)}</TableCell>
                       {proposals.map((proposal) => (
-                        <TableCell key={proposal.id} className="text-center">
+                        <TableCell 
+                          key={proposal.id} 
+                          className="text-center cursor-pointer hover:bg-muted/50 transition-colors"
+                          onClick={() => {
+                            setSelectedControlForConvo(control);
+                            setConvoDialogOpen(true);
+                          }}
+                        >
                           {proposal.systems[control] ? (
                             <span className="font-medium">
                               ${(proposal.systems[control] / 1000).toFixed(0)}k
@@ -315,6 +325,14 @@ export const ProposalsStep = ({ data, onBack, onNext }: ProposalsStepProps) => {
           </Button>
         )}
       </div>
+
+      <ControlConversationDialog
+        open={convoDialogOpen}
+        onOpenChange={setConvoDialogOpen}
+        controlName={selectedControlForConvo}
+        projectId={data.projectId}
+        userName={data.userName || "Project Manager"}
+      />
     </div>
   );
 };
