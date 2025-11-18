@@ -110,9 +110,14 @@ export const ProposalsStep = ({ data, onBack, onNext }: ProposalsStepProps) => {
   const { toast } = useToast();
 
   useEffect(() => {
-    if (data.projectId) {
-      fetchProposals();
-    }
+    // Temporarily using mock data for demo
+    setProposals(MOCK_PROPOSALS);
+    setControls(Object.keys(MOCK_PROPOSALS[0].systems));
+    setLoading(false);
+    
+    // if (data.projectId) {
+    //   fetchProposals();
+    // }
   }, [data.projectId]);
 
   const fetchProposals = async () => {
