@@ -117,6 +117,24 @@ export const ProposalsStep = ({ data, onBack, onNext }: ProposalsStepProps) => {
 
   const fetchProposals = async () => {
     try {
+      // Fetch ALL 25 mitigation controls
+      const { data: allControls, error: controlsError } = await supabase
+        .from("mitigation_controls")
+        .select("name")
+        .eq("is_active", true)
+        .order("display_order");
+
+      if (controlsError) throw controlsError;
+
+      // Filter by selected controls
+      const selectedControls = data.selectedControls || [];
+      const controlsToShow = selectedControls.length === 0 
+        ? allControls?.map(c => c.name) || []
+        : allControls?.filter(c => selectedControls.includes(c.name)).map(c => c.name) || [];
+      
+      setControls(controlsToShow);
+
+      // Fetch company proposals
       const { data: companyProposals, error } = await supabase
         .from("company_proposals")
         .select("*")
@@ -124,51 +142,63 @@ export const ProposalsStep = ({ data, onBack, onNext }: ProposalsStepProps) => {
 
       if (error) throw error;
 
-      // Filter by selected controls
-      const selectedControls = data.selectedControls || [];
+      // Filter proposals by selected controls
       const filteredProposals = selectedControls.length === 0 
         ? companyProposals 
         : companyProposals?.filter((proposal) => selectedControls.includes(proposal.system_name));
 
-      // Get unique control names (only selected ones)
-      const uniqueControls = new Set<string>();
-      filteredProposals?.forEach((proposal) => {
-        uniqueControls.add(proposal.system_name);
-      });
-      setControls(Array.from(uniqueControls));
-
-      // Group by company
+      // Group by company and create full matrix
       const companyMap = new Map<string, any>();
       
+      // Get unique companies
+      const companies = new Set<string>();
       filteredProposals?.forEach((proposal) => {
-        if (!companyMap.has(proposal.company)) {
-          companyMap.set(proposal.company, {
-            id: proposal.company,
-            company_name: proposal.company,
-            contact_email: "N/A",
-            contact_phone: null,
-            proposed_cost: 0,
-            proposal_details: null,
-            status: "In Progress" as const,
-            submitted_at: proposal.created_at,
-            systems: {},
-          });
+        companies.add(proposal.company);
+      });
+
+      // Create matrix: each company has ALL controls
+      companies.forEach((companyName) => {
+        const companyProposalsForThisCompany = filteredProposals?.filter(p => p.company === companyName) || [];
+        
+        // Create systems object with ALL controls
+        const systems: Record<string, number | null> = {};
+        let totalCost = 0;
+        const controlStatuses: string[] = [];
+        
+        controlsToShow.forEach((controlName) => {
+          const proposal = companyProposalsForThisCompany.find(p => p.system_name === controlName);
+          if (proposal) {
+            systems[controlName] = Number(proposal.system_cost) || 0;
+            totalCost += Number(proposal.system_cost) || 0;
+            controlStatuses.push(proposal.status || 'draft');
+          } else {
+            systems[controlName] = null;
+            controlStatuses.push('invited');
+          }
+        });
+
+        // Determine company-level status based on control statuses
+        let companyStatus: "Invited" | "In Progress" | "Complete ✅" = "Invited";
+        const submittedCount = controlStatuses.filter(s => s === 'submitted').length;
+        const totalCount = controlsToShow.length;
+        
+        if (submittedCount === totalCount && totalCount > 0) {
+          companyStatus = "Complete ✅";
+        } else if (submittedCount > 0 || controlStatuses.some(s => s === 'draft')) {
+          companyStatus = "In Progress";
         }
 
-        const company = companyMap.get(proposal.company);
-        company.proposed_cost += Number(proposal.system_cost) || 0;
-        company.systems[proposal.system_name] = Number(proposal.system_cost) || 0;
-        
-        // Determine status based on completeness
-        const totalControls = uniqueControls.size;
-        const filledControls = Object.keys(company.systems).length;
-        if (filledControls === totalControls && totalControls > 0) {
-          company.status = "Complete ✅";
-        } else if (filledControls > 0) {
-          company.status = "In Progress";
-        } else {
-          company.status = "Invited";
-        }
+        companyMap.set(companyName, {
+          id: companyName,
+          company_name: companyName,
+          contact_email: "N/A",
+          contact_phone: null,
+          proposed_cost: totalCost,
+          proposal_details: null,
+          status: companyStatus,
+          submitted_at: companyProposalsForThisCompany[0]?.created_at || new Date().toISOString(),
+          systems,
+        });
       });
 
       setProposals(Array.from(companyMap.values()));
