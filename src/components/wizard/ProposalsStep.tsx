@@ -238,14 +238,6 @@ export const ProposalsStep = ({ data, onBack, onNext }: ProposalsStepProps) => {
 
   return (
     <div className="space-y-8">
-      <div className="space-y-2">
-        <p className="text-sm text-muted-foreground">Step 8 of 9</p>
-        <h2 className="text-3xl font-bold text-foreground">Proposals</h2>
-        <p className="text-muted-foreground">
-          Review and select proposals from companies responding to your RFP.
-        </p>
-      </div>
-
       <Card className="p-8" style={{ display: 'none' }}>
         {loading ? (
           <div className="text-center py-12">
@@ -265,10 +257,7 @@ export const ProposalsStep = ({ data, onBack, onNext }: ProposalsStepProps) => {
         )}
       </Card>
 
-      <div className="flex justify-between pt-4">
-        <Button type="button" variant="outline" onClick={onBack}>
-          Back
-        </Button>
+      <div className="flex justify-end pt-4">
         {selectedProposals.length > 0 && (
           <Button
             onClick={() => {
