@@ -27,7 +27,7 @@ interface GanttChartProps {
 
 export const GanttChart = ({ data, selectedControls = [] }: GanttChartProps) => {
   const [expandedControls, setExpandedControls] = useState<Set<string>>(new Set());
-  const [zoom, setZoom] = useState(1);
+  const [zoom, setZoom] = useState(0.2);
   const [searchQuery, setSearchQuery] = useState("");
 
   // Filter and sort data based on search query and selectedControls
