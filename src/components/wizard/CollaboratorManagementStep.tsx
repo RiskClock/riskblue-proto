@@ -13,7 +13,7 @@ import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { z } from "zod";
-import { SolutionProviderPortal } from "./SolutionProviderPortal";
+// SolutionProviderPortal import removed - using route navigation instead
 import { normalizeControlName } from "@/lib/utils";
 
 interface CollaboratorManagementStepProps {
@@ -328,31 +328,40 @@ export const CollaboratorManagementStep = ({ projectId }: CollaboratorManagement
         throw error;
       }
 
-      // Create empty proposals for new companies
-      const uniqueCompanies = Array.from(new Set(contactsToInvite.map(c => c.company)));
-      
-      for (const company of uniqueCompanies) {
-        const { data: existingProposals } = await supabase
-          .from("company_proposals")
-          .select("id")
-          .eq("project_id", projectId)
-          .eq("company", company)
-          .limit(1);
+      // Create initial proposals for invited collaborators
+      // Fetch the newly inserted collaborator IDs
+      const { data: newCollaborators } = await supabase
+        .from("project_collaborators")
+        .select("id, company")
+        .eq("project_id", projectId)
+        .in("company", Array.from(new Set(contactsToInvite.map(c => c.company))));
 
-        if (!existingProposals || existingProposals.length === 0) {
-          const emptyProposals = [
-            "Electrical Room Presence of Water Monitoring",
-            "Mechanical Room Presence of Water Monitoring",
-            "Main Electrical Room Presence of Water Monitoring",
-            "Cold Domestic Water Abnormal Flow Monitoring",
-            "Temporary Water Run Abnormal Flow Monitoring",
-          ].map((systemName) => ({
-            project_id: projectId,
-            company: company,
-            system_name: systemName,
-            system_cost: 0,
-            details: "",
-          }));
+      if (newCollaborators && newCollaborators.length > 0) {
+        // Fetch control IDs for the initial controls we want to create
+        const initialControlNames = [
+          "Electrical Room Presence of Water Monitoring",
+          "Mechanical Room Presence of Water Monitoring",
+          "Cold Domestic Water Abnormal Flow Monitoring",
+          "Temporary Water Run Abnormal Flow Monitoring",
+        ];
+
+        const { data: controls } = await supabase
+          .from("mitigation_controls")
+          .select("id, name")
+          .in("name", initialControlNames);
+
+        if (controls && controls.length > 0) {
+          const emptyProposals = newCollaborators.flatMap(collab => 
+            controls.map(control => ({
+              project_id: projectId,
+              collaborator_id: collab.id,
+              control_id: control.id,
+              company: collab.company,
+              system_name: control.name,
+              system_cost: 0,
+              details: "",
+            }))
+          );
 
           await supabase.from("company_proposals").insert(emptyProposals);
         }
@@ -465,41 +474,61 @@ export const CollaboratorManagementStep = ({ projectId }: CollaboratorManagement
 
         // If no proposals exist for this company, create empty proposals for all 25 controls
         if (!existingProposals || existingProposals.length === 0) {
-          const emptyProposals = [
-            "Electrical Room Presence of Water Monitoring",
-            "Mechanical Risers Presence of Water Monitoring",
-            "Mechanical Room Presence of Water Monitoring",
-            "Cold Domestic Water Abnormal Flow Monitoring",
-            "Temporary Water Run Abnormal Flow Monitoring",
-            "Fire Suppression System Abnormal Flow Monitoring",
-            "Automatic Shut Off Temporary Water Run",
-            "Main Riser Section Automatic Shut Open/Close Cold Domestic Water",
-            "Suite Drains",
-            "Flood Control Measures",
-            "Pre-qualification of Envelope Systems",
-            "Heat Trace and Insulation",
-            "Pressure Reducing Valve Maintenance Plan: Safeguarding System Performance",
-            "Proper Zoning Configuration: Optimizing Pressure Systems",
-            "Floor Penetrations Water Seals",
-            "Historical Project Water Incident Reports",
-            "100-Year Flood and Wind Storm Report",
-            "Water Mitigation Components Warranties and Insurance",
-            "Water Mitigation Equipment Labeling",
-            "Water Mitigation Equipment Acceptance Test",
-            "Installation Integrity: Joints, Bolts, and Piping",
-            "Additional Fill Tests: Ensuring Water System Integrity",
-            "Air Pressure or Water Tests in Plumbing System",
-            "Spill Kit",
-            "Temporary Enclosures Plan",
-          ].map((systemName) => ({
-            project_id: projectId,
-            company: row.company.trim(),
-            system_name: systemName,
-            system_cost: 0,
-            details: "",
-          }));
+          // Fetch the collaborator ID
+          const { data: newCollab } = await supabase
+            .from("project_collaborators")
+            .select("id")
+            .eq("project_id", projectId)
+            .eq("company", row.company.trim())
+            .single();
 
-          await supabase.from("company_proposals").insert(emptyProposals);
+          if (newCollab) {
+            const controlNames = [
+              "Electrical Room Presence of Water Monitoring",
+              "Mechanical Risers Presence of Water Monitoring",
+              "Mechanical Room Presence of Water Monitoring",
+              "Cold Domestic Water Abnormal Flow Monitoring",
+              "Temporary Water Run Abnormal Flow Monitoring",
+              "Fire Suppression System Abnormal Flow Monitoring",
+              "Automatic Shut Off Temporary Water Run",
+              "Main Riser Section Automatic Shut Open/Close Cold Domestic Water",
+              "Suite Drains",
+              "Flood Control Measures",
+              "Pre-qualification of Envelope Systems",
+              "Heat trace and Insulation",
+              "Pressure Reducing Valve Maintenance Plan Safeguarding System Performance",
+              "Proper Zoning Configuration Optimizing Pressure System",
+              "Floor Penetrations Water Seals",
+              "Historical Project Water Incident Reports",
+              "100-Year Flood and Wind Storm Report",
+              "Water Mitigation Components Warranties and Insurance",
+              "Water Mitigation Equipment Labeling",
+              "Water Mitigation Equipment Acceptance Test",
+              "Installation Integrity Joints Bolts and Piping",
+              "Additional Fill Tests Ensuring Water System Integrity",
+              "Air Pressure or Water Tests in Plumbing System",
+              "Spill Kit",
+              "Temporary Enclosures Plan",
+            ];
+
+            const { data: controls } = await supabase
+              .from("mitigation_controls")
+              .select("id, name")
+              .in("name", controlNames);
+
+            if (controls) {
+              const emptyProposals = controls.map(control => ({
+                project_id: projectId,
+                collaborator_id: newCollab.id,
+                control_id: control.id,
+                company: row.company.trim(),
+                system_name: control.name,
+                system_cost: 0,
+                details: "",
+              }));
+              await supabase.from("company_proposals").insert(emptyProposals);
+            }
+          }
         }
       }
 
@@ -967,16 +996,7 @@ export const CollaboratorManagementStep = ({ projectId }: CollaboratorManagement
         </AlertDialogContent>
       </AlertDialog>
 
-      {/* Solution Provider Portal */}
-      {selectedProvider && (
-        <SolutionProviderPortal
-          open={portalOpen}
-          onOpenChange={handlePortalClose}
-          projectId={projectId}
-          providerName={selectedProvider.name}
-          companyName={selectedProvider.company}
-        />
-      )}
+      {/* Solution Provider Portal - Removed, now using route navigation via handleOpenPortal */}
     </div>
   );
 };
