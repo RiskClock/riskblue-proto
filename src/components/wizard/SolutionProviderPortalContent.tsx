@@ -167,6 +167,7 @@ const towerTypeImages: Record<string, string> = {
 
 interface SolutionProviderPortalContentProps {
   projectId: string;
+  collaboratorId: string;
   providerName: string;
   companyName: string;
   onRefresh?: () => void;
@@ -174,6 +175,7 @@ interface SolutionProviderPortalContentProps {
 
 export const SolutionProviderPortalContent = ({
   projectId,
+  collaboratorId,
   providerName,
   companyName,
   onRefresh,
@@ -193,7 +195,7 @@ export const SolutionProviderPortalContent = ({
   const [selectedControlForConvo, setSelectedControlForConvo] = useState("");
 
   useEffect(() => {
-    if (projectId && companyName) {
+    if (projectId && collaboratorId) {
       setIsLoadingData(true);
       // Reset state first to prevent stale data
       setCosts({});
@@ -300,13 +302,13 @@ export const SolutionProviderPortalContent = ({
         .from("company_proposals")
         .select("*")
         .eq("project_id", projectId)
-        .eq("company", companyName);
+        .eq("collaborator_id", collaboratorId);
 
       if (fetchError) throw fetchError;
 
       // Create a map of existing proposals for easy lookup
       const existingProposalsMap = new Map(
-        (existingProposals || []).map(p => [p.system_name, p])
+        (existingProposals || []).map(p => [p.control_id, p])
       );
 
       const now = new Date().toISOString();
@@ -325,7 +327,7 @@ export const SolutionProviderPortalContent = ({
         const hasChanged = currentCost !== originalCost || currentDetails !== originalDetail;
         
         // Get existing proposal data
-        const existingProposal = existingProposalsMap.get(control.name);
+        const existingProposal = existingProposalsMap.get(control.id);
         
         // Only update editor_name and edited_at if the values changed
         const editorName = hasChanged ? providerName : (existingProposal?.editor_name || providerName);
@@ -333,6 +335,8 @@ export const SolutionProviderPortalContent = ({
 
         return {
           project_id: projectId,
+          collaborator_id: collaboratorId,
+          control_id: control.id,
           company: companyName,
           system_name: control.name,
           system_cost: parseFloat(currentCost),
@@ -348,7 +352,7 @@ export const SolutionProviderPortalContent = ({
         const { error } = await supabase
           .from("company_proposals")
           .upsert(proposals, {
-            onConflict: "project_id,company,system_name",
+            onConflict: "project_id,collaborator_id,control_id",
             ignoreDuplicates: false,
           });
 
@@ -420,31 +424,37 @@ export const SolutionProviderPortalContent = ({
 
   const handleSubmitProposal = async () => {
     try {
-      setSaving(true);
-      
-      // Get the selected controls from project data
-      const selectedControls = projectData?.project_data?.selectedControls || [];
-      
-      // Create proposals ONLY for selected controls to mark as complete
-      const now = new Date().toISOString();
-      const selectedProposals = mitigationControls
-        .filter((control) => selectedControls.includes(control.name) || selectedControls.includes(control.id))
-        .map((control) => ({
-          project_id: projectId,
-          company: companyName,
-          system_name: control.name,
-          system_cost: parseFloat(costs[control.id] || "0"),
-          details: details[control.id] || "",
-          editor_name: providerName,
-          edited_at: now,
-          status: 'submitted',
-        }));
+      const selectedControls = mitigationControls.filter(
+        (control) => costs[control.id] && parseFloat(costs[control.id]) > 0
+      );
 
-      // UPSERT all proposals (insert or update)
+      if (selectedControls.length === 0) {
+        toast({
+          title: "No Controls Selected",
+          description: "Please add cost estimates for at least one control before submitting.",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      const now = new Date().toISOString();
+      const proposals = selectedControls.map((control) => ({
+        project_id: projectId,
+        collaborator_id: collaboratorId,
+        control_id: control.id,
+        company: companyName,
+        system_name: control.name,
+        system_cost: parseFloat(costs[control.id]),
+        details: details[control.id] || "",
+        editor_name: providerName,
+        edited_at: now,
+        status: "submitted",
+      }));
+
       const { error } = await supabase
         .from("company_proposals")
-        .upsert(selectedProposals, {
-          onConflict: "project_id,company,system_name",
+        .upsert(proposals, {
+          onConflict: "project_id,collaborator_id,control_id",
           ignoreDuplicates: false,
         });
 

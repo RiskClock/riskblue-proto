@@ -16,7 +16,9 @@ export type Database = {
     Tables: {
       company_proposals: {
         Row: {
+          collaborator_id: string
           company: string
+          control_id: string
           created_at: string
           details: string | null
           edited_at: string | null
@@ -29,7 +31,9 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          collaborator_id: string
           company: string
+          control_id: string
           created_at?: string
           details?: string | null
           edited_at?: string | null
@@ -42,7 +46,9 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          collaborator_id?: string
           company?: string
+          control_id?: string
           created_at?: string
           details?: string | null
           edited_at?: string | null
@@ -60,6 +66,20 @@ export type Database = {
             columns: ["project_id"]
             isOneToOne: false
             referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "fk_company_proposals_collaborator"
+            columns: ["collaborator_id"]
+            isOneToOne: false
+            referencedRelation: "project_collaborators"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "fk_company_proposals_control"
+            columns: ["control_id"]
+            isOneToOne: false
+            referencedRelation: "mitigation_controls"
             referencedColumns: ["id"]
           },
         ]

@@ -220,7 +220,9 @@ export default function SolutionProviderPortal() {
               </p>
             </div>
             <SolutionProviderPortalContent
+              key={`${selectedProject.id}-${selectedCollaborator.id}`}
               projectId={selectedProject.id}
+              collaboratorId={selectedCollaborator.id}
               providerName={selectedCollaborator.name}
               companyName={selectedCollaborator.company}
             />
