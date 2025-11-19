@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -64,6 +65,14 @@ import elevatorsImg from "@/assets/timeline4-elevators.avif";
 import fireImg from "@/assets/timeline5-fire.avif";
 import interiorImg from "@/assets/timeline6-interior.avif";
 
+// Helper function to generate image key from control name
+const getControlImageKey = (name: string): string => {
+  return name
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-|-$/g, '');
+};
+
 const controlImages: Record<string, string> = {
   "electrical-room-monitoring": electricalRoomImg,
   "mechanical-room-monitoring": mechanicalRoomImg,
@@ -77,56 +86,42 @@ const controlImages: Record<string, string> = {
   "flood-control": floodControlImg,
   "envelope-prequalification": envelopePrequalificationImg,
   "heat-trace-insulation": heatTraceImg,
+  "heat-trace-and-insulation": heatTraceImg,
   "prv-maintenance": prvMaintenanceImg,
+  "pressure-reducing-valve-maintenance-plan-safeguarding-system-performance": prvMaintenanceImg,
   "proper-zoning": properZoningImg,
+  "proper-zoning-configuration-optimizing-pressure-system": properZoningImg,
   "floor-penetrations": floorPenetrationsImg,
+  "floor-penetrations-water-seals": floorPenetrationsImg,
   "incident-reports": historicalReportsImg,
+  "historical-project-water-incident-reports": historicalReportsImg,
   "flood-wind-report": floodWindReportImg,
+  "100-year-flood-and-wind-storm-report": floodWindReportImg,
   "warranties-insurance": warrantiesInsuranceImg,
+  "water-mitigation-components-warranties-and-insurance": warrantiesInsuranceImg,
   "equipment-labeling": equipmentLabelingImg,
+  "water-mitigation-equipment-labeling": equipmentLabelingImg,
   "acceptance-test": acceptanceTestImg,
+  "water-mitigation-equipment-acceptance-test": acceptanceTestImg,
   "installation-integrity": installationIntegrityImg,
+  "installation-integrity-joints-bolts-and-piping": installationIntegrityImg,
   "fill-tests": fillTestsImg,
+  "additional-fill-tests-ensuring-water-system-integrity": fillTestsImg,
   "air-pressure-tests": airPressureTestsImg,
+  "air-pressure-or-water-tests-in-plumbing-system": airPressureTestsImg,
   "spill-kit": spillKitImg,
   "temporary-enclosures": temporaryEnclosuresImg,
+  "temporary-enclosures-plan": temporaryEnclosuresImg,
+  "cold-domestic-water-abnormal-flow-monitoring": triggerValveImg,
+  "temporary-water-run-abnormal-flow-monitoring": tempWaterRunImg,
+  "fire-suppression-system-abnormal-flow-monitoring": fireSuppressionFlowImg,
+  "automatic-shut-off-temporary-water-run": tempWaterRunAutomaticImg,
+  "main-riser-section-automatic-shut-openclose-cold-domestic-water": mainElectricalRiserImg,
+  "electrical-room-presence-of-water-monitoring": electricalRoomImg,
+  "mechanical-room-presence-of-water-monitoring": mechanicalRoomImg,
+  "mechanical-risers-presence-of-water-monitoring": mechanicalRisersImg,
+  "hot-domestic-water-abnormal-flow-monitoring": tempWaterRunImg,
 };
-
-const mitigationControlsUnsorted = [
-  { id: "cold-domestic-flow-monitoring", name: "Cold Domestic Water Abnormal Flow Monitoring", category: "Abnormal Flow Valve and Pump Automation", image: controlImages["cold-domestic-flow-monitoring"], display_order: 1 },
-  { id: "temporary-water-flow-monitoring", name: "Temporary Water Run Abnormal Flow Monitoring", category: "Abnormal Flow Valve and Pump Automation", image: controlImages["temporary-water-flow-monitoring"], display_order: 2 },
-  { id: "fire-suppression-flow-monitoring", name: "Fire Suppression System Abnormal Flow Monitoring", category: "Abnormal Flow Valve and Pump Automation", image: controlImages["fire-suppression-flow-monitoring"], display_order: 3 },
-  { id: "automatic-shutoff-temp-water", name: "Automatic Shut Off Temporary Water Run", category: "Abnormal Flow Valve and Pump Automation", image: controlImages["automatic-shutoff-temp-water"], display_order: 4 },
-  { id: "main-riser-shutoff", name: "Main Riser Section Automatic Shut Open/Close Cold Domestic Water", category: "Abnormal Flow Valve and Pump Automation", image: controlImages["main-riser-shutoff"], display_order: 5 },
-  { id: "suite-drains", name: "Suite Drains", category: "Design Incorporated", image: controlImages["suite-drains"], display_order: 1 },
-  { id: "flood-control", name: "Flood Control Measures", category: "Design Incorporated", image: controlImages["flood-control"], display_order: 2 },
-  { id: "envelope-prequalification", name: "Pre-qualification of Envelope Systems", category: "Design Incorporated", image: controlImages["envelope-prequalification"], display_order: 3 },
-  { id: "heat-trace-insulation", name: "Heat Trace and Insulation", category: "Design Incorporated", image: controlImages["heat-trace-insulation"], display_order: 4 },
-  { id: "prv-maintenance", name: "Pressure Reducing Valve Maintenance Plan: Safeguarding System Performance", category: "Design Incorporated", image: controlImages["prv-maintenance"], display_order: 5 },
-  { id: "proper-zoning", name: "Proper Zoning Configuration: Optimizing Pressure Systems", category: "Design Incorporated", image: controlImages["proper-zoning"], display_order: 6 },
-  { id: "floor-penetrations", name: "Floor Penetrations Water Seals", category: "Design Incorporated", image: controlImages["floor-penetrations"], display_order: 7 },
-  { id: "electrical-room-monitoring", name: "Electrical Room Presence of Water Monitoring", category: "Presence of Water Monitoring", image: controlImages["electrical-room-monitoring"], display_order: 1 },
-  { id: "mechanical-risers-monitoring", name: "Mechanical Risers Presence of Water Monitoring", category: "Presence of Water Monitoring", image: controlImages["mechanical-risers-monitoring"], display_order: 2 },
-  { id: "mechanical-room-monitoring", name: "Mechanical Room Presence of Water Monitoring", category: "Presence of Water Monitoring", image: controlImages["mechanical-room-monitoring"], display_order: 3 },
-  { id: "warranties-insurance", name: "Water Mitigation Components Warranties and Insurance", category: "Process Inspections and Documentation", image: controlImages["warranties-insurance"], display_order: 1 },
-  { id: "equipment-labeling", name: "Water Mitigation Equipment Labeling", category: "Process Inspections and Documentation", image: controlImages["equipment-labeling"], display_order: 2 },
-  { id: "acceptance-test", name: "Water Mitigation Equipment Acceptance Test", category: "Process Inspections and Documentation", image: controlImages["acceptance-test"], display_order: 3 },
-  { id: "installation-integrity", name: "Installation Integrity: Joints, Bolts, and Piping", category: "Process Inspections and Documentation", image: controlImages["installation-integrity"], display_order: 4 },
-  { id: "fill-tests", name: "Additional Fill Tests: Ensuring Water System Integrity", category: "Process Inspections and Documentation", image: controlImages["fill-tests"], display_order: 5 },
-  { id: "air-pressure-tests", name: "Air Pressure or Water Tests in Plumbing System", category: "Tests Expansions and Maintenance", image: controlImages["air-pressure-tests"], display_order: 1 },
-  { id: "spill-kit", name: "Spill Kit", category: "Tests Expansions and Maintenance", image: controlImages["spill-kit"], display_order: 2 },
-  { id: "temporary-enclosures", name: "Temporary Enclosures Plan", category: "Tests Expansions and Maintenance", image: controlImages["temporary-enclosures"], display_order: 3 },
-  { id: "incident-reports", name: "Historical Project Water Incident Reports", category: "Water Response Strategy", image: controlImages["incident-reports"], display_order: 1 },
-  { id: "flood-wind-report", name: "100-Year Flood and Wind Storm Report", category: "Water Response Strategy", image: controlImages["flood-wind-report"], display_order: 2 },
-];
-
-// Sort by category first, then by display_order (same as in MitigationControlsStep)
-const mitigationControls = [...mitigationControlsUnsorted].sort((a, b) => {
-  if (a.category !== b.category) {
-    return a.category.localeCompare(b.category);
-  }
-  return a.display_order - b.display_order;
-});
 
 const assets = [
   { id: "mechanical", name: "Mechanical Rooms", threat: "Building water source", riskLevel: "Very High Risk", image: mechanicalRoomsAssetImg },
@@ -193,7 +188,27 @@ export const SolutionProviderPortalContent = ({
   const [isLoadingData, setIsLoadingData] = useState(true);
   const [convoDialogOpen, setConvoDialogOpen] = useState(false);
   const [selectedControlForConvo, setSelectedControlForConvo] = useState("");
-  const [controlIdMap, setControlIdMap] = useState<Record<string, string>>({});
+
+  // Fetch mitigation controls from database
+  const { data: mitigationControls = [], isLoading: isLoadingControls } = useQuery({
+    queryKey: ['mitigation-controls'],
+    queryFn: async () => {
+      const { data: controls, error } = await supabase
+        .from('mitigation_controls')
+        .select('*')
+        .eq('is_active', true)
+        .order('category')
+        .order('display_order');
+      
+      if (error) throw error;
+
+      // Map images to controls
+      return controls.map(control => ({
+        ...control,
+        image: controlImages[getControlImageKey(control.name)] || control.image_url
+      }));
+    },
+  });
 
   useEffect(() => {
     if (projectId && collaboratorId) {
@@ -206,7 +221,7 @@ export const SolutionProviderPortalContent = ({
       setOriginalDetails({});
       setOriginalEditorInfo({});
       
-      Promise.all([fetchProjectData(), loadExistingProposals(), fetchControlIds()]).finally(() => {
+      Promise.all([fetchProjectData(), loadExistingProposals()]).finally(() => {
         setTimeout(() => setIsLoadingData(false), 300);
       });
     }
@@ -224,24 +239,6 @@ export const SolutionProviderPortalContent = ({
       setProjectData(data);
     } catch (error) {
       console.error("Error fetching project:", error);
-    }
-  };
-
-  const fetchControlIds = async () => {
-    try {
-      const { data, error } = await supabase
-        .from("mitigation_controls")
-        .select("id, name");
-
-      if (error) throw error;
-
-      const map: Record<string, string> = {};
-      (data || []).forEach((control) => {
-        map[control.name] = control.id;
-      });
-      setControlIdMap(map);
-    } catch (error) {
-      console.error("Error fetching mitigation control IDs:", error);
     }
   };
 
@@ -338,12 +335,6 @@ export const SolutionProviderPortalContent = ({
       // Build proposals for UPSERT
       const proposals = controlsWithCosts
         .map((control) => {
-          const dbControlId = controlIdMap[control.name];
-          if (!dbControlId) {
-            console.warn("Missing control ID mapping for control", control.name);
-            return null;
-          }
-
           const currentCost = costs[control.id];
           const currentDetails = details[control.id] || "";
           const originalCost = originalCosts[control.id];
@@ -353,7 +344,7 @@ export const SolutionProviderPortalContent = ({
           const hasChanged = currentCost !== originalCost || currentDetails !== originalDetail;
           
           // Get existing proposal data
-          const existingProposal = existingProposalsMap.get(dbControlId);
+          const existingProposal = existingProposalsMap.get(control.id);
           
           // Only update editor_name and edited_at if the values changed
           const editorName = hasChanged ? providerName : (existingProposal?.editor_name || providerName);
@@ -362,7 +353,7 @@ export const SolutionProviderPortalContent = ({
           return {
             project_id: projectId,
             collaborator_id: collaboratorId,
-            control_id: dbControlId,
+            control_id: control.id,
             company: companyName,
             system_name: control.name,
             system_cost: parseFloat(currentCost),
@@ -478,16 +469,10 @@ export const SolutionProviderPortalContent = ({
       const now = new Date().toISOString();
       const proposals = selectedControls
         .map((control) => {
-          const dbControlId = controlIdMap[control.name];
-          if (!dbControlId) {
-            console.warn("Missing control ID mapping for control", control.name);
-            return null;
-          }
-
           return {
             project_id: projectId,
             collaborator_id: collaboratorId,
-            control_id: dbControlId,
+            control_id: control.id,
             company: companyName,
             system_name: control.name,
             system_cost: parseFloat(costs[control.id]),
@@ -542,7 +527,7 @@ export const SolutionProviderPortalContent = ({
     }
   };
 
-  if (!projectData) {
+  if (isLoadingControls || !projectData) {
     return <div className="p-8 text-center">Loading project data...</div>;
   }
 
