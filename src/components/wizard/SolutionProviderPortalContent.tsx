@@ -92,33 +92,41 @@ const controlImages: Record<string, string> = {
   "temporary-enclosures": temporaryEnclosuresImg,
 };
 
-const mitigationControls = [
-  { id: "electrical-room-monitoring", name: "Electrical Room Presence of Water Monitoring", category: "Presence of Water Monitoring", image: controlImages["electrical-room-monitoring"] },
-  { id: "mechanical-risers-monitoring", name: "Mechanical Risers Presence of Water Monitoring", category: "Presence of Water Monitoring", image: controlImages["mechanical-risers-monitoring"] },
-  { id: "mechanical-room-monitoring", name: "Mechanical Room Presence of Water Monitoring", category: "Presence of Water Monitoring", image: controlImages["mechanical-room-monitoring"] },
-  { id: "cold-domestic-flow-monitoring", name: "Cold Domestic Water Abnormal Flow Monitoring", category: "Abnormal Flow Valve and Pump Automation", image: controlImages["cold-domestic-flow-monitoring"] },
-  { id: "temporary-water-flow-monitoring", name: "Temporary Water Run Abnormal Flow Monitoring", category: "Abnormal Flow Valve and Pump Automation", image: controlImages["temporary-water-flow-monitoring"] },
-  { id: "fire-suppression-flow-monitoring", name: "Fire Suppression System Abnormal Flow Monitoring", category: "Abnormal Flow Valve and Pump Automation", image: controlImages["fire-suppression-flow-monitoring"] },
-  { id: "automatic-shutoff-temp-water", name: "Automatic Shut Off Temporary Water Run", category: "Abnormal Flow Valve and Pump Automation", image: controlImages["automatic-shutoff-temp-water"] },
-  { id: "main-riser-shutoff", name: "Main Riser Section Automatic Shut Open/Close Cold Domestic Water", category: "Abnormal Flow Valve and Pump Automation", image: controlImages["main-riser-shutoff"] },
-  { id: "suite-drains", name: "Suite Drains", category: "Design Incorporated", image: controlImages["suite-drains"] },
-  { id: "flood-control", name: "Flood Control Measures", category: "Design Incorporated", image: controlImages["flood-control"] },
-  { id: "envelope-prequalification", name: "Pre-qualification of Envelope Systems", category: "Design Incorporated", image: controlImages["envelope-prequalification"] },
-  { id: "heat-trace-insulation", name: "Heat Trace and Insulation", category: "Design Incorporated", image: controlImages["heat-trace-insulation"] },
-  { id: "prv-maintenance", name: "Pressure Reducing Valve Maintenance Plan: Safeguarding System Performance", category: "Design Incorporated", image: controlImages["prv-maintenance"] },
-  { id: "proper-zoning", name: "Proper Zoning Configuration: Optimizing Pressure Systems", category: "Design Incorporated", image: controlImages["proper-zoning"] },
-  { id: "floor-penetrations", name: "Floor Penetrations Water Seals", category: "Design Incorporated", image: controlImages["floor-penetrations"] },
-  { id: "incident-reports", name: "Historical Project Water Incident Reports", category: "Water Response Strategy", image: controlImages["incident-reports"] },
-  { id: "flood-wind-report", name: "100-Year Flood and Wind Storm Report", category: "Water Response Strategy", image: controlImages["flood-wind-report"] },
-  { id: "warranties-insurance", name: "Water Mitigation Components Warranties and Insurance", category: "Process Inspections and Documentation", image: controlImages["warranties-insurance"] },
-  { id: "equipment-labeling", name: "Water Mitigation Equipment Labeling", category: "Process Inspections and Documentation", image: controlImages["equipment-labeling"] },
-  { id: "acceptance-test", name: "Water Mitigation Equipment Acceptance Test", category: "Process Inspections and Documentation", image: controlImages["acceptance-test"] },
-  { id: "installation-integrity", name: "Installation Integrity: Joints, Bolts, and Piping", category: "Process Inspections and Documentation", image: controlImages["installation-integrity"] },
-  { id: "fill-tests", name: "Additional Fill Tests: Ensuring Water System Integrity", category: "Process Inspections and Documentation", image: controlImages["fill-tests"] },
-  { id: "air-pressure-tests", name: "Air Pressure or Water Tests in Plumbing System", category: "Tests Expansions and Maintenance", image: controlImages["air-pressure-tests"] },
-  { id: "spill-kit", name: "Spill Kit", category: "Tests Expansions and Maintenance", image: controlImages["spill-kit"] },
-  { id: "temporary-enclosures", name: "Temporary Enclosures Plan", category: "Tests Expansions and Maintenance", image: controlImages["temporary-enclosures"] },
+const mitigationControlsUnsorted = [
+  { id: "cold-domestic-flow-monitoring", name: "Cold Domestic Water Abnormal Flow Monitoring", category: "Abnormal Flow Valve and Pump Automation", image: controlImages["cold-domestic-flow-monitoring"], display_order: 1 },
+  { id: "temporary-water-flow-monitoring", name: "Temporary Water Run Abnormal Flow Monitoring", category: "Abnormal Flow Valve and Pump Automation", image: controlImages["temporary-water-flow-monitoring"], display_order: 2 },
+  { id: "fire-suppression-flow-monitoring", name: "Fire Suppression System Abnormal Flow Monitoring", category: "Abnormal Flow Valve and Pump Automation", image: controlImages["fire-suppression-flow-monitoring"], display_order: 3 },
+  { id: "automatic-shutoff-temp-water", name: "Automatic Shut Off Temporary Water Run", category: "Abnormal Flow Valve and Pump Automation", image: controlImages["automatic-shutoff-temp-water"], display_order: 4 },
+  { id: "main-riser-shutoff", name: "Main Riser Section Automatic Shut Open/Close Cold Domestic Water", category: "Abnormal Flow Valve and Pump Automation", image: controlImages["main-riser-shutoff"], display_order: 5 },
+  { id: "suite-drains", name: "Suite Drains", category: "Design Incorporated", image: controlImages["suite-drains"], display_order: 1 },
+  { id: "flood-control", name: "Flood Control Measures", category: "Design Incorporated", image: controlImages["flood-control"], display_order: 2 },
+  { id: "envelope-prequalification", name: "Pre-qualification of Envelope Systems", category: "Design Incorporated", image: controlImages["envelope-prequalification"], display_order: 3 },
+  { id: "heat-trace-insulation", name: "Heat Trace and Insulation", category: "Design Incorporated", image: controlImages["heat-trace-insulation"], display_order: 4 },
+  { id: "prv-maintenance", name: "Pressure Reducing Valve Maintenance Plan: Safeguarding System Performance", category: "Design Incorporated", image: controlImages["prv-maintenance"], display_order: 5 },
+  { id: "proper-zoning", name: "Proper Zoning Configuration: Optimizing Pressure Systems", category: "Design Incorporated", image: controlImages["proper-zoning"], display_order: 6 },
+  { id: "floor-penetrations", name: "Floor Penetrations Water Seals", category: "Design Incorporated", image: controlImages["floor-penetrations"], display_order: 7 },
+  { id: "electrical-room-monitoring", name: "Electrical Room Presence of Water Monitoring", category: "Presence of Water Monitoring", image: controlImages["electrical-room-monitoring"], display_order: 1 },
+  { id: "mechanical-risers-monitoring", name: "Mechanical Risers Presence of Water Monitoring", category: "Presence of Water Monitoring", image: controlImages["mechanical-risers-monitoring"], display_order: 2 },
+  { id: "mechanical-room-monitoring", name: "Mechanical Room Presence of Water Monitoring", category: "Presence of Water Monitoring", image: controlImages["mechanical-room-monitoring"], display_order: 3 },
+  { id: "warranties-insurance", name: "Water Mitigation Components Warranties and Insurance", category: "Process Inspections and Documentation", image: controlImages["warranties-insurance"], display_order: 1 },
+  { id: "equipment-labeling", name: "Water Mitigation Equipment Labeling", category: "Process Inspections and Documentation", image: controlImages["equipment-labeling"], display_order: 2 },
+  { id: "acceptance-test", name: "Water Mitigation Equipment Acceptance Test", category: "Process Inspections and Documentation", image: controlImages["acceptance-test"], display_order: 3 },
+  { id: "installation-integrity", name: "Installation Integrity: Joints, Bolts, and Piping", category: "Process Inspections and Documentation", image: controlImages["installation-integrity"], display_order: 4 },
+  { id: "fill-tests", name: "Additional Fill Tests: Ensuring Water System Integrity", category: "Process Inspections and Documentation", image: controlImages["fill-tests"], display_order: 5 },
+  { id: "air-pressure-tests", name: "Air Pressure or Water Tests in Plumbing System", category: "Tests Expansions and Maintenance", image: controlImages["air-pressure-tests"], display_order: 1 },
+  { id: "spill-kit", name: "Spill Kit", category: "Tests Expansions and Maintenance", image: controlImages["spill-kit"], display_order: 2 },
+  { id: "temporary-enclosures", name: "Temporary Enclosures Plan", category: "Tests Expansions and Maintenance", image: controlImages["temporary-enclosures"], display_order: 3 },
+  { id: "incident-reports", name: "Historical Project Water Incident Reports", category: "Water Response Strategy", image: controlImages["incident-reports"], display_order: 1 },
+  { id: "flood-wind-report", name: "100-Year Flood and Wind Storm Report", category: "Water Response Strategy", image: controlImages["flood-wind-report"], display_order: 2 },
 ];
+
+// Sort by category first, then by display_order (same as in MitigationControlsStep)
+const mitigationControls = [...mitigationControlsUnsorted].sort((a, b) => {
+  if (a.category !== b.category) {
+    return a.category.localeCompare(b.category);
+  }
+  return a.display_order - b.display_order;
+});
 
 const assets = [
   { id: "mechanical", name: "Mechanical Rooms", threat: "Building water source", riskLevel: "Very High Risk", image: mechanicalRoomsAssetImg },
