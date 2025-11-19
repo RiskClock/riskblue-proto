@@ -139,20 +139,10 @@ const Projects = () => {
 
           <div className="bg-muted/50 p-6 rounded-lg mb-6">
             <p className="text-sm text-foreground mb-3">
-              <strong>Welcome to RiskBlue.</strong>
+              <strong>Welcome to RiskBlue!</strong>
             </p>
             <p className="text-sm text-muted-foreground mb-3">
-              RiskBlue empowers insurance brokers to efficiently create cost-effective Water Mitigation
-              Guidelines for High-Rise Builder's Risk underwriting, helping to assess and minimize
-              water-related risks prior to the construction start. Our streamlined approach ensures that
-              underwriters collaboratively choose with developers, contractors and carriers comprehensive,
-              data-driven Control Measures, enabling better decision-making and risk control.
-            </p>
-            <p className="text-sm text-muted-foreground">
-              To begin creating a Water Mitigation Guideline, click "New", and a step-by-step discovery
-              process will guide you through each stage seamlessly. If you've already started a project,
-              simply click "Open project" to resume where you left off, allowing you to review, update,
-              or finalize your water mitigation guideline.
+              RiskBlue helps builders identify project-specific water risks, determine the right mitigation strategies, and translate them into structured plans and coordinated execution. By unifying risk discovery, planning, and field operations, RiskBlue ensures consistent control, accountability, and rapid response across the entire water-mitigation lifecycle.
             </p>
           </div>
         </div>
