@@ -453,11 +453,11 @@ export const SolutionProviderPortalContent = ({
 
   const handleSubmitProposal = async () => {
     try {
-      const selectedControls = mitigationControls.filter(
+      const controlsWithCosts = mitigationControls.filter(
         (control) => costs[control.id] && parseFloat(costs[control.id]) > 0
       );
 
-      if (selectedControls.length === 0) {
+      if (controlsWithCosts.length === 0) {
         toast({
           title: "No Controls Selected",
           description: "Please add cost estimates for at least one control before submitting.",
@@ -466,8 +466,32 @@ export const SolutionProviderPortalContent = ({
         return;
       }
 
+      // Fetch existing proposals to determine which ones need to be cleared
+      const { data: existingProposals, error: fetchError } = await supabase
+        .from("company_proposals")
+        .select("*")
+        .eq("project_id", projectId)
+        .eq("collaborator_id", collaboratorId);
+
+      if (fetchError) throw fetchError;
+
+      // Delete proposals that no longer have costs (using control IDs)
+      const controlsWithCostsSet = new Set(controlsWithCosts.map(c => c.id));
+      const proposalsToDelete = (existingProposals || [])
+        .filter(p => !controlsWithCostsSet.has(p.control_id))
+        .map(p => p.id);
+
+      if (proposalsToDelete.length > 0) {
+        const { error: deleteError } = await supabase
+          .from("company_proposals")
+          .delete()
+          .in("id", proposalsToDelete);
+
+        if (deleteError) throw deleteError;
+      }
+
       const now = new Date().toISOString();
-      const proposals = selectedControls
+      const proposals = controlsWithCosts
         .map((control) => {
           return {
             project_id: projectId,
