@@ -193,6 +193,7 @@ export const SolutionProviderPortalContent = ({
   const [isLoadingData, setIsLoadingData] = useState(true);
   const [convoDialogOpen, setConvoDialogOpen] = useState(false);
   const [selectedControlForConvo, setSelectedControlForConvo] = useState("");
+  const [controlIdMap, setControlIdMap] = useState<Record<string, string>>({});
 
   useEffect(() => {
     if (projectId && collaboratorId) {
@@ -205,11 +206,11 @@ export const SolutionProviderPortalContent = ({
       setOriginalDetails({});
       setOriginalEditorInfo({});
       
-      Promise.all([fetchProjectData(), loadExistingProposals()]).finally(() => {
+      Promise.all([fetchProjectData(), loadExistingProposals(), fetchControlIds()]).finally(() => {
         setTimeout(() => setIsLoadingData(false), 300);
       });
     }
-  }, [projectId, companyName]);
+  }, [projectId, collaboratorId]);
 
   const fetchProjectData = async () => {
     try {
@@ -226,13 +227,31 @@ export const SolutionProviderPortalContent = ({
     }
   };
 
+  const fetchControlIds = async () => {
+    try {
+      const { data, error } = await supabase
+        .from("mitigation_controls")
+        .select("id, name");
+
+      if (error) throw error;
+
+      const map: Record<string, string> = {};
+      (data || []).forEach((control) => {
+        map[control.name] = control.id;
+      });
+      setControlIdMap(map);
+    } catch (error) {
+      console.error("Error fetching mitigation control IDs:", error);
+    }
+  };
+
   const loadExistingProposals = async () => {
     try {
       const { data, error } = await supabase
         .from("company_proposals")
         .select("*")
         .eq("project_id", projectId)
-        .eq("company", companyName);
+        .eq("collaborator_id", collaboratorId);
 
       if (error) throw error;
 
@@ -317,35 +336,54 @@ export const SolutionProviderPortalContent = ({
       );
 
       // Build proposals for UPSERT
-      const proposals = controlsWithCosts.map((control) => {
-        const currentCost = costs[control.id];
-        const currentDetails = details[control.id] || "";
-        const originalCost = originalCosts[control.id];
-        const originalDetail = originalDetails[control.id] || "";
-        
-        // Check if this control has actually changed
-        const hasChanged = currentCost !== originalCost || currentDetails !== originalDetail;
-        
-        // Get existing proposal data
-        const existingProposal = existingProposalsMap.get(control.id);
-        
-        // Only update editor_name and edited_at if the values changed
-        const editorName = hasChanged ? providerName : (existingProposal?.editor_name || providerName);
-        const editedAt = hasChanged ? now : (existingProposal?.edited_at || now);
+      const proposals = controlsWithCosts
+        .map((control) => {
+          const dbControlId = controlIdMap[control.name];
+          if (!dbControlId) {
+            console.warn("Missing control ID mapping for control", control.name);
+            return null;
+          }
 
-        return {
-          project_id: projectId,
-          collaborator_id: collaboratorId,
-          control_id: control.id,
-          company: companyName,
-          system_name: control.name,
-          system_cost: parseFloat(currentCost),
-          details: currentDetails,
-          editor_name: editorName,
-          edited_at: editedAt,
-          status: (existingProposal as any)?.status || 'draft',
-        };
-      });
+          const currentCost = costs[control.id];
+          const currentDetails = details[control.id] || "";
+          const originalCost = originalCosts[control.id];
+          const originalDetail = originalDetails[control.id] || "";
+          
+          // Check if this control has actually changed
+          const hasChanged = currentCost !== originalCost || currentDetails !== originalDetail;
+          
+          // Get existing proposal data
+          const existingProposal = existingProposalsMap.get(dbControlId);
+          
+          // Only update editor_name and edited_at if the values changed
+          const editorName = hasChanged ? providerName : (existingProposal?.editor_name || providerName);
+          const editedAt = hasChanged ? now : (existingProposal?.edited_at || now);
+
+          return {
+            project_id: projectId,
+            collaborator_id: collaboratorId,
+            control_id: dbControlId,
+            company: companyName,
+            system_name: control.name,
+            system_cost: parseFloat(currentCost),
+            details: currentDetails,
+            editor_name: editorName,
+            edited_at: editedAt,
+            status: (existingProposal as any)?.status || 'draft',
+          };
+        })
+        .filter((p): p is {
+          project_id: string;
+          collaborator_id: string;
+          control_id: string;
+          company: string;
+          system_name: string;
+          system_cost: number;
+          details: string;
+          editor_name: string;
+          edited_at: string;
+          status: string;
+        } => p !== null);
 
       // UPSERT proposals (insert or update based on unique constraint)
       if (proposals.length > 0) {
@@ -438,18 +476,39 @@ export const SolutionProviderPortalContent = ({
       }
 
       const now = new Date().toISOString();
-      const proposals = selectedControls.map((control) => ({
-        project_id: projectId,
-        collaborator_id: collaboratorId,
-        control_id: control.id,
-        company: companyName,
-        system_name: control.name,
-        system_cost: parseFloat(costs[control.id]),
-        details: details[control.id] || "",
-        editor_name: providerName,
-        edited_at: now,
-        status: "submitted",
-      }));
+      const proposals = selectedControls
+        .map((control) => {
+          const dbControlId = controlIdMap[control.name];
+          if (!dbControlId) {
+            console.warn("Missing control ID mapping for control", control.name);
+            return null;
+          }
+
+          return {
+            project_id: projectId,
+            collaborator_id: collaboratorId,
+            control_id: dbControlId,
+            company: companyName,
+            system_name: control.name,
+            system_cost: parseFloat(costs[control.id]),
+            details: details[control.id] || "",
+            editor_name: providerName,
+            edited_at: now,
+            status: "submitted",
+          };
+        })
+        .filter((p): p is {
+          project_id: string;
+          collaborator_id: string;
+          control_id: string;
+          company: string;
+          system_name: string;
+          system_cost: number;
+          details: string;
+          editor_name: string;
+          edited_at: string;
+          status: string;
+        } => p !== null);
 
       const { error } = await supabase
         .from("company_proposals")
