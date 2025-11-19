@@ -211,21 +211,23 @@ export const SolutionProviderPortalContent = ({
   });
 
   useEffect(() => {
-    if (projectId && collaboratorId) {
-      setIsLoadingData(true);
-      // Reset state first to prevent stale data
-      setCosts({});
-      setDetails({});
-      setEditorInfo({});
-      setOriginalCosts({});
-      setOriginalDetails({});
-      setOriginalEditorInfo({});
-      
-      Promise.all([fetchProjectData(), loadExistingProposals()]).finally(() => {
-        setTimeout(() => setIsLoadingData(false), 300);
-      });
-    }
-  }, [projectId, collaboratorId]);
+    if (!projectId || !collaboratorId) return;
+    if (isLoadingControls) return;
+    if (!mitigationControls || mitigationControls.length === 0) return;
+
+    setIsLoadingData(true);
+    // Reset state first to prevent stale data
+    setCosts({});
+    setDetails({});
+    setEditorInfo({});
+    setOriginalCosts({});
+    setOriginalDetails({});
+    setOriginalEditorInfo({});
+    
+    Promise.all([fetchProjectData(), loadExistingProposals()]).finally(() => {
+      setTimeout(() => setIsLoadingData(false), 300);
+    });
+  }, [projectId, collaboratorId, isLoadingControls, mitigationControls]);
 
   const fetchProjectData = async () => {
     try {
@@ -244,6 +246,10 @@ export const SolutionProviderPortalContent = ({
 
   const loadExistingProposals = async () => {
     try {
+      if (!mitigationControls || mitigationControls.length === 0) {
+        return;
+      }
+
       const { data, error } = await supabase
         .from("company_proposals")
         .select("*")
