@@ -259,7 +259,7 @@ export const SolutionProviderPortalContent = ({
         const existingOriginalEditorInfo: Record<string, { name: string; time: string; timestamp: string }> = {};
         
         data.forEach((proposal: any) => {
-          const control = mitigationControls.find(c => c.name === proposal.system_name);
+          const control = mitigationControls.find(c => c.id === proposal.control_id);
           if (control) {
             existingCosts[control.id] = proposal.system_cost.toString();
             if (proposal.details) {
@@ -410,7 +410,7 @@ export const SolutionProviderPortalContent = ({
       const newOriginalEditorInfo: Record<string, { name: string; time: string; timestamp: string }> = {};
       
       proposals.forEach((proposal) => {
-        const control = mitigationControls.find(c => c.name === proposal.system_name);
+        const control = mitigationControls.find(c => c.id === proposal.control_id);
         if (control) {
           newEditorInfo[control.id] = {
             name: proposal.editor_name,
