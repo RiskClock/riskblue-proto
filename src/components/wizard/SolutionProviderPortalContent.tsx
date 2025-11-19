@@ -388,10 +388,10 @@ export const SolutionProviderPortalContent = ({
         if (error) throw error;
       }
 
-      // Delete proposals that no longer have costs
-      const controlsWithCostsSet = new Set(controlsWithCosts.map(c => c.name));
+      // Delete proposals that no longer have costs (using control IDs)
+      const controlsWithCostsSet = new Set(controlsWithCosts.map(c => c.id));
       const proposalsToDelete = (existingProposals || [])
-        .filter(p => !controlsWithCostsSet.has(p.system_name))
+        .filter(p => !controlsWithCostsSet.has(p.control_id))
         .map(p => p.id);
 
       if (proposalsToDelete.length > 0) {
