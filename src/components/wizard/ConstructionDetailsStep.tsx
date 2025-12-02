@@ -4,7 +4,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
-import { Check } from "lucide-react";
+
 import residentialImg from "@/assets/type1-residential.avif";
 import mixedUseImg from "@/assets/type2-mixeduse.avif";
 import institutionalImg from "@/assets/type3-institutional.avif";
@@ -169,7 +169,6 @@ export const ConstructionDetailsStep = ({ data, onNext, onBack, projectId, isPro
 
         <div>
           <Label className="text-base mb-4 block">Structural Type</Label>
-          <p className="text-sm text-muted-foreground mb-4">Select all that apply</p>
           <div className="grid grid-cols-4 gap-4">
             {structuralTypes.map((type) => {
               const isSelected = (formData.structural_types || []).includes(type.id);
@@ -185,11 +184,6 @@ export const ConstructionDetailsStep = ({ data, onNext, onBack, projectId, isPro
                       : "border-2 border-border hover:border-primary/50"
                   } ${type.disabled ? "opacity-50 cursor-not-allowed" : "cursor-pointer"}`}
                 >
-                  {isSelected && (
-                    <div className="absolute top-2 right-2 bg-primary text-primary-foreground rounded-full p-1">
-                      <Check className="h-3 w-3" />
-                    </div>
-                  )}
                   <div className="h-24 bg-muted rounded mb-3 flex items-center justify-center overflow-hidden">
                     <span className="text-muted-foreground text-xs text-center px-2">{type.label}</span>
                   </div>
