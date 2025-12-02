@@ -352,7 +352,12 @@ const ProjectWizard = () => {
       
       <header className="sticky top-0 z-20 border-b bg-card no-print">
         <div className="container mx-auto px-6 py-4 flex items-center justify-between">
-          <img src={riskBlueLogo} alt="RiskBlue" className="h-8" />
+          <img 
+            src={riskBlueLogo} 
+            alt="RiskBlue" 
+            className="h-8 cursor-pointer" 
+            onClick={() => navigate("/projects")}
+          />
           <div className="flex items-center gap-6">
             <button onClick={() => navigate("/projects")} className="text-foreground hover:text-primary">
               Projects

@@ -4,6 +4,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
+import { Check } from "lucide-react";
 import residentialImg from "@/assets/type1-residential.avif";
 import mixedUseImg from "@/assets/type2-mixeduse.avif";
 import institutionalImg from "@/assets/type3-institutional.avif";
@@ -30,6 +31,13 @@ const buildingTypes = [
   { id: "house-complex", label: "House Complex", disabled: true, image: houseComplexImg },
 ];
 
+const structuralTypes = [
+  { id: "cast-in-place", label: "Cast-in-Place Reinforced Concrete", disabled: false },
+  { id: "precast", label: "Precast Concrete", disabled: false },
+  { id: "steel", label: "Steel", disabled: false },
+  { id: "mass-timber", label: "Mass Timber", disabled: false },
+];
+
 const towerTypes = [
   { id: "single", label: "Single Tower", disabled: false, image: singleTowerImg },
   { id: "double", label: "Double Tower", disabled: false, image: doubleTowerImg },
@@ -49,6 +57,7 @@ export const ConstructionDetailsStep = ({ data, onNext, onBack, projectId, isPro
   const [formData, setFormData] = useState({
     project_type: data.project_type || "",
     building_type: data.building_type || "",
+    structural_types: data.structural_types || [] as string[],
     has_podium: data.has_podium || false,
     tower_type: data.tower_type || "",
     total_floors: data.total_floors || "",
@@ -66,6 +75,7 @@ export const ConstructionDetailsStep = ({ data, onNext, onBack, projectId, isPro
     setFormData({
       project_type: data.project_type || "",
       building_type: data.building_type || "",
+      structural_types: data.structural_types || [],
       has_podium: data.has_podium || false,
       tower_type: data.tower_type || "",
       total_floors: data.total_floors || "",
@@ -78,6 +88,14 @@ export const ConstructionDetailsStep = ({ data, onNext, onBack, projectId, isPro
       above_grade_parking: data.above_grade_parking || false,
     });
   }, [data]);
+
+  const toggleStructuralType = (typeId: string) => {
+    const currentTypes = formData.structural_types || [];
+    const newTypes = currentTypes.includes(typeId)
+      ? currentTypes.filter((t: string) => t !== typeId)
+      : [...currentTypes, typeId];
+    updateFormData({ structural_types: newTypes });
+  };
 
 
   // Update parent immediately on change
@@ -148,6 +166,39 @@ export const ConstructionDetailsStep = ({ data, onNext, onBack, projectId, isPro
           </div>
         </div>
 
+
+        <div>
+          <Label className="text-base mb-4 block">Structural Type</Label>
+          <p className="text-sm text-muted-foreground mb-4">Select all that apply</p>
+          <div className="grid grid-cols-4 gap-4">
+            {structuralTypes.map((type) => {
+              const isSelected = (formData.structural_types || []).includes(type.id);
+              return (
+                <button
+                  key={type.id}
+                  type="button"
+                  disabled={type.disabled}
+                  onClick={() => toggleStructuralType(type.id)}
+                  className={`relative p-6 rounded-lg transition-all ${
+                    isSelected
+                      ? "border-4 border-primary bg-primary/5"
+                      : "border-2 border-border hover:border-primary/50"
+                  } ${type.disabled ? "opacity-50 cursor-not-allowed" : "cursor-pointer"}`}
+                >
+                  {isSelected && (
+                    <div className="absolute top-2 right-2 bg-primary text-primary-foreground rounded-full p-1">
+                      <Check className="h-3 w-3" />
+                    </div>
+                  )}
+                  <div className="h-24 bg-muted rounded mb-3 flex items-center justify-center overflow-hidden">
+                    <span className="text-muted-foreground text-xs text-center px-2">{type.label}</span>
+                  </div>
+                  <p className="text-sm text-center">{type.label}</p>
+                </button>
+              );
+            })}
+          </div>
+        </div>
 
         <div>
           <Label className="text-base mb-4 block">Tower Configuration</Label>
