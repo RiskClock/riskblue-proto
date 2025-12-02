@@ -16,6 +16,10 @@ import houseComplexImg from "@/assets/buildingtype4-housecomplex.avif";
 import singleTowerImg from "@/assets/tower1-single.avif";
 import doubleTowerImg from "@/assets/tower2-double.avif";
 import multiTowerImg from "@/assets/tower3-multi.avif";
+import castInPlaceImg from "@/assets/structuraltype_cast-in-place.png";
+import precastImg from "@/assets/structuraltype_precast.png";
+import steelImg from "@/assets/structuraltype_steel.png";
+import massTimberImg from "@/assets/structuraltype_mass_timber.png";
 
 const constructionTypes = [
   { id: "residential", label: "Residential", disabled: false, image: residentialImg },
@@ -32,10 +36,10 @@ const buildingTypes = [
 ];
 
 const structuralTypes = [
-  { id: "cast-in-place", label: "Cast-in-Place Reinforced Concrete", disabled: false },
-  { id: "precast", label: "Precast Concrete", disabled: false },
-  { id: "steel", label: "Steel", disabled: false },
-  { id: "mass-timber", label: "Mass Timber", disabled: false },
+  { id: "cast-in-place", label: "Cast-in-Place Reinforced Concrete", disabled: false, image: castInPlaceImg },
+  { id: "precast", label: "Precast Concrete", disabled: false, image: precastImg },
+  { id: "steel", label: "Steel", disabled: false, image: steelImg },
+  { id: "mass-timber", label: "Mass Timber", disabled: false, image: massTimberImg },
 ];
 
 const towerTypes = [
@@ -185,7 +189,7 @@ export const ConstructionDetailsStep = ({ data, onNext, onBack, projectId, isPro
                   } ${type.disabled ? "opacity-50 cursor-not-allowed" : "cursor-pointer"}`}
                 >
                   <div className="h-24 bg-muted rounded mb-3 flex items-center justify-center overflow-hidden">
-                    <span className="text-muted-foreground text-xs text-center px-2">{type.label}</span>
+                    <img src={type.image} alt={type.label} className="w-full h-full object-contain p-2" />
                   </div>
                   <p className="text-sm text-center">{type.label}</p>
                 </button>
