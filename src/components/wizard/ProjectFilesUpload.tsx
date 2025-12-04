@@ -324,17 +324,30 @@ export const ProjectFilesUpload = ({ projectId, onDataExtracted, setIsProcessing
       return;
     }
 
+    if (!driveAccessToken) {
+      toast({
+        title: "Not Connected",
+        description: "Please reconnect to Google Drive.",
+        variant: "destructive",
+      });
+      return;
+    }
+
     setAnalyzingFiles(true);
     setAnalysisResult(null);
 
     try {
-      const fileNames = driveFiles.map(f => f.name);
+      // Send full file objects with id, name, and mimeType for downloading
+      const filesToAnalyze = driveFiles.map(f => ({
+        id: f.id,
+        name: f.name,
+        mimeType: f.mimeType,
+      }));
       
       const response = await supabase.functions.invoke('analyze-drive-files', {
         body: {
-          fileNames,
+          files: filesToAnalyze,
           accessToken: driveAccessToken,
-          folderId: folderId.trim(),
         },
       });
 
@@ -349,7 +362,7 @@ export const ProjectFilesUpload = ({ projectId, onDataExtracted, setIsProcessing
       setAnalysisResult(response.data.analysis);
       toast({
         title: "Analysis Complete",
-        description: `Analyzed ${response.data.filesAnalyzed} files with AI.`,
+        description: `Analyzed ${response.data.filesAnalyzed} files: ${response.data.fileNames?.join(', ') || 'N/A'}`,
       });
     } catch (error) {
       console.error("Error analyzing files:", error);

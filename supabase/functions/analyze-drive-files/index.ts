@@ -43,18 +43,69 @@ Important rules:
 • The goal is a universal, standardized monitoring table for all water-related lines.
 • Output only the completed chart, clean and professional.`;
 
+interface DriveFile {
+  id: string;
+  name: string;
+  mimeType: string;
+}
+
+async function downloadFileContent(fileId: string, accessToken: string, mimeType: string): Promise<{ content: string; type: string } | null> {
+  try {
+    // For Google Docs/Sheets/Slides, export as PDF
+    let downloadUrl: string;
+    let exportMimeType = mimeType;
+    
+    if (mimeType.includes('google-apps')) {
+      // Export Google Docs as PDF
+      downloadUrl = `https://www.googleapis.com/drive/v3/files/${fileId}/export?mimeType=application/pdf`;
+      exportMimeType = 'application/pdf';
+    } else {
+      // Direct download for other files
+      downloadUrl = `https://www.googleapis.com/drive/v3/files/${fileId}?alt=media`;
+    }
+
+    const response = await fetch(downloadUrl, {
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+      },
+    });
+
+    if (!response.ok) {
+      console.error(`Failed to download file ${fileId}: ${response.status}`);
+      return null;
+    }
+
+    const arrayBuffer = await response.arrayBuffer();
+    const base64 = btoa(String.fromCharCode(...new Uint8Array(arrayBuffer)));
+    
+    return {
+      content: base64,
+      type: exportMimeType,
+    };
+  } catch (error) {
+    console.error(`Error downloading file ${fileId}:`, error);
+    return null;
+  }
+}
+
 serve(async (req) => {
-  // Handle CORS preflight requests
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
   }
 
   try {
-    const { fileNames, accessToken, folderId } = await req.json();
+    const { files, accessToken } = await req.json();
 
-    if (!fileNames || !Array.isArray(fileNames) || fileNames.length === 0) {
+    if (!files || !Array.isArray(files) || files.length === 0) {
       return new Response(
-        JSON.stringify({ error: "File names are required" }),
+        JSON.stringify({ error: "Files are required" }),
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    if (!accessToken) {
+      return new Response(
+        JSON.stringify({ error: "Access token is required" }),
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
@@ -68,19 +119,69 @@ serve(async (req) => {
       );
     }
 
-    // Build the user message with file information
-    const fileListText = fileNames.map((name: string, i: number) => `${i + 1}. ${name}`).join("\n");
+    // Filter for relevant files (A2.01 to A2.11 or similar drawing files)
+    const relevantFiles = (files as DriveFile[]).filter(file => {
+      const name = file.name.toLowerCase();
+      // Include PDF files and image files that might be drawings
+      return name.includes('a2') || 
+             name.includes('plumbing') || 
+             name.includes('mechanical') ||
+             name.includes('fire') ||
+             file.mimeType.includes('pdf') ||
+             file.mimeType.includes('image');
+    });
+
+    console.log(`Found ${relevantFiles.length} relevant files out of ${files.length} total`);
+
+    // Download file contents
+    const fileContents: Array<{ name: string; content: string; mimeType: string }> = [];
     
-    const userMessage = `I have the following building drawing files in my Google Drive folder:
+    for (const file of relevantFiles.slice(0, 10)) { // Limit to 10 files to avoid timeout
+      console.log(`Downloading: ${file.name}`);
+      const downloaded = await downloadFileContent(file.id, accessToken, file.mimeType);
+      if (downloaded) {
+        fileContents.push({
+          name: file.name,
+          content: downloaded.content,
+          mimeType: downloaded.type,
+        });
+      }
+    }
 
-${fileListText}
+    if (fileContents.length === 0) {
+      return new Response(
+        JSON.stringify({ error: "Could not download any files. Please check file permissions." }),
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
 
-Please analyze these files based on their names and provide the water system monitoring chart. Focus on files A2.01 to A2.11 as they typically contain the relevant plumbing and fire protection drawings.
+    console.log(`Successfully downloaded ${fileContents.length} files`);
 
-If you cannot see the actual content of the drawings (which is expected), please provide a template/example of what information should be extracted from each relevant drawing file, and explain what to look for in each file based on standard architectural drawing conventions.`;
+    // Build messages with file content for Gemini
+    const messages: any[] = [
+      { role: "system", content: ANALYSIS_PROMPT },
+    ];
 
-    console.log("Sending request to Lovable AI Gateway...");
-    console.log("File count:", fileNames.length);
+    // For Gemini, we can send images/PDFs as parts
+    const userContent: any[] = [
+      { type: "text", text: `I have ${fileContents.length} building drawing files to analyze. Please extract all water system information and create the monitoring chart.\n\nFiles included:\n${fileContents.map(f => `- ${f.name}`).join('\n')}` }
+    ];
+
+    // Add file contents as images/documents
+    for (const file of fileContents) {
+      if (file.mimeType.includes('image') || file.mimeType.includes('pdf')) {
+        userContent.push({
+          type: "image_url",
+          image_url: {
+            url: `data:${file.mimeType};base64,${file.content}`
+          }
+        });
+      }
+    }
+
+    messages.push({ role: "user", content: userContent });
+
+    console.log("Sending request to Lovable AI Gateway with file contents...");
 
     const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
       method: "POST",
@@ -90,10 +191,8 @@ If you cannot see the actual content of the drawings (which is expected), please
       },
       body: JSON.stringify({
         model: "google/gemini-3-pro-preview",
-        messages: [
-          { role: "system", content: ANALYSIS_PROMPT },
-          { role: "user", content: userMessage }
-        ],
+        messages,
+        max_tokens: 8000,
       }),
     });
 
@@ -115,7 +214,7 @@ If you cannot see the actual content of the drawings (which is expected), please
       }
       
       return new Response(
-        JSON.stringify({ error: "Failed to analyze files" }),
+        JSON.stringify({ error: `AI analysis failed: ${errorText}` }),
         { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
@@ -136,7 +235,8 @@ If you cannot see the actual content of the drawings (which is expected), please
     return new Response(
       JSON.stringify({ 
         analysis: analysisResult,
-        filesAnalyzed: fileNames.length 
+        filesAnalyzed: fileContents.length,
+        fileNames: fileContents.map(f => f.name)
       }),
       { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
