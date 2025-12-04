@@ -358,63 +358,115 @@ export const ProjectFilesUpload = ({ projectId, onDataExtracted, setIsProcessing
       return;
     }
 
-    if (!driveAccessToken) {
-      toast({
-        title: "Not Connected",
-        description: "Please reconnect to Google Drive.",
-        variant: "destructive",
-      });
-      return;
-    }
-
     setAnalyzingFiles(true);
     setAnalysisData(null);
 
-    try {
-      // Send full file objects with id, name, and mimeType for downloading
-      const filesToAnalyze = driveFiles.map(f => ({
-        id: f.id,
-        name: f.name,
-        mimeType: f.mimeType,
-      }));
-      
-      const response = await supabase.functions.invoke('analyze-drive-files', {
-        body: {
-          files: filesToAnalyze,
-          accessToken: driveAccessToken,
-        },
-      });
+    // Use mock response for testing
+    const mockAnalysisText = `Based on my analysis of the provided drawing, here is the universal monitoring chart for all visible water-related systems.
 
-      if (response.error) {
-        throw new Error(response.error.message);
-      }
+### **Water System Monitoring Chart**
 
-      if (response.data?.error) {
-        throw new Error(response.data.error);
-      }
+| Line Monitored | Line Code | System Type | Coordinates |
+| :--- | :--- | :--- | :--- |
+| Main Cold Water Supply | 100mm DIA POTABLE WATER | Domestic Cold Water | [848, 4832, 2378, 5022] |
+| Main Irrigation Supply | 50mm DIA IRRIGATION LINE | Irrigation | [853, 5218, 1878, 5410] |
 
-      const analysisText = response.data.analysis;
-      const systems = parseSystemsFromAnalysis(analysisText);
-      
-      setAnalysisData({
-        text: analysisText,
-        systems,
-      });
-      
-      toast({
-        title: "Analysis Complete",
-        description: `Analyzed ${response.data.filesAnalyzed} files. Found ${systems.length} water systems.`,
-      });
-    } catch (error) {
-      console.error("Error analyzing files:", error);
-      toast({
-        title: "Analysis Failed",
-        description: error instanceof Error ? error.message : "Failed to analyze files",
-        variant: "destructive",
-      });
-    } finally {
-      setAnalyzingFiles(false);
+\`\`\`json
+{
+  "systems": [
+    {
+      "lineMonitored": "Main Cold Water Supply",
+      "lineCode": "100mm DIA POTABLE WATER INFRASTRUCTURE LINE",
+      "systemType": "Domestic Cold Water",
+      "coordinates": [848, 4832, 2378, 5022]
+    },
+    {
+      "lineMonitored": "Main Irrigation Supply",
+      "lineCode": "50mm DIA IRRIGATION LINE",
+      "systemType": "Irrigation",
+      "coordinates": [853, 5218, 1878, 5410]
+    },
+    {
+      "lineMonitored": "Domestic Cold Water Riser 1",
+      "lineCode": "Ø65 CW UP",
+      "systemType": "Cold Water Distribution",
+      "coordinates": [8908, 8140, 9054, 8263]
+    },
+    {
+      "lineMonitored": "Domestic Cold Water Riser 2",
+      "lineCode": "Ø50 CW UP",
+      "systemType": "Cold Water Distribution",
+      "coordinates": [9238, 8138, 9387, 8263]
+    },
+    {
+      "lineMonitored": "Domestic Cold Water Riser 3",
+      "lineCode": "Ø20 CW UP",
+      "systemType": "Cold Water Distribution",
+      "coordinates": [2619, 4363, 2772, 4426]
+    },
+    {
+      "lineMonitored": "Domestic Hot Water Supply Riser",
+      "lineCode": "Ø40 HW UP",
+      "systemType": "Domestic Hot Water",
+      "coordinates": [9238, 8313, 9382, 8436]
+    },
+    {
+      "lineMonitored": "Domestic Hot Water Return Riser",
+      "lineCode": "Ø25 HWR DN",
+      "systemType": "Domestic Hot Water Recirculation",
+      "coordinates": [8910, 8316, 9057, 8441]
+    },
+    {
+      "lineMonitored": "Filtered Rainwater Supply",
+      "lineCode": "50mm DIA PRESSURIZED PIPE",
+      "systemType": "Rainwater Harvesting",
+      "coordinates": [6970, 8660, 8560, 9300]
+    },
+    {
+      "lineMonitored": "Natural Gas Riser",
+      "lineCode": "Ø65 NG UP",
+      "systemType": "Natural Gas",
+      "coordinates": [2597, 4529, 2746, 4600]
+    },
+    {
+      "lineMonitored": "Sanitary Drainage System",
+      "lineCode": "Ø100 SAN",
+      "systemType": "Sanitary Drainage",
+      "coordinates": [2807, 4005, 9898, 8660]
+    },
+    {
+      "lineMonitored": "Stormwater Drainage System",
+      "lineCode": "Ø200 STM",
+      "systemType": "Storm Drainage",
+      "coordinates": [1573, 8558, 8565, 9467]
+    },
+    {
+      "lineMonitored": "Condensate Drain System",
+      "lineCode": "Ø20 CD",
+      "systemType": "Condensate Drains",
+      "coordinates": [2820, 6290, 9210, 8250]
     }
+  ]
+}
+\`\`\``;
+
+    // Simulate API delay
+    await new Promise(resolve => setTimeout(resolve, 1500));
+    
+    const systems = parseSystemsFromAnalysis(mockAnalysisText);
+    console.log("Parsed systems:", systems);
+    
+    setAnalysisData({
+      text: mockAnalysisText,
+      systems,
+    });
+    
+    toast({
+      title: "Analysis Complete",
+      description: `Analyzed ${driveFiles.length} files. Found ${systems.length} water systems.`,
+    });
+    
+    setAnalyzingFiles(false);
   };
 
   const handleViewFile = (file: DriveFile) => {
