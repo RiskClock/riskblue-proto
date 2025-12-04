@@ -47,25 +47,28 @@ interface DriveFile {
   mimeType: string;
 }
 
-async function downloadFileContent(fileId: string, accessToken: string, mimeType: string): Promise<{ content: string; type: string } | null> {
+interface GeminiFile {
+  name: string;
+  uri: string;
+  mimeType: string;
+  state: string;
+}
+
+// Download file from Google Drive
+async function downloadFromDrive(fileId: string, accessToken: string, mimeType: string): Promise<{ data: ArrayBuffer; mimeType: string } | null> {
   try {
-    // For Google Docs/Sheets/Slides, export as PDF
     let downloadUrl: string;
     let exportMimeType = mimeType;
     
     if (mimeType.includes('google-apps')) {
-      // Export Google Docs as PDF
       downloadUrl = `https://www.googleapis.com/drive/v3/files/${fileId}/export?mimeType=application/pdf`;
       exportMimeType = 'application/pdf';
     } else {
-      // Direct download for other files
       downloadUrl = `https://www.googleapis.com/drive/v3/files/${fileId}?alt=media`;
     }
 
     const response = await fetch(downloadUrl, {
-      headers: {
-        Authorization: `Bearer ${accessToken}`,
-      },
+      headers: { Authorization: `Bearer ${accessToken}` },
     });
 
     if (!response.ok) {
@@ -74,14 +77,171 @@ async function downloadFileContent(fileId: string, accessToken: string, mimeType
     }
 
     const arrayBuffer = await response.arrayBuffer();
-    const base64 = btoa(String.fromCharCode(...new Uint8Array(arrayBuffer)));
-    
     return {
-      content: base64,
-      type: exportMimeType,
+      data: arrayBuffer,
+      mimeType: exportMimeType,
     };
   } catch (error) {
     console.error(`Error downloading file ${fileId}:`, error);
+    return null;
+  }
+}
+
+// Upload file to Gemini Files API
+async function uploadToGemini(fileName: string, data: ArrayBuffer, mimeType: string, apiKey: string): Promise<GeminiFile | null> {
+  try {
+    console.log(`Uploading ${fileName} to Gemini Files API...`);
+    
+    const byteLength = data.byteLength;
+    
+    // Step 1: Start resumable upload
+    const startResponse = await fetch(
+      `https://generativelanguage.googleapis.com/upload/v1beta/files?key=${apiKey}`,
+      {
+        method: "POST",
+        headers: {
+          "X-Goog-Upload-Protocol": "resumable",
+          "X-Goog-Upload-Command": "start",
+          "X-Goog-Upload-Header-Content-Length": byteLength.toString(),
+          "X-Goog-Upload-Header-Content-Type": mimeType,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          file: { display_name: fileName },
+        }),
+      }
+    );
+
+    if (!startResponse.ok) {
+      const errorText = await startResponse.text();
+      console.error(`Failed to start upload for ${fileName}: ${startResponse.status} - ${errorText}`);
+      return null;
+    }
+
+    const uploadUrl = startResponse.headers.get("X-Goog-Upload-URL");
+    if (!uploadUrl) {
+      console.error(`No upload URL returned for ${fileName}`);
+      return null;
+    }
+
+    // Step 2: Upload the file data
+    const uploadResponse = await fetch(uploadUrl, {
+      method: "POST",
+      headers: {
+        "X-Goog-Upload-Command": "upload, finalize",
+        "X-Goog-Upload-Offset": "0",
+        "Content-Type": mimeType,
+      },
+      body: data,
+    });
+
+    if (!uploadResponse.ok) {
+      const errorText = await uploadResponse.text();
+      console.error(`Failed to upload ${fileName}: ${uploadResponse.status} - ${errorText}`);
+      return null;
+    }
+
+    const fileInfo = await uploadResponse.json();
+    console.log(`Uploaded ${fileName}: ${fileInfo.file?.uri || fileInfo.uri}`);
+    
+    return {
+      name: fileInfo.file?.name || fileInfo.name,
+      uri: fileInfo.file?.uri || fileInfo.uri,
+      mimeType: fileInfo.file?.mimeType || mimeType,
+      state: fileInfo.file?.state || "ACTIVE",
+    };
+  } catch (error) {
+    console.error(`Error uploading ${fileName} to Gemini:`, error);
+    return null;
+  }
+}
+
+// Wait for file to be processed
+async function waitForFileProcessing(fileName: string, apiKey: string, maxAttempts = 10): Promise<boolean> {
+  for (let i = 0; i < maxAttempts; i++) {
+    try {
+      const response = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/${fileName}?key=${apiKey}`
+      );
+      
+      if (!response.ok) {
+        console.error(`Error checking file status: ${response.status}`);
+        return false;
+      }
+      
+      const fileInfo = await response.json();
+      console.log(`File ${fileName} state: ${fileInfo.state}`);
+      
+      if (fileInfo.state === "ACTIVE") {
+        return true;
+      } else if (fileInfo.state === "FAILED") {
+        console.error(`File processing failed for ${fileName}`);
+        return false;
+      }
+      
+      // Wait 2 seconds before checking again
+      await new Promise(resolve => setTimeout(resolve, 2000));
+    } catch (error) {
+      console.error(`Error checking file status:`, error);
+      return false;
+    }
+  }
+  
+  console.error(`Timeout waiting for file ${fileName} to process`);
+  return false;
+}
+
+// Call Gemini generateContent with file references
+async function analyzeWithGemini(files: GeminiFile[], apiKey: string): Promise<string | null> {
+  try {
+    const parts: any[] = [
+      { text: ANALYSIS_PROMPT },
+      { text: `\n\nI have ${files.length} building drawing files to analyze. Please extract all water system information and create the monitoring chart.\n\nFiles included:\n${files.map(f => `- ${f.name}`).join('\n')}` },
+    ];
+
+    // Add file references
+    for (const file of files) {
+      parts.push({
+        file_data: {
+          file_uri: file.uri,
+          mime_type: file.mimeType,
+        },
+      });
+    }
+
+    console.log(`Calling Gemini generateContent with ${files.length} files...`);
+
+    const response = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-pro:generateContent?key=${apiKey}`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          contents: [{ role: "user", parts }],
+          generationConfig: {
+            maxOutputTokens: 8000,
+          },
+        }),
+      }
+    );
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error(`Gemini API error: ${response.status} - ${errorText}`);
+      return null;
+    }
+
+    const data = await response.json();
+    const content = data.candidates?.[0]?.content?.parts?.[0]?.text;
+    
+    if (!content) {
+      console.error("No content in Gemini response:", JSON.stringify(data));
+      return null;
+    }
+
+    return content;
+  } catch (error) {
+    console.error("Error calling Gemini:", error);
     return null;
   }
 }
@@ -108,19 +268,18 @@ serve(async (req) => {
       );
     }
 
-    const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
-    if (!LOVABLE_API_KEY) {
-      console.error("LOVABLE_API_KEY is not configured");
+    const GEMINI_API_KEY = Deno.env.get("GEMINI_API_KEY");
+    if (!GEMINI_API_KEY) {
+      console.error("GEMINI_API_KEY is not configured");
       return new Response(
-        JSON.stringify({ error: "AI service is not configured" }),
+        JSON.stringify({ error: "Gemini API key is not configured" }),
         { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
-    // Filter for relevant files (A2.01 to A2.11 or similar drawing files)
+    // Filter for relevant files
     const relevantFiles = (files as DriveFile[]).filter(file => {
       const name = file.name.toLowerCase();
-      // Include PDF files and image files that might be drawings
       return name.includes('a2') || 
              name.includes('plumbing') || 
              name.includes('mechanical') ||
@@ -131,99 +290,53 @@ serve(async (req) => {
 
     console.log(`Found ${relevantFiles.length} relevant files out of ${files.length} total`);
 
-    // Download file contents
-    const fileContents: Array<{ name: string; content: string; mimeType: string }> = [];
+    // Download and upload files to Gemini
+    const uploadedFiles: GeminiFile[] = [];
     
-    for (const file of relevantFiles.slice(0, 10)) { // Limit to 10 files to avoid timeout
-      console.log(`Downloading: ${file.name}`);
-      const downloaded = await downloadFileContent(file.id, accessToken, file.mimeType);
-      if (downloaded) {
-        fileContents.push({
-          name: file.name,
-          content: downloaded.content,
-          mimeType: downloaded.type,
-        });
+    for (const file of relevantFiles.slice(0, 20)) { // Limit to 20 files
+      console.log(`Processing: ${file.name}`);
+      
+      // Download from Google Drive
+      const downloaded = await downloadFromDrive(file.id, accessToken, file.mimeType);
+      if (!downloaded) {
+        console.log(`Skipping ${file.name} - download failed`);
+        continue;
       }
+
+      // Upload to Gemini Files API
+      const uploaded = await uploadToGemini(file.name, downloaded.data, downloaded.mimeType, GEMINI_API_KEY);
+      if (!uploaded) {
+        console.log(`Skipping ${file.name} - upload failed`);
+        continue;
+      }
+
+      // Wait for processing if not already active
+      if (uploaded.state !== "ACTIVE") {
+        const isReady = await waitForFileProcessing(uploaded.name, GEMINI_API_KEY);
+        if (!isReady) {
+          console.log(`Skipping ${file.name} - processing failed`);
+          continue;
+        }
+      }
+
+      uploadedFiles.push(uploaded);
     }
 
-    if (fileContents.length === 0) {
+    if (uploadedFiles.length === 0) {
       return new Response(
-        JSON.stringify({ error: "Could not download any files. Please check file permissions." }),
+        JSON.stringify({ error: "Could not process any files. Please check file permissions and try again." }),
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
-    console.log(`Successfully downloaded ${fileContents.length} files`);
+    console.log(`Successfully uploaded ${uploadedFiles.length} files to Gemini`);
 
-    // Build messages with file content for Gemini
-    const messages: any[] = [
-      { role: "system", content: ANALYSIS_PROMPT },
-    ];
-
-    // For Gemini, we can send images/PDFs as parts
-    const userContent: any[] = [
-      { type: "text", text: `I have ${fileContents.length} building drawing files to analyze. Please extract all water system information and create the monitoring chart.\n\nFiles included:\n${fileContents.map(f => `- ${f.name}`).join('\n')}` }
-    ];
-
-    // Add file contents as images/documents
-    for (const file of fileContents) {
-      if (file.mimeType.includes('image') || file.mimeType.includes('pdf')) {
-        userContent.push({
-          type: "image_url",
-          image_url: {
-            url: `data:${file.mimeType};base64,${file.content}`
-          }
-        });
-      }
-    }
-
-    messages.push({ role: "user", content: userContent });
-
-    console.log("Sending request to Lovable AI Gateway with file contents...");
-
-    const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${LOVABLE_API_KEY}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        model: "google/gemini-3-pro-preview",
-        messages,
-        max_tokens: 8000,
-      }),
-    });
-
-    if (!response.ok) {
-      const errorText = await response.text();
-      console.error("AI gateway error:", response.status, errorText);
-      
-      if (response.status === 429) {
-        return new Response(
-          JSON.stringify({ error: "Rate limit exceeded. Please try again in a moment." }),
-          { status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-        );
-      }
-      if (response.status === 402) {
-        return new Response(
-          JSON.stringify({ error: "AI usage limit reached. Please add credits to continue." }),
-          { status: 402, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-        );
-      }
-      
-      return new Response(
-        JSON.stringify({ error: `AI analysis failed: ${errorText}` }),
-        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
-    }
-
-    const data = await response.json();
-    const analysisResult = data.choices?.[0]?.message?.content;
+    // Analyze with Gemini
+    const analysisResult = await analyzeWithGemini(uploadedFiles, GEMINI_API_KEY);
 
     if (!analysisResult) {
-      console.error("No content in AI response:", data);
       return new Response(
-        JSON.stringify({ error: "No analysis result received" }),
+        JSON.stringify({ error: "AI analysis failed. Please try again." }),
         { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
@@ -233,8 +346,8 @@ serve(async (req) => {
     return new Response(
       JSON.stringify({ 
         analysis: analysisResult,
-        filesAnalyzed: fileContents.length,
-        fileNames: fileContents.map(f => f.name)
+        filesAnalyzed: uploadedFiles.length,
+        fileNames: uploadedFiles.map(f => f.name.replace('files/', ''))
       }),
       { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
