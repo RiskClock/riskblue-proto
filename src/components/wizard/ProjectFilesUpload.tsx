@@ -1,0 +1,513 @@
+import { useState, useRef } from "react";
+import { Card } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
+import { Loader2, Upload, FileText, FolderOpen, Link2, Check, X, File } from "lucide-react";
+import { useToast } from "@/hooks/use-toast";
+import { extractPDFData, extractKeyInformation, PDFMetadata, formatFileSize as formatFileSizeUtil } from "@/lib/pdfProcessor";
+import { PDFAnalysisAnimation } from "../PDFAnalysisAnimation";
+import { supabase } from "@/integrations/supabase/client";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+
+interface DriveFile {
+  id: string;
+  name: string;
+  mimeType: string;
+  size?: string;
+  modifiedTime: string;
+  webViewLink?: string;
+  iconLink?: string;
+}
+
+interface ProjectFilesUploadProps {
+  projectId: string;
+  onDataExtracted?: (data: any) => void;
+  isProcessingWebhook?: boolean;
+  setIsProcessingWebhook?: (value: boolean) => void;
+}
+
+export const ProjectFilesUpload = ({ projectId, onDataExtracted, setIsProcessingWebhook }: ProjectFilesUploadProps) => {
+  const { toast } = useToast();
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const abortControllerRef = useRef<AbortController | null>(null);
+  
+  // Local upload states
+  const [uploadedFile, setUploadedFile] = useState<File | null>(null);
+  const [uploading, setUploading] = useState(false);
+  const [responseData, setResponseData] = useState<any>(null);
+  const [showDebugInfo, setShowDebugInfo] = useState(false);
+  
+  // PDF Analysis states
+  const [analyzing, setAnalyzing] = useState(false);
+  const [pdfMetadata, setPdfMetadata] = useState<PDFMetadata | null>(null);
+  const [currentPage, setCurrentPage] = useState(0);
+  const [extractedDates, setExtractedDates] = useState<string[]>([]);
+  const [extractedMilestones, setExtractedMilestones] = useState<string[]>([]);
+  const [extractedText, setExtractedText] = useState<string[]>([]);
+  const [webhookComplete, setWebhookComplete] = useState(false);
+  
+  // Google Drive states
+  const [driveConnected, setDriveConnected] = useState(false);
+  const [driveAccessToken, setDriveAccessToken] = useState<string | null>(null);
+  const [folderId, setFolderId] = useState("");
+  const [driveFiles, setDriveFiles] = useState<DriveFile[]>([]);
+  const [loadingDriveFiles, setLoadingDriveFiles] = useState(false);
+  const [connectingDrive, setConnectingDrive] = useState(false);
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      setUploadedFile(file);
+    }
+  };
+
+  const handleStop = () => {
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+    }
+    setUploading(false);
+    setAnalyzing(false);
+    setWebhookComplete(false);
+    setPdfMetadata(null);
+    toast({
+      title: "Upload cancelled",
+      description: "The file upload has been stopped.",
+    });
+  };
+
+  const handleUpload = async () => {
+    if (!uploadedFile) return;
+
+    abortControllerRef.current = new AbortController();
+
+    setUploading(true);
+    setAnalyzing(true);
+    setWebhookComplete(false);
+    
+    setPdfMetadata({
+      pageCount: 0,
+      fileSize: formatFileSizeUtil(uploadedFile.size),
+      pages: []
+    });
+    
+    setCurrentPage(0);
+    setExtractedDates([]);
+    setExtractedMilestones([]);
+    setExtractedText([]);
+
+    const pdfProcessingPromise = extractPDFData(
+      uploadedFile,
+      (progress, pageNumber) => {
+        setCurrentPage(pageNumber);
+      },
+      (pageCount) => {
+        setPdfMetadata({
+          pageCount,
+          fileSize: formatFileSizeUtil(uploadedFile.size),
+          pages: []
+        });
+      }
+    ).then((metadata) => {
+      setPdfMetadata(metadata);
+      const { dates, milestones } = extractKeyInformation(metadata.pages);
+      setExtractedDates(dates);
+      setExtractedMilestones(milestones);
+      setExtractedText(metadata.pages.map(p => p.text).filter(t => t.length > 50));
+    }).catch((error) => {
+      if (error.name === 'AbortError') return;
+      console.error("PDF processing error:", error);
+      toast({
+        title: "Warning",
+        description: "Could not analyze PDF locally, but upload continues.",
+        variant: "destructive",
+      });
+    });
+
+    const formData = new FormData();
+    formData.append("file", uploadedFile);
+    formData.append("projectId", projectId);
+
+    const webhookPromise = (async () => {
+      try {
+        const response = await fetch(
+          "https://riskclock.app.n8n.cloud/webhook/478b15fa-6098-4d3d-b51d-77ae4d0a1b4e",
+          {
+            method: "POST",
+            body: formData,
+            signal: abortControllerRef.current?.signal,
+          }
+        );
+
+        if (!response.ok) {
+          const errorText = await response.text();
+          console.error("Upload failed:", errorText);
+          throw new Error("Failed to upload file");
+        }
+
+        const data = await response.text();
+        setResponseData(data);
+        
+        try {
+          const parsedData = JSON.parse(data);
+          if (onDataExtracted) {
+            onDataExtracted(parsedData);
+          }
+          toast({
+            title: "Success",
+            description: "File uploaded and analyzed. Information has been pre-filled.",
+          });
+        } catch (e) {
+          console.log("Response is not JSON, skipping auto-fill");
+          toast({
+            title: "File uploaded",
+            description: "Document processed successfully",
+          });
+        }
+      } catch (error) {
+        if (error instanceof Error && error.name === 'AbortError') {
+          return;
+        }
+        console.error("Upload error:", error);
+        toast({
+          title: "Error",
+          description: error instanceof Error ? error.message : "Failed to upload file",
+          variant: "destructive",
+        });
+      } finally {
+        setWebhookComplete(true);
+      }
+    })();
+
+    await Promise.all([pdfProcessingPromise, webhookPromise]);
+    setUploading(false);
+    setAnalyzing(false);
+  };
+
+  const handleConnectGoogleDrive = async () => {
+    setConnectingDrive(true);
+    try {
+      const { data, error } = await supabase.auth.signInWithOAuth({
+        provider: 'google',
+        options: {
+          scopes: 'https://www.googleapis.com/auth/drive.readonly',
+          queryParams: {
+            access_type: 'offline',
+            prompt: 'consent',
+          },
+          redirectTo: window.location.href,
+        },
+      });
+
+      if (error) {
+        throw error;
+      }
+    } catch (error) {
+      console.error("Google Drive connection error:", error);
+      toast({
+        title: "Connection Failed",
+        description: "Could not connect to Google Drive. Please try again.",
+        variant: "destructive",
+      });
+      setConnectingDrive(false);
+    }
+  };
+
+  // Check for provider token on mount and after OAuth redirect
+  useState(() => {
+    const checkSession = async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session?.provider_token) {
+        setDriveAccessToken(session.provider_token);
+        setDriveConnected(true);
+      }
+    };
+    checkSession();
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      if (session?.provider_token) {
+        setDriveAccessToken(session.provider_token);
+        setDriveConnected(true);
+        setConnectingDrive(false);
+      }
+    });
+
+    return () => subscription.unsubscribe();
+  });
+
+  const handleLoadDriveFiles = async () => {
+    if (!folderId.trim() || !driveAccessToken) {
+      toast({
+        title: "Missing Information",
+        description: "Please enter a Google Drive folder ID.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setLoadingDriveFiles(true);
+    setDriveFiles([]);
+
+    try {
+      let allFiles: DriveFile[] = [];
+      let nextPageToken: string | null = null;
+
+      do {
+        const response = await supabase.functions.invoke('list-drive-files', {
+          body: {
+            folderId: folderId.trim(),
+            accessToken: driveAccessToken,
+            pageToken: nextPageToken,
+          },
+        });
+
+        if (response.error) {
+          throw new Error(response.error.message);
+        }
+
+        const data = response.data;
+        if (data.error) {
+          throw new Error(data.error);
+        }
+
+        allFiles = [...allFiles, ...(data.files || [])];
+        nextPageToken = data.nextPageToken || null;
+      } while (nextPageToken);
+
+      setDriveFiles(allFiles);
+      
+      if (allFiles.length === 0) {
+        toast({
+          title: "No Files Found",
+          description: "The folder appears to be empty or inaccessible.",
+        });
+      } else {
+        toast({
+          title: "Files Loaded",
+          description: `Found ${allFiles.length} file(s) in the folder.`,
+        });
+      }
+    } catch (error) {
+      console.error("Error loading Drive files:", error);
+      toast({
+        title: "Error",
+        description: error instanceof Error ? error.message : "Failed to load files from Google Drive",
+        variant: "destructive",
+      });
+    } finally {
+      setLoadingDriveFiles(false);
+    }
+  };
+
+  const handleDisconnectDrive = () => {
+    setDriveConnected(false);
+    setDriveAccessToken(null);
+    setDriveFiles([]);
+    setFolderId("");
+  };
+
+  const formatFileSize = (bytes?: string) => {
+    if (!bytes) return "—";
+    const size = parseInt(bytes);
+    if (size < 1024) return `${size} B`;
+    if (size < 1024 * 1024) return `${(size / 1024).toFixed(1)} KB`;
+    return `${(size / (1024 * 1024)).toFixed(1)} MB`;
+  };
+
+  return (
+    <Card className="p-6 space-y-4 mb-6">
+      <div className="space-y-3">
+        <button
+          onClick={() => setShowDebugInfo(!showDebugInfo)}
+          className="text-sm font-medium hover:text-primary transition-colors cursor-pointer text-left"
+        >
+          Upload Project Files
+          {showDebugInfo && <span className="ml-2 text-xs text-muted-foreground">(Debug Mode)</span>}
+        </button>
+        
+        <Tabs defaultValue="local" className="w-full">
+          <TabsList className="grid w-full grid-cols-2">
+            <TabsTrigger value="local" className="flex items-center gap-2">
+              <Upload className="w-4 h-4" />
+              Local Upload
+            </TabsTrigger>
+            <TabsTrigger value="drive" className="flex items-center gap-2">
+              <FolderOpen className="w-4 h-4" />
+              Google Drive
+            </TabsTrigger>
+          </TabsList>
+          
+          <TabsContent value="local" className="space-y-4 mt-4">
+            {/* Hidden file input */}
+            <Input
+              ref={fileInputRef}
+              type="file"
+              onChange={handleFileChange}
+              disabled={uploading}
+              className="hidden"
+              accept=".pdf"
+            />
+            
+            {/* Visual upload zone */}
+            <div className="flex gap-2 items-center">
+              <button
+                onClick={() => fileInputRef.current?.click()}
+                disabled={uploading}
+                className="flex-1 border-2 border-dashed border-muted-foreground/30 rounded-lg p-4 hover:border-muted-foreground/50 hover:bg-muted/50 transition-all cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                <div className="flex items-center gap-3">
+                  <div className="p-2 rounded-md bg-muted transition-colors">
+                    {uploadedFile ? (
+                      <FileText className="w-5 h-5 text-muted-foreground" />
+                    ) : (
+                      <Upload className="w-5 h-5 text-muted-foreground" />
+                    )}
+                  </div>
+                  <div className="text-left flex-1">
+                    {uploadedFile ? (
+                      <>
+                        <p className="text-sm font-medium text-foreground truncate">{uploadedFile.name}</p>
+                        <p className="text-xs text-muted-foreground">Click to change file</p>
+                      </>
+                    ) : (
+                      <>
+                        <p className="text-sm font-medium text-foreground">Click to select PDF</p>
+                        <p className="text-xs text-muted-foreground">Drag and drop or click to browse</p>
+                      </>
+                    )}
+                  </div>
+                </div>
+              </button>
+              
+              <Button 
+                onClick={uploading ? handleStop : handleUpload} 
+                disabled={!uploadedFile && !uploading}
+                variant={uploading ? "destructive" : "default"}
+              >
+                {uploading ? (
+                  <>
+                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                    Stop
+                  </>
+                ) : (
+                  "Upload"
+                )}
+              </Button>
+            </div>
+          </TabsContent>
+          
+          <TabsContent value="drive" className="space-y-4 mt-4">
+            {!driveConnected ? (
+              <div className="border-2 border-dashed border-muted-foreground/30 rounded-lg p-6 text-center">
+                <FolderOpen className="w-10 h-10 text-muted-foreground mx-auto mb-3" />
+                <p className="text-sm font-medium mb-2">Connect to Google Drive</p>
+                <p className="text-xs text-muted-foreground mb-4">
+                  Sign in with your Google account to access files from your Drive
+                </p>
+                <Button onClick={handleConnectGoogleDrive} disabled={connectingDrive}>
+                  {connectingDrive ? (
+                    <>
+                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                      Connecting...
+                    </>
+                  ) : (
+                    <>
+                      <Link2 className="w-4 h-4 mr-2" />
+                      Connect Google Drive
+                    </>
+                  )}
+                </Button>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                <div className="flex items-center justify-between p-3 bg-muted/50 rounded-lg">
+                  <div className="flex items-center gap-2">
+                    <Check className="w-4 h-4 text-green-500" />
+                    <span className="text-sm font-medium">Google Drive Connected</span>
+                  </div>
+                  <Button variant="ghost" size="sm" onClick={handleDisconnectDrive}>
+                    <X className="w-4 h-4" />
+                  </Button>
+                </div>
+                
+                <div className="space-y-2">
+                  <label className="text-sm font-medium">Folder ID</label>
+                  <p className="text-xs text-muted-foreground">
+                    Enter the Google Drive folder ID (the string at the end of the folder URL)
+                  </p>
+                  <div className="flex gap-2">
+                    <Input
+                      placeholder="e.g., 1ABC123xyz..."
+                      value={folderId}
+                      onChange={(e) => setFolderId(e.target.value)}
+                      disabled={loadingDriveFiles}
+                    />
+                    <Button onClick={handleLoadDriveFiles} disabled={loadingDriveFiles || !folderId.trim()}>
+                      {loadingDriveFiles ? (
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                      ) : (
+                        "Load Files"
+                      )}
+                    </Button>
+                  </div>
+                </div>
+
+                {/* Drive files list */}
+                {driveFiles.length > 0 && (
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium">Files in Folder ({driveFiles.length})</label>
+                    <div className="border rounded-lg divide-y max-h-64 overflow-y-auto">
+                      {driveFiles.map((file) => (
+                        <div key={file.id} className="flex items-center gap-3 p-3 hover:bg-muted/50">
+                          <div className="p-1.5 rounded bg-muted">
+                            <File className="w-4 h-4 text-muted-foreground" />
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-medium truncate">{file.name}</p>
+                            <p className="text-xs text-muted-foreground">
+                              {formatFileSize(file.size)} • {new Date(file.modifiedTime).toLocaleDateString()}
+                            </p>
+                          </div>
+                          {file.webViewLink && (
+                            <a
+                              href={file.webViewLink}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="text-xs text-primary hover:underline"
+                            >
+                              View
+                            </a>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+          </TabsContent>
+        </Tabs>
+      </div>
+
+      {/* PDF Analysis Animation */}
+      {analyzing && pdfMetadata && (
+        <PDFAnalysisAnimation
+          pageCount={pdfMetadata.pageCount}
+          currentPage={currentPage}
+          extractedText={extractedText}
+          extractedDates={extractedDates}
+          extractedMilestones={extractedMilestones}
+          isComplete={webhookComplete}
+        />
+      )}
+
+      {showDebugInfo && responseData && (
+        <div className="space-y-2 pt-4 border-t">
+          <label className="text-sm font-medium">Response</label>
+          <pre className="bg-muted/30 rounded-lg p-4 overflow-auto max-h-[400px] text-xs">
+            {responseData}
+          </pre>
+        </div>
+      )}
+    </Card>
+  );
+};

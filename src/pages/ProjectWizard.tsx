@@ -20,7 +20,7 @@ import { WaterMitigationGuidelinesStep } from "@/components/wizard/WaterMitigati
 import { CollaboratorManagementStep } from "@/components/wizard/CollaboratorManagementStep";
 import { ProposalsStep } from "@/components/wizard/ProposalsStep";
 import { ImplementationScheduleStep } from "@/components/wizard/ImplementationScheduleStep";
-import { DocumentUploadChat } from "@/components/DocumentUploadChat";
+import { ProjectFilesUpload } from "@/components/wizard/ProjectFilesUpload";
 import { ResponsePlanUploadChat } from "@/components/ResponsePlanUploadChat";
 import { Download, LogOut, FileText, Check } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -402,7 +402,7 @@ const ProjectWizard = () => {
           </div>
 
           <TabsContent value="guideline" className="max-w-5xl mx-auto">
-            <DocumentUploadChat 
+            <ProjectFilesUpload 
               projectId={id || "new"} 
               onDataExtracted={handleDocumentDataExtracted}
               isProcessingWebhook={isProcessingWebhook}
