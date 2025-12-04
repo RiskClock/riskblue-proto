@@ -35,8 +35,8 @@ interface FileViewerModalProps {
 // Color map for different system types
 const getSystemColor = (systemType: string): string => {
   const type = systemType.toLowerCase();
-  if (type.includes("cold water")) return "#3b82f6"; // blue
-  if (type.includes("hot water")) return "#ef4444"; // red
+  if (type.includes("cold water") || type.includes("dcw")) return "#3b82f6"; // blue
+  if (type.includes("hot water") || type.includes("dhw")) return "#ef4444"; // red
   if (type.includes("fire") || type.includes("sprinkler")) return "#f97316"; // orange
   if (type.includes("storm") || type.includes("rain")) return "#8b5cf6"; // purple
   if (type.includes("sanitary")) return "#84cc16"; // lime
@@ -61,6 +61,7 @@ export const FileViewerModal = ({
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [pageImages, setPageImages] = useState<HTMLImageElement[]>([]);
+  const [imageSize, setImageSize] = useState<{ width: number; height: number } | null>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
 
@@ -69,11 +70,19 @@ export const FileViewerModal = ({
     (d) => !d.fileName || d.fileName.toLowerCase().includes(fileName.toLowerCase().split('.')[0])
   );
 
+  // Debug logging
+  useEffect(() => {
+    console.log("FileViewerModal - detections:", detections);
+    console.log("FileViewerModal - fileDetections:", fileDetections);
+    console.log("FileViewerModal - fileName:", fileName);
+  }, [detections, fileDetections, fileName]);
+
   const loadFile = useCallback(async () => {
     setLoading(true);
     setError(null);
     setPageImages([]);
     setCurrentPage(1);
+    setImageSize(null);
 
     try {
       const isPdf = mimeType.includes('pdf') || mimeType.includes('google-apps') || fileName.toLowerCase().endsWith('.pdf');
@@ -133,6 +142,12 @@ export const FileViewerModal = ({
             img.onload = () => resolve();
           });
           images.push(img);
+          
+          // Store original image size for coordinate scaling
+          if (pageNum === 1) {
+            setImageSize({ width: viewport.width / scale, height: viewport.height / scale });
+            console.log("PDF original size:", viewport.width / scale, "x", viewport.height / scale);
+          }
         }
 
         setPageImages(images);
@@ -144,6 +159,8 @@ export const FileViewerModal = ({
         img.onload = () => {
           setPageImages([img]);
           setTotalPages(1);
+          setImageSize({ width: img.naturalWidth, height: img.naturalHeight });
+          console.log("Image original size:", img.naturalWidth, "x", img.naturalHeight);
           setLoading(false);
           URL.revokeObjectURL(url);
         };
@@ -167,34 +184,41 @@ export const FileViewerModal = ({
     }
   }, [isOpen, fileId, accessToken, loadFile]);
 
-  const drawCanvas = useCallback(() => {
+  // Draw canvas with image and bounding boxes
+  useEffect(() => {
     const canvas = canvasRef.current;
     const container = containerRef.current;
     const img = pageImages[currentPage - 1];
-    if (!canvas || !img || !container) return;
+    
+    if (!canvas || !img || !container || loading) return;
 
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
 
+    console.log("Drawing canvas, zoom:", zoom, "fileDetections:", fileDetections.length);
+
     // Calculate dimensions to fit container while maintaining aspect ratio
-    const containerWidth = container.clientWidth;
-    const containerHeight = container.clientHeight;
+    const containerWidth = container.clientWidth - 32; // padding
+    const containerHeight = container.clientHeight - 32;
     
     const imgAspect = img.width / img.height;
     const containerAspect = containerWidth / containerHeight;
 
-    let displayWidth: number;
-    let displayHeight: number;
+    let baseWidth: number;
+    let baseHeight: number;
 
     if (imgAspect > containerAspect) {
       // Image is wider than container
-      displayWidth = containerWidth * zoom;
-      displayHeight = (containerWidth / imgAspect) * zoom;
+      baseWidth = containerWidth;
+      baseHeight = containerWidth / imgAspect;
     } else {
       // Image is taller than container
-      displayHeight = containerHeight * zoom;
-      displayWidth = (containerHeight * imgAspect) * zoom;
+      baseHeight = containerHeight;
+      baseWidth = containerHeight * imgAspect;
     }
+
+    const displayWidth = baseWidth * zoom;
+    const displayHeight = baseHeight * zoom;
 
     canvas.width = displayWidth;
     canvas.height = displayHeight;
@@ -206,33 +230,39 @@ export const FileViewerModal = ({
     const scaleX = displayWidth / img.width;
     const scaleY = displayHeight / img.height;
 
+    console.log("Scale factors:", scaleX, scaleY, "Image size:", img.width, img.height);
+
     // Draw bounding boxes for each detection
-    fileDetections.forEach((detection) => {
+    fileDetections.forEach((detection, index) => {
       const [x1, y1, x2, y2] = detection.coordinates;
       const color = getSystemColor(detection.systemType);
 
-      // Scale coordinates from original image pixels to displayed size
-      const scaledX1 = x1 * scaleX;
-      const scaledY1 = y1 * scaleY;
-      const scaledX2 = x2 * scaleX;
-      const scaledY2 = y2 * scaleY;
-      const width = scaledX2 - scaledX1;
-      const height = scaledY2 - scaledY1;
+      console.log(`Detection ${index}:`, detection.lineCode, "coords:", x1, y1, x2, y2);
+
+      // Gemini returns coordinates normalized to 1000x1000
+      // Scale from 1000 to actual image dimensions, then to display dimensions
+      const normalizedX1 = (x1 / 1000) * img.width * scaleX;
+      const normalizedY1 = (y1 / 1000) * img.height * scaleY;
+      const normalizedX2 = (x2 / 1000) * img.width * scaleX;
+      const normalizedY2 = (y2 / 1000) * img.height * scaleY;
+      
+      const width = normalizedX2 - normalizedX1;
+      const height = normalizedY2 - normalizedY1;
 
       const isHovered = hoveredSystem === detection.lineCode;
 
       // Draw rectangle
       ctx.strokeStyle = color;
       ctx.lineWidth = isHovered ? 4 : 2;
-      ctx.strokeRect(scaledX1, scaledY1, width, height);
+      ctx.strokeRect(normalizedX1, normalizedY1, width, height);
 
       // Draw semi-transparent fill
       ctx.fillStyle = `${color}${isHovered ? '40' : '20'}`;
-      ctx.fillRect(scaledX1, scaledY1, width, height);
+      ctx.fillRect(normalizedX1, normalizedY1, width, height);
 
       // Draw label background
       const label = detection.lineCode || detection.systemType;
-      const fontSize = Math.max(10, 12 * Math.min(scaleX, scaleY));
+      const fontSize = Math.max(10, 12);
       ctx.font = `bold ${fontSize}px sans-serif`;
       const textMetrics = ctx.measureText(label);
       const textHeight = fontSize;
@@ -240,34 +270,27 @@ export const FileViewerModal = ({
 
       ctx.fillStyle = color;
       ctx.fillRect(
-        scaledX1,
-        scaledY1 - textHeight - padding * 2,
+        normalizedX1,
+        normalizedY1 - textHeight - padding * 2,
         textMetrics.width + padding * 2,
         textHeight + padding * 2
       );
 
       // Draw label text
       ctx.fillStyle = "#ffffff";
-      ctx.fillText(label, scaledX1 + padding, scaledY1 - padding - 2);
+      ctx.fillText(label, normalizedX1 + padding, normalizedY1 - padding - 2);
     });
-  }, [pageImages, currentPage, zoom, hoveredSystem, fileDetections]);
-
-  useEffect(() => {
-    if (pageImages.length > 0) {
-      drawCanvas();
-    }
-  }, [drawCanvas, pageImages]);
+  }, [pageImages, currentPage, zoom, hoveredSystem, fileDetections, loading]);
 
   // Redraw on window resize
   useEffect(() => {
     const handleResize = () => {
-      if (pageImages.length > 0) {
-        drawCanvas();
-      }
+      // Force re-render by updating a state
+      setZoom(z => z);
     };
     window.addEventListener('resize', handleResize);
     return () => window.removeEventListener('resize', handleResize);
-  }, [drawCanvas, pageImages]);
+  }, []);
 
   const handleZoomIn = () => setZoom((z) => Math.min(z + 0.25, 3));
   const handleZoomOut = () => setZoom((z) => Math.max(z - 0.25, 0.5));
@@ -316,7 +339,7 @@ export const FileViewerModal = ({
           {/* Main content area */}
           <div 
             ref={containerRef}
-            className="flex-1 border rounded-lg overflow-auto bg-muted/30 flex items-center justify-center"
+            className="flex-1 border rounded-lg overflow-auto bg-muted/30 flex items-center justify-center p-4"
           >
             {loading ? (
               <div className="text-center space-y-2">
@@ -331,8 +354,7 @@ export const FileViewerModal = ({
             ) : (
               <canvas 
                 ref={canvasRef} 
-                className="max-w-full max-h-full"
-                style={{ objectFit: 'contain' }}
+                style={{ maxWidth: '100%', maxHeight: '100%' }}
               />
             )}
           </div>
