@@ -55,6 +55,13 @@ const ProjectWizard = () => {
     const fetchProject = async () => {
       if (!id || id === "new") return;
       
+      // Wait for auth session to be ready (important after OAuth redirects)
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) {
+        // If no session, wait for auth state change
+        return;
+      }
+      
       try {
         const { data, error } = await supabase
           .from("projects")
@@ -81,7 +88,16 @@ const ProjectWizard = () => {
       }
     };
 
+    // Listen for auth state changes (triggered after OAuth redirect)
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED' || event === 'INITIAL_SESSION') {
+        fetchProject();
+      }
+    });
+
     fetchProject();
+    
+    return () => subscription.unsubscribe();
   }, [id, toast]);
 
   const saveProject = useCallback(async (data: ProjectData) => {
