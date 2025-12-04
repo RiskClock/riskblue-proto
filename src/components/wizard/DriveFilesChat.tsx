@@ -11,12 +11,21 @@ interface Message {
   content: string;
 }
 
+interface SystemDetection {
+  lineMonitored: string;
+  lineCode: string;
+  systemType: string;
+  coordinates: [number, number, number, number];
+  fileName?: string;
+}
+
 interface DriveFilesChatProps {
   analysisResult: string;
   fileUris?: Array<{ uri: string; mimeType: string }>;
+  detectedSystems?: SystemDetection[];
 }
 
-export const DriveFilesChat = ({ analysisResult, fileUris }: DriveFilesChatProps) => {
+export const DriveFilesChat = ({ analysisResult, fileUris, detectedSystems }: DriveFilesChatProps) => {
   const { toast } = useToast();
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");

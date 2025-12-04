@@ -31,6 +31,7 @@ For each system and each significant line, populate a chart with one row per mon
 | Exact Location & Description | Where the sensor should be installed, described precisely using visible drawing context (e.g., "after DCDA, before pump suction," "on HW header leaving DWH-1/2," "below riser before vertical transition," etc.). |
 | Purpose / Goal | A short explanation of what the sensor would detect (e.g., "leaks," "unauthorized flow," "monitor zone usage," "detect burst or abnormal demand"). |
 | System Type | Identify system group (e.g., "Domestic Hot Water Recirculation System," "Wet Fire Sprinkler System," "Cold Water Distribution," "Storm Drainage—no monitoring applicable"). |
+| Coordinates | [x_start, y_start, x_end, y_end] bounding box in pixels within the file where the system was found. |
 
 Important rules:
 • Extract EVERYTHING directly from the drawing text—no assumptions.
@@ -39,7 +40,24 @@ Important rules:
 • Include one row per line or per riser if needed.
 • If a system does not require monitoring, include it with "Sensor Type = none required."
 • The goal is a universal, standardized monitoring table for all water-related lines.
-• Output only the completed chart, clean and professional.`;
+• IMPORTANT: For coordinates, provide accurate pixel bounding boxes [x_start, y_start, x_end, y_end] for where each system is located in the drawing.
+
+After the chart, provide a JSON block with all detected systems and their coordinates in this exact format:
+\`\`\`json
+{
+  "systems": [
+    {
+      "lineMonitored": "Main Hot Water Supply",
+      "lineCode": "Ø100 HW",
+      "systemType": "Domestic Hot Water",
+      "coordinates": [100, 200, 300, 400],
+      "fileName": "file_name.pdf"
+    }
+  ]
+}
+\`\`\`
+
+Output the completed chart first, then the JSON block.`;
 
 interface DriveFile {
   id: string;
