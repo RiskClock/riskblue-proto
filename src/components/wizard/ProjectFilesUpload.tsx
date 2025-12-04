@@ -2,13 +2,15 @@ import { useState, useRef } from "react";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { Loader2, Upload, FileText, FolderOpen, Link2, Check, X, File, Sparkles } from "lucide-react";
+import { Loader2, Upload, FileText, FolderOpen, Link2, Check, X, File, Sparkles, Eye } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { extractPDFData, extractKeyInformation, PDFMetadata, formatFileSize as formatFileSizeUtil } from "@/lib/pdfProcessor";
 import { PDFAnalysisAnimation } from "../PDFAnalysisAnimation";
 import { supabase } from "@/integrations/supabase/client";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { DriveFilesChat } from "./DriveFilesChat";
+import { FileViewerModal } from "./FileViewerModal";
+
 interface DriveFile {
   id: string;
   name: string;
@@ -17,6 +19,20 @@ interface DriveFile {
   modifiedTime: string;
   webViewLink?: string;
   iconLink?: string;
+  thumbnailLink?: string;
+}
+
+interface SystemDetection {
+  lineMonitored: string;
+  lineCode: string;
+  systemType: string;
+  coordinates: [number, number, number, number];
+  fileName?: string;
+}
+
+interface AnalysisData {
+  text: string;
+  systems: SystemDetection[];
 }
 
 interface ProjectFilesUploadProps {
@@ -56,7 +72,11 @@ export const ProjectFilesUpload = ({ projectId, onDataExtracted, setIsProcessing
   
   // AI Analysis states
   const [analyzingFiles, setAnalyzingFiles] = useState(false);
-  const [analysisResult, setAnalysisResult] = useState<string | null>(null);
+  const [analysisData, setAnalysisData] = useState<AnalysisData | null>(null);
+  
+  // File viewer modal
+  const [viewerOpen, setViewerOpen] = useState(false);
+  const [viewerFile, setViewerFile] = useState<{ url: string; name: string } | null>(null);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -311,7 +331,21 @@ export const ProjectFilesUpload = ({ projectId, onDataExtracted, setIsProcessing
     setDriveAccessToken(null);
     setDriveFiles([]);
     setFolderId("");
-    setAnalysisResult(null);
+    setAnalysisData(null);
+  };
+
+  // Parse systems JSON from analysis text
+  const parseSystemsFromAnalysis = (text: string): SystemDetection[] => {
+    try {
+      const jsonMatch = text.match(/```json\s*([\s\S]*?)\s*```/);
+      if (jsonMatch && jsonMatch[1]) {
+        const parsed = JSON.parse(jsonMatch[1]);
+        return parsed.systems || [];
+      }
+    } catch (e) {
+      console.error("Failed to parse systems JSON:", e);
+    }
+    return [];
   };
 
   const handleAnalyzeFiles = async () => {
@@ -334,7 +368,7 @@ export const ProjectFilesUpload = ({ projectId, onDataExtracted, setIsProcessing
     }
 
     setAnalyzingFiles(true);
-    setAnalysisResult(null);
+    setAnalysisData(null);
 
     try {
       // Send full file objects with id, name, and mimeType for downloading
@@ -359,10 +393,17 @@ export const ProjectFilesUpload = ({ projectId, onDataExtracted, setIsProcessing
         throw new Error(response.data.error);
       }
 
-      setAnalysisResult(response.data.analysis);
+      const analysisText = response.data.analysis;
+      const systems = parseSystemsFromAnalysis(analysisText);
+      
+      setAnalysisData({
+        text: analysisText,
+        systems,
+      });
+      
       toast({
         title: "Analysis Complete",
-        description: `Analyzed ${response.data.filesAnalyzed} files: ${response.data.fileNames?.join(', ') || 'N/A'}`,
+        description: `Analyzed ${response.data.filesAnalyzed} files. Found ${systems.length} water systems.`,
       });
     } catch (error) {
       console.error("Error analyzing files:", error);
@@ -374,6 +415,16 @@ export const ProjectFilesUpload = ({ projectId, onDataExtracted, setIsProcessing
     } finally {
       setAnalyzingFiles(false);
     }
+  };
+
+  const handleViewFile = (file: DriveFile) => {
+    // Use Google Drive thumbnail or export URL for viewing
+    const imageUrl = file.thumbnailLink 
+      ? file.thumbnailLink.replace('=s220', '=s1600') // Get larger thumbnail
+      : `https://drive.google.com/thumbnail?id=${file.id}&sz=w1600`;
+    
+    setViewerFile({ url: imageUrl, name: file.name });
+    setViewerOpen(true);
   };
 
   const formatFileSize = (bytes?: string) => {
@@ -558,23 +609,25 @@ export const ProjectFilesUpload = ({ projectId, onDataExtracted, setIsProcessing
                               {formatFileSize(file.size)} • {new Date(file.modifiedTime).toLocaleDateString()}
                             </p>
                           </div>
-                          {file.webViewLink && (
-                            <a
-                              href={file.webViewLink}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="text-xs text-primary hover:underline"
-                            >
-                              View
-                            </a>
-                          )}
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => handleViewFile(file)}
+                            className="text-xs gap-1"
+                          >
+                            <Eye className="w-3 h-3" />
+                            View
+                          </Button>
                         </div>
                       ))}
                     </div>
                     
                     {/* AI Analysis Result with Chat */}
-                    {analysisResult && (
-                      <DriveFilesChat analysisResult={analysisResult} />
+                    {analysisData && (
+                      <DriveFilesChat 
+                        analysisResult={analysisData.text} 
+                        detectedSystems={analysisData.systems}
+                      />
                     )}
                   </div>
                 )}
@@ -603,6 +656,17 @@ export const ProjectFilesUpload = ({ projectId, onDataExtracted, setIsProcessing
             {responseData}
           </pre>
         </div>
+      )}
+
+      {/* File Viewer Modal */}
+      {viewerFile && (
+        <FileViewerModal
+          isOpen={viewerOpen}
+          onClose={() => setViewerOpen(false)}
+          fileUrl={viewerFile.url}
+          fileName={viewerFile.name}
+          detections={analysisData?.systems || []}
+        />
       )}
     </Card>
   );
