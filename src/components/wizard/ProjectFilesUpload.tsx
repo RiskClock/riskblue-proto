@@ -2,13 +2,13 @@ import { useState, useRef } from "react";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { Loader2, Upload, FileText, FolderOpen, Link2, Check, X, File } from "lucide-react";
+import { Loader2, Upload, FileText, FolderOpen, Link2, Check, X, File, Sparkles } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { extractPDFData, extractKeyInformation, PDFMetadata, formatFileSize as formatFileSizeUtil } from "@/lib/pdfProcessor";
 import { PDFAnalysisAnimation } from "../PDFAnalysisAnimation";
 import { supabase } from "@/integrations/supabase/client";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-
+import { ScrollArea } from "@/components/ui/scroll-area";
 interface DriveFile {
   id: string;
   name: string;
@@ -53,6 +53,10 @@ export const ProjectFilesUpload = ({ projectId, onDataExtracted, setIsProcessing
   const [driveFiles, setDriveFiles] = useState<DriveFile[]>([]);
   const [loadingDriveFiles, setLoadingDriveFiles] = useState(false);
   const [connectingDrive, setConnectingDrive] = useState(false);
+  
+  // AI Analysis states
+  const [analyzingFiles, setAnalyzingFiles] = useState(false);
+  const [analysisResult, setAnalysisResult] = useState<string | null>(null);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -303,6 +307,56 @@ export const ProjectFilesUpload = ({ projectId, onDataExtracted, setIsProcessing
     setDriveAccessToken(null);
     setDriveFiles([]);
     setFolderId("");
+    setAnalysisResult(null);
+  };
+
+  const handleAnalyzeFiles = async () => {
+    if (driveFiles.length === 0) {
+      toast({
+        title: "No Files",
+        description: "Please load files from Google Drive first.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setAnalyzingFiles(true);
+    setAnalysisResult(null);
+
+    try {
+      const fileNames = driveFiles.map(f => f.name);
+      
+      const response = await supabase.functions.invoke('analyze-drive-files', {
+        body: {
+          fileNames,
+          accessToken: driveAccessToken,
+          folderId: folderId.trim(),
+        },
+      });
+
+      if (response.error) {
+        throw new Error(response.error.message);
+      }
+
+      if (response.data?.error) {
+        throw new Error(response.data.error);
+      }
+
+      setAnalysisResult(response.data.analysis);
+      toast({
+        title: "Analysis Complete",
+        description: `Analyzed ${response.data.filesAnalyzed} files with AI.`,
+      });
+    } catch (error) {
+      console.error("Error analyzing files:", error);
+      toast({
+        title: "Analysis Failed",
+        description: error instanceof Error ? error.message : "Failed to analyze files",
+        variant: "destructive",
+      });
+    } finally {
+      setAnalyzingFiles(false);
+    }
   };
 
   const formatFileSize = (bytes?: string) => {
@@ -453,9 +507,29 @@ export const ProjectFilesUpload = ({ projectId, onDataExtracted, setIsProcessing
 
                 {/* Drive files list */}
                 {driveFiles.length > 0 && (
-                  <div className="space-y-2">
-                    <label className="text-sm font-medium">Files in Folder ({driveFiles.length})</label>
-                    <div className="border rounded-lg divide-y max-h-64 overflow-y-auto">
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between">
+                      <label className="text-sm font-medium">Files in Folder ({driveFiles.length})</label>
+                      <Button 
+                        onClick={handleAnalyzeFiles} 
+                        disabled={analyzingFiles}
+                        size="sm"
+                        className="gap-2"
+                      >
+                        {analyzingFiles ? (
+                          <>
+                            <Loader2 className="w-4 h-4 animate-spin" />
+                            Analyzing...
+                          </>
+                        ) : (
+                          <>
+                            <Sparkles className="w-4 h-4" />
+                            Analyze with AI
+                          </>
+                        )}
+                      </Button>
+                    </div>
+                    <div className="border rounded-lg divide-y max-h-48 overflow-y-auto">
                       {driveFiles.map((file) => (
                         <div key={file.id} className="flex items-center gap-3 p-3 hover:bg-muted/50">
                           <div className="p-1.5 rounded bg-muted">
@@ -480,6 +554,21 @@ export const ProjectFilesUpload = ({ projectId, onDataExtracted, setIsProcessing
                         </div>
                       ))}
                     </div>
+                    
+                    {/* AI Analysis Result */}
+                    {analysisResult && (
+                      <div className="space-y-2 pt-2 border-t">
+                        <label className="text-sm font-medium flex items-center gap-2">
+                          <Sparkles className="w-4 h-4 text-primary" />
+                          AI Analysis Result
+                        </label>
+                        <ScrollArea className="h-[300px] rounded-lg border bg-muted/30 p-4">
+                          <pre className="text-xs whitespace-pre-wrap font-mono">
+                            {analysisResult}
+                          </pre>
+                        </ScrollArea>
+                      </div>
+                    )}
                   </div>
                 )}
               </div>
