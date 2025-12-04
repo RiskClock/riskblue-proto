@@ -190,6 +190,10 @@ export const ProjectFilesUpload = ({ projectId, onDataExtracted, setIsProcessing
   const handleConnectGoogleDrive = async () => {
     setConnectingDrive(true);
     try {
+      // Use clean redirect URL without query params
+      const redirectUrl = `${window.location.origin}${window.location.pathname}`;
+      console.log("OAuth redirect URL:", redirectUrl);
+      
       const { data, error } = await supabase.auth.signInWithOAuth({
         provider: 'google',
         options: {
@@ -198,7 +202,7 @@ export const ProjectFilesUpload = ({ projectId, onDataExtracted, setIsProcessing
             access_type: 'offline',
             prompt: 'consent',
           },
-          redirectTo: window.location.href,
+          redirectTo: redirectUrl,
         },
       });
 
