@@ -6,7 +6,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { Loader2, ZoomIn, ZoomOut, RotateCw } from "lucide-react";
+import { Loader2, ZoomIn, ZoomOut, RotateCw, AlertCircle } from "lucide-react";
 import { ScrollArea } from "@/components/ui/scroll-area";
 
 interface SystemDetection {
@@ -20,8 +20,10 @@ interface SystemDetection {
 interface FileViewerModalProps {
   isOpen: boolean;
   onClose: () => void;
-  fileUrl: string;
+  fileId: string;
   fileName: string;
+  mimeType: string;
+  accessToken: string;
   detections: SystemDetection[];
 }
 
@@ -41,38 +43,98 @@ const getSystemColor = (systemType: string): string => {
 export const FileViewerModal = ({
   isOpen,
   onClose,
-  fileUrl,
+  fileId,
   fileName,
+  mimeType,
+  accessToken,
   detections,
 }: FileViewerModalProps) => {
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [zoom, setZoom] = useState(1);
-  const [imageSize, setImageSize] = useState({ width: 0, height: 0 });
   const [hoveredSystem, setHoveredSystem] = useState<string | null>(null);
+  const [blobUrl, setBlobUrl] = useState<string | null>(null);
+  const [isPdf, setIsPdf] = useState(false);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const imageRef = useRef<HTMLImageElement | null>(null);
 
   useEffect(() => {
-    if (isOpen && fileUrl) {
-      setLoading(true);
-      const img = new Image();
-      img.crossOrigin = "anonymous";
-      img.onload = () => {
-        imageRef.current = img;
-        setImageSize({ width: img.width, height: img.height });
-        setLoading(false);
-        drawCanvas();
-      };
-      img.onerror = () => {
-        setLoading(false);
-      };
-      img.src = fileUrl;
+    if (isOpen && fileId && accessToken) {
+      loadFile();
     }
-  }, [isOpen, fileUrl]);
+    
+    return () => {
+      // Cleanup blob URL on unmount
+      if (blobUrl) {
+        URL.revokeObjectURL(blobUrl);
+      }
+    };
+  }, [isOpen, fileId, accessToken]);
 
   useEffect(() => {
-    drawCanvas();
-  }, [zoom, hoveredSystem, detections]);
+    if (!isPdf && imageRef.current) {
+      drawCanvas();
+    }
+  }, [zoom, hoveredSystem, detections, isPdf]);
+
+  const loadFile = async () => {
+    setLoading(true);
+    setError(null);
+    setBlobUrl(null);
+    
+    try {
+      // Determine if it's a PDF or image
+      const isPdfFile = mimeType.includes('pdf') || fileName.toLowerCase().endsWith('.pdf');
+      setIsPdf(isPdfFile);
+
+      let downloadUrl: string;
+      let responseMimeType = mimeType;
+      
+      // For Google Docs/Sheets, export as PDF; otherwise download directly
+      if (mimeType.includes('google-apps')) {
+        downloadUrl = `https://www.googleapis.com/drive/v3/files/${fileId}/export?mimeType=application/pdf`;
+        responseMimeType = 'application/pdf';
+        setIsPdf(true);
+      } else {
+        downloadUrl = `https://www.googleapis.com/drive/v3/files/${fileId}?alt=media`;
+      }
+
+      const response = await fetch(downloadUrl, {
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+        },
+      });
+
+      if (!response.ok) {
+        throw new Error(`Failed to load file: ${response.status}`);
+      }
+
+      const blob = await response.blob();
+      const url = URL.createObjectURL(blob);
+      setBlobUrl(url);
+
+      // If it's an image, load it into the canvas
+      if (!isPdfFile && !mimeType.includes('google-apps')) {
+        const img = new Image();
+        img.onload = () => {
+          imageRef.current = img;
+          setLoading(false);
+          drawCanvas();
+        };
+        img.onerror = () => {
+          setError("Failed to load image");
+          setLoading(false);
+        };
+        img.src = url;
+      } else {
+        setLoading(false);
+      }
+    } catch (err) {
+      console.error("Error loading file:", err);
+      setError(err instanceof Error ? err.message : "Failed to load file");
+      setLoading(false);
+    }
+  };
 
   const drawCanvas = () => {
     const canvas = canvasRef.current;
@@ -92,7 +154,7 @@ export const FileViewerModal = ({
     ctx.drawImage(img, 0, 0, scaledWidth, scaledHeight);
 
     // Draw bounding boxes for each detection
-    detections.forEach((detection) => {
+    fileDetections.forEach((detection) => {
       const [x1, y1, x2, y2] = detection.coordinates;
       const color = getSystemColor(detection.systemType);
       
@@ -149,41 +211,61 @@ export const FileViewerModal = ({
         <DialogHeader>
           <DialogTitle className="flex items-center justify-between">
             <span className="truncate max-w-md">{fileName}</span>
-            <div className="flex items-center gap-2">
-              <Button variant="outline" size="icon" onClick={handleZoomOut}>
-                <ZoomOut className="w-4 h-4" />
-              </Button>
-              <span className="text-sm min-w-[4rem] text-center">
-                {Math.round(zoom * 100)}%
-              </span>
-              <Button variant="outline" size="icon" onClick={handleZoomIn}>
-                <ZoomIn className="w-4 h-4" />
-              </Button>
-              <Button variant="outline" size="icon" onClick={handleResetZoom}>
-                <RotateCw className="w-4 h-4" />
-              </Button>
-            </div>
+            {!isPdf && (
+              <div className="flex items-center gap-2">
+                <Button variant="outline" size="icon" onClick={handleZoomOut}>
+                  <ZoomOut className="w-4 h-4" />
+                </Button>
+                <span className="text-sm min-w-[4rem] text-center">
+                  {Math.round(zoom * 100)}%
+                </span>
+                <Button variant="outline" size="icon" onClick={handleZoomIn}>
+                  <ZoomIn className="w-4 h-4" />
+                </Button>
+                <Button variant="outline" size="icon" onClick={handleResetZoom}>
+                  <RotateCw className="w-4 h-4" />
+                </Button>
+              </div>
+            )}
           </DialogTitle>
         </DialogHeader>
 
         <div className="flex flex-1 gap-4 overflow-hidden">
-          {/* Canvas area */}
-          <ScrollArea className="flex-1 border rounded-lg">
-            <div className="p-4">
-              {loading ? (
-                <div className="flex items-center justify-center h-64">
-                  <Loader2 className="w-8 h-8 animate-spin text-muted-foreground" />
+          {/* Main content area */}
+          <div className="flex-1 border rounded-lg overflow-hidden">
+            {loading ? (
+              <div className="flex items-center justify-center h-full">
+                <div className="text-center space-y-2">
+                  <Loader2 className="w-8 h-8 animate-spin text-muted-foreground mx-auto" />
+                  <p className="text-sm text-muted-foreground">Loading file...</p>
                 </div>
-              ) : (
-                <canvas ref={canvasRef} className="max-w-full" />
-              )}
-            </div>
-          </ScrollArea>
+              </div>
+            ) : error ? (
+              <div className="flex items-center justify-center h-full">
+                <div className="text-center space-y-2">
+                  <AlertCircle className="w-8 h-8 text-destructive mx-auto" />
+                  <p className="text-sm text-destructive">{error}</p>
+                </div>
+              </div>
+            ) : isPdf && blobUrl ? (
+              <iframe
+                src={blobUrl}
+                className="w-full h-full"
+                title={fileName}
+              />
+            ) : (
+              <ScrollArea className="h-full">
+                <div className="p-4">
+                  <canvas ref={canvasRef} className="max-w-full" />
+                </div>
+              </ScrollArea>
+            )}
+          </div>
 
           {/* Legend sidebar */}
-          {fileDetections.length > 0 && (
+          {fileDetections.length > 0 && !isPdf && (
             <div className="w-64 border rounded-lg p-3 space-y-2">
-              <h4 className="text-sm font-medium">Detected Systems</h4>
+              <h4 className="text-sm font-medium">Detected Systems ({fileDetections.length})</h4>
               <ScrollArea className="h-full max-h-[calc(90vh-12rem)]">
                 <div className="space-y-2 pr-2">
                   {fileDetections.map((detection, i) => (
@@ -205,6 +287,37 @@ export const FileViewerModal = ({
                       </p>
                       <p className="text-[10px] text-muted-foreground">
                         {detection.lineMonitored}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+              </ScrollArea>
+            </div>
+          )}
+
+          {/* Info for PDFs */}
+          {isPdf && fileDetections.length > 0 && (
+            <div className="w-64 border rounded-lg p-3 space-y-2">
+              <h4 className="text-sm font-medium">Detected Systems ({fileDetections.length})</h4>
+              <p className="text-xs text-muted-foreground">
+                Bounding boxes can only be displayed on image files. This PDF contains the following detected systems:
+              </p>
+              <ScrollArea className="h-full max-h-[calc(90vh-14rem)]">
+                <div className="space-y-2 pr-2">
+                  {fileDetections.map((detection, i) => (
+                    <div
+                      key={i}
+                      className="p-2 rounded-md border"
+                      style={{
+                        borderLeftWidth: 4,
+                        borderLeftColor: getSystemColor(detection.systemType),
+                      }}
+                    >
+                      <p className="text-xs font-medium truncate">
+                        {detection.lineCode}
+                      </p>
+                      <p className="text-xs text-muted-foreground truncate">
+                        {detection.systemType}
                       </p>
                     </div>
                   ))}

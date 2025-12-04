@@ -76,7 +76,7 @@ export const ProjectFilesUpload = ({ projectId, onDataExtracted, setIsProcessing
   
   // File viewer modal
   const [viewerOpen, setViewerOpen] = useState(false);
-  const [viewerFile, setViewerFile] = useState<{ url: string; name: string } | null>(null);
+  const [viewerFile, setViewerFile] = useState<{ id: string; name: string; mimeType: string } | null>(null);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -418,12 +418,7 @@ export const ProjectFilesUpload = ({ projectId, onDataExtracted, setIsProcessing
   };
 
   const handleViewFile = (file: DriveFile) => {
-    // Use Google Drive thumbnail or export URL for viewing
-    const imageUrl = file.thumbnailLink 
-      ? file.thumbnailLink.replace('=s220', '=s1600') // Get larger thumbnail
-      : `https://drive.google.com/thumbnail?id=${file.id}&sz=w1600`;
-    
-    setViewerFile({ url: imageUrl, name: file.name });
+    setViewerFile({ id: file.id, name: file.name, mimeType: file.mimeType });
     setViewerOpen(true);
   };
 
@@ -659,12 +654,14 @@ export const ProjectFilesUpload = ({ projectId, onDataExtracted, setIsProcessing
       )}
 
       {/* File Viewer Modal */}
-      {viewerFile && (
+      {viewerFile && driveAccessToken && (
         <FileViewerModal
           isOpen={viewerOpen}
           onClose={() => setViewerOpen(false)}
-          fileUrl={viewerFile.url}
+          fileId={viewerFile.id}
           fileName={viewerFile.name}
+          mimeType={viewerFile.mimeType}
+          accessToken={driveAccessToken}
           detections={analysisData?.systems || []}
         />
       )}
