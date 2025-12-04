@@ -224,18 +224,22 @@ export const FileViewerModal = ({
     canvas.height = displayHeight;
 
     console.log("Drawing canvas:", displayWidth, "x", displayHeight, "zoom:", zoom);
-    console.log("Original image size:", img.width, "x", img.height);
+    console.log("Rendered image size:", img.width, "x", img.height);
+    console.log("Original PDF size:", originalSize?.width, "x", originalSize?.height);
 
     // Draw image
     ctx.drawImage(img, 0, 0, displayWidth, displayHeight);
 
-    // Calculate scale from original coordinates to display size
-    // The coordinates in the sample are pixel coordinates from the original PDF/image
-    // We need to scale them to our displayed canvas size
-    const scaleX = displayWidth / img.width;
-    const scaleY = displayHeight / img.height;
+    // The coordinates from Gemini are based on the original PDF page size (not the 2x rendered version)
+    // We need to scale from original PDF coordinates to displayed canvas size
+    // originalSize contains the PDF page size before the 2x scale rendering
+    const origWidth = originalSize?.width || img.width / 2;
+    const origHeight = originalSize?.height || img.height / 2;
+    
+    const scaleX = displayWidth / origWidth;
+    const scaleY = displayHeight / origHeight;
 
-    console.log("Scale factors:", scaleX, scaleY);
+    console.log("Scale factors:", scaleX, scaleY, "from original:", origWidth, "x", origHeight);
     console.log("Drawing", fileDetections.length, "detections");
 
     // Draw bounding boxes
