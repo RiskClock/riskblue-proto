@@ -5,3 +5,6 @@ verify_jwt = false
 
 [functions.analyze-drive-files]
 verify_jwt = false
+
+[functions.chat-with-files]
+verify_jwt = false
