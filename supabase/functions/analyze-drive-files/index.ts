@@ -5,9 +5,7 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
-const ANALYSIS_PROMPT = `ONLY use the files A2.01 to A2.11.
-
-I am providing you with building drawings that may include multiple water-related systems.
+const ANALYSIS_PROMPT = `I am providing you with building drawings that may include multiple water-related systems.
 Assume I have no technical knowledge, so you must extract everything directly from the drawings without asking me any questions.
 Your task is to analyze the drawing and create one universal chart covering every water system visible, including (if present):
 • Domestic Cold Water (CW)
