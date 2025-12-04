@@ -8,7 +8,7 @@ import { extractPDFData, extractKeyInformation, PDFMetadata, formatFileSize as f
 import { PDFAnalysisAnimation } from "../PDFAnalysisAnimation";
 import { supabase } from "@/integrations/supabase/client";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { ScrollArea } from "@/components/ui/scroll-area";
+import { DriveFilesChat } from "./DriveFilesChat";
 interface DriveFile {
   id: string;
   name: string;
@@ -572,19 +572,9 @@ export const ProjectFilesUpload = ({ projectId, onDataExtracted, setIsProcessing
                       ))}
                     </div>
                     
-                    {/* AI Analysis Result */}
+                    {/* AI Analysis Result with Chat */}
                     {analysisResult && (
-                      <div className="space-y-2 pt-2 border-t">
-                        <label className="text-sm font-medium flex items-center gap-2">
-                          <Sparkles className="w-4 h-4 text-primary" />
-                          AI Analysis Result
-                        </label>
-                        <ScrollArea className="h-[300px] rounded-lg border bg-muted/30 p-4">
-                          <pre className="text-xs whitespace-pre-wrap font-mono">
-                            {analysisResult}
-                          </pre>
-                        </ScrollArea>
-                      </div>
+                      <DriveFilesChat analysisResult={analysisResult} />
                     )}
                   </div>
                 )}
