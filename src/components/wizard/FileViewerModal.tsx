@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import {
   Dialog,
   DialogContent,
@@ -6,8 +6,12 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { Loader2, ZoomIn, ZoomOut, RotateCw, AlertCircle } from "lucide-react";
+import { Loader2, ZoomIn, ZoomOut, RotateCw, AlertCircle, ChevronLeft, ChevronRight } from "lucide-react";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import * as pdfjsLib from "pdfjs-dist";
+
+// Set worker path
+pdfjsLib.GlobalWorkerOptions.workerSrc = `//cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.js`;
 
 interface SystemDetection {
   lineMonitored: string;
@@ -53,48 +57,33 @@ export const FileViewerModal = ({
   const [error, setError] = useState<string | null>(null);
   const [zoom, setZoom] = useState(1);
   const [hoveredSystem, setHoveredSystem] = useState<string | null>(null);
-  const [blobUrl, setBlobUrl] = useState<string | null>(null);
-  const [isPdf, setIsPdf] = useState(false);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+  const [pageImages, setPageImages] = useState<HTMLImageElement[]>([]);
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const imageRef = useRef<HTMLImageElement | null>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
 
-  useEffect(() => {
-    if (isOpen && fileId && accessToken) {
-      loadFile();
-    }
-    
-    return () => {
-      // Cleanup blob URL on unmount
-      if (blobUrl) {
-        URL.revokeObjectURL(blobUrl);
-      }
-    };
-  }, [isOpen, fileId, accessToken]);
+  // Filter detections for this file
+  const fileDetections = detections.filter(
+    (d) => !d.fileName || d.fileName.toLowerCase().includes(fileName.toLowerCase().split('.')[0])
+  );
 
-  useEffect(() => {
-    if (!isPdf && imageRef.current) {
-      drawCanvas();
-    }
-  }, [zoom, hoveredSystem, detections, isPdf]);
-
-  const loadFile = async () => {
+  const loadFile = useCallback(async () => {
     setLoading(true);
     setError(null);
-    setBlobUrl(null);
-    
-    try {
-      // Determine if it's a PDF or image
-      const isPdfFile = mimeType.includes('pdf') || fileName.toLowerCase().endsWith('.pdf');
-      setIsPdf(isPdfFile);
+    setPageImages([]);
+    setCurrentPage(1);
 
-      let downloadUrl: string;
-      let responseMimeType = mimeType;
+    try {
+      const isPdf = mimeType.includes('pdf') || mimeType.includes('google-apps') || fileName.toLowerCase().endsWith('.pdf');
       
-      // For Google Docs/Sheets, export as PDF; otherwise download directly
+      let downloadUrl: string;
+      let fetchMimeType = mimeType;
+
+      // For Google Docs/Sheets, export as PDF
       if (mimeType.includes('google-apps')) {
         downloadUrl = `https://www.googleapis.com/drive/v3/files/${fileId}/export?mimeType=application/pdf`;
-        responseMimeType = 'application/pdf';
-        setIsPdf(true);
+        fetchMimeType = 'application/pdf';
       } else {
         downloadUrl = `https://www.googleapis.com/drive/v3/files/${fileId}?alt=media`;
       }
@@ -110,77 +99,143 @@ export const FileViewerModal = ({
       }
 
       const blob = await response.blob();
-      const url = URL.createObjectURL(blob);
-      setBlobUrl(url);
 
-      // If it's an image, load it into the canvas
-      if (!isPdfFile && !mimeType.includes('google-apps')) {
+      if (isPdf || fetchMimeType.includes('pdf')) {
+        // Render PDF pages as images using pdfjs
+        const arrayBuffer = await blob.arrayBuffer();
+        const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+        setTotalPages(pdf.numPages);
+
+        const images: HTMLImageElement[] = [];
+        
+        for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
+          const page = await pdf.getPage(pageNum);
+          const scale = 2; // High resolution
+          const viewport = page.getViewport({ scale });
+
+          const offscreenCanvas = document.createElement('canvas');
+          const ctx = offscreenCanvas.getContext('2d');
+          if (!ctx) continue;
+
+          offscreenCanvas.width = viewport.width;
+          offscreenCanvas.height = viewport.height;
+
+          await page.render({
+            canvasContext: ctx,
+            viewport: viewport,
+            canvas: offscreenCanvas,
+          }).promise;
+
+          const img = new Image();
+          img.src = offscreenCanvas.toDataURL('image/png');
+          await new Promise<void>((resolve) => {
+            img.onload = () => resolve();
+          });
+          images.push(img);
+        }
+
+        setPageImages(images);
+        setLoading(false);
+      } else {
+        // Regular image
+        const url = URL.createObjectURL(blob);
         const img = new Image();
         img.onload = () => {
-          imageRef.current = img;
+          setPageImages([img]);
+          setTotalPages(1);
           setLoading(false);
-          drawCanvas();
+          URL.revokeObjectURL(url);
         };
         img.onerror = () => {
           setError("Failed to load image");
           setLoading(false);
+          URL.revokeObjectURL(url);
         };
         img.src = url;
-      } else {
-        setLoading(false);
       }
     } catch (err) {
       console.error("Error loading file:", err);
       setError(err instanceof Error ? err.message : "Failed to load file");
       setLoading(false);
     }
-  };
+  }, [fileId, accessToken, mimeType, fileName]);
 
-  const drawCanvas = () => {
+  useEffect(() => {
+    if (isOpen && fileId && accessToken) {
+      loadFile();
+    }
+  }, [isOpen, fileId, accessToken, loadFile]);
+
+  const drawCanvas = useCallback(() => {
     const canvas = canvasRef.current;
-    const img = imageRef.current;
-    if (!canvas || !img) return;
+    const container = containerRef.current;
+    const img = pageImages[currentPage - 1];
+    if (!canvas || !img || !container) return;
 
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
 
-    const scaledWidth = img.width * zoom;
-    const scaledHeight = img.height * zoom;
+    // Calculate dimensions to fit container while maintaining aspect ratio
+    const containerWidth = container.clientWidth;
+    const containerHeight = container.clientHeight;
     
-    canvas.width = scaledWidth;
-    canvas.height = scaledHeight;
+    const imgAspect = img.width / img.height;
+    const containerAspect = containerWidth / containerHeight;
+
+    let displayWidth: number;
+    let displayHeight: number;
+
+    if (imgAspect > containerAspect) {
+      // Image is wider than container
+      displayWidth = containerWidth * zoom;
+      displayHeight = (containerWidth / imgAspect) * zoom;
+    } else {
+      // Image is taller than container
+      displayHeight = containerHeight * zoom;
+      displayWidth = (containerHeight * imgAspect) * zoom;
+    }
+
+    canvas.width = displayWidth;
+    canvas.height = displayHeight;
 
     // Draw image
-    ctx.drawImage(img, 0, 0, scaledWidth, scaledHeight);
+    ctx.drawImage(img, 0, 0, displayWidth, displayHeight);
+
+    // Calculate scale factor from original image to displayed size
+    const scaleX = displayWidth / img.width;
+    const scaleY = displayHeight / img.height;
 
     // Draw bounding boxes for each detection
     fileDetections.forEach((detection) => {
       const [x1, y1, x2, y2] = detection.coordinates;
       const color = getSystemColor(detection.systemType);
-      
-      // Scale coordinates
-      const scaledX1 = x1 * zoom;
-      const scaledY1 = y1 * zoom;
-      const scaledX2 = x2 * zoom;
-      const scaledY2 = y2 * zoom;
+
+      // Scale coordinates from original image pixels to displayed size
+      const scaledX1 = x1 * scaleX;
+      const scaledY1 = y1 * scaleY;
+      const scaledX2 = x2 * scaleX;
+      const scaledY2 = y2 * scaleY;
       const width = scaledX2 - scaledX1;
       const height = scaledY2 - scaledY1;
 
+      const isHovered = hoveredSystem === detection.lineCode;
+
       // Draw rectangle
       ctx.strokeStyle = color;
-      ctx.lineWidth = hoveredSystem === detection.lineCode ? 4 : 2;
+      ctx.lineWidth = isHovered ? 4 : 2;
       ctx.strokeRect(scaledX1, scaledY1, width, height);
 
       // Draw semi-transparent fill
-      ctx.fillStyle = `${color}20`;
+      ctx.fillStyle = `${color}${isHovered ? '40' : '20'}`;
       ctx.fillRect(scaledX1, scaledY1, width, height);
 
       // Draw label background
       const label = detection.lineCode || detection.systemType;
-      ctx.font = `${Math.max(12, 14 * zoom)}px sans-serif`;
+      const fontSize = Math.max(10, 12 * Math.min(scaleX, scaleY));
+      ctx.font = `bold ${fontSize}px sans-serif`;
       const textMetrics = ctx.measureText(label);
-      const textHeight = 16 * zoom;
-      const padding = 4 * zoom;
+      const textHeight = fontSize;
+      const padding = 4;
 
       ctx.fillStyle = color;
       ctx.fillRect(
@@ -192,81 +247,100 @@ export const FileViewerModal = ({
 
       // Draw label text
       ctx.fillStyle = "#ffffff";
-      ctx.fillText(label, scaledX1 + padding, scaledY1 - padding);
+      ctx.fillText(label, scaledX1 + padding, scaledY1 - padding - 2);
     });
-  };
+  }, [pageImages, currentPage, zoom, hoveredSystem, fileDetections]);
+
+  useEffect(() => {
+    if (pageImages.length > 0) {
+      drawCanvas();
+    }
+  }, [drawCanvas, pageImages]);
+
+  // Redraw on window resize
+  useEffect(() => {
+    const handleResize = () => {
+      if (pageImages.length > 0) {
+        drawCanvas();
+      }
+    };
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, [drawCanvas, pageImages]);
 
   const handleZoomIn = () => setZoom((z) => Math.min(z + 0.25, 3));
-  const handleZoomOut = () => setZoom((z) => Math.max(z - 0.25, 0.25));
+  const handleZoomOut = () => setZoom((z) => Math.max(z - 0.25, 0.5));
   const handleResetZoom = () => setZoom(1);
-
-  // Filter detections for this file
-  const fileDetections = detections.filter(
-    (d) => !d.fileName || d.fileName.toLowerCase().includes(fileName.toLowerCase().split('.')[0])
-  );
+  const handlePrevPage = () => setCurrentPage((p) => Math.max(1, p - 1));
+  const handleNextPage = () => setCurrentPage((p) => Math.min(totalPages, p + 1));
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="max-w-6xl h-[90vh] flex flex-col">
-        <DialogHeader>
-          <DialogTitle className="flex items-center justify-between">
-            <span className="truncate max-w-md">{fileName}</span>
-            {!isPdf && (
-              <div className="flex items-center gap-2">
-                <Button variant="outline" size="icon" onClick={handleZoomOut}>
-                  <ZoomOut className="w-4 h-4" />
-                </Button>
-                <span className="text-sm min-w-[4rem] text-center">
-                  {Math.round(zoom * 100)}%
-                </span>
-                <Button variant="outline" size="icon" onClick={handleZoomIn}>
-                  <ZoomIn className="w-4 h-4" />
-                </Button>
-                <Button variant="outline" size="icon" onClick={handleResetZoom}>
-                  <RotateCw className="w-4 h-4" />
-                </Button>
-              </div>
-            )}
+      <DialogContent className="max-w-[95vw] w-[95vw] h-[90vh] flex flex-col p-4">
+        <DialogHeader className="flex-shrink-0">
+          <DialogTitle className="flex items-center justify-between gap-4">
+            <span className="truncate flex-1">{fileName}</span>
+            <div className="flex items-center gap-2 flex-shrink-0">
+              {totalPages > 1 && (
+                <>
+                  <Button variant="outline" size="icon" onClick={handlePrevPage} disabled={currentPage === 1}>
+                    <ChevronLeft className="w-4 h-4" />
+                  </Button>
+                  <span className="text-sm min-w-[5rem] text-center">
+                    Page {currentPage} / {totalPages}
+                  </span>
+                  <Button variant="outline" size="icon" onClick={handleNextPage} disabled={currentPage === totalPages}>
+                    <ChevronRight className="w-4 h-4" />
+                  </Button>
+                  <div className="w-px h-6 bg-border mx-1" />
+                </>
+              )}
+              <Button variant="outline" size="icon" onClick={handleZoomOut}>
+                <ZoomOut className="w-4 h-4" />
+              </Button>
+              <span className="text-sm min-w-[4rem] text-center">
+                {Math.round(zoom * 100)}%
+              </span>
+              <Button variant="outline" size="icon" onClick={handleZoomIn}>
+                <ZoomIn className="w-4 h-4" />
+              </Button>
+              <Button variant="outline" size="icon" onClick={handleResetZoom}>
+                <RotateCw className="w-4 h-4" />
+              </Button>
+            </div>
           </DialogTitle>
         </DialogHeader>
 
-        <div className="flex flex-1 gap-4 overflow-hidden">
+        <div className="flex flex-1 gap-4 overflow-hidden min-h-0">
           {/* Main content area */}
-          <div className="flex-1 border rounded-lg overflow-hidden">
+          <div 
+            ref={containerRef}
+            className="flex-1 border rounded-lg overflow-auto bg-muted/30 flex items-center justify-center"
+          >
             {loading ? (
-              <div className="flex items-center justify-center h-full">
-                <div className="text-center space-y-2">
-                  <Loader2 className="w-8 h-8 animate-spin text-muted-foreground mx-auto" />
-                  <p className="text-sm text-muted-foreground">Loading file...</p>
-                </div>
+              <div className="text-center space-y-2">
+                <Loader2 className="w-8 h-8 animate-spin text-muted-foreground mx-auto" />
+                <p className="text-sm text-muted-foreground">Loading file...</p>
               </div>
             ) : error ? (
-              <div className="flex items-center justify-center h-full">
-                <div className="text-center space-y-2">
-                  <AlertCircle className="w-8 h-8 text-destructive mx-auto" />
-                  <p className="text-sm text-destructive">{error}</p>
-                </div>
+              <div className="text-center space-y-2">
+                <AlertCircle className="w-8 h-8 text-destructive mx-auto" />
+                <p className="text-sm text-destructive">{error}</p>
               </div>
-            ) : isPdf && blobUrl ? (
-              <iframe
-                src={blobUrl}
-                className="w-full h-full"
-                title={fileName}
-              />
             ) : (
-              <ScrollArea className="h-full">
-                <div className="p-4">
-                  <canvas ref={canvasRef} className="max-w-full" />
-                </div>
-              </ScrollArea>
+              <canvas 
+                ref={canvasRef} 
+                className="max-w-full max-h-full"
+                style={{ objectFit: 'contain' }}
+              />
             )}
           </div>
 
           {/* Legend sidebar */}
-          {fileDetections.length > 0 && !isPdf && (
-            <div className="w-64 border rounded-lg p-3 space-y-2">
-              <h4 className="text-sm font-medium">Detected Systems ({fileDetections.length})</h4>
-              <ScrollArea className="h-full max-h-[calc(90vh-12rem)]">
+          {fileDetections.length > 0 && (
+            <div className="w-64 flex-shrink-0 border rounded-lg p-3 flex flex-col">
+              <h4 className="text-sm font-medium mb-2">Detected Systems ({fileDetections.length})</h4>
+              <ScrollArea className="flex-1">
                 <div className="space-y-2 pr-2">
                   {fileDetections.map((detection, i) => (
                     <div
@@ -275,6 +349,7 @@ export const FileViewerModal = ({
                       style={{
                         borderLeftWidth: 4,
                         borderLeftColor: getSystemColor(detection.systemType),
+                        backgroundColor: hoveredSystem === detection.lineCode ? 'hsl(var(--muted))' : undefined,
                       }}
                       onMouseEnter={() => setHoveredSystem(detection.lineCode)}
                       onMouseLeave={() => setHoveredSystem(null)}
@@ -287,37 +362,6 @@ export const FileViewerModal = ({
                       </p>
                       <p className="text-[10px] text-muted-foreground">
                         {detection.lineMonitored}
-                      </p>
-                    </div>
-                  ))}
-                </div>
-              </ScrollArea>
-            </div>
-          )}
-
-          {/* Info for PDFs */}
-          {isPdf && fileDetections.length > 0 && (
-            <div className="w-64 border rounded-lg p-3 space-y-2">
-              <h4 className="text-sm font-medium">Detected Systems ({fileDetections.length})</h4>
-              <p className="text-xs text-muted-foreground">
-                Bounding boxes can only be displayed on image files. This PDF contains the following detected systems:
-              </p>
-              <ScrollArea className="h-full max-h-[calc(90vh-14rem)]">
-                <div className="space-y-2 pr-2">
-                  {fileDetections.map((detection, i) => (
-                    <div
-                      key={i}
-                      className="p-2 rounded-md border"
-                      style={{
-                        borderLeftWidth: 4,
-                        borderLeftColor: getSystemColor(detection.systemType),
-                      }}
-                    >
-                      <p className="text-xs font-medium truncate">
-                        {detection.lineCode}
-                      </p>
-                      <p className="text-xs text-muted-foreground truncate">
-                        {detection.systemType}
                       </p>
                     </div>
                   ))}
