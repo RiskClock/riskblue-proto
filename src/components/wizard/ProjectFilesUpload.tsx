@@ -10,6 +10,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { DriveFilesChat } from "./DriveFilesChat";
 import { FileViewerModal } from "./FileViewerModal";
+import { PromptEditorModal, DEFAULT_ANALYSIS_PROMPT } from "./PromptEditorModal";
 
 interface DriveFile {
   id: string;
@@ -77,6 +78,9 @@ export const ProjectFilesUpload = ({ projectId, onDataExtracted, setIsProcessing
   // File viewer modal
   const [viewerOpen, setViewerOpen] = useState(false);
   const [viewerFile, setViewerFile] = useState<{ id: string; name: string; mimeType: string } | null>(null);
+  
+  // Prompt editor modal
+  const [promptEditorOpen, setPromptEditorOpen] = useState(false);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -360,7 +364,7 @@ export const ProjectFilesUpload = ({ projectId, onDataExtracted, setIsProcessing
     return [];
   };
 
-  const handleAnalyzeFiles = async () => {
+  const handleAnalyzeFiles = () => {
     if (driveFiles.length === 0) {
       toast({
         title: "No Files",
@@ -369,16 +373,21 @@ export const ProjectFilesUpload = ({ projectId, onDataExtracted, setIsProcessing
       });
       return;
     }
+    // Open the prompt editor modal instead of directly analyzing
+    setPromptEditorOpen(true);
+  };
 
+  const handleConfirmAnalysis = async (customPrompt: string) => {
     setAnalyzingFiles(true);
     setAnalysisData(null);
 
     try {
-      // Call the actual edge function
+      // Call the actual edge function with custom prompt
       const response = await supabase.functions.invoke('analyze-drive-files', {
         body: {
           files: driveFiles,
           accessToken: driveAccessToken,
+          customPrompt,
         },
       });
 
@@ -664,6 +673,14 @@ export const ProjectFilesUpload = ({ projectId, onDataExtracted, setIsProcessing
           detections={analysisData?.systems || []}
         />
       )}
+
+      {/* Prompt Editor Modal */}
+      <PromptEditorModal
+        open={promptEditorOpen}
+        onOpenChange={setPromptEditorOpen}
+        onConfirm={handleConfirmAnalysis}
+        defaultPrompt={DEFAULT_ANALYSIS_PROMPT}
+      />
     </Card>
   );
 };
