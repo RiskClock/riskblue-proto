@@ -1,4 +1,4 @@
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -242,7 +242,7 @@ export const ProjectFilesUpload = ({ projectId, onDataExtracted, setIsProcessing
   };
 
   // Check for provider token on mount and after OAuth redirect
-  useState(() => {
+  useEffect(() => {
     const checkSession = async () => {
       const { data: { session } } = await supabase.auth.getSession();
       if (session?.provider_token) {
@@ -261,7 +261,7 @@ export const ProjectFilesUpload = ({ projectId, onDataExtracted, setIsProcessing
     });
 
     return () => subscription.unsubscribe();
-  });
+  }, []);
 
   const handleLoadDriveFiles = async () => {
     if (!folderId.trim() || !driveAccessToken) {
