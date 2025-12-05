@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useMemo } from "react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -77,12 +77,17 @@ export const MitigationControlsStep = ({ data, onNext, onBack, isProcessingWebho
     },
   });
 
+  // Memoize allControlNames to prevent infinite loops
+  const allControlNames = useMemo(() => 
+    mitigationControls.map(c => c.name), 
+    [mitigationControls]
+  );
+  
   // Default to all controls selected
-  const allControlNames = mitigationControls.map(c => c.name);
   const [selectedControls, setSelectedControls] = useState<string[]>(
     data.selectedControls && data.selectedControls.length > 0 
       ? data.selectedControls 
-      : allControlNames
+      : []
   );
 
   // Update default selection when controls load
@@ -91,7 +96,7 @@ export const MitigationControlsStep = ({ data, onNext, onBack, isProcessingWebho
       setSelectedControls(allControlNames);
       hasPendingSave.current = true; // Mark that we have unsaved changes
     }
-  }, [mitigationControls, allControlNames, data.selectedControls]);
+  }, [mitigationControls.length, allControlNames, data.selectedControls]);
 
   // Effect 1: Always sync incoming data to local state
   useEffect(() => {

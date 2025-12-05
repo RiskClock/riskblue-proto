@@ -52,6 +52,8 @@ const ProjectWizard = () => {
   const [showGuidelinesDialog, setShowGuidelinesDialog] = useState(false);
 
   useEffect(() => {
+    let mounted = true;
+    
     const fetchProject = async () => {
       if (!id || id === "new") return;
       
@@ -67,9 +69,18 @@ const ProjectWizard = () => {
           .from("projects")
           .select("*")
           .eq("id", id)
-          .single();
+          .maybeSingle();
+
+        // Don't show errors if component unmounted
+        if (!mounted) return;
 
         if (error) throw error;
+        
+        // Handle case where project is not found
+        if (!data) {
+          console.warn("Project not found:", id);
+          return;
+        }
         
         // Merge table columns with project_data JSONB
         const { project_data, created_at, updated_at, user_id, id: projectId, ...tableColumns } = data;
@@ -80,6 +91,10 @@ const ProjectWizard = () => {
         
         setProjectData(mergedData);
       } catch (error: any) {
+        // Don't show errors if component unmounted
+        if (!mounted) return;
+        
+        console.error("Error fetching project:", error);
         toast({
           title: "Error",
           description: getUserFriendlyError(error),
@@ -97,7 +112,10 @@ const ProjectWizard = () => {
 
     fetchProject();
     
-    return () => subscription.unsubscribe();
+    return () => {
+      mounted = false;
+      subscription.unsubscribe();
+    };
   }, [id, toast]);
 
   const saveProject = useCallback(async (data: ProjectData) => {
