@@ -7,6 +7,7 @@ const corsHeaders = {
 
 const ANALYSIS_PROMPT = `I am providing you with building drawings that may include multiple water-related systems.
 Assume I have no technical knowledge, so you must extract everything directly from the drawings without asking me any questions.
+
 Your task is to analyze the drawing and create one universal chart covering every water system visible, including (if present):
 • Domestic Cold Water (CW)
 • Domestic Hot Water (HW)
@@ -31,7 +32,7 @@ For each system and each significant line, populate a chart with one row per mon
 | Exact Location & Description | Where the sensor should be installed, described precisely using visible drawing context (e.g., "after DCDA, before pump suction," "on HW header leaving DWH-1/2," "below riser before vertical transition," etc.). |
 | Purpose / Goal | A short explanation of what the sensor would detect (e.g., "leaks," "unauthorized flow," "monitor zone usage," "detect burst or abnormal demand"). |
 | System Type | Identify system group (e.g., "Domestic Hot Water Recirculation System," "Wet Fire Sprinkler System," "Cold Water Distribution," "Storm Drainage—no monitoring applicable"). |
-| Coordinates | [x_start, y_start, x_end, y_end] bounding box in pixels within the file where the system was found. |
+| Coordinates | [x start, y start, x end, y end] box in pixels within the file where the system was found, in normalized coordinates. |
 
 Important rules:
 • Extract EVERYTHING directly from the drawing text—no assumptions.
@@ -40,7 +41,7 @@ Important rules:
 • Include one row per line or per riser if needed.
 • If a system does not require monitoring, include it with "Sensor Type = none required."
 • The goal is a universal, standardized monitoring table for all water-related lines.
-• IMPORTANT: For coordinates, provide accurate pixel bounding boxes [x_start, y_start, x_end, y_end] for where each system is located in the drawing.
+• Output only the completed chart, clean and professional.
 
 After the chart, provide a JSON block with all detected systems and their coordinates in this exact format:
 \`\`\`json
@@ -50,8 +51,7 @@ After the chart, provide a JSON block with all detected systems and their coordi
       "lineMonitored": "Main Hot Water Supply",
       "lineCode": "Ø100 HW",
       "systemType": "Domestic Hot Water",
-      "coordinates": [100, 200, 300, 400],
-      "fileName": "file_name.pdf"
+      "coordinates": [100, 200, 300, 400]
     }
   ]
 }
@@ -214,7 +214,7 @@ async function analyzeWithGemini(files: GeminiFile[], apiKey: string): Promise<s
   try {
     const parts: any[] = [
       { text: ANALYSIS_PROMPT },
-      { text: `\n\nI have ${files.length} building drawing files to analyze. Please extract all water system information and create the monitoring chart.\n\nFiles included:\n${files.map(f => `- ${f.name}`).join('\n')}` },
+      { text: `\n\nI have ${files.length} building drawing files to analyze. Please extract all water system information and create the monitoring chart.\n\nFiles included:\n${files.map(f => f.name).join('\n')}` },
     ];
 
     // Add file references
