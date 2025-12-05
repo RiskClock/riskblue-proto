@@ -228,18 +228,18 @@ export const FileViewerModal = ({
     // Draw image
     ctx.drawImage(img, 0, 0, displayWidth, displayHeight);
 
-    // Gemini Vision returns coordinates normalized to 0-10000 range 
-    // (based on max values in sample data being ~9898)
-    const COORD_SCALE = 10000;
+    // Gemini Vision returns coordinates normalized to 0-1000 range
+    // Scale from normalized (0-1000) to display canvas
+    const COORD_SCALE = 1000;
     
     console.log("Drawing", fileDetections.length, "detections, normalized to", COORD_SCALE);
 
     // Draw bounding boxes
     fileDetections.forEach((detection, index) => {
-      const [x1, y1, x2, y2] = detection.coordinates;
+      const [y1, x1, y2, x2] = detection.coordinates; // Gemini returns [y1, x1, y2, x2]
       const color = getSystemColor(detection.systemType);
 
-      // Scale from normalized coordinates (0-10000) to display canvas size
+      // Scale from normalized coordinates (0-1000) to display canvas size
       const scaledX1 = (x1 / COORD_SCALE) * displayWidth;
       const scaledY1 = (y1 / COORD_SCALE) * displayHeight;
       const scaledX2 = (x2 / COORD_SCALE) * displayWidth;
