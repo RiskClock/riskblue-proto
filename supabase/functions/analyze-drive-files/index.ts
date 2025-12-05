@@ -210,10 +210,11 @@ async function waitForFileProcessing(fileName: string, apiKey: string, maxAttemp
 }
 
 // Call Gemini generateContent with file references
-async function analyzeWithGemini(files: GeminiFile[], apiKey: string): Promise<string | null> {
+async function analyzeWithGemini(files: GeminiFile[], apiKey: string, customPrompt?: string): Promise<string | null> {
   try {
+    const promptToUse = customPrompt || ANALYSIS_PROMPT;
     const parts: any[] = [
-      { text: ANALYSIS_PROMPT },
+      { text: promptToUse },
       { text: `\n\nI have ${files.length} building drawing files to analyze. Please extract all water system information and create the monitoring chart.\n\nFiles included:\n${files.map(f => f.name).join('\n')}` },
     ];
 
@@ -270,7 +271,7 @@ serve(async (req) => {
   }
 
   try {
-    const { files, accessToken } = await req.json();
+    const { files, accessToken, customPrompt } = await req.json();
 
     if (!files || !Array.isArray(files) || files.length === 0) {
       return new Response(
@@ -349,8 +350,8 @@ serve(async (req) => {
 
     console.log(`Successfully uploaded ${uploadedFiles.length} files to Gemini`);
 
-    // Analyze with Gemini
-    const analysisResult = await analyzeWithGemini(uploadedFiles, GEMINI_API_KEY);
+    // Analyze with Gemini (use custom prompt if provided)
+    const analysisResult = await analyzeWithGemini(uploadedFiles, GEMINI_API_KEY, customPrompt);
 
     if (!analysisResult) {
       return new Response(
