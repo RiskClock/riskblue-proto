@@ -238,7 +238,7 @@ async function analyzeWithGemini(files: GeminiFile[], apiKey: string, customProm
         body: JSON.stringify({
           contents: [{ role: "user", parts }],
           generationConfig: {
-            maxOutputTokens: 8000,
+            maxOutputTokens: 32000,
           },
         }),
       }
