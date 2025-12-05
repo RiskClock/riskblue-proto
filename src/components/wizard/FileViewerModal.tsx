@@ -228,22 +228,38 @@ export const FileViewerModal = ({
     // Draw image
     ctx.drawImage(img, 0, 0, displayWidth, displayHeight);
 
-    // Gemini Vision returns coordinates normalized to 0-1000 range
-    // Scale from normalized (0-1000) to display canvas
-    const COORD_SCALE = 1000;
+    // Auto-detect coordinate scale based on max values
+    // Gemini can return: 0-1 (normalized), 0-1000, or actual pixel values
+    let maxCoord = 0;
+    fileDetections.forEach(d => {
+      const coords = d.coordinates;
+      maxCoord = Math.max(maxCoord, ...coords);
+    });
     
-    console.log("Drawing", fileDetections.length, "detections, normalized to", COORD_SCALE);
+    // Determine scale: if max <= 1 it's 0-1, if max <= 1000 it's 0-1000, else pixels
+    let coordScale: number;
+    if (maxCoord <= 1) {
+      coordScale = 1; // 0-1 normalized
+    } else if (maxCoord <= 1000) {
+      coordScale = 1000; // 0-1000 normalized
+    } else {
+      // Actual pixel coordinates - use original PDF size
+      coordScale = Math.max(originalSize?.width || img.width, originalSize?.height || img.height);
+    }
+    
+    console.log("Drawing", fileDetections.length, "detections, maxCoord:", maxCoord, "scale:", coordScale);
 
     // Draw bounding boxes
     fileDetections.forEach((detection, index) => {
-      const [y1, x1, y2, x2] = detection.coordinates; // Gemini returns [y1, x1, y2, x2]
+      // Gemini returns [y_min, x_min, y_max, x_max] in normalized format
+      const [y1, x1, y2, x2] = detection.coordinates;
       const color = getSystemColor(detection.systemType);
 
-      // Scale from normalized coordinates (0-1000) to display canvas size
-      const scaledX1 = (x1 / COORD_SCALE) * displayWidth;
-      const scaledY1 = (y1 / COORD_SCALE) * displayHeight;
-      const scaledX2 = (x2 / COORD_SCALE) * displayWidth;
-      const scaledY2 = (y2 / COORD_SCALE) * displayHeight;
+      // Scale from normalized coordinates to display canvas size
+      const scaledX1 = (x1 / coordScale) * displayWidth;
+      const scaledY1 = (y1 / coordScale) * displayHeight;
+      const scaledX2 = (x2 / coordScale) * displayWidth;
+      const scaledY2 = (y2 / coordScale) * displayHeight;
       
       const width = scaledX2 - scaledX1;
       const height = scaledY2 - scaledY1;
