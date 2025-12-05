@@ -31,7 +31,7 @@ For each system and each significant line, populate a chart with one row per mon
 | Exact Location & Description | Where the sensor should be installed, described precisely using visible drawing context (e.g., "after DCDA, before pump suction," "on HW header leaving DWH-1/2," "below riser before vertical transition," etc.). |
 | Purpose / Goal | A short explanation of what the sensor would detect (e.g., "leaks," "unauthorized flow," "monitor zone usage," "detect burst or abnormal demand"). |
 | System Type | Identify system group (e.g., "Domestic Hot Water Recirculation System," "Wet Fire Sprinkler System," "Cold Water Distribution," "Storm Drainage—no monitoring applicable"). |
-| Coordinates | [x start, y start, x end, y end] box within the file where the system was found, in normalized relative coordinates. |
+| Coordinates | [x start, y start, x end, y end] box within the file where the system was found, in normalized relative coordinates, percentages between 0 and 1. |
 
 Important rules:
 • Extract EVERYTHING directly from the drawing text—no assumptions.
