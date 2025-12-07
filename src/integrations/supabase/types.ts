@@ -373,6 +373,71 @@ export type Database = {
         }
         Relationships: []
       }
+      project_analysis_items: {
+        Row: {
+          area_name: string | null
+          category: string
+          controls: string[] | null
+          coordinates: number[] | null
+          created_at: string
+          drawing_code: string | null
+          file_name: string | null
+          floor: string | null
+          id: string
+          item_id: string
+          length: number | null
+          name: string
+          project_id: string
+          size_category: string | null
+          updated_at: string
+          width: number | null
+        }
+        Insert: {
+          area_name?: string | null
+          category: string
+          controls?: string[] | null
+          coordinates?: number[] | null
+          created_at?: string
+          drawing_code?: string | null
+          file_name?: string | null
+          floor?: string | null
+          id?: string
+          item_id: string
+          length?: number | null
+          name: string
+          project_id: string
+          size_category?: string | null
+          updated_at?: string
+          width?: number | null
+        }
+        Update: {
+          area_name?: string | null
+          category?: string
+          controls?: string[] | null
+          coordinates?: number[] | null
+          created_at?: string
+          drawing_code?: string | null
+          file_name?: string | null
+          floor?: string | null
+          id?: string
+          item_id?: string
+          length?: number | null
+          name?: string
+          project_id?: string
+          size_category?: string | null
+          updated_at?: string
+          width?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "project_analysis_items_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       project_collaborators: {
         Row: {
           company: string
