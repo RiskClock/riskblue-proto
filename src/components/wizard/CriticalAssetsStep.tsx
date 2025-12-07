@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
@@ -136,14 +136,6 @@ export const CriticalAssetsStep = ({
     display_order: 999
   }))];
 
-  // Get analysis items for a specific asset type
-  const getAssetAnalysisItems = (assetName: string): AnalysisItem[] => {
-    return analysisItems.filter(item => 
-      item.category === "Asset" && 
-      normalizeAssetName(item.name) === normalizeAssetName(assetName)
-    );
-  };
-
   // Normalize asset name for comparison
   const normalizeAssetName = (name: string): string => {
     const normalized = name.toLowerCase()
@@ -160,7 +152,6 @@ export const CriticalAssetsStep = ({
       .replace(/\s+/g, ' ')
       .trim();
     
-    // Map specific patterns
     if (normalized.includes('electrical') && normalized.includes('room')) return 'electrical rooms';
     if (normalized.includes('mechanical') && normalized.includes('room')) return 'mechanical rooms';
     if (normalized.includes('electrical') && normalized.includes('riser')) return 'electrical risers';
@@ -172,6 +163,36 @@ export const CriticalAssetsStep = ({
     if (normalized.includes('mass timber') || normalized.includes('millwork')) return 'mass timber and millwork';
     
     return normalized;
+  };
+
+  // Get unique asset types from analysis items
+  const detectedAssetTypes = useMemo(() => {
+    const types = new Set<string>();
+    analysisItems.forEach(item => {
+      if (item.category === "Asset") {
+        const normalized = normalizeAssetName(item.name);
+        types.add(normalized);
+      }
+    });
+    return types;
+  }, [analysisItems]);
+
+  // Filter assets to only show those detected in analysis (if any analysis exists)
+  const filteredAssets = useMemo(() => {
+    if (analysisItems.length === 0) return allAssets;
+    
+    return allAssets.filter(asset => {
+      const normalized = normalizeAssetName(asset.name);
+      return detectedAssetTypes.has(normalized);
+    });
+  }, [allAssets, detectedAssetTypes, analysisItems.length]);
+
+  // Get analysis items for a specific asset type
+  const getAssetAnalysisItems = (assetName: string): AnalysisItem[] => {
+    return analysisItems.filter(item => 
+      item.category === "Asset" && 
+      normalizeAssetName(item.name) === normalizeAssetName(assetName)
+    );
   };
 
   // Get count of instances for an asset
@@ -250,7 +271,7 @@ export const CriticalAssetsStep = ({
 
   return <div className="space-y-6">
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-        {allAssets.map(asset => {
+        {filteredAssets.map(asset => {
         const isSelected = selectedAssets.includes(asset.name);
         const count = getAssetCount(asset.name);
         return <div key={asset.id} onClick={() => toggleAsset(asset.name)} className={`p-4 rounded-lg cursor-pointer transition-all relative ${isSelected ? "border-4 border-primary bg-primary/5" : "border-2 border-border hover:border-primary/50"}`}>
@@ -293,17 +314,19 @@ export const CriticalAssetsStep = ({
             </div>;
       })}
         
-        {/* Add New Asset Card */}
-        <div
-          onClick={() => setAddAssetDialogOpen(true)}
-          className="p-4 rounded-lg cursor-pointer transition-all border-2 border-dashed border-border hover:border-primary/50 flex flex-col items-center justify-center min-h-[280px]"
-        >
-          <Plus className="h-12 w-12 text-muted-foreground mb-2" />
-          <h3 className="font-semibold text-sm text-center">Add Custom Asset</h3>
-          <p className="text-xs text-muted-foreground text-center mt-1">
-            Add an asset specific to your project
-          </p>
-        </div>
+        {/* Add New Asset Card - only show if no analysis */}
+        {analysisItems.length === 0 && (
+          <div
+            onClick={() => setAddAssetDialogOpen(true)}
+            className="p-4 rounded-lg cursor-pointer transition-all border-2 border-dashed border-border hover:border-primary/50 flex flex-col items-center justify-center min-h-[280px]"
+          >
+            <Plus className="h-12 w-12 text-muted-foreground mb-2" />
+            <h3 className="font-semibold text-sm text-center">Add Custom Asset</h3>
+            <p className="text-xs text-muted-foreground text-center mt-1">
+              Add an asset specific to your project
+            </p>
+          </div>
+        )}
       </div>
 
       {/* Floor Specification Dialog */}

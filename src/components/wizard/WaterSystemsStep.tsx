@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
@@ -136,19 +136,10 @@ export const WaterSystemsStep = ({
     display_order: 999
   }))];
 
-  // Get analysis items for a specific water system type
-  const getSystemAnalysisItems = (systemName: string): AnalysisItem[] => {
-    return analysisItems.filter(item => 
-      item.category === "Water System" && 
-      normalizeSystemName(item.name) === normalizeSystemName(systemName)
-    );
-  };
-
   // Normalize system name for comparison
   const normalizeSystemName = (name: string): string => {
     const lower = name.toLowerCase();
     
-    // Map specific patterns to database names
     if (lower.includes('cold') && (lower.includes('domestic') || lower.includes('water'))) return 'domestic cold water';
     if (lower.includes('hot') && (lower.includes('domestic') || lower.includes('water'))) return 'domestic hot water';
     if (lower.includes('temporary') && lower.includes('water')) return 'temporary water run';
@@ -158,6 +149,36 @@ export const WaterSystemsStep = ({
     if (lower.includes('sump') || lower.includes('storm drain') || lower.includes('drainage')) return 'sump pits storm drains and drainages';
     
     return lower.replace(/[,&]/g, '').replace(/\s+/g, ' ').trim();
+  };
+
+  // Get unique system types from analysis items
+  const detectedSystemTypes = useMemo(() => {
+    const types = new Set<string>();
+    analysisItems.forEach(item => {
+      if (item.category === "Water System") {
+        const normalized = normalizeSystemName(item.name);
+        types.add(normalized);
+      }
+    });
+    return types;
+  }, [analysisItems]);
+
+  // Filter systems to only show those detected in analysis (if any analysis exists)
+  const filteredSystems = useMemo(() => {
+    if (analysisItems.length === 0) return allSystems;
+    
+    return allSystems.filter(system => {
+      const normalized = normalizeSystemName(system.name);
+      return detectedSystemTypes.has(normalized);
+    });
+  }, [allSystems, detectedSystemTypes, analysisItems.length]);
+
+  // Get analysis items for a specific water system type
+  const getSystemAnalysisItems = (systemName: string): AnalysisItem[] => {
+    return analysisItems.filter(item => 
+      item.category === "Water System" && 
+      normalizeSystemName(item.name) === normalizeSystemName(systemName)
+    );
   };
 
   // Get count of instances for a system
@@ -236,7 +257,7 @@ export const WaterSystemsStep = ({
 
   return <div className="space-y-6">
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-        {allSystems.map(system => {
+        {filteredSystems.map(system => {
         const isSelected = selectedSystems.includes(system.name);
         const count = getSystemCount(system.name);
         return <div key={system.id} onClick={() => toggleSystem(system.name)} className={`p-4 rounded-lg cursor-pointer transition-all relative ${isSelected ? "border-4 border-primary bg-primary/5" : "border-2 border-border hover:border-primary/50"}`}>
@@ -279,17 +300,19 @@ export const WaterSystemsStep = ({
             </div>;
       })}
         
-        {/* Add New System Card */}
-        <div
-          onClick={() => setAddSystemDialogOpen(true)}
-          className="p-4 rounded-lg cursor-pointer transition-all border-2 border-dashed border-border hover:border-primary/50 flex flex-col items-center justify-center min-h-[280px]"
-        >
-          <Plus className="h-12 w-12 text-muted-foreground mb-2" />
-          <h3 className="font-semibold text-sm text-center">Add Custom System</h3>
-          <p className="text-xs text-muted-foreground text-center mt-1">
-            Add a water system specific to your project
-          </p>
-        </div>
+        {/* Add New System Card - only show if no analysis */}
+        {analysisItems.length === 0 && (
+          <div
+            onClick={() => setAddSystemDialogOpen(true)}
+            className="p-4 rounded-lg cursor-pointer transition-all border-2 border-dashed border-border hover:border-primary/50 flex flex-col items-center justify-center min-h-[280px]"
+          >
+            <Plus className="h-12 w-12 text-muted-foreground mb-2" />
+            <h3 className="font-semibold text-sm text-center">Add Custom System</h3>
+            <p className="text-xs text-muted-foreground text-center mt-1">
+              Add a water system specific to your project
+            </p>
+          </div>
+        )}
       </div>
 
       {/* Floor Specification Dialog */}
