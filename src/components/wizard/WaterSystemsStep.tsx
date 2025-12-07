@@ -260,17 +260,7 @@ export const WaterSystemsStep = ({
         {filteredSystems.map(system => {
         const isSelected = selectedSystems.includes(system.name);
         const count = getSystemCount(system.name);
-        return <div key={system.id} onClick={() => toggleSystem(system.name)} className={`p-4 rounded-lg cursor-pointer transition-all relative ${isSelected ? "border-4 border-primary bg-primary/5" : "border-2 border-border hover:border-primary/50"}`}>
-              {/* Count Badge */}
-              {count > 0 && (
-                <Badge 
-                  variant="default" 
-                  className="absolute -top-2 -left-2 h-6 min-w-6 flex items-center justify-center text-xs font-bold"
-                >
-                  {count}
-                </Badge>
-              )}
-
+        return <div key={system.id} onClick={() => toggleSystem(system.name)} className={`p-4 rounded-lg cursor-pointer transition-all relative ${isSelected ? "border-2 border-primary bg-primary/5" : "border border-border hover:border-primary/50"}`}>
               <button onClick={e => {
                 e.stopPropagation();
                 if (count > 0) {
@@ -283,7 +273,14 @@ export const WaterSystemsStep = ({
               </button>
 
               <div className="mb-3">
-                <h3 className="font-semibold text-sm mb-1">{system.name}</h3>
+                <div className="flex items-center gap-2 mb-1">
+                  <h3 className="font-semibold text-sm">{system.name}</h3>
+                  {count > 0 && (
+                    <Badge variant="secondary" className="text-xs">
+                      ×{count}
+                    </Badge>
+                  )}
+                </div>
                 <span className="inline-block px-2 py-0.5 text-xs bg-secondary text-secondary-foreground rounded">{system.risk_level}</span>
               </div>
               
