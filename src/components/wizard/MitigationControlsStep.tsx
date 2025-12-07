@@ -1,8 +1,7 @@
 import { useState, useEffect, useRef, useMemo } from "react";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import { Badge } from "@/components/ui/badge";
-import { Shield, ChevronRight } from "lucide-react";
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
+import { Shield, Building2, Droplets, Users } from "lucide-react";
 import { AnalysisItem } from "@/lib/analysisItemMapper";
 
 interface MitigationControlsStepProps {
@@ -25,8 +24,6 @@ export const MitigationControlsStep = ({
   isProcessingWebhook,
   analysisItems = []
 }: MitigationControlsStepProps) => {
-  const [selectedControl, setSelectedControl] = useState<UniqueControl | null>(null);
-  const [dialogOpen, setDialogOpen] = useState(false);
   const hasPendingSave = useRef(false);
 
   // Extract unique controls directly from analysis items
@@ -94,11 +91,6 @@ export const MitigationControlsStep = ({
     }
   }, [selectedControls, onNext, isProcessingWebhook]);
 
-  const handleViewDetails = (control: UniqueControl) => {
-    setSelectedControl(control);
-    setDialogOpen(true);
-  };
-
   if (analysisItems.length === 0) {
     return (
       <div className="text-center py-12 text-muted-foreground">
@@ -130,126 +122,135 @@ export const MitigationControlsStep = ({
         </div>
       </div>
 
-      {/* Compact list view */}
-      <div className="border rounded-lg divide-y">
+      {/* Accordion list view */}
+      <Accordion type="multiple" className="border rounded-lg">
         {uniqueControls.map((control) => {
           const isSelected = selectedControls.includes(control.name);
-          const assetCount = control.protectedItems.filter(i => i.category === "Asset").length;
-          const systemCount = control.protectedItems.filter(i => i.category === "Water System").length;
-          const processCount = control.protectedItems.filter(i => i.category === "Process").length;
+          const assets = control.protectedItems.filter(i => i.category === "Asset");
+          const systems = control.protectedItems.filter(i => i.category === "Water System");
+          const processes = control.protectedItems.filter(i => i.category === "Process");
 
           return (
-            <div 
-              key={control.name}
-              className={`flex items-center gap-3 p-3 cursor-pointer transition-colors hover:bg-muted/50 ${
-                isSelected ? "bg-primary/5" : ""
-              }`}
-              onClick={() => toggleControl(control.name)}
-            >
-              {/* Checkbox indicator */}
-              <div className={`w-5 h-5 rounded border-2 flex items-center justify-center flex-shrink-0 transition-colors ${
-                isSelected 
-                  ? "bg-primary border-primary" 
-                  : "border-muted-foreground/30"
-              }`}>
-                {isSelected && (
-                  <svg className="w-3 h-3 text-primary-foreground" fill="currentColor" viewBox="0 0 20 20">
-                    <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
-                  </svg>
-                )}
-              </div>
-
-              {/* Control name */}
-              <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium truncate">{control.name}</p>
-              </div>
-
-              {/* Protection counts */}
-              <div className="flex items-center gap-1 flex-shrink-0">
-                {assetCount > 0 && (
-                  <Badge variant="secondary" className="text-xs px-1.5 py-0">
-                    {assetCount}A
-                  </Badge>
-                )}
-                {systemCount > 0 && (
-                  <Badge variant="secondary" className="text-xs px-1.5 py-0">
-                    {systemCount}S
-                  </Badge>
-                )}
-                {processCount > 0 && (
-                  <Badge variant="secondary" className="text-xs px-1.5 py-0">
-                    {processCount}P
-                  </Badge>
-                )}
-              </div>
-
-              {/* View details button */}
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  handleViewDetails(control);
-                }}
-                className="p-1.5 hover:bg-muted rounded transition-colors flex-shrink-0"
-              >
-                <ChevronRight className="h-4 w-4 text-muted-foreground" />
-              </button>
-            </div>
-          );
-        })}
-      </div>
-
-      <div className="text-xs text-muted-foreground text-center pt-2">
-        A = Assets, S = Water Systems, P = Processes
-      </div>
-
-      <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-        <DialogContent className="max-w-2xl max-h-[80vh]">
-          <DialogHeader>
-            <DialogTitle>{selectedControl?.name}</DialogTitle>
-            <DialogDescription>
-              Protects {selectedControl?.protectedItems.length} item{selectedControl?.protectedItems.length !== 1 ? 's' : ''}
-            </DialogDescription>
-          </DialogHeader>
-          <ScrollArea className="max-h-[60vh] pr-4">
-            <div className="space-y-4">
-              {selectedControl?.protectedItems.map((item, index) => (
-                <div key={index} className="border rounded-lg p-4 space-y-2">
-                  <div className="flex items-center justify-between">
-                    <h4 className="font-semibold">{item.areaName || item.name}</h4>
-                    <div className="flex gap-2">
-                      <Badge variant="outline">{item.category}</Badge>
-                      <Badge variant="secondary">{item.id}</Badge>
-                    </div>
-                  </div>
-                  
-                  <div className="grid grid-cols-2 gap-2 text-sm">
-                    {item.floor && (
-                      <div>
-                        <span className="text-muted-foreground">Floor:</span> {item.floor}
-                      </div>
-                    )}
-                    {item.drawingCode && (
-                      <div>
-                        <span className="text-muted-foreground">Drawing Code:</span> {item.drawingCode}
-                      </div>
-                    )}
-                    {item.width && item.length && (
-                      <div>
-                        <span className="text-muted-foreground">Dimensions:</span> {item.width}' × {item.length}'
-                      </div>
-                    )}
-                    {item.sizeCategory && (
-                      <div>
-                        <span className="text-muted-foreground">Size:</span> {item.sizeCategory}
-                      </div>
+            <AccordionItem key={control.name} value={control.name} className="border-b last:border-b-0">
+              <div className={`flex items-center transition-colors ${isSelected ? "bg-primary/5" : ""}`}>
+                {/* Checkbox - stops propagation to not trigger accordion */}
+                <div 
+                  className="p-3 cursor-pointer"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    toggleControl(control.name);
+                  }}
+                >
+                  <div className={`w-5 h-5 rounded border-2 flex items-center justify-center flex-shrink-0 transition-colors ${
+                    isSelected 
+                      ? "bg-primary border-primary" 
+                      : "border-muted-foreground/30"
+                  }`}>
+                    {isSelected && (
+                      <svg className="w-3 h-3 text-primary-foreground" fill="currentColor" viewBox="0 0 20 20">
+                        <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                      </svg>
                     )}
                   </div>
                 </div>
-              ))}
-            </div>
-          </ScrollArea>
-        </DialogContent>
-      </Dialog>
+
+                {/* Accordion trigger covers the rest of the row */}
+                <AccordionTrigger className="flex-1 hover:no-underline py-3 pr-3">
+                  <div className="flex items-center justify-between w-full pr-2">
+                    <span className="text-sm font-medium text-left">{control.name}</span>
+                    <div className="flex items-center gap-2">
+                      {assets.length > 0 && (
+                        <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                          <Building2 className="h-3.5 w-3.5" />
+                          <span>{assets.length}</span>
+                        </div>
+                      )}
+                      {systems.length > 0 && (
+                        <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                          <Droplets className="h-3.5 w-3.5" />
+                          <span>{systems.length}</span>
+                        </div>
+                      )}
+                      {processes.length > 0 && (
+                        <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                          <Users className="h-3.5 w-3.5" />
+                          <span>{processes.length}</span>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </AccordionTrigger>
+              </div>
+
+              <AccordionContent className="px-3 pb-3">
+                <div className="space-y-3 pt-2">
+                  {/* Assets section */}
+                  {assets.length > 0 && (
+                    <div className="space-y-2">
+                      <div className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
+                        <Building2 className="h-4 w-4" />
+                        <span>Assets ({assets.length})</span>
+                      </div>
+                      <div className="grid gap-2 pl-6">
+                        {assets.map((item, idx) => (
+                          <div key={idx} className="flex items-center justify-between p-2 bg-muted/30 rounded text-sm">
+                            <span>{item.areaName || item.name}</span>
+                            <div className="flex gap-1">
+                              {item.floor && <Badge variant="outline" className="text-xs">{item.floor}</Badge>}
+                              {item.sizeCategory && <Badge variant="secondary" className="text-xs">{item.sizeCategory}</Badge>}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Water Systems section */}
+                  {systems.length > 0 && (
+                    <div className="space-y-2">
+                      <div className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
+                        <Droplets className="h-4 w-4" />
+                        <span>Water Systems ({systems.length})</span>
+                      </div>
+                      <div className="grid gap-2 pl-6">
+                        {systems.map((item, idx) => (
+                          <div key={idx} className="flex items-center justify-between p-2 bg-muted/30 rounded text-sm">
+                            <span>{item.areaName || item.name}</span>
+                            <div className="flex gap-1">
+                              {item.floor && <Badge variant="outline" className="text-xs">{item.floor}</Badge>}
+                              {item.sizeCategory && <Badge variant="secondary" className="text-xs">{item.sizeCategory}</Badge>}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Processes section */}
+                  {processes.length > 0 && (
+                    <div className="space-y-2">
+                      <div className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
+                        <Users className="h-4 w-4" />
+                        <span>Processes ({processes.length})</span>
+                      </div>
+                      <div className="grid gap-2 pl-6">
+                        {processes.map((item, idx) => (
+                          <div key={idx} className="flex items-center justify-between p-2 bg-muted/30 rounded text-sm">
+                            <span>{item.areaName || item.name}</span>
+                            <div className="flex gap-1">
+                              {item.floor && <Badge variant="outline" className="text-xs">{item.floor}</Badge>}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </AccordionContent>
+            </AccordionItem>
+          );
+        })}
+      </Accordion>
     </div>
   );
 };
