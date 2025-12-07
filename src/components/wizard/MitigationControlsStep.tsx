@@ -156,7 +156,7 @@ export const MitigationControlsStep = ({
 
                 {/* Accordion trigger covers the rest of the row */}
                 <AccordionTrigger className="flex-1 hover:no-underline py-3 pr-3 [&>svg]:ml-2">
-                  <div className="flex items-center justify-between w-full">
+                  <div className="flex flex-1 items-center justify-between min-w-0">
                     <span className="text-sm font-medium text-left">{control.name}</span>
                     <div className="flex items-center gap-1.5 mr-2 shrink-0">
                       {assets.length > 0 && (
