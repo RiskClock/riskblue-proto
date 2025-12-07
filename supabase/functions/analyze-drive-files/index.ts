@@ -353,8 +353,8 @@ async function analyzeWithGemini(files: GeminiFile[], apiKey: string, customProm
   }
 }
 
-// Mock data for development - TMU response
-const MOCK_ASSETS_WATER_SYSTEMS_PROCESSES = [
+// Complete TMU Mock data with all controls
+const MOCK_ASSETS_WATER_SYSTEMS_PROCESSES: AnalysisItem[] = [
   {
     "id": "ERM001",
     "name": "Electrical Rooms",
@@ -366,7 +366,12 @@ const MOCK_ASSETS_WATER_SYSTEMS_PROCESSES = [
     "width": 36.7,
     "length": 20.7,
     "sizeCategory": "large",
-    "controls": ["Presence of Water Monitoring", "Water Piping in and Around Electrical Rooms", "Water-Sensitive and High-Value Equipment Protection", "Temporary Enclosure Plan"],
+    "controls": [
+      "Presence of Water Monitoring",
+      "Water Piping in and Around Electrical Rooms",
+      "Water-Sensitive and High-Value Equipment Protection",
+      "Temporary Enclosure Plan"
+    ],
     "coordinates": [0.595, 0.1923, 0.1755, 0.2434]
   },
   {
@@ -380,7 +385,12 @@ const MOCK_ASSETS_WATER_SYSTEMS_PROCESSES = [
     "width": 12.1,
     "length": 34.7,
     "sizeCategory": "medium",
-    "controls": ["Presence of Water Monitoring", "Water Piping in and Around Electrical Rooms", "Water-Sensitive and High-Value Equipment Protection", "Temporary Enclosure Plan"],
+    "controls": [
+      "Presence of Water Monitoring",
+      "Water Piping in and Around Electrical Rooms",
+      "Water-Sensitive and High-Value Equipment Protection",
+      "Temporary Enclosure Plan"
+    ],
     "coordinates": [0.0268, 0.6475, 0.2073, 0.288]
   },
   {
@@ -394,8 +404,70 @@ const MOCK_ASSETS_WATER_SYSTEMS_PROCESSES = [
     "width": 10.5,
     "length": 32.5,
     "sizeCategory": "medium",
-    "controls": ["Presence of Water Monitoring", "Water Piping in and Around Electrical Rooms", "Water-Sensitive and High-Value Equipment Protection", "Temporary Enclosure Plan"],
+    "controls": [
+      "Presence of Water Monitoring",
+      "Water Piping in and Around Electrical Rooms",
+      "Water-Sensitive and High-Value Equipment Protection",
+      "Temporary Enclosure Plan"
+    ],
     "coordinates": [0.9206, 0.0748, 0.059, 0.1157]
+  },
+  {
+    "id": "ERM004",
+    "name": "Electrical Rooms",
+    "category": "Asset",
+    "areaName": "IT ROOM",
+    "floor": "7th Floor",
+    "drawingCode": null,
+    "fileName": null,
+    "width": 36.9,
+    "length": 37.8,
+    "sizeCategory": "very large",
+    "controls": [
+      "Presence of Water Monitoring",
+      "Water Piping in and Around Electrical Rooms",
+      "Water-Sensitive and High-Value Equipment Protection",
+      "Temporary Enclosure Plan"
+    ],
+    "coordinates": [0.5121, 0.1132, 0.1462, 0.153]
+  },
+  {
+    "id": "ERM005",
+    "name": "Electrical Rooms",
+    "category": "Asset",
+    "areaName": "ELECTRICAL ROOM",
+    "floor": "Roof",
+    "drawingCode": null,
+    "fileName": null,
+    "width": 37.7,
+    "length": 26.4,
+    "sizeCategory": "very large",
+    "controls": [
+      "Presence of Water Monitoring",
+      "Water Piping in and Around Electrical Rooms",
+      "Water-Sensitive and High-Value Equipment Protection",
+      "Temporary Enclosure Plan"
+    ],
+    "coordinates": [0.6006, 0.1699, 0.0992, 0.1853]
+  },
+  {
+    "id": "ERM006",
+    "name": "Electrical Rooms",
+    "category": "Asset",
+    "areaName": "HYDRO VAULT",
+    "floor": "Lower Level",
+    "drawingCode": null,
+    "fileName": null,
+    "width": 27.9,
+    "length": 34.7,
+    "sizeCategory": "very large",
+    "controls": [
+      "Presence of Water Monitoring",
+      "Water Piping in and Around Electrical Rooms",
+      "Water-Sensitive and High-Value Equipment Protection",
+      "Temporary Enclosure Plan"
+    ],
+    "coordinates": [0.5344, 0.3189, 0.1756, 0.1463]
   },
   {
     "id": "MRM001",
@@ -408,7 +480,18 @@ const MOCK_ASSETS_WATER_SYSTEMS_PROCESSES = [
     "width": 35.7,
     "length": 10.9,
     "sizeCategory": "large",
-    "controls": ["Presence of Water Monitoring", "Spill Kit", "Air Pressure or Water Tests in Plumbing System", "Floor Penetrations Water Seals"],
+    "controls": [
+      "Presence of Water Monitoring",
+      "Spill Kit",
+      "Air Pressure or Water Tests in Plumbing System",
+      "Water Commissioning Activities and Water Mitigation Equipment Coordination",
+      "Additional Fill Tests: Ensuring Water System Integrity",
+      "Installation Integrity: Joints, Bolts, and Piping",
+      "Disinfection Process Reviews: Protecting System Integrity",
+      "Appropriate Material Review: Ensuring Compatibility and Durability",
+      "Floor Penetrations Water Seals",
+      "Mechanical Room Sleeves"
+    ],
     "coordinates": [0.3363, 0.5887, 0.1182, 0.0702]
   },
   {
@@ -422,7 +505,11 @@ const MOCK_ASSETS_WATER_SYSTEMS_PROCESSES = [
     "width": 39.8,
     "length": 25.9,
     "sizeCategory": "very large",
-    "controls": ["Presence of Water Monitoring", "Floor Penetrations Water Seals", "Temporary Enclosure Plan"],
+    "controls": [
+      "Presence of Water Monitoring",
+      "Floor Penetrations Water Seals",
+      "Temporary Enclosure Plan"
+    ],
     "coordinates": [0.5331, 0.0274, 0.0808, 0.2157]
   },
   {
@@ -436,7 +523,9 @@ const MOCK_ASSETS_WATER_SYSTEMS_PROCESSES = [
     "width": 18.9,
     "length": 27.2,
     "sizeCategory": "medium",
-    "controls": ["Presence of Water Monitoring"],
+    "controls": [
+      "Presence of Water Monitoring"
+    ],
     "coordinates": [0.6492, 0.0339, 0.151, 0.2247]
   },
   {
@@ -450,7 +539,9 @@ const MOCK_ASSETS_WATER_SYSTEMS_PROCESSES = [
     "width": 29.2,
     "length": 22.7,
     "sizeCategory": "large",
-    "controls": ["Presence of Water Monitoring"],
+    "controls": [
+      "Presence of Water Monitoring"
+    ],
     "coordinates": [0.2113, 0.4045, 0.204, 0.0555]
   },
   {
@@ -464,7 +555,9 @@ const MOCK_ASSETS_WATER_SYSTEMS_PROCESSES = [
     "width": 34.5,
     "length": 30.8,
     "sizeCategory": "very large",
-    "controls": ["Presence of Water Monitoring"],
+    "controls": [
+      "Presence of Water Monitoring"
+    ],
     "coordinates": [0.6155, 0.1094, 0.1531, 0.2747]
   },
   {
@@ -478,8 +571,186 @@ const MOCK_ASSETS_WATER_SYSTEMS_PROCESSES = [
     "width": 31.5,
     "length": 13.4,
     "sizeCategory": "large",
-    "controls": ["Presence of Water Monitoring"],
+    "controls": [
+      "Presence of Water Monitoring"
+    ],
     "coordinates": [0.1874, 0.0833, 0.0856, 0.1966]
+  },
+  {
+    "id": "KW003",
+    "name": "Kitchens & Washrooms",
+    "category": "Asset",
+    "areaName": "BF W/C",
+    "floor": "7th Floor",
+    "drawingCode": "SWC-701",
+    "fileName": null,
+    "width": 16.6,
+    "length": 20.7,
+    "sizeCategory": "small",
+    "controls": [
+      "Presence of Water Monitoring"
+    ],
+    "coordinates": [0.1074, 0.4066, 0.1961, 0.1761]
+  },
+  {
+    "id": "KW004",
+    "name": "Kitchens & Washrooms",
+    "category": "Asset",
+    "areaName": "BF W/C",
+    "floor": "6th Floor",
+    "drawingCode": "SWC-601",
+    "fileName": null,
+    "width": 29.7,
+    "length": 35.9,
+    "sizeCategory": "very large",
+    "controls": [
+      "Presence of Water Monitoring"
+    ],
+    "coordinates": [0.4799, 0.6361, 0.1096, 0.1265]
+  },
+  {
+    "id": "KW005",
+    "name": "Kitchens & Washrooms",
+    "category": "Asset",
+    "areaName": "BF W/C",
+    "floor": "5th Floor",
+    "drawingCode": "SWC-501",
+    "fileName": null,
+    "width": 23.9,
+    "length": 33.3,
+    "sizeCategory": "large",
+    "controls": [
+      "Presence of Water Monitoring"
+    ],
+    "coordinates": [0.545, 0.0838, 0.2456, 0.0962]
+  },
+  {
+    "id": "KW006",
+    "name": "Kitchens & Washrooms",
+    "category": "Asset",
+    "areaName": "BF W/C",
+    "floor": "4th Floor",
+    "drawingCode": "SWC-401",
+    "fileName": null,
+    "width": 30.6,
+    "length": 25.3,
+    "sizeCategory": "large",
+    "controls": [
+      "Presence of Water Monitoring"
+    ],
+    "coordinates": [0.1585, 0.2517, 0.196, 0.1849]
+  },
+  {
+    "id": "KW007",
+    "name": "Kitchens & Washrooms",
+    "category": "Asset",
+    "areaName": "BF W/C",
+    "floor": "3rd Floor",
+    "drawingCode": "SWC-301",
+    "fileName": null,
+    "width": 33.3,
+    "length": 31.7,
+    "sizeCategory": "very large",
+    "controls": [
+      "Presence of Water Monitoring"
+    ],
+    "coordinates": [0.145, 0.3328, 0.1552, 0.0602]
+  },
+  {
+    "id": "KW008",
+    "name": "Kitchens & Washrooms",
+    "category": "Asset",
+    "areaName": "BF W/C",
+    "floor": "2nd Floor",
+    "drawingCode": "SWC-291",
+    "fileName": null,
+    "width": 26.4,
+    "length": 35.6,
+    "sizeCategory": "very large",
+    "controls": [
+      "Presence of Water Monitoring"
+    ],
+    "coordinates": [0.0553, 0.7265, 0.2349, 0.0892]
+  },
+  {
+    "id": "KW009",
+    "name": "Kitchens & Washrooms",
+    "category": "Asset",
+    "areaName": "BF W/C",
+    "floor": "2nd Floor",
+    "drawingCode": "SWC-201",
+    "fileName": null,
+    "width": 27.7,
+    "length": 18.9,
+    "sizeCategory": "medium",
+    "controls": [
+      "Presence of Water Monitoring"
+    ],
+    "coordinates": [0.1312, 0.385, 0.2594, 0.0522]
+  },
+  {
+    "id": "KW010",
+    "name": "Kitchens & Washrooms",
+    "category": "Asset",
+    "areaName": "W/C",
+    "floor": "1st Floor",
+    "drawingCode": "SWC-102",
+    "fileName": null,
+    "width": 16.7,
+    "length": 12.2,
+    "sizeCategory": "small",
+    "controls": [
+      "Presence of Water Monitoring"
+    ],
+    "coordinates": [0.4909, 0.0697, 0.0677, 0.132]
+  },
+  {
+    "id": "KW011",
+    "name": "Kitchens & Washrooms",
+    "category": "Asset",
+    "areaName": "W/C",
+    "floor": "1st Floor",
+    "drawingCode": "SWC-103",
+    "fileName": null,
+    "width": 33.1,
+    "length": 18.9,
+    "sizeCategory": "large",
+    "controls": [
+      "Presence of Water Monitoring"
+    ],
+    "coordinates": [0.0084, 0.743, 0.1305, 0.0768]
+  },
+  {
+    "id": "KW012",
+    "name": "Kitchens & Washrooms",
+    "category": "Asset",
+    "areaName": "UNIVERSAL W/C",
+    "floor": "1st Floor",
+    "drawingCode": "SWC-104",
+    "fileName": null,
+    "width": 27.7,
+    "length": 17.9,
+    "sizeCategory": "medium",
+    "controls": [
+      "Presence of Water Monitoring"
+    ],
+    "coordinates": [0.1415, 0.0786, 0.1232, 0.2582]
+  },
+  {
+    "id": "KW013",
+    "name": "Kitchens & Washrooms",
+    "category": "Asset",
+    "areaName": "UNIVERSAL W/C",
+    "floor": "1st Floor",
+    "drawingCode": "SWC-B08",
+    "fileName": null,
+    "width": 32.1,
+    "length": 8.7,
+    "sizeCategory": "small",
+    "controls": [
+      "Presence of Water Monitoring"
+    ],
+    "coordinates": [0.3572, 0.3494, 0.2267, 0.1312]
   },
   {
     "id": "FEER",
@@ -492,7 +763,15 @@ const MOCK_ASSETS_WATER_SYSTEMS_PROCESSES = [
     "width": 32.8,
     "length": 14.7,
     "sizeCategory": "large",
-    "controls": ["Roofing Strategy", "Air and Water Barriers Continuity", "Pre-qualification of Envelope Systems", "Weather Station"],
+    "controls": [
+      "Roofing Strategy",
+      "Air and Water Barriers Continuity",
+      "Pre-qualification of Envelope Systems",
+      "Envelope System Performance Criteria",
+      "Weather Station",
+      "Permanent Drainage Systems Installation and Monitoring",
+      "Facade Designed as a Rainscreen"
+    ],
     "coordinates": [0.4465, 0.4053, 0.0782, 0.0639]
   },
   {
@@ -506,7 +785,12 @@ const MOCK_ASSETS_WATER_SYSTEMS_PROCESSES = [
     "width": 17.0,
     "length": 31.2,
     "sizeCategory": "medium",
-    "controls": ["Weather Station", "Measure Relative Humidity Sensors", "Lumber Moisture Content Sensors", "Presence of Water Monitoring"],
+    "controls": [
+      "Weather Station",
+      "Measure Relative Humidity Sensors",
+      "Lumber Moisture Content Sensors",
+      "Presence of Water Monitoring"
+    ],
     "coordinates": [0.3464, 0.2396, 0.1298, 0.2826]
   },
   {
@@ -520,7 +804,11 @@ const MOCK_ASSETS_WATER_SYSTEMS_PROCESSES = [
     "width": null,
     "length": null,
     "sizeCategory": null,
-    "controls": ["Automatic Shut Off Valve", "Ultrasonic Flow Sensors", "Inline Flow Sensors"],
+    "controls": [
+      "Automatic Shut Off Valve",
+      "Ultrasonic Flow Sensors",
+      "Inline Flow Sensors"
+    ],
     "coordinates": [0.4387, 0.0886, 0.2008, 0.2104]
   },
   {
@@ -534,7 +822,11 @@ const MOCK_ASSETS_WATER_SYSTEMS_PROCESSES = [
     "width": null,
     "length": null,
     "sizeCategory": null,
-    "controls": ["Automatic Shut Off Valve", "Ultrasonic Flow Sensors", "Inline Flow Sensors"],
+    "controls": [
+      "Automatic Shut Off Valve",
+      "Ultrasonic Flow Sensors",
+      "Inline Flow Sensors"
+    ],
     "coordinates": [0.515, 0.4133, 0.1028, 0.2108]
   },
   {
@@ -548,8 +840,76 @@ const MOCK_ASSETS_WATER_SYSTEMS_PROCESSES = [
     "width": null,
     "length": null,
     "sizeCategory": null,
-    "controls": ["Automatic Shut Off Valve", "Ultrasonic Flow Sensors", "Inline Flow Sensors"],
+    "controls": [
+      "Automatic Shut Off Valve",
+      "Ultrasonic Flow Sensors",
+      "Inline Flow Sensors"
+    ],
     "coordinates": [0.5711, 0.2303, 0.2296, 0.0887]
+  },
+  {
+    "id": "CDW-ZE002",
+    "name": "Cold Domestic Water: Zone Entry",
+    "category": "Water System",
+    "areaName": null,
+    "floor": null,
+    "drawingCode": null,
+    "fileName": null,
+    "width": null,
+    "length": null,
+    "sizeCategory": null,
+    "controls": [
+      "Automatic Shut Off Valve",
+      "Ultrasonic Flow Sensors",
+      "Inline Flow Sensors"
+    ],
+    "coordinates": [0.6831, 0.312, 0.2046, 0.2427]
+  },
+  {
+    "id": "CDW-ZE003",
+    "name": "Cold Domestic Water: Zone Entry",
+    "category": "Water System",
+    "areaName": null,
+    "floor": null,
+    "drawingCode": null,
+    "fileName": null,
+    "width": null,
+    "length": null,
+    "sizeCategory": null,
+    "controls": [
+      "Automatic Shut Off Valve",
+      "Ultrasonic Flow Sensors",
+      "Inline Flow Sensors"
+    ],
+    "coordinates": [0.4639, 0.2522, 0.2146, 0.114]
+  },
+  {
+    "id": "CDW-SRE001",
+    "name": "Cold Domestic Water: Suite Riser Entry",
+    "category": "Water System",
+    "areaName": null,
+    "floor": null,
+    "drawingCode": null,
+    "fileName": null,
+    "width": null,
+    "length": null,
+    "sizeCategory": null,
+    "controls": [],
+    "coordinates": [0.4529, 0.1701, 0.2686, 0.2675]
+  },
+  {
+    "id": "CDW-SE001",
+    "name": "Cold Domestic Water: Suite Entry",
+    "category": "Water System",
+    "areaName": null,
+    "floor": null,
+    "drawingCode": null,
+    "fileName": null,
+    "width": null,
+    "length": null,
+    "sizeCategory": null,
+    "controls": [],
+    "coordinates": [0.163, 0.274, 0.1175, 0.1807]
   },
   {
     "id": "SPSDD001",
@@ -562,7 +922,12 @@ const MOCK_ASSETS_WATER_SYSTEMS_PROCESSES = [
     "width": null,
     "length": null,
     "sizeCategory": null,
-    "controls": ["Temporary and Permanent Sump Pump Installation", "Permanent Drainage Systems Installation and Monitoring", "Flood Control Measures"],
+    "controls": [
+      "Temporary and Permanent Sump Pump Installation",
+      "Permanent Drainage Systems Installation and Monitoring",
+      "Flood Control Measures",
+      "Below Grade Water Response Plan"
+    ],
     "coordinates": [0.7033, 0.3048, 0.2379, 0.0909]
   },
   {
@@ -576,7 +941,10 @@ const MOCK_ASSETS_WATER_SYSTEMS_PROCESSES = [
     "width": null,
     "length": null,
     "sizeCategory": null,
-    "controls": ["Ultrasonic Flow Sensors", "Inline Flow Sensors"],
+    "controls": [
+      "Ultrasonic Flow Sensors",
+      "Inline Flow Sensors"
+    ],
     "coordinates": [0.5916, 0.2067, 0.1433, 0.2302]
   },
   {
@@ -590,7 +958,10 @@ const MOCK_ASSETS_WATER_SYSTEMS_PROCESSES = [
     "width": null,
     "length": null,
     "sizeCategory": null,
-    "controls": ["Inline Flow Sensors", "Ultrasonic Flow Sensors"],
+    "controls": [
+      "Inline Flow Sensors",
+      "Ultrasonic Flow Sensors"
+    ],
     "coordinates": [0.1233, 0.425, 0.0845, 0.1908]
   },
   {
@@ -604,7 +975,11 @@ const MOCK_ASSETS_WATER_SYSTEMS_PROCESSES = [
     "width": null,
     "length": null,
     "sizeCategory": null,
-    "controls": ["Presence of Water Monitoring", "Abnormal Flow Monitoring", "Automatic Shut Off Valve"],
+    "controls": [
+      "Presence of Water Monitoring",
+      "Abnormal Flow Monitoring",
+      "Automatic Shut Off Valve"
+    ],
     "coordinates": [0.4864, 0.5104, 0.0908, 0.2761]
   },
   {
@@ -618,7 +993,30 @@ const MOCK_ASSETS_WATER_SYSTEMS_PROCESSES = [
     "width": null,
     "length": null,
     "sizeCategory": null,
-    "controls": ["Yearly Risk Controls Inspection", "Water Mitigation Equipment Acceptance Test", "Water Watch Real-time Rounds Verification", "Water Leak and Equipment Housekeeping Orientation", "Water Response Team", "Water Response Plan"],
+    "controls": [
+      "Yearly Risk Controls Inspection",
+      "No Sole Contractor Design Responsibility",
+      "Water Mitigation Equipment Acceptance Test",
+      "Material Substitution Process: Ensuring System Integrity",
+      "Appropriate Material Review: Ensuring Compatibility and Durability",
+      "Design Phase Review Process: Ensuring System Reliability",
+      "Water Watch Real-time Rounds Verification",
+      "Water Leak and Equipment Housekeeping Orientation",
+      "Water Commissioning Activities and Water Mitigation Equipment Coordination",
+      "Construction Activities and Envelope Coordination",
+      "Water Leak Accountability Agreement",
+      "Water Mitigation Equipment Power Re-establishment",
+      "Temporary Ambient Heating Systems",
+      "Water-Sensitive and High-Value Equipment Protection",
+      "Spill Kit",
+      "Temporary Enclosures Plan",
+      "Power Outage Reports",
+      "Water Response Team",
+      "Water Response Plan",
+      "Water Technology Bid Strategy",
+      "Accidental Sprinkler Discharge Response Plan",
+      "Accidental Sprinkler Discharge Protection"
+    ],
     "coordinates": null
   },
   {
@@ -632,7 +1030,23 @@ const MOCK_ASSETS_WATER_SYSTEMS_PROCESSES = [
     "width": null,
     "length": null,
     "sizeCategory": null,
-    "controls": ["Periodic and Realtime Water Mitigation Equipment Inspections and Functionality Tests", "Water Mitigation Components Warranties and Insurance", "Water Mitigation Equipment Labeling", "Historical Project Water Incident Reports", "100-Year Flood and Wind Storm Report"],
+    "controls": [
+      "Periodic and Realtime Water Mitigation Equipment Inspections and Functionality Tests",
+      "Water Mitigation Cybersecurity",
+      "Water Mitigation Components Warranties and Insurance",
+      "Water Mitigation Equipment Labeling",
+      "Risk Notification and Acknowledgement Method",
+      "Water Mitigation System Expansion or Update",
+      "Water Mitigation System Uptime and Decommissioning Notice",
+      "Power Outage Reports",
+      "Maintenance Subcontractor Readiness",
+      "Historical Project Water Incident Reports",
+      "100-Year Flood and Wind Storm Report",
+      "Inclement Water Plan",
+      "Water Response Plan Minimal Procedures",
+      "Water Response Team Minimal Composition",
+      "Water Mitigation Equipment Water Re-establishment"
+    ],
     "coordinates": null
   },
   {
@@ -646,7 +1060,26 @@ const MOCK_ASSETS_WATER_SYSTEMS_PROCESSES = [
     "width": null,
     "length": null,
     "sizeCategory": null,
-    "controls": ["Water Leak Accountability Agreement", "Installation Integrity: Joints, Bolts, and Piping", "Air Pressure or Water Tests in Plumbing System", "Pressure Reducing Valve Maintenance Plan: Safeguarding System Performance", "Heat Trace and Insulation", "Suite Drains"],
+    "controls": [
+      "Water Leak Accountability Agreement",
+      "Installation Integrity: Joints, Bolts, and Piping",
+      "Water Commissioning Activities and Water Mitigation Equipment Coordination",
+      "Air Pressure or Water Tests in Plumbing System",
+      "Additional Fill Tests: Ensuring Water System Integrity",
+      "Disinfection Process Reviews: Protecting System Integrity",
+      "Appropriate Material Review: Ensuring Compatibility and Durability",
+      "Material Substitution Process: Ensuring System Integrity",
+      "Pressure Reducing Valve Maintenance Plan: Safeguarding System Performance",
+      "Proper Zoning Configuration: Optimizing Pressure Systems",
+      "Thermal Expansion Review: Mitigating Pressure Risk",
+      "Hot Water Velocity Review: Preventing Pipe Wear and System Damage",
+      "Hot Water Recirculating Pumps: Enhancing System Efficiency",
+      "Drip Trays",
+      "Heat Trace and Insulation",
+      "Suite Drains",
+      "Fire Suppression System Integration to Building Automation System",
+      "Fire Suppression System Commissioning"
+    ],
     "coordinates": null
   }
 ];
@@ -656,25 +1089,25 @@ const MOCK_ANALYSIS_TEXT = `## Analysis Summary
 Based on the building drawings analyzed, I have identified the following assets, water systems, and processes:
 
 ### Assets Detected:
-- **Electrical Rooms** (3 locations): Lower Level (ELECTRICAL, SUBSTATION ROOM), 4th Floor (IT ROOM)
+- **Electrical Rooms** (6 locations): Lower Level (ELECTRICAL, SUBSTATION ROOM, HYDRO VAULT), 4th Floor (IT ROOM), 7th Floor (IT ROOM), Roof (ELECTRICAL ROOM)
 - **Mechanical Rooms** (1 location): Lower Level (MECHANICAL)
 - **Electrical Risers** (1 location): Spanning Lower Level to 8th Floor
 - **Elevator Pits** (2 locations): ELEVATOR 1 and ELEVATOR 2 in Lower Level
-- **Kitchens & Washrooms** (2 locations): Staff Kitchen (4th Floor), BF W/C (8th Floor)
+- **Kitchens & Washrooms** (13 locations): Various floors from 1st to 8th Floor
 - **Facade, Envelope, Exterior, and Roofing**: Building exterior systems
 - **Mass Timber and Millwork**: Structural timber elements
 
 ### Water Systems Detected:
-- **Cold Domestic Water**: Main City Entry, Main Entry, Zone Entry lines
+- **Cold Domestic Water**: Main City Entry, Main Entry, Zone Entry (3 zones), Suite Riser Entry, Suite Entry
 - **Hot Domestic Water**: Central distribution
 - **Temporary Water Run**: Construction phase water supply
 - **Fire Suppression System**: Building-wide sprinkler system
 - **Sump Pit, Storm Drain, and Drainage**: Below-grade water management
 
 ### Processes Identified:
-- **Contractor Team**: General construction oversight and coordination
-- **Water Mitigation Vendor**: Specialized water damage prevention
-- **Mechanical Contractor and Engineering**: MEP systems installation and maintenance
+- **Contractor Team**: 22 controls including water mitigation, response planning, and equipment coordination
+- **Water Mitigation Vendor**: 15 controls including inspections, cybersecurity, and maintenance
+- **Mechanical Contractor and Engineering**: 18 controls including installation integrity, testing, and system optimization
 
 \`\`\`json
 {
