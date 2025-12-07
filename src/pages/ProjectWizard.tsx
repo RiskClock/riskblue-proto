@@ -558,7 +558,7 @@ const ProjectWizard = () => {
 
               <AccordionItem value="assets-systems" className="border rounded-lg px-6">
                 <AccordionTrigger className="text-lg font-semibold">
-                  Assets & Systems
+                  Assets, Water Systems & Processes
                 </AccordionTrigger>
                 <AccordionContent className="space-y-8 pt-4">
                   <div className="space-y-6">

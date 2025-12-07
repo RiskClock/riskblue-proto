@@ -1,5 +1,4 @@
 import { useState, useEffect, useRef, useMemo } from "react";
-import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Badge } from "@/components/ui/badge";
@@ -7,7 +6,6 @@ import { Info, Shield, ChevronDown, ChevronUp } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useQuery } from "@tanstack/react-query";
 import { AnalysisItem } from "@/lib/analysisItemMapper";
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 
 interface Control {
   id: string;
@@ -93,68 +91,16 @@ export const MitigationControlsStep = ({
     },
   });
 
-  // Memoize allControlNames to prevent infinite loops
-  const allControlNames = useMemo(() => 
-    mitigationControls.map(c => c.name), 
-    [mitigationControls]
-  );
-  
-  // Default to all controls selected
-  const [selectedControls, setSelectedControls] = useState<string[]>(
-    data.selectedControls && data.selectedControls.length > 0 
-      ? data.selectedControls 
-      : []
-  );
-
-  // Build a map of controls to the items they protect
-  const controlsWithProtectedItems = useMemo((): ControlWithProtectedItems[] => {
-    const controlMap = new Map<string, ControlWithProtectedItems>();
-
-    // Initialize all controls
-    mitigationControls.forEach(control => {
-      controlMap.set(control.name, {
-        control,
-        protectedAssets: [],
-        protectedSystems: []
-      });
-    });
-
-    // Go through analysis items and map them to controls
+  // Get all unique control names from analysis items
+  const controlNamesFromAnalysis = useMemo(() => {
+    const names = new Set<string>();
     analysisItems.forEach(item => {
-      if (!item.controls) return;
-      
-      item.controls.forEach(controlName => {
-        // Try to find a matching control (partial match)
-        for (const [name, data] of controlMap.entries()) {
-          if (controlName.toLowerCase().includes(name.toLowerCase()) || 
-              name.toLowerCase().includes(controlName.toLowerCase()) ||
-              normalizeControlName(controlName) === normalizeControlName(name)) {
-            if (item.category === "Asset") {
-              data.protectedAssets.push(item);
-            } else if (item.category === "Water System") {
-              data.protectedSystems.push(item);
-            }
-            break;
-          }
-        }
-      });
+      if (item.controls) {
+        item.controls.forEach(control => names.add(control.toLowerCase()));
+      }
     });
-
-    // Filter to only controls that protect something, sorted by total protected items
-    const controlsWithItems = Array.from(controlMap.values())
-      .filter(c => c.protectedAssets.length > 0 || c.protectedSystems.length > 0)
-      .sort((a, b) => {
-        const aTotal = a.protectedAssets.length + a.protectedSystems.length;
-        const bTotal = b.protectedAssets.length + b.protectedSystems.length;
-        return bTotal - aTotal;
-      });
-
-    // Add remaining controls that don't protect anything specific
-    const remainingControls = Array.from(controlMap.values())
-      .filter(c => c.protectedAssets.length === 0 && c.protectedSystems.length === 0);
-
-    return [...controlsWithItems, ...remainingControls];
-  }, [mitigationControls, analysisItems]);
+    return names;
+  }, [analysisItems]);
 
   // Normalize control name for matching
   function normalizeControlName(name: string): string {
@@ -164,13 +110,77 @@ export const MitigationControlsStep = ({
       .trim();
   }
 
+  // Check if a control matches any control from analysis
+  const controlMatchesAnalysis = (controlName: string): boolean => {
+    const normalized = normalizeControlName(controlName);
+    for (const analysisControl of controlNamesFromAnalysis) {
+      const normalizedAnalysis = normalizeControlName(analysisControl);
+      if (normalized.includes(normalizedAnalysis) || 
+          normalizedAnalysis.includes(normalized) ||
+          normalized === normalizedAnalysis) {
+        return true;
+      }
+    }
+    return false;
+  };
+
+  // Filter controls to only those mentioned in analysis items
+  const filteredControls = useMemo(() => {
+    if (analysisItems.length === 0) return mitigationControls;
+    
+    return mitigationControls.filter(control => controlMatchesAnalysis(control.name));
+  }, [mitigationControls, controlNamesFromAnalysis, analysisItems.length]);
+
+  // Build a map of controls to the items they protect
+  const controlsWithProtectedItems = useMemo((): ControlWithProtectedItems[] => {
+    return filteredControls.map(control => {
+      const protectedAssets: AnalysisItem[] = [];
+      const protectedSystems: AnalysisItem[] = [];
+
+      // Go through analysis items and find ones that have this control
+      analysisItems.forEach(item => {
+        if (!item.controls) return;
+        
+        const hasControl = item.controls.some(c => {
+          const normalizedC = normalizeControlName(c);
+          const normalizedControl = normalizeControlName(control.name);
+          return normalizedC.includes(normalizedControl) || 
+                 normalizedControl.includes(normalizedC) ||
+                 normalizedC === normalizedControl;
+        });
+
+        if (hasControl) {
+          if (item.category === "Asset") {
+            protectedAssets.push(item);
+          } else if (item.category === "Water System") {
+            protectedSystems.push(item);
+          }
+        }
+      });
+
+      return { control, protectedAssets, protectedSystems };
+    }).sort((a, b) => {
+      // Sort by total protected items (descending)
+      const aTotal = a.protectedAssets.length + a.protectedSystems.length;
+      const bTotal = b.protectedAssets.length + b.protectedSystems.length;
+      return bTotal - aTotal;
+    });
+  }, [filteredControls, analysisItems]);
+  
+  // Default to all filtered controls selected
+  const [selectedControls, setSelectedControls] = useState<string[]>(
+    data.selectedControls && data.selectedControls.length > 0 
+      ? data.selectedControls 
+      : []
+  );
+
   // Update default selection when controls load
   useEffect(() => {
-    if (mitigationControls.length > 0 && (!data.selectedControls || data.selectedControls.length === 0)) {
-      setSelectedControls(allControlNames);
+    if (filteredControls.length > 0 && (!data.selectedControls || data.selectedControls.length === 0)) {
+      setSelectedControls(filteredControls.map(c => c.name));
       hasPendingSave.current = true;
     }
-  }, [mitigationControls.length, allControlNames, data.selectedControls]);
+  }, [filteredControls.length, data.selectedControls]);
 
   // Effect 1: Always sync incoming data to local state
   useEffect(() => {
@@ -215,11 +225,11 @@ export const MitigationControlsStep = ({
   }, [selectedControls, onNext, isProcessingWebhook]);
 
   const totalPoints = selectedControls.reduce((sum, controlName) => {
-    const control = mitigationControls.find(c => c.name === controlName);
+    const control = filteredControls.find(c => c.name === controlName);
     return sum + (control?.points || 0);
   }, 0);
 
-  const maxPoints = mitigationControls.reduce((sum, control) => sum + control.points, 0);
+  const maxPoints = filteredControls.reduce((sum, control) => sum + control.points, 0);
 
   const handleMoreInfo = (control: Control) => {
     setSelectedControl(control);
@@ -242,6 +252,16 @@ export const MitigationControlsStep = ({
     );
   }
 
+  if (filteredControls.length === 0 && analysisItems.length > 0) {
+    return (
+      <div className="text-center py-12 text-muted-foreground">
+        <Shield className="h-12 w-12 mx-auto mb-4 opacity-50" />
+        <p>No matching controls found for the detected items.</p>
+        <p className="text-sm mt-1">Controls will appear here based on AI analysis results.</p>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6">
       <div className="bg-muted/30 p-6 rounded-lg mb-6">
@@ -251,7 +271,7 @@ export const MitigationControlsStep = ({
             <div>
               <p className="font-semibold">Controls</p>
               <p className="text-sm text-muted-foreground">
-                {selectedControls.filter(name => mitigationControls.some(c => c.name === name)).length} / {mitigationControls.length} Selected
+                {selectedControls.filter(name => filteredControls.some(c => c.name === name)).length} / {filteredControls.length} Selected
               </p>
             </div>
           </div>
@@ -276,7 +296,7 @@ export const MitigationControlsStep = ({
         </div>
       </div>
 
-      {/* Reorganized view: Controls grouped by what they protect */}
+      {/* Controls list */}
       <div className="space-y-4">
         {controlsWithProtectedItems.map(({ control, protectedAssets, protectedSystems }) => {
           const isSelected = selectedControls.includes(control.name);
