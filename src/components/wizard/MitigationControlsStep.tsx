@@ -156,23 +156,25 @@ export const MitigationControlsStep = ({
 
                 {/* Accordion trigger covers the rest of the row */}
                 <AccordionTrigger className="flex-1 hover:no-underline py-3 pr-3">
-                  <div className="flex items-center gap-2 w-full pr-2">
+                  <div className="flex items-center justify-between w-full pr-2">
                     <span className="text-sm font-medium text-left">{control.name}</span>
-                    {assets.length > 0 && (
-                      <Badge className="bg-blue-100 text-blue-700 hover:bg-blue-100 border-0 text-xs font-medium px-2 py-0.5 shrink-0">
-                        {assets.length} Asset{assets.length > 1 ? 's' : ''}
-                      </Badge>
-                    )}
-                    {systems.length > 0 && (
-                      <Badge className="bg-cyan-100 text-cyan-700 hover:bg-cyan-100 border-0 text-xs font-medium px-2 py-0.5 shrink-0">
-                        {systems.length} System{systems.length > 1 ? 's' : ''}
-                      </Badge>
-                    )}
-                    {processes.length > 0 && (
-                      <Badge className="bg-violet-100 text-violet-700 hover:bg-violet-100 border-0 text-xs font-medium px-2 py-0.5 shrink-0">
-                        {processes.length} Process{processes.length > 1 ? 'es' : ''}
-                      </Badge>
-                    )}
+                    <div className="flex items-center gap-1.5">
+                      {assets.length > 0 && (
+                        <Badge className="bg-blue-100 text-blue-700 hover:bg-blue-100 border-0 text-xs font-medium px-2 py-0.5 shrink-0">
+                          {assets.length} Asset{assets.length > 1 ? 's' : ''}
+                        </Badge>
+                      )}
+                      {systems.length > 0 && (
+                        <Badge className="bg-cyan-100 text-cyan-700 hover:bg-cyan-100 border-0 text-xs font-medium px-2 py-0.5 shrink-0">
+                          {systems.length} System{systems.length > 1 ? 's' : ''}
+                        </Badge>
+                      )}
+                      {processes.length > 0 && (
+                        <Badge className="bg-violet-100 text-violet-700 hover:bg-violet-100 border-0 text-xs font-medium px-2 py-0.5 shrink-0">
+                          {processes.length} Process{processes.length > 1 ? 'es' : ''}
+                        </Badge>
+                      )}
+                    </div>
                   </div>
                 </AccordionTrigger>
               </div>
@@ -187,15 +189,20 @@ export const MitigationControlsStep = ({
                         <span>Assets ({assets.length})</span>
                       </div>
                       <div className="grid gap-2 pl-6">
-                        {assets.map((item, idx) => (
-                          <div key={idx} className="flex items-center justify-between p-2 bg-muted/30 rounded text-sm">
-                            <span>{item.areaName || item.name}</span>
-                            <div className="flex gap-1">
-                              {item.floor && <Badge variant="outline" className="text-xs">{item.floor}</Badge>}
-                              {item.sizeCategory && <Badge variant="secondary" className="text-xs">{item.sizeCategory}</Badge>}
+                        {assets.map((item, idx) => {
+                          const capitalize = (str: string) => str.charAt(0).toUpperCase() + str.slice(1).toLowerCase();
+                          const sizeDisplay = item.sizeCategory ? capitalize(item.sizeCategory) : null;
+                          const dimensionDisplay = item.length && item.width ? `(${item.length}×${item.width})` : null;
+                          return (
+                            <div key={idx} className="flex items-center justify-between p-2 bg-muted/30 rounded border border-border/50 text-sm">
+                              <span><span className="text-muted-foreground">{item.id}</span> — {item.areaName || item.name}</span>
+                              <div className="flex gap-1">
+                                {item.floor && <Badge variant="outline" className="text-xs">{item.floor}</Badge>}
+                                {sizeDisplay && <Badge variant="secondary" className="text-xs">{sizeDisplay} {dimensionDisplay}</Badge>}
+                              </div>
                             </div>
-                          </div>
-                        ))}
+                          );
+                        })}
                       </div>
                     </div>
                   )}
@@ -208,15 +215,20 @@ export const MitigationControlsStep = ({
                         <span>Water Systems ({systems.length})</span>
                       </div>
                       <div className="grid gap-2 pl-6">
-                        {systems.map((item, idx) => (
-                          <div key={idx} className="flex items-center justify-between p-2 bg-muted/30 rounded text-sm">
-                            <span>{item.areaName || item.name}</span>
-                            <div className="flex gap-1">
-                              {item.floor && <Badge variant="outline" className="text-xs">{item.floor}</Badge>}
-                              {item.sizeCategory && <Badge variant="secondary" className="text-xs">{item.sizeCategory}</Badge>}
+                        {systems.map((item, idx) => {
+                          const capitalize = (str: string) => str.charAt(0).toUpperCase() + str.slice(1).toLowerCase();
+                          const sizeDisplay = item.sizeCategory ? capitalize(item.sizeCategory) : null;
+                          const dimensionDisplay = item.length && item.width ? `(${item.length}×${item.width})` : null;
+                          return (
+                            <div key={idx} className="flex items-center justify-between p-2 bg-muted/30 rounded border border-border/50 text-sm">
+                              <span><span className="text-muted-foreground">{item.id}</span> — {item.areaName || item.name}</span>
+                              <div className="flex gap-1">
+                                {item.floor && <Badge variant="outline" className="text-xs">{item.floor}</Badge>}
+                                {sizeDisplay && <Badge variant="secondary" className="text-xs">{sizeDisplay} {dimensionDisplay}</Badge>}
+                              </div>
                             </div>
-                          </div>
-                        ))}
+                          );
+                        })}
                       </div>
                     </div>
                   )}
@@ -230,8 +242,8 @@ export const MitigationControlsStep = ({
                       </div>
                       <div className="grid gap-2 pl-6">
                         {processes.map((item, idx) => (
-                          <div key={idx} className="flex items-center justify-between p-2 bg-muted/30 rounded text-sm">
-                            <span>{item.areaName || item.name}</span>
+                          <div key={idx} className="flex items-center justify-between p-2 bg-muted/30 rounded border border-border/50 text-sm">
+                            <span><span className="text-muted-foreground">{item.id}</span> — {item.areaName || item.name}</span>
                             <div className="flex gap-1">
                               {item.floor && <Badge variant="outline" className="text-xs">{item.floor}</Badge>}
                             </div>
