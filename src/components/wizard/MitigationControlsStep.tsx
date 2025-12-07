@@ -155,10 +155,10 @@ export const MitigationControlsStep = ({
                 </div>
 
                 {/* Accordion trigger covers the rest of the row */}
-                <AccordionTrigger className="flex-1 hover:no-underline py-3 pr-3">
-                  <div className="flex items-center justify-between w-full pr-2">
+                <AccordionTrigger className="flex-1 hover:no-underline py-3 pr-3 [&>svg]:ml-2">
+                  <div className="flex items-center w-full pr-2">
                     <span className="text-sm font-medium text-left">{control.name}</span>
-                    <div className="flex items-center gap-1.5">
+                    <div className="flex items-center gap-1.5 ml-auto">
                       {assets.length > 0 && (
                         <Badge className="bg-blue-100 text-blue-700 hover:bg-blue-100 border-0 text-xs font-medium px-2 py-0.5 shrink-0">
                           {assets.length} Asset{assets.length > 1 ? 's' : ''}
@@ -192,7 +192,7 @@ export const MitigationControlsStep = ({
                         {assets.map((item, idx) => {
                           const capitalize = (str: string) => str.charAt(0).toUpperCase() + str.slice(1).toLowerCase();
                           const sizeDisplay = item.sizeCategory ? capitalize(item.sizeCategory) : null;
-                          const dimensionDisplay = item.length && item.width ? `(${item.length}×${item.width})` : null;
+                          const dimensionDisplay = item.length && item.width ? `(${item.length} ft × ${item.width} ft)` : null;
                           return (
                             <div key={idx} className="flex items-center justify-between p-2 bg-muted/30 rounded border border-border/50 text-sm">
                               <span><span className="text-muted-foreground">{item.id}</span> — {item.areaName || item.name}</span>
@@ -218,7 +218,7 @@ export const MitigationControlsStep = ({
                         {systems.map((item, idx) => {
                           const capitalize = (str: string) => str.charAt(0).toUpperCase() + str.slice(1).toLowerCase();
                           const sizeDisplay = item.sizeCategory ? capitalize(item.sizeCategory) : null;
-                          const dimensionDisplay = item.length && item.width ? `(${item.length}×${item.width})` : null;
+                          const dimensionDisplay = item.length && item.width ? `(${item.length} ft × ${item.width} ft)` : null;
                           return (
                             <div key={idx} className="flex items-center justify-between p-2 bg-muted/30 rounded border border-border/50 text-sm">
                               <span><span className="text-muted-foreground">{item.id}</span> — {item.areaName || item.name}</span>
