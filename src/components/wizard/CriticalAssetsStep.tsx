@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Info, Plus } from "lucide-react";
@@ -9,6 +9,10 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { calculateCriticalAssetDuration } from "@/lib/durationCalculator";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
+import { Badge } from "@/components/ui/badge";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { AnalysisItem } from "@/lib/analysisItemMapper";
+
 interface Asset {
   id: string;
   name: string;
@@ -19,25 +23,31 @@ interface Asset {
   image_url: string;
   display_order: number;
 }
+
 interface CriticalAssetsStepProps {
   data: any;
   onNext: (data: any) => void;
   onBack: () => void;
   isProcessingWebhook?: boolean;
   projectId?: string;
+  analysisItems?: AnalysisItem[];
 }
+
 export const CriticalAssetsStep = ({
   data,
   onNext,
   onBack,
   isProcessingWebhook,
-  projectId
+  projectId,
+  analysisItems = []
 }: CriticalAssetsStepProps) => {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [selectedAssets, setSelectedAssets] = useState<string[]>(data.selectedAssets || []);
   const [assetFloors, setAssetFloors] = useState<Record<string, string>>(data.assetFloors || {});
   const [dialogOpen, setDialogOpen] = useState<string | null>(null);
+  const [detailDialogOpen, setDetailDialogOpen] = useState(false);
+  const [selectedAssetForDetail, setSelectedAssetForDetail] = useState<string | null>(null);
   const [tempFloors, setTempFloors] = useState("");
   const [addAssetDialogOpen, setAddAssetDialogOpen] = useState(false);
   const [newAsset, setNewAsset] = useState({
@@ -126,6 +136,49 @@ export const CriticalAssetsStep = ({
     display_order: 999
   }))];
 
+  // Get analysis items for a specific asset type
+  const getAssetAnalysisItems = (assetName: string): AnalysisItem[] => {
+    return analysisItems.filter(item => 
+      item.category === "Asset" && 
+      normalizeAssetName(item.name) === normalizeAssetName(assetName)
+    );
+  };
+
+  // Normalize asset name for comparison
+  const normalizeAssetName = (name: string): string => {
+    const normalized = name.toLowerCase()
+      .replace(/rooms?/g, 'room')
+      .replace(/risers?/g, 'riser')
+      .replace(/pits?/g, 'pit')
+      .replace(/suites?/g, 'suite')
+      .replace(/guest rooms?/g, 'suite')
+      .replace(/kitchens?/g, 'kitchen')
+      .replace(/washrooms?/g, 'washroom')
+      .replace(/w\/c/g, 'washroom')
+      .replace(/&/g, 'and')
+      .replace(/,/g, '')
+      .replace(/\s+/g, ' ')
+      .trim();
+    
+    // Map specific patterns
+    if (normalized.includes('electrical') && normalized.includes('room')) return 'electrical rooms';
+    if (normalized.includes('mechanical') && normalized.includes('room')) return 'mechanical rooms';
+    if (normalized.includes('electrical') && normalized.includes('riser')) return 'electrical risers';
+    if (normalized.includes('mechanical') && normalized.includes('riser')) return 'mechanical risers';
+    if (normalized.includes('elevator') && normalized.includes('pit')) return 'elevator pits';
+    if (normalized.includes('suite') || normalized.includes('guest')) return 'suites';
+    if (normalized.includes('kitchen') || normalized.includes('washroom')) return 'kitchens and washrooms';
+    if (normalized.includes('facade') || normalized.includes('envelope') || normalized.includes('exterior') || normalized.includes('roofing')) return 'facade envelope exterior and roofing';
+    if (normalized.includes('mass timber') || normalized.includes('millwork')) return 'mass timber and millwork';
+    
+    return normalized;
+  };
+
+  // Get count of instances for an asset
+  const getAssetCount = (assetName: string): number => {
+    return getAssetAnalysisItems(assetName).length;
+  };
+
   // Sync props to state when data changes (e.g., from webhook)
   useEffect(() => {
     if (data.selectedAssets) {
@@ -135,13 +188,21 @@ export const CriticalAssetsStep = ({
       setAssetFloors(data.assetFloors);
     }
   }, [data.selectedAssets, data.assetFloors]);
+
   const toggleAsset = (assetName: string) => {
     setSelectedAssets(prev => prev.includes(assetName) ? prev.filter(name => name !== assetName) : [...prev, assetName]);
   };
+
   const handleOpenFloorDialog = (assetName: string) => {
     setTempFloors(assetFloors[assetName] || "");
     setDialogOpen(assetName);
   };
+
+  const handleOpenDetailDialog = (assetName: string) => {
+    setSelectedAssetForDetail(assetName);
+    setDetailDialogOpen(true);
+  };
+
   const handleSaveFloors = () => {
     if (dialogOpen) {
       setAssetFloors(prev => ({
@@ -163,6 +224,7 @@ export const CriticalAssetsStep = ({
     }, 500);
     return () => clearTimeout(timer);
   }, [selectedAssets, assetFloors, onNext, isProcessingWebhook]);
+
   const handleAddAsset = () => {
     if (!newAsset.name || !newAsset.risk_level || !newAsset.duration || !newAsset.cost) {
       toast({
@@ -175,6 +237,8 @@ export const CriticalAssetsStep = ({
     addCustomAssetMutation.mutate(newAsset);
   };
 
+  const selectedAssetItems = selectedAssetForDetail ? getAssetAnalysisItems(selectedAssetForDetail) : [];
+
   if (isLoading || isLoadingCustom) {
     return <div className="flex items-center justify-center py-12">
         <div className="text-center">
@@ -183,20 +247,31 @@ export const CriticalAssetsStep = ({
         </div>
       </div>;
   }
-  return <div className="space-y-6">
-      <div>
-        
-        
-      </div>
 
+  return <div className="space-y-6">
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
         {allAssets.map(asset => {
         const isSelected = selectedAssets.includes(asset.name);
+        const count = getAssetCount(asset.name);
         return <div key={asset.id} onClick={() => toggleAsset(asset.name)} className={`p-4 rounded-lg cursor-pointer transition-all relative ${isSelected ? "border-4 border-primary bg-primary/5" : "border-2 border-border hover:border-primary/50"}`}>
+              {/* Count Badge */}
+              {count > 0 && (
+                <Badge 
+                  variant="default" 
+                  className="absolute -top-2 -left-2 h-6 min-w-6 flex items-center justify-center text-xs font-bold"
+                >
+                  {count}
+                </Badge>
+              )}
+
               <button onClick={e => {
-            e.stopPropagation();
-            handleOpenFloorDialog(asset.name);
-          }} className="absolute top-2 right-2 p-1 hover:bg-muted rounded-full transition-colors">
+                e.stopPropagation();
+                if (count > 0) {
+                  handleOpenDetailDialog(asset.name);
+                } else {
+                  handleOpenFloorDialog(asset.name);
+                }
+              }} className="absolute top-2 right-2 p-1 hover:bg-muted rounded-full transition-colors">
                 <Info className="h-4 w-4 text-muted-foreground" />
               </button>
 
@@ -215,23 +290,6 @@ export const CriticalAssetsStep = ({
                 <span><strong>Duration:</strong> {calculateCriticalAssetDuration(asset.name, data)}</span>
                 <span><strong>Cost:</strong> {asset.cost}</span>
               </div>
-              
-              <Dialog open={dialogOpen === asset.name} onOpenChange={open => !open && setDialogOpen(null)}>
-                <DialogContent onClick={e => e.stopPropagation()}>
-                  <DialogHeader>
-                    <DialogTitle>Specify Floors for {asset.name}</DialogTitle>
-                  </DialogHeader>
-                  <div className="space-y-4 py-4">
-                    <div>
-                      <Label htmlFor="floors">Floors (e.g., 1-5, 10, 15-20)</Label>
-                      <Input id="floors" value={tempFloors} onChange={e => setTempFloors(e.target.value)} placeholder="Enter floor numbers or ranges" />
-                    </div>
-                    <Button onClick={handleSaveFloors} className="w-full">
-                      Save Floors
-                    </Button>
-                  </div>
-                </DialogContent>
-              </Dialog>
             </div>;
       })}
         
@@ -247,6 +305,84 @@ export const CriticalAssetsStep = ({
           </p>
         </div>
       </div>
+
+      {/* Floor Specification Dialog */}
+      <Dialog open={dialogOpen !== null} onOpenChange={(open) => !open && setDialogOpen(null)}>
+        <DialogContent onClick={e => e.stopPropagation()}>
+          <DialogHeader>
+            <DialogTitle>Specify Floors for {dialogOpen}</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div>
+              <Label htmlFor="floors">Floors (e.g., 1-5, 10, 15-20)</Label>
+              <Input id="floors" value={tempFloors} onChange={e => setTempFloors(e.target.value)} placeholder="Enter floor numbers or ranges" />
+            </div>
+            <Button onClick={handleSaveFloors} className="w-full">
+              Save Floors
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Detail Dialog - Shows all instances */}
+      <Dialog open={detailDialogOpen} onOpenChange={setDetailDialogOpen}>
+        <DialogContent className="max-w-2xl max-h-[80vh]" onClick={e => e.stopPropagation()}>
+          <DialogHeader>
+            <DialogTitle>{selectedAssetForDetail}</DialogTitle>
+            <DialogDescription>
+              {selectedAssetItems.length} instance{selectedAssetItems.length !== 1 ? 's' : ''} detected
+            </DialogDescription>
+          </DialogHeader>
+          <ScrollArea className="max-h-[60vh] pr-4">
+            <div className="space-y-4">
+              {selectedAssetItems.map((item, index) => (
+                <div key={item.id} className="border rounded-lg p-4 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <h4 className="font-semibold">{item.areaName || `Instance ${index + 1}`}</h4>
+                    <Badge variant="outline">{item.id}</Badge>
+                  </div>
+                  
+                  <div className="grid grid-cols-2 gap-2 text-sm">
+                    {item.floor && (
+                      <div>
+                        <span className="text-muted-foreground">Floor:</span> {item.floor}
+                      </div>
+                    )}
+                    {item.drawingCode && (
+                      <div>
+                        <span className="text-muted-foreground">Drawing Code:</span> {item.drawingCode}
+                      </div>
+                    )}
+                    {item.width && item.length && (
+                      <div>
+                        <span className="text-muted-foreground">Dimensions:</span> {item.width}' × {item.length}'
+                      </div>
+                    )}
+                    {item.sizeCategory && (
+                      <div>
+                        <span className="text-muted-foreground">Size:</span> {item.sizeCategory}
+                      </div>
+                    )}
+                  </div>
+                  
+                  {item.controls && item.controls.length > 0 && (
+                    <div>
+                      <span className="text-sm text-muted-foreground">Recommended Controls:</span>
+                      <div className="flex flex-wrap gap-1 mt-1">
+                        {item.controls.map((control, i) => (
+                          <Badge key={i} variant="secondary" className="text-xs">
+                            {control}
+                          </Badge>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          </ScrollArea>
+        </DialogContent>
+      </Dialog>
 
       {/* Add Custom Asset Dialog */}
       <Dialog open={addAssetDialogOpen} onOpenChange={setAddAssetDialogOpen}>
@@ -303,6 +439,5 @@ export const CriticalAssetsStep = ({
           </div>
         </DialogContent>
       </Dialog>
-
     </div>;
 };
