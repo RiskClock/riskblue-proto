@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Info, Users, Check } from "lucide-react";
+import { Info, Users } from "lucide-react";
 import { AnalysisItem } from "@/lib/analysisItemMapper";
 
 interface ProcessesStepProps {
@@ -98,18 +98,12 @@ export const ProcessesStep = ({
             <div
               key={process.id}
               onClick={() => toggleProcess(process.id)}
-              className={`p-4 rounded-lg cursor-pointer transition-all relative border ${
+              className={`p-4 rounded-lg cursor-pointer transition-all relative border-2 ${
                 isSelected 
-                  ? "border-primary bg-primary/5" 
-                  : "border-border hover:border-primary/50"
+                  ? "border-primary bg-primary/5 shadow-[0_0_0_1px_hsl(var(--primary)/0.3)]" 
+                  : "border-transparent bg-card hover:border-primary/30"
               }`}
             >
-              {/* Selection indicator */}
-              {isSelected && (
-                <div className="absolute top-2 left-2 w-5 h-5 rounded-full bg-primary flex items-center justify-center">
-                  <Check className="h-3 w-3 text-primary-foreground" />
-                </div>
-              )}
 
               <button 
                 onClick={(e) => handleOpenDetail(e, process)}
