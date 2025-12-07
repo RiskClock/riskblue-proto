@@ -132,7 +132,7 @@ export const MitigationControlsStep = ({
 
           return (
             <AccordionItem key={control.name} value={control.name} className="border-b last:border-b-0">
-              <div className={`relative flex items-center transition-colors ${isSelected ? "bg-primary/5" : ""}`}>
+              <div className={`flex items-center transition-colors ${isSelected ? "bg-primary/5" : ""}`}>
                 {/* Checkbox - stops propagation to not trigger accordion */}
                 <div 
                   className="p-3 cursor-pointer"
@@ -154,29 +154,29 @@ export const MitigationControlsStep = ({
                   </div>
                 </div>
 
-                {/* Accordion trigger - just contains the control name */}
-                <AccordionTrigger className="flex-1 hover:no-underline py-3 pr-3 [&>svg]:ml-2">
-                  <span className="text-sm font-medium text-left">{control.name}</span>
+                {/* Accordion trigger - override justify-between so inner div can expand */}
+                <AccordionTrigger className="flex-1 hover:no-underline py-3 pr-3 !justify-start">
+                  <div className="flex flex-1 items-center">
+                    <span className="text-sm font-medium text-left">{control.name}</span>
+                    <div className="ml-auto flex items-center gap-1.5 mr-2">
+                      {assets.length > 0 && (
+                        <Badge className="bg-blue-100 text-blue-700 hover:bg-blue-100 border-0 text-xs font-medium px-2 py-0.5">
+                          {assets.length} Asset{assets.length > 1 ? 's' : ''}
+                        </Badge>
+                      )}
+                      {systems.length > 0 && (
+                        <Badge className="bg-cyan-100 text-cyan-700 hover:bg-cyan-100 border-0 text-xs font-medium px-2 py-0.5">
+                          {systems.length} System{systems.length > 1 ? 's' : ''}
+                        </Badge>
+                      )}
+                      {processes.length > 0 && (
+                        <Badge className="bg-violet-100 text-violet-700 hover:bg-violet-100 border-0 text-xs font-medium px-2 py-0.5">
+                          {processes.length} Process{processes.length > 1 ? 'es' : ''}
+                        </Badge>
+                      )}
+                    </div>
+                  </div>
                 </AccordionTrigger>
-
-                {/* Badges - absolutely positioned to the right */}
-                <div className="absolute right-10 top-1/2 -translate-y-1/2 flex items-center gap-1.5 pointer-events-none">
-                  {assets.length > 0 && (
-                    <Badge className="bg-blue-100 text-blue-700 hover:bg-blue-100 border-0 text-xs font-medium px-2 py-0.5">
-                      {assets.length} Asset{assets.length > 1 ? 's' : ''}
-                    </Badge>
-                  )}
-                  {systems.length > 0 && (
-                    <Badge className="bg-cyan-100 text-cyan-700 hover:bg-cyan-100 border-0 text-xs font-medium px-2 py-0.5">
-                      {systems.length} System{systems.length > 1 ? 's' : ''}
-                    </Badge>
-                  )}
-                  {processes.length > 0 && (
-                    <Badge className="bg-violet-100 text-violet-700 hover:bg-violet-100 border-0 text-xs font-medium px-2 py-0.5">
-                      {processes.length} Process{processes.length > 1 ? 'es' : ''}
-                    </Badge>
-                  )}
-                </div>
               </div>
 
               <AccordionContent className="px-3 pb-3">
