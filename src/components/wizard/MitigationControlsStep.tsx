@@ -3,9 +3,11 @@ import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Badge } from "@/components/ui/badge";
-import { Info } from "lucide-react";
+import { Info, Shield, ChevronDown, ChevronUp } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useQuery } from "@tanstack/react-query";
+import { AnalysisItem } from "@/lib/analysisItemMapper";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 
 interface Control {
   id: string;
@@ -30,12 +32,26 @@ interface MitigationControlsStepProps {
   onNext: (data: any) => void;
   onBack: () => void;
   isProcessingWebhook?: boolean;
+  analysisItems?: AnalysisItem[];
 }
 
-export const MitigationControlsStep = ({ data, onNext, onBack, isProcessingWebhook }: MitigationControlsStepProps) => {
+interface ControlWithProtectedItems {
+  control: Control;
+  protectedAssets: AnalysisItem[];
+  protectedSystems: AnalysisItem[];
+}
+
+export const MitigationControlsStep = ({ 
+  data, 
+  onNext, 
+  onBack, 
+  isProcessingWebhook,
+  analysisItems = []
+}: MitigationControlsStepProps) => {
   const [selectedControl, setSelectedControl] = useState<Control | null>(null);
   const [dialogOpen, setDialogOpen] = useState(false);
   const hasPendingSave = useRef(false);
+  const [expandedControls, setExpandedControls] = useState<Set<string>>(new Set());
 
   // Fetch mitigation controls from database
   const { data: mitigationControls = [], isLoading } = useQuery({
@@ -90,11 +106,69 @@ export const MitigationControlsStep = ({ data, onNext, onBack, isProcessingWebho
       : []
   );
 
+  // Build a map of controls to the items they protect
+  const controlsWithProtectedItems = useMemo((): ControlWithProtectedItems[] => {
+    const controlMap = new Map<string, ControlWithProtectedItems>();
+
+    // Initialize all controls
+    mitigationControls.forEach(control => {
+      controlMap.set(control.name, {
+        control,
+        protectedAssets: [],
+        protectedSystems: []
+      });
+    });
+
+    // Go through analysis items and map them to controls
+    analysisItems.forEach(item => {
+      if (!item.controls) return;
+      
+      item.controls.forEach(controlName => {
+        // Try to find a matching control (partial match)
+        for (const [name, data] of controlMap.entries()) {
+          if (controlName.toLowerCase().includes(name.toLowerCase()) || 
+              name.toLowerCase().includes(controlName.toLowerCase()) ||
+              normalizeControlName(controlName) === normalizeControlName(name)) {
+            if (item.category === "Asset") {
+              data.protectedAssets.push(item);
+            } else if (item.category === "Water System") {
+              data.protectedSystems.push(item);
+            }
+            break;
+          }
+        }
+      });
+    });
+
+    // Filter to only controls that protect something, sorted by total protected items
+    const controlsWithItems = Array.from(controlMap.values())
+      .filter(c => c.protectedAssets.length > 0 || c.protectedSystems.length > 0)
+      .sort((a, b) => {
+        const aTotal = a.protectedAssets.length + a.protectedSystems.length;
+        const bTotal = b.protectedAssets.length + b.protectedSystems.length;
+        return bTotal - aTotal;
+      });
+
+    // Add remaining controls that don't protect anything specific
+    const remainingControls = Array.from(controlMap.values())
+      .filter(c => c.protectedAssets.length === 0 && c.protectedSystems.length === 0);
+
+    return [...controlsWithItems, ...remainingControls];
+  }, [mitigationControls, analysisItems]);
+
+  // Normalize control name for matching
+  function normalizeControlName(name: string): string {
+    return name.toLowerCase()
+      .replace(/[^a-z0-9\s]/g, '')
+      .replace(/\s+/g, ' ')
+      .trim();
+  }
+
   // Update default selection when controls load
   useEffect(() => {
     if (mitigationControls.length > 0 && (!data.selectedControls || data.selectedControls.length === 0)) {
       setSelectedControls(allControlNames);
-      hasPendingSave.current = true; // Mark that we have unsaved changes
+      hasPendingSave.current = true;
     }
   }, [mitigationControls.length, allControlNames, data.selectedControls]);
 
@@ -111,18 +185,29 @@ export const MitigationControlsStep = ({ data, onNext, onBack, isProcessingWebho
     );
   };
 
+  const toggleExpanded = (controlName: string) => {
+    setExpandedControls(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(controlName)) {
+        newSet.delete(controlName);
+      } else {
+        newSet.add(controlName);
+      }
+      return newSet;
+    });
+  };
+
   // Effect 2: Auto-save with debounce (blocked during webhook processing)
   useEffect(() => {
     if (isProcessingWebhook) {
-      hasPendingSave.current = true; // Mark pending if blocked
+      hasPendingSave.current = true;
       return;
     }
     
-    // If we have pending changes OR selectedControls changed, save
     if (hasPendingSave.current || selectedControls.length > 0) {
       const timer = setTimeout(() => {
         onNext({ selectedControls });
-        hasPendingSave.current = false; // Clear pending flag after save
+        hasPendingSave.current = false;
       }, 500);
 
       return () => clearTimeout(timer);
@@ -141,20 +226,10 @@ export const MitigationControlsStep = ({ data, onNext, onBack, isProcessingWebho
     setDialogOpen(true);
   };
 
-  // Group controls by category, maintaining order from CSV data
-  const groupedControls = mitigationControls.reduce((acc, control) => {
-    if (!acc[control.category]) {
-      acc[control.category] = [];
-    }
-    acc[control.category].push(control);
-    return acc;
-  }, {} as Record<string, Control[]>);
-
-  // Extract unique categories in order they appear (based on display_order from CSV)
-  const sortedGroupedControls = Object.fromEntries(
-    Array.from(new Set(mitigationControls.map(c => c.category)))
-      .map(category => [category, groupedControls[category]])
-  );
+  // Count controls that protect detected items
+  const controlsProtectingItems = controlsWithProtectedItems.filter(
+    c => c.protectedAssets.length > 0 || c.protectedSystems.length > 0
+  ).length;
 
   if (isLoading) {
     return (
@@ -170,13 +245,22 @@ export const MitigationControlsStep = ({ data, onNext, onBack, isProcessingWebho
   return (
     <div className="space-y-6">
       <div className="bg-muted/30 p-6 rounded-lg mb-6">
-        <div className="flex items-center justify-between">
+        <div className="flex items-center justify-between flex-wrap gap-4">
           <div className="flex items-center gap-4">
             <div className="text-2xl">⚙️</div>
             <div>
               <p className="font-semibold">Controls</p>
               <p className="text-sm text-muted-foreground">
                 {selectedControls.filter(name => mitigationControls.some(c => c.name === name)).length} / {mitigationControls.length} Selected
+              </p>
+            </div>
+          </div>
+          <div className="flex items-center gap-4">
+            <div className="text-2xl">🛡️</div>
+            <div>
+              <p className="font-semibold">Protecting</p>
+              <p className="text-sm text-muted-foreground">
+                {controlsProtectingItems} controls linked to detected items
               </p>
             </div>
           </div>
@@ -192,66 +276,124 @@ export const MitigationControlsStep = ({ data, onNext, onBack, isProcessingWebho
         </div>
       </div>
 
-      {Object.entries(sortedGroupedControls).map(([category, controls]) => (
-        <div key={category}>
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="text-lg font-semibold">{category}</h3>
-          </div>
-          <p className="text-sm text-muted-foreground mb-4">
-            {selectedControls.filter((name) => controls.some(c => c.name === name)).length} of{" "}
-            {controls.length} controls selected
-          </p>
-          <div className="grid md:grid-cols-4 gap-4">
-            {controls.map((control) => (
-              <div
-                key={control.name}
-                onClick={() => toggleControl(control.name)}
-                className={`p-4 rounded-lg cursor-pointer transition-all relative ${
-                  selectedControls.includes(control.name)
-                    ? "border-4 border-primary bg-primary/5"
-                    : "border-2 border-border hover:border-primary/50"
-                }`}
-              >
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    handleMoreInfo(control);
-                  }}
-                  className="absolute top-2 right-2 p-1 hover:bg-muted rounded-full transition-colors"
-                >
-                  <Info className="h-4 w-4 text-muted-foreground" />
-                </button>
+      {/* Reorganized view: Controls grouped by what they protect */}
+      <div className="space-y-4">
+        {controlsWithProtectedItems.map(({ control, protectedAssets, protectedSystems }) => {
+          const isSelected = selectedControls.includes(control.name);
+          const hasProtectedItems = protectedAssets.length > 0 || protectedSystems.length > 0;
+          const isExpanded = expandedControls.has(control.name);
 
-                <div className="mb-3">
-                  <h4 className="font-semibold text-sm mb-1">{control.name}</h4>
-                  <div className="flex gap-2">
-                    <Badge variant="secondary" className="text-xs">
+          return (
+            <div 
+              key={control.name}
+              className={`rounded-lg transition-all ${
+                isSelected 
+                  ? "border-2 border-primary bg-primary/5" 
+                  : "border border-border hover:border-primary/50"
+              }`}
+            >
+              {/* Control Header */}
+              <div 
+                className="p-4 flex items-center gap-4 cursor-pointer"
+                onClick={() => toggleControl(control.name)}
+              >
+                <div className="flex-shrink-0">
+                  <img 
+                    src={control.image_url} 
+                    alt={control.name}
+                    className="w-16 h-16 object-contain rounded bg-muted/30"
+                    onError={(e) => {
+                      e.currentTarget.src = 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64"><rect fill="%23ddd" width="64" height="64"/><text x="50%" y="50%" text-anchor="middle" fill="%23999" font-size="12">🛡️</text></svg>';
+                    }}
+                  />
+                </div>
+                
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 mb-1">
+                    <h4 className="font-semibold text-sm truncate">{control.name}</h4>
+                    <Badge variant="secondary" className="text-xs flex-shrink-0">
                       {control.points} pts
                     </Badge>
-                    <Badge variant="outline" className="text-xs">
-                      {"⭐".repeat(control.popularity)}
-                    </Badge>
                   </div>
+                  
+                  {hasProtectedItems && (
+                    <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                      <Shield className="h-3 w-3" />
+                      <span>
+                        Protects {protectedAssets.length > 0 && `${protectedAssets.length} asset${protectedAssets.length !== 1 ? 's' : ''}`}
+                        {protectedAssets.length > 0 && protectedSystems.length > 0 && ', '}
+                        {protectedSystems.length > 0 && `${protectedSystems.length} system${protectedSystems.length !== 1 ? 's' : ''}`}
+                      </span>
+                    </div>
+                  )}
                 </div>
-                
-                <img 
-                  src={control.image_url} 
-                  alt={control.name}
-                  className="w-full h-32 object-contain rounded-md mb-3 bg-muted/30"
-                  onError={(e) => {
-                    console.error(`Failed to load image for ${control.name}:`, control.image_url);
-                    e.currentTarget.src = 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" width="200" height="200"><rect fill="%23ddd" width="200" height="200"/><text x="50%" y="50%" text-anchor="middle" fill="%23999" font-size="14">No Image</text></svg>';
-                  }}
-                />
-                
-                <div className="flex justify-between text-xs text-muted-foreground">
-                  <span><strong>Author:</strong> {control.author}</span>
+
+                <div className="flex items-center gap-2 flex-shrink-0">
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleMoreInfo(control);
+                    }}
+                    className="p-2 hover:bg-muted rounded-full transition-colors"
+                  >
+                    <Info className="h-4 w-4 text-muted-foreground" />
+                  </button>
+                  
+                  {hasProtectedItems && (
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        toggleExpanded(control.name);
+                      }}
+                      className="p-2 hover:bg-muted rounded-full transition-colors"
+                    >
+                      {isExpanded ? (
+                        <ChevronUp className="h-4 w-4 text-muted-foreground" />
+                      ) : (
+                        <ChevronDown className="h-4 w-4 text-muted-foreground" />
+                      )}
+                    </button>
+                  )}
                 </div>
               </div>
-            ))}
-          </div>
-        </div>
-      ))}
+
+              {/* Expanded Protected Items */}
+              {hasProtectedItems && isExpanded && (
+                <div className="px-4 pb-4 pt-0">
+                  <div className="border-t pt-4 space-y-3">
+                    {protectedAssets.length > 0 && (
+                      <div>
+                        <p className="text-xs font-medium text-muted-foreground mb-2">Protected Assets:</p>
+                        <div className="flex flex-wrap gap-2">
+                          {protectedAssets.map((asset, i) => (
+                            <Badge key={i} variant="outline" className="text-xs">
+                              {asset.areaName || asset.name}
+                              {asset.floor && ` (${asset.floor})`}
+                            </Badge>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                    
+                    {protectedSystems.length > 0 && (
+                      <div>
+                        <p className="text-xs font-medium text-muted-foreground mb-2">Protected Systems:</p>
+                        <div className="flex flex-wrap gap-2">
+                          {protectedSystems.map((system, i) => (
+                            <Badge key={i} variant="outline" className="text-xs">
+                              {system.name}
+                            </Badge>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
 
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
         <DialogContent className="max-w-2xl max-h-[80vh]">

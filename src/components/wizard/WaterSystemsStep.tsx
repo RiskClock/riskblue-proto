@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Info, Plus } from "lucide-react";
@@ -9,6 +9,10 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { calculateWaterSystemDuration } from "@/lib/durationCalculator";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
+import { Badge } from "@/components/ui/badge";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { AnalysisItem } from "@/lib/analysisItemMapper";
+
 interface WaterSystem {
   id: string;
   name: string;
@@ -19,25 +23,31 @@ interface WaterSystem {
   image_url: string;
   display_order: number;
 }
+
 interface WaterSystemsStepProps {
   data: any;
   onNext: (data: any) => void;
   onBack: () => void;
   isProcessingWebhook?: boolean;
   projectId?: string;
+  analysisItems?: AnalysisItem[];
 }
+
 export const WaterSystemsStep = ({
   data,
   onNext,
   onBack,
   isProcessingWebhook,
-  projectId
+  projectId,
+  analysisItems = []
 }: WaterSystemsStepProps) => {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [selectedSystems, setSelectedSystems] = useState<string[]>(data.selectedSystems || []);
   const [systemFloors, setSystemFloors] = useState<Record<string, string>>(data.systemFloors || {});
   const [dialogOpen, setDialogOpen] = useState<string | null>(null);
+  const [detailDialogOpen, setDetailDialogOpen] = useState(false);
+  const [selectedSystemForDetail, setSelectedSystemForDetail] = useState<string | null>(null);
   const [tempFloors, setTempFloors] = useState("");
   const [addSystemDialogOpen, setAddSystemDialogOpen] = useState(false);
   const [newSystem, setNewSystem] = useState({
@@ -126,6 +136,35 @@ export const WaterSystemsStep = ({
     display_order: 999
   }))];
 
+  // Get analysis items for a specific water system type
+  const getSystemAnalysisItems = (systemName: string): AnalysisItem[] => {
+    return analysisItems.filter(item => 
+      item.category === "Water System" && 
+      normalizeSystemName(item.name) === normalizeSystemName(systemName)
+    );
+  };
+
+  // Normalize system name for comparison
+  const normalizeSystemName = (name: string): string => {
+    const lower = name.toLowerCase();
+    
+    // Map specific patterns to database names
+    if (lower.includes('cold') && (lower.includes('domestic') || lower.includes('water'))) return 'domestic cold water';
+    if (lower.includes('hot') && (lower.includes('domestic') || lower.includes('water'))) return 'domestic hot water';
+    if (lower.includes('temporary') && lower.includes('water')) return 'temporary water run';
+    if (lower.includes('main') && lower.includes('city') && lower.includes('water')) return 'main city water supply';
+    if (lower.includes('hydronic')) return 'hydronics';
+    if (lower.includes('fire') && (lower.includes('suppression') || lower.includes('protection') || lower.includes('sprinkler'))) return 'fire suppression system';
+    if (lower.includes('sump') || lower.includes('storm drain') || lower.includes('drainage')) return 'sump pits storm drains and drainages';
+    
+    return lower.replace(/[,&]/g, '').replace(/\s+/g, ' ').trim();
+  };
+
+  // Get count of instances for a system
+  const getSystemCount = (systemName: string): number => {
+    return getSystemAnalysisItems(systemName).length;
+  };
+
   // Sync props to state when data changes (e.g., from webhook)
   useEffect(() => {
     if (data.selectedSystems) {
@@ -135,13 +174,21 @@ export const WaterSystemsStep = ({
       setSystemFloors(data.systemFloors);
     }
   }, [data.selectedSystems, data.systemFloors]);
+
   const toggleSystem = (systemName: string) => {
     setSelectedSystems(prev => prev.includes(systemName) ? prev.filter(name => name !== systemName) : [...prev, systemName]);
   };
+
   const handleOpenFloorDialog = (systemName: string) => {
     setTempFloors(systemFloors[systemName] || "");
     setDialogOpen(systemName);
   };
+
+  const handleOpenDetailDialog = (systemName: string) => {
+    setSelectedSystemForDetail(systemName);
+    setDetailDialogOpen(true);
+  };
+
   const handleSaveFloors = () => {
     if (dialogOpen) {
       setSystemFloors(prev => ({
@@ -163,6 +210,7 @@ export const WaterSystemsStep = ({
     }, 500);
     return () => clearTimeout(timer);
   }, [selectedSystems, systemFloors, onNext, isProcessingWebhook]);
+
   const handleAddSystem = () => {
     if (!newSystem.name || !newSystem.risk_level || !newSystem.duration || !newSystem.cost) {
       toast({
@@ -175,6 +223,8 @@ export const WaterSystemsStep = ({
     addCustomSystemMutation.mutate(newSystem);
   };
 
+  const selectedSystemItems = selectedSystemForDetail ? getSystemAnalysisItems(selectedSystemForDetail) : [];
+
   if (isLoading || isLoadingCustom) {
     return <div className="flex items-center justify-center py-12">
         <div className="text-center">
@@ -183,20 +233,31 @@ export const WaterSystemsStep = ({
         </div>
       </div>;
   }
-  return <div className="space-y-6">
-      <div>
-        
-        
-      </div>
 
+  return <div className="space-y-6">
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
         {allSystems.map(system => {
         const isSelected = selectedSystems.includes(system.name);
+        const count = getSystemCount(system.name);
         return <div key={system.id} onClick={() => toggleSystem(system.name)} className={`p-4 rounded-lg cursor-pointer transition-all relative ${isSelected ? "border-4 border-primary bg-primary/5" : "border-2 border-border hover:border-primary/50"}`}>
+              {/* Count Badge */}
+              {count > 0 && (
+                <Badge 
+                  variant="default" 
+                  className="absolute -top-2 -left-2 h-6 min-w-6 flex items-center justify-center text-xs font-bold"
+                >
+                  {count}
+                </Badge>
+              )}
+
               <button onClick={e => {
-            e.stopPropagation();
-            handleOpenFloorDialog(system.name);
-          }} className="absolute top-2 right-2 p-1 hover:bg-muted rounded-full transition-colors">
+                e.stopPropagation();
+                if (count > 0) {
+                  handleOpenDetailDialog(system.name);
+                } else {
+                  handleOpenFloorDialog(system.name);
+                }
+              }} className="absolute top-2 right-2 p-1 hover:bg-muted rounded-full transition-colors">
                 <Info className="h-4 w-4 text-muted-foreground" />
               </button>
 
@@ -215,23 +276,6 @@ export const WaterSystemsStep = ({
                 <span><strong>Duration:</strong> {calculateWaterSystemDuration(system.name, data)}</span>
                 <span><strong>Cost:</strong> {system.cost}</span>
               </div>
-              
-              <Dialog open={dialogOpen === system.name} onOpenChange={open => !open && setDialogOpen(null)}>
-                <DialogContent onClick={e => e.stopPropagation()}>
-                  <DialogHeader>
-                    <DialogTitle>Specify Floors for {system.name}</DialogTitle>
-                  </DialogHeader>
-                  <div className="space-y-4 py-4">
-                    <div>
-                      <Label htmlFor="floors">Floors (e.g., 1-5, 10, 15-20)</Label>
-                      <Input id="floors" value={tempFloors} onChange={e => setTempFloors(e.target.value)} placeholder="Enter floor numbers or ranges" />
-                    </div>
-                    <Button onClick={handleSaveFloors} className="w-full">
-                      Save Floors
-                    </Button>
-                  </div>
-                </DialogContent>
-              </Dialog>
             </div>;
       })}
         
@@ -247,6 +291,79 @@ export const WaterSystemsStep = ({
           </p>
         </div>
       </div>
+
+      {/* Floor Specification Dialog */}
+      <Dialog open={dialogOpen !== null} onOpenChange={(open) => !open && setDialogOpen(null)}>
+        <DialogContent onClick={e => e.stopPropagation()}>
+          <DialogHeader>
+            <DialogTitle>Specify Floors for {dialogOpen}</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div>
+              <Label htmlFor="floors">Floors (e.g., 1-5, 10, 15-20)</Label>
+              <Input id="floors" value={tempFloors} onChange={e => setTempFloors(e.target.value)} placeholder="Enter floor numbers or ranges" />
+            </div>
+            <Button onClick={handleSaveFloors} className="w-full">
+              Save Floors
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Detail Dialog - Shows all instances */}
+      <Dialog open={detailDialogOpen} onOpenChange={setDetailDialogOpen}>
+        <DialogContent className="max-w-2xl max-h-[80vh]" onClick={e => e.stopPropagation()}>
+          <DialogHeader>
+            <DialogTitle>{selectedSystemForDetail}</DialogTitle>
+            <DialogDescription>
+              {selectedSystemItems.length} instance{selectedSystemItems.length !== 1 ? 's' : ''} detected
+            </DialogDescription>
+          </DialogHeader>
+          <ScrollArea className="max-h-[60vh] pr-4">
+            <div className="space-y-4">
+              {selectedSystemItems.map((item, index) => (
+                <div key={item.id} className="border rounded-lg p-4 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <h4 className="font-semibold">{item.name}</h4>
+                    <Badge variant="outline">{item.id}</Badge>
+                  </div>
+                  
+                  <div className="grid grid-cols-2 gap-2 text-sm">
+                    {item.floor && (
+                      <div>
+                        <span className="text-muted-foreground">Floor:</span> {item.floor}
+                      </div>
+                    )}
+                    {item.drawingCode && (
+                      <div>
+                        <span className="text-muted-foreground">Drawing Code:</span> {item.drawingCode}
+                      </div>
+                    )}
+                    {item.areaName && (
+                      <div>
+                        <span className="text-muted-foreground">Area:</span> {item.areaName}
+                      </div>
+                    )}
+                  </div>
+                  
+                  {item.controls && item.controls.length > 0 && (
+                    <div>
+                      <span className="text-sm text-muted-foreground">Recommended Controls:</span>
+                      <div className="flex flex-wrap gap-1 mt-1">
+                        {item.controls.map((control, i) => (
+                          <Badge key={i} variant="secondary" className="text-xs">
+                            {control}
+                          </Badge>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          </ScrollArea>
+        </DialogContent>
+      </Dialog>
 
       {/* Add Custom System Dialog */}
       <Dialog open={addSystemDialogOpen} onOpenChange={setAddSystemDialogOpen}>
@@ -303,6 +420,5 @@ export const WaterSystemsStep = ({
           </div>
         </DialogContent>
       </Dialog>
-
     </div>;
 };

@@ -15,6 +15,7 @@ import { ConstructionDetailsStep } from "@/components/wizard/ConstructionDetails
 import { CriticalAssetsStep } from "@/components/wizard/CriticalAssetsStep";
 import { WaterSystemsStep } from "@/components/wizard/WaterSystemsStep";
 import { MitigationControlsStep } from "@/components/wizard/MitigationControlsStep";
+import { ProcessesStep } from "@/components/wizard/ProcessesStep";
 import { MitigationResponsePlanStep } from "@/components/wizard/MitigationResponsePlanStep";
 import { WaterMitigationGuidelinesStep } from "@/components/wizard/WaterMitigationGuidelinesStep";
 import { CollaboratorManagementStep } from "@/components/wizard/CollaboratorManagementStep";
@@ -51,6 +52,41 @@ const ProjectWizard = () => {
   const isWebhookCreatingProject = useRef(false);
   const [showProviderDialog, setShowProviderDialog] = useState(false);
   const [showGuidelinesDialog, setShowGuidelinesDialog] = useState(false);
+  const [analysisItems, setAnalysisItems] = useState<AnalysisItem[]>([]);
+
+  // Fetch analysis items when project loads
+  useEffect(() => {
+    const fetchAnalysisItems = async () => {
+      if (!id || id === "new") return;
+      try {
+        const { data, error } = await supabase
+          .from('project_analysis_items')
+          .select('*')
+          .eq('project_id', id);
+        if (error) throw error;
+        if (data) {
+          const items: AnalysisItem[] = data.map(d => ({
+            id: d.item_id,
+            name: d.name,
+            category: d.category as "Asset" | "Water System" | "Process",
+            areaName: d.area_name,
+            floor: d.floor,
+            drawingCode: d.drawing_code,
+            fileName: d.file_name,
+            width: d.width ? Number(d.width) : null,
+            length: d.length ? Number(d.length) : null,
+            sizeCategory: d.size_category as any,
+            controls: d.controls || [],
+            coordinates: d.coordinates as any
+          }));
+          setAnalysisItems(items);
+        }
+      } catch (error) {
+        console.error("Error fetching analysis items:", error);
+      }
+    };
+    fetchAnalysisItems();
+  }, [id]);
 
   useEffect(() => {
     let mounted = true;
@@ -58,12 +94,8 @@ const ProjectWizard = () => {
     const fetchProject = async () => {
       if (!id || id === "new") return;
       
-      // Wait for auth session to be ready (important after OAuth redirects)
       const { data: { session } } = await supabase.auth.getSession();
-      if (!session) {
-        // If no session, wait for auth state change
-        return;
-      }
+      if (!session) return;
       
       try {
         const { data, error } = await supabase
@@ -72,18 +104,10 @@ const ProjectWizard = () => {
           .eq("id", id)
           .maybeSingle();
 
-        // Don't show errors if component unmounted
         if (!mounted) return;
-
         if (error) throw error;
+        if (!data) return;
         
-        // Handle case where project is not found
-        if (!data) {
-          console.warn("Project not found:", id);
-          return;
-        }
-        
-        // Merge table columns with project_data JSONB
         const { project_data, created_at, updated_at, user_id, id: projectId, ...tableColumns } = data;
         const mergedData = {
           ...tableColumns,
@@ -92,9 +116,7 @@ const ProjectWizard = () => {
         
         setProjectData(mergedData);
       } catch (error: any) {
-        // Don't show errors if component unmounted
         if (!mounted) return;
-        
         console.error("Error fetching project:", error);
         toast({
           title: "Error",
@@ -104,8 +126,7 @@ const ProjectWizard = () => {
       }
     };
 
-    // Listen for auth state changes (triggered after OAuth redirect)
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event) => {
       if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED' || event === 'INITIAL_SESSION') {
         fetchProject();
       }
@@ -372,6 +393,7 @@ const ProjectWizard = () => {
       // If we have the new format, save the detailed analysis items to the database
       if (hasNewFormat && id && id !== "new") {
         await saveAnalysisItems(id, analysisItems);
+        setAnalysisItems(analysisItems);
       }
       
       toast({
@@ -547,6 +569,7 @@ const ProjectWizard = () => {
                       onBack={() => {}} 
                       isProcessingWebhook={isProcessingWebhook}
                       projectId={id}
+                      analysisItems={analysisItems}
                     />
                   </div>
                   <div className="space-y-6 pt-6 border-t">
@@ -557,7 +580,12 @@ const ProjectWizard = () => {
                       onBack={() => {}} 
                       isProcessingWebhook={isProcessingWebhook}
                       projectId={id}
+                      analysisItems={analysisItems}
                     />
+                  </div>
+                  <div className="space-y-6 pt-6 border-t">
+                    <h3 className="text-md font-medium">Processes</h3>
+                    <ProcessesStep analysisItems={analysisItems} />
                   </div>
                 </AccordionContent>
               </AccordionItem>
@@ -572,6 +600,7 @@ const ProjectWizard = () => {
                     onNext={handleStepUpdate} 
                     onBack={() => {}} 
                     isProcessingWebhook={isProcessingWebhook}
+                    analysisItems={analysisItems}
                   />
                 </AccordionContent>
               </AccordionItem>
