@@ -23,6 +23,9 @@ interface DriveFile {
   thumbnailLink?: string;
 }
 
+import { AnalysisItem, countByCategory } from "@/lib/analysisItemMapper";
+
+// Keep SystemDetection for backward compatibility with file viewer
 interface SystemDetection {
   lineMonitored: string;
   lineCode: string;
@@ -34,6 +37,7 @@ interface SystemDetection {
 interface AnalysisData {
   text: string;
   systems: SystemDetection[];
+  assetsWaterSystemsProcesses: AnalysisItem[];
 }
 
 interface ProjectFilesUploadProps {
@@ -347,13 +351,28 @@ export const ProjectFilesUpload = ({ projectId, onDataExtracted, setIsProcessing
     setAnalysisData(null);
   };
 
-  // Parse systems JSON from analysis text
+  // Parse systems JSON from analysis text (for backward compatibility with file viewer)
   const parseSystemsFromAnalysis = (text: string): SystemDetection[] => {
     try {
       const jsonMatch = text.match(/```json\s*([\s\S]*?)\s*```/);
       if (jsonMatch && jsonMatch[1]) {
         const parsed = JSON.parse(jsonMatch[1]);
-        return parsed.systems || [];
+        // Try old format first
+        if (parsed.systems) {
+          return parsed.systems;
+        }
+        // Convert new format to old format for file viewer
+        if (parsed.assets_water_systems_processes) {
+          return parsed.assets_water_systems_processes
+            .filter((item: AnalysisItem) => item.category === "Water System")
+            .map((item: AnalysisItem) => ({
+              lineMonitored: item.name,
+              lineCode: item.drawingCode || "",
+              systemType: item.name,
+              coordinates: item.coordinates || [0, 0, 0, 0],
+              fileName: item.fileName || undefined,
+            }));
+        }
       }
     } catch (e) {
       console.error("Failed to parse systems JSON:", e);
@@ -392,17 +411,28 @@ export const ProjectFilesUpload = ({ projectId, onDataExtracted, setIsProcessing
       }
 
       const analysisText = data.analysis;
+      const assetsWaterSystemsProcesses: AnalysisItem[] = data.assets_water_systems_processes || [];
       const systems = parseSystemsFromAnalysis(analysisText);
-      console.log("Parsed systems:", systems);
+      
+      console.log("Parsed items:", assetsWaterSystemsProcesses);
       
       setAnalysisData({
         text: analysisText,
         systems,
+        assetsWaterSystemsProcesses,
       });
       
+      // Call onDataExtracted if provided to update project data
+      if (onDataExtracted && assetsWaterSystemsProcesses.length > 0) {
+        onDataExtracted({
+          assets_water_systems_processes: assetsWaterSystemsProcesses,
+        });
+      }
+      
+      const counts = countByCategory(assetsWaterSystemsProcesses);
       toast({
         title: "Analysis Complete",
-        description: `Analyzed ${data.filesAnalyzed} files. Found ${systems.length} water systems.`,
+        description: `Analyzed ${data.filesAnalyzed} files. Found ${counts.assets} assets, ${counts.waterSystems} water systems, ${counts.processes} processes.`,
       });
     } catch (error) {
       console.error("Analysis error:", error);

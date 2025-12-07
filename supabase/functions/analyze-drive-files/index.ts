@@ -5,58 +5,105 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
-const ANALYSIS_PROMPT = `I am providing you with building drawings that may include multiple water-related systems.
+const ANALYSIS_PROMPT = `I am providing you with building drawings that may include water-related systems, critical assets, and construction processes.
 Assume I have no technical knowledge, so you must extract everything directly from the drawings without asking me any questions.
-Your task is to analyze the drawing and create one universal chart covering every water system visible, including (if present):
-• Domestic Cold Water (CW)
-• Domestic Hot Water (HW)
-• Hot Water Return (HWR)
-• Rainwater Harvesting / Filtered Water
-• Irrigation
-• Condensate Drains (CD)
-• Stormwater (STM / PSTM)
-• Sanitary (SAN)
-• Natural Gas (NG) only if relevant for monitoring
-• Fire Protection (FSP, FDC, DCDA, Fire Pump, Standpipe, Sprinkler Mains)
 
-For each system and each significant line, populate a chart with one row per monitored line using the following fields:
+Your task is to analyze the drawings and identify ALL of the following:
 
-| Field | Description |
-|-------|-------------|
-| Line Monitored | The functional name of the line (e.g., "Main Hot Water Supply," "Fire Protection Incoming Main," "Domestic Cold Water Riser," etc.) |
-| Line Code (from the drawing) | Exact text on the drawing (e.g., "Ø100 CW," "150 Ø FIRE PROTECTION SERVICES LINE," "Ø50 HW UP"). |
-| Pipe Diameter | The diameter shown (e.g., Ø20, Ø50, Ø150). |
-| Qty | How many such lines or risers appear on the drawing. |
-| Sensor Type | Recommend one: in-line, non-intrusive clamp-on ultrasonic, or "none required." |
-| Exact Location & Description | Where the sensor should be installed, described precisely using visible drawing context (e.g., "after DCDA, before pump suction," "on HW header leaving DWH-1/2," "below riser before vertical transition," etc.). |
-| Purpose / Goal | A short explanation of what the sensor would detect (e.g., "leaks," "unauthorized flow," "monitor zone usage," "detect burst or abnormal demand"). |
-| System Type | Identify system group (e.g., "Domestic Hot Water Recirculation System," "Wet Fire Sprinkler System," "Cold Water Distribution," "Storm Drainage—no monitoring applicable"). |
-| Coordinates | [x start, y start, x end, y end] box within the file where the system was found, in normalized relative coordinates, percentages between 0 and 1. |
+## 1. ASSETS (Critical building assets)
+Look for and identify:
+- Electrical Rooms
+- Mechanical Rooms
+- Electrical Risers / Main Electrical Risers
+- Mechanical Risers
+- Elevator Pits
+- Suites / Guest Rooms
+- Kitchens & Washrooms
+- Facade, Envelope, Exterior, and Roofing areas
+- Mass Timber and Millwork areas
 
-Important rules:
-• Extract EVERYTHING directly from the drawing text—no assumptions.
-• Use the exact line codes and diameter labels as shown on the drawing.
-• Use concise wording, suitable to forward to a hardware vendor.
-• Include one row per line or per riser if needed.
-• If a system does not require monitoring, include it with "Sensor Type = none required."
-• The goal is a universal, standardized monitoring table for all water-related lines.
-• Output only the completed chart, clean and professional.
+## 2. WATER SYSTEMS
+Look for and identify:
+- Domestic Cold Water (CW) - including Main Entry, Zone Entry, Suite Entry variations
+- Domestic Hot Water (HW)
+- Hot Water Return (HWR)
+- Temporary Water Run
+- Main City Water Supply
+- Hydronics
+- Fire Suppression System (FSP, FDC, sprinklers)
+- Sump Pits, Storm Drains, and Drainages
+- Stormwater (STM / PSTM)
+- Sanitary (SAN)
 
-After the chart, provide a JSON block with all detected systems and their coordinates in this exact format:
+## 3. PROCESSES (Stakeholder responsibilities)
+Identify relevant processes for:
+- Contractor Team
+- Water Mitigation Vendor
+- Mechanical Contractor and Engineering
+
+## OUTPUT FORMAT
+After analyzing, provide a JSON block with ALL detected items in this EXACT format:
+
 \`\`\`json
 {
-  "systems": [
+  "assets_water_systems_processes": [
     {
-      "lineMonitored": "Main Hot Water Supply",
-      "lineCode": "Ø100 HW",
-      "systemType": "Domestic Hot Water",
-      "coordinates": [100, 200, 300, 400]
+      "id": "ERM001",
+      "name": "Electrical Rooms",
+      "category": "Asset",
+      "areaName": "ELECTRICAL",
+      "floor": "Lower Level",
+      "drawingCode": null,
+      "fileName": null,
+      "width": 36.7,
+      "length": 20.7,
+      "sizeCategory": "large",
+      "controls": ["Presence of Water Monitoring", "Temporary Enclosure Plan"],
+      "coordinates": [0.595, 0.1923, 0.1755, 0.2434]
+    },
+    {
+      "id": "CDW-ME001",
+      "name": "Cold Domestic Water: Main Entry",
+      "category": "Water System",
+      "areaName": null,
+      "floor": null,
+      "drawingCode": "Ø100 CW",
+      "fileName": null,
+      "width": null,
+      "length": null,
+      "sizeCategory": null,
+      "controls": ["Automatic Shut Off Valve", "Ultrasonic Flow Sensors"],
+      "coordinates": [0.515, 0.4133, 0.1028, 0.2108]
+    },
+    {
+      "id": "CT001",
+      "name": "Contractor Team",
+      "category": "Process",
+      "areaName": null,
+      "floor": null,
+      "drawingCode": null,
+      "fileName": null,
+      "width": null,
+      "length": null,
+      "sizeCategory": null,
+      "controls": ["Water Mitigation Equipment Acceptance Test", "Water Watch Real-time Rounds Verification"],
+      "coordinates": null
     }
   ]
 }
 \`\`\`
 
-Output the completed chart first, then the JSON block.`;
+## IMPORTANT RULES:
+- Extract EVERYTHING directly from the drawing - no assumptions
+- Use exact line codes, labels, and room names as shown on drawings
+- Include coordinates as [x_start, y_start, width, height] in normalized values (0-1)
+- sizeCategory should be: "small", "medium", "large", or "very large" based on dimensions
+- controls should list recommended mitigation controls for each item
+- Category MUST be exactly one of: "Asset", "Water System", or "Process"
+- Generate unique IDs for each item (e.g., ERM001, CDW-ME001, CT001)
+- Include ALL instances found (e.g., if there are 3 electrical rooms, include all 3)
+
+Provide a brief analysis summary first, then the JSON block.`;
 
 interface DriveFile {
   id: string;
@@ -69,6 +116,21 @@ interface GeminiFile {
   uri: string;
   mimeType: string;
   state: string;
+}
+
+interface AnalysisItem {
+  id: string;
+  name: string;
+  category: "Asset" | "Water System" | "Process";
+  areaName: string | null;
+  floor: string | null;
+  drawingCode: string | null;
+  fileName: string | null;
+  width: number | null;
+  length: number | null;
+  sizeCategory: "small" | "medium" | "large" | "very large" | null;
+  controls: string[];
+  coordinates: [number, number, number, number] | null;
 }
 
 // Download file from Google Drive
@@ -208,13 +270,40 @@ async function waitForFileProcessing(fileName: string, apiKey: string, maxAttemp
   return false;
 }
 
+// Parse the analysis result to extract the structured data
+function parseAnalysisResult(analysisText: string): AnalysisItem[] {
+  try {
+    // Look for JSON block in the response
+    const jsonMatch = analysisText.match(/```json\s*([\s\S]*?)\s*```/);
+    if (jsonMatch && jsonMatch[1]) {
+      const parsed = JSON.parse(jsonMatch[1]);
+      if (parsed.assets_water_systems_processes && Array.isArray(parsed.assets_water_systems_processes)) {
+        return parsed.assets_water_systems_processes;
+      }
+    }
+    
+    // Try parsing the whole text as JSON if no code block found
+    try {
+      const parsed = JSON.parse(analysisText);
+      if (parsed.assets_water_systems_processes && Array.isArray(parsed.assets_water_systems_processes)) {
+        return parsed.assets_water_systems_processes;
+      }
+    } catch {
+      // Not valid JSON
+    }
+  } catch (e) {
+    console.error("Failed to parse analysis result:", e);
+  }
+  return [];
+}
+
 // Call Gemini generateContent with file references
 async function analyzeWithGemini(files: GeminiFile[], apiKey: string, customPrompt?: string): Promise<string | null> {
   try {
     const promptToUse = customPrompt || ANALYSIS_PROMPT;
     const parts: any[] = [
       { text: promptToUse },
-      { text: `\n\nI have ${files.length} building drawing files to analyze. Please extract all water system information and create the monitoring chart.\n\nFiles included:\n${files.map(f => f.name).join('\n')}` },
+      { text: `\n\nI have ${files.length} building drawing files to analyze. Please extract all assets, water systems, and processes.\n\nFiles included:\n${files.map(f => f.name).join('\n')}` },
     ];
 
     // Add file references
@@ -361,9 +450,14 @@ serve(async (req) => {
 
     console.log("Analysis completed successfully");
 
+    // Parse the structured data from the analysis
+    const assetsWaterSystemsProcesses = parseAnalysisResult(analysisResult);
+    console.log(`Parsed ${assetsWaterSystemsProcesses.length} items from analysis`);
+
     return new Response(
       JSON.stringify({ 
         analysis: analysisResult,
+        assets_water_systems_processes: assetsWaterSystemsProcesses,
         filesAnalyzed: uploadedFiles.length,
         fileNames: uploadedFiles.map(f => f.name.replace('files/', ''))
       }),

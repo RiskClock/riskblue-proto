@@ -32,6 +32,7 @@ import { Badge } from "@/components/ui/badge";
 import { format } from "date-fns";
 import { WaterRiskReport } from "@/components/reports/WaterRiskReport";
 import { generateReportFilename } from "@/lib/reportGenerator";
+import { AnalysisItem, extractSelectedAssets, extractSelectedSystems } from "@/lib/analysisItemMapper";
 
 interface ProjectData {
   [key: string]: any;
@@ -279,6 +280,10 @@ const ProjectWizard = () => {
       return towerConfig.replace("_tower", "");
     };
     
+    // Check if this is the new format with assets_water_systems_processes array
+    const analysisItems: AnalysisItem[] = extractedData.assets_water_systems_processes || [];
+    const hasNewFormat = analysisItems.length > 0;
+    
     // Map the extracted data to project fields based on webhook schema
     const mappedData = {
       ...projectData,
@@ -316,40 +321,44 @@ const ProjectWizard = () => {
       interior_start_date: extractedData.milestones?.interior_finishes?.start || projectData.interior_start_date,
       interior_end_date: extractedData.milestones?.interior_finishes?.finish || projectData.interior_end_date,
       
-      // Map critical assets from boolean object to selected array
-      selectedAssets: extractedData.critical_assets_present ? 
-        Object.entries(extractedData.critical_assets_present)
-          .filter(([_, value]) => value === true)
-          .map(([key]) => {
-            // Map schema keys to our asset IDs
-            const assetMap: Record<string, string> = {
-              "mechanical_rooms": "Mechanical Rooms",
-              "electrical_rooms": "Electrical Rooms",
-              "main_electrical_risers": "Main Electrical Risers",
-              "sump_pits": "Sump Pits",
-              "mechanical_risers": "Mechanical Risers",
-              "elevator_pits": "Elevator Pits",
-              "suites/guest_rooms": "Suites"
-            };
-            return assetMap[key] || key;
-          }) : projectData.selectedAssets,
+      // Map critical assets - use new format if available, otherwise fall back to old format
+      selectedAssets: hasNewFormat 
+        ? extractSelectedAssets(analysisItems)
+        : extractedData.critical_assets_present 
+          ? Object.entries(extractedData.critical_assets_present)
+              .filter(([_, value]) => value === true)
+              .map(([key]) => {
+                const assetMap: Record<string, string> = {
+                  "mechanical_rooms": "Mechanical Rooms",
+                  "electrical_rooms": "Electrical Rooms",
+                  "main_electrical_risers": "Electrical Risers",
+                  "sump_pits": "Sump Pits, Storm Drains, and Drainages",
+                  "mechanical_risers": "Mechanical Risers",
+                  "elevator_pits": "Elevator Pits",
+                  "suites/guest_rooms": "Suites"
+                };
+                return assetMap[key] || key;
+              }) 
+          : projectData.selectedAssets,
       
-      // Map water systems from boolean object to selected array
-      selectedSystems: extractedData.water_systems_present ? 
-        Object.entries(extractedData.water_systems_present)
-          .filter(([_, value]) => value === true)
-          .map(([key]) => {
-            // Map schema keys to our system IDs
-            const systemMap: Record<string, string> = {
-              "domestic_cold_water": "Domestic Cold Water",
-              "domestic_hot_water": "Domestic Hot Water",
-              "temporary_water_run": "Temporary Water Run",
-              "main_city_water_supply": "Main City Water Supply",
-              "hydronics": "Hydronics",
-              "fire_suppression_systems": "Fire Suppression System"
-            };
-            return systemMap[key] || key;
-          }) : projectData.selectedSystems,
+      // Map water systems - use new format if available, otherwise fall back to old format
+      selectedSystems: hasNewFormat
+        ? extractSelectedSystems(analysisItems)
+        : extractedData.water_systems_present 
+          ? Object.entries(extractedData.water_systems_present)
+              .filter(([_, value]) => value === true)
+              .map(([key]) => {
+                const systemMap: Record<string, string> = {
+                  "domestic_cold_water": "Domestic Cold Water",
+                  "domestic_hot_water": "Domestic Hot Water",
+                  "temporary_water_run": "Temporary Water Run",
+                  "main_city_water_supply": "Main City Water Supply",
+                  "hydronics": "Hydronics",
+                  "fire_suppression_systems": "Fire Suppression System"
+                };
+                return systemMap[key] || key;
+              }) 
+          : projectData.selectedSystems,
       
       // Map mitigation controls if present
       selectedControls: extractedData.mitigation_controls || projectData.selectedControls,
@@ -360,9 +369,16 @@ const ProjectWizard = () => {
     try {
       await saveProject(mappedData);
       
+      // If we have the new format, save the detailed analysis items to the database
+      if (hasNewFormat && id && id !== "new") {
+        await saveAnalysisItems(id, analysisItems);
+      }
+      
       toast({
         title: "Data Pre-filled",
-        description: "Project information has been automatically filled from the uploaded document.",
+        description: hasNewFormat 
+          ? `Found ${analysisItems.length} items: ${extractSelectedAssets(analysisItems).length} assets, ${extractSelectedSystems(analysisItems).length} water systems.`
+          : "Project information has been automatically filled from the uploaded document.",
       });
     } catch (error) {
       console.error("Error saving webhook data:", error);
@@ -374,6 +390,48 @@ const ProjectWizard = () => {
     } finally {
       isWebhookCreatingProject.current = false;
       setIsProcessingWebhook(false);
+    }
+  };
+
+  // Save analysis items to the database
+  const saveAnalysisItems = async (projectId: string, items: AnalysisItem[]) => {
+    try {
+      // First, delete existing items for this project
+      await supabase
+        .from('project_analysis_items')
+        .delete()
+        .eq('project_id', projectId);
+
+      // Insert new items
+      const itemsToInsert = items.map(item => ({
+        project_id: projectId,
+        item_id: item.id,
+        name: item.name,
+        category: item.category,
+        area_name: item.areaName,
+        floor: item.floor,
+        drawing_code: item.drawingCode,
+        file_name: item.fileName,
+        width: item.width,
+        length: item.length,
+        size_category: item.sizeCategory,
+        controls: item.controls,
+        coordinates: item.coordinates,
+      }));
+
+      if (itemsToInsert.length > 0) {
+        const { error } = await supabase
+          .from('project_analysis_items')
+          .insert(itemsToInsert);
+
+        if (error) {
+          console.error("Error saving analysis items:", error);
+        } else {
+          console.log(`Saved ${itemsToInsert.length} analysis items to database`);
+        }
+      }
+    } catch (error) {
+      console.error("Error in saveAnalysisItems:", error);
     }
   };
 
