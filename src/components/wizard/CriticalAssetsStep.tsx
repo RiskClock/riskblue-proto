@@ -177,9 +177,10 @@ export const CriticalAssetsStep = ({
     return types;
   }, [analysisItems]);
 
-  // Filter assets to only show those detected in analysis (if any analysis exists)
+  // Filter assets to only show those detected in analysis
   const filteredAssets = useMemo(() => {
-    if (analysisItems.length === 0) return allAssets;
+    // Only show assets that were detected in analysis
+    if (analysisItems.length === 0) return [];
     
     return allAssets.filter(asset => {
       const normalized = normalizeAssetName(asset.name);
@@ -269,6 +270,16 @@ export const CriticalAssetsStep = ({
       </div>;
   }
 
+  if (filteredAssets.length === 0) {
+    return (
+      <div className="text-center py-8 text-muted-foreground">
+        <Info className="h-12 w-12 mx-auto mb-4 opacity-50" />
+        <p>No critical assets detected yet.</p>
+        <p className="text-sm mt-1">Connect to Google Drive and analyze project files to identify assets.</p>
+      </div>
+    );
+  }
+
   return <div className="space-y-6">
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
         {filteredAssets.map(asset => {
@@ -310,20 +321,6 @@ export const CriticalAssetsStep = ({
               </div>
             </div>;
       })}
-        
-        {/* Add New Asset Card - only show if no analysis */}
-        {analysisItems.length === 0 && (
-          <div
-            onClick={() => setAddAssetDialogOpen(true)}
-            className="p-4 rounded-lg cursor-pointer transition-all border-2 border-dashed border-border hover:border-primary/50 flex flex-col items-center justify-center min-h-[280px]"
-          >
-            <Plus className="h-12 w-12 text-muted-foreground mb-2" />
-            <h3 className="font-semibold text-sm text-center">Add Custom Asset</h3>
-            <p className="text-xs text-muted-foreground text-center mt-1">
-              Add an asset specific to your project
-            </p>
-          </div>
-        )}
       </div>
 
       {/* Floor Specification Dialog */}

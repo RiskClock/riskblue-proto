@@ -163,9 +163,10 @@ export const WaterSystemsStep = ({
     return types;
   }, [analysisItems]);
 
-  // Filter systems to only show those detected in analysis (if any analysis exists)
+  // Filter systems to only show those detected in analysis
   const filteredSystems = useMemo(() => {
-    if (analysisItems.length === 0) return allSystems;
+    // Only show systems that were detected in analysis
+    if (analysisItems.length === 0) return [];
     
     return allSystems.filter(system => {
       const normalized = normalizeSystemName(system.name);
@@ -255,6 +256,16 @@ export const WaterSystemsStep = ({
       </div>;
   }
 
+  if (filteredSystems.length === 0) {
+    return (
+      <div className="text-center py-8 text-muted-foreground">
+        <Info className="h-12 w-12 mx-auto mb-4 opacity-50" />
+        <p>No water systems detected yet.</p>
+        <p className="text-sm mt-1">Connect to Google Drive and analyze project files to identify water systems.</p>
+      </div>
+    );
+  }
+
   return <div className="space-y-6">
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
         {filteredSystems.map(system => {
@@ -296,20 +307,6 @@ export const WaterSystemsStep = ({
               </div>
             </div>;
       })}
-        
-        {/* Add New System Card - only show if no analysis */}
-        {analysisItems.length === 0 && (
-          <div
-            onClick={() => setAddSystemDialogOpen(true)}
-            className="p-4 rounded-lg cursor-pointer transition-all border-2 border-dashed border-border hover:border-primary/50 flex flex-col items-center justify-center min-h-[280px]"
-          >
-            <Plus className="h-12 w-12 text-muted-foreground mb-2" />
-            <h3 className="font-semibold text-sm text-center">Add Custom System</h3>
-            <p className="text-xs text-muted-foreground text-center mt-1">
-              Add a water system specific to your project
-            </p>
-          </div>
-        )}
       </div>
 
       {/* Floor Specification Dialog */}
