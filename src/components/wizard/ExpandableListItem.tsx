@@ -178,9 +178,6 @@ export const ExpandableListItem = ({
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2">
             <h4 className="font-medium text-sm truncate">{name}</h4>
-            <Badge variant="secondary" className="text-xs flex-shrink-0">
-              {instanceCount}
-            </Badge>
             {riskLevel && (
               <Badge className={cn("text-xs flex-shrink-0 border", getRiskLevelStyles(riskLevel))}>
                 {riskLevel}
@@ -192,21 +189,26 @@ export const ExpandableListItem = ({
               {threat && <span className="truncate">{threat}</span>}
               {duration && <span>Duration: {duration}</span>}
               {cost && (
-                <Badge className={cn("text-xs", getCostStyles(cost))}>
+                <span className={cn("inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium", getCostStyles(cost))}>
                   Cost to Protect: {cost}
-                </Badge>
+                </span>
               )}
             </div>
           )}
         </div>
 
-        {/* Expand arrow */}
-        <ChevronDown 
-          className={cn(
-            "w-5 h-5 text-muted-foreground transition-transform flex-shrink-0",
-            isExpanded && "rotate-180"
-          )}
-        />
+        {/* Count + Expand arrow */}
+        <div className="flex items-center gap-2 flex-shrink-0">
+          <Badge variant="secondary" className="text-xs">
+            {instanceCount}
+          </Badge>
+          <ChevronDown 
+            className={cn(
+              "w-5 h-5 text-muted-foreground transition-transform",
+              isExpanded && "rotate-180"
+            )}
+          />
+        </div>
       </div>
 
       {/* Expanded content - child instances */}
