@@ -265,14 +265,14 @@ export const ExpandableListItem = ({
                       {sizeDisplay} {dimensionDisplay}
                     </Badge>
                   )}
-                  {pipeInfo && (
-                    <Badge variant="outline" className="text-xs cursor-default hover:bg-transparent bg-blue-50 text-blue-700 border-blue-200">
-                      {pipeInfo}
-                    </Badge>
-                  )}
                   {directionInfo && (
                     <Badge variant="outline" className="text-xs cursor-default hover:bg-transparent bg-purple-50 text-purple-700 border-purple-200">
                       {directionInfo}
+                    </Badge>
+                  )}
+                  {pipeInfo && (
+                    <Badge variant="outline" className="text-xs cursor-default hover:bg-transparent bg-blue-50 text-blue-700 border-blue-200">
+                      {pipeInfo}
                     </Badge>
                   )}
                 </div>
