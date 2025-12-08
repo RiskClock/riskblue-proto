@@ -23,6 +23,66 @@ interface ExpandableListItemProps {
   canViewFiles?: boolean;
 }
 
+// Risk level color mapping (yellow to dark red)
+const getRiskLevelStyles = (riskLevel?: string): string => {
+  if (!riskLevel) return "bg-muted text-muted-foreground";
+  const level = riskLevel.toLowerCase();
+  if (level.includes("extreme")) return "bg-red-700 text-white border-red-800";
+  if (level.includes("very high")) return "bg-red-500 text-white border-red-600";
+  if (level.includes("high")) return "bg-orange-500 text-white border-orange-600";
+  if (level.includes("moderate")) return "bg-yellow-500 text-black border-yellow-600";
+  if (level.includes("low")) return "bg-green-500 text-white border-green-600";
+  return "bg-muted text-muted-foreground";
+};
+
+// Cost color mapping
+const getCostStyles = (cost?: string): string => {
+  if (!cost) return "bg-muted text-muted-foreground";
+  const costLower = cost.toLowerCase();
+  if (costLower.includes("500k") || costLower.includes("1m") || costLower.includes("million")) return "bg-red-600 text-white";
+  if (costLower.includes("200k") || costLower.includes("300k") || costLower.includes("400k")) return "bg-orange-500 text-white";
+  if (costLower.includes("100k") || costLower.includes("150k")) return "bg-yellow-500 text-black";
+  if (costLower.includes("50k") || costLower.includes("75k")) return "bg-emerald-500 text-white";
+  return "bg-muted text-muted-foreground";
+};
+
+// Floor level priority for sorting (lower levels first)
+const getFloorPriority = (floor?: string | null): number => {
+  if (!floor) return 999;
+  const floorLower = floor.toLowerCase();
+  
+  // Underground / basement levels (lowest priority number = shown first)
+  if (floorLower.includes("basement") || floorLower.includes("underground")) {
+    const match = floorLower.match(/\d+/);
+    return -(match ? parseInt(match[0]) : 1);
+  }
+  if (floorLower.includes("lower level") || floorLower.includes("lower")) return 0;
+  if (floorLower.includes("ground")) return 1;
+  
+  // Numbered floors
+  const match = floorLower.match(/(\d+)/);
+  if (match) {
+    const num = parseInt(match[1]);
+    // Handle ordinal suffixes like 1st, 2nd, 3rd
+    return num + 1;
+  }
+  
+  // Roof / top
+  if (floorLower.includes("roof") || floorLower.includes("top")) return 1000;
+  
+  return 500;
+};
+
+// Sort instances by floor level (lowest to highest), then by ID ascending
+const sortInstances = (instances: AnalysisItem[]): AnalysisItem[] => {
+  return [...instances].sort((a, b) => {
+    const floorA = getFloorPriority(a.floor);
+    const floorB = getFloorPriority(b.floor);
+    if (floorA !== floorB) return floorA - floorB;
+    return a.id.localeCompare(b.id);
+  });
+};
+
 export const ExpandableListItem = ({
   name,
   icon,
@@ -40,6 +100,9 @@ export const ExpandableListItem = ({
   canViewFiles = false,
 }: ExpandableListItemProps) => {
   const [isExpanded, setIsExpanded] = useState(false);
+
+  // Sort instances
+  const sortedInstances = useMemo(() => sortInstances(instances), [instances]);
 
   // Calculate selection state
   const allInstanceIds = useMemo(() => instances.map(i => i.id), [instances]);
@@ -116,19 +179,23 @@ export const ExpandableListItem = ({
           <div className="flex items-center gap-2">
             <h4 className="font-medium text-sm truncate">{name}</h4>
             <Badge variant="secondary" className="text-xs flex-shrink-0">
-              ×{instanceCount}
+              {instanceCount}
             </Badge>
             {riskLevel && (
-              <Badge variant="outline" className="text-xs flex-shrink-0">
+              <Badge className={cn("text-xs flex-shrink-0 border", getRiskLevelStyles(riskLevel))}>
                 {riskLevel}
               </Badge>
             )}
           </div>
           {(threat || duration || cost) && (
-            <div className="flex items-center gap-4 text-xs text-muted-foreground mt-1">
+            <div className="flex items-center gap-3 text-xs text-muted-foreground mt-1">
               {threat && <span className="truncate">{threat}</span>}
               {duration && <span>Duration: {duration}</span>}
-              {cost && <span>Cost: {cost}</span>}
+              {cost && (
+                <Badge className={cn("text-xs", getCostStyles(cost))}>
+                  Cost to Protect: {cost}
+                </Badge>
+              )}
             </div>
           )}
         </div>
@@ -143,9 +210,9 @@ export const ExpandableListItem = ({
       </div>
 
       {/* Expanded content - child instances */}
-      {isExpanded && instances.length > 0 && (
+      {isExpanded && sortedInstances.length > 0 && (
         <div className="border-t bg-muted/20">
-          {instances.map((instance, idx) => {
+          {sortedInstances.map((instance, idx) => {
             const isInstanceSelected = selectedInstanceIds.includes(instance.id);
             const capitalize = (str: string) => str.charAt(0).toUpperCase() + str.slice(1).toLowerCase();
             const sizeDisplay = instance.sizeCategory ? capitalize(instance.sizeCategory) : null;

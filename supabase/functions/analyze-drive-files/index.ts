@@ -24,6 +24,11 @@ interface AnalysisItem {
   sizeCategory: "small" | "medium" | "large" | "very large" | null;
   controls: string[];
   coordinates: [number, number, number, number] | null;
+  additionalParameters?: {
+    mainPipeDirection?: string;
+    pipeDiameterInches?: string | null;
+    pipeDiameterMM?: string;
+  };
 }
 
 // Complete TMU Mock data with exact file names from provided mock data
@@ -527,6 +532,190 @@ const MOCK_ASSETS_WATER_SYSTEMS_PROCESSES: AnalysisItem[] = [
     "coordinates": [0.4639, 0.2522, 0.2146, 0.114]
   },
   {
+    "id": "CDW-ZE004",
+    "name": "Cold Domestic Water: Zone Entry",
+    "category": "Water System",
+    "areaName": null,
+    "floor": null,
+    "drawingCode": "Ø25 CW UP",
+    "fileName": "A2.01-LOWER-LEVEL-Rev.18.pdf",
+    "width": null,
+    "length": null,
+    "sizeCategory": null,
+    "controls": [
+      "Automatic Shut Off Valve",
+      "Ultrasonic Flow Sensors",
+      "Inline Flow Sensors"
+    ],
+    "coordinates": [0.2, 0.15, 0.1, 0.08],
+    "additionalParameters": {
+      "mainPipeDirection": "vertical",
+      "pipeDiameterInches": null,
+      "pipeDiameterMM": "25"
+    }
+  },
+  {
+    "id": "CDW-ZE005",
+    "name": "Cold Domestic Water: Zone Entry",
+    "category": "Water System",
+    "areaName": null,
+    "floor": null,
+    "drawingCode": "Ø25 CW UP",
+    "fileName": "A2.03-SECOND-FLOOR-Rev.20.pdf",
+    "width": null,
+    "length": null,
+    "sizeCategory": null,
+    "controls": [
+      "Automatic Shut Off Valve",
+      "Ultrasonic Flow Sensors",
+      "Inline Flow Sensors"
+    ],
+    "coordinates": [0.35, 0.22, 0.09, 0.07],
+    "additionalParameters": {
+      "mainPipeDirection": "vertical",
+      "pipeDiameterInches": null,
+      "pipeDiameterMM": "25"
+    }
+  },
+  {
+    "id": "CDW-ZE006",
+    "name": "Cold Domestic Water: Zone Entry",
+    "category": "Water System",
+    "areaName": null,
+    "floor": null,
+    "drawingCode": "Ø25 CW UP",
+    "fileName": "A2.05-FOURTH-FLOOR-Rev.16.pdf",
+    "width": null,
+    "length": null,
+    "sizeCategory": null,
+    "controls": [
+      "Automatic Shut Off Valve",
+      "Ultrasonic Flow Sensors",
+      "Inline Flow Sensors"
+    ],
+    "coordinates": [0.48, 0.18, 0.12, 0.06],
+    "additionalParameters": {
+      "mainPipeDirection": "vertical",
+      "pipeDiameterInches": null,
+      "pipeDiameterMM": "25"
+    }
+  },
+  {
+    "id": "CDW-ZE007",
+    "name": "Cold Domestic Water: Zone Entry",
+    "category": "Water System",
+    "areaName": null,
+    "floor": null,
+    "drawingCode": "Ø20 CW UP",
+    "fileName": "A2.07-SIXTH-FLOOR-Rev.18.1.pdf",
+    "width": null,
+    "length": null,
+    "sizeCategory": null,
+    "controls": [
+      "Automatic Shut Off Valve",
+      "Ultrasonic Flow Sensors",
+      "Inline Flow Sensors"
+    ],
+    "coordinates": [0.6, 0.3, 0.08, 0.09],
+    "additionalParameters": {
+      "mainPipeDirection": "vertical",
+      "pipeDiameterInches": null,
+      "pipeDiameterMM": "20"
+    }
+  },
+  {
+    "id": "CDW-ZE008",
+    "name": "Cold Domestic Water: Zone Entry",
+    "category": "Water System",
+    "areaName": null,
+    "floor": null,
+    "drawingCode": "Ø20 CW UP",
+    "fileName": "A2.09-EIGHTH-FLOOR-Rev.17.1.pdf",
+    "width": null,
+    "length": null,
+    "sizeCategory": null,
+    "controls": [
+      "Automatic Shut Off Valve",
+      "Ultrasonic Flow Sensors",
+      "Inline Flow Sensors"
+    ],
+    "coordinates": [0.72, 0.4, 0.07, 0.08],
+    "additionalParameters": {
+      "mainPipeDirection": "vertical",
+      "pipeDiameterInches": null,
+      "pipeDiameterMM": "20"
+    }
+  },
+  {
+    "id": "CDW-ZE009",
+    "name": "Cold Domestic Water: Zone Entry",
+    "category": "Water System",
+    "areaName": null,
+    "floor": null,
+    "drawingCode": "Ø20 CW UP",
+    "fileName": "A2.11-PARAPET-Rev.14.pdf",
+    "width": null,
+    "length": null,
+    "sizeCategory": null,
+    "controls": [
+      "Automatic Shut Off Valve",
+      "Ultrasonic Flow Sensors",
+      "Inline Flow Sensors"
+    ],
+    "coordinates": [0.15, 0.5, 0.1, 0.1],
+    "additionalParameters": {
+      "mainPipeDirection": "vertical",
+      "pipeDiameterInches": null,
+      "pipeDiameterMM": "20"
+    }
+  },
+  {
+    "id": "CDW-ZE010",
+    "name": "Cold Domestic Water: Zone Entry",
+    "category": "Water System",
+    "areaName": null,
+    "floor": null,
+    "drawingCode": "Ø15 CW UP",
+    "fileName": "A2.02-GROUND-FLOOR-Rev.19.pdf",
+    "width": null,
+    "length": null,
+    "sizeCategory": null,
+    "controls": [
+      "Automatic Shut Off Valve",
+      "Ultrasonic Flow Sensors",
+      "Inline Flow Sensors"
+    ],
+    "coordinates": [0.3, 0.6, 0.09, 0.12],
+    "additionalParameters": {
+      "mainPipeDirection": "vertical",
+      "pipeDiameterInches": null,
+      "pipeDiameterMM": "15"
+    }
+  },
+  {
+    "id": "CDW-ZE011",
+    "name": "Cold Domestic Water: Zone Entry",
+    "category": "Water System",
+    "areaName": null,
+    "floor": null,
+    "drawingCode": "Ø15 CW UP",
+    "fileName": "M-200B1-PLUMBING-BASEMENT-FLOOR-PLAN-Rev.20.pdf",
+    "width": null,
+    "length": null,
+    "sizeCategory": null,
+    "controls": [
+      "Automatic Shut Off Valve",
+      "Ultrasonic Flow Sensors",
+      "Inline Flow Sensors"
+    ],
+    "coordinates": [0.45, 0.7, 0.08, 0.09],
+    "additionalParameters": {
+      "mainPipeDirection": "vertical",
+      "pipeDiameterInches": null,
+      "pipeDiameterMM": "15"
+    }
+  },
+  {
     "id": "CDW-SRE001",
     "name": "Cold Domestic Water: Suite Riser Entry",
     "category": "Water System",
@@ -741,11 +930,11 @@ Based on the building drawings analyzed, I have identified the following assets,
 - **Mass Timber and Millwork**: Structural timber elements
 
 ### Water Systems Detected:
-- **Cold Domestic Water**: Main City Entry, Main Entry, Zone Entry (3 zones), Suite Riser Entry, Suite Entry
-- **Hot Domestic Water**: Central distribution
-- **Temporary Water Run**: Construction phase water supply
-- **Fire Suppression System**: Building-wide sprinkler system
-- **Sump Pit, Storm Drain, and Drainage**: Below-grade water management
+- **Cold Domestic Water**: Main City Entry (1), Main Entry (1), Zone Entry (11), Suite Riser Entry (1), Suite Entry (1)
+- **Hot Domestic Water**: Central distribution (1)
+- **Temporary Water Run**: Construction phase water supply (1)
+- **Fire Suppression System**: Building-wide sprinkler system (1)
+- **Sump Pit, Storm Drain, and Drainage**: Below-grade water management (1)
 
 ### Processes Identified:
 - **Contractor Team**: 22 controls including water mitigation, response planning, and equipment coordination
