@@ -1153,10 +1153,42 @@ serve(async (req) => {
       fileName: fileNames.length > 0 ? fileNames[index % fileNames.length] : null
     }));
 
+    // Generate dynamic analysis text with updated file names
+    const dynamicAnalysisText = `## Analysis Summary
+
+Based on the building drawings analyzed, I have identified the following assets, water systems, and processes:
+
+### Assets Detected:
+- **Electrical Rooms** (6 locations): Lower Level (ELECTRICAL, SUBSTATION ROOM, HYDRO VAULT), 4th Floor (IT ROOM), 7th Floor (IT ROOM), Roof (ELECTRICAL ROOM)
+- **Mechanical Rooms** (1 location): Lower Level (MECHANICAL)
+- **Electrical Risers** (1 location): Spanning Lower Level to 8th Floor
+- **Elevator Pits** (2 locations): ELEVATOR 1 and ELEVATOR 2 in Lower Level
+- **Kitchens & Washrooms** (13 locations): Various floors from 1st to 8th Floor
+- **Facade, Envelope, Exterior, and Roofing**: Building exterior systems
+- **Mass Timber and Millwork**: Structural timber elements
+
+### Water Systems Detected:
+- **Cold Domestic Water**: Main City Entry, Main Entry, Zone Entry (3 zones), Suite Riser Entry, Suite Entry
+- **Hot Domestic Water**: Central distribution
+- **Temporary Water Run**: Construction phase water supply
+- **Fire Suppression System**: Building-wide sprinkler system
+- **Sump Pit, Storm Drain, and Drainage**: Below-grade water management
+
+### Processes Identified:
+- **Contractor Team**: 22 controls including water mitigation, response planning, and equipment coordination
+- **Water Mitigation Vendor**: 15 controls including inspections, cybersecurity, and maintenance
+- **Mechanical Contractor and Engineering**: 18 controls including installation integrity, testing, and system optimization
+
+\`\`\`json
+{
+  "assets_water_systems_processes": ${JSON.stringify(updatedMockData, null, 2)}
+}
+\`\`\``;
+
     // Return mock data with file names populated
     return new Response(
       JSON.stringify({ 
-        analysis: MOCK_ANALYSIS_TEXT,
+        analysis: dynamicAnalysisText,
         assets_water_systems_processes: updatedMockData,
         filesAnalyzed: files.length,
         fileNames
