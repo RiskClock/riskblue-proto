@@ -18,7 +18,7 @@ const getAbsoluteUrl = (path: string) => {
   return path;
 };
 
-// Type configuration maps with public paths
+// Type configuration maps with public paths - using PNG for better print compatibility
 const constructionTypeConfig: Record<string, { label: string; imagePath: string }> = {
   "residential": { label: "Residential", imagePath: "/assets/type1-residential.avif" },
   "mixed-use": { label: "Mixed Use", imagePath: "/assets/type2-mixeduse.avif" },
@@ -186,7 +186,7 @@ export const WaterRiskReport = ({ data, analysisItems = [] }: WaterRiskReportPro
       {/* Fixed footer for subsequent pages */}
       <div className="print-page-footer hidden print:flex">
         <span>Built in</span>
-        <img src={logoUrl} alt="RiskBlue" style={{ height: '20px' }} />
+        <img src={logoUrl} alt="RiskBlue" style={{ height: '20px', display: 'inline-block' }} />
       </div>
 
       {/* Header with Logo */}
@@ -195,7 +195,7 @@ export const WaterRiskReport = ({ data, analysisItems = [] }: WaterRiskReportPro
           <h1 className="text-3xl font-bold text-gray-900 mb-2">Water Mitigation Guideline</h1>
           <p className="text-sm text-gray-600">Generated: {formatDate(new Date())}</p>
         </div>
-        <img src={logoUrl} alt="RiskBlue" className="h-12" />
+        <img src={logoUrl} alt="RiskBlue" style={{ height: '48px', display: 'inline-block' }} />
       </div>
 
       {/* Executive Summary */}
@@ -256,7 +256,8 @@ export const WaterRiskReport = ({ data, analysisItems = [] }: WaterRiskReportPro
                   <img 
                     src={getAbsoluteUrl(constructionTypeConfig[data.project_type].imagePath)} 
                     alt={constructionTypeConfig[data.project_type].label}
-                    className="w-10 h-10 object-contain rounded border border-gray-200 bg-white"
+                    className="object-contain rounded border border-gray-200 bg-white"
+                    style={{ width: '40px', height: '40px', display: 'inline-block' }}
                   />
                   <p className="text-base text-gray-900">{constructionTypeConfig[data.project_type].label}</p>
                 </div>
@@ -271,7 +272,8 @@ export const WaterRiskReport = ({ data, analysisItems = [] }: WaterRiskReportPro
                   <img 
                     src={getAbsoluteUrl(buildingTypeConfig[data.building_type].imagePath)} 
                     alt={buildingTypeConfig[data.building_type].label}
-                    className="w-10 h-10 object-contain rounded border border-gray-200 bg-white"
+                    className="object-contain rounded border border-gray-200 bg-white"
+                    style={{ width: '40px', height: '40px', display: 'inline-block' }}
                   />
                   <p className="text-base text-gray-900">{buildingTypeConfig[data.building_type].label}</p>
                 </div>
@@ -286,7 +288,8 @@ export const WaterRiskReport = ({ data, analysisItems = [] }: WaterRiskReportPro
                   <img 
                     src={getAbsoluteUrl(towerTypeConfig[data.tower_type].imagePath)} 
                     alt={towerTypeConfig[data.tower_type].label}
-                    className="w-10 h-10 object-contain rounded border border-gray-200 bg-white"
+                    className="object-contain rounded border border-gray-200 bg-white"
+                    style={{ width: '40px', height: '40px', display: 'inline-block' }}
                   />
                   <p className="text-base text-gray-900">{towerTypeConfig[data.tower_type].label}</p>
                 </div>
@@ -308,7 +311,8 @@ export const WaterRiskReport = ({ data, analysisItems = [] }: WaterRiskReportPro
                     <img 
                       src={getAbsoluteUrl(config.imagePath)} 
                       alt={config.label}
-                      className="w-8 h-8 object-contain"
+                      className="object-contain"
+                      style={{ width: '32px', height: '32px', display: 'inline-block' }}
                     />
                     <span className="text-sm text-gray-900">{config.label}</span>
                   </div>
