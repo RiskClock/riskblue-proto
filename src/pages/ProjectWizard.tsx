@@ -117,11 +117,35 @@ const ProjectWizard = () => {
     fetchAnalysisItems();
   }, [id]);
 
+  // Check for and restore cached project data after OAuth redirect
+  useEffect(() => {
+    const cachedDataKey = `projectData_${id}`;
+    const cachedData = localStorage.getItem(cachedDataKey);
+    if (cachedData) {
+      try {
+        const parsed = JSON.parse(cachedData);
+        console.log("Restoring cached project data after OAuth redirect:", parsed);
+        setProjectData(parsed);
+        // Clear the cache after restoring
+        localStorage.removeItem(cachedDataKey);
+      } catch (e) {
+        console.error("Failed to parse cached project data:", e);
+        localStorage.removeItem(cachedDataKey);
+      }
+    }
+  }, [id]);
+
   useEffect(() => {
     let mounted = true;
     
     const fetchProject = async () => {
       if (!id || id === "new") return;
+      
+      // Don't fetch if we just restored from cache (OAuth redirect scenario)
+      const cachedDataKey = `projectData_${id}`;
+      if (localStorage.getItem(cachedDataKey)) {
+        return; // Let the other useEffect handle restoration
+      }
       
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) return;
@@ -481,11 +505,17 @@ const ProjectWizard = () => {
     }
   };
 
-  // Force save current project data - used before OAuth redirects
+  // Cache project data to localStorage before OAuth redirect
+  // This ensures form data is preserved even if DB save hasn't completed
   const handleBeforeOAuthRedirect = useCallback(async () => {
-    if (id && id !== "new" && Object.keys(projectData).length > 0) {
-      console.log("Saving project data before OAuth redirect...");
-      await saveProject(projectData);
+    if (id && Object.keys(projectData).length > 0) {
+      console.log("Caching project data to localStorage before OAuth redirect...");
+      const cachedDataKey = `projectData_${id}`;
+      localStorage.setItem(cachedDataKey, JSON.stringify(projectData));
+      // Also try to save to DB, but don't wait for it
+      if (id !== "new") {
+        saveProject(projectData).catch(console.error);
+      }
     }
   }, [id, projectData, saveProject]);
 
