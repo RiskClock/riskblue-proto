@@ -56,6 +56,8 @@ interface ProjectFilesUploadProps {
   setDriveAccessToken: (token: string | null) => void;
   driveConnected: boolean;
   setDriveConnected: (connected: boolean) => void;
+  // Callback to save project data before OAuth redirect
+  onBeforeOAuthRedirect?: () => Promise<void>;
 }
 
 export const ProjectFilesUpload = ({ 
@@ -68,7 +70,8 @@ export const ProjectFilesUpload = ({
   driveAccessToken,
   setDriveAccessToken,
   driveConnected,
-  setDriveConnected
+  setDriveConnected,
+  onBeforeOAuthRedirect
 }: ProjectFilesUploadProps) => {
   const { toast } = useToast();
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -237,6 +240,11 @@ export const ProjectFilesUpload = ({
   const handleConnectGoogleDrive = async () => {
     setConnectingDrive(true);
     try {
+      // Save project data before OAuth redirect to prevent data loss
+      if (onBeforeOAuthRedirect) {
+        await onBeforeOAuthRedirect();
+      }
+      
       // Use clean redirect URL without query params
       const redirectUrl = `${window.location.origin}${window.location.pathname}`;
       console.log("OAuth redirect URL:", redirectUrl);
