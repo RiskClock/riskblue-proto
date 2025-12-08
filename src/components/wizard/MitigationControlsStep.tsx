@@ -1,8 +1,16 @@
 import { useState, useEffect, useRef, useMemo } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
-import { Shield, Building2, Droplets, Users } from "lucide-react";
+import { Shield, Building2, Droplets, Users, FileText } from "lucide-react";
+import { Button } from "@/components/ui/button";
 import { AnalysisItem } from "@/lib/analysisItemMapper";
+import { FileViewerModal } from "./FileViewerModal";
+
+interface DriveFile {
+  id: string;
+  name: string;
+  mimeType: string;
+}
 
 interface MitigationControlsStepProps {
   data: any;
@@ -10,6 +18,8 @@ interface MitigationControlsStepProps {
   onBack: () => void;
   isProcessingWebhook?: boolean;
   analysisItems?: AnalysisItem[];
+  driveFiles?: DriveFile[];
+  driveAccessToken?: string | null;
 }
 
 interface UniqueControl {
@@ -22,7 +32,9 @@ export const MitigationControlsStep = ({
   onNext, 
   onBack, 
   isProcessingWebhook,
-  analysisItems = []
+  analysisItems = [],
+  driveFiles = [],
+  driveAccessToken = null
 }: MitigationControlsStepProps) => {
   const hasPendingSave = useRef(false);
 
@@ -52,6 +64,31 @@ export const MitigationControlsStep = ({
       ? data.selectedControls 
       : []
   );
+  
+  // File viewer modal state
+  const [viewerOpen, setViewerOpen] = useState(false);
+  const [viewerItem, setViewerItem] = useState<AnalysisItem | null>(null);
+  const [viewerFileId, setViewerFileId] = useState<string>("");
+  const [viewerMimeType, setViewerMimeType] = useState<string>("application/pdf");
+  
+  // Helper to find Drive file by fileName
+  const findDriveFile = (fileName: string): DriveFile | undefined => {
+    return driveFiles.find(f => f.name === fileName);
+  };
+  
+  const openFileViewer = (item: AnalysisItem) => {
+    if (!item.fileName) return;
+    const driveFile = findDriveFile(item.fileName);
+    if (driveFile) {
+      setViewerFileId(driveFile.id);
+      setViewerMimeType(driveFile.mimeType);
+    }
+    setViewerItem(item);
+    setViewerOpen(true);
+  };
+  
+  // Check if file viewing is available (has Drive access)
+  const canViewFiles = driveFiles.length > 0 && driveAccessToken;
 
   // Update default selection when controls load
   useEffect(() => {
@@ -154,11 +191,11 @@ export const MitigationControlsStep = ({
                   </div>
                 </div>
 
-                {/* Accordion trigger - override justify-between so inner div can expand */}
-                <AccordionTrigger className="flex-1 hover:no-underline py-3 pr-3 !justify-start">
-                  <div className="flex flex-1 items-center">
+                {/* Accordion trigger with full-width justify-between layout */}
+                <AccordionTrigger className="flex-1 hover:no-underline py-3 pr-3">
+                  <div className="flex flex-1 items-center justify-between">
                     <span className="text-sm font-medium text-left">{control.name}</span>
-                    <div className="ml-auto flex items-center gap-1.5 mr-2">
+                    <div className="flex items-center gap-1.5">
                       {assets.length > 0 && (
                         <Badge className="bg-blue-100 text-blue-700 hover:bg-blue-100 border-0 text-xs font-medium px-2 py-0.5">
                           {assets.length} Asset{assets.length > 1 ? 's' : ''}
@@ -195,7 +232,20 @@ export const MitigationControlsStep = ({
                           const dimensionDisplay = item.length && item.width ? `(${item.length} ft × ${item.width} ft)` : null;
                           return (
                             <div key={idx} className="flex items-center justify-between p-2 bg-muted/30 rounded border border-border/50 text-sm">
-                              <span><span className="text-muted-foreground">{item.id}</span> — {item.areaName || item.name}</span>
+                              <div className="flex items-center gap-2">
+                                <span><span className="text-muted-foreground">{item.id}</span> — {item.areaName || item.name}</span>
+                                {item.fileName && canViewFiles && findDriveFile(item.fileName) && (
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    className="h-6 px-2 text-xs text-primary hover:text-primary"
+                                    onClick={() => openFileViewer(item)}
+                                  >
+                                    <FileText className="w-3 h-3 mr-1" />
+                                    View
+                                  </Button>
+                                )}
+                              </div>
                               <div className="flex gap-1">
                                 {item.floor && <Badge variant="outline" className="text-xs">{item.floor}</Badge>}
                                 {sizeDisplay && <Badge variant="secondary" className="text-xs">{sizeDisplay} {dimensionDisplay}</Badge>}
@@ -221,7 +271,20 @@ export const MitigationControlsStep = ({
                           const dimensionDisplay = item.length && item.width ? `(${item.length} ft × ${item.width} ft)` : null;
                           return (
                             <div key={idx} className="flex items-center justify-between p-2 bg-muted/30 rounded border border-border/50 text-sm">
-                              <span><span className="text-muted-foreground">{item.id}</span> — {item.areaName || item.name}</span>
+                              <div className="flex items-center gap-2">
+                                <span><span className="text-muted-foreground">{item.id}</span> — {item.areaName || item.name}</span>
+                                {item.fileName && canViewFiles && findDriveFile(item.fileName) && (
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    className="h-6 px-2 text-xs text-primary hover:text-primary"
+                                    onClick={() => openFileViewer(item)}
+                                  >
+                                    <FileText className="w-3 h-3 mr-1" />
+                                    View
+                                  </Button>
+                                )}
+                              </div>
                               <div className="flex gap-1">
                                 {item.floor && <Badge variant="outline" className="text-xs">{item.floor}</Badge>}
                                 {sizeDisplay && <Badge variant="secondary" className="text-xs">{sizeDisplay} {dimensionDisplay}</Badge>}
@@ -258,6 +321,29 @@ export const MitigationControlsStep = ({
           );
         })}
       </Accordion>
+      
+      {/* File Viewer Modal for viewing drawings with bounding boxes */}
+      {viewerItem && driveAccessToken && (
+        <FileViewerModal
+          isOpen={viewerOpen}
+          onClose={() => {
+            setViewerOpen(false);
+            setViewerItem(null);
+            setViewerFileId("");
+          }}
+          fileId={viewerFileId}
+          fileName={viewerItem.fileName || ""}
+          mimeType={viewerMimeType}
+          accessToken={driveAccessToken}
+          detections={viewerItem.coordinates ? [{
+            lineMonitored: viewerItem.name,
+            lineCode: viewerItem.id,
+            systemType: viewerItem.category,
+            coordinates: viewerItem.coordinates,
+            fileName: viewerItem.fileName || undefined,
+          }] : []}
+        />
+      )}
     </div>
   );
 };
