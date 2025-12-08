@@ -10,32 +10,40 @@ const getPublicImageUrl = (filename: string) => {
   return `${baseUrl}/assets/${filename}`;
 };
 
+// Get the base URL for absolute paths in print
+const getAbsoluteUrl = (path: string) => {
+  if (typeof window !== 'undefined') {
+    return `${window.location.origin}${path}`;
+  }
+  return path;
+};
+
 // Type configuration maps with public paths
-const constructionTypeConfig: Record<string, { label: string; image: string }> = {
-  "residential": { label: "Residential", image: "/assets/type1-residential.avif" },
-  "mixed-use": { label: "Mixed Use", image: "/assets/type2-mixeduse.avif" },
-  "institutional": { label: "Institutional", image: "/assets/type3-institutional.avif" },
-  "commercial": { label: "Commercial", image: "/assets/type4-commercial.avif" },
+const constructionTypeConfig: Record<string, { label: string; imagePath: string }> = {
+  "residential": { label: "Residential", imagePath: "/assets/type1-residential.avif" },
+  "mixed-use": { label: "Mixed Use", imagePath: "/assets/type2-mixeduse.avif" },
+  "institutional": { label: "Institutional", imagePath: "/assets/type3-institutional.avif" },
+  "commercial": { label: "Commercial", imagePath: "/assets/type4-commercial.avif" },
 };
 
-const buildingTypeConfig: Record<string, { label: string; image: string }> = {
-  "mid-rise": { label: "Mid-rise", image: "/assets/buildingtype1-mid-rise.avif" },
-  "high-rise": { label: "High-rise", image: "/assets/buildingtype2-high-rise.avif" },
-  "single-house": { label: "Single House", image: "/assets/buildingtype3-singlehouse.avif" },
-  "house-complex": { label: "House Complex", image: "/assets/housecomplex.avif" },
+const buildingTypeConfig: Record<string, { label: string; imagePath: string }> = {
+  "mid-rise": { label: "Mid-rise", imagePath: "/assets/buildingtype1-mid-rise.avif" },
+  "high-rise": { label: "High-rise", imagePath: "/assets/buildingtype2-high-rise.avif" },
+  "single-house": { label: "Single House", imagePath: "/assets/buildingtype3-singlehouse.avif" },
+  "house-complex": { label: "House Complex", imagePath: "/assets/buildingtype4-housecomplex.avif" },
 };
 
-const structuralTypeConfig: Record<string, { label: string; image: string }> = {
-  "cast-in-place": { label: "Cast-in-Place Reinforced Concrete", image: "/assets/structuraltype_cast-in-place.png" },
-  "precast": { label: "Precast Concrete", image: "/assets/structuraltype_precast.png" },
-  "steel": { label: "Steel", image: "/assets/structuraltype_steel.png" },
-  "mass-timber": { label: "Mass Timber", image: "/assets/structuraltype_mass_timber.png" },
+const structuralTypeConfig: Record<string, { label: string; imagePath: string }> = {
+  "cast-in-place": { label: "Cast-in-Place Reinforced Concrete", imagePath: "/assets/structuraltype_cast-in-place.png" },
+  "precast": { label: "Precast Concrete", imagePath: "/assets/structuraltype_precast.png" },
+  "steel": { label: "Steel", imagePath: "/assets/structuraltype_steel.png" },
+  "mass-timber": { label: "Mass Timber", imagePath: "/assets/structuraltype_mass_timber.png" },
 };
 
-const towerTypeConfig: Record<string, { label: string; image: string }> = {
-  "single": { label: "Single Tower", image: "/assets/tower1-single.avif" },
-  "double": { label: "Double Tower", image: "/assets/tower2-double.avif" },
-  "multi": { label: "Multi-tower", image: "/assets/tower3-multi.avif" },
+const towerTypeConfig: Record<string, { label: string; imagePath: string }> = {
+  "single": { label: "Single Tower", imagePath: "/assets/tower1-single.avif" },
+  "double": { label: "Double Tower", imagePath: "/assets/tower2-double.avif" },
+  "multi": { label: "Multi-tower", imagePath: "/assets/tower3-multi.avif" },
 };
 
 interface WaterRiskReportProps {
@@ -151,12 +159,15 @@ export const WaterRiskReport = ({ data, analysisItems = [] }: WaterRiskReportPro
   // Get structural types
   const structuralTypes = data.structural_types || [];
 
+  // Generate absolute URLs for images
+  const logoUrl = getAbsoluteUrl("/assets/riskblue-logo.png");
+
   return (
     <div className="print-report bg-white text-black p-8 max-w-[210mm] mx-auto">
       {/* Fixed footer for subsequent pages */}
       <div className="print-page-footer hidden print:flex">
         <span>Built in</span>
-        <img src="/assets/riskblue-logo.png" alt="RiskBlue" style={{ height: '20px' }} />
+        <img src={logoUrl} alt="RiskBlue" style={{ height: '20px' }} />
       </div>
 
       {/* Header with Logo */}
@@ -165,7 +176,7 @@ export const WaterRiskReport = ({ data, analysisItems = [] }: WaterRiskReportPro
           <h1 className="text-3xl font-bold text-gray-900 mb-2">Water Mitigation Guideline</h1>
           <p className="text-sm text-gray-600">Generated: {formatDate(new Date())}</p>
         </div>
-        <img src="/assets/riskblue-logo.png" alt="RiskBlue" className="h-12" />
+        <img src={logoUrl} alt="RiskBlue" className="h-12" />
       </div>
 
       {/* Executive Summary */}
@@ -224,7 +235,7 @@ export const WaterRiskReport = ({ data, analysisItems = [] }: WaterRiskReportPro
                 <p className="text-sm font-semibold text-gray-600">Construction Type</p>
                 <div className="flex items-center gap-2 mt-1">
                   <img 
-                    src={constructionTypeConfig[data.project_type].image} 
+                    src={getAbsoluteUrl(constructionTypeConfig[data.project_type].imagePath)} 
                     alt={constructionTypeConfig[data.project_type].label}
                     className="w-10 h-10 object-contain rounded border border-gray-200 bg-white"
                   />
@@ -239,7 +250,7 @@ export const WaterRiskReport = ({ data, analysisItems = [] }: WaterRiskReportPro
                 <p className="text-sm font-semibold text-gray-600">Building Type</p>
                 <div className="flex items-center gap-2 mt-1">
                   <img 
-                    src={buildingTypeConfig[data.building_type].image} 
+                    src={getAbsoluteUrl(buildingTypeConfig[data.building_type].imagePath)} 
                     alt={buildingTypeConfig[data.building_type].label}
                     className="w-10 h-10 object-contain rounded border border-gray-200 bg-white"
                   />
@@ -254,7 +265,7 @@ export const WaterRiskReport = ({ data, analysisItems = [] }: WaterRiskReportPro
                 <p className="text-sm font-semibold text-gray-600">Tower Configuration</p>
                 <div className="flex items-center gap-2 mt-1">
                   <img 
-                    src={towerTypeConfig[data.tower_type].image} 
+                    src={getAbsoluteUrl(towerTypeConfig[data.tower_type].imagePath)} 
                     alt={towerTypeConfig[data.tower_type].label}
                     className="w-10 h-10 object-contain rounded border border-gray-200 bg-white"
                   />
@@ -276,7 +287,7 @@ export const WaterRiskReport = ({ data, analysisItems = [] }: WaterRiskReportPro
                 return (
                   <div key={typeId} className="flex items-center gap-2 bg-gray-50 px-3 py-2 rounded border border-gray-200">
                     <img 
-                      src={config.image} 
+                      src={getAbsoluteUrl(config.imagePath)} 
                       alt={config.label}
                       className="w-8 h-8 object-contain"
                     />
