@@ -144,6 +144,12 @@ export const WaterSystemsStep = ({
     return lower.replace(/[,&]/g, '').replace(/\s+/g, ' ').trim();
   };
 
+  // Total count of water system instances
+  const totalSystemCount = useMemo(() => 
+    analysisItems.filter(i => i.category === "Water System").length, 
+    [analysisItems]
+  );
+
   // Get unique system types from analysis items
   const detectedSystemTypes = useMemo(() => {
     const types = new Set<string>();
@@ -262,11 +268,6 @@ export const WaterSystemsStep = ({
       </div>
     );
   }
-
-  const totalSystemCount = useMemo(() => 
-    analysisItems.filter(i => i.category === "Water System").length, 
-    [analysisItems]
-  );
 
   return (
     <div className="space-y-4">
