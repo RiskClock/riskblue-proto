@@ -22,7 +22,7 @@ export const formatRiskLevel = (level: string | undefined): string => {
   return level.charAt(0).toUpperCase() + level.slice(1);
 };
 
-export const generateReportFilename = (projectName: string, reportType: string = "WaterRiskDiscovery"): string => {
+export const generateReportFilename = (projectName: string, reportType: string = "WaterMitigationGuideline"): string => {
   const cleanName = (projectName || "unnamed_project").replace(/\s+/g, '_');
   const timestamp = format(new Date(), "yyyyMMdd_HHmmss");
   return `RiskBlue_${reportType}_${cleanName}_${timestamp}`;
