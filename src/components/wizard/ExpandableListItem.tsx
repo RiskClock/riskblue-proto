@@ -283,9 +283,9 @@ export const ExpandableListItem = ({
 
         {/* Count + Expand arrow */}
         <div className="flex items-center gap-2 flex-shrink-0">
-          <Badge variant="secondary" className="text-xs">
-            {instanceCount}
-          </Badge>
+          <span className="text-sm text-muted-foreground">
+            {instanceCount} {instanceCount === 1 ? 'Instance' : 'Instances'}
+          </span>
           <ChevronDown 
             className={cn(
               "w-5 h-5 text-muted-foreground transition-transform",
