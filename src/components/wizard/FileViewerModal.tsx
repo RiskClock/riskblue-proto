@@ -18,7 +18,7 @@ interface SystemDetection {
   lineMonitored: string;
   lineCode: string;
   systemType: string;
-  coordinates: [number, number, number, number]; // [x_start, y_start, x_end, y_end]
+  coordinates: [number, number, number, number]; // [x, y, width, height] - normalized 0-1 values
   fileName?: string;
 }
 
@@ -251,31 +251,28 @@ export const FileViewerModal = ({
 
     // Draw bounding boxes
     fileDetections.forEach((detection, index) => {
-      // Gemini returns [y_min, x_min, y_max, x_max] in normalized format
-      const [y1, x1, y2, x2] = detection.coordinates;
+      // Coordinates are [x, y, width, height] - normalized values
+      const [x, y, w, h] = detection.coordinates;
       const color = getSystemColor(detection.systemType);
 
       // Scale from normalized coordinates to display canvas size
-      const scaledX1 = (x1 / coordScale) * displayWidth;
-      const scaledY1 = (y1 / coordScale) * displayHeight;
-      const scaledX2 = (x2 / coordScale) * displayWidth;
-      const scaledY2 = (y2 / coordScale) * displayHeight;
-      
-      const width = scaledX2 - scaledX1;
-      const height = scaledY2 - scaledY1;
+      const scaledX = (x / coordScale) * displayWidth;
+      const scaledY = (y / coordScale) * displayHeight;
+      const scaledWidth = (w / coordScale) * displayWidth;
+      const scaledHeight = (h / coordScale) * displayHeight;
 
-      console.log(`Detection ${index} "${detection.lineCode}": [${x1},${y1},${x2},${y2}] -> [${scaledX1.toFixed(0)},${scaledY1.toFixed(0)},${scaledX2.toFixed(0)},${scaledY2.toFixed(0)}]`);
+      console.log(`Detection ${index} "${detection.lineCode}": [${x},${y},${w},${h}] -> pos(${scaledX.toFixed(0)},${scaledY.toFixed(0)}) size(${scaledWidth.toFixed(0)}x${scaledHeight.toFixed(0)})`);
 
       const isHovered = hoveredSystem === detection.lineCode;
 
       // Draw rectangle
       ctx.strokeStyle = color;
       ctx.lineWidth = isHovered ? 4 : 2;
-      ctx.strokeRect(scaledX1, scaledY1, width, height);
+      ctx.strokeRect(scaledX, scaledY, scaledWidth, scaledHeight);
 
       // Draw semi-transparent fill
       ctx.fillStyle = `${color}${isHovered ? '40' : '20'}`;
-      ctx.fillRect(scaledX1, scaledY1, width, height);
+      ctx.fillRect(scaledX, scaledY, scaledWidth, scaledHeight);
 
       // Draw label
       const label = detection.lineCode || detection.systemType;
@@ -284,10 +281,10 @@ export const FileViewerModal = ({
       const padding = 4;
 
       ctx.fillStyle = color;
-      ctx.fillRect(scaledX1, scaledY1 - 20, textMetrics.width + padding * 2, 20);
+      ctx.fillRect(scaledX, scaledY - 20, textMetrics.width + padding * 2, 20);
 
       ctx.fillStyle = "#ffffff";
-      ctx.fillText(label, scaledX1 + padding, scaledY1 - 6);
+      ctx.fillText(label, scaledX + padding, scaledY - 6);
     });
   }, [pageImages, currentPage, zoom, hoveredSystem, fileDetections, loading]);
 
