@@ -147,6 +147,10 @@ export const ProcessesStep = ({
 
   return (
     <div className="space-y-4">
+      {/* Section header with count */}
+      <h3 className="text-sm font-medium text-muted-foreground">
+        Processes ({processItems.length})
+      </h3>
       {/* List of process groups */}
       <div className="space-y-3">
         {processGroups.map(group => (

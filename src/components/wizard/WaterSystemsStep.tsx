@@ -263,8 +263,17 @@ export const WaterSystemsStep = ({
     );
   }
 
+  const totalSystemCount = useMemo(() => 
+    analysisItems.filter(i => i.category === "Water System").length, 
+    [analysisItems]
+  );
+
   return (
     <div className="space-y-4">
+      {/* Section header with count */}
+      <h3 className="text-sm font-medium text-muted-foreground">
+        Water Systems ({totalSystemCount})
+      </h3>
       {/* List of water systems */}
       <div className="space-y-3">
         {filteredSystems.map(system => {
