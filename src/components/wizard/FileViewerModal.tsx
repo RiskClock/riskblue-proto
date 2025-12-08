@@ -32,19 +32,8 @@ interface FileViewerModalProps {
   detections: SystemDetection[];
 }
 
-// Color map for different system types
-const getSystemColor = (systemType: string): string => {
-  const type = systemType.toLowerCase();
-  if (type.includes("cold water") || type.includes("dcw")) return "#3b82f6"; // blue
-  if (type.includes("hot water") || type.includes("dhw")) return "#ef4444"; // red
-  if (type.includes("fire") || type.includes("sprinkler")) return "#f97316"; // orange
-  if (type.includes("storm") || type.includes("rain")) return "#8b5cf6"; // purple
-  if (type.includes("sanitary")) return "#84cc16"; // lime
-  if (type.includes("gas")) return "#eab308"; // yellow
-  if (type.includes("condensate")) return "#06b6d4"; // cyan
-  if (type.includes("irrigation")) return "#22c55e"; // green
-  return "#6b7280"; // gray default
-};
+// Highlighter green color for all bounding boxes
+const BOUNDING_BOX_COLOR = "#39FF14"; // highlighter green
 
 export const FileViewerModal = ({
   isOpen,
@@ -253,7 +242,7 @@ export const FileViewerModal = ({
     fileDetections.forEach((detection, index) => {
       // Coordinates are [x, y, width, height] - normalized values
       const [x, y, w, h] = detection.coordinates;
-      const color = getSystemColor(detection.systemType);
+      const color = BOUNDING_BOX_COLOR;
 
       // Scale from normalized coordinates to display canvas size
       const scaledX = (x / coordScale) * displayWidth;
@@ -388,7 +377,7 @@ export const FileViewerModal = ({
                       className="p-2 rounded-md border cursor-pointer transition-colors hover:bg-muted/50"
                       style={{
                         borderLeftWidth: 4,
-                        borderLeftColor: getSystemColor(detection.systemType),
+                        borderLeftColor: BOUNDING_BOX_COLOR,
                         backgroundColor: hoveredSystem === detection.lineCode ? 'hsl(var(--muted))' : undefined,
                       }}
                       onMouseEnter={() => setHoveredSystem(detection.lineCode)}
