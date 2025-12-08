@@ -227,7 +227,9 @@ export const ExpandableListItem = ({
               : additionalParams?.pipeDiameterInches 
                 ? `Ø${additionalParams.pipeDiameterInches}"` 
                 : null;
-            const directionInfo = additionalParams?.mainPipeDirection;
+            const directionInfo = additionalParams?.mainPipeDirection 
+              ? `Pipe Direction: ${additionalParams.mainPipeDirection.charAt(0).toUpperCase() + additionalParams.mainPipeDirection.slice(1).toLowerCase()}`
+              : null;
 
             return (
               <div 
