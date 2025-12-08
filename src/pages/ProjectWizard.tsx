@@ -156,7 +156,9 @@ const ProjectWizard = () => {
     };
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event) => {
-      if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED' || event === 'INITIAL_SESSION') {
+      // Only fetch on initial session, not on token refresh or re-sign in
+      // This prevents data reset when connecting Google Drive (OAuth redirect)
+      if (event === 'INITIAL_SESSION') {
         fetchProject();
       }
     });

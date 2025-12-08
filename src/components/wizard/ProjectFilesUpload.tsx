@@ -2,7 +2,7 @@ import { useState, useRef, useEffect } from "react";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { Loader2, Upload, FileText, FolderOpen, Link2, Check, X, File, Sparkles, Eye } from "lucide-react";
+import { Loader2, Upload, FileText, FolderOpen, Link2, Check, X, File, Sparkles } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { extractPDFData, extractKeyInformation, PDFMetadata, formatFileSize as formatFileSizeUtil } from "@/lib/pdfProcessor";
 import { PDFAnalysisAnimation } from "../PDFAnalysisAnimation";
@@ -664,15 +664,6 @@ export const ProjectFilesUpload = ({
                               {formatFileSize(file.size)} • {new Date(file.modifiedTime).toLocaleDateString()}
                             </p>
                           </div>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => handleViewFile(file)}
-                            className="text-xs gap-1"
-                          >
-                            <Eye className="w-3 h-3" />
-                            View
-                          </Button>
                         </div>
                       ))}
                     </div>
