@@ -80,18 +80,8 @@ export const ProjectMilestonesStep = ({ data, onNext, onBack, isProcessingWebhoo
     data.interior_start_date, data.interior_end_date
   ]);
 
-  // Effect 2: Sync form data to sessionStorage on every change (for OAuth redirect preservation)
-  // AND auto-save with debounce (blocked during webhook processing)
+  // Effect 2: Auto-save with debounce (blocked during webhook processing)
   useEffect(() => {
-    // Always update sessionStorage immediately for OAuth redirect preservation
-    const projectId = window.location.pathname.split('/').pop();
-    if (projectId && projectId !== 'new') {
-      const cachedDataKey = `projectData_${projectId}`;
-      const existingCache = sessionStorage.getItem(cachedDataKey);
-      const existingData = existingCache ? JSON.parse(existingCache) : {};
-      sessionStorage.setItem(cachedDataKey, JSON.stringify({ ...existingData, ...formData, _cacheTimestamp: Date.now() }));
-    }
-
     if (isProcessingWebhook) return;
     
     const timer = setTimeout(() => {

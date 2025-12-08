@@ -128,16 +128,6 @@ export const ConstructionDetailsStep = ({ data, onNext, onBack, projectId, isPro
   const updateFormData = (updates: Partial<typeof formData>) => {
     const newFormData = { ...formData, ...updates };
     setFormData(newFormData);
-    
-    // Sync to sessionStorage for OAuth redirect preservation
-    const projectId = window.location.pathname.split('/').pop();
-    if (projectId && projectId !== 'new') {
-      const cachedDataKey = `projectData_${projectId}`;
-      const existingCache = sessionStorage.getItem(cachedDataKey);
-      const existingData = existingCache ? JSON.parse(existingCache) : {};
-      sessionStorage.setItem(cachedDataKey, JSON.stringify({ ...existingData, ...newFormData, _cacheTimestamp: Date.now() }));
-    }
-    
     onNext(newFormData);
   };
 
