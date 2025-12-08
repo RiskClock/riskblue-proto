@@ -73,9 +73,27 @@
   .page-break-avoid,
   .accordion-item,
   .card,
-  table {
+  table,
+  section,
+  .item-card,
+  ul,
+  li,
+  p,
+  h1, h2, h3, h4, h5, h6 {
     page-break-inside: avoid;
     break-inside: avoid;
+  }
+
+  /* Allow orphans and widows for better text flow */
+  p, li {
+    orphans: 3;
+    widows: 3;
+  }
+
+  /* Keep headers with their following content */
+  h1, h2, h3, h4, h5, h6 {
+    page-break-after: avoid;
+    break-after: avoid;
   }
 
   /* Print header styling */
@@ -97,6 +115,9 @@
   img {
     max-width: 100%;
     page-break-inside: avoid;
+    break-inside: avoid;
+    display: inline-block !important;
+    visibility: visible !important;
   }
 
   /* Table styling for print */
