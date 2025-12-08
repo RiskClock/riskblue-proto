@@ -319,10 +319,11 @@ export const ExpandableListItem = ({
               : null;
 
             // Instance checkbox state (considers controls too)
+            const hasAnyControlSelected = hasControls && !controlState.none;
             const instanceCheckboxState = {
               all: isInstanceSelected && (controlState.all || !hasControls),
-              partial: isInstanceSelected && controlState.partial,
-              none: !isInstanceSelected && controlState.none
+              partial: (isInstanceSelected && controlState.partial) || (!isInstanceSelected && hasAnyControlSelected),
+              none: !isInstanceSelected && !hasAnyControlSelected
             };
 
             return (
@@ -367,7 +368,7 @@ export const ExpandableListItem = ({
                       "w-5 h-5 rounded border-2 flex items-center justify-center transition-colors cursor-pointer",
                       instanceCheckboxState.all && "bg-primary border-primary",
                       instanceCheckboxState.partial && "bg-primary border-primary",
-                      !isInstanceSelected && "border-muted-foreground/30"
+                      instanceCheckboxState.none && "border-muted-foreground/30"
                     )}>
                       {instanceCheckboxState.all && (
                         <svg className="w-3.5 h-3.5 text-primary-foreground" fill="currentColor" viewBox="0 0 20 20">
