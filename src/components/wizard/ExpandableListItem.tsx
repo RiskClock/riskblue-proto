@@ -23,27 +23,27 @@ interface ExpandableListItemProps {
   canViewFiles?: boolean;
 }
 
-// Risk level color mapping (yellow to dark red)
+// Risk level color mapping (yellow to dark red) - no hover effects
 const getRiskLevelStyles = (riskLevel?: string): string => {
-  if (!riskLevel) return "bg-muted text-muted-foreground";
+  if (!riskLevel) return "bg-muted text-muted-foreground cursor-default";
   const level = riskLevel.toLowerCase();
-  if (level.includes("extreme")) return "bg-red-700 text-white border-red-800";
-  if (level.includes("very high")) return "bg-red-500 text-white border-red-600";
-  if (level.includes("high")) return "bg-orange-500 text-white border-orange-600";
-  if (level.includes("moderate")) return "bg-yellow-500 text-black border-yellow-600";
-  if (level.includes("low")) return "bg-green-500 text-white border-green-600";
-  return "bg-muted text-muted-foreground";
+  if (level.includes("extreme")) return "bg-red-700 text-white border-red-800 cursor-default hover:bg-red-700";
+  if (level.includes("very high")) return "bg-red-500 text-white border-red-600 cursor-default hover:bg-red-500";
+  if (level.includes("high")) return "bg-orange-500 text-white border-orange-600 cursor-default hover:bg-orange-500";
+  if (level.includes("moderate")) return "bg-yellow-500 text-black border-yellow-600 cursor-default hover:bg-yellow-500";
+  if (level.includes("low")) return "bg-green-500 text-white border-green-600 cursor-default hover:bg-green-500";
+  return "bg-muted text-muted-foreground cursor-default";
 };
 
-// Cost color mapping
+// Cost color mapping - no hover effects
 const getCostStyles = (cost?: string): string => {
-  if (!cost) return "bg-muted text-muted-foreground";
+  if (!cost) return "bg-muted text-muted-foreground cursor-default";
   const costLower = cost.toLowerCase();
-  if (costLower.includes("500k") || costLower.includes("1m") || costLower.includes("million")) return "bg-red-600 text-white";
-  if (costLower.includes("200k") || costLower.includes("300k") || costLower.includes("400k")) return "bg-orange-500 text-white";
-  if (costLower.includes("100k") || costLower.includes("150k")) return "bg-yellow-500 text-black";
-  if (costLower.includes("50k") || costLower.includes("75k")) return "bg-emerald-500 text-white";
-  return "bg-muted text-muted-foreground";
+  if (costLower.includes("500k") || costLower.includes("1m") || costLower.includes("million")) return "bg-red-600 text-white cursor-default hover:bg-red-600";
+  if (costLower.includes("200k") || costLower.includes("300k") || costLower.includes("400k")) return "bg-orange-500 text-white cursor-default hover:bg-orange-500";
+  if (costLower.includes("100k") || costLower.includes("150k")) return "bg-yellow-500 text-black cursor-default hover:bg-yellow-500";
+  if (costLower.includes("50k") || costLower.includes("75k")) return "bg-emerald-500 text-white cursor-default hover:bg-emerald-500";
+  return "bg-muted text-muted-foreground cursor-default";
 };
 
 // Floor level priority for sorting (lower levels first)
@@ -150,13 +150,13 @@ export const ExpandableListItem = ({
             isPartiallySelected && "bg-primary border-primary",
             isNoneSelected && "border-muted-foreground/30"
           )}>
-            {isAllSelected && (
-              <svg className="w-3 h-3 text-primary-foreground" fill="currentColor" viewBox="0 0 20 20">
-                <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+          {isAllSelected && (
+              <svg className="w-3.5 h-3.5 text-primary-foreground" fill="currentColor" viewBox="0 0 20 20">
+                <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" strokeWidth="1.5" />
               </svg>
             )}
             {isPartiallySelected && (
-              <Minus className="w-3 h-3 text-primary-foreground" />
+              <Minus className="w-3.5 h-3.5 text-primary-foreground" strokeWidth={3} />
             )}
           </div>
         </div>
@@ -217,6 +217,15 @@ export const ExpandableListItem = ({
             const capitalize = (str: string) => str.charAt(0).toUpperCase() + str.slice(1).toLowerCase();
             const sizeDisplay = instance.sizeCategory ? capitalize(instance.sizeCategory) : null;
             const dimensionDisplay = instance.length && instance.width ? `(${instance.length} ft × ${instance.width} ft)` : null;
+            
+            // Get additional parameters if available
+            const additionalParams = (instance as any).additionalParameters;
+            const pipeInfo = additionalParams?.pipeDiameterMM 
+              ? `Ø${additionalParams.pipeDiameterMM}mm` 
+              : additionalParams?.pipeDiameterInches 
+                ? `Ø${additionalParams.pipeDiameterInches}"` 
+                : null;
+            const directionInfo = additionalParams?.mainPipeDirection;
 
             return (
               <div 
@@ -243,13 +252,23 @@ export const ExpandableListItem = ({
                 </div>
 
                 {/* Badges */}
-                <div className="flex items-center gap-1 flex-shrink-0">
+                <div className="flex items-center gap-1 flex-shrink-0 flex-wrap">
                   {instance.floor && (
-                    <Badge variant="outline" className="text-xs">{instance.floor}</Badge>
+                    <Badge variant="outline" className="text-xs cursor-default hover:bg-transparent">{instance.floor}</Badge>
                   )}
                   {sizeDisplay && (
-                    <Badge variant="secondary" className="text-xs">
+                    <Badge variant="secondary" className="text-xs cursor-default hover:bg-secondary">
                       {sizeDisplay} {dimensionDisplay}
+                    </Badge>
+                  )}
+                  {pipeInfo && (
+                    <Badge variant="outline" className="text-xs cursor-default hover:bg-transparent bg-blue-50 text-blue-700 border-blue-200">
+                      {pipeInfo}
+                    </Badge>
+                  )}
+                  {directionInfo && (
+                    <Badge variant="outline" className="text-xs cursor-default hover:bg-transparent bg-purple-50 text-purple-700 border-purple-200">
+                      {directionInfo}
                     </Badge>
                   )}
                 </div>
