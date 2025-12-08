@@ -5,12 +5,7 @@ import { Shield, Building2, Droplets, Users, FileText } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { AnalysisItem } from "@/lib/analysisItemMapper";
 import { FileViewerModal } from "./FileViewerModal";
-
-interface DriveFile {
-  id: string;
-  name: string;
-  mimeType: string;
-}
+import type { DriveFileInfo } from "./ProjectFilesUpload";
 
 interface MitigationControlsStepProps {
   data: any;
@@ -18,7 +13,7 @@ interface MitigationControlsStepProps {
   onBack: () => void;
   isProcessingWebhook?: boolean;
   analysisItems?: AnalysisItem[];
-  driveFiles?: DriveFile[];
+  driveFiles?: DriveFileInfo[];
   driveAccessToken?: string | null;
 }
 
@@ -72,7 +67,7 @@ export const MitigationControlsStep = ({
   const [viewerMimeType, setViewerMimeType] = useState<string>("application/pdf");
   
   // Helper to find Drive file by fileName
-  const findDriveFile = (fileName: string): DriveFile | undefined => {
+  const findDriveFile = (fileName: string): DriveFileInfo | undefined => {
     return driveFiles.find(f => f.name === fileName);
   };
   
