@@ -14,7 +14,7 @@ import { ProjectMilestonesStep } from "@/components/wizard/ProjectMilestonesStep
 import { ConstructionDetailsStep } from "@/components/wizard/ConstructionDetailsStep";
 import { CriticalAssetsStep } from "@/components/wizard/CriticalAssetsStep";
 import { WaterSystemsStep } from "@/components/wizard/WaterSystemsStep";
-import { MitigationControlsStep } from "@/components/wizard/MitigationControlsStep";
+
 import { ProcessesStep } from "@/components/wizard/ProcessesStep";
 import { MitigationResponsePlanStep } from "@/components/wizard/MitigationResponsePlanStep";
 import { WaterMitigationGuidelinesStep } from "@/components/wizard/WaterMitigationGuidelinesStep";
@@ -553,7 +553,7 @@ const ProjectWizard = () => {
               driveConnected={driveConnected}
               setDriveConnected={setDriveConnected}
             />
-            <Accordion type="multiple" defaultValue={["basic-info", "assets-systems", "mitigation-controls"]} className="space-y-4">
+            <Accordion type="multiple" defaultValue={["basic-info", "assets-systems"]} className="space-y-4">
               <AccordionItem value="basic-info" className="border rounded-lg px-6">
                 <AccordionTrigger className="text-lg font-semibold">
                   Project Info
@@ -647,22 +647,6 @@ const ProjectWizard = () => {
                 </AccordionContent>
               </AccordionItem>
 
-              <AccordionItem value="mitigation-controls" className="border rounded-lg px-6">
-                <AccordionTrigger className="text-lg font-semibold">
-                  Mitigation Controls
-                </AccordionTrigger>
-                <AccordionContent className="pt-4">
-                  <MitigationControlsStep 
-                    data={projectData} 
-                    onNext={handleStepUpdate} 
-                    onBack={() => {}} 
-                    isProcessingWebhook={isProcessingWebhook}
-                    analysisItems={analysisItems}
-                    driveFiles={driveFiles}
-                    driveAccessToken={driveAccessToken}
-                  />
-                </AccordionContent>
-              </AccordionItem>
             </Accordion>
             
             {/* Bottom Controls */}
