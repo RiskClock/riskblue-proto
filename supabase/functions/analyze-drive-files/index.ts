@@ -5,117 +5,10 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
-const ANALYSIS_PROMPT = `I am providing you with building drawings that may include water-related systems, critical assets, and construction processes.
-Assume I have no technical knowledge, so you must extract everything directly from the drawings without asking me any questions.
-
-Your task is to analyze the drawings and identify ALL of the following:
-
-## 1. ASSETS (Critical building assets)
-Look for and identify:
-- Electrical Rooms
-- Mechanical Rooms
-- Electrical Risers / Main Electrical Risers
-- Mechanical Risers
-- Elevator Pits
-- Suites / Guest Rooms
-- Kitchens & Washrooms
-- Facade, Envelope, Exterior, and Roofing areas
-- Mass Timber and Millwork areas
-
-## 2. WATER SYSTEMS
-Look for and identify:
-- Domestic Cold Water (CW) - including Main Entry, Zone Entry, Suite Entry variations
-- Domestic Hot Water (HW)
-- Hot Water Return (HWR)
-- Temporary Water Run
-- Main City Water Supply
-- Hydronics
-- Fire Suppression System (FSP, FDC, sprinklers)
-- Sump Pits, Storm Drains, and Drainages
-- Stormwater (STM / PSTM)
-- Sanitary (SAN)
-
-## 3. PROCESSES (Stakeholder responsibilities)
-Identify relevant processes for:
-- Contractor Team
-- Water Mitigation Vendor
-- Mechanical Contractor and Engineering
-
-## OUTPUT FORMAT
-After analyzing, provide a JSON block with ALL detected items in this EXACT format:
-
-\`\`\`json
-{
-  "assets_water_systems_processes": [
-    {
-      "id": "ERM001",
-      "name": "Electrical Rooms",
-      "category": "Asset",
-      "areaName": "ELECTRICAL",
-      "floor": "Lower Level",
-      "drawingCode": null,
-      "fileName": null,
-      "width": 36.7,
-      "length": 20.7,
-      "sizeCategory": "large",
-      "controls": ["Presence of Water Monitoring", "Temporary Enclosure Plan"],
-      "coordinates": [0.595, 0.1923, 0.1755, 0.2434]
-    },
-    {
-      "id": "CDW-ME001",
-      "name": "Cold Domestic Water: Main Entry",
-      "category": "Water System",
-      "areaName": null,
-      "floor": null,
-      "drawingCode": "Ø100 CW",
-      "fileName": null,
-      "width": null,
-      "length": null,
-      "sizeCategory": null,
-      "controls": ["Automatic Shut Off Valve", "Ultrasonic Flow Sensors"],
-      "coordinates": [0.515, 0.4133, 0.1028, 0.2108]
-    },
-    {
-      "id": "CT001",
-      "name": "Contractor Team",
-      "category": "Process",
-      "areaName": null,
-      "floor": null,
-      "drawingCode": null,
-      "fileName": null,
-      "width": null,
-      "length": null,
-      "sizeCategory": null,
-      "controls": ["Water Mitigation Equipment Acceptance Test", "Water Watch Real-time Rounds Verification"],
-      "coordinates": null
-    }
-  ]
-}
-\`\`\`
-
-## IMPORTANT RULES:
-- Extract EVERYTHING directly from the drawing - no assumptions
-- Use exact line codes, labels, and room names as shown on drawings
-- Include coordinates as [x_start, y_start, width, height] in normalized values (0-1)
-- sizeCategory should be: "small", "medium", "large", or "very large" based on dimensions
-- controls should list recommended mitigation controls for each item
-- Category MUST be exactly one of: "Asset", "Water System", or "Process"
-- Generate unique IDs for each item (e.g., ERM001, CDW-ME001, CT001)
-- Include ALL instances found (e.g., if there are 3 electrical rooms, include all 3)
-
-Provide a brief analysis summary first, then the JSON block.`;
-
 interface DriveFile {
   id: string;
   name: string;
   mimeType: string;
-}
-
-interface GeminiFile {
-  name: string;
-  uri: string;
-  mimeType: string;
-  state: string;
 }
 
 interface AnalysisItem {
@@ -133,227 +26,7 @@ interface AnalysisItem {
   coordinates: [number, number, number, number] | null;
 }
 
-// Download file from Google Drive
-async function downloadFromDrive(fileId: string, accessToken: string, mimeType: string): Promise<{ data: ArrayBuffer; mimeType: string } | null> {
-  try {
-    let downloadUrl: string;
-    let exportMimeType = mimeType;
-    
-    if (mimeType.includes('google-apps')) {
-      downloadUrl = `https://www.googleapis.com/drive/v3/files/${fileId}/export?mimeType=application/pdf`;
-      exportMimeType = 'application/pdf';
-    } else {
-      downloadUrl = `https://www.googleapis.com/drive/v3/files/${fileId}?alt=media`;
-    }
-
-    const response = await fetch(downloadUrl, {
-      headers: { Authorization: `Bearer ${accessToken}` },
-    });
-
-    if (!response.ok) {
-      console.error(`Failed to download file ${fileId}: ${response.status}`);
-      return null;
-    }
-
-    const arrayBuffer = await response.arrayBuffer();
-    return {
-      data: arrayBuffer,
-      mimeType: exportMimeType,
-    };
-  } catch (error) {
-    console.error(`Error downloading file ${fileId}:`, error);
-    return null;
-  }
-}
-
-// Upload file to Gemini Files API
-async function uploadToGemini(fileName: string, data: ArrayBuffer, mimeType: string, apiKey: string): Promise<GeminiFile | null> {
-  try {
-    console.log(`Uploading ${fileName} to Gemini Files API...`);
-    
-    const byteLength = data.byteLength;
-    
-    // Step 1: Start resumable upload
-    const startResponse = await fetch(
-      `https://generativelanguage.googleapis.com/upload/v1beta/files?key=${apiKey}`,
-      {
-        method: "POST",
-        headers: {
-          "X-Goog-Upload-Protocol": "resumable",
-          "X-Goog-Upload-Command": "start",
-          "X-Goog-Upload-Header-Content-Length": byteLength.toString(),
-          "X-Goog-Upload-Header-Content-Type": mimeType,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          file: { display_name: fileName },
-        }),
-      }
-    );
-
-    if (!startResponse.ok) {
-      const errorText = await startResponse.text();
-      console.error(`Failed to start upload for ${fileName}: ${startResponse.status} - ${errorText}`);
-      return null;
-    }
-
-    const uploadUrl = startResponse.headers.get("X-Goog-Upload-URL");
-    if (!uploadUrl) {
-      console.error(`No upload URL returned for ${fileName}`);
-      return null;
-    }
-
-    // Step 2: Upload the file data
-    const uploadResponse = await fetch(uploadUrl, {
-      method: "POST",
-      headers: {
-        "X-Goog-Upload-Command": "upload, finalize",
-        "X-Goog-Upload-Offset": "0",
-        "Content-Type": mimeType,
-      },
-      body: data,
-    });
-
-    if (!uploadResponse.ok) {
-      const errorText = await uploadResponse.text();
-      console.error(`Failed to upload ${fileName}: ${uploadResponse.status} - ${errorText}`);
-      return null;
-    }
-
-    const fileInfo = await uploadResponse.json();
-    console.log(`Uploaded ${fileName}: ${fileInfo.file?.uri || fileInfo.uri}`);
-    
-    return {
-      name: fileInfo.file?.name || fileInfo.name,
-      uri: fileInfo.file?.uri || fileInfo.uri,
-      mimeType: fileInfo.file?.mimeType || mimeType,
-      state: fileInfo.file?.state || "ACTIVE",
-    };
-  } catch (error) {
-    console.error(`Error uploading ${fileName} to Gemini:`, error);
-    return null;
-  }
-}
-
-// Wait for file to be processed
-async function waitForFileProcessing(fileName: string, apiKey: string, maxAttempts = 10): Promise<boolean> {
-  for (let i = 0; i < maxAttempts; i++) {
-    try {
-      const response = await fetch(
-        `https://generativelanguage.googleapis.com/v1beta/${fileName}?key=${apiKey}`
-      );
-      
-      if (!response.ok) {
-        console.error(`Error checking file status: ${response.status}`);
-        return false;
-      }
-      
-      const fileInfo = await response.json();
-      console.log(`File ${fileName} state: ${fileInfo.state}`);
-      
-      if (fileInfo.state === "ACTIVE") {
-        return true;
-      } else if (fileInfo.state === "FAILED") {
-        console.error(`File processing failed for ${fileName}`);
-        return false;
-      }
-      
-      // Wait 2 seconds before checking again
-      await new Promise(resolve => setTimeout(resolve, 2000));
-    } catch (error) {
-      console.error(`Error checking file status:`, error);
-      return false;
-    }
-  }
-  
-  console.error(`Timeout waiting for file ${fileName} to process`);
-  return false;
-}
-
-// Parse the analysis result to extract the structured data
-function parseAnalysisResult(analysisText: string): AnalysisItem[] {
-  try {
-    // Look for JSON block in the response
-    const jsonMatch = analysisText.match(/```json\s*([\s\S]*?)\s*```/);
-    if (jsonMatch && jsonMatch[1]) {
-      const parsed = JSON.parse(jsonMatch[1]);
-      if (parsed.assets_water_systems_processes && Array.isArray(parsed.assets_water_systems_processes)) {
-        return parsed.assets_water_systems_processes;
-      }
-    }
-    
-    // Try parsing the whole text as JSON if no code block found
-    try {
-      const parsed = JSON.parse(analysisText);
-      if (parsed.assets_water_systems_processes && Array.isArray(parsed.assets_water_systems_processes)) {
-        return parsed.assets_water_systems_processes;
-      }
-    } catch {
-      // Not valid JSON
-    }
-  } catch (e) {
-    console.error("Failed to parse analysis result:", e);
-  }
-  return [];
-}
-
-// Call Gemini generateContent with file references
-async function analyzeWithGemini(files: GeminiFile[], apiKey: string, customPrompt?: string): Promise<string | null> {
-  try {
-    const promptToUse = customPrompt || ANALYSIS_PROMPT;
-    const parts: any[] = [
-      { text: promptToUse },
-      { text: `\n\nI have ${files.length} building drawing files to analyze. Please extract all assets, water systems, and processes.\n\nFiles included:\n${files.map(f => f.name).join('\n')}` },
-    ];
-
-    // Add file references
-    for (const file of files) {
-      parts.push({
-        file_data: {
-          file_uri: file.uri,
-          mime_type: file.mimeType,
-        },
-      });
-    }
-
-    console.log(`Calling Gemini generateContent with ${files.length} files...`);
-
-    const response = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-pro:generateContent?key=${apiKey}`,
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          contents: [{ role: "user", parts }],
-          generationConfig: {
-            maxOutputTokens: 32000,
-          },
-        }),
-      }
-    );
-
-    if (!response.ok) {
-      const errorText = await response.text();
-      console.error(`Gemini API error: ${response.status} - ${errorText}`);
-      return null;
-    }
-
-    const data = await response.json();
-    const content = data.candidates?.[0]?.content?.parts?.[0]?.text;
-    
-    if (!content) {
-      console.error("No content in Gemini response:", JSON.stringify(data));
-      return null;
-    }
-
-    return content;
-  } catch (error) {
-    console.error("Error calling Gemini:", error);
-    return null;
-  }
-}
-
-// Complete TMU Mock data with all controls
+// Complete TMU Mock data with exact file names from provided mock data
 const MOCK_ASSETS_WATER_SYSTEMS_PROCESSES: AnalysisItem[] = [
   {
     "id": "ERM001",
@@ -362,7 +35,7 @@ const MOCK_ASSETS_WATER_SYSTEMS_PROCESSES: AnalysisItem[] = [
     "areaName": "ELECTRICAL",
     "floor": "Lower Level",
     "drawingCode": null,
-    "fileName": null,
+    "fileName": "A2.01-LOWER-LEVEL-Rev.18.pdf",
     "width": 36.7,
     "length": 20.7,
     "sizeCategory": "large",
@@ -381,7 +54,7 @@ const MOCK_ASSETS_WATER_SYSTEMS_PROCESSES: AnalysisItem[] = [
     "areaName": "SUBSTATION ROOM",
     "floor": "Lower Level",
     "drawingCode": null,
-    "fileName": null,
+    "fileName": "A2.02-GROUND-FLOOR-Rev.19.pdf",
     "width": 12.1,
     "length": 34.7,
     "sizeCategory": "medium",
@@ -400,7 +73,7 @@ const MOCK_ASSETS_WATER_SYSTEMS_PROCESSES: AnalysisItem[] = [
     "areaName": "IT ROOM",
     "floor": "4th Floor",
     "drawingCode": null,
-    "fileName": null,
+    "fileName": "A2.03-SECOND-FLOOR-Rev.20.pdf",
     "width": 10.5,
     "length": 32.5,
     "sizeCategory": "medium",
@@ -419,7 +92,7 @@ const MOCK_ASSETS_WATER_SYSTEMS_PROCESSES: AnalysisItem[] = [
     "areaName": "IT ROOM",
     "floor": "7th Floor",
     "drawingCode": null,
-    "fileName": null,
+    "fileName": "A2.04-THIRD-FLOOR-Rev.15.pdf",
     "width": 36.9,
     "length": 37.8,
     "sizeCategory": "very large",
@@ -438,7 +111,7 @@ const MOCK_ASSETS_WATER_SYSTEMS_PROCESSES: AnalysisItem[] = [
     "areaName": "ELECTRICAL ROOM",
     "floor": "Roof",
     "drawingCode": null,
-    "fileName": null,
+    "fileName": "A2.05-FOURTH-FLOOR-Rev.16.pdf",
     "width": 37.7,
     "length": 26.4,
     "sizeCategory": "very large",
@@ -457,7 +130,7 @@ const MOCK_ASSETS_WATER_SYSTEMS_PROCESSES: AnalysisItem[] = [
     "areaName": "HYDRO VAULT",
     "floor": "Lower Level",
     "drawingCode": null,
-    "fileName": null,
+    "fileName": "A2.06-FIFTH-FLOOR-Rev.14.pdf",
     "width": 27.9,
     "length": 34.7,
     "sizeCategory": "very large",
@@ -476,7 +149,7 @@ const MOCK_ASSETS_WATER_SYSTEMS_PROCESSES: AnalysisItem[] = [
     "areaName": "MECHANICAL",
     "floor": "Lower Level",
     "drawingCode": null,
-    "fileName": null,
+    "fileName": "A2.07-SIXTH-FLOOR-Rev.18.1.pdf",
     "width": 35.7,
     "length": 10.9,
     "sizeCategory": "large",
@@ -501,7 +174,7 @@ const MOCK_ASSETS_WATER_SYSTEMS_PROCESSES: AnalysisItem[] = [
     "areaName": "ELECTRICAL RISER",
     "floor": "Lower Level - 8th Floor",
     "drawingCode": null,
-    "fileName": null,
+    "fileName": "A2.08-SEVENTH-FLOOR-Rev.17.1.pdf",
     "width": 39.8,
     "length": 25.9,
     "sizeCategory": "very large",
@@ -519,13 +192,11 @@ const MOCK_ASSETS_WATER_SYSTEMS_PROCESSES: AnalysisItem[] = [
     "areaName": "ELEVATOR 1",
     "floor": "Lower Level",
     "drawingCode": null,
-    "fileName": null,
+    "fileName": "A2.09-EIGHTH-FLOOR-Rev.17.1.pdf",
     "width": 18.9,
     "length": 27.2,
     "sizeCategory": "medium",
-    "controls": [
-      "Presence of Water Monitoring"
-    ],
+    "controls": ["Presence of Water Monitoring"],
     "coordinates": [0.6492, 0.0339, 0.151, 0.2247]
   },
   {
@@ -535,13 +206,11 @@ const MOCK_ASSETS_WATER_SYSTEMS_PROCESSES: AnalysisItem[] = [
     "areaName": "ELEVATOR 2",
     "floor": "Lower Level",
     "drawingCode": null,
-    "fileName": null,
+    "fileName": "A2.10-ROOF-PLAN-Rev.14.pdf",
     "width": 29.2,
     "length": 22.7,
     "sizeCategory": "large",
-    "controls": [
-      "Presence of Water Monitoring"
-    ],
+    "controls": ["Presence of Water Monitoring"],
     "coordinates": [0.2113, 0.4045, 0.204, 0.0555]
   },
   {
@@ -551,13 +220,11 @@ const MOCK_ASSETS_WATER_SYSTEMS_PROCESSES: AnalysisItem[] = [
     "areaName": "STAFF KITCHEN",
     "floor": "4th Floor",
     "drawingCode": "SWC-408",
-    "fileName": null,
+    "fileName": "A2.11-PARAPET-Rev.14.pdf",
     "width": 34.5,
     "length": 30.8,
     "sizeCategory": "very large",
-    "controls": [
-      "Presence of Water Monitoring"
-    ],
+    "controls": ["Presence of Water Monitoring"],
     "coordinates": [0.6155, 0.1094, 0.1531, 0.2747]
   },
   {
@@ -567,13 +234,11 @@ const MOCK_ASSETS_WATER_SYSTEMS_PROCESSES: AnalysisItem[] = [
     "areaName": "BF W/C",
     "floor": "8th Floor",
     "drawingCode": "SWC-801",
-    "fileName": null,
+    "fileName": "M-200B1-PLUMBING-BASEMENT-FLOOR-PLAN-Rev.20.pdf",
     "width": 31.5,
     "length": 13.4,
     "sizeCategory": "large",
-    "controls": [
-      "Presence of Water Monitoring"
-    ],
+    "controls": ["Presence of Water Monitoring"],
     "coordinates": [0.1874, 0.0833, 0.0856, 0.1966]
   },
   {
@@ -583,13 +248,11 @@ const MOCK_ASSETS_WATER_SYSTEMS_PROCESSES: AnalysisItem[] = [
     "areaName": "BF W/C",
     "floor": "7th Floor",
     "drawingCode": "SWC-701",
-    "fileName": null,
+    "fileName": "A2.01-LOWER-LEVEL-Rev.18.pdf",
     "width": 16.6,
     "length": 20.7,
     "sizeCategory": "small",
-    "controls": [
-      "Presence of Water Monitoring"
-    ],
+    "controls": ["Presence of Water Monitoring"],
     "coordinates": [0.1074, 0.4066, 0.1961, 0.1761]
   },
   {
@@ -599,13 +262,11 @@ const MOCK_ASSETS_WATER_SYSTEMS_PROCESSES: AnalysisItem[] = [
     "areaName": "BF W/C",
     "floor": "6th Floor",
     "drawingCode": "SWC-601",
-    "fileName": null,
+    "fileName": "A2.02-GROUND-FLOOR-Rev.19.pdf",
     "width": 29.7,
     "length": 35.9,
     "sizeCategory": "very large",
-    "controls": [
-      "Presence of Water Monitoring"
-    ],
+    "controls": ["Presence of Water Monitoring"],
     "coordinates": [0.4799, 0.6361, 0.1096, 0.1265]
   },
   {
@@ -615,13 +276,11 @@ const MOCK_ASSETS_WATER_SYSTEMS_PROCESSES: AnalysisItem[] = [
     "areaName": "BF W/C",
     "floor": "5th Floor",
     "drawingCode": "SWC-501",
-    "fileName": null,
+    "fileName": "A2.03-SECOND-FLOOR-Rev.20.pdf",
     "width": 23.9,
     "length": 33.3,
     "sizeCategory": "large",
-    "controls": [
-      "Presence of Water Monitoring"
-    ],
+    "controls": ["Presence of Water Monitoring"],
     "coordinates": [0.545, 0.0838, 0.2456, 0.0962]
   },
   {
@@ -631,13 +290,11 @@ const MOCK_ASSETS_WATER_SYSTEMS_PROCESSES: AnalysisItem[] = [
     "areaName": "BF W/C",
     "floor": "4th Floor",
     "drawingCode": "SWC-401",
-    "fileName": null,
+    "fileName": "A2.04-THIRD-FLOOR-Rev.15.pdf",
     "width": 30.6,
     "length": 25.3,
     "sizeCategory": "large",
-    "controls": [
-      "Presence of Water Monitoring"
-    ],
+    "controls": ["Presence of Water Monitoring"],
     "coordinates": [0.1585, 0.2517, 0.196, 0.1849]
   },
   {
@@ -647,13 +304,11 @@ const MOCK_ASSETS_WATER_SYSTEMS_PROCESSES: AnalysisItem[] = [
     "areaName": "BF W/C",
     "floor": "3rd Floor",
     "drawingCode": "SWC-301",
-    "fileName": null,
+    "fileName": "A2.05-FOURTH-FLOOR-Rev.16.pdf",
     "width": 33.3,
     "length": 31.7,
     "sizeCategory": "very large",
-    "controls": [
-      "Presence of Water Monitoring"
-    ],
+    "controls": ["Presence of Water Monitoring"],
     "coordinates": [0.145, 0.3328, 0.1552, 0.0602]
   },
   {
@@ -663,13 +318,11 @@ const MOCK_ASSETS_WATER_SYSTEMS_PROCESSES: AnalysisItem[] = [
     "areaName": "BF W/C",
     "floor": "2nd Floor",
     "drawingCode": "SWC-291",
-    "fileName": null,
+    "fileName": "A2.06-FIFTH-FLOOR-Rev.14.pdf",
     "width": 26.4,
     "length": 35.6,
     "sizeCategory": "very large",
-    "controls": [
-      "Presence of Water Monitoring"
-    ],
+    "controls": ["Presence of Water Monitoring"],
     "coordinates": [0.0553, 0.7265, 0.2349, 0.0892]
   },
   {
@@ -679,13 +332,11 @@ const MOCK_ASSETS_WATER_SYSTEMS_PROCESSES: AnalysisItem[] = [
     "areaName": "BF W/C",
     "floor": "2nd Floor",
     "drawingCode": "SWC-201",
-    "fileName": null,
+    "fileName": "A2.07-SIXTH-FLOOR-Rev.18.1.pdf",
     "width": 27.7,
     "length": 18.9,
     "sizeCategory": "medium",
-    "controls": [
-      "Presence of Water Monitoring"
-    ],
+    "controls": ["Presence of Water Monitoring"],
     "coordinates": [0.1312, 0.385, 0.2594, 0.0522]
   },
   {
@@ -695,13 +346,11 @@ const MOCK_ASSETS_WATER_SYSTEMS_PROCESSES: AnalysisItem[] = [
     "areaName": "W/C",
     "floor": "1st Floor",
     "drawingCode": "SWC-102",
-    "fileName": null,
+    "fileName": "A2.08-SEVENTH-FLOOR-Rev.17.1.pdf",
     "width": 16.7,
     "length": 12.2,
     "sizeCategory": "small",
-    "controls": [
-      "Presence of Water Monitoring"
-    ],
+    "controls": ["Presence of Water Monitoring"],
     "coordinates": [0.4909, 0.0697, 0.0677, 0.132]
   },
   {
@@ -711,13 +360,11 @@ const MOCK_ASSETS_WATER_SYSTEMS_PROCESSES: AnalysisItem[] = [
     "areaName": "W/C",
     "floor": "1st Floor",
     "drawingCode": "SWC-103",
-    "fileName": null,
+    "fileName": "A2.09-EIGHTH-FLOOR-Rev.17.1.pdf",
     "width": 33.1,
     "length": 18.9,
     "sizeCategory": "large",
-    "controls": [
-      "Presence of Water Monitoring"
-    ],
+    "controls": ["Presence of Water Monitoring"],
     "coordinates": [0.0084, 0.743, 0.1305, 0.0768]
   },
   {
@@ -727,13 +374,11 @@ const MOCK_ASSETS_WATER_SYSTEMS_PROCESSES: AnalysisItem[] = [
     "areaName": "UNIVERSAL W/C",
     "floor": "1st Floor",
     "drawingCode": "SWC-104",
-    "fileName": null,
+    "fileName": "A2.10-ROOF-PLAN-Rev.14.pdf",
     "width": 27.7,
     "length": 17.9,
     "sizeCategory": "medium",
-    "controls": [
-      "Presence of Water Monitoring"
-    ],
+    "controls": ["Presence of Water Monitoring"],
     "coordinates": [0.1415, 0.0786, 0.1232, 0.2582]
   },
   {
@@ -743,13 +388,11 @@ const MOCK_ASSETS_WATER_SYSTEMS_PROCESSES: AnalysisItem[] = [
     "areaName": "UNIVERSAL W/C",
     "floor": "1st Floor",
     "drawingCode": "SWC-B08",
-    "fileName": null,
+    "fileName": "A2.11-PARAPET-Rev.14.pdf",
     "width": 32.1,
     "length": 8.7,
     "sizeCategory": "small",
-    "controls": [
-      "Presence of Water Monitoring"
-    ],
+    "controls": ["Presence of Water Monitoring"],
     "coordinates": [0.3572, 0.3494, 0.2267, 0.1312]
   },
   {
@@ -759,7 +402,7 @@ const MOCK_ASSETS_WATER_SYSTEMS_PROCESSES: AnalysisItem[] = [
     "areaName": null,
     "floor": null,
     "drawingCode": null,
-    "fileName": null,
+    "fileName": "M-200B1-PLUMBING-BASEMENT-FLOOR-PLAN-Rev.20.pdf",
     "width": 32.8,
     "length": 14.7,
     "sizeCategory": "large",
@@ -781,7 +424,7 @@ const MOCK_ASSETS_WATER_SYSTEMS_PROCESSES: AnalysisItem[] = [
     "areaName": null,
     "floor": null,
     "drawingCode": null,
-    "fileName": null,
+    "fileName": "A2.01-LOWER-LEVEL-Rev.18.pdf",
     "width": 17.0,
     "length": 31.2,
     "sizeCategory": "medium",
@@ -800,7 +443,7 @@ const MOCK_ASSETS_WATER_SYSTEMS_PROCESSES: AnalysisItem[] = [
     "areaName": null,
     "floor": null,
     "drawingCode": null,
-    "fileName": null,
+    "fileName": "A2.02-GROUND-FLOOR-Rev.19.pdf",
     "width": null,
     "length": null,
     "sizeCategory": null,
@@ -818,7 +461,7 @@ const MOCK_ASSETS_WATER_SYSTEMS_PROCESSES: AnalysisItem[] = [
     "areaName": null,
     "floor": null,
     "drawingCode": null,
-    "fileName": null,
+    "fileName": "A2.03-SECOND-FLOOR-Rev.20.pdf",
     "width": null,
     "length": null,
     "sizeCategory": null,
@@ -836,7 +479,7 @@ const MOCK_ASSETS_WATER_SYSTEMS_PROCESSES: AnalysisItem[] = [
     "areaName": null,
     "floor": null,
     "drawingCode": null,
-    "fileName": null,
+    "fileName": "A2.04-THIRD-FLOOR-Rev.15.pdf",
     "width": null,
     "length": null,
     "sizeCategory": null,
@@ -854,7 +497,7 @@ const MOCK_ASSETS_WATER_SYSTEMS_PROCESSES: AnalysisItem[] = [
     "areaName": null,
     "floor": null,
     "drawingCode": null,
-    "fileName": null,
+    "fileName": "A2.05-FOURTH-FLOOR-Rev.16.pdf",
     "width": null,
     "length": null,
     "sizeCategory": null,
@@ -872,7 +515,7 @@ const MOCK_ASSETS_WATER_SYSTEMS_PROCESSES: AnalysisItem[] = [
     "areaName": null,
     "floor": null,
     "drawingCode": null,
-    "fileName": null,
+    "fileName": "A2.06-FIFTH-FLOOR-Rev.14.pdf",
     "width": null,
     "length": null,
     "sizeCategory": null,
@@ -890,7 +533,7 @@ const MOCK_ASSETS_WATER_SYSTEMS_PROCESSES: AnalysisItem[] = [
     "areaName": null,
     "floor": null,
     "drawingCode": null,
-    "fileName": null,
+    "fileName": "A2.07-SIXTH-FLOOR-Rev.18.1.pdf",
     "width": null,
     "length": null,
     "sizeCategory": null,
@@ -904,7 +547,7 @@ const MOCK_ASSETS_WATER_SYSTEMS_PROCESSES: AnalysisItem[] = [
     "areaName": null,
     "floor": null,
     "drawingCode": null,
-    "fileName": null,
+    "fileName": "A2.08-SEVENTH-FLOOR-Rev.17.1.pdf",
     "width": null,
     "length": null,
     "sizeCategory": null,
@@ -918,7 +561,7 @@ const MOCK_ASSETS_WATER_SYSTEMS_PROCESSES: AnalysisItem[] = [
     "areaName": null,
     "floor": null,
     "drawingCode": null,
-    "fileName": null,
+    "fileName": "A2.09-EIGHTH-FLOOR-Rev.17.1.pdf",
     "width": null,
     "length": null,
     "sizeCategory": null,
@@ -937,7 +580,7 @@ const MOCK_ASSETS_WATER_SYSTEMS_PROCESSES: AnalysisItem[] = [
     "areaName": null,
     "floor": null,
     "drawingCode": null,
-    "fileName": null,
+    "fileName": "A2.10-ROOF-PLAN-Rev.14.pdf",
     "width": null,
     "length": null,
     "sizeCategory": null,
@@ -954,7 +597,7 @@ const MOCK_ASSETS_WATER_SYSTEMS_PROCESSES: AnalysisItem[] = [
     "areaName": null,
     "floor": null,
     "drawingCode": null,
-    "fileName": null,
+    "fileName": "A2.11-PARAPET-Rev.14.pdf",
     "width": null,
     "length": null,
     "sizeCategory": null,
@@ -971,7 +614,7 @@ const MOCK_ASSETS_WATER_SYSTEMS_PROCESSES: AnalysisItem[] = [
     "areaName": null,
     "floor": null,
     "drawingCode": null,
-    "fileName": null,
+    "fileName": "M-200B1-PLUMBING-BASEMENT-FLOOR-PLAN-Rev.20.pdf",
     "width": null,
     "length": null,
     "sizeCategory": null,
@@ -1121,7 +764,7 @@ serve(async (req) => {
   }
 
   try {
-    const { files, accessToken, customPrompt } = await req.json();
+    const { files, accessToken } = await req.json();
 
     if (!files || !Array.isArray(files) || files.length === 0) {
       return new Response(
@@ -1143,53 +786,14 @@ serve(async (req) => {
 
     console.log(`Mock analysis completed for ${files.length} files after ${Math.round(delay)}ms delay`);
 
-    // Get file names from the request to distribute among mock data
+    // Get file names from the request
     const fileNames = (files as DriveFile[]).map(f => f.name);
-    
-    // Update mock data with actual file names from the request
-    // Distribute files across the mock items so View button works
-    const updatedMockData = MOCK_ASSETS_WATER_SYSTEMS_PROCESSES.map((item, index) => ({
-      ...item,
-      fileName: fileNames.length > 0 ? fileNames[index % fileNames.length] : null
-    }));
 
-    // Generate dynamic analysis text with updated file names
-    const dynamicAnalysisText = `## Analysis Summary
-
-Based on the building drawings analyzed, I have identified the following assets, water systems, and processes:
-
-### Assets Detected:
-- **Electrical Rooms** (6 locations): Lower Level (ELECTRICAL, SUBSTATION ROOM, HYDRO VAULT), 4th Floor (IT ROOM), 7th Floor (IT ROOM), Roof (ELECTRICAL ROOM)
-- **Mechanical Rooms** (1 location): Lower Level (MECHANICAL)
-- **Electrical Risers** (1 location): Spanning Lower Level to 8th Floor
-- **Elevator Pits** (2 locations): ELEVATOR 1 and ELEVATOR 2 in Lower Level
-- **Kitchens & Washrooms** (13 locations): Various floors from 1st to 8th Floor
-- **Facade, Envelope, Exterior, and Roofing**: Building exterior systems
-- **Mass Timber and Millwork**: Structural timber elements
-
-### Water Systems Detected:
-- **Cold Domestic Water**: Main City Entry, Main Entry, Zone Entry (3 zones), Suite Riser Entry, Suite Entry
-- **Hot Domestic Water**: Central distribution
-- **Temporary Water Run**: Construction phase water supply
-- **Fire Suppression System**: Building-wide sprinkler system
-- **Sump Pit, Storm Drain, and Drainage**: Below-grade water management
-
-### Processes Identified:
-- **Contractor Team**: 22 controls including water mitigation, response planning, and equipment coordination
-- **Water Mitigation Vendor**: 15 controls including inspections, cybersecurity, and maintenance
-- **Mechanical Contractor and Engineering**: 18 controls including installation integrity, testing, and system optimization
-
-\`\`\`json
-{
-  "assets_water_systems_processes": ${JSON.stringify(updatedMockData, null, 2)}
-}
-\`\`\``;
-
-    // Return mock data with file names populated
+    // Return mock data directly (file names are already hardcoded in the mock data)
     return new Response(
       JSON.stringify({ 
-        analysis: dynamicAnalysisText,
-        assets_water_systems_processes: updatedMockData,
+        analysis: MOCK_ANALYSIS_TEXT,
+        assets_water_systems_processes: MOCK_ASSETS_WATER_SYSTEMS_PROCESSES,
         filesAnalyzed: files.length,
         fileNames
       }),
