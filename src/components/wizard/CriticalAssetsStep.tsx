@@ -160,6 +160,12 @@ export const CriticalAssetsStep = ({
     return normalized;
   };
 
+  // Total count of asset instances
+  const totalAssetCount = useMemo(() => 
+    analysisItems.filter(i => i.category === "Asset").length, 
+    [analysisItems]
+  );
+
   // Get unique asset types from analysis items
   const detectedAssetTypes = useMemo(() => {
     const types = new Set<string>();
@@ -278,11 +284,6 @@ export const CriticalAssetsStep = ({
       </div>
     );
   }
-
-  const totalAssetCount = useMemo(() => 
-    analysisItems.filter(i => i.category === "Asset").length, 
-    [analysisItems]
-  );
 
   return (
     <div className="space-y-4">
