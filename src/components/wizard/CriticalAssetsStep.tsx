@@ -340,10 +340,6 @@ export const CriticalAssetsStep = ({
 
   return (
     <div className="space-y-4">
-      {/* Section header with count */}
-      <h3 className="text-sm font-medium text-muted-foreground">
-        Critical Assets ({totalAssetCount})
-      </h3>
       {/* List of assets */}
       <div className="space-y-3">
         {filteredAssets.map(asset => {
