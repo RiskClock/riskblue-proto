@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
@@ -59,6 +59,30 @@ const ProjectWizard = () => {
   const [driveAccessToken, setDriveAccessToken] = useState<string | null>(null);
   const [driveConnected, setDriveConnected] = useState(false);
 
+  // Compute class counts for subheadings
+  const assetClassCount = useMemo(() => {
+    const assetNames = new Set<string>();
+    analysisItems.forEach(item => {
+      if (item.category === "Asset") assetNames.add(item.name.toLowerCase());
+    });
+    return assetNames.size;
+  }, [analysisItems]);
+
+  const waterSystemClassCount = useMemo(() => {
+    const systemNames = new Set<string>();
+    analysisItems.forEach(item => {
+      if (item.category === "Water System") systemNames.add(item.name.toLowerCase());
+    });
+    return systemNames.size;
+  }, [analysisItems]);
+
+  const processClassCount = useMemo(() => {
+    const processNames = new Set<string>();
+    analysisItems.forEach(item => {
+      if (item.category === "Process") processNames.add(item.name.toLowerCase());
+    });
+    return processNames.size;
+  }, [analysisItems]);
   // Fetch analysis items when project loads
   useEffect(() => {
     const fetchAnalysisItems = async () => {
@@ -573,7 +597,12 @@ const ProjectWizard = () => {
                 </AccordionTrigger>
                 <AccordionContent className="space-y-8 pt-4">
                   <div className="space-y-6">
-                    <h3 className="text-md font-medium">Critical Assets</h3>
+                    <h3 className="text-md font-medium">
+                      Critical Assets
+                      {assetClassCount > 0 && (
+                        <span className="ml-2 text-muted-foreground font-normal">({assetClassCount})</span>
+                      )}
+                    </h3>
                     <CriticalAssetsStep 
                       data={projectData} 
                       onNext={handleStepUpdate} 
@@ -586,7 +615,12 @@ const ProjectWizard = () => {
                     />
                   </div>
                   <div className="space-y-6 pt-6 border-t">
-                    <h3 className="text-md font-medium">Water Systems</h3>
+                    <h3 className="text-md font-medium">
+                      Water Systems
+                      {waterSystemClassCount > 0 && (
+                        <span className="ml-2 text-muted-foreground font-normal">({waterSystemClassCount})</span>
+                      )}
+                    </h3>
                     <WaterSystemsStep 
                       data={projectData} 
                       onNext={handleStepUpdate} 
@@ -599,7 +633,12 @@ const ProjectWizard = () => {
                     />
                   </div>
                   <div className="space-y-6 pt-6 border-t">
-                    <h3 className="text-md font-medium">Processes</h3>
+                    <h3 className="text-md font-medium">
+                      Processes
+                      {processClassCount > 0 && (
+                        <span className="ml-2 text-muted-foreground font-normal">({processClassCount})</span>
+                      )}
+                    </h3>
                     <ProcessesStep 
                       analysisItems={analysisItems}
                       data={projectData}
