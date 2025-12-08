@@ -24,19 +24,37 @@ export const ProjectInfoStep = ({ data, onNext, isProcessingWebhook }: ProjectIn
     has_builders_risk_policy: data.has_builders_risk_policy || false,
   });
 
-  // Effect 1: Always sync incoming data to local state
+  // Effect 1: Sync incoming data to local state only when external data actually changes
+  // This prevents overwriting user input when the component re-renders
   useEffect(() => {
-    setFormData({
-      name: data.name || "",
-      address_1: data.address_1 || "",
-      address_2: data.address_2 || "",
-      city: data.city || "",
-      state: data.state || "",
-      zip_code: data.zip_code || "",
-      country: data.country || "United States",
-      has_builders_risk_policy: data.has_builders_risk_policy || false,
+    setFormData(prev => {
+      // Only update if the incoming data is different from current form state
+      // This prevents the form from resetting while user is typing
+      const incomingData = {
+        name: data.name || "",
+        address_1: data.address_1 || "",
+        address_2: data.address_2 || "",
+        city: data.city || "",
+        state: data.state || "",
+        zip_code: data.zip_code || "",
+        country: data.country || "United States",
+        has_builders_risk_policy: data.has_builders_risk_policy || false,
+      };
+      
+      // Check if any value from parent is actually different (and not empty replacing filled)
+      const hasRealChanges = Object.keys(incomingData).some(key => {
+        const incomingValue = incomingData[key as keyof typeof incomingData];
+        const currentValue = prev[key as keyof typeof prev];
+        // Only accept change if incoming is not empty or current is also empty
+        return incomingValue !== currentValue && (incomingValue !== "" || currentValue === "");
+      });
+      
+      if (hasRealChanges) {
+        return incomingData;
+      }
+      return prev;
     });
-  }, [data]);
+  }, [data.name, data.address_1, data.address_2, data.city, data.state, data.zip_code, data.country, data.has_builders_risk_policy]);
 
   // Effect 2: Auto-save with debounce (blocked during webhook processing)
   useEffect(() => {
