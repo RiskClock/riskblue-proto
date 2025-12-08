@@ -12,17 +12,6 @@ import { DriveFilesChat } from "./DriveFilesChat";
 import { FileViewerModal } from "./FileViewerModal";
 
 
-interface DriveFile {
-  id: string;
-  name: string;
-  mimeType: string;
-  size?: string;
-  modifiedTime: string;
-  webViewLink?: string;
-  iconLink?: string;
-  thumbnailLink?: string;
-}
-
 import { AnalysisItem, countByCategory } from "@/lib/analysisItemMapper";
 
 // Keep SystemDetection for backward compatibility with file viewer
@@ -40,14 +29,45 @@ interface AnalysisData {
   assetsWaterSystemsProcesses: AnalysisItem[];
 }
 
+export interface DriveFileInfo {
+  id: string;
+  name: string;
+  mimeType: string;
+  size?: string;
+  modifiedTime: string;
+  webViewLink?: string;
+  iconLink?: string;
+  thumbnailLink?: string;
+}
+
+// DriveFile is kept as a local type alias for backward compatibility
+type DriveFile = DriveFileInfo;
+
 interface ProjectFilesUploadProps {
   projectId: string;
   onDataExtracted?: (data: any) => void;
   isProcessingWebhook?: boolean;
   setIsProcessingWebhook?: (value: boolean) => void;
+  // Lifted Drive state
+  driveFiles: DriveFileInfo[];
+  setDriveFiles: (files: DriveFileInfo[]) => void;
+  driveAccessToken: string | null;
+  setDriveAccessToken: (token: string | null) => void;
+  driveConnected: boolean;
+  setDriveConnected: (connected: boolean) => void;
 }
 
-export const ProjectFilesUpload = ({ projectId, onDataExtracted, setIsProcessingWebhook }: ProjectFilesUploadProps) => {
+export const ProjectFilesUpload = ({ 
+  projectId, 
+  onDataExtracted, 
+  setIsProcessingWebhook,
+  driveFiles,
+  setDriveFiles,
+  driveAccessToken,
+  setDriveAccessToken,
+  driveConnected,
+  setDriveConnected
+}: ProjectFilesUploadProps) => {
   const { toast } = useToast();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
@@ -67,11 +87,8 @@ export const ProjectFilesUpload = ({ projectId, onDataExtracted, setIsProcessing
   const [extractedText, setExtractedText] = useState<string[]>([]);
   const [webhookComplete, setWebhookComplete] = useState(false);
   
-  // Google Drive states
-  const [driveConnected, setDriveConnected] = useState(false);
-  const [driveAccessToken, setDriveAccessToken] = useState<string | null>(null);
+  // Google Drive states (non-lifted)
   const [folderId, setFolderId] = useState("1PurGzT3-2G8yDoBVlurBRyNrTX_Y2rk5");
-  const [driveFiles, setDriveFiles] = useState<DriveFile[]>([]);
   const [loadingDriveFiles, setLoadingDriveFiles] = useState(false);
   const [connectingDrive, setConnectingDrive] = useState(false);
   

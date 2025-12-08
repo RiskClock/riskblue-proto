@@ -21,7 +21,7 @@ import { WaterMitigationGuidelinesStep } from "@/components/wizard/WaterMitigati
 import { CollaboratorManagementStep } from "@/components/wizard/CollaboratorManagementStep";
 import { ProposalsStep } from "@/components/wizard/ProposalsStep";
 import { ImplementationScheduleStep } from "@/components/wizard/ImplementationScheduleStep";
-import { ProjectFilesUpload } from "@/components/wizard/ProjectFilesUpload";
+import { ProjectFilesUpload, DriveFileInfo } from "@/components/wizard/ProjectFilesUpload";
 import { ResponsePlanUploadChat } from "@/components/ResponsePlanUploadChat";
 import { Download, LogOut, FileText, Check } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -53,6 +53,11 @@ const ProjectWizard = () => {
   const [showProviderDialog, setShowProviderDialog] = useState(false);
   const [showGuidelinesDialog, setShowGuidelinesDialog] = useState(false);
   const [analysisItems, setAnalysisItems] = useState<AnalysisItem[]>([]);
+  
+  // Lifted Google Drive state (shared between ProjectFilesUpload and MitigationControlsStep)
+  const [driveFiles, setDriveFiles] = useState<DriveFileInfo[]>([]);
+  const [driveAccessToken, setDriveAccessToken] = useState<string | null>(null);
+  const [driveConnected, setDriveConnected] = useState(false);
 
   // Fetch analysis items when project loads
   useEffect(() => {
@@ -521,6 +526,12 @@ const ProjectWizard = () => {
               onDataExtracted={handleDocumentDataExtracted}
               isProcessingWebhook={isProcessingWebhook}
               setIsProcessingWebhook={setIsProcessingWebhook}
+              driveFiles={driveFiles}
+              setDriveFiles={setDriveFiles}
+              driveAccessToken={driveAccessToken}
+              setDriveAccessToken={setDriveAccessToken}
+              driveConnected={driveConnected}
+              setDriveConnected={setDriveConnected}
             />
             <Accordion type="multiple" defaultValue={["basic-info", "assets-systems", "mitigation-controls"]} className="space-y-4">
               <AccordionItem value="basic-info" className="border rounded-lg px-6">
@@ -601,6 +612,8 @@ const ProjectWizard = () => {
                     onBack={() => {}} 
                     isProcessingWebhook={isProcessingWebhook}
                     analysisItems={analysisItems}
+                    driveFiles={driveFiles}
+                    driveAccessToken={driveAccessToken}
                   />
                 </AccordionContent>
               </AccordionItem>
