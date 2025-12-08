@@ -581,6 +581,8 @@ const ProjectWizard = () => {
                       isProcessingWebhook={isProcessingWebhook}
                       projectId={id}
                       analysisItems={analysisItems}
+                      driveFiles={driveFiles}
+                      driveAccessToken={driveAccessToken}
                     />
                   </div>
                   <div className="space-y-6 pt-6 border-t">
@@ -592,11 +594,20 @@ const ProjectWizard = () => {
                       isProcessingWebhook={isProcessingWebhook}
                       projectId={id}
                       analysisItems={analysisItems}
+                      driveFiles={driveFiles}
+                      driveAccessToken={driveAccessToken}
                     />
                   </div>
                   <div className="space-y-6 pt-6 border-t">
                     <h3 className="text-md font-medium">Processes</h3>
-                    <ProcessesStep analysisItems={analysisItems} />
+                    <ProcessesStep 
+                      analysisItems={analysisItems}
+                      data={projectData}
+                      onNext={handleStepUpdate}
+                      isProcessingWebhook={isProcessingWebhook}
+                      driveFiles={driveFiles}
+                      driveAccessToken={driveAccessToken}
+                    />
                   </div>
                 </AccordionContent>
               </AccordionItem>
