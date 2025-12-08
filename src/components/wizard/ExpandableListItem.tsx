@@ -329,10 +329,19 @@ export const ExpandableListItem = ({
               <div key={instance.id}>
                 <div 
                   className={cn(
-                    "flex items-center gap-3 px-3 py-2 border-b",
+                    "flex items-center gap-3 px-3 py-2 border-b cursor-pointer transition-colors hover:bg-muted/50",
                     isInstanceSelected && "bg-primary/5",
                     !isInstanceExpanded && "last:border-b-0"
                   )}
+                  onClick={() => hasControls && setExpandedInstanceIds(prev => {
+                    const next = new Set(prev);
+                    if (next.has(instance.id)) {
+                      next.delete(instance.id);
+                    } else {
+                      next.add(instance.id);
+                    }
+                    return next;
+                  })}
                 >
                   {/* Expand chevron for controls */}
                   <div 
