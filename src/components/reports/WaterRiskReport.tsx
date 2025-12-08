@@ -182,84 +182,84 @@ export const WaterRiskReport = ({ data, analysisItems = [] }: WaterRiskReportPro
   const logoUrl = getAbsoluteUrl("/assets/riskblue-logo.png");
 
   return (
-    <div className="print-report bg-white text-black p-8 max-w-[210mm] mx-auto">
+    <div className="print-report bg-white text-black p-4 max-w-[210mm] mx-auto text-[11px]">
       {/* Fixed footer for subsequent pages */}
       <div className="print-page-footer hidden print:flex">
         <span>Built in</span>
-        <img src={logoUrl} alt="RiskBlue" style={{ height: '20px', display: 'inline-block' }} />
+        <img src={logoUrl} alt="RiskBlue" style={{ height: '14px', display: 'inline-block' }} />
       </div>
 
       {/* Header with Logo */}
-      <div className="print-header flex justify-between items-start mb-8 pb-4 border-b-2 border-gray-300">
+      <div className="print-header flex justify-between items-start mb-4 pb-2 border-b-2 border-gray-300">
         <div>
-          <h1 className="text-3xl font-bold text-gray-900 mb-2">Water Mitigation Guideline</h1>
-          <p className="text-sm text-gray-600">Generated: {formatDate(new Date())}</p>
+          <h1 className="text-xl font-bold text-gray-900 mb-1">Water Mitigation Guideline</h1>
+          <p className="text-[10px] text-gray-600">Generated: {formatDate(new Date())}</p>
         </div>
-        <img src={logoUrl} alt="RiskBlue" style={{ height: '48px', display: 'inline-block' }} />
+        <img src={logoUrl} alt="RiskBlue" style={{ height: '32px', display: 'inline-block' }} />
       </div>
 
       {/* Executive Summary */}
-      <section className="mb-8">
-        <h2 className="text-2xl font-bold text-gray-900 mb-4 border-b border-gray-300 pb-2">Executive Summary</h2>
-        <div className="grid grid-cols-4 gap-4">
-          <div className="bg-gray-50 p-4 rounded border border-gray-200 flex flex-col items-center justify-center text-center">
-            <p className="text-sm text-gray-600 mb-1">Critical Assets</p>
-            <p className="text-3xl font-bold text-gray-900">{totalAssets}</p>
+      <section className="mb-4">
+        <h2 className="text-base font-bold text-gray-900 mb-2 border-b border-gray-300 pb-1">Executive Summary</h2>
+        <div className="grid grid-cols-4 gap-2">
+          <div className="bg-gray-50 p-2 rounded border border-gray-200 flex flex-col items-center justify-center text-center">
+            <p className="text-[10px] text-gray-600">Critical Assets</p>
+            <p className="text-xl font-bold text-gray-900">{totalAssets}</p>
           </div>
-          <div className="bg-gray-50 p-4 rounded border border-gray-200 flex flex-col items-center justify-center text-center">
-            <p className="text-sm text-gray-600 mb-1">Water Systems</p>
-            <p className="text-3xl font-bold text-gray-900">{totalSystems}</p>
+          <div className="bg-gray-50 p-2 rounded border border-gray-200 flex flex-col items-center justify-center text-center">
+            <p className="text-[10px] text-gray-600">Water Systems</p>
+            <p className="text-xl font-bold text-gray-900">{totalSystems}</p>
           </div>
-          <div className="bg-gray-50 p-4 rounded border border-gray-200 flex flex-col items-center justify-center text-center">
-            <p className="text-sm text-gray-600 mb-1">Processes</p>
-            <p className="text-3xl font-bold text-gray-900">{totalProcesses}</p>
+          <div className="bg-gray-50 p-2 rounded border border-gray-200 flex flex-col items-center justify-center text-center">
+            <p className="text-[10px] text-gray-600">Processes</p>
+            <p className="text-xl font-bold text-gray-900">{totalProcesses}</p>
           </div>
-          <div className="bg-gray-50 p-4 rounded border border-gray-200 flex flex-col items-center justify-center text-center">
-            <p className="text-sm text-gray-600 mb-1">Controls</p>
-            <p className="text-3xl font-bold text-gray-900">{totalControls}</p>
+          <div className="bg-gray-50 p-2 rounded border border-gray-200 flex flex-col items-center justify-center text-center">
+            <p className="text-[10px] text-gray-600">Controls</p>
+            <p className="text-xl font-bold text-gray-900">{totalControls}</p>
           </div>
         </div>
       </section>
 
       {/* Project Information */}
-      <section className="mb-8 page-break-avoid">
-        <h2 className="text-2xl font-bold text-gray-900 mb-4 border-b border-gray-300 pb-2">Project Information</h2>
-        <div className="grid grid-cols-2 gap-4 mb-6">
-          <div className="space-y-3">
+      <section className="mb-4 page-break-avoid">
+        <h2 className="text-base font-bold text-gray-900 mb-2 border-b border-gray-300 pb-1">Project Information</h2>
+        <div className="grid grid-cols-2 gap-3 mb-3">
+          <div className="space-y-1.5">
             <div>
-              <p className="text-sm font-semibold text-gray-600">Project Name</p>
-              <p className="text-base text-gray-900">{data.name || "—"}</p>
+              <p className="text-[10px] font-semibold text-gray-600">Project Name</p>
+              <p className="text-[11px] text-gray-900">{data.name || "—"}</p>
             </div>
             <div>
-              <p className="text-sm font-semibold text-gray-600">Address</p>
-              <p className="text-base text-gray-900">{data.address_1 || data.address || "—"}</p>
-              <p className="text-base text-gray-900">
+              <p className="text-[10px] font-semibold text-gray-600">Address</p>
+              <p className="text-[11px] text-gray-900">{data.address_1 || data.address || "—"}</p>
+              <p className="text-[11px] text-gray-900">
                 {data.city && data.state && data.zip_code
                   ? `${data.city}, ${data.state} ${data.zip_code}`
                   : data.city && data.state
                   ? `${data.city}, ${data.state}`
                   : "—"}
               </p>
-              {data.country && <p className="text-base text-gray-900">{data.country}</p>}
+              {data.country && <p className="text-[11px] text-gray-900">{data.country}</p>}
             </div>
             <div>
-              <p className="text-sm font-semibold text-gray-600">Builder's Risk Policy</p>
-              <p className="text-base text-gray-900 capitalize">{data.has_builders_risk_policy ? "Yes" : "No"}</p>
+              <p className="text-[10px] font-semibold text-gray-600">Builder's Risk Policy</p>
+              <p className="text-[11px] text-gray-900 capitalize">{data.has_builders_risk_policy ? "Yes" : "No"}</p>
             </div>
           </div>
-          <div className="space-y-3">
+          <div className="space-y-1.5">
             {/* Construction Type with Icon */}
             {data.project_type && constructionTypeConfig[data.project_type] && (
               <div>
-                <p className="text-sm font-semibold text-gray-600">Construction Type</p>
-                <div className="flex items-center gap-2 mt-1">
+                <p className="text-[10px] font-semibold text-gray-600">Construction Type</p>
+                <div className="flex items-center gap-1.5">
                   <img 
                     src={getAbsoluteUrl(constructionTypeConfig[data.project_type].imagePath)} 
                     alt={constructionTypeConfig[data.project_type].label}
                     className="object-contain rounded border border-gray-200 bg-white"
-                    style={{ width: '40px', height: '40px', display: 'inline-block' }}
+                    style={{ width: '24px', height: '24px', display: 'inline-block' }}
                   />
-                  <p className="text-base text-gray-900">{constructionTypeConfig[data.project_type].label}</p>
+                  <p className="text-[11px] text-gray-900">{constructionTypeConfig[data.project_type].label}</p>
                 </div>
               </div>
             )}
@@ -267,15 +267,15 @@ export const WaterRiskReport = ({ data, analysisItems = [] }: WaterRiskReportPro
             {/* Building Type with Icon */}
             {data.building_type && buildingTypeConfig[data.building_type] && (
               <div>
-                <p className="text-sm font-semibold text-gray-600">Building Type</p>
-                <div className="flex items-center gap-2 mt-1">
+                <p className="text-[10px] font-semibold text-gray-600">Building Type</p>
+                <div className="flex items-center gap-1.5">
                   <img 
                     src={getAbsoluteUrl(buildingTypeConfig[data.building_type].imagePath)} 
                     alt={buildingTypeConfig[data.building_type].label}
                     className="object-contain rounded border border-gray-200 bg-white"
-                    style={{ width: '40px', height: '40px', display: 'inline-block' }}
+                    style={{ width: '24px', height: '24px', display: 'inline-block' }}
                   />
-                  <p className="text-base text-gray-900">{buildingTypeConfig[data.building_type].label}</p>
+                  <p className="text-[11px] text-gray-900">{buildingTypeConfig[data.building_type].label}</p>
                 </div>
               </div>
             )}
@@ -283,15 +283,15 @@ export const WaterRiskReport = ({ data, analysisItems = [] }: WaterRiskReportPro
             {/* Tower Configuration with Icon */}
             {data.tower_type && towerTypeConfig[data.tower_type] && (
               <div>
-                <p className="text-sm font-semibold text-gray-600">Tower Configuration</p>
-                <div className="flex items-center gap-2 mt-1">
+                <p className="text-[10px] font-semibold text-gray-600">Tower Configuration</p>
+                <div className="flex items-center gap-1.5">
                   <img 
                     src={getAbsoluteUrl(towerTypeConfig[data.tower_type].imagePath)} 
                     alt={towerTypeConfig[data.tower_type].label}
                     className="object-contain rounded border border-gray-200 bg-white"
-                    style={{ width: '40px', height: '40px', display: 'inline-block' }}
+                    style={{ width: '24px', height: '24px', display: 'inline-block' }}
                   />
-                  <p className="text-base text-gray-900">{towerTypeConfig[data.tower_type].label}</p>
+                  <p className="text-[11px] text-gray-900">{towerTypeConfig[data.tower_type].label}</p>
                 </div>
               </div>
             )}
@@ -300,21 +300,21 @@ export const WaterRiskReport = ({ data, analysisItems = [] }: WaterRiskReportPro
 
         {/* Structural Types */}
         {structuralTypes.length > 0 && (
-          <div className="mb-6">
-            <p className="text-sm font-semibold text-gray-600 mb-2">Structural Type</p>
-            <div className="flex flex-wrap gap-3">
+          <div className="mb-3">
+            <p className="text-[10px] font-semibold text-gray-600 mb-1">Structural Type</p>
+            <div className="flex flex-wrap gap-2">
               {structuralTypes.map((typeId: string) => {
                 const config = structuralTypeConfig[typeId];
                 if (!config) return null;
                 return (
-                  <div key={typeId} className="flex items-center gap-2 bg-gray-50 px-3 py-2 rounded border border-gray-200">
+                  <div key={typeId} className="flex items-center gap-1.5 bg-gray-50 px-2 py-1 rounded border border-gray-200">
                     <img 
                       src={getAbsoluteUrl(config.imagePath)} 
                       alt={config.label}
                       className="object-contain"
-                      style={{ width: '32px', height: '32px', display: 'inline-block' }}
+                      style={{ width: '20px', height: '20px', display: 'inline-block' }}
                     />
-                    <span className="text-sm text-gray-900">{config.label}</span>
+                    <span className="text-[10px] text-gray-900">{config.label}</span>
                   </div>
                 );
               })}
@@ -323,40 +323,40 @@ export const WaterRiskReport = ({ data, analysisItems = [] }: WaterRiskReportPro
         )}
 
         {/* Building Details */}
-        <div className="bg-gray-50 p-4 rounded border border-gray-200">
-          <p className="text-sm font-semibold text-gray-700 mb-3">Building Details</p>
-          <div className="grid grid-cols-3 gap-4 text-sm">
+        <div className="bg-gray-50 p-2 rounded border border-gray-200">
+          <p className="text-[10px] font-semibold text-gray-700 mb-1.5">Building Details</p>
+          <div className="grid grid-cols-3 gap-2 text-[10px]">
             {data.total_floors && (
               <div>
                 <span className="text-gray-600">Total Floors:</span>
-                <span className="ml-2 text-gray-900 font-medium">{data.total_floors}</span>
+                <span className="ml-1 text-gray-900 font-medium">{data.total_floors}</span>
               </div>
             )}
             {data.typical_floors && (
               <div>
                 <span className="text-gray-600">Typical Floors:</span>
-                <span className="ml-2 text-gray-900 font-medium">{data.typical_floors}</span>
+                <span className="ml-1 text-gray-900 font-medium">{data.typical_floors}</span>
               </div>
             )}
             {(data.typical_floors_start || data.typical_floors_end) && (
               <div>
                 <span className="text-gray-600">Typical Floor Range:</span>
-                <span className="ml-2 text-gray-900 font-medium">
+                <span className="ml-1 text-gray-900 font-medium">
                   {data.typical_floors_start || "—"} to {data.typical_floors_end || "—"}
                 </span>
               </div>
             )}
             <div>
               <span className="text-gray-600">Podium:</span>
-              <span className="ml-2 text-gray-900 font-medium">{data.has_podium ? "Yes" : "No"}</span>
+              <span className="ml-1 text-gray-900 font-medium">{data.has_podium ? "Yes" : "No"}</span>
             </div>
             <div>
               <span className="text-gray-600">Underground Parking:</span>
-              <span className="ml-2 text-gray-900 font-medium">{data.underground_parking ? "Yes" : "No"}</span>
+              <span className="ml-1 text-gray-900 font-medium">{data.underground_parking ? "Yes" : "No"}</span>
             </div>
             <div>
               <span className="text-gray-600">Above Grade Parking:</span>
-              <span className="ml-2 text-gray-900 font-medium">{data.above_grade_parking ? "Yes" : "No"}</span>
+              <span className="ml-1 text-gray-900 font-medium">{data.above_grade_parking ? "Yes" : "No"}</span>
             </div>
           </div>
         </div>
@@ -364,16 +364,16 @@ export const WaterRiskReport = ({ data, analysisItems = [] }: WaterRiskReportPro
 
       {/* Milestones & Timeline */}
       {timelinePhases.length > 0 && (
-        <section className="mb-8 page-break-avoid">
-          <h2 className="text-2xl font-bold text-gray-900 mb-4 border-b border-gray-300 pb-2">Milestones & Timeline</h2>
-          <div className="space-y-2">
+        <section className="mb-4 page-break-avoid">
+          <h2 className="text-base font-bold text-gray-900 mb-2 border-b border-gray-300 pb-1">Milestones & Timeline</h2>
+          <div className="space-y-0.5">
             {timelinePhases.map((phase, index) => (
-              <div key={index} className="flex justify-between items-center py-2 border-b border-gray-200">
+              <div key={index} className="flex justify-between items-center py-1 border-b border-gray-200">
                 <div>
-                  <p className="font-semibold text-gray-900">{phase.name}</p>
-                  <p className="text-sm text-gray-600">{phase.description}</p>
+                  <p className="font-semibold text-[11px] text-gray-900">{phase.name}</p>
+                  <p className="text-[10px] text-gray-600">{phase.description}</p>
                 </div>
-                <div className="text-right text-sm text-gray-700">
+                <div className="text-right text-[10px] text-gray-700">
                   {phase.date ? (
                     <p>{formatDate(phase.date)}</p>
                   ) : (
@@ -391,30 +391,30 @@ export const WaterRiskReport = ({ data, analysisItems = [] }: WaterRiskReportPro
 
       {/* Critical Assets */}
       {assetGroups.length > 0 && (
-        <section className="mb-8 page-break-avoid">
-          <h2 className="text-2xl font-bold text-gray-900 mb-4 border-b border-gray-300 pb-2">Critical Assets</h2>
-          <div className="space-y-4">
+        <section className="mb-4 page-break-avoid">
+          <h2 className="text-base font-bold text-gray-900 mb-2 border-b border-gray-300 pb-1">Critical Assets</h2>
+          <div className="space-y-2">
             {assetGroups.map((group, index) => (
-              <div key={index} className="bg-gray-50 p-4 rounded border border-gray-200">
-                <div className="flex justify-between items-start mb-2">
-                  <h3 className="font-bold text-lg text-gray-900">{group.name}</h3>
-                  <span className="px-3 py-1 rounded text-sm font-semibold bg-blue-100 text-blue-800">
+              <div key={index} className="bg-gray-50 p-2 rounded border border-gray-200">
+                <div className="flex justify-between items-start mb-1">
+                  <h3 className="font-bold text-[12px] text-gray-900">{group.name}</h3>
+                  <span className="px-1.5 py-0.5 rounded text-[9px] font-semibold bg-blue-100 text-blue-800">
                     {group.instances.length} {group.instances.length === 1 ? 'Instance' : 'Instances'}
                   </span>
                 </div>
                 
                 {/* Instance list */}
-                <div className="mt-3 space-y-2">
+                <div className="space-y-0.5">
                   {group.instances.map((instance, i) => {
                     const details = renderInstanceDetails(instance);
                     return (
-                      <div key={i} className="text-sm text-gray-700">
-                        <div className="flex gap-2 items-start">
+                      <div key={i} className="text-[10px] text-gray-700">
+                        <div className="flex gap-1 items-start">
                           <span className="text-gray-500 font-medium">{instance.id}:</span>
                           <span>{instance.areaName || instance.name}</span>
                         </div>
                         {details.length > 0 && (
-                          <div className="ml-4 mt-1 flex flex-wrap gap-x-4 gap-y-1 text-xs text-gray-500">
+                          <div className="ml-3 flex flex-wrap gap-x-2 text-[9px] text-gray-500">
                             {details.map((detail, j) => (
                               <span key={j}>{detail}</span>
                             ))}
@@ -427,9 +427,9 @@ export const WaterRiskReport = ({ data, analysisItems = [] }: WaterRiskReportPro
                 
                 {/* Common Controls */}
                 {group.commonControls.length > 0 && (
-                  <div className="mt-4 pt-3 border-t border-gray-200">
-                    <p className="text-sm font-semibold text-gray-700 mb-2">Controls:</p>
-                    <ul className="list-disc list-inside text-sm text-gray-700 space-y-1">
+                  <div className="mt-2 pt-1.5 border-t border-gray-200">
+                    <p className="text-[10px] font-semibold text-gray-700 mb-0.5">Controls:</p>
+                    <ul className="list-disc list-inside text-[10px] text-gray-700 space-y-0">
                       {group.commonControls.map((control, i) => (
                         <li key={i}>{control}</li>
                       ))}
@@ -439,12 +439,12 @@ export const WaterRiskReport = ({ data, analysisItems = [] }: WaterRiskReportPro
 
                 {/* Instance-specific controls (if different from common) */}
                 {group.instancesWithDifferentControls.length > 0 && group.instancesWithDifferentControls.some(i => i.controls.length > 0) && (
-                  <div className="mt-3 pt-3 border-t border-gray-200">
-                    <p className="text-sm font-semibold text-gray-700 mb-2">Instance-Specific Controls:</p>
+                  <div className="mt-1.5 pt-1.5 border-t border-gray-200">
+                    <p className="text-[10px] font-semibold text-gray-700 mb-0.5">Instance-Specific Controls:</p>
                     {group.instancesWithDifferentControls.filter(i => i.controls.length > 0).map(({ instance, controls }, i) => (
-                      <div key={i} className="ml-4 mb-2">
-                        <p className="text-sm text-gray-600 font-medium">{instance.id}:</p>
-                        <ul className="list-disc list-inside text-sm text-gray-700 ml-2">
+                      <div key={i} className="ml-2 mb-1">
+                        <p className="text-[10px] text-gray-600 font-medium">{instance.id}:</p>
+                        <ul className="list-disc list-inside text-[10px] text-gray-700 ml-1">
                           {controls.map((control, j) => (
                             <li key={j}>{control}</li>
                           ))}
@@ -461,30 +461,30 @@ export const WaterRiskReport = ({ data, analysisItems = [] }: WaterRiskReportPro
 
       {/* Water Systems */}
       {systemGroups.length > 0 && (
-        <section className="mb-8 page-break-avoid">
-          <h2 className="text-2xl font-bold text-gray-900 mb-4 border-b border-gray-300 pb-2">Water Systems</h2>
-          <div className="space-y-4">
+        <section className="mb-4 page-break-avoid">
+          <h2 className="text-base font-bold text-gray-900 mb-2 border-b border-gray-300 pb-1">Water Systems</h2>
+          <div className="space-y-2">
             {systemGroups.map((group, index) => (
-              <div key={index} className="bg-gray-50 p-4 rounded border border-gray-200">
-                <div className="flex justify-between items-start mb-2">
-                  <h3 className="font-bold text-lg text-gray-900">{group.name}</h3>
-                  <span className="px-3 py-1 rounded text-sm font-semibold bg-cyan-100 text-cyan-800">
+              <div key={index} className="bg-gray-50 p-2 rounded border border-gray-200">
+                <div className="flex justify-between items-start mb-1">
+                  <h3 className="font-bold text-[12px] text-gray-900">{group.name}</h3>
+                  <span className="px-1.5 py-0.5 rounded text-[9px] font-semibold bg-cyan-100 text-cyan-800">
                     {group.instances.length} {group.instances.length === 1 ? 'Instance' : 'Instances'}
                   </span>
                 </div>
                 
                 {/* Instance list */}
-                <div className="mt-3 space-y-2">
+                <div className="space-y-0.5">
                   {group.instances.map((instance, i) => {
                     const details = renderInstanceDetails(instance);
                     return (
-                      <div key={i} className="text-sm text-gray-700">
-                        <div className="flex gap-2 items-start">
+                      <div key={i} className="text-[10px] text-gray-700">
+                        <div className="flex gap-1 items-start">
                           <span className="text-gray-500 font-medium">{instance.id}:</span>
                           <span>{instance.areaName || instance.name}</span>
                         </div>
                         {details.length > 0 && (
-                          <div className="ml-4 mt-1 flex flex-wrap gap-x-4 gap-y-1 text-xs text-gray-500">
+                          <div className="ml-3 flex flex-wrap gap-x-2 text-[9px] text-gray-500">
                             {details.map((detail, j) => (
                               <span key={j}>{detail}</span>
                             ))}
@@ -497,9 +497,9 @@ export const WaterRiskReport = ({ data, analysisItems = [] }: WaterRiskReportPro
                 
                 {/* Common Controls */}
                 {group.commonControls.length > 0 && (
-                  <div className="mt-4 pt-3 border-t border-gray-200">
-                    <p className="text-sm font-semibold text-gray-700 mb-2">Controls:</p>
-                    <ul className="list-disc list-inside text-sm text-gray-700 space-y-1">
+                  <div className="mt-2 pt-1.5 border-t border-gray-200">
+                    <p className="text-[10px] font-semibold text-gray-700 mb-0.5">Controls:</p>
+                    <ul className="list-disc list-inside text-[10px] text-gray-700 space-y-0">
                       {group.commonControls.map((control, i) => (
                         <li key={i}>{control}</li>
                       ))}
@@ -509,12 +509,12 @@ export const WaterRiskReport = ({ data, analysisItems = [] }: WaterRiskReportPro
 
                 {/* Instance-specific controls */}
                 {group.instancesWithDifferentControls.length > 0 && group.instancesWithDifferentControls.some(i => i.controls.length > 0) && (
-                  <div className="mt-3 pt-3 border-t border-gray-200">
-                    <p className="text-sm font-semibold text-gray-700 mb-2">Instance-Specific Controls:</p>
+                  <div className="mt-1.5 pt-1.5 border-t border-gray-200">
+                    <p className="text-[10px] font-semibold text-gray-700 mb-0.5">Instance-Specific Controls:</p>
                     {group.instancesWithDifferentControls.filter(i => i.controls.length > 0).map(({ instance, controls }, i) => (
-                      <div key={i} className="ml-4 mb-2">
-                        <p className="text-sm text-gray-600 font-medium">{instance.id}:</p>
-                        <ul className="list-disc list-inside text-sm text-gray-700 ml-2">
+                      <div key={i} className="ml-2 mb-1">
+                        <p className="text-[10px] text-gray-600 font-medium">{instance.id}:</p>
+                        <ul className="list-disc list-inside text-[10px] text-gray-700 ml-1">
                           {controls.map((control, j) => (
                             <li key={j}>{control}</li>
                           ))}
@@ -531,30 +531,30 @@ export const WaterRiskReport = ({ data, analysisItems = [] }: WaterRiskReportPro
 
       {/* Processes */}
       {processGroups.length > 0 && (
-        <section className="mb-8 page-break-avoid">
-          <h2 className="text-2xl font-bold text-gray-900 mb-4 border-b border-gray-300 pb-2">Processes</h2>
-          <div className="space-y-4">
+        <section className="mb-4 page-break-avoid">
+          <h2 className="text-base font-bold text-gray-900 mb-2 border-b border-gray-300 pb-1">Processes</h2>
+          <div className="space-y-2">
             {processGroups.map((group, index) => (
-              <div key={index} className="bg-gray-50 p-4 rounded border border-gray-200">
-                <div className="flex justify-between items-start mb-2">
-                  <h3 className="font-bold text-lg text-gray-900">{group.name}</h3>
-                  <span className="px-3 py-1 rounded text-sm font-semibold bg-purple-100 text-purple-800">
+              <div key={index} className="bg-gray-50 p-2 rounded border border-gray-200">
+                <div className="flex justify-between items-start mb-1">
+                  <h3 className="font-bold text-[12px] text-gray-900">{group.name}</h3>
+                  <span className="px-1.5 py-0.5 rounded text-[9px] font-semibold bg-purple-100 text-purple-800">
                     {group.instances.length} {group.instances.length === 1 ? 'Instance' : 'Instances'}
                   </span>
                 </div>
                 
                 {/* Instance list */}
-                <div className="mt-3 space-y-2">
+                <div className="space-y-0.5">
                   {group.instances.map((instance, i) => {
                     const details = renderInstanceDetails(instance);
                     return (
-                      <div key={i} className="text-sm text-gray-700">
-                        <div className="flex gap-2 items-start">
+                      <div key={i} className="text-[10px] text-gray-700">
+                        <div className="flex gap-1 items-start">
                           <span className="text-gray-500 font-medium">{instance.id}:</span>
                           <span>{instance.areaName || instance.name}</span>
                         </div>
                         {details.length > 0 && (
-                          <div className="ml-4 mt-1 flex flex-wrap gap-x-4 gap-y-1 text-xs text-gray-500">
+                          <div className="ml-3 flex flex-wrap gap-x-2 text-[9px] text-gray-500">
                             {details.map((detail, j) => (
                               <span key={j}>{detail}</span>
                             ))}
@@ -567,9 +567,9 @@ export const WaterRiskReport = ({ data, analysisItems = [] }: WaterRiskReportPro
                 
                 {/* Common Controls */}
                 {group.commonControls.length > 0 && (
-                  <div className="mt-4 pt-3 border-t border-gray-200">
-                    <p className="text-sm font-semibold text-gray-700 mb-2">Controls:</p>
-                    <ul className="list-disc list-inside text-sm text-gray-700 space-y-1">
+                  <div className="mt-2 pt-1.5 border-t border-gray-200">
+                    <p className="text-[10px] font-semibold text-gray-700 mb-0.5">Controls:</p>
+                    <ul className="list-disc list-inside text-[10px] text-gray-700 space-y-0">
                       {group.commonControls.map((control, i) => (
                         <li key={i}>{control}</li>
                       ))}
@@ -579,12 +579,12 @@ export const WaterRiskReport = ({ data, analysisItems = [] }: WaterRiskReportPro
 
                 {/* Instance-specific controls */}
                 {group.instancesWithDifferentControls.length > 0 && group.instancesWithDifferentControls.some(i => i.controls.length > 0) && (
-                  <div className="mt-3 pt-3 border-t border-gray-200">
-                    <p className="text-sm font-semibold text-gray-700 mb-2">Instance-Specific Controls:</p>
+                  <div className="mt-1.5 pt-1.5 border-t border-gray-200">
+                    <p className="text-[10px] font-semibold text-gray-700 mb-0.5">Instance-Specific Controls:</p>
                     {group.instancesWithDifferentControls.filter(i => i.controls.length > 0).map(({ instance, controls }, i) => (
-                      <div key={i} className="ml-4 mb-2">
-                        <p className="text-sm text-gray-600 font-medium">{instance.id}:</p>
-                        <ul className="list-disc list-inside text-sm text-gray-700 ml-2">
+                      <div key={i} className="ml-2 mb-1">
+                        <p className="text-[10px] text-gray-600 font-medium">{instance.id}:</p>
+                        <ul className="list-disc list-inside text-[10px] text-gray-700 ml-1">
                           {controls.map((control, j) => (
                             <li key={j}>{control}</li>
                           ))}
@@ -600,10 +600,10 @@ export const WaterRiskReport = ({ data, analysisItems = [] }: WaterRiskReportPro
       )}
 
       {/* Footer */}
-      <footer className="mt-12 pt-6 border-t-2 border-gray-300 text-center text-sm text-gray-600">
+      <footer className="mt-6 pt-3 border-t-2 border-gray-300 text-center text-[10px] text-gray-600">
         <p className="font-semibold">RiskBlue Water Risk Management Solutions</p>
-        <p className="mt-1">This report is confidential and prepared exclusively for {data.name || "the specified project"}</p>
-        <p className="mt-1">Report Generated: {formatDate(new Date())}</p>
+        <p>This report is confidential and prepared exclusively for {data.name || "the specified project"}</p>
+        <p>Report Generated: {formatDate(new Date())}</p>
       </footer>
     </div>
   );
