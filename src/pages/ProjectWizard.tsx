@@ -648,7 +648,7 @@ const ProjectWizard = () => {
                 // Import and render
                 import('react-dom/client').then(({ createRoot }) => {
                   const reactRoot = createRoot(root);
-                  reactRoot.render(<WaterRiskReport data={projectData} />);
+                  reactRoot.render(<WaterRiskReport data={projectData} analysisItems={analysisItems} />);
                   
                   // Wait a bit for rendering, then print
                   setTimeout(() => {
