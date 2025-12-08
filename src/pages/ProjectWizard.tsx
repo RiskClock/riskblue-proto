@@ -614,6 +614,16 @@ const ProjectWizard = () => {
                     analysisItems={analysisItems}
                     driveFiles={driveFiles}
                     driveAccessToken={driveAccessToken}
+                    onSaveTestData={async (items) => {
+                      if (id && id !== "new") {
+                        await saveAnalysisItems(id, items);
+                        setAnalysisItems(items);
+                        toast({
+                          title: "Test Data Saved",
+                          description: `Saved ${items.length} test items to database.`,
+                        });
+                      }
+                    }}
                   />
                 </AccordionContent>
               </AccordionItem>
