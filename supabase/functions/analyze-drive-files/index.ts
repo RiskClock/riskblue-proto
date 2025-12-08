@@ -1143,13 +1143,23 @@ serve(async (req) => {
 
     console.log(`Mock analysis completed for ${files.length} files after ${Math.round(delay)}ms delay`);
 
-    // Return mock data
+    // Get file names from the request to distribute among mock data
+    const fileNames = (files as DriveFile[]).map(f => f.name);
+    
+    // Update mock data with actual file names from the request
+    // Distribute files across the mock items so View button works
+    const updatedMockData = MOCK_ASSETS_WATER_SYSTEMS_PROCESSES.map((item, index) => ({
+      ...item,
+      fileName: fileNames.length > 0 ? fileNames[index % fileNames.length] : null
+    }));
+
+    // Return mock data with file names populated
     return new Response(
       JSON.stringify({ 
         analysis: MOCK_ANALYSIS_TEXT,
-        assets_water_systems_processes: MOCK_ASSETS_WATER_SYSTEMS_PROCESSES,
+        assets_water_systems_processes: updatedMockData,
         filesAnalyzed: files.length,
-        fileNames: (files as DriveFile[]).map(f => f.name)
+        fileNames
       }),
       { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
