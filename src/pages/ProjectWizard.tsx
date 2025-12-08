@@ -126,33 +126,38 @@ const ProjectWizard = () => {
 
   // Check for and restore cached project data after OAuth redirect
   useEffect(() => {
+    const oauthFlagKey = `oauthPending_${id}`;
     const cachedDataKey = `projectData_${id}`;
+    
+    // Only restore if we have the OAuth pending flag (set before redirect)
+    const oauthPending = sessionStorage.getItem(oauthFlagKey);
+    if (!oauthPending) {
+      // No OAuth in progress, clear any stale cache
+      sessionStorage.removeItem(cachedDataKey);
+      return;
+    }
+    
     const cachedData = sessionStorage.getItem(cachedDataKey);
     if (cachedData) {
       try {
         const parsed = JSON.parse(cachedData);
-        // Only restore if cache is less than 5 minutes old
-        const cacheAge = Date.now() - (parsed._cacheTimestamp || 0);
-        if (cacheAge < 5 * 60 * 1000) {
-          console.log("Restoring cached project data after OAuth redirect:", parsed);
-          const { _cacheTimestamp, ...dataWithoutTimestamp } = parsed;
-          setProjectData(dataWithoutTimestamp);
-          // Set flag to prevent fetchProject from overwriting
-          justRestoredFromCache.current = true;
-          // Reset flag after a short delay to allow normal fetching later
-          setTimeout(() => {
-            justRestoredFromCache.current = false;
-          }, 2000);
-        } else {
-          console.log("Cache too old, ignoring");
-        }
-        // Always clear the cache after checking
-        sessionStorage.removeItem(cachedDataKey);
+        console.log("Restoring cached project data after OAuth redirect:", parsed);
+        const { _cacheTimestamp, ...dataWithoutTimestamp } = parsed;
+        setProjectData(dataWithoutTimestamp);
+        // Set flag to prevent fetchProject from overwriting
+        justRestoredFromCache.current = true;
+        // Reset flag after a short delay to allow normal fetching later
+        setTimeout(() => {
+          justRestoredFromCache.current = false;
+        }, 2000);
       } catch (e) {
         console.error("Failed to parse cached project data:", e);
-        sessionStorage.removeItem(cachedDataKey);
       }
     }
+    
+    // Always clear both flags after checking
+    sessionStorage.removeItem(oauthFlagKey);
+    sessionStorage.removeItem(cachedDataKey);
   }, [id]);
 
   useEffect(() => {
@@ -529,7 +534,10 @@ const ProjectWizard = () => {
   const handleBeforeOAuthRedirect = useCallback(async () => {
     if (id && Object.keys(projectData).length > 0) {
       console.log("Caching project data to sessionStorage before OAuth redirect...");
+      const oauthFlagKey = `oauthPending_${id}`;
       const cachedDataKey = `projectData_${id}`;
+      // Set flag to indicate OAuth is in progress
+      sessionStorage.setItem(oauthFlagKey, 'true');
       const dataWithTimestamp = { ...projectData, _cacheTimestamp: Date.now() };
       sessionStorage.setItem(cachedDataKey, JSON.stringify(dataWithTimestamp));
       // Also try to save to DB, but don't wait for it
