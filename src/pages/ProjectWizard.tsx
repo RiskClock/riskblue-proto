@@ -156,9 +156,7 @@ const ProjectWizard = () => {
     };
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event) => {
-      // Only fetch on initial session, not on token refresh or re-sign in
-      // This prevents data reset when connecting Google Drive (OAuth redirect)
-      if (event === 'INITIAL_SESSION') {
+      if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED' || event === 'INITIAL_SESSION') {
         fetchProject();
       }
     });
@@ -483,6 +481,14 @@ const ProjectWizard = () => {
     }
   };
 
+  // Force save current project data - used before OAuth redirects
+  const handleBeforeOAuthRedirect = useCallback(async () => {
+    if (id && id !== "new" && Object.keys(projectData).length > 0) {
+      console.log("Saving project data before OAuth redirect...");
+      await saveProject(projectData);
+    }
+  }, [id, projectData, saveProject]);
+
   return (
     <div className="min-h-screen bg-background">
       {/* Print-only header */}
@@ -554,6 +560,7 @@ const ProjectWizard = () => {
               setDriveAccessToken={setDriveAccessToken}
               driveConnected={driveConnected}
               setDriveConnected={setDriveConnected}
+              onBeforeOAuthRedirect={handleBeforeOAuthRedirect}
             />
             <Accordion type="multiple" defaultValue={["basic-info", "assets-systems"]} className="space-y-4">
               <AccordionItem value="basic-info" className="border rounded-lg px-6">
