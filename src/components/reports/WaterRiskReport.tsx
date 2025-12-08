@@ -1,52 +1,41 @@
 import { formatDate, formatRiskLevel, getTimelinePhases } from "@/lib/reportGenerator";
-import riskBlueLogo from "@/assets/riskblue-logo.jpg";
 import { normalizeControlName } from "@/lib/utils";
 import { AnalysisItem } from "@/lib/analysisItemMapper";
 import { getControlId } from "@/components/wizard/ExpandableListItem";
 
-// Import type images for the report
-import residentialImg from "@/assets/type1-residential.avif";
-import mixedUseImg from "@/assets/type2-mixeduse.avif";
-import institutionalImg from "@/assets/type3-institutional.avif";
-import commercialImg from "@/assets/type4-commercial.avif";
-import midRiseImg from "@/assets/buildingtype1-mid-rise.avif";
-import highRiseImg from "@/assets/buildingtype2-high-rise.avif";
-import singleHouseImg from "@/assets/buildingtype3-singlehouse.avif";
-import houseComplexImg from "@/assets/buildingtype4-housecomplex.avif";
-import singleTowerImg from "@/assets/tower1-single.avif";
-import doubleTowerImg from "@/assets/tower2-double.avif";
-import multiTowerImg from "@/assets/tower3-multi.avif";
-import castInPlaceImg from "@/assets/structuraltype_cast-in-place.png";
-import precastImg from "@/assets/structuraltype_precast.png";
-import steelImg from "@/assets/structuraltype_steel.png";
-import massTimberImg from "@/assets/structuraltype_mass_timber.png";
+// Use public URLs for images - these work in print PDFs
+const getPublicImageUrl = (filename: string) => {
+  // In production, use window.location.origin, in dev use relative path
+  const baseUrl = typeof window !== 'undefined' ? window.location.origin : '';
+  return `${baseUrl}/assets/${filename}`;
+};
 
-// Type configuration maps
+// Type configuration maps with public paths
 const constructionTypeConfig: Record<string, { label: string; image: string }> = {
-  "residential": { label: "Residential", image: residentialImg },
-  "mixed-use": { label: "Mixed Use", image: mixedUseImg },
-  "institutional": { label: "Institutional", image: institutionalImg },
-  "commercial": { label: "Commercial", image: commercialImg },
+  "residential": { label: "Residential", image: "/assets/type1-residential.avif" },
+  "mixed-use": { label: "Mixed Use", image: "/assets/type2-mixeduse.avif" },
+  "institutional": { label: "Institutional", image: "/assets/type3-institutional.avif" },
+  "commercial": { label: "Commercial", image: "/assets/type4-commercial.avif" },
 };
 
 const buildingTypeConfig: Record<string, { label: string; image: string }> = {
-  "mid-rise": { label: "Mid-rise", image: midRiseImg },
-  "high-rise": { label: "High-rise", image: highRiseImg },
-  "single-house": { label: "Single House", image: singleHouseImg },
-  "house-complex": { label: "House Complex", image: houseComplexImg },
+  "mid-rise": { label: "Mid-rise", image: "/assets/buildingtype1-mid-rise.avif" },
+  "high-rise": { label: "High-rise", image: "/assets/buildingtype2-high-rise.avif" },
+  "single-house": { label: "Single House", image: "/assets/buildingtype3-singlehouse.avif" },
+  "house-complex": { label: "House Complex", image: "/assets/housecomplex.avif" },
 };
 
 const structuralTypeConfig: Record<string, { label: string; image: string }> = {
-  "cast-in-place": { label: "Cast-in-Place Reinforced Concrete", image: castInPlaceImg },
-  "precast": { label: "Precast Concrete", image: precastImg },
-  "steel": { label: "Steel", image: steelImg },
-  "mass-timber": { label: "Mass Timber", image: massTimberImg },
+  "cast-in-place": { label: "Cast-in-Place Reinforced Concrete", image: "/assets/structuraltype_cast-in-place.png" },
+  "precast": { label: "Precast Concrete", image: "/assets/structuraltype_precast.png" },
+  "steel": { label: "Steel", image: "/assets/structuraltype_steel.png" },
+  "mass-timber": { label: "Mass Timber", image: "/assets/structuraltype_mass_timber.png" },
 };
 
 const towerTypeConfig: Record<string, { label: string; image: string }> = {
-  "single": { label: "Single Tower", image: singleTowerImg },
-  "double": { label: "Double Tower", image: doubleTowerImg },
-  "multi": { label: "Multi-tower", image: multiTowerImg },
+  "single": { label: "Single Tower", image: "/assets/tower1-single.avif" },
+  "double": { label: "Double Tower", image: "/assets/tower2-double.avif" },
+  "multi": { label: "Multi-tower", image: "/assets/tower3-multi.avif" },
 };
 
 interface WaterRiskReportProps {
@@ -164,33 +153,39 @@ export const WaterRiskReport = ({ data, analysisItems = [] }: WaterRiskReportPro
 
   return (
     <div className="print-report bg-white text-black p-8 max-w-[210mm] mx-auto">
+      {/* Fixed footer for subsequent pages */}
+      <div className="print-page-footer hidden print:flex">
+        <span>Built in</span>
+        <img src="/assets/riskblue-logo.png" alt="RiskBlue" style={{ height: '20px' }} />
+      </div>
+
       {/* Header with Logo */}
       <div className="print-header flex justify-between items-start mb-8 pb-4 border-b-2 border-gray-300">
         <div>
           <h1 className="text-3xl font-bold text-gray-900 mb-2">Water Mitigation Guideline</h1>
           <p className="text-sm text-gray-600">Generated: {formatDate(new Date())}</p>
         </div>
-        <img src={riskBlueLogo} alt="RiskBlue" className="h-12" />
+        <img src="/assets/riskblue-logo.png" alt="RiskBlue" className="h-12" />
       </div>
 
       {/* Executive Summary */}
       <section className="mb-8">
         <h2 className="text-2xl font-bold text-gray-900 mb-4 border-b border-gray-300 pb-2">Executive Summary</h2>
         <div className="grid grid-cols-4 gap-4">
-          <div className="bg-gray-50 p-4 rounded border border-gray-200">
+          <div className="bg-gray-50 p-4 rounded border border-gray-200 flex flex-col items-center justify-center text-center">
             <p className="text-sm text-gray-600 mb-1">Critical Assets</p>
             <p className="text-3xl font-bold text-gray-900">{totalAssets}</p>
           </div>
-          <div className="bg-gray-50 p-4 rounded border border-gray-200">
+          <div className="bg-gray-50 p-4 rounded border border-gray-200 flex flex-col items-center justify-center text-center">
             <p className="text-sm text-gray-600 mb-1">Water Systems</p>
             <p className="text-3xl font-bold text-gray-900">{totalSystems}</p>
           </div>
-          <div className="bg-gray-50 p-4 rounded border border-gray-200">
+          <div className="bg-gray-50 p-4 rounded border border-gray-200 flex flex-col items-center justify-center text-center">
             <p className="text-sm text-gray-600 mb-1">Processes</p>
             <p className="text-3xl font-bold text-gray-900">{totalProcesses}</p>
           </div>
-          <div className="bg-gray-50 p-4 rounded border border-gray-200">
-            <p className="text-sm text-gray-600 mb-1">Mitigation Controls</p>
+          <div className="bg-gray-50 p-4 rounded border border-gray-200 flex flex-col items-center justify-center text-center">
+            <p className="text-sm text-gray-600 mb-1">Controls</p>
             <p className="text-3xl font-bold text-gray-900">{totalControls}</p>
           </div>
         </div>
@@ -231,7 +226,7 @@ export const WaterRiskReport = ({ data, analysisItems = [] }: WaterRiskReportPro
                   <img 
                     src={constructionTypeConfig[data.project_type].image} 
                     alt={constructionTypeConfig[data.project_type].label}
-                    className="w-10 h-10 object-contain rounded border border-gray-200"
+                    className="w-10 h-10 object-contain rounded border border-gray-200 bg-white"
                   />
                   <p className="text-base text-gray-900">{constructionTypeConfig[data.project_type].label}</p>
                 </div>
@@ -246,7 +241,7 @@ export const WaterRiskReport = ({ data, analysisItems = [] }: WaterRiskReportPro
                   <img 
                     src={buildingTypeConfig[data.building_type].image} 
                     alt={buildingTypeConfig[data.building_type].label}
-                    className="w-10 h-10 object-contain rounded border border-gray-200"
+                    className="w-10 h-10 object-contain rounded border border-gray-200 bg-white"
                   />
                   <p className="text-base text-gray-900">{buildingTypeConfig[data.building_type].label}</p>
                 </div>
@@ -261,7 +256,7 @@ export const WaterRiskReport = ({ data, analysisItems = [] }: WaterRiskReportPro
                   <img 
                     src={towerTypeConfig[data.tower_type].image} 
                     alt={towerTypeConfig[data.tower_type].label}
-                    className="w-10 h-10 object-contain rounded border border-gray-200"
+                    className="w-10 h-10 object-contain rounded border border-gray-200 bg-white"
                   />
                   <p className="text-base text-gray-900">{towerTypeConfig[data.tower_type].label}</p>
                 </div>
@@ -388,7 +383,7 @@ export const WaterRiskReport = ({ data, analysisItems = [] }: WaterRiskReportPro
                 {/* Common Controls */}
                 {group.commonControls.length > 0 && (
                   <div className="mt-4 pt-3 border-t border-gray-200">
-                    <p className="text-sm font-semibold text-gray-700 mb-2">Mitigation Controls:</p>
+                    <p className="text-sm font-semibold text-gray-700 mb-2">Controls:</p>
                     <ul className="list-disc list-inside text-sm text-gray-700 space-y-1">
                       {group.commonControls.map((control, i) => (
                         <li key={i}>{control}</li>
@@ -447,7 +442,7 @@ export const WaterRiskReport = ({ data, analysisItems = [] }: WaterRiskReportPro
                 {/* Common Controls */}
                 {group.commonControls.length > 0 && (
                   <div className="mt-4 pt-3 border-t border-gray-200">
-                    <p className="text-sm font-semibold text-gray-700 mb-2">Mitigation Controls:</p>
+                    <p className="text-sm font-semibold text-gray-700 mb-2">Controls:</p>
                     <ul className="list-disc list-inside text-sm text-gray-700 space-y-1">
                       {group.commonControls.map((control, i) => (
                         <li key={i}>{control}</li>
@@ -506,7 +501,7 @@ export const WaterRiskReport = ({ data, analysisItems = [] }: WaterRiskReportPro
                 {/* Common Controls */}
                 {group.commonControls.length > 0 && (
                   <div className="mt-4 pt-3 border-t border-gray-200">
-                    <p className="text-sm font-semibold text-gray-700 mb-2">Mitigation Controls:</p>
+                    <p className="text-sm font-semibold text-gray-700 mb-2">Controls:</p>
                     <ul className="list-disc list-inside text-sm text-gray-700 space-y-1">
                       {group.commonControls.map((control, i) => (
                         <li key={i}>{control}</li>

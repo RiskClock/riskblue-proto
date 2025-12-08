@@ -30,7 +30,37 @@
   /* Page setup */
   @page {
     margin: 1.5cm;
+    margin-bottom: 2cm;
     size: A4;
+  }
+
+  @page :first {
+    margin-bottom: 1.5cm;
+  }
+
+  /* Page footer for subsequent pages - uses running footer */
+  .print-page-footer {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    height: 1.2cm;
+    display: flex !important;
+    align-items: center;
+    justify-content: center;
+    gap: 0.4rem;
+    font-size: 9pt;
+    color: #666;
+    background: white;
+  }
+
+  .print-page-footer img {
+    height: 16px;
+  }
+
+  /* Hide footer content on first page using counter trick */
+  .print-page-footer::before {
+    content: "";
   }
 
   body {
