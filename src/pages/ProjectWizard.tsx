@@ -50,6 +50,7 @@ const ProjectWizard = () => {
   const [isProcessingWebhook, setIsProcessingWebhook] = useState(false);
   const [isSavingNewProject, setIsSavingNewProject] = useState(false);
   const isWebhookCreatingProject = useRef(false);
+  const justRestoredFromCache = useRef(false);
   const [showProviderDialog, setShowProviderDialog] = useState(false);
   const [showGuidelinesDialog, setShowGuidelinesDialog] = useState(false);
   const [analysisItems, setAnalysisItems] = useState<AnalysisItem[]>([]);
@@ -126,8 +127,14 @@ const ProjectWizard = () => {
         const parsed = JSON.parse(cachedData);
         console.log("Restoring cached project data after OAuth redirect:", parsed);
         setProjectData(parsed);
+        // Set flag to prevent fetchProject from overwriting
+        justRestoredFromCache.current = true;
         // Clear the cache after restoring
         localStorage.removeItem(cachedDataKey);
+        // Reset flag after a short delay to allow normal fetching later
+        setTimeout(() => {
+          justRestoredFromCache.current = false;
+        }, 2000);
       } catch (e) {
         console.error("Failed to parse cached project data:", e);
         localStorage.removeItem(cachedDataKey);
@@ -142,9 +149,9 @@ const ProjectWizard = () => {
       if (!id || id === "new") return;
       
       // Don't fetch if we just restored from cache (OAuth redirect scenario)
-      const cachedDataKey = `projectData_${id}`;
-      if (localStorage.getItem(cachedDataKey)) {
-        return; // Let the other useEffect handle restoration
+      if (justRestoredFromCache.current) {
+        console.log("Skipping fetchProject - just restored from cache");
+        return;
       }
       
       const { data: { session } } = await supabase.auth.getSession();
