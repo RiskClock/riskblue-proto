@@ -399,7 +399,7 @@ export const WaterRiskReport = ({ data, analysisItems = [] }: WaterRiskReportPro
                 <div className="flex justify-between items-start mb-2">
                   <h3 className="font-bold text-lg text-gray-900">{group.name}</h3>
                   <span className="px-3 py-1 rounded text-sm font-semibold bg-blue-100 text-blue-800">
-                    {group.instances.length} instance{group.instances.length !== 1 ? 's' : ''}
+                    {group.instances.length} {group.instances.length === 1 ? 'Instance' : 'Instances'}
                   </span>
                 </div>
                 
@@ -469,7 +469,7 @@ export const WaterRiskReport = ({ data, analysisItems = [] }: WaterRiskReportPro
                 <div className="flex justify-between items-start mb-2">
                   <h3 className="font-bold text-lg text-gray-900">{group.name}</h3>
                   <span className="px-3 py-1 rounded text-sm font-semibold bg-cyan-100 text-cyan-800">
-                    {group.instances.length} instance{group.instances.length !== 1 ? 's' : ''}
+                    {group.instances.length} {group.instances.length === 1 ? 'Instance' : 'Instances'}
                   </span>
                 </div>
                 
@@ -539,7 +539,7 @@ export const WaterRiskReport = ({ data, analysisItems = [] }: WaterRiskReportPro
                 <div className="flex justify-between items-start mb-2">
                   <h3 className="font-bold text-lg text-gray-900">{group.name}</h3>
                   <span className="px-3 py-1 rounded text-sm font-semibold bg-purple-100 text-purple-800">
-                    {group.instances.length} instance{group.instances.length !== 1 ? 's' : ''}
+                    {group.instances.length} {group.instances.length === 1 ? 'Instance' : 'Instances'}
                   </span>
                 </div>
                 
