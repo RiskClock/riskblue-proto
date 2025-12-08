@@ -118,26 +118,39 @@ const ProjectWizard = () => {
     fetchAnalysisItems();
   }, [id]);
 
+  // Clean up any old localStorage cache on mount (from previous implementation)
+  useEffect(() => {
+    const oldCacheKey = `projectData_${id}`;
+    localStorage.removeItem(oldCacheKey);
+  }, [id]);
+
   // Check for and restore cached project data after OAuth redirect
   useEffect(() => {
     const cachedDataKey = `projectData_${id}`;
-    const cachedData = localStorage.getItem(cachedDataKey);
+    const cachedData = sessionStorage.getItem(cachedDataKey);
     if (cachedData) {
       try {
         const parsed = JSON.parse(cachedData);
-        console.log("Restoring cached project data after OAuth redirect:", parsed);
-        setProjectData(parsed);
-        // Set flag to prevent fetchProject from overwriting
-        justRestoredFromCache.current = true;
-        // Clear the cache after restoring
-        localStorage.removeItem(cachedDataKey);
-        // Reset flag after a short delay to allow normal fetching later
-        setTimeout(() => {
-          justRestoredFromCache.current = false;
-        }, 2000);
+        // Only restore if cache is less than 5 minutes old
+        const cacheAge = Date.now() - (parsed._cacheTimestamp || 0);
+        if (cacheAge < 5 * 60 * 1000) {
+          console.log("Restoring cached project data after OAuth redirect:", parsed);
+          const { _cacheTimestamp, ...dataWithoutTimestamp } = parsed;
+          setProjectData(dataWithoutTimestamp);
+          // Set flag to prevent fetchProject from overwriting
+          justRestoredFromCache.current = true;
+          // Reset flag after a short delay to allow normal fetching later
+          setTimeout(() => {
+            justRestoredFromCache.current = false;
+          }, 2000);
+        } else {
+          console.log("Cache too old, ignoring");
+        }
+        // Always clear the cache after checking
+        sessionStorage.removeItem(cachedDataKey);
       } catch (e) {
         console.error("Failed to parse cached project data:", e);
-        localStorage.removeItem(cachedDataKey);
+        sessionStorage.removeItem(cachedDataKey);
       }
     }
   }, [id]);
@@ -512,13 +525,13 @@ const ProjectWizard = () => {
     }
   };
 
-  // Cache project data to localStorage before OAuth redirect
-  // This ensures form data is preserved even if DB save hasn't completed
+  // Cache project data to sessionStorage before OAuth redirect
   const handleBeforeOAuthRedirect = useCallback(async () => {
     if (id && Object.keys(projectData).length > 0) {
-      console.log("Caching project data to localStorage before OAuth redirect...");
+      console.log("Caching project data to sessionStorage before OAuth redirect...");
       const cachedDataKey = `projectData_${id}`;
-      localStorage.setItem(cachedDataKey, JSON.stringify(projectData));
+      const dataWithTimestamp = { ...projectData, _cacheTimestamp: Date.now() };
+      sessionStorage.setItem(cachedDataKey, JSON.stringify(dataWithTimestamp));
       // Also try to save to DB, but don't wait for it
       if (id !== "new") {
         saveProject(projectData).catch(console.error);
