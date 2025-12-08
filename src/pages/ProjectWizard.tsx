@@ -490,12 +490,28 @@ const ProjectWizard = () => {
 
   // Save analysis items to the database
   const saveAnalysisItems = async (projectId: string, items: AnalysisItem[]) => {
+    console.log(`saveAnalysisItems called with projectId: ${projectId}, items count: ${items.length}`);
+    
+    if (!projectId || projectId === "new") {
+      console.error("Cannot save analysis items: invalid project ID");
+      return;
+    }
+    
+    if (items.length === 0) {
+      console.warn("No analysis items to save");
+      return;
+    }
+    
     try {
       // First, delete existing items for this project
-      await supabase
+      const { error: deleteError } = await supabase
         .from('project_analysis_items')
         .delete()
         .eq('project_id', projectId);
+      
+      if (deleteError) {
+        console.error("Error deleting existing analysis items:", deleteError);
+      }
 
       // Insert new items
       const itemsToInsert = items.map(item => ({
@@ -503,30 +519,41 @@ const ProjectWizard = () => {
         item_id: item.id,
         name: item.name,
         category: item.category,
-        area_name: item.areaName,
-        floor: item.floor,
-        drawing_code: item.drawingCode,
-        file_name: item.fileName,
-        width: item.width,
-        length: item.length,
-        size_category: item.sizeCategory,
-        controls: item.controls,
-        coordinates: item.coordinates,
+        area_name: item.areaName || null,
+        floor: item.floor || null,
+        drawing_code: item.drawingCode || null,
+        file_name: item.fileName || null,
+        width: item.width || null,
+        length: item.length || null,
+        size_category: item.sizeCategory || null,
+        controls: item.controls || [],
+        coordinates: item.coordinates || null,
       }));
 
-      if (itemsToInsert.length > 0) {
-        const { error } = await supabase
-          .from('project_analysis_items')
-          .insert(itemsToInsert);
+      console.log("Inserting analysis items:", itemsToInsert);
+      
+      const { data, error } = await supabase
+        .from('project_analysis_items')
+        .insert(itemsToInsert)
+        .select();
 
-        if (error) {
-          console.error("Error saving analysis items:", error);
-        } else {
-          console.log(`Saved ${itemsToInsert.length} analysis items to database`);
-        }
+      if (error) {
+        console.error("Error saving analysis items:", error);
+        toast({
+          title: "Error Saving Analysis",
+          description: "Failed to save analysis items. Please try again.",
+          variant: "destructive",
+        });
+      } else {
+        console.log(`Successfully saved ${data?.length || itemsToInsert.length} analysis items to database`);
       }
     } catch (error) {
       console.error("Error in saveAnalysisItems:", error);
+      toast({
+        title: "Error",
+        description: "An unexpected error occurred while saving analysis items.",
+        variant: "destructive",
+      });
     }
   };
 
