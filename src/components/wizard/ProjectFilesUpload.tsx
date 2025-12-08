@@ -431,9 +431,14 @@ export const ProjectFilesUpload = ({
         throw new Error(data.error);
       }
 
-      const analysisText = data.analysis;
-      const assetsWaterSystemsProcesses: AnalysisItem[] = data.assets_water_systems_processes || [];
-      const systems = parseSystemsFromAnalysis(analysisText);
+      // Handle both response formats:
+      // - New format: { summary: string, analysis: AnalysisItem[] }
+      // - Old format: { analysis: string, assets_water_systems_processes: AnalysisItem[] }
+      const analysisText = typeof data.summary === 'string' ? data.summary : (typeof data.analysis === 'string' ? data.analysis : '');
+      const assetsWaterSystemsProcesses: AnalysisItem[] = Array.isArray(data.analysis) 
+        ? data.analysis 
+        : (data.assets_water_systems_processes || []);
+      const systems = analysisText ? parseSystemsFromAnalysis(analysisText) : [];
       
       console.log("Parsed items:", assetsWaterSystemsProcesses);
       
@@ -451,9 +456,10 @@ export const ProjectFilesUpload = ({
       }
       
       const counts = countByCategory(assetsWaterSystemsProcesses);
+      const filesCount = data.analyzedFiles?.length || driveFiles.length;
       toast({
         title: "Analysis Complete",
-        description: `Analyzed ${data.filesAnalyzed} files. Found ${counts.assets} assets, ${counts.waterSystems} water systems, ${counts.processes} processes.`,
+        description: `Analyzed ${filesCount} files. Found ${counts.assets} assets, ${counts.waterSystems} water systems, ${counts.processes} processes.`,
       });
     } catch (error) {
       console.error("Analysis error:", error);
