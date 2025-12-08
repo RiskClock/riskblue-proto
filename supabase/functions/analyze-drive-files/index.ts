@@ -457,7 +457,12 @@ const MOCK_ASSETS_WATER_SYSTEMS_PROCESSES: AnalysisItem[] = [
       "Ultrasonic Flow Sensors",
       "Inline Flow Sensors"
     ],
-    "coordinates": [0.4387, 0.0886, 0.2008, 0.2104]
+    "coordinates": [0.4387, 0.0886, 0.2008, 0.2104],
+    "additionalParameters": {
+      "mainPipeDirection": "horizontal",
+      "pipeDiameterInches": "4",
+      "pipeDiameterMM": "100"
+    }
   },
   {
     "id": "CDW-ME001",
@@ -475,7 +480,12 @@ const MOCK_ASSETS_WATER_SYSTEMS_PROCESSES: AnalysisItem[] = [
       "Ultrasonic Flow Sensors",
       "Inline Flow Sensors"
     ],
-    "coordinates": [0.515, 0.4133, 0.1028, 0.2108]
+    "coordinates": [0.515, 0.4133, 0.1028, 0.2108],
+    "additionalParameters": {
+      "mainPipeDirection": "horizontal",
+      "pipeDiameterInches": "4",
+      "pipeDiameterMM": "100"
+    }
   },
   {
     "id": "CDW-ZE001",
@@ -916,38 +926,27 @@ const MOCK_ASSETS_WATER_SYSTEMS_PROCESSES: AnalysisItem[] = [
   }
 ];
 
-const MOCK_ANALYSIS_TEXT = `## Analysis Summary
+const MOCK_ANALYSIS_TEXT = `## Drawing Analysis Complete
 
-Based on the building drawings analyzed, I have identified the following assets, water systems, and processes:
+Based on the analysis of your uploaded construction drawings, we have identified **${MOCK_ASSETS_WATER_SYSTEMS_PROCESSES.length} items** across the project.
 
-### Assets Detected:
-- **Electrical Rooms** (6 locations): Lower Level (ELECTRICAL, SUBSTATION ROOM, HYDRO VAULT), 4th Floor (IT ROOM), 7th Floor (IT ROOM), Roof (ELECTRICAL ROOM)
-- **Mechanical Rooms** (1 location): Lower Level (MECHANICAL)
-- **Electrical Risers** (1 location): Spanning Lower Level to 8th Floor
-- **Elevator Pits** (2 locations): ELEVATOR 1 and ELEVATOR 2 in Lower Level
-- **Kitchens & Washrooms** (13 locations): Various floors from 1st to 8th Floor
-- **Facade, Envelope, Exterior, and Roofing**: Building exterior systems
-- **Mass Timber and Millwork**: Structural timber elements
+### Summary
+- **Critical Assets**: ${MOCK_ASSETS_WATER_SYSTEMS_PROCESSES.filter(i => i.category === "Asset").length} identified
+- **Water Systems**: ${MOCK_ASSETS_WATER_SYSTEMS_PROCESSES.filter(i => i.category === "Water System").length} identified  
+- **Processes**: ${MOCK_ASSETS_WATER_SYSTEMS_PROCESSES.filter(i => i.category === "Process").length} identified
 
-### Water Systems Detected:
-- **Cold Domestic Water**: Main City Entry (1), Main Entry (1), Zone Entry (11), Suite Riser Entry (1), Suite Entry (1)
-- **Hot Domestic Water**: Central distribution (1)
-- **Temporary Water Run**: Construction phase water supply (1)
-- **Fire Suppression System**: Building-wide sprinkler system (1)
-- **Sump Pit, Storm Drain, and Drainage**: Below-grade water management (1)
+### Key Findings
+1. **Electrical Infrastructure**: Multiple electrical rooms and risers identified across floors
+2. **Mechanical Systems**: Mechanical rooms with comprehensive plumbing controls
+3. **Water Entry Points**: Multiple cold domestic water entry points with flow monitoring
+4. **Critical Spaces**: Elevator pits, kitchens, and washrooms requiring water protection
+5. **Building Envelope**: Facade and roofing systems with weather monitoring controls
 
-### Processes Identified:
-- **Contractor Team**: 22 controls including water mitigation, response planning, and equipment coordination
-- **Water Mitigation Vendor**: 15 controls including inspections, cybersecurity, and maintenance
-- **Mechanical Contractor and Engineering**: 18 controls including installation integrity, testing, and system optimization
-
-\`\`\`json
-{
-  "assets_water_systems_processes": ${JSON.stringify(MOCK_ASSETS_WATER_SYSTEMS_PROCESSES, null, 2)}
-}
-\`\`\``;
+### Recommended Controls
+Each identified asset and water system has been mapped to appropriate mitigation controls based on industry best practices and TMU (Technology and Mitigation Utilization) guidelines.`;
 
 serve(async (req) => {
+  // Handle CORS preflight requests
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
   }
@@ -957,41 +956,35 @@ serve(async (req) => {
 
     if (!files || !Array.isArray(files) || files.length === 0) {
       return new Response(
-        JSON.stringify({ error: "Files are required" }),
+        JSON.stringify({ error: "No files provided for analysis" }),
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
-    if (!accessToken) {
-      return new Response(
-        JSON.stringify({ error: "Access token is required" }),
-        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
-    }
-
-    // Simulate AI analysis delay (3-5 seconds)
-    const delay = 3000 + Math.random() * 2000;
+    // Simulate AI processing delay (3-5 seconds)
+    const delay = Math.floor(Math.random() * 2000) + 3000;
     await new Promise(resolve => setTimeout(resolve, delay));
 
-    console.log(`Mock analysis completed for ${files.length} files after ${Math.round(delay)}ms delay`);
+    console.info(`Mock analysis completed for ${files.length} files after ${delay}ms delay`);
 
-    // Get file names from the request
-    const fileNames = (files as DriveFile[]).map(f => f.name);
-
-    // Return mock data directly (file names are already hardcoded in the mock data)
     return new Response(
-      JSON.stringify({ 
-        analysis: MOCK_ANALYSIS_TEXT,
-        assets_water_systems_processes: MOCK_ASSETS_WATER_SYSTEMS_PROCESSES,
-        filesAnalyzed: files.length,
-        fileNames
+      JSON.stringify({
+        summary: MOCK_ANALYSIS_TEXT,
+        analysis: MOCK_ASSETS_WATER_SYSTEMS_PROCESSES,
+        analyzedFiles: files.map((f: DriveFile) => ({
+          id: f.id,
+          name: f.name,
+          mimeType: f.mimeType,
+          analyzed: true
+        }))
       }),
-      { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
-  } catch (error) {
+  } catch (error: unknown) {
     console.error("Error in analyze-drive-files:", error);
+    const errorMessage = error instanceof Error ? error.message : "Failed to analyze files";
     return new Response(
-      JSON.stringify({ error: error instanceof Error ? error.message : "Unknown error" }),
+      JSON.stringify({ error: errorMessage }),
       { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   }
