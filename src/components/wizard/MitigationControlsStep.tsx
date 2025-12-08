@@ -186,27 +186,25 @@ export const MitigationControlsStep = ({
                   </div>
                 </div>
 
-                {/* Accordion trigger with full-width justify-between layout */}
+                {/* AccordionTrigger has justify-between, so we pass name as first child and badges as last child */}
                 <AccordionTrigger className="flex-1 hover:no-underline py-3 pr-3">
-                  <div className="flex flex-1 items-center justify-between">
-                    <span className="text-sm font-medium text-left">{control.name}</span>
-                    <div className="flex items-center gap-1.5">
-                      {assets.length > 0 && (
-                        <Badge className="bg-blue-100 text-blue-700 hover:bg-blue-100 border-0 text-xs font-medium px-2 py-0.5">
-                          {assets.length} Asset{assets.length > 1 ? 's' : ''}
-                        </Badge>
-                      )}
-                      {systems.length > 0 && (
-                        <Badge className="bg-cyan-100 text-cyan-700 hover:bg-cyan-100 border-0 text-xs font-medium px-2 py-0.5">
-                          {systems.length} System{systems.length > 1 ? 's' : ''}
-                        </Badge>
-                      )}
-                      {processes.length > 0 && (
-                        <Badge className="bg-violet-100 text-violet-700 hover:bg-violet-100 border-0 text-xs font-medium px-2 py-0.5">
-                          {processes.length} Process{processes.length > 1 ? 'es' : ''}
-                        </Badge>
-                      )}
-                    </div>
+                  <span className="text-sm font-medium text-left">{control.name}</span>
+                  <div className="flex items-center gap-1.5 mr-2">
+                    {assets.length > 0 && (
+                      <Badge className="bg-blue-100 text-blue-700 hover:bg-blue-100 border-0 text-xs font-medium px-2 py-0.5">
+                        {assets.length} Asset{assets.length > 1 ? 's' : ''}
+                      </Badge>
+                    )}
+                    {systems.length > 0 && (
+                      <Badge className="bg-cyan-100 text-cyan-700 hover:bg-cyan-100 border-0 text-xs font-medium px-2 py-0.5">
+                        {systems.length} System{systems.length > 1 ? 's' : ''}
+                      </Badge>
+                    )}
+                    {processes.length > 0 && (
+                      <Badge className="bg-violet-100 text-violet-700 hover:bg-violet-100 border-0 text-xs font-medium px-2 py-0.5">
+                        {processes.length} Process{processes.length > 1 ? 'es' : ''}
+                      </Badge>
+                    )}
                   </div>
                 </AccordionTrigger>
               </div>
@@ -229,12 +227,14 @@ export const MitigationControlsStep = ({
                             <div key={idx} className="flex items-center justify-between p-2 bg-muted/30 rounded border border-border/50 text-sm">
                               <div className="flex items-center gap-2">
                                 <span><span className="text-muted-foreground">{item.id}</span> — {item.areaName || item.name}</span>
-                                {item.fileName && canViewFiles && findDriveFile(item.fileName) && (
+                                {item.fileName && (
                                   <Button
                                     variant="ghost"
                                     size="sm"
                                     className="h-6 px-2 text-xs text-primary hover:text-primary"
                                     onClick={() => openFileViewer(item)}
+                                    disabled={!canViewFiles || !findDriveFile(item.fileName)}
+                                    title={!canViewFiles ? "Connect to Google Drive to view files" : !findDriveFile(item.fileName) ? "File not found in Drive" : "View drawing"}
                                   >
                                     <FileText className="w-3 h-3 mr-1" />
                                     View
@@ -268,12 +268,14 @@ export const MitigationControlsStep = ({
                             <div key={idx} className="flex items-center justify-between p-2 bg-muted/30 rounded border border-border/50 text-sm">
                               <div className="flex items-center gap-2">
                                 <span><span className="text-muted-foreground">{item.id}</span> — {item.areaName || item.name}</span>
-                                {item.fileName && canViewFiles && findDriveFile(item.fileName) && (
+                                {item.fileName && (
                                   <Button
                                     variant="ghost"
                                     size="sm"
                                     className="h-6 px-2 text-xs text-primary hover:text-primary"
                                     onClick={() => openFileViewer(item)}
+                                    disabled={!canViewFiles || !findDriveFile(item.fileName)}
+                                    title={!canViewFiles ? "Connect to Google Drive to view files" : !findDriveFile(item.fileName) ? "File not found in Drive" : "View drawing"}
                                   >
                                     <FileText className="w-3 h-3 mr-1" />
                                     View
