@@ -125,11 +125,20 @@ export const ConstructionDetailsStep = ({ data, onNext, onBack, projectId, isPro
     updateFormData({ structural_types: newTypes });
   };
 
-
-  // Update parent immediately on change
+  // Update parent immediately on change AND sync to localStorage for OAuth redirect preservation
   const updateFormData = (updates: Partial<typeof formData>) => {
     const newFormData = { ...formData, ...updates };
     setFormData(newFormData);
+    
+    // Sync to localStorage for OAuth redirect preservation
+    const projectId = window.location.pathname.split('/').pop();
+    if (projectId && projectId !== 'new') {
+      const cachedDataKey = `projectData_${projectId}`;
+      const existingCache = localStorage.getItem(cachedDataKey);
+      const existingData = existingCache ? JSON.parse(existingCache) : {};
+      localStorage.setItem(cachedDataKey, JSON.stringify({ ...existingData, ...newFormData }));
+    }
+    
     onNext(newFormData);
   };
 
