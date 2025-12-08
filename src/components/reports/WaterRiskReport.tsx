@@ -159,6 +159,25 @@ export const WaterRiskReport = ({ data, analysisItems = [] }: WaterRiskReportPro
   // Get structural types
   const structuralTypes = data.structural_types || [];
 
+  // Helper to check if instance has additional parameters
+  const hasAdditionalParams = (instance: AnalysisItem) => {
+    return instance.floor || instance.drawingCode || instance.fileName || 
+           instance.width || instance.length || instance.sizeCategory;
+  };
+
+  // Render instance details with additional parameters
+  const renderInstanceDetails = (instance: AnalysisItem) => {
+    const details: string[] = [];
+    if (instance.floor) details.push(`Floor: ${instance.floor}`);
+    if (instance.drawingCode) details.push(`Drawing: ${instance.drawingCode}`);
+    if (instance.sizeCategory) details.push(`Size: ${instance.sizeCategory}`);
+    if (instance.width && instance.length) details.push(`Dimensions: ${instance.width} × ${instance.length}`);
+    else if (instance.width) details.push(`Width: ${instance.width}`);
+    else if (instance.length) details.push(`Length: ${instance.length}`);
+    if (instance.fileName) details.push(`File: ${instance.fileName}`);
+    return details;
+  };
+
   // Generate absolute URLs for images
   const logoUrl = getAbsoluteUrl("/assets/riskblue-logo.png");
 
@@ -381,14 +400,25 @@ export const WaterRiskReport = ({ data, analysisItems = [] }: WaterRiskReportPro
                 </div>
                 
                 {/* Instance list */}
-                <div className="mt-3 space-y-1">
-                  {group.instances.map((instance, i) => (
-                    <div key={i} className="text-sm text-gray-700 flex gap-2">
-                      <span className="text-gray-500">{instance.id}:</span>
-                      <span>{instance.areaName || instance.name}</span>
-                      {instance.floor && <span className="text-gray-500">({instance.floor})</span>}
-                    </div>
-                  ))}
+                <div className="mt-3 space-y-2">
+                  {group.instances.map((instance, i) => {
+                    const details = renderInstanceDetails(instance);
+                    return (
+                      <div key={i} className="text-sm text-gray-700">
+                        <div className="flex gap-2 items-start">
+                          <span className="text-gray-500 font-medium">{instance.id}:</span>
+                          <span>{instance.areaName || instance.name}</span>
+                        </div>
+                        {details.length > 0 && (
+                          <div className="ml-4 mt-1 flex flex-wrap gap-x-4 gap-y-1 text-xs text-gray-500">
+                            {details.map((detail, j) => (
+                              <span key={j}>{detail}</span>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
                 </div>
                 
                 {/* Common Controls */}
@@ -440,14 +470,25 @@ export const WaterRiskReport = ({ data, analysisItems = [] }: WaterRiskReportPro
                 </div>
                 
                 {/* Instance list */}
-                <div className="mt-3 space-y-1">
-                  {group.instances.map((instance, i) => (
-                    <div key={i} className="text-sm text-gray-700 flex gap-2">
-                      <span className="text-gray-500">{instance.id}:</span>
-                      <span>{instance.areaName || instance.name}</span>
-                      {instance.floor && <span className="text-gray-500">({instance.floor})</span>}
-                    </div>
-                  ))}
+                <div className="mt-3 space-y-2">
+                  {group.instances.map((instance, i) => {
+                    const details = renderInstanceDetails(instance);
+                    return (
+                      <div key={i} className="text-sm text-gray-700">
+                        <div className="flex gap-2 items-start">
+                          <span className="text-gray-500 font-medium">{instance.id}:</span>
+                          <span>{instance.areaName || instance.name}</span>
+                        </div>
+                        {details.length > 0 && (
+                          <div className="ml-4 mt-1 flex flex-wrap gap-x-4 gap-y-1 text-xs text-gray-500">
+                            {details.map((detail, j) => (
+                              <span key={j}>{detail}</span>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
                 </div>
                 
                 {/* Common Controls */}
@@ -499,14 +540,25 @@ export const WaterRiskReport = ({ data, analysisItems = [] }: WaterRiskReportPro
                 </div>
                 
                 {/* Instance list */}
-                <div className="mt-3 space-y-1">
-                  {group.instances.map((instance, i) => (
-                    <div key={i} className="text-sm text-gray-700 flex gap-2">
-                      <span className="text-gray-500">{instance.id}:</span>
-                      <span>{instance.areaName || instance.name}</span>
-                      {instance.floor && <span className="text-gray-500">({instance.floor})</span>}
-                    </div>
-                  ))}
+                <div className="mt-3 space-y-2">
+                  {group.instances.map((instance, i) => {
+                    const details = renderInstanceDetails(instance);
+                    return (
+                      <div key={i} className="text-sm text-gray-700">
+                        <div className="flex gap-2 items-start">
+                          <span className="text-gray-500 font-medium">{instance.id}:</span>
+                          <span>{instance.areaName || instance.name}</span>
+                        </div>
+                        {details.length > 0 && (
+                          <div className="ml-4 mt-1 flex flex-wrap gap-x-4 gap-y-1 text-xs text-gray-500">
+                            {details.map((detail, j) => (
+                              <span key={j}>{detail}</span>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
                 </div>
                 
                 {/* Common Controls */}
