@@ -1,51 +1,83 @@
-import { useState, useEffect, useRef } from "react";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
-import { Badge } from "@/components/ui/badge";
-import { ScrollArea } from "@/components/ui/scroll-area";
-import { Info, Users } from "lucide-react";
+import { useState, useEffect, useRef, useMemo, useCallback } from "react";
+import { Users } from "lucide-react";
 import { AnalysisItem } from "@/lib/analysisItemMapper";
+import { ExpandableListItem } from "./ExpandableListItem";
+import { FileViewerModal } from "./FileViewerModal";
+import type { DriveFileInfo } from "./ProjectFilesUpload";
 
 interface ProcessesStepProps {
   data?: any;
   onNext?: (data: any) => void;
   isProcessingWebhook?: boolean;
   analysisItems?: AnalysisItem[];
+  driveFiles?: DriveFileInfo[];
+  driveAccessToken?: string | null;
+}
+
+// Group processes by name for expandable list view
+interface ProcessGroup {
+  name: string;
+  instances: AnalysisItem[];
 }
 
 export const ProcessesStep = ({ 
   data = {}, 
   onNext, 
   isProcessingWebhook,
-  analysisItems = [] 
+  analysisItems = [],
+  driveFiles = [],
+  driveAccessToken = null
 }: ProcessesStepProps) => {
-  const [detailDialogOpen, setDetailDialogOpen] = useState(false);
-  const [selectedProcess, setSelectedProcess] = useState<AnalysisItem | null>(null);
   const hasPendingSave = useRef(false);
 
   // Filter only process items
-  const processItems = analysisItems.filter(item => item.category === "Process");
+  const processItems = useMemo(() => 
+    analysisItems.filter(item => item.category === "Process"),
+    [analysisItems]
+  );
+
+  // Group processes by name
+  const processGroups = useMemo((): ProcessGroup[] => {
+    const groupMap = new Map<string, AnalysisItem[]>();
+    
+    processItems.forEach(item => {
+      const existing = groupMap.get(item.name) || [];
+      existing.push(item);
+      groupMap.set(item.name, existing);
+    });
+
+    return Array.from(groupMap.entries())
+      .map(([name, instances]) => ({ name, instances }))
+      .sort((a, b) => b.instances.length - a.instances.length);
+  }, [processItems]);
 
   // Selection state - default to all selected
-  const [selectedProcesses, setSelectedProcesses] = useState<string[]>(
-    data.selectedProcesses && data.selectedProcesses.length > 0 
-      ? data.selectedProcesses 
+  const [selectedInstanceIds, setSelectedInstanceIds] = useState<string[]>(
+    data.selectedProcessInstances && data.selectedProcessInstances.length > 0 
+      ? data.selectedProcessInstances 
       : []
   );
 
+  // File viewer state
+  const [viewerOpen, setViewerOpen] = useState(false);
+  const [viewerItem, setViewerItem] = useState<AnalysisItem | null>(null);
+  const [viewerFileId, setViewerFileId] = useState<string>("");
+  const [viewerMimeType, setViewerMimeType] = useState<string>("application/pdf");
+
   // Initialize selection when process items load
   useEffect(() => {
-    if (processItems.length > 0 && (!data.selectedProcesses || data.selectedProcesses.length === 0)) {
-      setSelectedProcesses(processItems.map(p => p.id));
+    if (processItems.length > 0 && (!data.selectedProcessInstances || data.selectedProcessInstances.length === 0)) {
+      setSelectedInstanceIds(processItems.map(p => p.id));
       hasPendingSave.current = true;
     }
-  }, [processItems.length, data.selectedProcesses]);
+  }, [processItems.length, data.selectedProcessInstances]);
 
   // Sync incoming data to local state
   useEffect(() => {
-    if (data.selectedProcesses && data.selectedProcesses.length > 0) {
-      setSelectedProcesses(data.selectedProcesses);
+    if (data.selectedProcessInstances && data.selectedProcessInstances.length > 0) {
+      setSelectedInstanceIds(data.selectedProcessInstances);
     }
-  }, [data.selectedProcesses]);
+  }, [data.selectedProcessInstances]);
 
   // Auto-save with debounce
   useEffect(() => {
@@ -56,27 +88,52 @@ export const ProcessesStep = ({
       return;
     }
     
-    if (hasPendingSave.current || selectedProcesses.length > 0) {
+    if (hasPendingSave.current || selectedInstanceIds.length > 0) {
       const timer = setTimeout(() => {
-        onNext({ selectedProcesses });
+        onNext({ selectedProcessInstances: selectedInstanceIds });
         hasPendingSave.current = false;
       }, 500);
 
       return () => clearTimeout(timer);
     }
-  }, [selectedProcesses, onNext, isProcessingWebhook]);
+  }, [selectedInstanceIds, onNext, isProcessingWebhook]);
 
-  const toggleProcess = (processId: string) => {
-    setSelectedProcesses((prev) =>
-      prev.includes(processId) ? prev.filter((id) => id !== processId) : [...prev, processId]
+  const handleToggleInstance = useCallback((instanceId: string) => {
+    setSelectedInstanceIds(prev => 
+      prev.includes(instanceId) 
+        ? prev.filter(id => id !== instanceId) 
+        : [...prev, instanceId]
     );
+  }, []);
+
+  const handleToggleAll = useCallback((instanceIds: string[], selected: boolean) => {
+    setSelectedInstanceIds(prev => {
+      if (selected) {
+        const newIds = new Set([...prev, ...instanceIds]);
+        return Array.from(newIds);
+      } else {
+        return prev.filter(id => !instanceIds.includes(id));
+      }
+    });
+  }, []);
+
+  // File viewer helpers
+  const findDriveFile = (fileName: string): DriveFileInfo | undefined => {
+    return driveFiles.find(f => f.name === fileName);
   };
 
-  const handleOpenDetail = (e: React.MouseEvent, process: AnalysisItem) => {
-    e.stopPropagation();
-    setSelectedProcess(process);
-    setDetailDialogOpen(true);
-  };
+  const canViewFiles = driveFiles.length > 0 && !!driveAccessToken;
+
+  const handleViewInstance = useCallback((item: AnalysisItem) => {
+    if (!item.fileName) return;
+    const driveFile = findDriveFile(item.fileName);
+    if (driveFile) {
+      setViewerFileId(driveFile.id);
+      setViewerMimeType(driveFile.mimeType);
+    }
+    setViewerItem(item);
+    setViewerOpen(true);
+  }, [driveFiles]);
 
   if (processItems.length === 0) {
     return (
@@ -89,103 +146,47 @@ export const ProcessesStep = ({
   }
 
   return (
-    <div className="space-y-6">
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-        {processItems.map((process) => {
-          const isSelected = selectedProcesses.includes(process.id);
-          
-          return (
-            <div
-              key={process.id}
-              onClick={() => toggleProcess(process.id)}
-              className={`p-4 rounded-lg cursor-pointer transition-all relative border-2 ${
-                isSelected 
-                  ? "border-primary bg-primary/5 shadow-[0_0_0_1px_hsl(var(--primary)/0.3)]" 
-                  : "border-transparent bg-card hover:border-primary/30"
-              }`}
-            >
-
-              <button 
-                onClick={(e) => handleOpenDetail(e, process)}
-                className="absolute top-2 right-2 p-1 hover:bg-muted rounded-full transition-colors"
-              >
-                <Info className="h-4 w-4 text-muted-foreground" />
-              </button>
-
-              <div className="mb-3 pt-4">
-                <div className="flex items-center gap-2 mb-1">
-                  <h3 className="font-semibold text-sm">{process.name}</h3>
-                </div>
-                <span className="inline-block px-2 py-0.5 text-xs bg-secondary text-secondary-foreground rounded">
-                  Process
-                </span>
-              </div>
-              
-              <div className="w-full h-32 rounded-md mb-3 bg-muted/30 flex items-center justify-center">
-                <Users className="h-12 w-12 text-muted-foreground/50" />
-              </div>
-              
-              <p className="text-xs text-muted-foreground mb-3">
-                <strong>Controls:</strong> {process.controls?.length || 0} assigned
-              </p>
-              
-              {process.controls && process.controls.length > 0 && (
-                <div className="flex flex-wrap gap-1">
-                  {process.controls.slice(0, 2).map((control, i) => (
-                    <Badge key={i} variant="secondary" className="text-xs truncate max-w-full">
-                      {control.length > 20 ? control.substring(0, 20) + '...' : control}
-                    </Badge>
-                  ))}
-                  {process.controls.length > 2 && (
-                    <Badge variant="outline" className="text-xs">
-                      +{process.controls.length - 2}
-                    </Badge>
-                  )}
-                </div>
-              )}
-            </div>
-          );
-        })}
+    <div className="space-y-4">
+      {/* List of process groups */}
+      <div className="space-y-3">
+        {processGroups.map(group => (
+          <ExpandableListItem
+            key={group.name}
+            name={group.name}
+            icon={<Users className="h-6 w-6 text-muted-foreground/50" />}
+            instanceCount={group.instances.length}
+            instances={group.instances}
+            selectedInstanceIds={selectedInstanceIds}
+            onToggleInstance={handleToggleInstance}
+            onToggleAll={handleToggleAll}
+            onViewInstance={handleViewInstance}
+            canViewFiles={canViewFiles}
+          />
+        ))}
       </div>
 
-      {/* Detail Dialog */}
-      <Dialog open={detailDialogOpen} onOpenChange={setDetailDialogOpen}>
-        <DialogContent className="max-w-2xl max-h-[80vh]">
-          <DialogHeader>
-            <DialogTitle>{selectedProcess?.name}</DialogTitle>
-            <DialogDescription>
-              {selectedProcess?.controls?.length || 0} control{selectedProcess?.controls?.length !== 1 ? 's' : ''} assigned
-            </DialogDescription>
-          </DialogHeader>
-          <ScrollArea className="max-h-[60vh] pr-4">
-            {selectedProcess && (
-              <div className="space-y-4">
-                <div className="flex items-center gap-2">
-                  <Badge variant="outline">{selectedProcess.id}</Badge>
-                  <Badge variant="secondary">Process</Badge>
-                </div>
-
-                {selectedProcess.controls && selectedProcess.controls.length > 0 && (
-                  <div className="space-y-3">
-                    <h4 className="font-semibold">Assigned Controls</h4>
-                    <div className="space-y-2">
-                      {selectedProcess.controls.map((control, i) => (
-                        <div 
-                          key={i} 
-                          className="p-3 rounded-lg border bg-muted/30 flex items-center gap-3"
-                        >
-                          <div className="h-2 w-2 rounded-full bg-primary flex-shrink-0" />
-                          <span className="text-sm">{control}</span>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-              </div>
-            )}
-          </ScrollArea>
-        </DialogContent>
-      </Dialog>
+      {/* File Viewer Modal */}
+      {viewerItem && driveAccessToken && (
+        <FileViewerModal
+          isOpen={viewerOpen}
+          onClose={() => {
+            setViewerOpen(false);
+            setViewerItem(null);
+            setViewerFileId("");
+          }}
+          fileId={viewerFileId}
+          fileName={viewerItem.fileName || ""}
+          mimeType={viewerMimeType}
+          accessToken={driveAccessToken}
+          detections={viewerItem.coordinates ? [{
+            lineMonitored: viewerItem.name,
+            lineCode: viewerItem.id,
+            systemType: viewerItem.category,
+            coordinates: viewerItem.coordinates,
+            fileName: viewerItem.fileName || undefined,
+          }] : []}
+        />
+      )}
     </div>
   );
 };

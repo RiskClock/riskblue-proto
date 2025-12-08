@@ -1,17 +1,18 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useCallback } from "react";
 import { Button } from "@/components/ui/button";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Info, Plus } from "lucide-react";
+import { Info, Droplets } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { calculateWaterSystemDuration } from "@/lib/durationCalculator";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
-import { Badge } from "@/components/ui/badge";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import { AnalysisItem } from "@/lib/analysisItemMapper";
+import { ExpandableListItem } from "./ExpandableListItem";
+import { FileViewerModal } from "./FileViewerModal";
+import type { DriveFileInfo } from "./ProjectFilesUpload";
 
 interface WaterSystem {
   id: string;
@@ -31,6 +32,8 @@ interface WaterSystemsStepProps {
   isProcessingWebhook?: boolean;
   projectId?: string;
   analysisItems?: AnalysisItem[];
+  driveFiles?: DriveFileInfo[];
+  driveAccessToken?: string | null;
 }
 
 export const WaterSystemsStep = ({
@@ -39,16 +42,18 @@ export const WaterSystemsStep = ({
   onBack,
   isProcessingWebhook,
   projectId,
-  analysisItems = []
+  analysisItems = [],
+  driveFiles = [],
+  driveAccessToken = null
 }: WaterSystemsStepProps) => {
   const { toast } = useToast();
   const queryClient = useQueryClient();
-  const [selectedSystems, setSelectedSystems] = useState<string[]>(data.selectedSystems || []);
-  const [systemFloors, setSystemFloors] = useState<Record<string, string>>(data.systemFloors || {});
-  const [dialogOpen, setDialogOpen] = useState<string | null>(null);
-  const [detailDialogOpen, setDetailDialogOpen] = useState(false);
-  const [selectedSystemForDetail, setSelectedSystemForDetail] = useState<string | null>(null);
-  const [tempFloors, setTempFloors] = useState("");
+  
+  // Selected instance IDs (individual items from analysis)
+  const [selectedInstanceIds, setSelectedInstanceIds] = useState<string[]>(
+    data.selectedSystemInstances || []
+  );
+  
   const [addSystemDialogOpen, setAddSystemDialogOpen] = useState(false);
   const [newSystem, setNewSystem] = useState({
     name: "",
@@ -57,27 +62,28 @@ export const WaterSystemsStep = ({
     cost: ""
   });
 
+  // File viewer state
+  const [viewerOpen, setViewerOpen] = useState(false);
+  const [viewerItem, setViewerItem] = useState<AnalysisItem | null>(null);
+  const [viewerFileId, setViewerFileId] = useState<string>("");
+  const [viewerMimeType, setViewerMimeType] = useState<string>("application/pdf");
+
   // Fetch water systems from database
-  const {
-    data: waterSystems = [],
-    isLoading
-  } = useQuery({
+  const { data: waterSystems = [], isLoading } = useQuery({
     queryKey: ['water-systems'],
     queryFn: async () => {
-      const {
-        data,
-        error
-      } = await supabase.from('water_systems' as any).select('*').eq('is_active', true).order('display_order');
+      const { data, error } = await supabase
+        .from('water_systems' as any)
+        .select('*')
+        .eq('is_active', true)
+        .order('display_order');
       if (error) throw error;
       return data as any as WaterSystem[];
     }
   });
 
   // Fetch custom systems for this project
-  const {
-    data: customSystems = [],
-    isLoading: isLoadingCustom
-  } = useQuery({
+  const { data: customSystems = [], isLoading: isLoadingCustom } = useQuery({
     queryKey: ['custom-water-systems', projectId],
     queryFn: async () => {
       if (!projectId) return [];
@@ -97,10 +103,7 @@ export const WaterSystemsStep = ({
     mutationFn: async (system: typeof newSystem) => {
       const { data, error } = await supabase
         .from('custom_water_systems' as any)
-        .insert({
-          project_id: projectId,
-          ...system
-        })
+        .insert({ project_id: projectId, ...system })
         .select()
         .single();
       if (error) throw error;
@@ -108,20 +111,12 @@ export const WaterSystemsStep = ({
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['custom-water-systems', projectId] });
-      toast({
-        title: "System added",
-        description: "Custom water system has been added successfully."
-      });
+      toast({ title: "System added", description: "Custom water system has been added successfully." });
       setAddSystemDialogOpen(false);
       setNewSystem({ name: "", risk_level: "", duration: "", cost: "" });
     },
-    onError: (error) => {
-      toast({
-        title: "Error",
-        description: "Failed to add custom water system.",
-        variant: "destructive"
-      });
-      console.error('Error adding custom system:', error);
+    onError: () => {
+      toast({ title: "Error", description: "Failed to add custom water system.", variant: "destructive" });
     }
   });
 
@@ -139,7 +134,6 @@ export const WaterSystemsStep = ({
   // Normalize system name for comparison
   const normalizeSystemName = (name: string): string => {
     const lower = name.toLowerCase();
-    
     if (lower.includes('cold') && (lower.includes('domestic') || lower.includes('water'))) return 'domestic cold water';
     if (lower.includes('hot') && (lower.includes('domestic') || lower.includes('water'))) return 'domestic hot water';
     if (lower.includes('temporary') && lower.includes('water')) return 'temporary water run';
@@ -147,7 +141,6 @@ export const WaterSystemsStep = ({
     if (lower.includes('hydronic')) return 'hydronics';
     if (lower.includes('fire') && (lower.includes('suppression') || lower.includes('protection') || lower.includes('sprinkler'))) return 'fire suppression system';
     if (lower.includes('sump') || lower.includes('storm drain') || lower.includes('drainage')) return 'sump pits storm drains and drainages';
-    
     return lower.replace(/[,&]/g, '').replace(/\s+/g, ' ').trim();
   };
 
@@ -165,9 +158,7 @@ export const WaterSystemsStep = ({
 
   // Filter systems to only show those detected in analysis
   const filteredSystems = useMemo(() => {
-    // Only show systems that were detected in analysis
     if (analysisItems.length === 0) return [];
-    
     return allSystems.filter(system => {
       const normalized = normalizeSystemName(system.name);
       return detectedSystemTypes.has(normalized);
@@ -175,85 +166,91 @@ export const WaterSystemsStep = ({
   }, [allSystems, detectedSystemTypes, analysisItems.length]);
 
   // Get analysis items for a specific water system type
-  const getSystemAnalysisItems = (systemName: string): AnalysisItem[] => {
+  const getSystemAnalysisItems = useCallback((systemName: string): AnalysisItem[] => {
     return analysisItems.filter(item => 
       item.category === "Water System" && 
       normalizeSystemName(item.name) === normalizeSystemName(systemName)
     );
-  };
+  }, [analysisItems]);
 
-  // Get count of instances for a system
-  const getSystemCount = (systemName: string): number => {
-    return getSystemAnalysisItems(systemName).length;
-  };
-
-  // Sync props to state when data changes (e.g., from webhook)
+  // Initialize selection with all instances when data loads
   useEffect(() => {
-    if (data.selectedSystems) {
-      setSelectedSystems(data.selectedSystems);
+    if (analysisItems.length > 0 && (!data.selectedSystemInstances || data.selectedSystemInstances.length === 0)) {
+      const allIds = analysisItems.filter(i => i.category === "Water System").map(i => i.id);
+      setSelectedInstanceIds(allIds);
     }
-    if (data.systemFloors) {
-      setSystemFloors(data.systemFloors);
+  }, [analysisItems, data.selectedSystemInstances]);
+
+  // Sync props to state
+  useEffect(() => {
+    if (data.selectedSystemInstances) {
+      setSelectedInstanceIds(data.selectedSystemInstances);
     }
-  }, [data.selectedSystems, data.systemFloors]);
+  }, [data.selectedSystemInstances]);
 
-  const toggleSystem = (systemName: string) => {
-    setSelectedSystems(prev => prev.includes(systemName) ? prev.filter(name => name !== systemName) : [...prev, systemName]);
+  const handleToggleInstance = useCallback((instanceId: string) => {
+    setSelectedInstanceIds(prev => 
+      prev.includes(instanceId) 
+        ? prev.filter(id => id !== instanceId) 
+        : [...prev, instanceId]
+    );
+  }, []);
+
+  const handleToggleAll = useCallback((instanceIds: string[], selected: boolean) => {
+    setSelectedInstanceIds(prev => {
+      if (selected) {
+        const newIds = new Set([...prev, ...instanceIds]);
+        return Array.from(newIds);
+      } else {
+        return prev.filter(id => !instanceIds.includes(id));
+      }
+    });
+  }, []);
+
+  // File viewer helpers
+  const findDriveFile = (fileName: string): DriveFileInfo | undefined => {
+    return driveFiles.find(f => f.name === fileName);
   };
 
-  const handleOpenFloorDialog = (systemName: string) => {
-    setTempFloors(systemFloors[systemName] || "");
-    setDialogOpen(systemName);
-  };
+  const canViewFiles = driveFiles.length > 0 && !!driveAccessToken;
 
-  const handleOpenDetailDialog = (systemName: string) => {
-    setSelectedSystemForDetail(systemName);
-    setDetailDialogOpen(true);
-  };
-
-  const handleSaveFloors = () => {
-    if (dialogOpen) {
-      setSystemFloors(prev => ({
-        ...prev,
-        [dialogOpen]: tempFloors
-      }));
-      setDialogOpen(null);
+  const handleViewInstance = useCallback((item: AnalysisItem) => {
+    if (!item.fileName) return;
+    const driveFile = findDriveFile(item.fileName);
+    if (driveFile) {
+      setViewerFileId(driveFile.id);
+      setViewerMimeType(driveFile.mimeType);
     }
-  };
+    setViewerItem(item);
+    setViewerOpen(true);
+  }, [driveFiles]);
 
-  // Auto-save with debounce - don't save while webhook is processing
+  // Auto-save with debounce
   useEffect(() => {
     if (isProcessingWebhook) return;
     const timer = setTimeout(() => {
-      onNext({
-        selectedSystems,
-        systemFloors
-      });
+      onNext({ selectedSystemInstances: selectedInstanceIds });
     }, 500);
     return () => clearTimeout(timer);
-  }, [selectedSystems, systemFloors, onNext, isProcessingWebhook]);
+  }, [selectedInstanceIds, onNext, isProcessingWebhook]);
 
   const handleAddSystem = () => {
     if (!newSystem.name || !newSystem.risk_level || !newSystem.duration || !newSystem.cost) {
-      toast({
-        title: "Missing fields",
-        description: "Please fill in all fields.",
-        variant: "destructive"
-      });
+      toast({ title: "Missing fields", description: "Please fill in all fields.", variant: "destructive" });
       return;
     }
     addCustomSystemMutation.mutate(newSystem);
   };
 
-  const selectedSystemItems = selectedSystemForDetail ? getSystemAnalysisItems(selectedSystemForDetail) : [];
-
   if (isLoading || isLoadingCustom) {
-    return <div className="flex items-center justify-center py-12">
+    return (
+      <div className="flex items-center justify-center py-12">
         <div className="text-center">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-4"></div>
           <p className="text-muted-foreground">Loading water systems...</p>
         </div>
-      </div>;
+      </div>
+    );
   }
 
   if (filteredSystems.length === 0) {
@@ -266,121 +263,33 @@ export const WaterSystemsStep = ({
     );
   }
 
-  return <div className="space-y-6">
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+  return (
+    <div className="space-y-4">
+      {/* List of water systems */}
+      <div className="space-y-3">
         {filteredSystems.map(system => {
-        const isSelected = selectedSystems.includes(system.name);
-        const count = getSystemCount(system.name);
-        return <div key={system.id} onClick={() => toggleSystem(system.name)} className={`p-4 rounded-lg cursor-pointer transition-all relative ${isSelected ? "border-2 border-primary bg-primary/5" : "border border-border hover:border-primary/50"}`}>
-              <button onClick={e => {
-                e.stopPropagation();
-                if (count > 0) {
-                  handleOpenDetailDialog(system.name);
-                } else {
-                  handleOpenFloorDialog(system.name);
-                }
-              }} className="absolute top-2 right-2 p-1 hover:bg-muted rounded-full transition-colors">
-                <Info className="h-4 w-4 text-muted-foreground" />
-              </button>
-
-              <div className="mb-3">
-                <div className="flex items-center gap-2 mb-1">
-                  <h3 className="font-semibold text-sm">{system.name}</h3>
-                  {count > 0 && (
-                    <Badge variant="secondary" className="text-xs">
-                      ×{count}
-                    </Badge>
-                  )}
-                </div>
-                <span className="inline-block px-2 py-0.5 text-xs bg-secondary text-secondary-foreground rounded">{system.risk_level}</span>
-              </div>
-              
-              <img src={system.image_url} alt={system.name} className="w-full h-32 object-contain rounded-md mb-3 bg-muted/30" />
-              
-              <p className="text-xs text-muted-foreground mb-3">
-                <strong>Threat:</strong> {system.threat}
-              </p>
-              
-              <div className="flex justify-between text-xs text-muted-foreground">
-                <span><strong>Duration:</strong> {calculateWaterSystemDuration(system.name, data)}</span>
-                <span><strong>Cost:</strong> {system.cost}</span>
-              </div>
-            </div>;
-      })}
+          const instances = getSystemAnalysisItems(system.name);
+          return (
+            <ExpandableListItem
+              key={system.id}
+              name={system.name}
+              imageUrl={system.image_url}
+              icon={<Droplets className="h-6 w-6 text-muted-foreground/50" />}
+              riskLevel={system.risk_level}
+              threat={system.threat}
+              duration={calculateWaterSystemDuration(system.name, data)}
+              cost={system.cost}
+              instanceCount={instances.length}
+              instances={instances}
+              selectedInstanceIds={selectedInstanceIds}
+              onToggleInstance={handleToggleInstance}
+              onToggleAll={handleToggleAll}
+              onViewInstance={handleViewInstance}
+              canViewFiles={canViewFiles}
+            />
+          );
+        })}
       </div>
-
-      {/* Floor Specification Dialog */}
-      <Dialog open={dialogOpen !== null} onOpenChange={(open) => !open && setDialogOpen(null)}>
-        <DialogContent onClick={e => e.stopPropagation()}>
-          <DialogHeader>
-            <DialogTitle>Specify Floors for {dialogOpen}</DialogTitle>
-          </DialogHeader>
-          <div className="space-y-4 py-4">
-            <div>
-              <Label htmlFor="floors">Floors (e.g., 1-5, 10, 15-20)</Label>
-              <Input id="floors" value={tempFloors} onChange={e => setTempFloors(e.target.value)} placeholder="Enter floor numbers or ranges" />
-            </div>
-            <Button onClick={handleSaveFloors} className="w-full">
-              Save Floors
-            </Button>
-          </div>
-        </DialogContent>
-      </Dialog>
-
-      {/* Detail Dialog - Shows all instances */}
-      <Dialog open={detailDialogOpen} onOpenChange={setDetailDialogOpen}>
-        <DialogContent className="max-w-2xl max-h-[80vh]" onClick={e => e.stopPropagation()}>
-          <DialogHeader>
-            <DialogTitle>{selectedSystemForDetail}</DialogTitle>
-            <DialogDescription>
-              {selectedSystemItems.length} instance{selectedSystemItems.length !== 1 ? 's' : ''} detected
-            </DialogDescription>
-          </DialogHeader>
-          <ScrollArea className="max-h-[60vh] pr-4">
-            <div className="space-y-4">
-              {selectedSystemItems.map((item, index) => (
-                <div key={item.id} className="border rounded-lg p-4 space-y-2">
-                  <div className="flex items-center justify-between">
-                    <h4 className="font-semibold">{item.name}</h4>
-                    <Badge variant="outline">{item.id}</Badge>
-                  </div>
-                  
-                  <div className="grid grid-cols-2 gap-2 text-sm">
-                    {item.floor && (
-                      <div>
-                        <span className="text-muted-foreground">Floor:</span> {item.floor}
-                      </div>
-                    )}
-                    {item.drawingCode && (
-                      <div>
-                        <span className="text-muted-foreground">Drawing Code:</span> {item.drawingCode}
-                      </div>
-                    )}
-                    {item.areaName && (
-                      <div>
-                        <span className="text-muted-foreground">Area:</span> {item.areaName}
-                      </div>
-                    )}
-                  </div>
-                  
-                  {item.controls && item.controls.length > 0 && (
-                    <div>
-                      <span className="text-sm text-muted-foreground">Recommended Controls:</span>
-                      <div className="flex flex-wrap gap-1 mt-1">
-                        {item.controls.map((control, i) => (
-                          <Badge key={i} variant="secondary" className="text-xs">
-                            {control}
-                          </Badge>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-                </div>
-              ))}
-            </div>
-          </ScrollArea>
-        </DialogContent>
-      </Dialog>
 
       {/* Add Custom System Dialog */}
       <Dialog open={addSystemDialogOpen} onOpenChange={setAddSystemDialogOpen}>
@@ -437,5 +346,29 @@ export const WaterSystemsStep = ({
           </div>
         </DialogContent>
       </Dialog>
-    </div>;
+
+      {/* File Viewer Modal */}
+      {viewerItem && driveAccessToken && (
+        <FileViewerModal
+          isOpen={viewerOpen}
+          onClose={() => {
+            setViewerOpen(false);
+            setViewerItem(null);
+            setViewerFileId("");
+          }}
+          fileId={viewerFileId}
+          fileName={viewerItem.fileName || ""}
+          mimeType={viewerMimeType}
+          accessToken={driveAccessToken}
+          detections={viewerItem.coordinates ? [{
+            lineMonitored: viewerItem.name,
+            lineCode: viewerItem.id,
+            systemType: viewerItem.category,
+            coordinates: viewerItem.coordinates,
+            fileName: viewerItem.fileName || undefined,
+          }] : []}
+        />
+      )}
+    </div>
+  );
 };
