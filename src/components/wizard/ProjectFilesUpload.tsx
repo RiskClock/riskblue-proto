@@ -45,7 +45,8 @@ type DriveFile = DriveFileInfo;
 
 interface ProjectFilesUploadProps {
   projectId: string;
-  onDataExtracted?: (data: any) => void;
+  onScheduleDataExtracted?: (data: any) => void;
+  onDrawingDataExtracted?: (data: any) => void;
   isProcessingWebhook?: boolean;
   setIsProcessingWebhook?: (value: boolean) => void;
   // Lifted Drive state
@@ -59,7 +60,8 @@ interface ProjectFilesUploadProps {
 
 export const ProjectFilesUpload = ({ 
   projectId, 
-  onDataExtracted, 
+  onScheduleDataExtracted,
+  onDrawingDataExtracted,
   setIsProcessingWebhook,
   driveFiles,
   setDriveFiles,
@@ -198,8 +200,8 @@ export const ProjectFilesUpload = ({
         
         try {
           const parsedData = JSON.parse(data);
-          if (onDataExtracted) {
-            onDataExtracted(parsedData);
+          if (onScheduleDataExtracted) {
+            onScheduleDataExtracted(parsedData);
           }
           toast({
             title: "Success",
@@ -448,9 +450,9 @@ export const ProjectFilesUpload = ({
         assetsWaterSystemsProcesses,
       });
       
-      // Call onDataExtracted if provided to update project data
-      if (onDataExtracted && assetsWaterSystemsProcesses.length > 0) {
-        onDataExtracted({
+      // Call onDrawingDataExtracted if provided to update project data
+      if (onDrawingDataExtracted && assetsWaterSystemsProcesses.length > 0) {
+        onDrawingDataExtracted({
           assets_water_systems_processes: assetsWaterSystemsProcesses,
         });
       }

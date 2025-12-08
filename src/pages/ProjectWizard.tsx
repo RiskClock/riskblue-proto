@@ -313,28 +313,21 @@ const ProjectWizard = () => {
     }
   }, [saveProject]);
 
-  const handleDocumentDataExtracted = async (extractedData: any) => {
-    // Set flag immediately to prevent any auto-saves from starting
+  // Handler for SCHEDULE analysis - only fills project information fields
+  const handleScheduleDataExtracted = async (extractedData: any) => {
     setIsProcessingWebhook(true);
     isWebhookCreatingProject.current = true;
     
-    console.log("Webhook data received:", extractedData);
+    console.log("Schedule webhook data received:", extractedData);
     
-    // Wait a brief moment to allow any in-flight saves to complete
     await new Promise(resolve => setTimeout(resolve, 100));
     
-    // Helper function to extract tower type from webhook data
     const getTowerType = (towerConfig: string | undefined) => {
       if (!towerConfig) return projectData.tower_type;
-      // "single_tower" -> "single", "double_tower" -> "double", "multi_tower" -> "multi"
       return towerConfig.replace("_tower", "");
     };
     
-    // Check if this is the new format with assets_water_systems_processes array
-    const analysisItems: AnalysisItem[] = extractedData.assets_water_systems_processes || [];
-    const hasNewFormat = analysisItems.length > 0;
-    
-    // Map the extracted data to project fields based on webhook schema
+    // Schedule analysis ONLY fills project info - no assets/water systems
     const mappedData = {
       ...projectData,
       // Basic project info
@@ -342,17 +335,14 @@ const ProjectWizard = () => {
       construction_start_date: extractedData.project_start_date || projectData.construction_start_date,
       construction_end_date: extractedData.project_end_date || projectData.construction_end_date,
       
-      // Building details - map webhook keys to project fields
-      // construction_type: "commercial", "residential", "mixed use", "institutional" -> project_type
+      // Building details
       project_type: extractedData.construction_type
         ? extractedData.construction_type.toLowerCase().replace(/ /g, '-')
         : projectData.project_type,
-      // building_type: "mid-rise", "high-rise" -> building_type
       building_type: extractedData.building_type || projectData.building_type,
       has_podium: extractedData.has_podium !== undefined 
         ? extractedData.has_podium 
         : projectData.has_podium,
-      // tower_configuration: "single_tower", "double_tower", "multi_tower" -> tower_type
       tower_type: extractedData.tower_configuration 
         ? getTowerType(extractedData.tower_configuration)
         : projectData.tower_type,
@@ -370,48 +360,55 @@ const ProjectWizard = () => {
       fire_end_date: extractedData.milestones?.fire_suppression_systems?.finish || projectData.fire_end_date,
       interior_start_date: extractedData.milestones?.interior_finishes?.start || projectData.interior_start_date,
       interior_end_date: extractedData.milestones?.interior_finishes?.finish || projectData.interior_end_date,
-      
-      // Map critical assets - use new format if available, otherwise fall back to old format
-      selectedAssets: hasNewFormat 
-        ? extractSelectedAssets(analysisItems)
-        : extractedData.critical_assets_present 
-          ? Object.entries(extractedData.critical_assets_present)
-              .filter(([_, value]) => value === true)
-              .map(([key]) => {
-                const assetMap: Record<string, string> = {
-                  "mechanical_rooms": "Mechanical Rooms",
-                  "electrical_rooms": "Electrical Rooms",
-                  "main_electrical_risers": "Electrical Risers",
-                  "sump_pits": "Sump Pits, Storm Drains, and Drainages",
-                  "mechanical_risers": "Mechanical Risers",
-                  "elevator_pits": "Elevator Pits",
-                  "suites/guest_rooms": "Suites"
-                };
-                return assetMap[key] || key;
-              }) 
-          : projectData.selectedAssets,
-      
-      // Map water systems - use new format if available, otherwise fall back to old format
-      selectedSystems: hasNewFormat
-        ? extractSelectedSystems(analysisItems)
-        : extractedData.water_systems_present 
-          ? Object.entries(extractedData.water_systems_present)
-              .filter(([_, value]) => value === true)
-              .map(([key]) => {
-                const systemMap: Record<string, string> = {
-                  "domestic_cold_water": "Domestic Cold Water",
-                  "domestic_hot_water": "Domestic Hot Water",
-                  "temporary_water_run": "Temporary Water Run",
-                  "main_city_water_supply": "Main City Water Supply",
-                  "hydronics": "Hydronics",
-                  "fire_suppression_systems": "Fire Suppression System"
-                };
-                return systemMap[key] || key;
-              }) 
-          : projectData.selectedSystems,
-      
-      // Map mitigation controls if present
-      selectedControls: extractedData.mitigation_controls || projectData.selectedControls,
+    };
+
+    setProjectData(mappedData);
+    
+    try {
+      await saveProject(mappedData);
+      toast({
+        title: "Schedule Data Pre-filled",
+        description: "Project information has been automatically filled from the uploaded schedule.",
+      });
+    } catch (error) {
+      console.error("Error saving schedule data:", error);
+      toast({
+        title: "Error",
+        description: "Failed to save extracted data. Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      isWebhookCreatingProject.current = false;
+      setIsProcessingWebhook(false);
+    }
+  };
+
+  // Handler for DRAWING analysis - fills assets/water systems (uses milestones for duration calculation)
+  const handleDrawingDataExtracted = async (extractedData: any) => {
+    setIsProcessingWebhook(true);
+    isWebhookCreatingProject.current = true;
+    
+    console.log("Drawing analysis data received:", extractedData);
+    
+    await new Promise(resolve => setTimeout(resolve, 100));
+    
+    const items: AnalysisItem[] = extractedData.assets_water_systems_processes || [];
+    
+    if (items.length === 0) {
+      toast({
+        title: "No Items Found",
+        description: "No assets or water systems were detected in the drawings.",
+      });
+      isWebhookCreatingProject.current = false;
+      setIsProcessingWebhook(false);
+      return;
+    }
+    
+    // Drawing analysis fills assets and water systems
+    const mappedData = {
+      ...projectData,
+      selectedAssets: extractSelectedAssets(items),
+      selectedSystems: extractSelectedSystems(items),
     };
 
     setProjectData(mappedData);
@@ -419,20 +416,18 @@ const ProjectWizard = () => {
     try {
       await saveProject(mappedData);
       
-      // If we have the new format, save the detailed analysis items to the database
-      if (hasNewFormat && id && id !== "new") {
-        await saveAnalysisItems(id, analysisItems);
-        setAnalysisItems(analysisItems);
+      // Save the detailed analysis items to the database
+      if (id && id !== "new") {
+        await saveAnalysisItems(id, items);
+        setAnalysisItems(items);
       }
       
       toast({
-        title: "Data Pre-filled",
-        description: hasNewFormat 
-          ? `Found ${analysisItems.length} items: ${extractSelectedAssets(analysisItems).length} assets, ${extractSelectedSystems(analysisItems).length} water systems.`
-          : "Project information has been automatically filled from the uploaded document.",
+        title: "Drawing Analysis Complete",
+        description: `Found ${items.length} items: ${extractSelectedAssets(items).length} assets, ${extractSelectedSystems(items).length} water systems.`,
       });
     } catch (error) {
-      console.error("Error saving webhook data:", error);
+      console.error("Error saving drawing data:", error);
       toast({
         title: "Error",
         description: "Failed to save extracted data. Please try again.",
@@ -547,7 +542,8 @@ const ProjectWizard = () => {
           <TabsContent value="guideline" className="max-w-5xl mx-auto">
             <ProjectFilesUpload 
               projectId={id || "new"} 
-              onDataExtracted={handleDocumentDataExtracted}
+              onScheduleDataExtracted={handleScheduleDataExtracted}
+              onDrawingDataExtracted={handleDrawingDataExtracted}
               isProcessingWebhook={isProcessingWebhook}
               setIsProcessingWebhook={setIsProcessingWebhook}
               driveFiles={driveFiles}
@@ -789,7 +785,7 @@ const ProjectWizard = () => {
             <div className="max-w-5xl mx-auto">
               <ResponsePlanUploadChat 
                 projectId={id || "new"} 
-                onDataExtracted={handleDocumentDataExtracted}
+                onDataExtracted={handleScheduleDataExtracted}
               />
             </div>
           </TabsContent>
