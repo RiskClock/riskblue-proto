@@ -1,7 +1,7 @@
 import { useState, useMemo, useCallback } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { ChevronDown, FileText, Minus } from "lucide-react";
+import { ChevronDown, ChevronRight, FileText, Minus, Shield } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
 import { cn } from "@/lib/utils";
 import { AnalysisItem } from "@/lib/analysisItemMapper";
@@ -21,6 +21,9 @@ interface ExpandableListItemProps {
   onToggleAll: (instanceIds: string[], selected: boolean) => void;
   onViewInstance?: (instance: AnalysisItem) => void;
   canViewFiles?: boolean;
+  // Control selection props
+  selectedControlIds?: Set<string>;
+  onToggleControl?: (instanceId: string, control: string) => void;
 }
 
 // Risk level color mapping (yellow to dark red) - no hover effects
@@ -83,6 +86,9 @@ const sortInstances = (instances: AnalysisItem[]): AnalysisItem[] => {
   });
 };
 
+// Helper to generate control ID
+const getControlId = (instanceId: string, control: string) => `${instanceId}::${control}`;
+
 export const ExpandableListItem = ({
   name,
   icon,
@@ -98,8 +104,11 @@ export const ExpandableListItem = ({
   onToggleAll,
   onViewInstance,
   canViewFiles = false,
+  selectedControlIds,
+  onToggleControl,
 }: ExpandableListItemProps) => {
   const [isExpanded, setIsExpanded] = useState(false);
+  const [expandedInstanceIds, setExpandedInstanceIds] = useState<Set<string>>(new Set());
 
   // Sort instances
   const sortedInstances = useMemo(() => sortInstances(instances), [instances]);
@@ -128,6 +137,19 @@ export const ExpandableListItem = ({
   const handleInstanceCheckboxChange = useCallback((instanceId: string) => {
     onToggleInstance(instanceId);
   }, [onToggleInstance]);
+
+  const toggleInstanceExpanded = useCallback((instanceId: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    setExpandedInstanceIds(prev => {
+      const next = new Set(prev);
+      if (next.has(instanceId)) {
+        next.delete(instanceId);
+      } else {
+        next.add(instanceId);
+      }
+      return next;
+    });
+  }, []);
 
   return (
     <div className="border rounded-lg overflow-hidden">
@@ -214,8 +236,10 @@ export const ExpandableListItem = ({
       {/* Expanded content - child instances */}
       {isExpanded && sortedInstances.length > 0 && (
         <div className="border-t bg-muted/20">
-          {sortedInstances.map((instance, idx) => {
+          {sortedInstances.map((instance) => {
             const isInstanceSelected = selectedInstanceIds.includes(instance.id);
+            const isInstanceExpanded = expandedInstanceIds.has(instance.id);
+            const hasControls = instance.controls && instance.controls.length > 0;
             const capitalize = (str: string) => str.charAt(0).toUpperCase() + str.slice(1).toLowerCase();
             const sizeDisplay = instance.sizeCategory ? capitalize(instance.sizeCategory) : null;
             const dimensionDisplay = instance.length && instance.width ? `(${instance.length} ft × ${instance.width} ft)` : null;
@@ -232,65 +256,115 @@ export const ExpandableListItem = ({
               : null;
 
             return (
-              <div 
-                key={instance.id}
-                className={cn(
-                  "flex items-center gap-3 px-3 py-2 border-b last:border-b-0",
-                  isInstanceSelected && "bg-primary/5"
-                )}
-              >
-                {/* Child checkbox */}
-                <div className="pl-8 flex-shrink-0">
-                  <Checkbox
-                    checked={isInstanceSelected}
-                    onCheckedChange={() => handleInstanceCheckboxChange(instance.id)}
-                    className="data-[state=checked]:bg-primary data-[state=checked]:border-primary"
-                  />
-                </div>
-
-                {/* Instance info */}
-                <div className="flex-1 min-w-0 flex items-center gap-2">
-                  <span className="text-sm text-muted-foreground">{instance.id}</span>
-                  <span className="text-sm">—</span>
-                  <span className="text-sm truncate">{instance.areaName || instance.name}</span>
-                </div>
-
-                {/* Badges */}
-                <div className="flex items-center gap-1 flex-shrink-0 flex-wrap">
-                  {instance.floor && (
-                    <Badge variant="outline" className="text-xs cursor-default hover:bg-transparent">{instance.floor}</Badge>
+              <div key={instance.id}>
+                <div 
+                  className={cn(
+                    "flex items-center gap-3 px-3 py-2 border-b",
+                    isInstanceSelected && "bg-primary/5",
+                    !isInstanceExpanded && "last:border-b-0"
                   )}
-                  {sizeDisplay && (
-                    <Badge variant="secondary" className="text-xs cursor-default hover:bg-secondary">
-                      {sizeDisplay} {dimensionDisplay}
-                    </Badge>
-                  )}
-                  {directionInfo && (
-                    <Badge variant="outline" className="text-xs cursor-default hover:bg-transparent bg-purple-50 text-purple-700 border-purple-200">
-                      {directionInfo}
-                    </Badge>
-                  )}
-                  {pipeInfo && (
-                    <Badge variant="outline" className="text-xs cursor-default hover:bg-transparent bg-blue-50 text-blue-700 border-blue-200">
-                      {pipeInfo}
-                    </Badge>
-                  )}
-                </div>
-
-                {/* View button */}
-                {onViewInstance && instance.fileName && canViewFiles && (
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className="h-7 px-2 text-xs text-primary hover:text-primary flex-shrink-0"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      onViewInstance(instance);
-                    }}
+                >
+                  {/* Expand chevron for controls */}
+                  <div 
+                    className="pl-4 flex-shrink-0 w-6"
+                    onClick={(e) => hasControls && toggleInstanceExpanded(instance.id, e)}
                   >
-                    <FileText className="w-3 h-3 mr-1" />
-                    View
-                  </Button>
+                    {hasControls && (
+                      <ChevronRight 
+                        className={cn(
+                          "w-4 h-4 text-muted-foreground transition-transform cursor-pointer hover:text-foreground",
+                          isInstanceExpanded && "rotate-90"
+                        )}
+                      />
+                    )}
+                  </div>
+
+                  {/* Child checkbox */}
+                  <div className="flex-shrink-0">
+                    <Checkbox
+                      checked={isInstanceSelected}
+                      onCheckedChange={() => handleInstanceCheckboxChange(instance.id)}
+                      className="data-[state=checked]:bg-primary data-[state=checked]:border-primary"
+                    />
+                  </div>
+
+                  {/* Instance info */}
+                  <div className="flex-1 min-w-0 flex items-center gap-2">
+                    <span className="text-sm text-muted-foreground">{instance.id}</span>
+                    <span className="text-sm">—</span>
+                    <span className="text-sm truncate">{instance.areaName || instance.name}</span>
+                  </div>
+
+                  {/* Badges */}
+                  <div className="flex items-center gap-1 flex-shrink-0 flex-wrap">
+                    {instance.floor && (
+                      <Badge variant="outline" className="text-xs cursor-default hover:bg-transparent">{instance.floor}</Badge>
+                    )}
+                    {sizeDisplay && (
+                      <Badge variant="secondary" className="text-xs cursor-default hover:bg-secondary">
+                        {sizeDisplay} {dimensionDisplay}
+                      </Badge>
+                    )}
+                    {directionInfo && (
+                      <Badge variant="outline" className="text-xs cursor-default hover:bg-transparent bg-purple-50 text-purple-700 border-purple-200">
+                        {directionInfo}
+                      </Badge>
+                    )}
+                    {pipeInfo && (
+                      <Badge variant="outline" className="text-xs cursor-default hover:bg-transparent bg-blue-50 text-blue-700 border-blue-200">
+                        {pipeInfo}
+                      </Badge>
+                    )}
+                    {hasControls && (
+                      <Badge variant="outline" className="text-xs cursor-default hover:bg-transparent bg-green-50 text-green-700 border-green-200">
+                        {instance.controls.length} controls
+                      </Badge>
+                    )}
+                  </div>
+
+                  {/* View button */}
+                  {onViewInstance && instance.fileName && canViewFiles && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-7 px-2 text-xs text-primary hover:text-primary flex-shrink-0"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onViewInstance(instance);
+                      }}
+                    >
+                      <FileText className="w-3 h-3 mr-1" />
+                      View
+                    </Button>
+                  )}
+                </div>
+
+                {/* Controls list - third level */}
+                {isInstanceExpanded && hasControls && (
+                  <div className="bg-muted/30 border-b">
+                    {instance.controls.map((control) => {
+                      const controlId = getControlId(instance.id, control);
+                      const isControlSelected = selectedControlIds?.has(controlId) ?? true;
+
+                      return (
+                        <div 
+                          key={control}
+                          className={cn(
+                            "flex items-center gap-3 px-3 py-1.5 pl-16 border-b last:border-b-0",
+                            isControlSelected && "bg-primary/5"
+                          )}
+                        >
+                          <Shield className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0" />
+                          <Checkbox
+                            checked={isControlSelected}
+                            onCheckedChange={() => onToggleControl?.(instance.id, control)}
+                            className="data-[state=checked]:bg-primary data-[state=checked]:border-primary"
+                          />
+                          <span className="text-sm">{control}</span>
+                        </div>
+                      );
+                    })}
+                  </div>
                 )}
               </div>
             );
