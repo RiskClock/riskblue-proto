@@ -186,25 +186,27 @@ export const MitigationControlsStep = ({
                   </div>
                 </div>
 
-                {/* AccordionTrigger has justify-between, so we pass name as first child and badges as last child */}
+                {/* Wrap all content in a single flex container so AccordionTrigger's justify-between works correctly */}
                 <AccordionTrigger className="flex-1 hover:no-underline py-3 pr-3">
-                  <span className="text-sm font-medium text-left">{control.name}</span>
-                  <div className="flex items-center gap-1.5 mr-2">
-                    {assets.length > 0 && (
-                      <Badge className="bg-blue-100 text-blue-700 hover:bg-blue-100 border-0 text-xs font-medium px-2 py-0.5">
-                        {assets.length} Asset{assets.length > 1 ? 's' : ''}
-                      </Badge>
-                    )}
-                    {systems.length > 0 && (
-                      <Badge className="bg-cyan-100 text-cyan-700 hover:bg-cyan-100 border-0 text-xs font-medium px-2 py-0.5">
-                        {systems.length} System{systems.length > 1 ? 's' : ''}
-                      </Badge>
-                    )}
-                    {processes.length > 0 && (
-                      <Badge className="bg-violet-100 text-violet-700 hover:bg-violet-100 border-0 text-xs font-medium px-2 py-0.5">
-                        {processes.length} Process{processes.length > 1 ? 'es' : ''}
-                      </Badge>
-                    )}
+                  <div className="flex flex-1 items-center justify-between">
+                    <span className="text-sm font-medium text-left">{control.name}</span>
+                    <div className="flex items-center gap-1.5 mr-2">
+                      {assets.length > 0 && (
+                        <Badge className="bg-blue-100 text-blue-700 hover:bg-blue-100 border-0 text-xs font-medium px-2 py-0.5">
+                          {assets.length} Asset{assets.length > 1 ? 's' : ''}
+                        </Badge>
+                      )}
+                      {systems.length > 0 && (
+                        <Badge className="bg-cyan-100 text-cyan-700 hover:bg-cyan-100 border-0 text-xs font-medium px-2 py-0.5">
+                          {systems.length} System{systems.length > 1 ? 's' : ''}
+                        </Badge>
+                      )}
+                      {processes.length > 0 && (
+                        <Badge className="bg-violet-100 text-violet-700 hover:bg-violet-100 border-0 text-xs font-medium px-2 py-0.5">
+                          {processes.length} Process{processes.length > 1 ? 'es' : ''}
+                        </Badge>
+                      )}
+                    </div>
                   </div>
                 </AccordionTrigger>
               </div>
