@@ -103,7 +103,7 @@ interface MitigationControlsStepProps {
   analysisItems?: AnalysisItem[];
   driveFiles?: DriveFileInfo[];
   driveAccessToken?: string | null;
-  onLoadMockData?: (items: AnalysisItem[]) => void;
+  onSaveTestData?: (items: AnalysisItem[]) => Promise<void>;
 }
 
 interface UniqueControl {
@@ -119,9 +119,10 @@ export const MitigationControlsStep = ({
   analysisItems = [],
   driveFiles = [],
   driveAccessToken = null,
-  onLoadMockData
+  onSaveTestData
 }: MitigationControlsStepProps) => {
   const [useDebugData, setUseDebugData] = useState(false);
+  const [isSavingTestData, setIsSavingTestData] = useState(false);
   
   // Use mock data if debug mode is enabled, otherwise use real analysis items
   const effectiveAnalysisItems = useDebugData ? MOCK_ANALYSIS_ITEMS : analysisItems;
@@ -262,6 +263,25 @@ export const MitigationControlsStep = ({
           <span className="text-sm text-muted-foreground">
             {selectedControls.filter(name => uniqueControls.some(c => c.name === name)).length} selected
           </span>
+          {useDebugData && onSaveTestData && (
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-7 text-xs"
+              onClick={async () => {
+                setIsSavingTestData(true);
+                try {
+                  await onSaveTestData(MOCK_ANALYSIS_ITEMS);
+                  setUseDebugData(false);
+                } finally {
+                  setIsSavingTestData(false);
+                }
+              }}
+              disabled={isSavingTestData}
+            >
+              {isSavingTestData ? "Saving..." : "Save to Database"}
+            </Button>
+          )}
           {useDebugData && (
             <Button
               variant="ghost"
