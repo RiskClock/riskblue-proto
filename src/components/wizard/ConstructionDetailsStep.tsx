@@ -74,24 +74,48 @@ export const ConstructionDetailsStep = ({ data, onNext, onBack, projectId, isPro
     above_grade_parking: data.above_grade_parking || false,
   });
 
-  // Effect 1: Always sync incoming data to local state
+  // Effect 1: Sync incoming data to local state only when external data actually changes
+  // This prevents overwriting user input when the component re-renders
   useEffect(() => {
-    setFormData({
-      project_type: data.project_type || "",
-      building_type: data.building_type || "",
-      structural_types: data.structural_types || [],
-      has_podium: data.has_podium || false,
-      tower_type: data.tower_type || "",
-      total_floors: data.total_floors || "",
-      typical_floors: data.typical_floors || "",
-      typical_floors_start: data.typical_floors_start || "",
-      typical_floors_end: data.typical_floors_end || "",
-      underground_parking: data.underground_parking || false,
-      underground_parking_start: data.underground_parking_start || "",
-      underground_parking_end: data.underground_parking_end || "",
-      above_grade_parking: data.above_grade_parking || false,
+    setFormData(prev => {
+      const incomingData = {
+        project_type: data.project_type || "",
+        building_type: data.building_type || "",
+        structural_types: data.structural_types || [],
+        has_podium: data.has_podium || false,
+        tower_type: data.tower_type || "",
+        total_floors: data.total_floors || "",
+        typical_floors: data.typical_floors || "",
+        typical_floors_start: data.typical_floors_start || "",
+        typical_floors_end: data.typical_floors_end || "",
+        underground_parking: data.underground_parking || false,
+        underground_parking_start: data.underground_parking_start || "",
+        underground_parking_end: data.underground_parking_end || "",
+        above_grade_parking: data.above_grade_parking || false,
+      };
+      
+      // Check if any value from parent is actually different (and not empty replacing filled)
+      const hasRealChanges = Object.keys(incomingData).some(key => {
+        const incomingValue = incomingData[key as keyof typeof incomingData];
+        const currentValue = prev[key as keyof typeof prev];
+        // For arrays, do a simple JSON comparison
+        if (Array.isArray(incomingValue) && Array.isArray(currentValue)) {
+          return JSON.stringify(incomingValue) !== JSON.stringify(currentValue);
+        }
+        return incomingValue !== currentValue && (incomingValue !== "" || currentValue === "");
+      });
+      
+      if (hasRealChanges) {
+        return incomingData;
+      }
+      return prev;
     });
-  }, [data]);
+  }, [
+    data.project_type, data.building_type, data.structural_types, data.has_podium,
+    data.tower_type, data.total_floors, data.typical_floors, data.typical_floors_start,
+    data.typical_floors_end, data.underground_parking, data.underground_parking_start,
+    data.underground_parking_end, data.above_grade_parking
+  ]);
 
   const toggleStructuralType = (typeId: string) => {
     const currentTypes = formData.structural_types || [];

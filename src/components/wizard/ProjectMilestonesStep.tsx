@@ -37,25 +37,48 @@ export const ProjectMilestonesStep = ({ data, onNext, onBack, isProcessingWebhoo
     interior_end_date: data.interior_end_date || "",
   });
 
-  // Effect 1: Always sync incoming data to local state
+  // Effect 1: Sync incoming data to local state only when external data actually changes
+  // This prevents overwriting user input when the component re-renders
   useEffect(() => {
-    setFormData({
-      construction_start_date: data.construction_start_date || "",
-      construction_end_date: data.construction_end_date || "",
-      frame_start_date: data.frame_start_date || "",
-      frame_end_date: data.frame_end_date || "",
-      enclosure_start_date: data.enclosure_start_date || "",
-      enclosure_end_date: data.enclosure_end_date || "",
-      mep_start_date: data.mep_start_date || "",
-      mep_end_date: data.mep_end_date || "",
-      elevators_start_date: data.elevators_start_date || "",
-      elevators_end_date: data.elevators_end_date || "",
-      fire_start_date: data.fire_start_date || "",
-      fire_end_date: data.fire_end_date || "",
-      interior_start_date: data.interior_start_date || "",
-      interior_end_date: data.interior_end_date || "",
+    setFormData(prev => {
+      const incomingData = {
+        construction_start_date: data.construction_start_date || "",
+        construction_end_date: data.construction_end_date || "",
+        frame_start_date: data.frame_start_date || "",
+        frame_end_date: data.frame_end_date || "",
+        enclosure_start_date: data.enclosure_start_date || "",
+        enclosure_end_date: data.enclosure_end_date || "",
+        mep_start_date: data.mep_start_date || "",
+        mep_end_date: data.mep_end_date || "",
+        elevators_start_date: data.elevators_start_date || "",
+        elevators_end_date: data.elevators_end_date || "",
+        fire_start_date: data.fire_start_date || "",
+        fire_end_date: data.fire_end_date || "",
+        interior_start_date: data.interior_start_date || "",
+        interior_end_date: data.interior_end_date || "",
+      };
+      
+      // Check if any value from parent is actually different (and not empty replacing filled)
+      const hasRealChanges = Object.keys(incomingData).some(key => {
+        const incomingValue = incomingData[key as keyof typeof incomingData];
+        const currentValue = prev[key as keyof typeof prev];
+        return incomingValue !== currentValue && (incomingValue !== "" || currentValue === "");
+      });
+      
+      if (hasRealChanges) {
+        return incomingData;
+      }
+      return prev;
     });
-  }, [data]);
+  }, [
+    data.construction_start_date, data.construction_end_date,
+    data.frame_start_date, data.frame_end_date,
+    data.enclosure_start_date, data.enclosure_end_date,
+    data.mep_start_date, data.mep_end_date,
+    data.elevators_start_date, data.elevators_end_date,
+    data.fire_start_date, data.fire_end_date,
+    data.interior_start_date, data.interior_end_date
+  ]);
 
   // Effect 2: Auto-save with debounce (blocked during webhook processing)
   useEffect(() => {
