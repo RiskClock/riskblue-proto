@@ -82,6 +82,9 @@ export const ProjectFilesUpload = ({ projectId, onDataExtracted, setIsProcessing
   // File viewer modal
   const [viewerOpen, setViewerOpen] = useState(false);
   const [viewerFile, setViewerFile] = useState<{ id: string; name: string; mimeType: string } | null>(null);
+  
+  // Tab state
+  const [activeTab, setActiveTab] = useState("local");
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -261,6 +264,7 @@ export const ProjectFilesUpload = ({ projectId, onDataExtracted, setIsProcessing
         setDriveAccessToken(session.provider_token);
         setDriveConnected(true);
         setConnectingDrive(false);
+        setActiveTab("drive"); // Stay on Google Drive tab after successful connection
       }
     });
 
@@ -472,7 +476,7 @@ export const ProjectFilesUpload = ({ projectId, onDataExtracted, setIsProcessing
           {showDebugInfo && <span className="ml-2 text-xs text-muted-foreground">(Debug Mode)</span>}
         </button>
         
-        <Tabs defaultValue="local" className="w-full">
+        <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
           <TabsList className="grid w-full grid-cols-2">
             <TabsTrigger value="local" className="flex items-center gap-2">
               <Upload className="w-4 h-4" />
