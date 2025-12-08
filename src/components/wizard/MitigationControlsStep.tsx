@@ -1,99 +1,11 @@
 import { useState, useEffect, useRef, useMemo } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
-import { Shield, Building2, Droplets, Users, FileText, Bug } from "lucide-react";
+import { Shield, Building2, Droplets, Users, FileText } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { AnalysisItem } from "@/lib/analysisItemMapper";
 import { FileViewerModal } from "./FileViewerModal";
 import type { DriveFileInfo } from "./ProjectFilesUpload";
-
-// Mock data for testing - this simulates what would come from analysis with fileName values
-const MOCK_ANALYSIS_ITEMS: AnalysisItem[] = [
-  {
-    id: "ERM001",
-    name: "Electrical Rooms",
-    category: "Asset",
-    areaName: "ELECTRICAL",
-    floor: "Lower Level",
-    drawingCode: null,
-    fileName: "A2.01-LOWER-LEVEL-Rev.18.pdf",
-    width: 36.7,
-    length: 20.7,
-    sizeCategory: "large",
-    controls: ["Presence of Water Monitoring", "Water Piping in and Around Electrical Rooms"],
-    coordinates: [0.595, 0.1923, 0.1755, 0.2434]
-  },
-  {
-    id: "ERM002",
-    name: "Electrical Rooms",
-    category: "Asset",
-    areaName: "SUBSTATION ROOM",
-    floor: "Lower Level",
-    drawingCode: null,
-    fileName: "A2.02-GROUND-FLOOR-Rev.19.pdf",
-    width: 12.1,
-    length: 34.7,
-    sizeCategory: "medium",
-    controls: ["Presence of Water Monitoring", "Temporary Enclosure Plan"],
-    coordinates: [0.0268, 0.6475, 0.2073, 0.288]
-  },
-  {
-    id: "MRM001",
-    name: "Mechanical Rooms",
-    category: "Asset",
-    areaName: "MECHANICAL",
-    floor: "Lower Level",
-    drawingCode: null,
-    fileName: "A2.07-SIXTH-FLOOR-Rev.18.1.pdf",
-    width: 35.7,
-    length: 10.9,
-    sizeCategory: "large",
-    controls: ["Presence of Water Monitoring", "Spill Kit", "Floor Penetrations Water Seals"],
-    coordinates: [0.3363, 0.5887, 0.1182, 0.0702]
-  },
-  {
-    id: "DCW001",
-    name: "Domestic Cold Water",
-    category: "Water System",
-    areaName: "Main Entry Point",
-    floor: "Lower Level",
-    drawingCode: null,
-    fileName: "M-200B1-PLUMBING-BASEMENT-FLOOR-PLAN-Rev.20.pdf",
-    width: null,
-    length: null,
-    sizeCategory: null,
-    controls: ["Abnormal Flow Monitoring", "Main Riser Section Automatic Shut"],
-    coordinates: [0.1874, 0.0833, 0.0856, 0.1966]
-  },
-  {
-    id: "FSS001",
-    name: "Fire Suppression System",
-    category: "Water System",
-    areaName: "Fire Riser Room",
-    floor: "Ground Floor",
-    drawingCode: null,
-    fileName: "A2.02-GROUND-FLOOR-Rev.19.pdf",
-    width: null,
-    length: null,
-    sizeCategory: null,
-    controls: ["Abnormal Flow Monitoring", "Trigger Valve Shut-Off"],
-    coordinates: [0.4799, 0.6361, 0.1096, 0.1265]
-  },
-  {
-    id: "PROC001",
-    name: "Water Testing",
-    category: "Process",
-    areaName: "Air Pressure Tests",
-    floor: "All Floors",
-    drawingCode: null,
-    fileName: null,
-    width: null,
-    length: null,
-    sizeCategory: null,
-    controls: ["Air Pressure or Water Tests in Plumbing System", "Additional Fill Tests"],
-    coordinates: null
-  }
-];
 
 interface MitigationControlsStepProps {
   data: any;
@@ -103,7 +15,6 @@ interface MitigationControlsStepProps {
   analysisItems?: AnalysisItem[];
   driveFiles?: DriveFileInfo[];
   driveAccessToken?: string | null;
-  onSaveTestData?: (items: AnalysisItem[]) => Promise<void>;
 }
 
 interface UniqueControl {
@@ -118,21 +29,15 @@ export const MitigationControlsStep = ({
   isProcessingWebhook,
   analysisItems = [],
   driveFiles = [],
-  driveAccessToken = null,
-  onSaveTestData
+  driveAccessToken = null
 }: MitigationControlsStepProps) => {
-  const [useDebugData, setUseDebugData] = useState(false);
-  const [isSavingTestData, setIsSavingTestData] = useState(false);
-  
-  // Use mock data if debug mode is enabled, otherwise use real analysis items
-  const effectiveAnalysisItems = useDebugData ? MOCK_ANALYSIS_ITEMS : analysisItems;
   const hasPendingSave = useRef(false);
 
-  // Extract unique controls directly from analysis items (use effectiveAnalysisItems for debug mode)
+  // Extract unique controls directly from analysis items
   const uniqueControls = useMemo((): UniqueControl[] => {
     const controlMap = new Map<string, AnalysisItem[]>();
     
-    effectiveAnalysisItems.forEach(item => {
+    analysisItems.forEach(item => {
       if (item.controls) {
         item.controls.forEach(controlName => {
           const existing = controlMap.get(controlName) || [];
@@ -146,7 +51,7 @@ export const MitigationControlsStep = ({
     return Array.from(controlMap.entries())
       .map(([name, protectedItems]) => ({ name, protectedItems }))
       .sort((a, b) => b.protectedItems.length - a.protectedItems.length);
-  }, [effectiveAnalysisItems]);
+  }, [analysisItems]);
   
   // Default to all controls selected
   const [selectedControls, setSelectedControls] = useState<string[]>(
@@ -218,21 +123,12 @@ export const MitigationControlsStep = ({
     }
   }, [selectedControls, onNext, isProcessingWebhook]);
 
-  if (effectiveAnalysisItems.length === 0) {
+  if (analysisItems.length === 0) {
     return (
       <div className="text-center py-12 text-muted-foreground">
         <Shield className="h-12 w-12 mx-auto mb-4 opacity-50" />
         <p>No controls detected yet.</p>
         <p className="text-sm mt-1">Connect to Google Drive and analyze files to discover recommended controls.</p>
-        <Button
-          variant="outline"
-          size="sm"
-          className="mt-4"
-          onClick={() => setUseDebugData(true)}
-        >
-          <Bug className="w-4 h-4 mr-2" />
-          Load Test Data
-        </Button>
       </div>
     );
   }
@@ -252,47 +148,10 @@ export const MitigationControlsStep = ({
         <div className="flex items-center gap-3">
           <Shield className="h-5 w-5 text-primary" />
           <span className="font-medium">{uniqueControls.length} Controls Identified</span>
-          {useDebugData && (
-            <Badge variant="outline" className="bg-amber-100 text-amber-700 border-amber-300">
-              <Bug className="w-3 h-3 mr-1" />
-              Test Mode
-            </Badge>
-          )}
         </div>
-        <div className="flex items-center gap-3">
-          <span className="text-sm text-muted-foreground">
-            {selectedControls.filter(name => uniqueControls.some(c => c.name === name)).length} selected
-          </span>
-          {useDebugData && onSaveTestData && (
-            <Button
-              variant="outline"
-              size="sm"
-              className="h-7 text-xs"
-              onClick={async () => {
-                setIsSavingTestData(true);
-                try {
-                  await onSaveTestData(MOCK_ANALYSIS_ITEMS);
-                  setUseDebugData(false);
-                } finally {
-                  setIsSavingTestData(false);
-                }
-              }}
-              disabled={isSavingTestData}
-            >
-              {isSavingTestData ? "Saving..." : "Save to Database"}
-            </Button>
-          )}
-          {useDebugData && (
-            <Button
-              variant="ghost"
-              size="sm"
-              className="h-7 text-xs"
-              onClick={() => setUseDebugData(false)}
-            >
-              Exit Test Mode
-            </Button>
-          )}
-        </div>
+        <span className="text-sm text-muted-foreground">
+          {selectedControls.filter(name => uniqueControls.some(c => c.name === name)).length} selected
+        </span>
       </div>
 
       {/* Accordion list view */}
