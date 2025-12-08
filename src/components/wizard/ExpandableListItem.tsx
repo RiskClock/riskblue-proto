@@ -1,7 +1,7 @@
 import { useState, useMemo, useCallback } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { ChevronDown, ChevronRight, FileText, Minus, Shield } from "lucide-react";
+import { ChevronDown, ChevronRight, FileText, Minus } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
 import { cn } from "@/lib/utils";
 import { AnalysisItem } from "@/lib/analysisItemMapper";
@@ -383,8 +383,7 @@ export const ExpandableListItem = ({
 
                   {/* Instance info */}
                   <div className="flex-1 min-w-0 flex items-center gap-2">
-                    <span className="text-sm text-muted-foreground">{instance.id}</span>
-                    <span className="text-sm">—</span>
+                    <span className="text-sm text-muted-foreground">{instance.id}:</span>
                     <span className="text-sm truncate">{instance.areaName || instance.name}</span>
                   </div>
 
@@ -410,7 +409,7 @@ export const ExpandableListItem = ({
                     )}
                     {hasControls && (
                       <Badge variant="outline" className="text-xs cursor-default hover:bg-transparent bg-green-50 text-green-700 border-green-200">
-                        {instance.controls.length} controls
+                        {instance.controls.length} Controls
                       </Badge>
                     )}
                   </div>
@@ -447,7 +446,6 @@ export const ExpandableListItem = ({
                             isControlSelected && "bg-primary/5"
                           )}
                         >
-                          <Shield className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0" />
                           <Checkbox
                             checked={isControlSelected}
                             onCheckedChange={() => handleControlToggle(controlId)}

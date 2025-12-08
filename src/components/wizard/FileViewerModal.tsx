@@ -303,7 +303,7 @@ export const FileViewerModal = ({
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="max-w-[95vw] w-[95vw] h-[90vh] flex flex-col p-4">
+      <DialogContent className="max-w-[95vw] w-[95vw] h-[90vh] flex flex-col p-4 [&>button]:top-4 [&>button]:right-4">
         <DialogHeader className="flex-shrink-0">
           <DialogTitle className="flex items-center justify-between gap-4">
             <span className="truncate flex-1">{fileName}</span>
