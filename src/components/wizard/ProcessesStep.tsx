@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useMemo, useCallback } from "react";
 import { Users } from "lucide-react";
 import { AnalysisItem } from "@/lib/analysisItemMapper";
-import { ExpandableListItem } from "./ExpandableListItem";
+import { ExpandableListItem, getControlId } from "./ExpandableListItem";
 import { FileViewerModal } from "./FileViewerModal";
 import type { DriveFileInfo } from "./ProjectFilesUpload";
 
@@ -58,6 +58,11 @@ export const ProcessesStep = ({
       : []
   );
 
+  // Selected control IDs
+  const [selectedControlIds, setSelectedControlIds] = useState<Set<string>>(
+    new Set(data.selectedProcessControls || [])
+  );
+
   // File viewer state
   const [viewerOpen, setViewerOpen] = useState(false);
   const [viewerItem, setViewerItem] = useState<AnalysisItem | null>(null);
@@ -66,18 +71,34 @@ export const ProcessesStep = ({
 
   // Initialize selection when process items load
   useEffect(() => {
-    if (processItems.length > 0 && (!data.selectedProcessInstances || data.selectedProcessInstances.length === 0)) {
-      setSelectedInstanceIds(processItems.map(p => p.id));
-      hasPendingSave.current = true;
+    if (processItems.length > 0) {
+      if (!data.selectedProcessInstances || data.selectedProcessInstances.length === 0) {
+        setSelectedInstanceIds(processItems.map(p => p.id));
+        hasPendingSave.current = true;
+      }
+      
+      // Initialize control selection
+      if (!data.selectedProcessControls || data.selectedProcessControls.length === 0) {
+        const allControlIds = new Set<string>();
+        processItems.forEach(item => {
+          (item.controls || []).forEach(control => {
+            allControlIds.add(getControlId(item.id, control));
+          });
+        });
+        setSelectedControlIds(allControlIds);
+      }
     }
-  }, [processItems.length, data.selectedProcessInstances]);
+  }, [processItems.length, data.selectedProcessInstances, data.selectedProcessControls]);
 
   // Sync incoming data to local state
   useEffect(() => {
     if (data.selectedProcessInstances && data.selectedProcessInstances.length > 0) {
       setSelectedInstanceIds(data.selectedProcessInstances);
     }
-  }, [data.selectedProcessInstances]);
+    if (data.selectedProcessControls) {
+      setSelectedControlIds(new Set(data.selectedProcessControls));
+    }
+  }, [data.selectedProcessInstances, data.selectedProcessControls]);
 
   // Auto-save with debounce
   useEffect(() => {
@@ -90,13 +111,16 @@ export const ProcessesStep = ({
     
     if (hasPendingSave.current || selectedInstanceIds.length > 0) {
       const timer = setTimeout(() => {
-        onNext({ selectedProcessInstances: selectedInstanceIds });
+        onNext({ 
+          selectedProcessInstances: selectedInstanceIds,
+          selectedProcessControls: Array.from(selectedControlIds)
+        });
         hasPendingSave.current = false;
       }, 500);
 
       return () => clearTimeout(timer);
     }
-  }, [selectedInstanceIds, onNext, isProcessingWebhook]);
+  }, [selectedInstanceIds, selectedControlIds, onNext, isProcessingWebhook]);
 
   const handleToggleInstance = useCallback((instanceId: string) => {
     setSelectedInstanceIds(prev => 
@@ -114,6 +138,32 @@ export const ProcessesStep = ({
       } else {
         return prev.filter(id => !instanceIds.includes(id));
       }
+    });
+  }, []);
+
+  const handleToggleControl = useCallback((controlId: string) => {
+    setSelectedControlIds(prev => {
+      const next = new Set(prev);
+      if (next.has(controlId)) {
+        next.delete(controlId);
+      } else {
+        next.add(controlId);
+      }
+      return next;
+    });
+  }, []);
+
+  const handleToggleAllControls = useCallback((controlIds: string[], selected: boolean) => {
+    setSelectedControlIds(prev => {
+      const next = new Set(prev);
+      controlIds.forEach(id => {
+        if (selected) {
+          next.add(id);
+        } else {
+          next.delete(id);
+        }
+      });
+      return next;
     });
   }, []);
 
@@ -165,6 +215,9 @@ export const ProcessesStep = ({
             onToggleAll={handleToggleAll}
             onViewInstance={handleViewInstance}
             canViewFiles={canViewFiles}
+            selectedControlIds={selectedControlIds}
+            onToggleControl={handleToggleControl}
+            onToggleAllControls={handleToggleAllControls}
           />
         ))}
       </div>

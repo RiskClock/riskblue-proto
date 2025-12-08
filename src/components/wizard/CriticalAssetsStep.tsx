@@ -10,7 +10,7 @@ import { calculateCriticalAssetDuration } from "@/lib/durationCalculator";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 import { AnalysisItem } from "@/lib/analysisItemMapper";
-import { ExpandableListItem } from "./ExpandableListItem";
+import { ExpandableListItem, getControlId } from "./ExpandableListItem";
 import { FileViewerModal } from "./FileViewerModal";
 import type { DriveFileInfo } from "./ProjectFilesUpload";
 
@@ -52,6 +52,11 @@ export const CriticalAssetsStep = ({
   // Selected instance IDs (individual items from analysis)
   const [selectedInstanceIds, setSelectedInstanceIds] = useState<string[]>(
     data.selectedAssetInstances || []
+  );
+  
+  // Selected control IDs
+  const [selectedControlIds, setSelectedControlIds] = useState<Set<string>>(
+    new Set(data.selectedAssetControls || [])
   );
   
   const [addAssetDialogOpen, setAddAssetDialogOpen] = useState(false);
@@ -195,20 +200,39 @@ export const CriticalAssetsStep = ({
     );
   }, [analysisItems]);
 
-  // Initialize selection with all instances when data loads
+  // Initialize selection with all instances and controls when data loads
   useEffect(() => {
-    if (analysisItems.length > 0 && (!data.selectedAssetInstances || data.selectedAssetInstances.length === 0)) {
-      const allIds = analysisItems.filter(i => i.category === "Asset").map(i => i.id);
-      setSelectedInstanceIds(allIds);
+    if (analysisItems.length > 0) {
+      const assetItems = analysisItems.filter(i => i.category === "Asset");
+      
+      // Initialize instance selection
+      if (!data.selectedAssetInstances || data.selectedAssetInstances.length === 0) {
+        const allIds = assetItems.map(i => i.id);
+        setSelectedInstanceIds(allIds);
+      }
+      
+      // Initialize control selection (all controls selected by default)
+      if (!data.selectedAssetControls || data.selectedAssetControls.length === 0) {
+        const allControlIds = new Set<string>();
+        assetItems.forEach(item => {
+          (item.controls || []).forEach(control => {
+            allControlIds.add(getControlId(item.id, control));
+          });
+        });
+        setSelectedControlIds(allControlIds);
+      }
     }
-  }, [analysisItems, data.selectedAssetInstances]);
+  }, [analysisItems, data.selectedAssetInstances, data.selectedAssetControls]);
 
   // Sync props to state
   useEffect(() => {
     if (data.selectedAssetInstances) {
       setSelectedInstanceIds(data.selectedAssetInstances);
     }
-  }, [data.selectedAssetInstances]);
+    if (data.selectedAssetControls) {
+      setSelectedControlIds(new Set(data.selectedAssetControls));
+    }
+  }, [data.selectedAssetInstances, data.selectedAssetControls]);
 
   const handleToggleInstance = useCallback((instanceId: string) => {
     setSelectedInstanceIds(prev => 
@@ -226,6 +250,32 @@ export const CriticalAssetsStep = ({
       } else {
         return prev.filter(id => !instanceIds.includes(id));
       }
+    });
+  }, []);
+
+  const handleToggleControl = useCallback((controlId: string) => {
+    setSelectedControlIds(prev => {
+      const next = new Set(prev);
+      if (next.has(controlId)) {
+        next.delete(controlId);
+      } else {
+        next.add(controlId);
+      }
+      return next;
+    });
+  }, []);
+
+  const handleToggleAllControls = useCallback((controlIds: string[], selected: boolean) => {
+    setSelectedControlIds(prev => {
+      const next = new Set(prev);
+      controlIds.forEach(id => {
+        if (selected) {
+          next.add(id);
+        } else {
+          next.delete(id);
+        }
+      });
+      return next;
     });
   }, []);
 
@@ -251,10 +301,13 @@ export const CriticalAssetsStep = ({
   useEffect(() => {
     if (isProcessingWebhook) return;
     const timer = setTimeout(() => {
-      onNext({ selectedAssetInstances: selectedInstanceIds });
+      onNext({ 
+        selectedAssetInstances: selectedInstanceIds,
+        selectedAssetControls: Array.from(selectedControlIds)
+      });
     }, 500);
     return () => clearTimeout(timer);
-  }, [selectedInstanceIds, onNext, isProcessingWebhook]);
+  }, [selectedInstanceIds, selectedControlIds, onNext, isProcessingWebhook]);
 
   const handleAddAsset = () => {
     if (!newAsset.name || !newAsset.risk_level || !newAsset.duration || !newAsset.cost) {
@@ -312,6 +365,9 @@ export const CriticalAssetsStep = ({
               onToggleAll={handleToggleAll}
               onViewInstance={handleViewInstance}
               canViewFiles={canViewFiles}
+              selectedControlIds={selectedControlIds}
+              onToggleControl={handleToggleControl}
+              onToggleAllControls={handleToggleAllControls}
             />
           );
         })}

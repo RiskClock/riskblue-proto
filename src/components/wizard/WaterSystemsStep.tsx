@@ -10,7 +10,7 @@ import { calculateWaterSystemDuration } from "@/lib/durationCalculator";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 import { AnalysisItem } from "@/lib/analysisItemMapper";
-import { ExpandableListItem } from "./ExpandableListItem";
+import { ExpandableListItem, getControlId } from "./ExpandableListItem";
 import { FileViewerModal } from "./FileViewerModal";
 import type { DriveFileInfo } from "./ProjectFilesUpload";
 
@@ -52,6 +52,11 @@ export const WaterSystemsStep = ({
   // Selected instance IDs (individual items from analysis)
   const [selectedInstanceIds, setSelectedInstanceIds] = useState<string[]>(
     data.selectedSystemInstances || []
+  );
+  
+  // Selected control IDs
+  const [selectedControlIds, setSelectedControlIds] = useState<Set<string>>(
+    new Set(data.selectedSystemControls || [])
   );
   
   const [addSystemDialogOpen, setAddSystemDialogOpen] = useState(false);
@@ -179,20 +184,39 @@ export const WaterSystemsStep = ({
     );
   }, [analysisItems]);
 
-  // Initialize selection with all instances when data loads
+  // Initialize selection with all instances and controls when data loads
   useEffect(() => {
-    if (analysisItems.length > 0 && (!data.selectedSystemInstances || data.selectedSystemInstances.length === 0)) {
-      const allIds = analysisItems.filter(i => i.category === "Water System").map(i => i.id);
-      setSelectedInstanceIds(allIds);
+    if (analysisItems.length > 0) {
+      const systemItems = analysisItems.filter(i => i.category === "Water System");
+      
+      // Initialize instance selection
+      if (!data.selectedSystemInstances || data.selectedSystemInstances.length === 0) {
+        const allIds = systemItems.map(i => i.id);
+        setSelectedInstanceIds(allIds);
+      }
+      
+      // Initialize control selection (all controls selected by default)
+      if (!data.selectedSystemControls || data.selectedSystemControls.length === 0) {
+        const allControlIds = new Set<string>();
+        systemItems.forEach(item => {
+          (item.controls || []).forEach(control => {
+            allControlIds.add(getControlId(item.id, control));
+          });
+        });
+        setSelectedControlIds(allControlIds);
+      }
     }
-  }, [analysisItems, data.selectedSystemInstances]);
+  }, [analysisItems, data.selectedSystemInstances, data.selectedSystemControls]);
 
   // Sync props to state
   useEffect(() => {
     if (data.selectedSystemInstances) {
       setSelectedInstanceIds(data.selectedSystemInstances);
     }
-  }, [data.selectedSystemInstances]);
+    if (data.selectedSystemControls) {
+      setSelectedControlIds(new Set(data.selectedSystemControls));
+    }
+  }, [data.selectedSystemInstances, data.selectedSystemControls]);
 
   const handleToggleInstance = useCallback((instanceId: string) => {
     setSelectedInstanceIds(prev => 
@@ -210,6 +234,32 @@ export const WaterSystemsStep = ({
       } else {
         return prev.filter(id => !instanceIds.includes(id));
       }
+    });
+  }, []);
+
+  const handleToggleControl = useCallback((controlId: string) => {
+    setSelectedControlIds(prev => {
+      const next = new Set(prev);
+      if (next.has(controlId)) {
+        next.delete(controlId);
+      } else {
+        next.add(controlId);
+      }
+      return next;
+    });
+  }, []);
+
+  const handleToggleAllControls = useCallback((controlIds: string[], selected: boolean) => {
+    setSelectedControlIds(prev => {
+      const next = new Set(prev);
+      controlIds.forEach(id => {
+        if (selected) {
+          next.add(id);
+        } else {
+          next.delete(id);
+        }
+      });
+      return next;
     });
   }, []);
 
@@ -235,10 +285,13 @@ export const WaterSystemsStep = ({
   useEffect(() => {
     if (isProcessingWebhook) return;
     const timer = setTimeout(() => {
-      onNext({ selectedSystemInstances: selectedInstanceIds });
+      onNext({ 
+        selectedSystemInstances: selectedInstanceIds,
+        selectedSystemControls: Array.from(selectedControlIds)
+      });
     }, 500);
     return () => clearTimeout(timer);
-  }, [selectedInstanceIds, onNext, isProcessingWebhook]);
+  }, [selectedInstanceIds, selectedControlIds, onNext, isProcessingWebhook]);
 
   const handleAddSystem = () => {
     if (!newSystem.name || !newSystem.risk_level || !newSystem.duration || !newSystem.cost) {
@@ -296,6 +349,9 @@ export const WaterSystemsStep = ({
               onToggleAll={handleToggleAll}
               onViewInstance={handleViewInstance}
               canViewFiles={canViewFiles}
+              selectedControlIds={selectedControlIds}
+              onToggleControl={handleToggleControl}
+              onToggleAllControls={handleToggleAllControls}
             />
           );
         })}

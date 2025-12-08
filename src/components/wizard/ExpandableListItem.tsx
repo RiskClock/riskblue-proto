@@ -22,9 +22,13 @@ interface ExpandableListItemProps {
   onViewInstance?: (instance: AnalysisItem) => void;
   canViewFiles?: boolean;
   // Control selection props
-  selectedControlIds?: Set<string>;
-  onToggleControl?: (instanceId: string, control: string) => void;
+  selectedControlIds: Set<string>;
+  onToggleControl: (controlId: string) => void;
+  onToggleAllControls: (controlIds: string[], selected: boolean) => void;
 }
+
+// Helper to generate control ID
+export const getControlId = (instanceId: string, control: string) => `${instanceId}::${control}`;
 
 // Risk level color mapping (yellow to dark red) - no hover effects
 const getRiskLevelStyles = (riskLevel?: string): string => {
@@ -86,9 +90,6 @@ const sortInstances = (instances: AnalysisItem[]): AnalysisItem[] => {
   });
 };
 
-// Helper to generate control ID
-const getControlId = (instanceId: string, control: string) => `${instanceId}::${control}`;
-
 export const ExpandableListItem = ({
   name,
   icon,
@@ -106,6 +107,7 @@ export const ExpandableListItem = ({
   canViewFiles = false,
   selectedControlIds,
   onToggleControl,
+  onToggleAllControls,
 }: ExpandableListItemProps) => {
   const [isExpanded, setIsExpanded] = useState(false);
   const [expandedInstanceIds, setExpandedInstanceIds] = useState<Set<string>>(new Set());
@@ -113,7 +115,7 @@ export const ExpandableListItem = ({
   // Sort instances
   const sortedInstances = useMemo(() => sortInstances(instances), [instances]);
 
-  // Calculate selection state
+  // Calculate selection state for instances
   const allInstanceIds = useMemo(() => instances.map(i => i.id), [instances]);
   
   const selectedCount = useMemo(() => {
@@ -124,19 +126,79 @@ export const ExpandableListItem = ({
   const isPartiallySelected = selectedCount > 0 && selectedCount < instanceCount;
   const isNoneSelected = selectedCount === 0;
 
+  // Get all control IDs for an instance
+  const getInstanceControlIds = useCallback((instance: AnalysisItem): string[] => {
+    return (instance.controls || []).map(c => getControlId(instance.id, c));
+  }, []);
+
+  // Get all control IDs for all instances in this group
+  const allControlIds = useMemo(() => {
+    return instances.flatMap(instance => getInstanceControlIds(instance));
+  }, [instances, getInstanceControlIds]);
+
+  // Calculate control selection state for an instance
+  const getInstanceControlSelectionState = useCallback((instance: AnalysisItem) => {
+    const controlIds = getInstanceControlIds(instance);
+    if (controlIds.length === 0) return { all: true, partial: false, none: false };
+    
+    const selectedCount = controlIds.filter(id => selectedControlIds.has(id)).length;
+    return {
+      all: selectedCount === controlIds.length,
+      partial: selectedCount > 0 && selectedCount < controlIds.length,
+      none: selectedCount === 0
+    };
+  }, [selectedControlIds, getInstanceControlIds]);
+
+  // Calculate overall selection state including controls
+  const overallSelectionState = useMemo(() => {
+    // Check if all instances are selected and all their controls are selected
+    const allInstancesSelected = isAllSelected;
+    const allControlsSelected = allControlIds.length === 0 || 
+      allControlIds.every(id => selectedControlIds.has(id));
+    
+    const someInstancesSelected = selectedCount > 0;
+    const someControlsSelected = allControlIds.some(id => selectedControlIds.has(id));
+    
+    if (allInstancesSelected && allControlsSelected) {
+      return { all: true, partial: false, none: false };
+    }
+    if (!someInstancesSelected && !someControlsSelected) {
+      return { all: false, partial: false, none: true };
+    }
+    return { all: false, partial: true, none: false };
+  }, [isAllSelected, allControlIds, selectedControlIds, selectedCount]);
+
   const handleParentCheckboxClick = useCallback((e: React.MouseEvent) => {
     e.stopPropagation();
-    // If all or some are selected, deselect all. If none selected, select all.
-    if (isAllSelected || isPartiallySelected) {
+    // If all or partial selected, deselect all. If none selected, select all.
+    if (overallSelectionState.all || overallSelectionState.partial) {
       onToggleAll(allInstanceIds, false);
+      onToggleAllControls(allControlIds, false);
     } else {
       onToggleAll(allInstanceIds, true);
+      onToggleAllControls(allControlIds, true);
     }
-  }, [isAllSelected, isPartiallySelected, allInstanceIds, onToggleAll]);
+  }, [overallSelectionState, allInstanceIds, allControlIds, onToggleAll, onToggleAllControls]);
 
-  const handleInstanceCheckboxChange = useCallback((instanceId: string) => {
-    onToggleInstance(instanceId);
-  }, [onToggleInstance]);
+  const handleInstanceCheckboxClick = useCallback((e: React.MouseEvent, instance: AnalysisItem) => {
+    e.stopPropagation();
+    const isSelected = selectedInstanceIds.includes(instance.id);
+    const controlIds = getInstanceControlIds(instance);
+    
+    if (isSelected) {
+      // Deselect instance and all its controls
+      onToggleInstance(instance.id);
+      onToggleAllControls(controlIds, false);
+    } else {
+      // Select instance and all its controls
+      onToggleInstance(instance.id);
+      onToggleAllControls(controlIds, true);
+    }
+  }, [selectedInstanceIds, getInstanceControlIds, onToggleInstance, onToggleAllControls]);
+
+  const handleControlToggle = useCallback((controlId: string) => {
+    onToggleControl(controlId);
+  }, [onToggleControl]);
 
   const toggleInstanceExpanded = useCallback((instanceId: string, e: React.MouseEvent) => {
     e.stopPropagation();
@@ -157,7 +219,7 @@ export const ExpandableListItem = ({
       <div 
         className={cn(
           "flex items-center gap-3 p-3 cursor-pointer transition-colors hover:bg-muted/50",
-          (isAllSelected || isPartiallySelected) && "bg-primary/5"
+          (overallSelectionState.all || overallSelectionState.partial) && "bg-primary/5"
         )}
         onClick={() => setIsExpanded(!isExpanded)}
       >
@@ -168,16 +230,16 @@ export const ExpandableListItem = ({
         >
           <div className={cn(
             "w-5 h-5 rounded border-2 flex items-center justify-center transition-colors",
-            isAllSelected && "bg-primary border-primary",
-            isPartiallySelected && "bg-primary border-primary",
-            isNoneSelected && "border-muted-foreground/30"
+            overallSelectionState.all && "bg-primary border-primary",
+            overallSelectionState.partial && "bg-primary border-primary",
+            overallSelectionState.none && "border-muted-foreground/30"
           )}>
-          {isAllSelected && (
+          {overallSelectionState.all && (
               <svg className="w-3.5 h-3.5 text-primary-foreground" fill="currentColor" viewBox="0 0 20 20">
                 <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" strokeWidth="1.5" />
               </svg>
             )}
-            {isPartiallySelected && (
+            {overallSelectionState.partial && (
               <Minus className="w-3.5 h-3.5 text-primary-foreground" strokeWidth={3} />
             )}
           </div>
@@ -240,6 +302,7 @@ export const ExpandableListItem = ({
             const isInstanceSelected = selectedInstanceIds.includes(instance.id);
             const isInstanceExpanded = expandedInstanceIds.has(instance.id);
             const hasControls = instance.controls && instance.controls.length > 0;
+            const controlState = getInstanceControlSelectionState(instance);
             const capitalize = (str: string) => str.charAt(0).toUpperCase() + str.slice(1).toLowerCase();
             const sizeDisplay = instance.sizeCategory ? capitalize(instance.sizeCategory) : null;
             const dimensionDisplay = instance.length && instance.width ? `(${instance.length} ft × ${instance.width} ft)` : null;
@@ -254,6 +317,13 @@ export const ExpandableListItem = ({
             const directionInfo = additionalParams?.mainPipeDirection 
               ? `Pipe Direction: ${additionalParams.mainPipeDirection.charAt(0).toUpperCase() + additionalParams.mainPipeDirection.slice(1).toLowerCase()}`
               : null;
+
+            // Instance checkbox state (considers controls too)
+            const instanceCheckboxState = {
+              all: isInstanceSelected && (controlState.all || !hasControls),
+              partial: isInstanceSelected && controlState.partial,
+              none: !isInstanceSelected && controlState.none
+            };
 
             return (
               <div key={instance.id}>
@@ -280,12 +350,25 @@ export const ExpandableListItem = ({
                   </div>
 
                   {/* Child checkbox */}
-                  <div className="flex-shrink-0">
-                    <Checkbox
-                      checked={isInstanceSelected}
-                      onCheckedChange={() => handleInstanceCheckboxChange(instance.id)}
-                      className="data-[state=checked]:bg-primary data-[state=checked]:border-primary"
-                    />
+                  <div 
+                    className="flex-shrink-0"
+                    onClick={(e) => handleInstanceCheckboxClick(e, instance)}
+                  >
+                    <div className={cn(
+                      "w-5 h-5 rounded border-2 flex items-center justify-center transition-colors cursor-pointer",
+                      instanceCheckboxState.all && "bg-primary border-primary",
+                      instanceCheckboxState.partial && "bg-primary border-primary",
+                      !isInstanceSelected && "border-muted-foreground/30"
+                    )}>
+                      {instanceCheckboxState.all && (
+                        <svg className="w-3.5 h-3.5 text-primary-foreground" fill="currentColor" viewBox="0 0 20 20">
+                          <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" strokeWidth="1.5" />
+                        </svg>
+                      )}
+                      {instanceCheckboxState.partial && (
+                        <Minus className="w-3.5 h-3.5 text-primary-foreground" strokeWidth={3} />
+                      )}
+                    </div>
                   </div>
 
                   {/* Instance info */}
@@ -344,7 +427,7 @@ export const ExpandableListItem = ({
                   <div className="bg-muted/30 border-b">
                     {instance.controls.map((control) => {
                       const controlId = getControlId(instance.id, control);
-                      const isControlSelected = selectedControlIds?.has(controlId) ?? true;
+                      const isControlSelected = selectedControlIds.has(controlId);
 
                       return (
                         <div 
@@ -357,7 +440,7 @@ export const ExpandableListItem = ({
                           <Shield className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0" />
                           <Checkbox
                             checked={isControlSelected}
-                            onCheckedChange={() => onToggleControl?.(instance.id, control)}
+                            onCheckedChange={() => handleControlToggle(controlId)}
                             className="data-[state=checked]:bg-primary data-[state=checked]:border-primary"
                           />
                           <span className="text-sm">{control}</span>
