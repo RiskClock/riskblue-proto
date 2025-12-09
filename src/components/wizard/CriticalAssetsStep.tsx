@@ -90,16 +90,16 @@ export const CriticalAssetsStep = ({
     }
   });
 
-  // Fetch mitigation controls for points/popularity
+  // Fetch mitigation controls for points/popularity/author/responsible
   const { data: controls = [] } = useQuery({
     queryKey: ['mitigation-controls'],
     queryFn: async () => {
       const { data, error } = await supabase
         .from('mitigation_controls')
-        .select('name, points, popularity')
+        .select('name, points, popularity, author, responsible')
         .eq('is_active', true);
       if (error) throw error;
-      return (data || []) as unknown as { name: string; points: number; popularity: number }[];
+      return (data || []) as unknown as { name: string; points: number; popularity: number; author: string; responsible: string }[];
     }
   });
 

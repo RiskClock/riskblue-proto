@@ -9,6 +9,8 @@ import { AnalysisItem } from "@/lib/analysisItemMapper";
 interface ControlPoints {
   points: number;
   popularity: number;
+  author?: string;
+  responsible?: string;
 }
 
 interface ExpandableListItemProps {
@@ -281,14 +283,14 @@ export const ExpandableListItem = ({
                 {riskLevel}
               </Badge>
             )}
-            {riskPoints !== undefined && riskPoints > 0 && (
+            {classRiskPoints !== undefined && classRiskPoints > 0 && (
               <Badge variant="outline" className="text-xs flex-shrink-0 bg-red-50 text-red-600 border-red-200">
-                {classRiskPoints ?? riskPoints} risk pts
+                {classRiskPoints} risk pts
               </Badge>
             )}
             {classDeriskPoints !== undefined && classDeriskPoints > 0 && (
-              <Badge variant="outline" className="text-xs flex-shrink-0 bg-green-50 text-green-600 border-green-200">
-                -{classDeriskPoints} derisk pts
+              <Badge variant="outline" className="text-xs flex-shrink-0 bg-emerald-50 text-emerald-600 border-emerald-200">
+                -{classDeriskPoints} control pts
               </Badge>
             )}
           </div>
@@ -431,8 +433,14 @@ export const ExpandableListItem = ({
                         {pipeInfo}
                       </Badge>
                     )}
+                    {/* Instance risk points - each instance has same risk as the class */}
+                    {riskPoints !== undefined && riskPoints > 0 && (
+                      <Badge variant="outline" className="text-xs cursor-default hover:bg-transparent bg-red-50 text-red-600 border-red-200">
+                        {riskPoints} risk pts
+                      </Badge>
+                    )}
                     {hasControls && (
-                      <Badge variant="outline" className="text-xs cursor-default hover:bg-transparent bg-green-50 text-green-700 border-green-200">
+                      <Badge variant="outline" className="text-xs cursor-default hover:bg-transparent bg-blue-50 text-blue-700 border-blue-200">
                         {instance.controls.length} Controls
                       </Badge>
                     )}
@@ -463,7 +471,7 @@ export const ExpandableListItem = ({
                       const isControlSelected = selectedControlIds.has(controlId);
                       const controlData = getControlPoints?.(control);
 
-                      return (
+                        return (
                         <div 
                           key={control}
                           className={cn(
@@ -476,10 +484,19 @@ export const ExpandableListItem = ({
                             onCheckedChange={() => handleControlToggle(controlId)}
                             className="data-[state=checked]:bg-primary data-[state=checked]:border-primary"
                           />
-                          <span className="text-sm flex-1">{control}</span>
+                          <div className="flex-1 min-w-0">
+                            <span className="text-sm">{control}</span>
+                            {controlData && (controlData.author || controlData.responsible) && (
+                              <div className="text-xs text-muted-foreground mt-0.5">
+                                {controlData.author && <span>By: {controlData.author}</span>}
+                                {controlData.author && controlData.responsible && <span className="mx-1">•</span>}
+                                {controlData.responsible && <span>Responsible: {controlData.responsible}</span>}
+                              </div>
+                            )}
+                          </div>
                           {controlData && (
                             <div className="flex items-center gap-2 flex-shrink-0">
-                              <Badge variant="outline" className="text-xs bg-green-50 text-green-600 border-green-200">
+                              <Badge variant="outline" className="text-xs bg-emerald-50 text-emerald-600 border-emerald-200">
                                 {controlData.points} pts
                               </Badge>
                               <span className="text-xs text-muted-foreground">
