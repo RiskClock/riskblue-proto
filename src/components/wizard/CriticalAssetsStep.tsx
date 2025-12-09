@@ -13,12 +13,15 @@ import { AnalysisItem } from "@/lib/analysisItemMapper";
 import { ExpandableListItem, getControlId } from "./ExpandableListItem";
 import { FileViewerModal } from "./FileViewerModal";
 import type { DriveFileInfo } from "./ProjectFilesUpload";
+import { useRiskScoring } from "@/hooks/useRiskScoring";
+import { RiskScoreSummary } from "./RiskScoreSummary";
 
 interface Asset {
   id: string;
   name: string;
   threat: string;
   risk_level: string;
+  risk_level_points?: number;
   duration: string;
   cost: string;
   image_url: string;
@@ -87,6 +90,19 @@ export const CriticalAssetsStep = ({
     }
   });
 
+  // Fetch mitigation controls for points/popularity
+  const { data: controls = [] } = useQuery({
+    queryKey: ['mitigation-controls'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('mitigation_controls')
+        .select('name, points, popularity')
+        .eq('is_active', true);
+      if (error) throw error;
+      return (data || []) as unknown as { name: string; points: number; popularity: number }[];
+    }
+  });
+
   // Fetch custom assets for this project
   const { data: customAssets = [], isLoading: isLoadingCustom } = useQuery({
     queryKey: ['custom-critical-assets', projectId],
@@ -130,11 +146,30 @@ export const CriticalAssetsStep = ({
     name: a.name,
     threat: 'Custom asset',
     risk_level: a.risk_level,
+    risk_level_points: 10, // default for custom
     duration: a.duration,
     cost: a.cost,
     image_url: '',
     display_order: 999
   }))];
+
+  // Filter only asset items for risk scoring
+  const assetItems = useMemo(() => 
+    analysisItems.filter(i => i.category === "Asset"),
+    [analysisItems]
+  );
+
+  // Risk scoring hook
+  const riskScore = useRiskScoring(
+    assetItems,
+    selectedInstanceIds,
+    selectedControlIds,
+    {
+      criticalAssets: allAssets.map(a => ({ name: a.name, risk_level_points: a.risk_level_points || 0 })),
+      waterSystems: [],
+      controls
+    }
+  );
 
   // Normalize asset name for comparison
   const normalizeAssetName = (name: string): string => {
@@ -340,10 +375,14 @@ export const CriticalAssetsStep = ({
 
   return (
     <div className="space-y-4">
+      {/* Risk Score Summary */}
+      <RiskScoreSummary riskScore={riskScore} compact />
+
       {/* List of assets */}
       <div className="space-y-3">
         {filteredAssets.map(asset => {
           const instances = getAssetAnalysisItems(asset.name);
+          const classScore = riskScore.getClassScore(asset.name);
           return (
             <ExpandableListItem
               key={asset.id}
@@ -351,6 +390,7 @@ export const CriticalAssetsStep = ({
               imageUrl={asset.image_url}
               icon={<Building2 className="h-6 w-6 text-muted-foreground/50" />}
               riskLevel={asset.risk_level}
+              riskPoints={asset.risk_level_points}
               threat={asset.threat}
               duration={calculateCriticalAssetDuration(asset.name, data)}
               cost={asset.cost}
@@ -364,6 +404,9 @@ export const CriticalAssetsStep = ({
               selectedControlIds={selectedControlIds}
               onToggleControl={handleToggleControl}
               onToggleAllControls={handleToggleAllControls}
+              getControlPoints={riskScore.getControlPoints}
+              classRiskPoints={classScore?.riskPoints}
+              classDeriskPoints={classScore?.selectedDeriskPoints}
             />
           );
         })}

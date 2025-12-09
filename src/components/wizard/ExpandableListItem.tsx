@@ -6,11 +6,17 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { cn } from "@/lib/utils";
 import { AnalysisItem } from "@/lib/analysisItemMapper";
 
+interface ControlPoints {
+  points: number;
+  popularity: number;
+}
+
 interface ExpandableListItemProps {
   name: string;
   icon?: React.ReactNode;
   imageUrl?: string;
   riskLevel?: string;
+  riskPoints?: number;
   threat?: string;
   duration?: string;
   cost?: string;
@@ -25,6 +31,10 @@ interface ExpandableListItemProps {
   selectedControlIds: Set<string>;
   onToggleControl: (controlId: string) => void;
   onToggleAllControls: (controlIds: string[], selected: boolean) => void;
+  // Risk scoring props
+  getControlPoints?: (controlName: string) => ControlPoints | undefined;
+  classRiskPoints?: number;
+  classDeriskPoints?: number;
 }
 
 // Helper to generate control ID
@@ -95,6 +105,7 @@ export const ExpandableListItem = ({
   icon,
   imageUrl,
   riskLevel,
+  riskPoints,
   threat,
   duration,
   cost,
@@ -108,6 +119,9 @@ export const ExpandableListItem = ({
   selectedControlIds,
   onToggleControl,
   onToggleAllControls,
+  getControlPoints,
+  classRiskPoints,
+  classDeriskPoints,
 }: ExpandableListItemProps) => {
   const [isExpanded, setIsExpanded] = useState(false);
   const [expandedInstanceIds, setExpandedInstanceIds] = useState<Set<string>>(new Set());
@@ -265,6 +279,16 @@ export const ExpandableListItem = ({
             {riskLevel && (
               <Badge className={cn("text-xs flex-shrink-0 border", getRiskLevelStyles(riskLevel))}>
                 {riskLevel}
+              </Badge>
+            )}
+            {riskPoints !== undefined && riskPoints > 0 && (
+              <Badge variant="outline" className="text-xs flex-shrink-0 bg-red-50 text-red-600 border-red-200">
+                {classRiskPoints ?? riskPoints} risk pts
+              </Badge>
+            )}
+            {classDeriskPoints !== undefined && classDeriskPoints > 0 && (
+              <Badge variant="outline" className="text-xs flex-shrink-0 bg-green-50 text-green-600 border-green-200">
+                -{classDeriskPoints} derisk pts
               </Badge>
             )}
           </div>
@@ -437,6 +461,7 @@ export const ExpandableListItem = ({
                     {instance.controls.map((control) => {
                       const controlId = getControlId(instance.id, control);
                       const isControlSelected = selectedControlIds.has(controlId);
+                      const controlData = getControlPoints?.(control);
 
                       return (
                         <div 
@@ -451,7 +476,17 @@ export const ExpandableListItem = ({
                             onCheckedChange={() => handleControlToggle(controlId)}
                             className="data-[state=checked]:bg-primary data-[state=checked]:border-primary"
                           />
-                          <span className="text-sm">{control}</span>
+                          <span className="text-sm flex-1">{control}</span>
+                          {controlData && (
+                            <div className="flex items-center gap-2 flex-shrink-0">
+                              <Badge variant="outline" className="text-xs bg-green-50 text-green-600 border-green-200">
+                                {controlData.points} pts
+                              </Badge>
+                              <span className="text-xs text-muted-foreground">
+                                ★ {controlData.popularity}
+                              </span>
+                            </div>
+                          )}
                         </div>
                       );
                     })}
