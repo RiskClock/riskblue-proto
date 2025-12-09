@@ -72,7 +72,19 @@ const getRiskPointsFromLevel = (riskLevel?: string): number => {
 };
 
 const normalizeAssetName = (name: string): string => {
-  return name.toLowerCase()
+  const lower = name.toLowerCase();
+  
+  // Normalize water system names
+  if (lower.includes('cold') && (lower.includes('domestic') || lower.includes('water'))) return 'cold domestic water';
+  if (lower.includes('hot') && (lower.includes('domestic') || lower.includes('water'))) return 'hot domestic water';
+  if (lower.includes('temporary') && lower.includes('water')) return 'temporary water run';
+  if (lower.includes('main') && lower.includes('city') && lower.includes('water')) return 'main city water supply';
+  if (lower.includes('hydronic')) return 'hydronics';
+  if (lower.includes('fire') && (lower.includes('suppression') || lower.includes('protection') || lower.includes('sprinkler'))) return 'fire suppression system';
+  if (lower.includes('sump') || lower.includes('storm drain') || lower.includes('drainage')) return 'sump pits storm drains and drainages';
+  
+  // Standard normalization
+  return lower
     .replace(/rooms?/g, 'room')
     .replace(/risers?/g, 'riser')
     .replace(/pits?/g, 'pit')
