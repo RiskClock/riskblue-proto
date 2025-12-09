@@ -156,8 +156,8 @@ export const WaterSystemsStep = ({
   // Normalize system name for comparison
   const normalizeSystemName = (name: string): string => {
     const lower = name.toLowerCase();
-    if (lower.includes('cold') && (lower.includes('domestic') || lower.includes('water'))) return 'domestic cold water';
-    if (lower.includes('hot') && (lower.includes('domestic') || lower.includes('water'))) return 'domestic hot water';
+    if (lower.includes('cold') && (lower.includes('domestic') || lower.includes('water'))) return 'cold domestic water';
+    if (lower.includes('hot') && (lower.includes('domestic') || lower.includes('water'))) return 'hot domestic water';
     if (lower.includes('temporary') && lower.includes('water')) return 'temporary water run';
     if (lower.includes('main') && lower.includes('city') && lower.includes('water')) return 'main city water supply';
     if (lower.includes('hydronic')) return 'hydronics';
