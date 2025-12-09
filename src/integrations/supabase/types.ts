@@ -176,6 +176,7 @@ export type Database = {
           is_active: boolean
           name: string
           risk_level: string
+          risk_level_points: number
           threat: string
           updated_at: string
         }
@@ -189,6 +190,7 @@ export type Database = {
           is_active?: boolean
           name: string
           risk_level: string
+          risk_level_points?: number
           threat: string
           updated_at?: string
         }
@@ -202,6 +204,7 @@ export type Database = {
           is_active?: boolean
           name?: string
           risk_level?: string
+          risk_level_points?: number
           threat?: string
           updated_at?: string
         }
@@ -651,6 +654,7 @@ export type Database = {
           is_active: boolean
           name: string
           risk_level: string
+          risk_level_points: number
           threat: string
           updated_at: string
         }
@@ -664,6 +668,7 @@ export type Database = {
           is_active?: boolean
           name: string
           risk_level: string
+          risk_level_points?: number
           threat: string
           updated_at?: string
         }
@@ -677,6 +682,7 @@ export type Database = {
           is_active?: boolean
           name?: string
           risk_level?: string
+          risk_level_points?: number
           threat?: string
           updated_at?: string
         }
