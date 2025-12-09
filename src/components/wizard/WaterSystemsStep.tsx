@@ -13,12 +13,15 @@ import { AnalysisItem } from "@/lib/analysisItemMapper";
 import { ExpandableListItem, getControlId } from "./ExpandableListItem";
 import { FileViewerModal } from "./FileViewerModal";
 import type { DriveFileInfo } from "./ProjectFilesUpload";
+import { useRiskScoring } from "@/hooks/useRiskScoring";
+import { RiskScoreSummary } from "./RiskScoreSummary";
 
 interface WaterSystem {
   id: string;
   name: string;
   threat: string;
   risk_level: string;
+  risk_level_points?: number;
   duration: string;
   cost: string;
   image_url: string;
@@ -87,6 +90,19 @@ export const WaterSystemsStep = ({
     }
   });
 
+  // Fetch mitigation controls for points/popularity/author/responsible
+  const { data: controls = [] } = useQuery({
+    queryKey: ['mitigation-controls'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('mitigation_controls')
+        .select('name, points, popularity, author, responsible')
+        .eq('is_active', true);
+      if (error) throw error;
+      return (data || []) as unknown as { name: string; points: number; popularity: number; author: string; responsible: string }[];
+    }
+  });
+
   // Fetch custom systems for this project
   const { data: customSystems = [], isLoading: isLoadingCustom } = useQuery({
     queryKey: ['custom-water-systems', projectId],
@@ -130,6 +146,7 @@ export const WaterSystemsStep = ({
     name: s.name,
     threat: 'Custom system',
     risk_level: s.risk_level,
+    risk_level_points: 10, // default for custom
     duration: s.duration,
     cost: s.cost,
     image_url: '',
@@ -175,6 +192,24 @@ export const WaterSystemsStep = ({
       return detectedSystemTypes.has(normalized);
     });
   }, [allSystems, detectedSystemTypes, analysisItems.length]);
+
+  // Filter only water system items for risk scoring
+  const systemItems = useMemo(() => 
+    analysisItems.filter(i => i.category === "Water System"),
+    [analysisItems]
+  );
+
+  // Risk scoring hook
+  const riskScore = useRiskScoring(
+    systemItems,
+    selectedInstanceIds,
+    selectedControlIds,
+    {
+      criticalAssets: [],
+      waterSystems: allSystems.map(s => ({ name: s.name, risk_level_points: s.risk_level_points || 0 })),
+      controls
+    }
+  );
 
   // Get analysis items for a specific water system type
   const getSystemAnalysisItems = useCallback((systemName: string): AnalysisItem[] => {
@@ -324,10 +359,14 @@ export const WaterSystemsStep = ({
 
   return (
     <div className="space-y-4">
+      {/* Risk Score Summary */}
+      <RiskScoreSummary riskScore={riskScore} compact />
+
       {/* List of water systems */}
       <div className="space-y-3">
         {filteredSystems.map(system => {
           const instances = getSystemAnalysisItems(system.name);
+          const classScore = riskScore.getClassScore(system.name);
           return (
             <ExpandableListItem
               key={system.id}
@@ -335,6 +374,7 @@ export const WaterSystemsStep = ({
               imageUrl={system.image_url}
               icon={<Droplets className="h-6 w-6 text-muted-foreground/50" />}
               riskLevel={system.risk_level}
+              riskPoints={system.risk_level_points}
               threat={system.threat}
               duration={calculateWaterSystemDuration(system.name, data)}
               cost={system.cost}
@@ -348,6 +388,9 @@ export const WaterSystemsStep = ({
               selectedControlIds={selectedControlIds}
               onToggleControl={handleToggleControl}
               onToggleAllControls={handleToggleAllControls}
+              getControlPoints={riskScore.getControlPoints}
+              classRiskPoints={classScore?.riskPoints}
+              classDeriskPoints={classScore?.selectedDeriskPoints}
             />
           );
         })}
