@@ -28,20 +28,30 @@ export const RiskScoreSummary = ({ riskScore, compact = false }: RiskScoreSummar
   if (compact) {
     return (
       <div className="flex items-center gap-3 p-3 bg-muted/30 rounded-lg border">
+        {/* Total Risk */}
         <div className="flex items-center gap-2">
-          <AlertTriangle className="h-4 w-4 text-orange-500" />
+          <AlertTriangle className="h-4 w-4 text-destructive" />
           <span className="text-sm font-medium">Water Risk:</span>
+          <Badge className="text-xs bg-destructive text-destructive-foreground">
+            {totalRiskPoints} pts
+          </Badge>
+        </div>
+        {/* DeRisk Applied */}
+        <div className="flex items-center gap-2">
+          <Shield className="h-4 w-4 text-green-600" />
+          <span className="text-sm text-muted-foreground">DeRisk:</span>
+          <Badge variant="outline" className="text-xs bg-green-50 text-green-700 border-green-200 dark:bg-green-950 dark:text-green-300 dark:border-green-800">
+            -{selectedDeriskPoints} pts
+          </Badge>
+        </div>
+        {/* Remaining Risk */}
+        <div className="flex items-center gap-2">
+          <span className="text-sm text-muted-foreground">Remaining:</span>
           <Badge className={cn("text-xs", getRiskColor(netRiskPoints, totalRiskPoints))}>
             {netRiskPoints} pts
           </Badge>
         </div>
-        <div className="flex items-center gap-2">
-          <Shield className="h-4 w-4 text-green-500" />
-          <span className="text-sm text-muted-foreground">DeRisk:</span>
-          <Badge variant="outline" className="text-xs bg-green-50 text-green-700 border-green-200">
-            -{selectedDeriskPoints} pts
-          </Badge>
-        </div>
+        {/* Reduction % */}
         <div className="flex items-center gap-2 ml-auto">
           <TrendingDown className="h-4 w-4 text-primary" />
           <span className="text-sm font-medium text-primary">{reductionPercentage}% reduced</span>
