@@ -415,13 +415,6 @@ export const WaterSystemsStep = ({
     <div className="space-y-4">
       {/* Risk Score Summary */}
       <RiskScoreSummary riskScore={riskScore} compact />
-      
-      {/* Risk Tolerance Selector */}
-      <RiskToleranceSelector
-        value={riskTolerance}
-        onChange={handleRiskToleranceChange}
-        totalCost={totalCost}
-      />
 
       {/* List of water systems */}
       <div className="space-y-3">
