@@ -15,6 +15,7 @@ import { FileViewerModal } from "./FileViewerModal";
 import type { DriveFileInfo } from "./ProjectFilesUpload";
 import { useRiskScoring } from "@/hooks/useRiskScoring";
 import { RiskScoreSummary } from "./RiskScoreSummary";
+import { RiskToleranceSelector, RiskTolerance } from "./RiskToleranceSelector";
 
 interface WaterSystem {
   id: string;
@@ -75,7 +76,11 @@ export const WaterSystemsStep = ({
   const [viewerItem, setViewerItem] = useState<AnalysisItem | null>(null);
   const [viewerFileId, setViewerFileId] = useState<string>("");
   const [viewerMimeType, setViewerMimeType] = useState<string>("application/pdf");
-
+  
+  // Risk tolerance state
+  const [riskTolerance, setRiskTolerance] = useState<RiskTolerance>(
+    data.riskTolerance || "low"
+  );
   // Fetch water systems from database
   const { data: waterSystems = [], isLoading } = useQuery({
     queryKey: ['water-systems'],
@@ -90,7 +95,7 @@ export const WaterSystemsStep = ({
     }
   });
 
-  // Fetch mitigation controls for points/popularity/author/responsible
+  // Fetch mitigation controls for points/popularity/author/responsible with random estimated costs
   const { data: controls = [] } = useQuery({
     queryKey: ['mitigation-controls'],
     queryFn: async () => {
@@ -99,7 +104,11 @@ export const WaterSystemsStep = ({
         .select('name, points, popularity, author, responsible')
         .eq('is_active', true);
       if (error) throw error;
-      return (data || []) as unknown as { name: string; points: number; popularity: number; author: string; responsible: string }[];
+      // Add random estimated cost between $100-$5000 for each control
+      return (data || []).map(control => ({
+        ...control,
+        estimatedCost: Math.floor(Math.random() * 49) * 100 + 100 // $100 to $5000 in $100 increments
+      })) as unknown as { name: string; points: number; popularity: number; author: string; responsible: string; estimatedCost: number }[];
     }
   });
 
@@ -357,10 +366,62 @@ export const WaterSystemsStep = ({
     );
   }
 
+  // Calculate total cost based on selected controls
+  const totalCost = useMemo(() => {
+    let cost = 0;
+    selectedControlIds.forEach(controlId => {
+      const controlName = controlId.split('::')[1];
+      const control = controls.find(c => c.name === controlName);
+      if (control?.estimatedCost) {
+        cost += control.estimatedCost;
+      }
+    });
+    return cost;
+  }, [selectedControlIds, controls]);
+
+  // Handle risk tolerance change
+  const handleRiskToleranceChange = useCallback((newTolerance: RiskTolerance) => {
+    setRiskTolerance(newTolerance);
+    
+    const allInstanceIds = systemItems.map(i => i.id);
+    const allControlIds = new Set<string>();
+    systemItems.forEach(item => {
+      (item.controls || []).forEach(control => {
+        allControlIds.add(getControlId(item.id, control));
+      });
+    });
+    
+    if (newTolerance === "low") {
+      // Select all
+      setSelectedInstanceIds(allInstanceIds);
+      setSelectedControlIds(allControlIds);
+    } else if (newTolerance === "high") {
+      // Select none
+      setSelectedInstanceIds([]);
+      setSelectedControlIds(new Set());
+    } else {
+      // Medium - randomize 50%
+      const randomInstances = allInstanceIds.filter(() => Math.random() > 0.5);
+      const randomControls = new Set<string>();
+      Array.from(allControlIds).forEach(id => {
+        if (Math.random() > 0.5) randomControls.add(id);
+      });
+      setSelectedInstanceIds(randomInstances);
+      setSelectedControlIds(randomControls);
+    }
+  }, [systemItems]);
+
   return (
     <div className="space-y-4">
       {/* Risk Score Summary */}
       <RiskScoreSummary riskScore={riskScore} compact />
+      
+      {/* Risk Tolerance Selector */}
+      <RiskToleranceSelector
+        value={riskTolerance}
+        onChange={handleRiskToleranceChange}
+        totalCost={totalCost}
+      />
 
       {/* List of water systems */}
       <div className="space-y-3">
