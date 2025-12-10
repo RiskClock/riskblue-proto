@@ -8,9 +8,10 @@ interface RiskToleranceSelectorProps {
   value: RiskTolerance;
   onChange: (value: RiskTolerance) => void;
   totalCost: number;
+  className?: string;
 }
 
-export const RiskToleranceSelector = ({ value, onChange, totalCost }: RiskToleranceSelectorProps) => {
+export const RiskToleranceSelector = ({ value, onChange, totalCost, className }: RiskToleranceSelectorProps) => {
   const formatCost = (cost: number) => {
     if (cost >= 1000000) {
       return `$${(cost / 1000000).toFixed(1)}M`;
@@ -43,7 +44,7 @@ export const RiskToleranceSelector = ({ value, onChange, totalCost }: RiskTolera
   ];
 
   return (
-    <div className="flex items-center gap-4 p-3 bg-muted/30 rounded-lg border">
+    <div className={cn("flex items-center gap-4 p-3 bg-muted/30 rounded-lg border", className)}>
       <div className="flex items-center gap-2">
         <span className="text-sm font-medium text-muted-foreground">Risk Tolerance:</span>
         <div className="flex items-center gap-1">
@@ -72,7 +73,7 @@ export const RiskToleranceSelector = ({ value, onChange, totalCost }: RiskTolera
       
       <div className="flex items-center gap-2 ml-auto">
         <DollarSign className="h-4 w-4 text-muted-foreground" />
-        <span className="text-sm text-muted-foreground">Est. Cost:</span>
+        <span className="text-sm text-muted-foreground">Total Est. Cost:</span>
         <Badge className="text-sm px-3 py-1 bg-primary text-primary-foreground">
           {formatCost(totalCost)}
         </Badge>

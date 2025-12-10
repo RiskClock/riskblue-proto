@@ -1,14 +1,251 @@
+import { useState, useEffect, useRef } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { Loader2, ZoomIn, ZoomOut, RotateCw, AlertCircle, ChevronLeft, ChevronRight } from "lucide-react";
 import { AnalysisItem } from "@/lib/analysisItemMapper";
+import type { DriveFileInfo } from "./ProjectFilesUpload";
+import * as pdfjsLib from "pdfjs-dist";
+import pdfjsWorker from "pdfjs-dist/build/pdf.worker.min.mjs?url";
+
+// Set worker path
+pdfjsLib.GlobalWorkerOptions.workerSrc = pdfjsWorker;
 
 interface InstanceDetailsModalProps {
   isOpen: boolean;
   onClose: () => void;
   instance: AnalysisItem | null;
+  canViewFile?: boolean;
+  driveFile?: DriveFileInfo;
+  driveAccessToken?: string | null;
 }
 
-export const InstanceDetailsModal = ({ isOpen, onClose, instance }: InstanceDetailsModalProps) => {
+// Highlighter green color for bounding boxes
+const BOUNDING_BOX_COLOR = "#39FF14";
+
+export const InstanceDetailsModal = ({ 
+  isOpen, 
+  onClose, 
+  instance, 
+  canViewFile = false,
+  driveFile,
+  driveAccessToken
+}: InstanceDetailsModalProps) => {
+  const [activeTab, setActiveTab] = useState<string>("details");
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [zoom, setZoom] = useState(1);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+  const [pageImages, setPageImages] = useState<HTMLImageElement[]>([]);
+  const [originalSize, setOriginalSize] = useState<{ width: number; height: number } | null>(null);
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  // Reset state when modal opens/closes or instance changes
+  useEffect(() => {
+    if (isOpen) {
+      setActiveTab("details");
+      setPageImages([]);
+      setOriginalSize(null);
+      setLoading(false);
+      setError(null);
+      setZoom(1);
+      setCurrentPage(1);
+    }
+  }, [isOpen, instance]);
+
+  // Load file when viewing tab is selected
+  useEffect(() => {
+    if (activeTab === "drawing" && driveFile && driveAccessToken && pageImages.length === 0) {
+      loadFile();
+    }
+  }, [activeTab, driveFile, driveAccessToken]);
+
+  const loadFile = async () => {
+    if (!driveFile || !driveAccessToken) return;
+    
+    setLoading(true);
+    setError(null);
+    setPageImages([]);
+    setCurrentPage(1);
+    setOriginalSize(null);
+
+    try {
+      const isPdf = driveFile.mimeType.includes('pdf') || driveFile.mimeType.includes('google-apps') || driveFile.name.toLowerCase().endsWith('.pdf');
+      
+      let downloadUrl: string;
+      let fetchMimeType = driveFile.mimeType;
+
+      if (driveFile.mimeType.includes('google-apps')) {
+        downloadUrl = `https://www.googleapis.com/drive/v3/files/${driveFile.id}/export?mimeType=application/pdf`;
+        fetchMimeType = 'application/pdf';
+      } else {
+        downloadUrl = `https://www.googleapis.com/drive/v3/files/${driveFile.id}?alt=media`;
+      }
+
+      const response = await fetch(downloadUrl, {
+        headers: {
+          Authorization: `Bearer ${driveAccessToken}`,
+        },
+      });
+
+      if (!response.ok) {
+        throw new Error(`Failed to load file: ${response.status}`);
+      }
+
+      const blob = await response.blob();
+
+      if (isPdf || fetchMimeType.includes('pdf')) {
+        const arrayBuffer = await blob.arrayBuffer();
+        const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+        setTotalPages(pdf.numPages);
+
+        const images: HTMLImageElement[] = [];
+        
+        for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
+          const page = await pdf.getPage(pageNum);
+          const scale = 2;
+          const viewport = page.getViewport({ scale });
+
+          const offscreenCanvas = document.createElement('canvas');
+          const ctx = offscreenCanvas.getContext('2d');
+          if (!ctx) continue;
+
+          offscreenCanvas.width = viewport.width;
+          offscreenCanvas.height = viewport.height;
+
+          await page.render({
+            canvasContext: ctx,
+            viewport: viewport,
+            canvas: offscreenCanvas,
+          }).promise;
+
+          const img = new Image();
+          img.src = offscreenCanvas.toDataURL('image/png');
+          await new Promise<void>((resolve) => {
+            img.onload = () => resolve();
+          });
+          images.push(img);
+          
+          if (pageNum === 1) {
+            setOriginalSize({ width: viewport.width / scale, height: viewport.height / scale });
+          }
+        }
+
+        setPageImages(images);
+        setLoading(false);
+      } else {
+        const url = URL.createObjectURL(blob);
+        const img = new Image();
+        img.onload = () => {
+          setPageImages([img]);
+          setTotalPages(1);
+          setOriginalSize({ width: img.naturalWidth, height: img.naturalHeight });
+          setLoading(false);
+          URL.revokeObjectURL(url);
+        };
+        img.onerror = () => {
+          setError("Failed to load image");
+          setLoading(false);
+          URL.revokeObjectURL(url);
+        };
+        img.src = url;
+      }
+    } catch (err) {
+      console.error("Error loading file:", err);
+      setError(err instanceof Error ? err.message : "Failed to load file");
+      setLoading(false);
+    }
+  };
+
+  // Draw canvas with bounding boxes
+  useEffect(() => {
+    if (loading || pageImages.length === 0 || activeTab !== "drawing") return;
+    
+    const canvas = canvasRef.current;
+    const container = containerRef.current;
+    const img = pageImages[currentPage - 1];
+    
+    if (!canvas || !img || !container) return;
+
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+
+    const containerRect = container.getBoundingClientRect();
+    const containerWidth = containerRect.width - 32;
+    const containerHeight = containerRect.height - 32;
+    
+    if (containerWidth <= 0 || containerHeight <= 0) return;
+
+    const imgAspect = img.width / img.height;
+    const containerAspect = containerWidth / containerHeight;
+
+    let baseWidth: number;
+    let baseHeight: number;
+
+    if (imgAspect > containerAspect) {
+      baseWidth = containerWidth;
+      baseHeight = containerWidth / imgAspect;
+    } else {
+      baseHeight = containerHeight;
+      baseWidth = containerHeight * imgAspect;
+    }
+
+    const displayWidth = Math.floor(baseWidth * zoom);
+    const displayHeight = Math.floor(baseHeight * zoom);
+
+    canvas.width = displayWidth;
+    canvas.height = displayHeight;
+
+    // Draw image
+    ctx.drawImage(img, 0, 0, displayWidth, displayHeight);
+
+    // Draw bounding box for instance if coordinates exist
+    if (instance?.coordinates && instance.coordinates.length === 4) {
+      const [x, y, w, h] = instance.coordinates;
+      
+      // Auto-detect coordinate scale
+      const maxCoord = Math.max(x, y, w, h);
+      let coordScale: number;
+      if (maxCoord <= 1) {
+        coordScale = 1;
+      } else if (maxCoord <= 1000) {
+        coordScale = 1000;
+      } else {
+        coordScale = Math.max(originalSize?.width || img.width, originalSize?.height || img.height);
+      }
+
+      const scaledX = (x / coordScale) * displayWidth;
+      const scaledY = (y / coordScale) * displayHeight;
+      const scaledWidth = (w / coordScale) * displayWidth;
+      const scaledHeight = (h / coordScale) * displayHeight;
+
+      // Draw rectangle
+      ctx.strokeStyle = BOUNDING_BOX_COLOR;
+      ctx.lineWidth = 3;
+      ctx.strokeRect(scaledX, scaledY, scaledWidth, scaledHeight);
+
+      // Draw semi-transparent fill
+      ctx.fillStyle = `${BOUNDING_BOX_COLOR}30`;
+      ctx.fillRect(scaledX, scaledY, scaledWidth, scaledHeight);
+
+      // Draw label
+      const label = instance.id;
+      ctx.font = `bold 14px sans-serif`;
+      const textMetrics = ctx.measureText(label);
+      const padding = 6;
+
+      ctx.fillStyle = BOUNDING_BOX_COLOR;
+      ctx.fillRect(scaledX, scaledY - 24, textMetrics.width + padding * 2, 24);
+
+      ctx.fillStyle = "#000000";
+      ctx.fillText(label, scaledX + padding, scaledY - 7);
+    }
+  }, [pageImages, currentPage, zoom, loading, activeTab, instance, originalSize]);
+
   if (!instance) return null;
 
   const capitalize = (str: string) => str.charAt(0).toUpperCase() + str.slice(1).toLowerCase();
@@ -29,9 +266,11 @@ export const InstanceDetailsModal = ({ isOpen, onClose, instance }: InstanceDeta
     ? `${instance.length} ft × ${instance.width} ft` 
     : null;
 
+  const showDrawingTab = canViewFile && driveFile && driveAccessToken;
+
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="sm:max-w-md">
+      <DialogContent className={showDrawingTab ? "sm:max-w-4xl h-[80vh] flex flex-col" : "sm:max-w-md"}>
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <span className="text-muted-foreground text-sm">{instance.id}:</span>
@@ -39,90 +278,190 @@ export const InstanceDetailsModal = ({ isOpen, onClose, instance }: InstanceDeta
           </DialogTitle>
         </DialogHeader>
         
-        <div className="space-y-4 py-4">
-          {/* Category & Floor */}
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="text-xs text-muted-foreground font-medium uppercase tracking-wide">Category</label>
-              <p className="text-sm font-medium mt-1">{instance.category}</p>
-            </div>
-            {instance.floor && (
-              <div>
-                <label className="text-xs text-muted-foreground font-medium uppercase tracking-wide">Floor</label>
-                <p className="text-sm font-medium mt-1">{instance.floor}</p>
+        {showDrawingTab ? (
+          <Tabs value={activeTab} onValueChange={setActiveTab} className="flex-1 flex flex-col min-h-0">
+            <TabsList className="grid w-full grid-cols-2">
+              <TabsTrigger value="details">Details</TabsTrigger>
+              <TabsTrigger value="drawing">Drawing</TabsTrigger>
+            </TabsList>
+            
+            <TabsContent value="details" className="flex-1 overflow-auto">
+              <DetailsContent 
+                instance={instance}
+                sizeDisplay={sizeDisplay}
+                dimensionDisplay={dimensionDisplay}
+                pipeInfo={pipeInfo}
+                directionInfo={directionInfo}
+              />
+            </TabsContent>
+            
+            <TabsContent value="drawing" className="flex-1 flex flex-col min-h-0">
+              {/* Zoom controls */}
+              <div className="flex items-center justify-end gap-2 mb-2 flex-shrink-0">
+                {totalPages > 1 && (
+                  <>
+                    <Button variant="outline" size="icon" onClick={() => setCurrentPage(p => Math.max(1, p - 1))} disabled={currentPage === 1}>
+                      <ChevronLeft className="w-4 h-4" />
+                    </Button>
+                    <span className="text-sm min-w-[5rem] text-center">
+                      Page {currentPage} / {totalPages}
+                    </span>
+                    <Button variant="outline" size="icon" onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))} disabled={currentPage === totalPages}>
+                      <ChevronRight className="w-4 h-4" />
+                    </Button>
+                    <div className="w-px h-6 bg-border mx-1" />
+                  </>
+                )}
+                <Button variant="outline" size="icon" onClick={() => setZoom(z => Math.max(0.5, z - 0.25))}>
+                  <ZoomOut className="w-4 h-4" />
+                </Button>
+                <span className="text-sm min-w-[4rem] text-center">
+                  {Math.round(zoom * 100)}%
+                </span>
+                <Button variant="outline" size="icon" onClick={() => setZoom(z => Math.min(3, z + 0.25))}>
+                  <ZoomIn className="w-4 h-4" />
+                </Button>
+                <Button variant="outline" size="icon" onClick={() => setZoom(1)}>
+                  <RotateCw className="w-4 h-4" />
+                </Button>
               </div>
-            )}
-          </div>
-
-          {/* Size & Dimensions */}
-          {(sizeDisplay || dimensionDisplay) && (
-            <div className="grid grid-cols-2 gap-4">
-              {sizeDisplay && (
-                <div>
-                  <label className="text-xs text-muted-foreground font-medium uppercase tracking-wide">Size</label>
-                  <p className="text-sm font-medium mt-1">{sizeDisplay}</p>
-                </div>
-              )}
-              {dimensionDisplay && (
-                <div>
-                  <label className="text-xs text-muted-foreground font-medium uppercase tracking-wide">Actual Dimensions</label>
-                  <p className="text-sm font-medium mt-1">{dimensionDisplay}</p>
-                </div>
-              )}
-            </div>
-          )}
-
-          {/* Pipe Information */}
-          {(pipeInfo || directionInfo) && (
-            <div className="grid grid-cols-2 gap-4">
-              {pipeInfo && (
-                <div>
-                  <label className="text-xs text-muted-foreground font-medium uppercase tracking-wide">Pipe Diameter</label>
-                  <p className="text-sm font-medium mt-1">{pipeInfo}</p>
-                </div>
-              )}
-              {directionInfo && (
-                <div>
-                  <label className="text-xs text-muted-foreground font-medium uppercase tracking-wide">Pipe Direction</label>
-                  <p className="text-sm font-medium mt-1">{directionInfo}</p>
-                </div>
-              )}
-            </div>
-          )}
-
-          {/* Drawing Info */}
-          {(instance.drawingCode || instance.fileName) && (
-            <div className="grid grid-cols-2 gap-4">
-              {instance.drawingCode && (
-                <div>
-                  <label className="text-xs text-muted-foreground font-medium uppercase tracking-wide">Drawing Code</label>
-                  <p className="text-sm font-medium mt-1">{instance.drawingCode}</p>
-                </div>
-              )}
-              {instance.fileName && (
-                <div>
-                  <label className="text-xs text-muted-foreground font-medium uppercase tracking-wide">Source File</label>
-                  <p className="text-sm font-medium mt-1 truncate">{instance.fileName}</p>
-                </div>
-              )}
-            </div>
-          )}
-
-          {/* Controls */}
-          {instance.controls && instance.controls.length > 0 && (
-            <div>
-              <label className="text-xs text-muted-foreground font-medium uppercase tracking-wide">Recommended Controls</label>
-              <div className="flex flex-wrap gap-1 mt-2">
-                {instance.controls.map((control, idx) => (
-                  <Badge key={idx} variant="outline" className="text-xs">
-                    {control}
-                  </Badge>
-                ))}
+              
+              {/* Drawing viewer */}
+              <div 
+                ref={containerRef}
+                className="flex-1 border rounded-lg overflow-auto bg-muted/30 p-4 min-h-0"
+              >
+                {loading ? (
+                  <div className="flex items-center justify-center h-full">
+                    <div className="text-center space-y-2">
+                      <Loader2 className="w-8 h-8 animate-spin text-muted-foreground mx-auto" />
+                      <p className="text-sm text-muted-foreground">Loading drawing...</p>
+                    </div>
+                  </div>
+                ) : error ? (
+                  <div className="flex items-center justify-center h-full">
+                    <div className="text-center space-y-2">
+                      <AlertCircle className="w-8 h-8 text-destructive mx-auto" />
+                      <p className="text-sm text-destructive">{error}</p>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="flex items-center justify-center min-h-full">
+                    <canvas ref={canvasRef} />
+                  </div>
+                )}
               </div>
-            </div>
-          )}
-        </div>
+            </TabsContent>
+          </Tabs>
+        ) : (
+          <DetailsContent 
+            instance={instance}
+            sizeDisplay={sizeDisplay}
+            dimensionDisplay={dimensionDisplay}
+            pipeInfo={pipeInfo}
+            directionInfo={directionInfo}
+          />
+        )}
       </DialogContent>
     </Dialog>
   );
 };
+
+// Extracted details content component
+const DetailsContent = ({ 
+  instance, 
+  sizeDisplay, 
+  dimensionDisplay, 
+  pipeInfo, 
+  directionInfo 
+}: { 
+  instance: AnalysisItem; 
+  sizeDisplay: string | null;
+  dimensionDisplay: string | null;
+  pipeInfo: string | null;
+  directionInfo: string | null;
+}) => (
+  <div className="space-y-4 py-4">
+    {/* Category & Floor */}
+    <div className="grid grid-cols-2 gap-4">
+      <div>
+        <label className="text-xs text-muted-foreground font-medium uppercase tracking-wide">Category</label>
+        <p className="text-sm font-medium mt-1">{instance.category}</p>
+      </div>
+      {instance.floor && (
+        <div>
+          <label className="text-xs text-muted-foreground font-medium uppercase tracking-wide">Floor</label>
+          <p className="text-sm font-medium mt-1">{instance.floor}</p>
+        </div>
+      )}
+    </div>
+
+    {/* Size & Dimensions */}
+    {(sizeDisplay || dimensionDisplay) && (
+      <div className="grid grid-cols-2 gap-4">
+        {sizeDisplay && (
+          <div>
+            <label className="text-xs text-muted-foreground font-medium uppercase tracking-wide">Size</label>
+            <p className="text-sm font-medium mt-1">{sizeDisplay}</p>
+          </div>
+        )}
+        {dimensionDisplay && (
+          <div>
+            <label className="text-xs text-muted-foreground font-medium uppercase tracking-wide">Actual Dimensions</label>
+            <p className="text-sm font-medium mt-1">{dimensionDisplay}</p>
+          </div>
+        )}
+      </div>
+    )}
+
+    {/* Pipe Information */}
+    {(pipeInfo || directionInfo) && (
+      <div className="grid grid-cols-2 gap-4">
+        {pipeInfo && (
+          <div>
+            <label className="text-xs text-muted-foreground font-medium uppercase tracking-wide">Pipe Diameter</label>
+            <p className="text-sm font-medium mt-1">{pipeInfo}</p>
+          </div>
+        )}
+        {directionInfo && (
+          <div>
+            <label className="text-xs text-muted-foreground font-medium uppercase tracking-wide">Pipe Direction</label>
+            <p className="text-sm font-medium mt-1">{directionInfo}</p>
+          </div>
+        )}
+      </div>
+    )}
+
+    {/* Drawing Info */}
+    {(instance.drawingCode || instance.fileName) && (
+      <div className="grid grid-cols-2 gap-4">
+        {instance.drawingCode && (
+          <div>
+            <label className="text-xs text-muted-foreground font-medium uppercase tracking-wide">Drawing Code</label>
+            <p className="text-sm font-medium mt-1">{instance.drawingCode}</p>
+          </div>
+        )}
+        {instance.fileName && (
+          <div>
+            <label className="text-xs text-muted-foreground font-medium uppercase tracking-wide">Source File</label>
+            <p className="text-sm font-medium mt-1 truncate">{instance.fileName}</p>
+          </div>
+        )}
+      </div>
+    )}
+
+    {/* Controls */}
+    {instance.controls && instance.controls.length > 0 && (
+      <div>
+        <label className="text-xs text-muted-foreground font-medium uppercase tracking-wide">Recommended Controls</label>
+        <div className="flex flex-wrap gap-1 mt-2">
+          {instance.controls.map((control, idx) => (
+            <Badge key={idx} variant="outline" className="text-xs">
+              {control}
+            </Badge>
+          ))}
+        </div>
+      </div>
+    )}
+  </div>
+);
