@@ -1,16 +1,19 @@
 import { useState, useMemo, useCallback } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { ChevronDown, ChevronRight, FileText, Minus } from "lucide-react";
+import { ChevronDown, ChevronRight, FileText, Minus, Info } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
 import { cn } from "@/lib/utils";
 import { AnalysisItem } from "@/lib/analysisItemMapper";
+import { ClassRiskBadges } from "./RiskScoreSummary";
+import { InstanceDetailsModal } from "./InstanceDetailsModal";
 
 interface ControlPoints {
   points: number;
   popularity: number;
   author?: string;
   responsible?: string;
+  estimatedCost?: number;
 }
 
 interface ExpandableListItemProps {
@@ -127,6 +130,14 @@ export const ExpandableListItem = ({
 }: ExpandableListItemProps) => {
   const [isExpanded, setIsExpanded] = useState(false);
   const [expandedInstanceIds, setExpandedInstanceIds] = useState<Set<string>>(new Set());
+  const [detailsModalOpen, setDetailsModalOpen] = useState(false);
+  const [selectedDetailInstance, setSelectedDetailInstance] = useState<AnalysisItem | null>(null);
+
+  const handleViewDetails = useCallback((instance: AnalysisItem, e: React.MouseEvent) => {
+    e.stopPropagation();
+    setSelectedDetailInstance(instance);
+    setDetailsModalOpen(true);
+  }, []);
 
   // Sort instances
   const sortedInstances = useMemo(() => sortInstances(instances), [instances]);
@@ -283,16 +294,6 @@ export const ExpandableListItem = ({
                 {riskLevel}
               </Badge>
             )}
-            {classRiskPoints !== undefined && classRiskPoints > 0 && (
-              <Badge variant="outline" className="text-xs flex-shrink-0 bg-red-50 text-red-600 border-red-200">
-                {classRiskPoints} risk pts
-              </Badge>
-            )}
-            {classDeriskPoints !== undefined && classDeriskPoints > 0 && (
-              <Badge variant="outline" className="text-xs flex-shrink-0 bg-emerald-50 text-emerald-600 border-emerald-200">
-                -{classDeriskPoints} control pts
-              </Badge>
-            )}
           </div>
           {(threat || duration || cost) && (
             <div className="flex items-center gap-3 text-xs text-muted-foreground mt-1">
@@ -307,11 +308,16 @@ export const ExpandableListItem = ({
           )}
         </div>
 
-        {/* Count + Expand arrow */}
-        <div className="flex items-center gap-2 flex-shrink-0">
-          <span className="text-sm text-muted-foreground">
+        {/* Risk badges + Count + Expand arrow */}
+        <div className="flex items-center gap-3 flex-shrink-0">
+          <ClassRiskBadges 
+            riskPoints={classRiskPoints} 
+            deriskPoints={classDeriskPoints} 
+            showRiskLabel={false}
+          />
+          <Badge variant="secondary" className="text-xs cursor-default">
             {instanceCount} {instanceCount === 1 ? 'Instance' : 'Instances'}
-          </span>
+          </Badge>
           <ChevronDown 
             className={cn(
               "w-5 h-5 text-muted-foreground transition-transform",
@@ -330,19 +336,7 @@ export const ExpandableListItem = ({
             const hasControls = instance.controls && instance.controls.length > 0;
             const controlState = getInstanceControlSelectionState(instance);
             const capitalize = (str: string) => str.charAt(0).toUpperCase() + str.slice(1).toLowerCase();
-            const sizeDisplay = instance.sizeCategory ? capitalize(instance.sizeCategory) : null;
-            const dimensionDisplay = instance.length && instance.width ? `(${instance.length} ft × ${instance.width} ft)` : null;
-            
-            // Get additional parameters if available
-            const additionalParams = (instance as any).additionalParameters;
-            const pipeInfo = additionalParams?.pipeDiameterMM 
-              ? `Ø${additionalParams.pipeDiameterMM}mm` 
-              : additionalParams?.pipeDiameterInches 
-                ? `Ø${additionalParams.pipeDiameterInches}"` 
-                : null;
-            const directionInfo = additionalParams?.mainPipeDirection 
-              ? `Pipe Direction: ${additionalParams.mainPipeDirection.charAt(0).toUpperCase() + additionalParams.mainPipeDirection.slice(1).toLowerCase()}`
-              : null;
+            const sizeDisplay = instance.sizeCategory ? `${capitalize(instance.sizeCategory)} Room` : null;
 
             // Instance checkbox state (considers controls too)
             const hasAnyControlSelected = hasControls && !controlState.none;
@@ -420,33 +414,34 @@ export const ExpandableListItem = ({
                     )}
                     {sizeDisplay && (
                       <Badge variant="secondary" className="text-xs cursor-default hover:bg-secondary">
-                        {sizeDisplay} {dimensionDisplay}
-                      </Badge>
-                    )}
-                    {directionInfo && (
-                      <Badge variant="outline" className="text-xs cursor-default hover:bg-transparent bg-purple-50 text-purple-700 border-purple-200">
-                        {directionInfo}
-                      </Badge>
-                    )}
-                    {pipeInfo && (
-                      <Badge variant="outline" className="text-xs cursor-default hover:bg-transparent bg-blue-50 text-blue-700 border-blue-200">
-                        {pipeInfo}
+                        {sizeDisplay}
                       </Badge>
                     )}
                     {/* Instance risk points - each instance has same risk as the class */}
                     {riskPoints !== undefined && riskPoints > 0 && (
-                      <Badge variant="outline" className="text-xs cursor-default hover:bg-transparent bg-red-50 text-red-600 border-red-200">
+                      <Badge variant="outline" className="text-xs cursor-default hover:bg-transparent bg-red-50 text-red-600 border-red-200 dark:bg-red-950 dark:text-red-300 dark:border-red-800">
                         {riskPoints} risk pts
                       </Badge>
                     )}
                     {hasControls && (
-                      <Badge variant="outline" className="text-xs cursor-default hover:bg-transparent bg-blue-50 text-blue-700 border-blue-200">
-                        {instance.controls.length} Controls
+                      <Badge variant="secondary" className="text-xs cursor-default">
+                        {instance.controls.length} {instance.controls.length === 1 ? 'Control' : 'Controls'}
                       </Badge>
                     )}
                   </div>
 
-                  {/* View button */}
+                  {/* Info button */}
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-7 w-7 p-0 text-muted-foreground hover:text-foreground flex-shrink-0"
+                    onClick={(e) => handleViewDetails(instance, e)}
+                    title="View details"
+                  >
+                    <Info className="w-4 h-4" />
+                  </Button>
+
+                  {/* View file button */}
                   {onViewInstance && instance.fileName && canViewFiles && (
                     <Button
                       variant="ghost"
@@ -470,8 +465,14 @@ export const ExpandableListItem = ({
                       const controlId = getControlId(instance.id, control);
                       const isControlSelected = selectedControlIds.has(controlId);
                       const controlData = getControlPoints?.(control);
+                      const estimatedCost = controlData?.estimatedCost || 0;
+                      
+                      const formatCost = (cost: number) => {
+                        if (cost >= 1000) return `$${(cost / 1000).toFixed(1)}K`;
+                        return `$${cost}`;
+                      };
 
-                        return (
+                      return (
                         <div 
                           key={control}
                           className={cn(
@@ -494,16 +495,23 @@ export const ExpandableListItem = ({
                               </div>
                             )}
                           </div>
-                          {controlData && (
-                            <div className="flex items-center gap-2 flex-shrink-0">
-                              <Badge variant="outline" className="text-xs bg-emerald-50 text-emerald-600 border-emerald-200">
-                                {controlData.points} pts
+                          <div className="flex items-center gap-2 flex-shrink-0">
+                            {estimatedCost > 0 && (
+                              <Badge variant="outline" className="text-xs bg-blue-50 text-blue-600 border-blue-200 dark:bg-blue-950 dark:text-blue-300 dark:border-blue-800">
+                                {formatCost(estimatedCost)}
                               </Badge>
-                              <span className="text-xs text-muted-foreground">
-                                ★ {controlData.popularity}
-                              </span>
-                            </div>
-                          )}
+                            )}
+                            {controlData && (
+                              <>
+                                <Badge variant="outline" className="text-xs bg-emerald-50 text-emerald-600 border-emerald-200 dark:bg-emerald-950 dark:text-emerald-300 dark:border-emerald-800">
+                                  {controlData.points} pts
+                                </Badge>
+                                <span className="text-xs text-muted-foreground">
+                                  ★ {controlData.popularity}
+                                </span>
+                              </>
+                            )}
+                          </div>
                         </div>
                       );
                     })}
@@ -514,6 +522,13 @@ export const ExpandableListItem = ({
           })}
         </div>
       )}
+
+      {/* Instance Details Modal */}
+      <InstanceDetailsModal
+        isOpen={detailsModalOpen}
+        onClose={() => setDetailsModalOpen(false)}
+        instance={selectedDetailInstance}
+      />
     </div>
   );
 };

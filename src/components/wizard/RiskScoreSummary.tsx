@@ -1,20 +1,48 @@
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import { ProjectRiskScore } from "@/hooks/useRiskScoring";
-import { Shield, AlertTriangle, TrendingDown } from "lucide-react";
+import { Shield, AlertTriangle } from "lucide-react";
 
 interface RiskScoreSummaryProps {
   riskScore: ProjectRiskScore;
   compact?: boolean;
 }
 
+// Inline version for class headers - just the badges
+interface ClassRiskBadgesProps {
+  riskPoints?: number;
+  deriskPoints?: number;
+  showRiskLabel?: boolean;
+}
+
+export const ClassRiskBadges = ({ riskPoints, deriskPoints, showRiskLabel = true }: ClassRiskBadgesProps) => {
+  const netRisk = (riskPoints || 0) - (deriskPoints || 0);
+  
+  return (
+    <div className="flex items-center gap-1.5">
+      {riskPoints !== undefined && riskPoints > 0 && (
+        <Badge variant="outline" className="text-xs bg-red-50 text-red-600 border-red-200 dark:bg-red-950 dark:text-red-300 dark:border-red-800">
+          {showRiskLabel && <AlertTriangle className="h-3 w-3 mr-1" />}
+          {riskPoints} risk
+        </Badge>
+      )}
+      {deriskPoints !== undefined && deriskPoints > 0 && (
+        <Badge variant="outline" className="text-xs bg-emerald-50 text-emerald-600 border-emerald-200 dark:bg-emerald-950 dark:text-emerald-300 dark:border-emerald-800">
+          {showRiskLabel && <Shield className="h-3 w-3 mr-1" />}
+          -{deriskPoints} derisk
+        </Badge>
+      )}
+      {netRisk > 0 && riskPoints !== undefined && riskPoints > 0 && deriskPoints !== undefined && deriskPoints > 0 && (
+        <Badge className="text-xs bg-orange-500 text-white">
+          {netRisk} net
+        </Badge>
+      )}
+    </div>
+  );
+};
+
 export const RiskScoreSummary = ({ riskScore, compact = false }: RiskScoreSummaryProps) => {
   const { totalRiskPoints, selectedDeriskPoints, netRiskPoints, categoryScores } = riskScore;
-  
-  // Calculate risk reduction percentage
-  const reductionPercentage = totalRiskPoints > 0 
-    ? Math.round((selectedDeriskPoints / totalRiskPoints) * 100)
-    : 0;
   
   // Determine risk level color based on net risk
   const getRiskColor = (net: number, total: number) => {
@@ -51,11 +79,6 @@ export const RiskScoreSummary = ({ riskScore, compact = false }: RiskScoreSummar
             {netRiskPoints} pts
           </Badge>
         </div>
-        {/* Reduction % */}
-        <div className="flex items-center gap-2 ml-auto">
-          <TrendingDown className="h-4 w-4 text-primary" />
-          <span className="text-sm font-medium text-primary">{reductionPercentage}% reduced</span>
-        </div>
       </div>
     );
   }
@@ -72,23 +95,20 @@ export const RiskScoreSummary = ({ riskScore, compact = false }: RiskScoreSummar
           <Badge className={cn("text-sm px-3 py-1", getRiskColor(netRiskPoints, totalRiskPoints))}>
             Net Risk: {netRiskPoints} pts
           </Badge>
-          <Badge variant="outline" className="text-sm px-3 py-1 bg-green-50 text-green-700 border-green-200">
-            {reductionPercentage}% Mitigated
-          </Badge>
         </div>
       </div>
 
       {/* Score Breakdown */}
       <div className="grid grid-cols-3 gap-4">
-        <div className="p-3 bg-red-50 rounded-lg border border-red-100">
-          <div className="text-xs text-red-600 font-medium uppercase tracking-wide">Total Risk</div>
-          <div className="text-2xl font-bold text-red-700">{totalRiskPoints}</div>
-          <div className="text-xs text-red-500">points</div>
+        <div className="p-3 bg-red-50 rounded-lg border border-red-100 dark:bg-red-950 dark:border-red-800">
+          <div className="text-xs text-red-600 dark:text-red-300 font-medium uppercase tracking-wide">Total Risk</div>
+          <div className="text-2xl font-bold text-red-700 dark:text-red-200">{totalRiskPoints}</div>
+          <div className="text-xs text-red-500 dark:text-red-400">points</div>
         </div>
-        <div className="p-3 bg-green-50 rounded-lg border border-green-100">
-          <div className="text-xs text-green-600 font-medium uppercase tracking-wide">DeRisk Applied</div>
-          <div className="text-2xl font-bold text-green-700">-{selectedDeriskPoints}</div>
-          <div className="text-xs text-green-500">points</div>
+        <div className="p-3 bg-green-50 rounded-lg border border-green-100 dark:bg-green-950 dark:border-green-800">
+          <div className="text-xs text-green-600 dark:text-green-300 font-medium uppercase tracking-wide">DeRisk Applied</div>
+          <div className="text-2xl font-bold text-green-700 dark:text-green-200">-{selectedDeriskPoints}</div>
+          <div className="text-xs text-green-500 dark:text-green-400">points</div>
         </div>
         <div className={cn("p-3 rounded-lg border", 
           getRiskColor(netRiskPoints, totalRiskPoints).replace("bg-", "bg-opacity-10 bg-").replace("text-white", "").replace("text-black", "")
