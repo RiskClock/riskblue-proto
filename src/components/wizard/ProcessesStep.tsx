@@ -4,6 +4,7 @@ import { AnalysisItem } from "@/lib/analysisItemMapper";
 import { ExpandableListItem, getControlId } from "./ExpandableListItem";
 import { FileViewerModal } from "./FileViewerModal";
 import type { DriveFileInfo } from "./ProjectFilesUpload";
+import type { RiskTolerance } from "./RiskToleranceSelector";
 
 interface ProcessesStepProps {
   data?: any;
@@ -12,6 +13,7 @@ interface ProcessesStepProps {
   analysisItems?: AnalysisItem[];
   driveFiles?: DriveFileInfo[];
   driveAccessToken?: string | null;
+  riskTolerance?: RiskTolerance;
 }
 
 // Group processes by name for expandable list view
@@ -26,7 +28,8 @@ export const ProcessesStep = ({
   isProcessingWebhook,
   analysisItems = [],
   driveFiles = [],
-  driveAccessToken = null
+  driveAccessToken = null,
+  riskTolerance: parentRiskTolerance = "low"
 }: ProcessesStepProps) => {
   const hasPendingSave = useRef(false);
 
@@ -99,6 +102,35 @@ export const ProcessesStep = ({
       setSelectedControlIds(new Set(data.selectedProcessControls));
     }
   }, [data.selectedProcessInstances, data.selectedProcessControls]);
+
+  // React to parent risk tolerance changes
+  useEffect(() => {
+    if (!processItems.length) return;
+    
+    const allInstanceIds = processItems.map(i => i.id);
+    const allControlIds = new Set<string>();
+    processItems.forEach(item => {
+      (item.controls || []).forEach(control => {
+        allControlIds.add(getControlId(item.id, control));
+      });
+    });
+    
+    if (parentRiskTolerance === "low") {
+      setSelectedInstanceIds(allInstanceIds);
+      setSelectedControlIds(allControlIds);
+    } else if (parentRiskTolerance === "high") {
+      setSelectedInstanceIds([]);
+      setSelectedControlIds(new Set());
+    } else {
+      const halfInstances = allInstanceIds.filter((_, i) => i % 2 === 0);
+      const halfControls = new Set<string>();
+      Array.from(allControlIds).forEach((id, i) => {
+        if (i % 2 === 0) halfControls.add(id);
+      });
+      setSelectedInstanceIds(halfInstances);
+      setSelectedControlIds(halfControls);
+    }
+  }, [parentRiskTolerance, processItems]);
 
   // Auto-save with debounce
   useEffect(() => {

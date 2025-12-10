@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
+import { useQuery } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
 import { getUserFriendlyError } from "@/lib/errorHandling";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
@@ -91,22 +92,41 @@ const ProjectWizard = () => {
     return processNames.size;
   }, [analysisItems]);
 
-  // Calculate total cost estimates for risk tolerance levels
-  // For simplicity, we estimate costs based on number of controls
+  // Fetch control costs from database
+  const { data: controlCosts = [] } = useQuery({
+    queryKey: ['control-costs'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('mitigation_controls')
+        .select('name, estimated_cost')
+        .eq('is_active', true);
+      if (error) throw error;
+      return (data || []).map(c => ({
+        name: c.name,
+        cost: Number(c.estimated_cost) || 0
+      }));
+    }
+  });
+
+  // Calculate total cost estimates for risk tolerance levels using real control costs
   const totalCostEstimates = useMemo(() => {
-    // Count total controls across all items
-    let totalControls = 0;
+    // Create a map of control name to cost
+    const costMap = new Map<string, number>();
+    controlCosts.forEach(c => costMap.set(c.name, c.cost));
+    
+    // Calculate total cost of all controls across all items
+    let lowCost = 0;
     analysisItems.forEach(item => {
-      totalControls += (item.controls || []).length;
+      (item.controls || []).forEach(controlName => {
+        lowCost += costMap.get(controlName) || 0;
+      });
     });
     
-    // Estimate cost per control (random between $100-$5000, average ~$2500)
-    const avgCostPerControl = 2500;
-    const lowCost = totalControls * avgCostPerControl; // All controls selected
-    const mediumCost = Math.floor(totalControls * avgCostPerControl * 0.5); // ~50% selected
+    // Medium is ~50% of controls
+    const mediumCost = Math.floor(lowCost * 0.5);
     
     return { lowCost, mediumCost };
-  }, [analysisItems]);
+  }, [analysisItems, controlCosts]);
 
   // Handle risk tolerance change
   const handleRiskToleranceChange = useCallback((newTolerance: RiskTolerance) => {
@@ -754,6 +774,7 @@ const ProjectWizard = () => {
                       analysisItems={analysisItems}
                       driveFiles={driveFiles}
                       driveAccessToken={driveAccessToken}
+                      riskTolerance={riskTolerance}
                     />
                   </div>
                   <div className="space-y-6 pt-6 border-t">
@@ -772,6 +793,7 @@ const ProjectWizard = () => {
                       analysisItems={analysisItems}
                       driveFiles={driveFiles}
                       driveAccessToken={driveAccessToken}
+                      riskTolerance={riskTolerance}
                     />
                   </div>
                   <div className="space-y-6 pt-6 border-t">
@@ -788,6 +810,7 @@ const ProjectWizard = () => {
                       isProcessingWebhook={isProcessingWebhook}
                       driveFiles={driveFiles}
                       driveAccessToken={driveAccessToken}
+                      riskTolerance={riskTolerance}
                     />
                   </div>
                 </AccordionContent>
