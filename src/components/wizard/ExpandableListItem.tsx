@@ -1,16 +1,16 @@
 import { useState, useMemo, useCallback } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { ChevronDown, ChevronRight, FileText, Minus, Info } from "lucide-react";
+import { ChevronDown, ChevronRight, Minus, Info } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
 import { cn } from "@/lib/utils";
 import { AnalysisItem } from "@/lib/analysisItemMapper";
 import { ClassRiskBadges } from "./RiskScoreSummary";
 import { InstanceDetailsModal } from "./InstanceDetailsModal";
+import type { DriveFileInfo } from "./ProjectFilesUpload";
 
 interface ControlPoints {
   points: number;
-  popularity: number;
   author?: string;
   responsible?: string;
   estimatedCost?: number;
@@ -30,8 +30,9 @@ interface ExpandableListItemProps {
   selectedInstanceIds: string[];
   onToggleInstance: (instanceId: string) => void;
   onToggleAll: (instanceIds: string[], selected: boolean) => void;
-  onViewInstance?: (instance: AnalysisItem) => void;
   canViewFiles?: boolean;
+  driveFiles?: DriveFileInfo[];
+  driveAccessToken?: string | null;
   // Control selection props
   selectedControlIds: Set<string>;
   onToggleControl: (controlId: string) => void;
@@ -40,6 +41,7 @@ interface ExpandableListItemProps {
   getControlPoints?: (controlName: string) => ControlPoints | undefined;
   classRiskPoints?: number;
   classDeriskPoints?: number;
+  classCostToProtect?: number;
 }
 
 // Helper to generate control ID
@@ -54,17 +56,6 @@ const getRiskLevelStyles = (riskLevel?: string): string => {
   if (level.includes("high")) return "bg-orange-500 text-white border-orange-600 cursor-default hover:bg-orange-500";
   if (level.includes("moderate")) return "bg-yellow-500 text-black border-yellow-600 cursor-default hover:bg-yellow-500";
   if (level.includes("low")) return "bg-green-500 text-white border-green-600 cursor-default hover:bg-green-500";
-  return "bg-muted text-muted-foreground cursor-default";
-};
-
-// Cost color mapping - no hover effects
-const getCostStyles = (cost?: string): string => {
-  if (!cost) return "bg-muted text-muted-foreground cursor-default";
-  const costLower = cost.toLowerCase();
-  if (costLower.includes("500k") || costLower.includes("1m") || costLower.includes("million")) return "bg-red-600 text-white cursor-default hover:bg-red-600";
-  if (costLower.includes("200k") || costLower.includes("300k") || costLower.includes("400k")) return "bg-orange-500 text-white cursor-default hover:bg-orange-500";
-  if (costLower.includes("100k") || costLower.includes("150k")) return "bg-yellow-500 text-black cursor-default hover:bg-yellow-500";
-  if (costLower.includes("50k") || costLower.includes("75k")) return "bg-emerald-500 text-white cursor-default hover:bg-emerald-500";
   return "bg-muted text-muted-foreground cursor-default";
 };
 
@@ -105,6 +96,13 @@ const sortInstances = (instances: AnalysisItem[]): AnalysisItem[] => {
   });
 };
 
+// Format cost helper
+const formatCost = (cost: number) => {
+  if (cost >= 1000000) return `$${(cost / 1000000).toFixed(1)}M`;
+  if (cost >= 1000) return `$${(cost / 1000).toFixed(1)}K`;
+  return `$${cost}`;
+};
+
 export const ExpandableListItem = ({
   name,
   icon,
@@ -113,25 +111,31 @@ export const ExpandableListItem = ({
   riskPoints,
   threat,
   duration,
-  cost,
   instanceCount,
   instances,
   selectedInstanceIds,
   onToggleInstance,
   onToggleAll,
-  onViewInstance,
   canViewFiles = false,
+  driveFiles = [],
+  driveAccessToken = null,
   selectedControlIds,
   onToggleControl,
   onToggleAllControls,
   getControlPoints,
   classRiskPoints,
   classDeriskPoints,
+  classCostToProtect,
 }: ExpandableListItemProps) => {
   const [isExpanded, setIsExpanded] = useState(false);
   const [expandedInstanceIds, setExpandedInstanceIds] = useState<Set<string>>(new Set());
   const [detailsModalOpen, setDetailsModalOpen] = useState(false);
   const [selectedDetailInstance, setSelectedDetailInstance] = useState<AnalysisItem | null>(null);
+
+  // Find drive file for the selected instance
+  const findDriveFile = useCallback((fileName: string): DriveFileInfo | undefined => {
+    return driveFiles.find(f => f.name === fileName);
+  }, [driveFiles]);
 
   const handleViewDetails = useCallback((instance: AnalysisItem, e: React.MouseEvent) => {
     e.stopPropagation();
@@ -151,7 +155,6 @@ export const ExpandableListItem = ({
 
   const isAllSelected = selectedCount === instanceCount && instanceCount > 0;
   const isPartiallySelected = selectedCount > 0 && selectedCount < instanceCount;
-  const isNoneSelected = selectedCount === 0;
 
   // Get all control IDs for an instance
   const getInstanceControlIds = useCallback((instance: AnalysisItem): string[] => {
@@ -240,6 +243,14 @@ export const ExpandableListItem = ({
     });
   }, []);
 
+  // Get pipe diameter display for an instance
+  const getPipeDiameter = (instance: AnalysisItem): string | null => {
+    const additionalParams = (instance as any).additionalParameters;
+    if (additionalParams?.pipeDiameterMM) return `${additionalParams.pipeDiameterMM}mm`;
+    if (additionalParams?.pipeDiameterInches) return `${additionalParams.pipeDiameterInches}"`;
+    return null;
+  };
+
   return (
     <div className="border rounded-lg overflow-hidden">
       {/* Parent row */}
@@ -295,26 +306,26 @@ export const ExpandableListItem = ({
               </Badge>
             )}
           </div>
-          {(threat || duration || cost) && (
+          {(threat || duration) && (
             <div className="flex items-center gap-3 text-xs text-muted-foreground mt-1">
               {threat && <span className="truncate">{threat}</span>}
               {duration && <span>Duration: {duration}</span>}
-              {cost && (
-                <span className={cn("inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium", getCostStyles(cost))}>
-                  Cost to Protect: {cost}
-                </span>
-              )}
             </div>
           )}
         </div>
 
-        {/* Risk badges + Count + Expand arrow */}
+        {/* Risk badges + Cost + Count + Expand arrow */}
         <div className="flex items-center gap-3 flex-shrink-0">
           <ClassRiskBadges 
             riskPoints={classRiskPoints} 
             deriskPoints={classDeriskPoints} 
             showRiskLabel={false}
           />
+          {classCostToProtect !== undefined && classCostToProtect > 0 && (
+            <Badge variant="outline" className="text-xs cursor-default bg-blue-50 text-blue-600 border-blue-200 dark:bg-blue-950 dark:text-blue-300 dark:border-blue-800">
+              {formatCost(classCostToProtect)}
+            </Badge>
+          )}
           <Badge variant="secondary" className="text-xs cursor-default">
             {instanceCount} {instanceCount === 1 ? 'Instance' : 'Instances'}
           </Badge>
@@ -337,6 +348,7 @@ export const ExpandableListItem = ({
             const controlState = getInstanceControlSelectionState(instance);
             const capitalize = (str: string) => str.charAt(0).toUpperCase() + str.slice(1).toLowerCase();
             const sizeDisplay = instance.sizeCategory ? `${capitalize(instance.sizeCategory)} Room` : null;
+            const pipeDiameter = getPipeDiameter(instance);
 
             // Instance checkbox state (considers controls too)
             const hasAnyControlSelected = hasControls && !controlState.none;
@@ -417,6 +429,11 @@ export const ExpandableListItem = ({
                         {sizeDisplay}
                       </Badge>
                     )}
+                    {pipeDiameter && (
+                      <Badge variant="outline" className="text-xs cursor-default hover:bg-transparent">
+                        Ø{pipeDiameter}
+                      </Badge>
+                    )}
                     {/* Instance risk points - each instance has same risk as the class */}
                     {riskPoints !== undefined && riskPoints > 0 && (
                       <Badge variant="outline" className="text-xs cursor-default hover:bg-transparent bg-red-50 text-red-600 border-red-200 dark:bg-red-950 dark:text-red-300 dark:border-red-800">
@@ -440,22 +457,6 @@ export const ExpandableListItem = ({
                   >
                     <Info className="w-4 h-4" />
                   </Button>
-
-                  {/* View file button */}
-                  {onViewInstance && instance.fileName && canViewFiles && (
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="h-7 px-2 text-xs text-primary hover:text-primary flex-shrink-0"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        onViewInstance(instance);
-                      }}
-                    >
-                      <FileText className="w-3 h-3 mr-1" />
-                      View
-                    </Button>
-                  )}
                 </div>
 
                 {/* Controls list - third level */}
@@ -466,11 +467,6 @@ export const ExpandableListItem = ({
                       const isControlSelected = selectedControlIds.has(controlId);
                       const controlData = getControlPoints?.(control);
                       const estimatedCost = controlData?.estimatedCost || 0;
-                      
-                      const formatCost = (cost: number) => {
-                        if (cost >= 1000) return `$${(cost / 1000).toFixed(1)}K`;
-                        return `$${cost}`;
-                      };
 
                       return (
                         <div 
@@ -502,14 +498,9 @@ export const ExpandableListItem = ({
                               </Badge>
                             )}
                             {controlData && (
-                              <>
-                                <Badge variant="outline" className="text-xs bg-emerald-50 text-emerald-600 border-emerald-200 dark:bg-emerald-950 dark:text-emerald-300 dark:border-emerald-800">
-                                  {controlData.points} pts
-                                </Badge>
-                                <span className="text-xs text-muted-foreground">
-                                  ★ {controlData.popularity}
-                                </span>
-                              </>
+                              <Badge variant="outline" className="text-xs bg-emerald-50 text-emerald-600 border-emerald-200 dark:bg-emerald-950 dark:text-emerald-300 dark:border-emerald-800">
+                                {controlData.points} pts
+                              </Badge>
                             )}
                           </div>
                         </div>
@@ -523,11 +514,14 @@ export const ExpandableListItem = ({
         </div>
       )}
 
-      {/* Instance Details Modal */}
+      {/* Instance Details Modal - combined with file viewer */}
       <InstanceDetailsModal
         isOpen={detailsModalOpen}
         onClose={() => setDetailsModalOpen(false)}
         instance={selectedDetailInstance}
+        canViewFile={canViewFiles && !!selectedDetailInstance?.fileName}
+        driveFile={selectedDetailInstance?.fileName ? findDriveFile(selectedDetailInstance.fileName) : undefined}
+        driveAccessToken={driveAccessToken}
       />
     </div>
   );
