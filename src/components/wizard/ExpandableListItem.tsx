@@ -315,13 +315,13 @@ export const ExpandableListItem = ({
         </div>
 
         {/* Risk badges + Cost + Count + Expand arrow */}
-        <div className="flex items-center gap-3 flex-shrink-0">
+        <div className="flex items-center gap-2 flex-shrink-0">
           <ClassRiskBadges 
             riskPoints={classRiskPoints} 
             deriskPoints={classDeriskPoints} 
             showRiskLabel={false}
           />
-          {classCostToProtect !== undefined && classCostToProtect > 0 && (
+          {classCostToProtect !== undefined && (
             <Badge variant="outline" className="text-xs cursor-default bg-blue-50 text-blue-600 border-blue-200 dark:bg-blue-950 dark:text-blue-300 dark:border-blue-800">
               {formatCost(classCostToProtect)}
             </Badge>
@@ -349,6 +349,16 @@ export const ExpandableListItem = ({
             const capitalize = (str: string) => str.charAt(0).toUpperCase() + str.slice(1).toLowerCase();
             const sizeDisplay = instance.sizeCategory ? `${capitalize(instance.sizeCategory)} Room` : null;
             const pipeDiameter = getPipeDiameter(instance);
+
+            // Calculate instance cost based on selected controls
+            const instanceCost = (instance.controls || []).reduce((sum, control) => {
+              const controlId = getControlId(instance.id, control);
+              if (selectedControlIds.has(controlId)) {
+                const controlData = getControlPoints?.(control);
+                return sum + (controlData?.estimatedCost || 0);
+              }
+              return sum;
+            }, 0);
 
             // Instance checkbox state (considers controls too)
             const hasAnyControlSelected = hasControls && !controlState.none;
@@ -445,6 +455,10 @@ export const ExpandableListItem = ({
                         {instance.controls.length} {instance.controls.length === 1 ? 'Control' : 'Controls'}
                       </Badge>
                     )}
+                    {/* Instance cost - sum of selected controls */}
+                    <Badge variant="outline" className="text-xs cursor-default bg-blue-50 text-blue-600 border-blue-200 dark:bg-blue-950 dark:text-blue-300 dark:border-blue-800">
+                      {formatCost(instanceCost)}
+                    </Badge>
                   </div>
 
                   {/* Info button */}
@@ -492,11 +506,9 @@ export const ExpandableListItem = ({
                             )}
                           </div>
                           <div className="flex items-center gap-2 flex-shrink-0">
-                            {estimatedCost > 0 && (
-                              <Badge variant="outline" className="text-xs bg-blue-50 text-blue-600 border-blue-200 dark:bg-blue-950 dark:text-blue-300 dark:border-blue-800">
-                                {formatCost(estimatedCost)}
-                              </Badge>
-                            )}
+                            <Badge variant="outline" className="text-xs bg-blue-50 text-blue-600 border-blue-200 dark:bg-blue-950 dark:text-blue-300 dark:border-blue-800">
+                              {formatCost(estimatedCost)}
+                            </Badge>
                             {controlData && (
                               <Badge variant="outline" className="text-xs bg-emerald-50 text-emerald-600 border-emerald-200 dark:bg-emerald-950 dark:text-emerald-300 dark:border-emerald-800">
                                 {controlData.points} pts
