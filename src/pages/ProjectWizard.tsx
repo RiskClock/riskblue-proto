@@ -19,6 +19,7 @@ import { ProcessesStep } from "@/components/wizard/ProcessesStep";
 import { MitigationResponsePlanStep } from "@/components/wizard/MitigationResponsePlanStep";
 import { WaterMitigationGuidelinesStep } from "@/components/wizard/WaterMitigationGuidelinesStep";
 import { CollaboratorManagementStep } from "@/components/wizard/CollaboratorManagementStep";
+import { RiskToleranceSelector, RiskTolerance } from "@/components/wizard/RiskToleranceSelector";
 import { ProposalsStep } from "@/components/wizard/ProposalsStep";
 import { ImplementationScheduleStep } from "@/components/wizard/ImplementationScheduleStep";
 import { ProjectFilesUpload, DriveFileInfo } from "@/components/wizard/ProjectFilesUpload";
@@ -59,6 +60,11 @@ const ProjectWizard = () => {
   const [driveFiles, setDriveFiles] = useState<DriveFileInfo[]>([]);
   const [driveAccessToken, setDriveAccessToken] = useState<string | null>(null);
   const [driveConnected, setDriveConnected] = useState(false);
+  
+  // Risk tolerance state (shared across all AWP sections)
+  const [riskTolerance, setRiskTolerance] = useState<RiskTolerance>(
+    (projectData.riskTolerance as RiskTolerance) || "low"
+  );
 
   // Compute class counts for subheadings
   const assetClassCount = useMemo(() => {
@@ -84,6 +90,44 @@ const ProjectWizard = () => {
     });
     return processNames.size;
   }, [analysisItems]);
+
+  // Calculate total cost estimates for risk tolerance levels
+  // For simplicity, we estimate costs based on number of controls
+  const totalCostEstimates = useMemo(() => {
+    // Count total controls across all items
+    let totalControls = 0;
+    analysisItems.forEach(item => {
+      totalControls += (item.controls || []).length;
+    });
+    
+    // Estimate cost per control (random between $100-$5000, average ~$2500)
+    const avgCostPerControl = 2500;
+    const lowCost = totalControls * avgCostPerControl; // All controls selected
+    const mediumCost = Math.floor(totalControls * avgCostPerControl * 0.5); // ~50% selected
+    
+    return { lowCost, mediumCost };
+  }, [analysisItems]);
+
+  // Handle risk tolerance change
+  const handleRiskToleranceChange = useCallback((newTolerance: RiskTolerance) => {
+    setRiskTolerance(newTolerance);
+    // Project data update will happen via the useEffect that syncs riskTolerance
+  }, []);
+
+  // Sync riskTolerance to projectData when it changes
+  useEffect(() => {
+    if (projectData.riskTolerance !== riskTolerance) {
+      setProjectData(prev => ({ ...prev, riskTolerance }));
+    }
+  }, [riskTolerance]);
+
+  // Sync riskTolerance from projectData when it loads
+  useEffect(() => {
+    if (projectData.riskTolerance && projectData.riskTolerance !== riskTolerance) {
+      setRiskTolerance(projectData.riskTolerance as RiskTolerance);
+    }
+  }, [projectData.riskTolerance]);
+
   // Fetch analysis items when project loads
   useEffect(() => {
     const fetchAnalysisItems = async () => {
@@ -686,6 +730,14 @@ const ProjectWizard = () => {
                   Assets, Water Systems & Processes
                 </AccordionTrigger>
                 <AccordionContent className="space-y-8 pt-4">
+                  {/* Risk Tolerance Selector - applies to all AWP sections */}
+                  <RiskToleranceSelector
+                    value={riskTolerance}
+                    onChange={handleRiskToleranceChange}
+                    lowCost={totalCostEstimates.lowCost}
+                    mediumCost={totalCostEstimates.mediumCost}
+                  />
+                  
                   <div className="space-y-6">
                     <h3 className="text-md font-medium">
                       Critical Assets

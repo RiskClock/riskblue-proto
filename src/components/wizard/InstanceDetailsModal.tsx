@@ -2,9 +2,7 @@ import { useState, useEffect, useRef } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { ScrollArea } from "@/components/ui/scroll-area";
-import { Loader2, ZoomIn, ZoomOut, RotateCw, AlertCircle, ChevronLeft, ChevronRight } from "lucide-react";
+import { Loader2, ZoomIn, ZoomOut, RotateCw, AlertCircle, ChevronLeft, ChevronRight, FileImage } from "lucide-react";
 import { AnalysisItem } from "@/lib/analysisItemMapper";
 import type { DriveFileInfo } from "./ProjectFilesUpload";
 import * as pdfjsLib from "pdfjs-dist";
@@ -33,7 +31,6 @@ export const InstanceDetailsModal = ({
   driveFile,
   driveAccessToken
 }: InstanceDetailsModalProps) => {
-  const [activeTab, setActiveTab] = useState<string>("details");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [zoom, setZoom] = useState(1);
@@ -44,10 +41,11 @@ export const InstanceDetailsModal = ({
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
 
+  const showDrawing = canViewFile && driveFile && driveAccessToken;
+
   // Reset state when modal opens/closes or instance changes
   useEffect(() => {
     if (isOpen) {
-      setActiveTab("details");
       setPageImages([]);
       setOriginalSize(null);
       setLoading(false);
@@ -57,12 +55,12 @@ export const InstanceDetailsModal = ({
     }
   }, [isOpen, instance]);
 
-  // Load file when viewing tab is selected
+  // Auto-load file when modal opens and can view
   useEffect(() => {
-    if (activeTab === "drawing" && driveFile && driveAccessToken && pageImages.length === 0) {
+    if (isOpen && showDrawing && pageImages.length === 0) {
       loadFile();
     }
-  }, [activeTab, driveFile, driveAccessToken]);
+  }, [isOpen, showDrawing]);
 
   const loadFile = async () => {
     if (!driveFile || !driveAccessToken) return;
@@ -163,7 +161,7 @@ export const InstanceDetailsModal = ({
 
   // Draw canvas with bounding boxes
   useEffect(() => {
-    if (loading || pageImages.length === 0 || activeTab !== "drawing") return;
+    if (loading || pageImages.length === 0) return;
     
     const canvas = canvasRef.current;
     const container = containerRef.current;
@@ -244,7 +242,7 @@ export const InstanceDetailsModal = ({
       ctx.fillStyle = "#000000";
       ctx.fillText(label, scaledX + padding, scaledY - 7);
     }
-  }, [pageImages, currentPage, zoom, loading, activeTab, instance, originalSize]);
+  }, [pageImages, currentPage, zoom, loading, instance, originalSize]);
 
   if (!instance) return null;
 
@@ -266,64 +264,141 @@ export const InstanceDetailsModal = ({
     ? `${instance.length} ft × ${instance.width} ft` 
     : null;
 
-  const showDrawingTab = canViewFile && driveFile && driveAccessToken;
-
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className={showDrawingTab ? "sm:max-w-4xl h-[80vh] flex flex-col" : "sm:max-w-md"}>
-        <DialogHeader>
+      <DialogContent className={showDrawing ? "sm:max-w-5xl h-[85vh] flex flex-col p-0" : "sm:max-w-md"}>
+        <DialogHeader className="px-6 pt-6 pb-4 border-b flex-shrink-0">
           <DialogTitle className="flex items-center gap-2">
             <span className="text-muted-foreground text-sm">{instance.id}:</span>
             {instance.areaName || instance.name}
           </DialogTitle>
         </DialogHeader>
         
-        {showDrawingTab ? (
-          <Tabs value={activeTab} onValueChange={setActiveTab} className="flex-1 flex flex-col min-h-0">
-            <TabsList className="grid w-full grid-cols-2">
-              <TabsTrigger value="details">Details</TabsTrigger>
-              <TabsTrigger value="drawing">Drawing</TabsTrigger>
-            </TabsList>
-            
-            <TabsContent value="details" className="flex-1 overflow-auto">
-              <DetailsContent 
-                instance={instance}
-                sizeDisplay={sizeDisplay}
-                dimensionDisplay={dimensionDisplay}
-                pipeInfo={pipeInfo}
-                directionInfo={directionInfo}
-              />
-            </TabsContent>
-            
-            <TabsContent value="drawing" className="flex-1 flex flex-col min-h-0">
-              {/* Zoom controls */}
-              <div className="flex items-center justify-end gap-2 mb-2 flex-shrink-0">
-                {totalPages > 1 && (
-                  <>
-                    <Button variant="outline" size="icon" onClick={() => setCurrentPage(p => Math.max(1, p - 1))} disabled={currentPage === 1}>
-                      <ChevronLeft className="w-4 h-4" />
-                    </Button>
-                    <span className="text-sm min-w-[5rem] text-center">
-                      Page {currentPage} / {totalPages}
-                    </span>
-                    <Button variant="outline" size="icon" onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))} disabled={currentPage === totalPages}>
-                      <ChevronRight className="w-4 h-4" />
-                    </Button>
-                    <div className="w-px h-6 bg-border mx-1" />
-                  </>
+        {showDrawing ? (
+          <div className="flex-1 flex min-h-0 overflow-hidden">
+            {/* Left side - Details */}
+            <div className="w-80 flex-shrink-0 border-r overflow-y-auto p-6">
+              <div className="space-y-4">
+                {/* Category & Floor */}
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="text-xs text-muted-foreground font-medium uppercase tracking-wide">Category</label>
+                    <p className="text-sm font-medium mt-1">{instance.category}</p>
+                  </div>
+                  {instance.floor && (
+                    <div>
+                      <label className="text-xs text-muted-foreground font-medium uppercase tracking-wide">Floor</label>
+                      <p className="text-sm font-medium mt-1">{instance.floor}</p>
+                    </div>
+                  )}
+                </div>
+
+                {/* Size & Dimensions */}
+                {(sizeDisplay || dimensionDisplay) && (
+                  <div className="grid grid-cols-2 gap-4">
+                    {sizeDisplay && (
+                      <div>
+                        <label className="text-xs text-muted-foreground font-medium uppercase tracking-wide">Size</label>
+                        <p className="text-sm font-medium mt-1">{sizeDisplay}</p>
+                      </div>
+                    )}
+                    {dimensionDisplay && (
+                      <div>
+                        <label className="text-xs text-muted-foreground font-medium uppercase tracking-wide">Dimensions</label>
+                        <p className="text-sm font-medium mt-1">{dimensionDisplay}</p>
+                      </div>
+                    )}
+                  </div>
                 )}
-                <Button variant="outline" size="icon" onClick={() => setZoom(z => Math.max(0.5, z - 0.25))}>
-                  <ZoomOut className="w-4 h-4" />
-                </Button>
-                <span className="text-sm min-w-[4rem] text-center">
-                  {Math.round(zoom * 100)}%
-                </span>
-                <Button variant="outline" size="icon" onClick={() => setZoom(z => Math.min(3, z + 0.25))}>
-                  <ZoomIn className="w-4 h-4" />
-                </Button>
-                <Button variant="outline" size="icon" onClick={() => setZoom(1)}>
-                  <RotateCw className="w-4 h-4" />
-                </Button>
+
+                {/* Pipe Information */}
+                {(pipeInfo || directionInfo) && (
+                  <div className="grid grid-cols-2 gap-4">
+                    {pipeInfo && (
+                      <div>
+                        <label className="text-xs text-muted-foreground font-medium uppercase tracking-wide">Pipe Diameter</label>
+                        <p className="text-sm font-medium mt-1">{pipeInfo}</p>
+                      </div>
+                    )}
+                    {directionInfo && (
+                      <div>
+                        <label className="text-xs text-muted-foreground font-medium uppercase tracking-wide">Pipe Direction</label>
+                        <p className="text-sm font-medium mt-1">{directionInfo}</p>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* Drawing Info */}
+                {(instance.drawingCode || instance.fileName) && (
+                  <div className="space-y-3">
+                    {instance.drawingCode && (
+                      <div>
+                        <label className="text-xs text-muted-foreground font-medium uppercase tracking-wide">Drawing Code</label>
+                        <p className="text-sm font-medium mt-1">{instance.drawingCode}</p>
+                      </div>
+                    )}
+                    {instance.fileName && (
+                      <div>
+                        <label className="text-xs text-muted-foreground font-medium uppercase tracking-wide">Source File</label>
+                        <p className="text-sm font-medium mt-1 truncate" title={instance.fileName}>{instance.fileName}</p>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* Controls */}
+                {instance.controls && instance.controls.length > 0 && (
+                  <div>
+                    <label className="text-xs text-muted-foreground font-medium uppercase tracking-wide">Recommended Controls</label>
+                    <div className="flex flex-wrap gap-1 mt-2">
+                      {instance.controls.map((control, idx) => (
+                        <Badge key={idx} variant="outline" className="text-xs">
+                          {control}
+                        </Badge>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+            
+            {/* Right side - Drawing */}
+            <div className="flex-1 flex flex-col min-h-0 p-4">
+              {/* Zoom controls */}
+              <div className="flex items-center justify-between mb-3 flex-shrink-0">
+                <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                  <FileImage className="w-4 h-4" />
+                  <span>Drawing Preview</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  {totalPages > 1 && (
+                    <>
+                      <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => setCurrentPage(p => Math.max(1, p - 1))} disabled={currentPage === 1}>
+                        <ChevronLeft className="w-4 h-4" />
+                      </Button>
+                      <span className="text-sm min-w-[5rem] text-center">
+                        Page {currentPage} / {totalPages}
+                      </span>
+                      <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))} disabled={currentPage === totalPages}>
+                        <ChevronRight className="w-4 h-4" />
+                      </Button>
+                      <div className="w-px h-6 bg-border mx-1" />
+                    </>
+                  )}
+                  <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => setZoom(z => Math.max(0.5, z - 0.25))}>
+                    <ZoomOut className="w-4 h-4" />
+                  </Button>
+                  <span className="text-sm min-w-[3rem] text-center">
+                    {Math.round(zoom * 100)}%
+                  </span>
+                  <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => setZoom(z => Math.min(3, z + 0.25))}>
+                    <ZoomIn className="w-4 h-4" />
+                  </Button>
+                  <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => setZoom(1)}>
+                    <RotateCw className="w-4 h-4" />
+                  </Button>
+                </div>
               </div>
               
               {/* Drawing viewer */}
@@ -351,117 +426,94 @@ export const InstanceDetailsModal = ({
                   </div>
                 )}
               </div>
-            </TabsContent>
-          </Tabs>
+            </div>
+          </div>
         ) : (
-          <DetailsContent 
-            instance={instance}
-            sizeDisplay={sizeDisplay}
-            dimensionDisplay={dimensionDisplay}
-            pipeInfo={pipeInfo}
-            directionInfo={directionInfo}
-          />
+          <div className="space-y-4 p-6">
+            {/* Category & Floor */}
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="text-xs text-muted-foreground font-medium uppercase tracking-wide">Category</label>
+                <p className="text-sm font-medium mt-1">{instance.category}</p>
+              </div>
+              {instance.floor && (
+                <div>
+                  <label className="text-xs text-muted-foreground font-medium uppercase tracking-wide">Floor</label>
+                  <p className="text-sm font-medium mt-1">{instance.floor}</p>
+                </div>
+              )}
+            </div>
+
+            {/* Size & Dimensions */}
+            {(sizeDisplay || dimensionDisplay) && (
+              <div className="grid grid-cols-2 gap-4">
+                {sizeDisplay && (
+                  <div>
+                    <label className="text-xs text-muted-foreground font-medium uppercase tracking-wide">Size</label>
+                    <p className="text-sm font-medium mt-1">{sizeDisplay}</p>
+                  </div>
+                )}
+                {dimensionDisplay && (
+                  <div>
+                    <label className="text-xs text-muted-foreground font-medium uppercase tracking-wide">Dimensions</label>
+                    <p className="text-sm font-medium mt-1">{dimensionDisplay}</p>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Pipe Information */}
+            {(pipeInfo || directionInfo) && (
+              <div className="grid grid-cols-2 gap-4">
+                {pipeInfo && (
+                  <div>
+                    <label className="text-xs text-muted-foreground font-medium uppercase tracking-wide">Pipe Diameter</label>
+                    <p className="text-sm font-medium mt-1">{pipeInfo}</p>
+                  </div>
+                )}
+                {directionInfo && (
+                  <div>
+                    <label className="text-xs text-muted-foreground font-medium uppercase tracking-wide">Pipe Direction</label>
+                    <p className="text-sm font-medium mt-1">{directionInfo}</p>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Drawing Info */}
+            {(instance.drawingCode || instance.fileName) && (
+              <div className="grid grid-cols-2 gap-4">
+                {instance.drawingCode && (
+                  <div>
+                    <label className="text-xs text-muted-foreground font-medium uppercase tracking-wide">Drawing Code</label>
+                    <p className="text-sm font-medium mt-1">{instance.drawingCode}</p>
+                  </div>
+                )}
+                {instance.fileName && (
+                  <div>
+                    <label className="text-xs text-muted-foreground font-medium uppercase tracking-wide">Source File</label>
+                    <p className="text-sm font-medium mt-1 truncate">{instance.fileName}</p>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Controls */}
+            {instance.controls && instance.controls.length > 0 && (
+              <div>
+                <label className="text-xs text-muted-foreground font-medium uppercase tracking-wide">Recommended Controls</label>
+                <div className="flex flex-wrap gap-1 mt-2">
+                  {instance.controls.map((control, idx) => (
+                    <Badge key={idx} variant="outline" className="text-xs">
+                      {control}
+                    </Badge>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
         )}
       </DialogContent>
     </Dialog>
   );
 };
-
-// Extracted details content component
-const DetailsContent = ({ 
-  instance, 
-  sizeDisplay, 
-  dimensionDisplay, 
-  pipeInfo, 
-  directionInfo 
-}: { 
-  instance: AnalysisItem; 
-  sizeDisplay: string | null;
-  dimensionDisplay: string | null;
-  pipeInfo: string | null;
-  directionInfo: string | null;
-}) => (
-  <div className="space-y-4 py-4">
-    {/* Category & Floor */}
-    <div className="grid grid-cols-2 gap-4">
-      <div>
-        <label className="text-xs text-muted-foreground font-medium uppercase tracking-wide">Category</label>
-        <p className="text-sm font-medium mt-1">{instance.category}</p>
-      </div>
-      {instance.floor && (
-        <div>
-          <label className="text-xs text-muted-foreground font-medium uppercase tracking-wide">Floor</label>
-          <p className="text-sm font-medium mt-1">{instance.floor}</p>
-        </div>
-      )}
-    </div>
-
-    {/* Size & Dimensions */}
-    {(sizeDisplay || dimensionDisplay) && (
-      <div className="grid grid-cols-2 gap-4">
-        {sizeDisplay && (
-          <div>
-            <label className="text-xs text-muted-foreground font-medium uppercase tracking-wide">Size</label>
-            <p className="text-sm font-medium mt-1">{sizeDisplay}</p>
-          </div>
-        )}
-        {dimensionDisplay && (
-          <div>
-            <label className="text-xs text-muted-foreground font-medium uppercase tracking-wide">Actual Dimensions</label>
-            <p className="text-sm font-medium mt-1">{dimensionDisplay}</p>
-          </div>
-        )}
-      </div>
-    )}
-
-    {/* Pipe Information */}
-    {(pipeInfo || directionInfo) && (
-      <div className="grid grid-cols-2 gap-4">
-        {pipeInfo && (
-          <div>
-            <label className="text-xs text-muted-foreground font-medium uppercase tracking-wide">Pipe Diameter</label>
-            <p className="text-sm font-medium mt-1">{pipeInfo}</p>
-          </div>
-        )}
-        {directionInfo && (
-          <div>
-            <label className="text-xs text-muted-foreground font-medium uppercase tracking-wide">Pipe Direction</label>
-            <p className="text-sm font-medium mt-1">{directionInfo}</p>
-          </div>
-        )}
-      </div>
-    )}
-
-    {/* Drawing Info */}
-    {(instance.drawingCode || instance.fileName) && (
-      <div className="grid grid-cols-2 gap-4">
-        {instance.drawingCode && (
-          <div>
-            <label className="text-xs text-muted-foreground font-medium uppercase tracking-wide">Drawing Code</label>
-            <p className="text-sm font-medium mt-1">{instance.drawingCode}</p>
-          </div>
-        )}
-        {instance.fileName && (
-          <div>
-            <label className="text-xs text-muted-foreground font-medium uppercase tracking-wide">Source File</label>
-            <p className="text-sm font-medium mt-1 truncate">{instance.fileName}</p>
-          </div>
-        )}
-      </div>
-    )}
-
-    {/* Controls */}
-    {instance.controls && instance.controls.length > 0 && (
-      <div>
-        <label className="text-xs text-muted-foreground font-medium uppercase tracking-wide">Recommended Controls</label>
-        <div className="flex flex-wrap gap-1 mt-2">
-          {instance.controls.map((control, idx) => (
-            <Badge key={idx} variant="outline" className="text-xs">
-              {control}
-            </Badge>
-          ))}
-        </div>
-      </div>
-    )}
-  </div>
-);
