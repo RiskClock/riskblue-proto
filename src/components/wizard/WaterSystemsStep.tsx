@@ -38,6 +38,7 @@ interface WaterSystemsStepProps {
   analysisItems?: AnalysisItem[];
   driveFiles?: DriveFileInfo[];
   driveAccessToken?: string | null;
+  riskTolerance?: RiskTolerance;
 }
 
 export const WaterSystemsStep = ({
@@ -48,7 +49,8 @@ export const WaterSystemsStep = ({
   projectId,
   analysisItems = [],
   driveFiles = [],
-  driveAccessToken = null
+  driveAccessToken = null,
+  riskTolerance: parentRiskTolerance = "low"
 }: WaterSystemsStepProps) => {
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -76,11 +78,6 @@ export const WaterSystemsStep = ({
   const [viewerItem, setViewerItem] = useState<AnalysisItem | null>(null);
   const [viewerFileId, setViewerFileId] = useState<string>("");
   const [viewerMimeType, setViewerMimeType] = useState<string>("application/pdf");
-  
-  // Risk tolerance state
-  const [riskTolerance, setRiskTolerance] = useState<RiskTolerance>(
-    data.riskTolerance || "low"
-  );
   // Fetch water systems from database
   const { data: waterSystems = [], isLoading } = useQuery({
     queryKey: ['water-systems'],
@@ -95,20 +92,19 @@ export const WaterSystemsStep = ({
     }
   });
 
-  // Fetch mitigation controls for points/popularity/author/responsible with random estimated costs
+  // Fetch mitigation controls for points/author/responsible with estimated_cost from DB
   const { data: controls = [] } = useQuery({
-    queryKey: ['mitigation-controls'],
+    queryKey: ['mitigation-controls-with-cost'],
     queryFn: async () => {
       const { data, error } = await supabase
         .from('mitigation_controls')
-        .select('name, points, popularity, author, responsible')
+        .select('name, points, author, responsible, estimated_cost')
         .eq('is_active', true);
       if (error) throw error;
-      // Add random estimated cost between $100-$5000 for each control
       return (data || []).map(control => ({
         ...control,
-        estimatedCost: Math.floor(Math.random() * 49) * 100 + 100 // $100 to $5000 in $100 increments
-      })) as unknown as { name: string; points: number; popularity: number; author: string; responsible: string; estimatedCost: number }[];
+        estimatedCost: Number(control.estimated_cost) || 0
+      })) as { name: string; points: number; author: string; responsible: string; estimatedCost: number }[];
     }
   });
 
@@ -358,9 +354,9 @@ export const WaterSystemsStep = ({
     return cost;
   }, [selectedControlIds, controls]);
 
-  // Handle risk tolerance change - MUST be before early returns
-  const handleRiskToleranceChange = useCallback((newTolerance: RiskTolerance) => {
-    setRiskTolerance(newTolerance);
+  // React to parent risk tolerance changes
+  useEffect(() => {
+    if (!systemItems.length) return;
     
     const allInstanceIds = systemItems.map(i => i.id);
     const allControlIds = new Set<string>();
@@ -370,25 +366,25 @@ export const WaterSystemsStep = ({
       });
     });
     
-    if (newTolerance === "low") {
+    if (parentRiskTolerance === "low") {
       // Select all
       setSelectedInstanceIds(allInstanceIds);
       setSelectedControlIds(allControlIds);
-    } else if (newTolerance === "high") {
+    } else if (parentRiskTolerance === "high") {
       // Select none
       setSelectedInstanceIds([]);
       setSelectedControlIds(new Set());
     } else {
-      // Medium - randomize 50%
-      const randomInstances = allInstanceIds.filter(() => Math.random() > 0.5);
-      const randomControls = new Set<string>();
-      Array.from(allControlIds).forEach(id => {
-        if (Math.random() > 0.5) randomControls.add(id);
+      // Medium - select ~50% deterministically based on index
+      const halfInstances = allInstanceIds.filter((_, i) => i % 2 === 0);
+      const halfControls = new Set<string>();
+      Array.from(allControlIds).forEach((id, i) => {
+        if (i % 2 === 0) halfControls.add(id);
       });
-      setSelectedInstanceIds(randomInstances);
-      setSelectedControlIds(randomControls);
+      setSelectedInstanceIds(halfInstances);
+      setSelectedControlIds(halfControls);
     }
-  }, [systemItems]);
+  }, [parentRiskTolerance, systemItems]);
 
   if (isLoading || isLoadingCustom) {
     return (
@@ -421,6 +417,19 @@ export const WaterSystemsStep = ({
         {filteredSystems.map(system => {
           const instances = getSystemAnalysisItems(system.name);
           const classScore = riskScore.getClassScore(system.name);
+          
+          // Calculate class cost to protect based on selected controls
+          let classCost = 0;
+          instances.forEach(instance => {
+            (instance.controls || []).forEach(controlName => {
+              const controlId = getControlId(instance.id, controlName);
+              if (selectedControlIds.has(controlId)) {
+                const control = controls.find(c => c.name === controlName);
+                classCost += control?.estimatedCost || 0;
+              }
+            });
+          });
+          
           return (
             <ExpandableListItem
               key={system.id}
@@ -446,6 +455,7 @@ export const WaterSystemsStep = ({
               getControlPoints={riskScore.getControlPoints}
               classRiskPoints={classScore?.riskPoints}
               classDeriskPoints={classScore?.selectedDeriskPoints}
+              classCostToProtect={classCost}
             />
           );
         })}

@@ -5,9 +5,10 @@ import { getControlId } from "@/components/wizard/ExpandableListItem";
 interface ControlData {
   name: string;
   points: number;
-  popularity: number;
+  popularity?: number;
   author?: string;
   responsible?: string;
+  estimatedCost?: number;
 }
 
 interface RiskScoringData {

@@ -15,6 +15,7 @@ import { FileViewerModal } from "./FileViewerModal";
 import type { DriveFileInfo } from "./ProjectFilesUpload";
 import { useRiskScoring } from "@/hooks/useRiskScoring";
 import { RiskScoreSummary } from "./RiskScoreSummary";
+import type { RiskTolerance } from "./RiskToleranceSelector";
 
 interface Asset {
   id: string;
@@ -37,6 +38,7 @@ interface CriticalAssetsStepProps {
   analysisItems?: AnalysisItem[];
   driveFiles?: DriveFileInfo[];
   driveAccessToken?: string | null;
+  riskTolerance?: RiskTolerance;
 }
 
 export const CriticalAssetsStep = ({
@@ -47,7 +49,8 @@ export const CriticalAssetsStep = ({
   projectId,
   analysisItems = [],
   driveFiles = [],
-  driveAccessToken = null
+  driveAccessToken = null,
+  riskTolerance: parentRiskTolerance = "low"
 }: CriticalAssetsStepProps) => {
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -90,16 +93,19 @@ export const CriticalAssetsStep = ({
     }
   });
 
-  // Fetch mitigation controls for points/popularity/author/responsible
+  // Fetch mitigation controls for points/author/responsible with estimated_cost from DB
   const { data: controls = [] } = useQuery({
-    queryKey: ['mitigation-controls'],
+    queryKey: ['mitigation-controls-with-cost'],
     queryFn: async () => {
       const { data, error } = await supabase
         .from('mitigation_controls')
-        .select('name, points, popularity, author, responsible')
+        .select('name, points, author, responsible, estimated_cost')
         .eq('is_active', true);
       if (error) throw error;
-      return (data || []) as unknown as { name: string; points: number; popularity: number; author: string; responsible: string }[];
+      return (data || []).map(control => ({
+        ...control,
+        estimatedCost: Number(control.estimated_cost) || 0
+      })) as { name: string; points: number; author: string; responsible: string; estimatedCost: number }[];
     }
   });
 
@@ -269,6 +275,35 @@ export const CriticalAssetsStep = ({
     }
   }, [data.selectedAssetInstances, data.selectedAssetControls]);
 
+  // React to parent risk tolerance changes
+  useEffect(() => {
+    if (!assetItems.length) return;
+    
+    const allInstanceIds = assetItems.map(i => i.id);
+    const allControlIds = new Set<string>();
+    assetItems.forEach(item => {
+      (item.controls || []).forEach(control => {
+        allControlIds.add(getControlId(item.id, control));
+      });
+    });
+    
+    if (parentRiskTolerance === "low") {
+      setSelectedInstanceIds(allInstanceIds);
+      setSelectedControlIds(allControlIds);
+    } else if (parentRiskTolerance === "high") {
+      setSelectedInstanceIds([]);
+      setSelectedControlIds(new Set());
+    } else {
+      const halfInstances = allInstanceIds.filter((_, i) => i % 2 === 0);
+      const halfControls = new Set<string>();
+      Array.from(allControlIds).forEach((id, i) => {
+        if (i % 2 === 0) halfControls.add(id);
+      });
+      setSelectedInstanceIds(halfInstances);
+      setSelectedControlIds(halfControls);
+    }
+  }, [parentRiskTolerance, assetItems]);
+
   const handleToggleInstance = useCallback((instanceId: string) => {
     setSelectedInstanceIds(prev => 
       prev.includes(instanceId) 
@@ -383,6 +418,19 @@ export const CriticalAssetsStep = ({
         {filteredAssets.map(asset => {
           const instances = getAssetAnalysisItems(asset.name);
           const classScore = riskScore.getClassScore(asset.name);
+          
+          // Calculate class cost to protect based on selected controls
+          let classCost = 0;
+          instances.forEach(instance => {
+            (instance.controls || []).forEach(controlName => {
+              const controlId = getControlId(instance.id, controlName);
+              if (selectedControlIds.has(controlId)) {
+                const control = controls.find(c => c.name === controlName);
+                classCost += control?.estimatedCost || 0;
+              }
+            });
+          });
+          
           return (
             <ExpandableListItem
               key={asset.id}
@@ -408,6 +456,7 @@ export const CriticalAssetsStep = ({
               getControlPoints={riskScore.getControlPoints}
               classRiskPoints={classScore?.riskPoints}
               classDeriskPoints={classScore?.selectedDeriskPoints}
+              classCostToProtect={classCost}
             />
           );
         })}
