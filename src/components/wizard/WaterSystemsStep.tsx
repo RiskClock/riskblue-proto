@@ -345,28 +345,7 @@ export const WaterSystemsStep = ({
     addCustomSystemMutation.mutate(newSystem);
   };
 
-  if (isLoading || isLoadingCustom) {
-    return (
-      <div className="flex items-center justify-center py-12">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-4"></div>
-          <p className="text-muted-foreground">Loading water systems...</p>
-        </div>
-      </div>
-    );
-  }
-
-  if (filteredSystems.length === 0) {
-    return (
-      <div className="text-center py-8 text-muted-foreground">
-        <Info className="h-12 w-12 mx-auto mb-4 opacity-50" />
-        <p>No water systems detected yet.</p>
-        <p className="text-sm mt-1">Connect to Google Drive and analyze project files to identify water systems.</p>
-      </div>
-    );
-  }
-
-  // Calculate total cost based on selected controls
+  // Calculate total cost based on selected controls - MUST be before early returns
   const totalCost = useMemo(() => {
     let cost = 0;
     selectedControlIds.forEach(controlId => {
@@ -379,7 +358,7 @@ export const WaterSystemsStep = ({
     return cost;
   }, [selectedControlIds, controls]);
 
-  // Handle risk tolerance change
+  // Handle risk tolerance change - MUST be before early returns
   const handleRiskToleranceChange = useCallback((newTolerance: RiskTolerance) => {
     setRiskTolerance(newTolerance);
     
@@ -410,6 +389,27 @@ export const WaterSystemsStep = ({
       setSelectedControlIds(randomControls);
     }
   }, [systemItems]);
+
+  if (isLoading || isLoadingCustom) {
+    return (
+      <div className="flex items-center justify-center py-12">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-4"></div>
+          <p className="text-muted-foreground">Loading water systems...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (filteredSystems.length === 0) {
+    return (
+      <div className="text-center py-8 text-muted-foreground">
+        <Info className="h-12 w-12 mx-auto mb-4 opacity-50" />
+        <p>No water systems detected yet.</p>
+        <p className="text-sm mt-1">Connect to Google Drive and analyze project files to identify water systems.</p>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-4">
