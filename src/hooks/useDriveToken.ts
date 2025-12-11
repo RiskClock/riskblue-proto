@@ -124,6 +124,7 @@ export function useDriveToken() {
       redirect_uri: callbackUri,
       user_id: user.id,
       project_path: projectPath,
+      app_origin: window.location.origin,
     });
 
     // Redirect to the edge function

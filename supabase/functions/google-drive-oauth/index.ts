@@ -26,6 +26,7 @@ serve(async (req) => {
       const redirectUri = url.searchParams.get("redirect_uri");
       const userId = url.searchParams.get("user_id");
       const projectPath = url.searchParams.get("project_path");
+      const appOrigin = url.searchParams.get("app_origin");
 
       if (!redirectUri || !userId) {
         return new Response(
@@ -34,8 +35,8 @@ serve(async (req) => {
         );
       }
 
-      // Store state in the state parameter (user_id + project_path)
-      const state = btoa(JSON.stringify({ userId, projectPath }));
+      // Store state in the state parameter (user_id + project_path + app_origin)
+      const state = btoa(JSON.stringify({ userId, projectPath, appOrigin }));
 
       const googleAuthUrl = new URL("https://accounts.google.com/o/oauth2/v2/auth");
       googleAuthUrl.searchParams.set("client_id", GOOGLE_CLIENT_ID);
@@ -67,7 +68,7 @@ serve(async (req) => {
       }
 
       // Parse state
-      let stateData: { userId: string; projectPath: string };
+      let stateData: { userId: string; projectPath: string; appOrigin: string };
       try {
         stateData = JSON.parse(atob(state));
       } catch {
@@ -133,8 +134,8 @@ serve(async (req) => {
 
       console.log("Tokens stored successfully for user:", stateData.userId);
 
-      // Redirect back to the project page with success indicator
-      const redirectUrl = `${url.origin}${stateData.projectPath}?drive_connected=true`;
+      // Redirect back to the project page with success indicator using the stored app origin
+      const redirectUrl = `${stateData.appOrigin}${stateData.projectPath}?drive_connected=true`;
       return Response.redirect(redirectUrl, 302);
     }
 
