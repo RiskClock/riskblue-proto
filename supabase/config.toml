@@ -1,16 +1,16 @@
 project_id = "qbzuchzqeefbzeldftvg"
 
 [functions.list-drive-files]
-verify_jwt = false
+verify_jwt = true
 
 [functions.analyze-drive-files]
-verify_jwt = false
+verify_jwt = true
 
 [functions.chat-with-files]
-verify_jwt = false
+verify_jwt = true
 
 [functions.create-filesearch-store]
-verify_jwt = false
+verify_jwt = true
 
 [functions.google-drive-oauth]
 verify_jwt = false
