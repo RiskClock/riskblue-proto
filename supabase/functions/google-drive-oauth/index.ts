@@ -74,8 +74,8 @@ serve(async (req) => {
         return new Response("Invalid state", { status: 400 });
       }
 
-      // Build the callback URL for token exchange
-      const callbackUri = `${url.origin}${url.pathname}?action=callback`;
+      // Build the callback URL for token exchange using the known public URL
+      const callbackUri = `${SUPABASE_URL}/functions/v1/google-drive-oauth?action=callback`;
       console.log("Token exchange callback URI:", callbackUri);
 
       // Exchange code for tokens
