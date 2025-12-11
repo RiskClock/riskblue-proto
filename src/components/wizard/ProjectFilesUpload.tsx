@@ -475,6 +475,16 @@ export const ProjectFilesUpload = ({
   };
 
   const handleAnalyzeFiles = async () => {
+    // Validate project is saved before analysis
+    if (!projectId || projectId === "new") {
+      toast({
+        title: "Save Project First",
+        description: "Please save the project before running analysis. Enter a project name and save.",
+        variant: "destructive",
+      });
+      return;
+    }
+    
     if (driveFiles.length === 0) {
       toast({
         title: "No Files",
