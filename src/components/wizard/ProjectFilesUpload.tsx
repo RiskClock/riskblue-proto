@@ -96,7 +96,7 @@ export const ProjectFilesUpload = ({
   const [webhookComplete, setWebhookComplete] = useState(false);
   
   // Google Drive states (non-lifted)
-  const [folderId, setFolderId] = useState("1PurGzT3-2G8yDoBVlurBRyNrTX_Y2rk5");
+  const [folderId, setFolderId] = useState("");
   const [loadingDriveFiles, setLoadingDriveFiles] = useState(false);
   const [connectingDrive, setConnectingDrive] = useState(false);
   
@@ -320,6 +320,34 @@ export const ProjectFilesUpload = ({
     }
   }, [driveToken, setDriveAccessToken, setDriveConnected]);
 
+  // Load saved folder ID from project on mount
+  useEffect(() => {
+    const loadProjectDriveFolderId = async () => {
+      if (!projectId || projectId === 'new') return;
+      
+      try {
+        const { data, error } = await supabase
+          .from('projects')
+          .select('drive_folder_id')
+          .eq('id', projectId)
+          .single();
+        
+        if (error) {
+          console.error("Error loading drive folder ID:", error);
+          return;
+        }
+        
+        if (data?.drive_folder_id) {
+          setFolderId(data.drive_folder_id);
+        }
+      } catch (error) {
+        console.error("Error loading drive folder ID:", error);
+      }
+    };
+    
+    loadProjectDriveFolderId();
+  }, [projectId]);
+
   const handleConnectGoogleDrive = async () => {
     setConnectingDrive(true);
     try {
@@ -409,6 +437,18 @@ export const ProjectFilesUpload = ({
       } while (nextPageToken);
 
       setDriveFiles(allFiles);
+      
+      // Save folder ID to project after successful load
+      if (projectId && projectId !== 'new') {
+        const { error: saveError } = await supabase
+          .from('projects')
+          .update({ drive_folder_id: folderId.trim() })
+          .eq('id', projectId);
+        
+        if (saveError) {
+          console.error("Error saving folder ID:", saveError);
+        }
+      }
       
       if (allFiles.length === 0) {
         toast({
