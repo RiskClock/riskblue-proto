@@ -312,7 +312,9 @@ export const ProjectFilesUpload = ({
       const redirectUrl = `${window.location.origin}${window.location.pathname}`;
       console.log("OAuth redirect URL:", redirectUrl);
       
-      const { data, error } = await supabase.auth.signInWithOAuth({
+      // Use linkIdentity instead of signInWithOAuth to link Google to existing account
+      // This preserves the current user session while adding Google Drive access
+      const { data, error } = await supabase.auth.linkIdentity({
         provider: 'google',
         options: {
           scopes: 'https://www.googleapis.com/auth/drive.readonly',
@@ -325,13 +327,39 @@ export const ProjectFilesUpload = ({
       });
 
       if (error) {
-        throw error;
+        // If identity already linked or other error, try signInWithOAuth as fallback
+        // but only if user is already signed in with Google
+        console.warn("linkIdentity failed, attempting alternative approach:", error.message);
+        
+        // Check if user already has Google linked
+        const { data: { user } } = await supabase.auth.getUser();
+        const hasGoogleIdentity = user?.identities?.some(i => i.provider === 'google');
+        
+        if (hasGoogleIdentity) {
+          // User already has Google linked, just need to re-authorize for Drive scope
+          // Use signInWithOAuth but it should maintain the same user
+          const { error: oauthError } = await supabase.auth.signInWithOAuth({
+            provider: 'google',
+            options: {
+              scopes: 'https://www.googleapis.com/auth/drive.readonly',
+              queryParams: {
+                access_type: 'offline',
+                prompt: 'consent',
+                login_hint: user?.email || '',
+              },
+              redirectTo: redirectUrl,
+            },
+          });
+          if (oauthError) throw oauthError;
+        } else {
+          throw error;
+        }
       }
     } catch (error) {
       console.error("Google Drive connection error:", error);
       toast({
         title: "Connection Failed",
-        description: "Could not connect to Google Drive. Please try again.",
+        description: error instanceof Error ? error.message : "Could not connect to Google Drive. Please try again.",
         variant: "destructive",
       });
       setConnectingDrive(false);
