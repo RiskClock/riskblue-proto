@@ -543,11 +543,26 @@ const ProjectWizard = () => {
     setIsProcessingWebhook(true);
     isWebhookCreatingProject.current = true;
     
-    console.log("Drawing analysis data received:", extractedData);
+    console.log("handleDrawingDataExtracted called with:", extractedData);
+    console.log("Current project ID:", id);
+    
+    // Validate project ID - must have a saved project before analysis
+    if (!id || id === "new") {
+      console.error("Cannot save analysis - project not yet saved. ID:", id);
+      toast({
+        title: "Save Project First",
+        description: "Please save the project before running analysis.",
+        variant: "destructive",
+      });
+      isWebhookCreatingProject.current = false;
+      setIsProcessingWebhook(false);
+      return;
+    }
     
     await new Promise(resolve => setTimeout(resolve, 100));
     
     const items: AnalysisItem[] = extractedData.assets_water_systems_processes || [];
+    console.log(`Received ${items.length} analysis items`);
     
     if (items.length === 0) {
       toast({
@@ -569,17 +584,18 @@ const ProjectWizard = () => {
     setProjectData(mappedData);
     
     try {
+      // Save project data first
       await saveProject(mappedData);
+      console.log("Project data saved, now saving analysis items...");
       
       // Save the detailed analysis items to the database
-      if (id && id !== "new") {
-        await saveAnalysisItems(id, items);
-        setAnalysisItems(items);
-      }
+      await saveAnalysisItems(id, items);
+      setAnalysisItems(items);
+      console.log("Analysis items saved and state updated");
       
       toast({
         title: "Drawing Analysis Complete",
-        description: `Found ${items.length} items: ${extractSelectedAssets(items).length} assets, ${extractSelectedSystems(items).length} water systems.`,
+        description: `Found and saved ${items.length} items: ${extractSelectedAssets(items).length} assets, ${extractSelectedSystems(items).length} water systems.`,
       });
     } catch (error) {
       console.error("Error saving drawing data:", error);
