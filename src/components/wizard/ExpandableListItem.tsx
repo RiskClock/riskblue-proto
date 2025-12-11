@@ -1,12 +1,13 @@
 import { useState, useMemo, useCallback } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { ChevronDown, ChevronRight, Minus, Info } from "lucide-react";
+import { ChevronDown, ChevronRight, Minus, Info, Shield } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
 import { cn } from "@/lib/utils";
 import { AnalysisItem } from "@/lib/analysisItemMapper";
 import { ClassRiskBadges } from "./RiskScoreSummary";
 import { InstanceDetailsModal } from "./InstanceDetailsModal";
+import { ControlDetailsModal } from "./ControlDetailsModal";
 import type { DriveFileInfo } from "./ProjectFilesUpload";
 
 interface ControlPoints {
@@ -14,6 +15,9 @@ interface ControlPoints {
   author?: string;
   responsible?: string;
   estimatedCost?: number;
+  description?: string;
+  action?: string;
+  category?: string;
 }
 
 interface ExpandableListItemProps {
@@ -131,6 +135,33 @@ export const ExpandableListItem = ({
   const [expandedInstanceIds, setExpandedInstanceIds] = useState<Set<string>>(new Set());
   const [detailsModalOpen, setDetailsModalOpen] = useState(false);
   const [selectedDetailInstance, setSelectedDetailInstance] = useState<AnalysisItem | null>(null);
+  const [controlModalOpen, setControlModalOpen] = useState(false);
+  const [selectedControl, setSelectedControl] = useState<{
+    name: string;
+    description?: string;
+    action?: string;
+    author?: string;
+    responsible?: string;
+    category?: string;
+    points?: number;
+    estimatedCost?: number;
+  } | null>(null);
+
+  const handleViewControlDetails = useCallback((controlName: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    const controlData = getControlPoints?.(controlName);
+    setSelectedControl({
+      name: controlName,
+      description: controlData?.description,
+      action: controlData?.action,
+      author: controlData?.author,
+      responsible: controlData?.responsible,
+      category: controlData?.category,
+      points: controlData?.points,
+      estimatedCost: controlData?.estimatedCost
+    });
+    setControlModalOpen(true);
+  }, [getControlPoints]);
 
   // Find drive file for the selected instance
   const findDriveFile = useCallback((fileName: string): DriveFileInfo | undefined => {
@@ -350,12 +381,22 @@ export const ExpandableListItem = ({
             const sizeDisplay = instance.sizeCategory ? `${capitalize(instance.sizeCategory)} Room` : null;
             const pipeDiameter = getPipeDiameter(instance);
 
-            // Calculate instance cost based on selected controls
+            // Calculate instance cost and derisk points based on selected controls
             const instanceCost = (instance.controls || []).reduce((sum, control) => {
               const controlId = getControlId(instance.id, control);
               if (selectedControlIds.has(controlId)) {
                 const controlData = getControlPoints?.(control);
                 return sum + (controlData?.estimatedCost || 0);
+              }
+              return sum;
+            }, 0);
+
+            // Calculate instance derisk points based on selected controls
+            const instanceDeriskPoints = (instance.controls || []).reduce((sum, control) => {
+              const controlId = getControlId(instance.id, control);
+              if (selectedControlIds.has(controlId)) {
+                const controlData = getControlPoints?.(control);
+                return sum + (controlData?.points || 0);
               }
               return sum;
             }, 0);
@@ -450,6 +491,13 @@ export const ExpandableListItem = ({
                         {riskPoints} risk pts
                       </Badge>
                     )}
+                    {/* Instance derisk points - sum of selected controls */}
+                    {instanceDeriskPoints > 0 && (
+                      <Badge variant="outline" className="text-xs cursor-default hover:bg-transparent bg-emerald-50 text-emerald-600 border-emerald-200 dark:bg-emerald-950 dark:text-emerald-300 dark:border-emerald-800">
+                        <Shield className="w-3 h-3 mr-1" />
+                        -{instanceDeriskPoints} derisk
+                      </Badge>
+                    )}
                     {hasControls && (
                       <Badge variant="secondary" className="text-xs cursor-default">
                         {instance.controls.length} {instance.controls.length === 1 ? 'Control' : 'Controls'}
@@ -514,6 +562,15 @@ export const ExpandableListItem = ({
                                 {controlData.points} pts
                               </Badge>
                             )}
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="h-6 w-6 p-0 text-muted-foreground hover:text-foreground"
+                              onClick={(e) => handleViewControlDetails(control, e)}
+                              title="View control details"
+                            >
+                              <Info className="w-3.5 h-3.5" />
+                            </Button>
                           </div>
                         </div>
                       );
@@ -534,6 +591,13 @@ export const ExpandableListItem = ({
         canViewFile={canViewFiles && !!selectedDetailInstance?.fileName}
         driveFile={selectedDetailInstance?.fileName ? findDriveFile(selectedDetailInstance.fileName) : undefined}
         driveAccessToken={driveAccessToken}
+      />
+
+      {/* Control Details Modal */}
+      <ControlDetailsModal
+        isOpen={controlModalOpen}
+        onClose={() => setControlModalOpen(false)}
+        control={selectedControl}
       />
     </div>
   );

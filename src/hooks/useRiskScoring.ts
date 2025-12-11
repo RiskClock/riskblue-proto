@@ -9,6 +9,9 @@ interface ControlData {
   author?: string;
   responsible?: string;
   estimatedCost?: number;
+  description?: string;
+  action?: string;
+  category?: string;
 }
 
 interface RiskScoringData {
@@ -49,7 +52,7 @@ export interface ProjectRiskScore {
   categoryScores: CategoryScore[];
   getClassScore: (className: string) => ClassScore | undefined;
   getInstanceScore: (instanceId: string) => InstanceScore | undefined;
-  getControlPoints: (controlName: string) => { points: number; popularity?: number; author?: string; responsible?: string; estimatedCost?: number } | undefined;
+  getControlPoints: (controlName: string) => { points: number; popularity?: number; author?: string; responsible?: string; estimatedCost?: number; description?: string; action?: string; category?: string } | undefined;
 }
 
 // Default risk points if not found in database
@@ -117,9 +120,9 @@ export const useRiskScoring = (
       systemRiskMap.set(normalizeAssetName(s.name), s.risk_level_points || getRiskPointsFromLevel(s.name));
     });
     
-    const controlPointsMap = new Map<string, { points: number; popularity?: number; author?: string; responsible?: string; estimatedCost?: number }>();
+    const controlPointsMap = new Map<string, { points: number; popularity?: number; author?: string; responsible?: string; estimatedCost?: number; description?: string; action?: string; category?: string }>();
     controls.forEach(c => {
-      controlPointsMap.set(c.name.toLowerCase(), { points: c.points, popularity: c.popularity, author: c.author, responsible: c.responsible, estimatedCost: c.estimatedCost });
+      controlPointsMap.set(c.name.toLowerCase(), { points: c.points, popularity: c.popularity, author: c.author, responsible: c.responsible, estimatedCost: c.estimatedCost, description: c.description, action: c.action, category: c.category });
     });
     
     // Group items by category and class (name)

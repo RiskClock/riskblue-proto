@@ -94,17 +94,17 @@ export const WaterSystemsStep = ({
 
   // Fetch mitigation controls for points/author/responsible with estimated_cost from DB
   const { data: controls = [] } = useQuery({
-    queryKey: ['mitigation-controls-with-cost'],
+    queryKey: ['mitigation-controls-with-details'],
     queryFn: async () => {
       const { data, error } = await supabase
         .from('mitigation_controls')
-        .select('name, points, author, responsible, estimated_cost')
+        .select('name, points, author, responsible, estimated_cost, description, action, category')
         .eq('is_active', true);
       if (error) throw error;
       return (data || []).map(control => ({
         ...control,
         estimatedCost: Number(control.estimated_cost) || 0
-      })) as { name: string; points: number; author: string; responsible: string; estimatedCost: number }[];
+      })) as { name: string; points: number; author: string; responsible: string; estimatedCost: number; description?: string; action?: string; category?: string }[];
     }
   });
 
