@@ -9,6 +9,7 @@ import { PDFAnalysisAnimation } from "../PDFAnalysisAnimation";
 import { supabase } from "@/integrations/supabase/client";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { DriveFilesChat } from "./DriveFilesChat";
+import { useDriveToken } from "@/hooks/useDriveToken";
 import { FileViewerModal } from "./FileViewerModal";
 
 
@@ -300,6 +301,25 @@ export const ProjectFilesUpload = ({
     setAnalyzing(false);
   };
 
+  // Use the new drive token hook
+  const { 
+    driveToken, 
+    isConnected: isDriveTokenConnected, 
+    connectDrive, 
+    disconnectDrive: disconnectDriveToken,
+    refreshToken: refreshDriveToken 
+  } = useDriveToken();
+
+  // Sync drive token state with parent component
+  useEffect(() => {
+    if (driveToken) {
+      setDriveAccessToken(driveToken.accessToken);
+      setDriveConnected(true);
+      setConnectingDrive(false);
+      setActiveTab("drive");
+    }
+  }, [driveToken, setDriveAccessToken, setDriveConnected]);
+
   const handleConnectGoogleDrive = async () => {
     setConnectingDrive(true);
     try {
@@ -308,53 +328,10 @@ export const ProjectFilesUpload = ({
         await onBeforeOAuthRedirect();
       }
       
-      // Use clean redirect URL without query params
-      const redirectUrl = `${window.location.origin}${window.location.pathname}`;
-      console.log("OAuth redirect URL:", redirectUrl);
-      
-      // Use linkIdentity instead of signInWithOAuth to link Google to existing account
-      // This preserves the current user session while adding Google Drive access
-      const { data, error } = await supabase.auth.linkIdentity({
-        provider: 'google',
-        options: {
-          scopes: 'https://www.googleapis.com/auth/drive.readonly',
-          queryParams: {
-            access_type: 'offline',
-            prompt: 'consent',
-          },
-          redirectTo: redirectUrl,
-        },
-      });
-
-      if (error) {
-        // If identity already linked or other error, try signInWithOAuth as fallback
-        // but only if user is already signed in with Google
-        console.warn("linkIdentity failed, attempting alternative approach:", error.message);
-        
-        // Check if user already has Google linked
-        const { data: { user } } = await supabase.auth.getUser();
-        const hasGoogleIdentity = user?.identities?.some(i => i.provider === 'google');
-        
-        if (hasGoogleIdentity) {
-          // User already has Google linked, just need to re-authorize for Drive scope
-          // Use signInWithOAuth but it should maintain the same user
-          const { error: oauthError } = await supabase.auth.signInWithOAuth({
-            provider: 'google',
-            options: {
-              scopes: 'https://www.googleapis.com/auth/drive.readonly',
-              queryParams: {
-                access_type: 'offline',
-                prompt: 'consent',
-                login_hint: user?.email || '',
-              },
-              redirectTo: redirectUrl,
-            },
-          });
-          if (oauthError) throw oauthError;
-        } else {
-          throw error;
-        }
-      }
+      // Use the new separate OAuth flow
+      const projectPath = window.location.pathname;
+      await connectDrive(projectPath);
+      // Note: This will redirect, so the rest of this function won't run
     } catch (error) {
       console.error("Google Drive connection error:", error);
       toast({
@@ -366,28 +343,25 @@ export const ProjectFilesUpload = ({
     }
   };
 
-  // Check for provider token on mount and after OAuth redirect
+  // Check for drive connection on mount (from URL param after OAuth)
   useEffect(() => {
-    const checkSession = async () => {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (session?.provider_token) {
-        setDriveAccessToken(session.provider_token);
-        setDriveConnected(true);
-      }
-    };
-    checkSession();
+    const urlParams = new URLSearchParams(window.location.search);
+    if (urlParams.get("drive_connected") === "true") {
+      // Clean up URL and refresh token
+      const cleanUrl = window.location.pathname;
+      window.history.replaceState({}, "", cleanUrl);
+      refreshDriveToken();
+    }
+  }, [refreshDriveToken]);
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
-      if (session?.provider_token) {
-        setDriveAccessToken(session.provider_token);
-        setDriveConnected(true);
-        setConnectingDrive(false);
-        setActiveTab("drive"); // Stay on Google Drive tab after successful connection
-      }
-    });
-
-    return () => subscription.unsubscribe();
-  }, []);
+  const handleDisconnectDrive = async () => {
+    await disconnectDriveToken();
+    setDriveConnected(false);
+    setDriveAccessToken(null);
+    setDriveFiles([]);
+    setFolderId("");
+    setAnalysisData(null);
+  };
 
   const handleLoadDriveFiles = async () => {
     if (!folderId.trim() || !driveAccessToken) {
@@ -465,13 +439,6 @@ export const ProjectFilesUpload = ({
     }
   };
 
-  const handleDisconnectDrive = () => {
-    setDriveConnected(false);
-    setDriveAccessToken(null);
-    setDriveFiles([]);
-    setFolderId("");
-    setAnalysisData(null);
-  };
 
   // Parse systems JSON from analysis text (for backward compatibility with file viewer)
   const parseSystemsFromAnalysis = (text: string): SystemDetection[] => {
