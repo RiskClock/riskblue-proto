@@ -45,6 +45,7 @@ type DriveFile = DriveFileInfo;
 
 interface ProjectFilesUploadProps {
   projectId: string;
+  projectName?: string;
   onScheduleDataExtracted?: (data: any) => void;
   onDrawingDataExtracted?: (data: any) => void;
   isProcessingWebhook?: boolean;
@@ -61,7 +62,8 @@ interface ProjectFilesUploadProps {
 }
 
 export const ProjectFilesUpload = ({ 
-  projectId, 
+  projectId,
+  projectName,
   onScheduleDataExtracted,
   onDrawingDataExtracted,
   setIsProcessingWebhook,
@@ -108,6 +110,61 @@ export const ProjectFilesUpload = ({
   // Tab state
   const [activeTab, setActiveTab] = useState("local");
 
+  // Utility function to get or create file search store ID
+  const getOrCreateFileSearchStore = async (): Promise<string | null> => {
+    try {
+      // 1. Check if project already has a store ID
+      const { data: project, error: fetchError } = await supabase
+        .from('projects')
+        .select('filesearch_store_id')
+        .eq('id', projectId)
+        .single();
+      
+      if (fetchError) {
+        console.error("Error fetching project:", fetchError);
+        return null;
+      }
+
+      if (project?.filesearch_store_id) {
+        console.log("Using existing file search store:", project.filesearch_store_id);
+        return project.filesearch_store_id;
+      }
+      
+      // 2. Create new store via edge function
+      console.log("Creating new file search store for project:", projectId);
+      const { data, error } = await supabase.functions.invoke('create-filesearch-store', {
+        body: { projectId, projectName: projectName || projectId }
+      });
+      
+      if (error) {
+        console.error("Error creating file search store:", error);
+        return null;
+      }
+
+      if (!data?.storeId) {
+        console.error("No storeId in response:", data);
+        return null;
+      }
+      
+      // 3. Save store ID to project
+      const { error: updateError } = await supabase
+        .from('projects')
+        .update({ filesearch_store_id: data.storeId })
+        .eq('id', projectId);
+
+      if (updateError) {
+        console.error("Error updating project with store ID:", updateError);
+        // Still return the storeId even if save failed - it was created
+      }
+      
+      console.log("Created and saved file search store:", data.storeId);
+      return data.storeId;
+    } catch (error) {
+      console.error("Error in getOrCreateFileSearchStore:", error);
+      return null;
+    }
+  };
+
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
@@ -149,6 +206,9 @@ export const ProjectFilesUpload = ({
     setExtractedMilestones([]);
     setExtractedText([]);
 
+    // Get or create file search store ID before uploading
+    const fileSearchStoreId = await getOrCreateFileSearchStore();
+
     const pdfProcessingPromise = extractPDFData(
       uploadedFile,
       (progress, pageNumber) => {
@@ -180,6 +240,9 @@ export const ProjectFilesUpload = ({
     const formData = new FormData();
     formData.append("file", uploadedFile);
     formData.append("projectId", projectId);
+    if (fileSearchStoreId) {
+      formData.append("filesearch_store_id", fileSearchStoreId);
+    }
 
     const webhookPromise = (async () => {
       try {
@@ -424,11 +487,15 @@ export const ProjectFilesUpload = ({
     setAnalyzingFiles(true);
     setAnalysisData(null);
 
+    // Get or create file search store ID before analysis
+    const fileSearchStoreId = await getOrCreateFileSearchStore();
+
     try {
       const response = await supabase.functions.invoke('analyze-drive-files', {
         body: {
           files: driveFiles,
           accessToken: driveAccessToken,
+          filesearch_store_id: fileSearchStoreId,
         },
       });
 
