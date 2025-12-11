@@ -740,7 +740,8 @@ const ProjectWizard = () => {
 
           <TabsContent value="guideline" className="max-w-5xl mx-auto">
             <ProjectFilesUpload 
-              projectId={id || "new"} 
+              projectId={id || "new"}
+              projectName={projectData.name}
               onScheduleDataExtracted={handleScheduleDataExtracted}
               onDrawingDataExtracted={handleDrawingDataExtracted}
               isProcessingWebhook={isProcessingWebhook}

@@ -493,6 +493,7 @@ export type Database = {
           construction_start_date: string | null
           country: string | null
           created_at: string
+          filesearch_store_id: string | null
           has_builders_risk_policy: boolean | null
           id: string
           location: string | null
@@ -523,6 +524,7 @@ export type Database = {
           construction_start_date?: string | null
           country?: string | null
           created_at?: string
+          filesearch_store_id?: string | null
           has_builders_risk_policy?: boolean | null
           id?: string
           location?: string | null
@@ -553,6 +555,7 @@ export type Database = {
           construction_start_date?: string | null
           country?: string | null
           created_at?: string
+          filesearch_store_id?: string | null
           has_builders_risk_policy?: boolean | null
           id?: string
           location?: string | null
