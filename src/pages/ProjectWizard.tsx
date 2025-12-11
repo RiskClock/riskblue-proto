@@ -616,13 +616,21 @@ const ProjectWizard = () => {
     
     if (!projectId || projectId === "new") {
       console.error("Cannot save analysis items: invalid project ID");
-      return;
+      throw new Error("Invalid project ID");
     }
     
     if (items.length === 0) {
       console.warn("No analysis items to save");
       return;
     }
+    
+    // Verify user is authenticated before attempting insert
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session) {
+      console.error("Cannot save analysis items: user not authenticated");
+      throw new Error("User not authenticated");
+    }
+    console.log("User authenticated, proceeding with save. User ID:", session.user.id);
     
     try {
       // First, delete existing items for this project
@@ -661,11 +669,7 @@ const ProjectWizard = () => {
 
       if (error) {
         console.error("Error saving analysis items:", error);
-        toast({
-          title: "Error Saving Analysis",
-          description: "Failed to save analysis items. Please try again.",
-          variant: "destructive",
-        });
+        throw error; // Propagate error for proper handling
       } else {
         console.log(`Successfully saved ${data?.length || itemsToInsert.length} analysis items to database`);
       }

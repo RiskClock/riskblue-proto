@@ -33,8 +33,12 @@ const Projects = () => {
   const [showProviderDialog, setShowProviderDialog] = useState(false);
 
   useEffect(() => {
-    fetchProjects();
-  }, []);
+    // Wait for user to be available before fetching projects
+    // This handles OAuth redirect where user state takes a moment to restore
+    if (user) {
+      fetchProjects();
+    }
+  }, [user]);
 
   const fetchProjects = async () => {
     try {
@@ -147,7 +151,7 @@ const Projects = () => {
           </div>
         </div>
 
-        {loading ? (
+        {loading || !user ? (
           <div className="text-center py-12">
             <p className="text-muted-foreground">Loading projects...</p>
           </div>
