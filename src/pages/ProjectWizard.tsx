@@ -439,6 +439,38 @@ const ProjectWizard = () => {
       if (!towerConfig) return projectData.tower_type;
       return towerConfig.replace("_tower", "");
     };
+
+    // Map height_category to building_type
+    const getBuildingType = () => {
+      if (extractedData.height_category) {
+        const category = extractedData.height_category.toLowerCase().replace(/ /g, '-');
+        // Valid building types: mid-rise, high-rise, single-house, house-complex
+        if (['mid-rise', 'high-rise'].includes(category)) {
+          return category;
+        }
+      }
+      return extractedData.building_type || projectData.building_type;
+    };
+
+    // Map structural_types object to array of selected type ids
+    const getStructuralTypes = () => {
+      if (extractedData.structural_types && typeof extractedData.structural_types === 'object') {
+        const typeMapping: Record<string, string> = {
+          'cast-in-place_reinforced_concrete': 'cast-in-place',
+          'precast_concrete': 'precast',
+          'steel': 'steel',
+          'mass_timber': 'mass-timber',
+        };
+        const selectedTypes: string[] = [];
+        Object.entries(extractedData.structural_types).forEach(([key, value]) => {
+          if (value === true && typeMapping[key]) {
+            selectedTypes.push(typeMapping[key]);
+          }
+        });
+        return selectedTypes.length > 0 ? selectedTypes : projectData.structural_types;
+      }
+      return projectData.structural_types;
+    };
     
     // Schedule analysis ONLY fills project info - no assets/water systems
     const mappedData = {
@@ -452,13 +484,23 @@ const ProjectWizard = () => {
       project_type: extractedData.construction_type
         ? extractedData.construction_type.toLowerCase().replace(/ /g, '-')
         : projectData.project_type,
-      building_type: extractedData.building_type || projectData.building_type,
+      building_type: getBuildingType(),
+      structural_types: getStructuralTypes(),
       has_podium: extractedData.has_podium !== undefined 
         ? extractedData.has_podium 
         : projectData.has_podium,
       tower_type: extractedData.tower_configuration 
         ? getTowerType(extractedData.tower_configuration)
         : projectData.tower_type,
+      
+      // Floor information
+      total_floors: extractedData.total_floor_count || projectData.total_floors,
+      typical_floors: extractedData.typical_floor_count || projectData.typical_floors,
+      typical_floors_start: extractedData.typical_floor_start || projectData.typical_floors_start,
+      typical_floors_end: extractedData.typical_floor_end || projectData.typical_floors_end,
+      underground_parking: extractedData.underground_parking_present !== undefined 
+        ? extractedData.underground_parking_present 
+        : projectData.underground_parking,
       
       // Map milestones to flat field structure
       frame_start_date: extractedData.milestones?.structural_framing?.start || projectData.frame_start_date,
