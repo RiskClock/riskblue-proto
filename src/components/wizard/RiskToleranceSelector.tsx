@@ -1,18 +1,33 @@
-import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
-import { Shield, AlertTriangle, DollarSign } from "lucide-react";
+import { CheckCircle2 } from "lucide-react";
 
 export type RiskTolerance = "low" | "medium" | "high";
+
+interface ImplementationPackage {
+  level: RiskTolerance;
+  name: string;
+  description: string;
+  riskLabel: string;
+  cost: number;
+}
 
 interface RiskToleranceSelectorProps {
   value: RiskTolerance;
   onChange: (value: RiskTolerance) => void;
   lowCost: number;
   mediumCost: number;
+  highCost?: number;
   className?: string;
 }
 
-export const RiskToleranceSelector = ({ value, onChange, lowCost, mediumCost, className }: RiskToleranceSelectorProps) => {
+export const RiskToleranceSelector = ({ 
+  value, 
+  onChange, 
+  lowCost, 
+  mediumCost, 
+  highCost = 0,
+  className 
+}: RiskToleranceSelectorProps) => {
   const formatCost = (cost: number) => {
     if (cost >= 1000000) {
       return `$${(cost / 1000000).toFixed(1)}M`;
@@ -23,77 +38,137 @@ export const RiskToleranceSelector = ({ value, onChange, lowCost, mediumCost, cl
     return `$${cost}`;
   };
 
-  const getCostForTolerance = (tolerance: RiskTolerance) => {
-    if (tolerance === "low") return lowCost;
-    if (tolerance === "medium") return mediumCost;
-    return 0;
-  };
-
-  const currentCost = getCostForTolerance(value);
-
-  const options: { value: RiskTolerance; label: string; description: string; icon: React.ReactNode; cost: number }[] = [
+  const packages: ImplementationPackage[] = [
     {
-      value: "low",
-      label: "Low",
-      description: "Maximum protection - all controls selected",
-      icon: <Shield className="h-4 w-4" />,
-      cost: lowCost
+      level: "high",
+      name: "Essential",
+      description: "Core Systems Only. Prioritizes the protection of water systems and primary assets through basic process implementation.",
+      riskLabel: "High",
+      cost: highCost
     },
     {
-      value: "medium", 
-      label: "Medium",
-      description: "Balanced protection - recommended controls",
-      icon: <AlertTriangle className="h-4 w-4" />,
+      level: "medium",
+      name: "Enhanced",
+      description: "Expanded Scope. Increases protection layers to cover standard construction risks, optimizing the balance between site safety and budget.",
+      riskLabel: "Medium",
       cost: mediumCost
     },
     {
-      value: "high",
-      label: "High",
-      description: "Minimal protection - no controls selected",
-      icon: <AlertTriangle className="h-4 w-4" />,
-      cost: 0
+      level: "low",
+      name: "Fortified",
+      description: "Turnkey Protection. Complete coverage of all site systems, assets, and processes. Includes full redundancy and maximum monitoring capabilities.",
+      riskLabel: "Low",
+      cost: lowCost
     }
   ];
 
   return (
-    <div className={cn("p-4 bg-gradient-to-r from-slate-50 to-slate-100 dark:from-slate-900 dark:to-slate-800 rounded-xl border-2 border-slate-200 dark:border-slate-700 shadow-sm", className)}>
-      <div className="flex items-center justify-between gap-6">
-        <div className="flex items-center gap-4">
-          <div className="flex items-center gap-2">
-            <Shield className="h-5 w-5 text-primary" />
-            <span className="font-semibold text-sm">Risk Tolerance:</span>
+    <div className={cn("w-full", className)}>
+      <div className="border rounded-lg overflow-hidden bg-card">
+        {/* Header Row */}
+        <div className="grid grid-cols-4 bg-muted/50 border-b">
+          <div className="p-4 font-medium text-sm text-muted-foreground">
+            Implementation Level
           </div>
-          <div className="flex items-center gap-1 bg-background rounded-lg p-1 shadow-inner">
-            {options.map((option) => (
-              <button
-                key={option.value}
-                onClick={() => onChange(option.value)}
-                className={cn(
-                  "px-4 py-2 rounded-md text-sm font-medium transition-all flex items-center gap-2",
-                  value === option.value
-                    ? option.value === "low" 
-                      ? "bg-green-500 text-white shadow-md"
-                      : option.value === "medium"
-                        ? "bg-yellow-500 text-black shadow-md"
-                        : "bg-red-500 text-white shadow-md"
-                    : "text-muted-foreground hover:bg-muted/50"
+          {packages.map((pkg) => (
+            <div 
+              key={pkg.level}
+              className={cn(
+                "p-4 font-semibold text-sm cursor-pointer transition-colors border-l",
+                value === pkg.level 
+                  ? "bg-primary/10 text-primary" 
+                  : "hover:bg-muted/80"
+              )}
+              onClick={() => onChange(pkg.level)}
+            >
+              <div className="flex items-center gap-2">
+                {value === pkg.level && (
+                  <CheckCircle2 className="h-4 w-4 text-primary" />
                 )}
-                title={option.description}
-              >
-                {option.icon}
-                <span>{option.label}</span>
-                <span className="text-xs opacity-80">({formatCost(option.cost)})</span>
-              </button>
-            ))}
-          </div>
+                {pkg.name}
+              </div>
+            </div>
+          ))}
         </div>
-        
-        <div className="flex items-center gap-3">
-          <DollarSign className="h-5 w-5 text-muted-foreground" />
-          <span className="text-sm font-medium text-muted-foreground">Total Est. Cost:</span>
-          <Badge className="text-base px-4 py-1.5 bg-primary text-primary-foreground font-bold shadow-md">
-            {formatCost(currentCost)}
-          </Badge>
+
+        {/* Description Row */}
+        <div className="grid grid-cols-4 border-b">
+          <div className="p-4 font-medium text-sm text-muted-foreground">
+            Description
+          </div>
+          {packages.map((pkg) => (
+            <div 
+              key={pkg.level}
+              className={cn(
+                "p-4 text-sm border-l cursor-pointer transition-colors",
+                value === pkg.level 
+                  ? "bg-primary/5" 
+                  : "hover:bg-muted/30"
+              )}
+              onClick={() => onChange(pkg.level)}
+            >
+              <span className="font-semibold">{pkg.name === "Essential" ? "Core Systems Only." : pkg.name === "Enhanced" ? "Expanded Scope." : "Turnkey Protection."}</span>{" "}
+              <span className="text-muted-foreground">
+                {pkg.name === "Essential" 
+                  ? "Prioritizes the protection of water systems and primary assets through basic process implementation."
+                  : pkg.name === "Enhanced"
+                    ? "Increases protection layers to cover standard construction risks, optimizing the balance between site safety and budget."
+                    : "Complete coverage of all site systems, assets, and processes. Includes full redundancy and maximum monitoring capabilities."
+                }
+              </span>
+            </div>
+          ))}
+        </div>
+
+        {/* Risk Tolerance Row */}
+        <div className="grid grid-cols-4 border-b">
+          <div className="p-4 font-medium text-sm text-muted-foreground">
+            Risk Tolerance
+          </div>
+          {packages.map((pkg) => (
+            <div 
+              key={pkg.level}
+              className={cn(
+                "p-4 text-sm border-l cursor-pointer transition-colors",
+                value === pkg.level 
+                  ? "bg-primary/5" 
+                  : "hover:bg-muted/30"
+              )}
+              onClick={() => onChange(pkg.level)}
+            >
+              <span className={cn(
+                "font-medium",
+                pkg.riskLabel === "High" && "text-red-600 dark:text-red-400",
+                pkg.riskLabel === "Medium" && "text-yellow-600 dark:text-yellow-400",
+                pkg.riskLabel === "Low" && "text-green-600 dark:text-green-400"
+              )}>
+                {pkg.riskLabel}
+              </span>
+            </div>
+          ))}
+        </div>
+
+        {/* Cost Estimate Row */}
+        <div className="grid grid-cols-4">
+          <div className="p-4 font-medium text-sm text-muted-foreground">
+            Cost Estimate
+          </div>
+          {packages.map((pkg) => (
+            <div 
+              key={pkg.level}
+              className={cn(
+                "p-4 text-sm border-l cursor-pointer transition-colors",
+                value === pkg.level 
+                  ? "bg-primary/5" 
+                  : "hover:bg-muted/30"
+              )}
+              onClick={() => onChange(pkg.level)}
+            >
+              <span className="font-semibold text-foreground">
+                {formatCost(pkg.cost)}
+              </span>
+            </div>
+          ))}
         </div>
       </div>
     </div>
