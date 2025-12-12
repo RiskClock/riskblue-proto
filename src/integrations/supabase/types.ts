@@ -170,13 +170,16 @@ export type Database = {
           cost: string
           created_at: string
           display_order: number
-          duration: string
+          duration: string | null
+          end_date_formula: string | null
           id: string
           image_url: string
           is_active: boolean
           name: string
           risk_level: string
           risk_level_points: number
+          risk_tolerance: number | null
+          start_date_formula: string | null
           threat: string
           updated_at: string
         }
@@ -184,13 +187,16 @@ export type Database = {
           cost: string
           created_at?: string
           display_order?: number
-          duration: string
+          duration?: string | null
+          end_date_formula?: string | null
           id?: string
           image_url: string
           is_active?: boolean
           name: string
           risk_level: string
           risk_level_points?: number
+          risk_tolerance?: number | null
+          start_date_formula?: string | null
           threat: string
           updated_at?: string
         }
@@ -198,13 +204,16 @@ export type Database = {
           cost?: string
           created_at?: string
           display_order?: number
-          duration?: string
+          duration?: string | null
+          end_date_formula?: string | null
           id?: string
           image_url?: string
           is_active?: boolean
           name?: string
           risk_level?: string
           risk_level_points?: number
+          risk_tolerance?: number | null
+          start_date_formula?: string | null
           threat?: string
           updated_at?: string
         }
@@ -348,6 +357,60 @@ export type Database = {
           popularity?: number
           responsible?: string
           systems_at_risk?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      processes: {
+        Row: {
+          cost: string
+          created_at: string
+          display_order: number
+          duration: string | null
+          end_date_formula: string | null
+          id: string
+          image_url: string
+          is_active: boolean
+          name: string
+          risk_level: string
+          risk_level_points: number
+          risk_tolerance: number
+          start_date_formula: string | null
+          threat: string
+          updated_at: string
+        }
+        Insert: {
+          cost: string
+          created_at?: string
+          display_order?: number
+          duration?: string | null
+          end_date_formula?: string | null
+          id?: string
+          image_url?: string
+          is_active?: boolean
+          name: string
+          risk_level: string
+          risk_level_points?: number
+          risk_tolerance?: number
+          start_date_formula?: string | null
+          threat: string
+          updated_at?: string
+        }
+        Update: {
+          cost?: string
+          created_at?: string
+          display_order?: number
+          duration?: string | null
+          end_date_formula?: string | null
+          id?: string
+          image_url?: string
+          is_active?: boolean
+          name?: string
+          risk_level?: string
+          risk_level_points?: number
+          risk_tolerance?: number
+          start_date_formula?: string | null
+          threat?: string
           updated_at?: string
         }
         Relationships: []
@@ -690,13 +753,16 @@ export type Database = {
           cost: string
           created_at: string
           display_order: number
-          duration: string
+          duration: string | null
+          end_date_formula: string | null
           id: string
           image_url: string
           is_active: boolean
           name: string
           risk_level: string
           risk_level_points: number
+          risk_tolerance: number | null
+          start_date_formula: string | null
           threat: string
           updated_at: string
         }
@@ -704,13 +770,16 @@ export type Database = {
           cost: string
           created_at?: string
           display_order?: number
-          duration: string
+          duration?: string | null
+          end_date_formula?: string | null
           id?: string
           image_url: string
           is_active?: boolean
           name: string
           risk_level: string
           risk_level_points?: number
+          risk_tolerance?: number | null
+          start_date_formula?: string | null
           threat: string
           updated_at?: string
         }
@@ -718,13 +787,16 @@ export type Database = {
           cost?: string
           created_at?: string
           display_order?: number
-          duration?: string
+          duration?: string | null
+          end_date_formula?: string | null
           id?: string
           image_url?: string
           is_active?: boolean
           name?: string
           risk_level?: string
           risk_level_points?: number
+          risk_tolerance?: number | null
+          start_date_formula?: string | null
           threat?: string
           updated_at?: string
         }
