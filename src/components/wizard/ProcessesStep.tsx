@@ -1,5 +1,7 @@
 import { useState, useEffect, useRef, useMemo, useCallback } from "react";
 import { Users } from "lucide-react";
+import { supabase } from "@/integrations/supabase/client";
+import { useQuery } from "@tanstack/react-query";
 import { AnalysisItem } from "@/lib/analysisItemMapper";
 import { ExpandableListItem, getControlId } from "./ExpandableListItem";
 import { FileViewerModal } from "./FileViewerModal";
@@ -32,6 +34,35 @@ export const ProcessesStep = ({
   riskTolerance: parentRiskTolerance = "low"
 }: ProcessesStepProps) => {
   const hasPendingSave = useRef(false);
+
+  // Fetch processes from database for risk tolerance values
+  const { data: processes = [] } = useQuery({
+    queryKey: ['processes'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('processes')
+        .select('name, risk_tolerance')
+        .eq('is_active', true);
+      if (error) throw error;
+      return (data || []) as { name: string; risk_tolerance: number }[];
+    }
+  });
+
+  // Fetch mitigation controls for risk_tolerance
+  const { data: controls = [] } = useQuery({
+    queryKey: ['mitigation-controls-risk-tolerance'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('mitigation_controls')
+        .select('name, risk_tolerance')
+        .eq('is_active', true);
+      if (error) throw error;
+      return (data || []).map(c => ({
+        name: c.name,
+        riskTolerance: c.risk_tolerance ?? 3
+      })) as { name: string; riskTolerance: number }[];
+    }
+  });
 
   // Filter only process items
   const processItems = useMemo(() => 
@@ -103,34 +134,58 @@ export const ProcessesStep = ({
     }
   }, [data.selectedProcessInstances, data.selectedProcessControls]);
 
+  // Create risk tolerance lookup maps
+  const processRiskToleranceMap = useMemo(() => {
+    const map = new Map<string, number>();
+    processes.forEach(p => {
+      map.set(p.name.toLowerCase(), p.risk_tolerance ?? 3);
+    });
+    return map;
+  }, [processes]);
+
+  const controlRiskToleranceMap = useMemo(() => {
+    const map = new Map<string, number>();
+    controls.forEach(c => {
+      map.set(c.name, c.riskTolerance);
+    });
+    return map;
+  }, [controls]);
+
+  // Helper to check if item meets risk tolerance threshold
+  const meetsRiskThreshold = (rt: number, tolerance: RiskTolerance): boolean => {
+    if (tolerance === "low") return true; // Fortified: all items (RT 1, 2, 3)
+    if (tolerance === "medium") return rt >= 2; // Enhanced: RT 2 and 3
+    return rt === 3; // Essential: only RT 3
+  };
+
   // React to parent risk tolerance changes
   useEffect(() => {
-    if (!processItems.length) return;
+    if (!processItems.length || !controls.length) return;
     
-    const allInstanceIds = processItems.map(i => i.id);
-    const allControlIds = new Set<string>();
+    // Filter instances based on their class's risk tolerance
+    const filteredInstanceIds = processItems
+      .filter(item => {
+        const classRT = processRiskToleranceMap.get(item.name.toLowerCase()) ?? 3;
+        return meetsRiskThreshold(classRT, parentRiskTolerance);
+      })
+      .map(i => i.id);
+    
+    // Filter controls based on control risk tolerance
+    const filteredControlIds = new Set<string>();
     processItems.forEach(item => {
-      (item.controls || []).forEach(control => {
-        allControlIds.add(getControlId(item.id, control));
-      });
+      if (filteredInstanceIds.includes(item.id)) {
+        (item.controls || []).forEach(controlName => {
+          const controlRT = controlRiskToleranceMap.get(controlName) ?? 3;
+          if (meetsRiskThreshold(controlRT, parentRiskTolerance)) {
+            filteredControlIds.add(getControlId(item.id, controlName));
+          }
+        });
+      }
     });
     
-    if (parentRiskTolerance === "low") {
-      setSelectedInstanceIds(allInstanceIds);
-      setSelectedControlIds(allControlIds);
-    } else if (parentRiskTolerance === "high") {
-      setSelectedInstanceIds([]);
-      setSelectedControlIds(new Set());
-    } else {
-      const halfInstances = allInstanceIds.filter((_, i) => i % 2 === 0);
-      const halfControls = new Set<string>();
-      Array.from(allControlIds).forEach((id, i) => {
-        if (i % 2 === 0) halfControls.add(id);
-      });
-      setSelectedInstanceIds(halfInstances);
-      setSelectedControlIds(halfControls);
-    }
-  }, [parentRiskTolerance, processItems]);
+    setSelectedInstanceIds(filteredInstanceIds);
+    setSelectedControlIds(filteredControlIds);
+  }, [parentRiskTolerance, processItems, processRiskToleranceMap, controlRiskToleranceMap, controls.length]);
 
   // Auto-save with debounce
   useEffect(() => {

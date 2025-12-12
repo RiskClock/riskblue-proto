@@ -92,19 +92,20 @@ export const WaterSystemsStep = ({
     }
   });
 
-  // Fetch mitigation controls for points/author/responsible with estimated_cost from DB
+  // Fetch mitigation controls for points/author/responsible with estimated_cost and risk_tolerance from DB
   const { data: controls = [] } = useQuery({
     queryKey: ['mitigation-controls-with-details'],
     queryFn: async () => {
       const { data, error } = await supabase
         .from('mitigation_controls')
-        .select('name, points, author, responsible, estimated_cost, description, action, category')
+        .select('name, points, author, responsible, estimated_cost, description, action, category, risk_tolerance')
         .eq('is_active', true);
       if (error) throw error;
       return (data || []).map(control => ({
         ...control,
-        estimatedCost: Number(control.estimated_cost) || 0
-      })) as { name: string; points: number; author: string; responsible: string; estimatedCost: number; description?: string; action?: string; category?: string }[];
+        estimatedCost: Number(control.estimated_cost) || 0,
+        riskTolerance: control.risk_tolerance ?? 3
+      })) as { name: string; points: number; author: string; responsible: string; estimatedCost: number; description?: string; action?: string; category?: string; riskTolerance: number }[];
     }
   });
 
@@ -354,37 +355,59 @@ export const WaterSystemsStep = ({
     return cost;
   }, [selectedControlIds, controls]);
 
+  // Create risk tolerance lookup maps
+  const systemRiskToleranceMap = useMemo(() => {
+    const map = new Map<string, number>();
+    allSystems.forEach(s => {
+      const system = s as any;
+      map.set(normalizeSystemName(s.name), system.risk_tolerance ?? 3);
+    });
+    return map;
+  }, [allSystems]);
+
+  const controlRiskToleranceMap = useMemo(() => {
+    const map = new Map<string, number>();
+    controls.forEach(c => {
+      map.set(c.name, c.riskTolerance);
+    });
+    return map;
+  }, [controls]);
+
+  // Helper to check if item meets risk tolerance threshold
+  const meetsRiskThreshold = (rt: number, tolerance: RiskTolerance): boolean => {
+    if (tolerance === "low") return true; // Fortified: all items (RT 1, 2, 3)
+    if (tolerance === "medium") return rt >= 2; // Enhanced: RT 2 and 3
+    return rt === 3; // Essential: only RT 3
+  };
+
   // React to parent risk tolerance changes
   useEffect(() => {
-    if (!systemItems.length) return;
+    if (!systemItems.length || !controls.length) return;
     
-    const allInstanceIds = systemItems.map(i => i.id);
-    const allControlIds = new Set<string>();
+    // Filter instances based on their class's risk tolerance
+    const filteredInstanceIds = systemItems
+      .filter(item => {
+        const classRT = systemRiskToleranceMap.get(normalizeSystemName(item.name)) ?? 3;
+        return meetsRiskThreshold(classRT, parentRiskTolerance);
+      })
+      .map(i => i.id);
+    
+    // Filter controls based on control risk tolerance
+    const filteredControlIds = new Set<string>();
     systemItems.forEach(item => {
-      (item.controls || []).forEach(control => {
-        allControlIds.add(getControlId(item.id, control));
-      });
+      if (filteredInstanceIds.includes(item.id)) {
+        (item.controls || []).forEach(controlName => {
+          const controlRT = controlRiskToleranceMap.get(controlName) ?? 3;
+          if (meetsRiskThreshold(controlRT, parentRiskTolerance)) {
+            filteredControlIds.add(getControlId(item.id, controlName));
+          }
+        });
+      }
     });
     
-    if (parentRiskTolerance === "low") {
-      // Select all
-      setSelectedInstanceIds(allInstanceIds);
-      setSelectedControlIds(allControlIds);
-    } else if (parentRiskTolerance === "high") {
-      // Select none
-      setSelectedInstanceIds([]);
-      setSelectedControlIds(new Set());
-    } else {
-      // Medium - select ~50% deterministically based on index
-      const halfInstances = allInstanceIds.filter((_, i) => i % 2 === 0);
-      const halfControls = new Set<string>();
-      Array.from(allControlIds).forEach((id, i) => {
-        if (i % 2 === 0) halfControls.add(id);
-      });
-      setSelectedInstanceIds(halfInstances);
-      setSelectedControlIds(halfControls);
-    }
-  }, [parentRiskTolerance, systemItems]);
+    setSelectedInstanceIds(filteredInstanceIds);
+    setSelectedControlIds(filteredControlIds);
+  }, [parentRiskTolerance, systemItems, systemRiskToleranceMap, controlRiskToleranceMap, controls.length]);
 
   if (isLoading || isLoadingCustom) {
     return (
