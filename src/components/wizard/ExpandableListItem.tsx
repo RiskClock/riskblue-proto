@@ -9,7 +9,12 @@ import { ClassRiskBadges } from "./RiskScoreSummary";
 import { InstanceDetailsModal } from "./InstanceDetailsModal";
 import { ControlDetailsModal } from "./ControlDetailsModal";
 import type { DriveFileInfo } from "./ProjectFilesUpload";
-import { calculateControlCost, parseDurationMonths } from "@/lib/costCalculator";
+import { 
+  calculateTieredControlCost, 
+  parseDurationMonths,
+  PricingTier,
+  InstancePricingData
+} from "@/lib/costCalculator";
 
 interface ControlPoints {
   points: number;
@@ -48,6 +53,8 @@ interface ExpandableListItemProps {
   classRiskPoints?: number;
   classDeriskPoints?: number;
   classCostToProtect?: number;
+  // Pricing tiers for tiered cost calculation
+  pricingTiers?: PricingTier[];
 }
 
 // Helper to generate control ID
@@ -132,6 +139,7 @@ export const ExpandableListItem = ({
   classRiskPoints,
   classDeriskPoints,
   classCostToProtect,
+  pricingTiers = [],
 }: ExpandableListItemProps) => {
   const [isExpanded, setIsExpanded] = useState(false);
   const [expandedInstanceIds, setExpandedInstanceIds] = useState<Set<string>>(new Set());
@@ -387,11 +395,27 @@ export const ExpandableListItem = ({
 
             // Calculate instance cost and derisk points based on selected controls
             const durationMonths = parseDurationMonths(duration);
+            
+            // Build instance pricing data for tiered lookup
+            const instancePricingData: InstancePricingData = {
+              width: instance.width,
+              length: instance.length,
+              sizeCategory: instance.sizeCategory,
+              pipeDiameterInches: (instance as any).additionalParameters?.pipeDiameterInches || null
+            };
+            
             const instanceCost = (instance.controls || []).reduce((sum, control) => {
               const controlId = getControlId(instance.id, control);
               if (selectedControlIds.has(controlId)) {
                 const controlData = getControlPoints?.(control);
-                return sum + calculateControlCost(controlData?.oneTimeCost || 0, controlData?.monthlyMaintCost || 0, durationMonths);
+                return sum + calculateTieredControlCost(
+                  control,
+                  instancePricingData,
+                  pricingTiers,
+                  controlData?.oneTimeCost || 0,
+                  controlData?.monthlyMaintCost || 0,
+                  durationMonths
+                );
               }
               return sum;
             }, 0);
@@ -534,7 +558,23 @@ export const ExpandableListItem = ({
                       const isControlSelected = selectedControlIds.has(controlId);
                       const controlData = getControlPoints?.(control);
                       const durationMonths = parseDurationMonths(duration);
-                      const controlCost = calculateControlCost(controlData?.oneTimeCost || 0, controlData?.monthlyMaintCost || 0, durationMonths);
+                      
+                      // Build instance pricing data for tiered lookup
+                      const instancePricingData: InstancePricingData = {
+                        width: instance.width,
+                        length: instance.length,
+                        sizeCategory: instance.sizeCategory,
+                        pipeDiameterInches: (instance as any).additionalParameters?.pipeDiameterInches || null
+                      };
+                      
+                      const controlCost = calculateTieredControlCost(
+                        control,
+                        instancePricingData,
+                        pricingTiers,
+                        controlData?.oneTimeCost || 0,
+                        controlData?.monthlyMaintCost || 0,
+                        durationMonths
+                      );
 
                       return (
                         <div 
