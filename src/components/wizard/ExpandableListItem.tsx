@@ -9,12 +9,14 @@ import { ClassRiskBadges } from "./RiskScoreSummary";
 import { InstanceDetailsModal } from "./InstanceDetailsModal";
 import { ControlDetailsModal } from "./ControlDetailsModal";
 import type { DriveFileInfo } from "./ProjectFilesUpload";
+import { calculateControlCost, parseDurationMonths } from "@/lib/costCalculator";
 
 interface ControlPoints {
   points: number;
   author?: string;
   responsible?: string;
-  estimatedCost?: number;
+  oneTimeCost?: number;
+  monthlyMaintCost?: number;
   description?: string;
   action?: string;
   category?: string;
@@ -144,7 +146,8 @@ export const ExpandableListItem = ({
     responsible?: string;
     category?: string;
     points?: number;
-    estimatedCost?: number;
+    oneTimeCost?: number;
+    monthlyMaintCost?: number;
   } | null>(null);
 
   const handleViewControlDetails = useCallback((controlName: string, e: React.MouseEvent) => {
@@ -158,7 +161,8 @@ export const ExpandableListItem = ({
       responsible: controlData?.responsible,
       category: controlData?.category,
       points: controlData?.points,
-      estimatedCost: controlData?.estimatedCost
+      oneTimeCost: controlData?.oneTimeCost,
+      monthlyMaintCost: controlData?.monthlyMaintCost
     });
     setControlModalOpen(true);
   }, [getControlPoints]);
@@ -382,11 +386,12 @@ export const ExpandableListItem = ({
             const pipeDiameter = getPipeDiameter(instance);
 
             // Calculate instance cost and derisk points based on selected controls
+            const durationMonths = parseDurationMonths(duration);
             const instanceCost = (instance.controls || []).reduce((sum, control) => {
               const controlId = getControlId(instance.id, control);
               if (selectedControlIds.has(controlId)) {
                 const controlData = getControlPoints?.(control);
-                return sum + (controlData?.estimatedCost || 0);
+                return sum + calculateControlCost(controlData?.oneTimeCost || 0, controlData?.monthlyMaintCost || 0, durationMonths);
               }
               return sum;
             }, 0);
@@ -528,7 +533,8 @@ export const ExpandableListItem = ({
                       const controlId = getControlId(instance.id, control);
                       const isControlSelected = selectedControlIds.has(controlId);
                       const controlData = getControlPoints?.(control);
-                      const estimatedCost = controlData?.estimatedCost || 0;
+                      const durationMonths = parseDurationMonths(duration);
+                      const controlCost = calculateControlCost(controlData?.oneTimeCost || 0, controlData?.monthlyMaintCost || 0, durationMonths);
 
                       return (
                         <div 
@@ -555,7 +561,7 @@ export const ExpandableListItem = ({
                           </div>
                           <div className="flex items-center gap-2 flex-shrink-0">
                             <Badge variant="outline" className="text-xs bg-blue-50 text-blue-600 border-blue-200 dark:bg-blue-950 dark:text-blue-300 dark:border-blue-800">
-                              {formatCost(estimatedCost)}
+                              {formatCost(controlCost)}
                             </Badge>
                             {controlData && (
                               <Badge variant="outline" className="text-xs bg-emerald-50 text-emerald-600 border-emerald-200 dark:bg-emerald-950 dark:text-emerald-300 dark:border-emerald-800">
