@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useCallback } from "react";
+import { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
@@ -55,6 +55,9 @@ export const CriticalAssetsStep = ({
 }: CriticalAssetsStepProps) => {
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  
+  // Ref to track if risk tolerance filter triggered the state change
+  const isRiskToleranceUpdateRef = useRef(false);
   
   // Selected instance IDs (individual items from analysis)
   const [selectedInstanceIds, setSelectedInstanceIds] = useState<string[]>(
@@ -281,8 +284,13 @@ export const CriticalAssetsStep = ({
     }
   }, [analysisItems, data.selectedAssetInstances, data.selectedAssetControls]);
 
-  // Sync props to state
+  // Sync props to state - only when NOT triggered by risk tolerance filter
+  // This prevents the circular update loop
   useEffect(() => {
+    if (isRiskToleranceUpdateRef.current) {
+      // Skip syncing - this change came from risk tolerance filter
+      return;
+    }
     if (data.selectedAssetInstances) {
       setSelectedInstanceIds(data.selectedAssetInstances);
     }
@@ -316,9 +324,19 @@ export const CriticalAssetsStep = ({
     return rt === 3; // Essential: only RT 3
   };
 
+  // Track previous risk tolerance to detect actual changes
+  const prevRiskToleranceRef = useRef(parentRiskTolerance);
+  
   // React to parent risk tolerance changes
   useEffect(() => {
     if (!assetItems.length || !controls.length) return;
+    
+    // Only run when risk tolerance actually changes
+    if (prevRiskToleranceRef.current === parentRiskTolerance) return;
+    prevRiskToleranceRef.current = parentRiskTolerance;
+    
+    // Mark that this update is from risk tolerance filter
+    isRiskToleranceUpdateRef.current = true;
     
     // Filter instances based on their class's risk tolerance
     const filteredInstanceIds = assetItems
@@ -343,6 +361,11 @@ export const CriticalAssetsStep = ({
     
     setSelectedInstanceIds(filteredInstanceIds);
     setSelectedControlIds(filteredControlIds);
+    
+    // Reset the flag after a short delay to allow state to settle
+    setTimeout(() => {
+      isRiskToleranceUpdateRef.current = false;
+    }, 100);
   }, [parentRiskTolerance, assetItems, assetRiskToleranceMap, controlRiskToleranceMap, controls.length]);
 
   const handleToggleInstance = useCallback((instanceId: string) => {
@@ -408,9 +431,11 @@ export const CriticalAssetsStep = ({
     setViewerOpen(true);
   }, [driveFiles]);
 
-  // Auto-save with debounce
+  // Auto-save with debounce - skip when risk tolerance update is in progress
   useEffect(() => {
     if (isProcessingWebhook) return;
+    if (isRiskToleranceUpdateRef.current) return;
+    
     const timer = setTimeout(() => {
       onNext({ 
         selectedAssetInstances: selectedInstanceIds,
