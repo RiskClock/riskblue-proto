@@ -324,6 +324,7 @@ export type Database = {
           points: number
           popularity: number
           responsible: string
+          risk_tolerance: number | null
           systems_at_risk: string | null
           updated_at: string
         }
@@ -349,6 +350,7 @@ export type Database = {
           points?: number
           popularity?: number
           responsible: string
+          risk_tolerance?: number | null
           systems_at_risk?: string | null
           updated_at?: string
         }
@@ -374,6 +376,7 @@ export type Database = {
           points?: number
           popularity?: number
           responsible?: string
+          risk_tolerance?: number | null
           systems_at_risk?: string | null
           updated_at?: string
         }
