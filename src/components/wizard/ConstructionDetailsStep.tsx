@@ -16,11 +16,10 @@ import houseComplexImg from "@/assets/buildingtype4-housecomplex.avif";
 import singleTowerImg from "@/assets/tower1-single.avif";
 import doubleTowerImg from "@/assets/tower2-double.avif";
 import multiTowerImg from "@/assets/tower3-multi.avif";
-// Structural type images from storage bucket
-const castInPlaceImg = "https://qbzuchzqeefbzeldftvg.supabase.co/storage/v1/object/public/entity-images/Cast%20in%20Place%20Structure.svg";
-const precastImg = "https://qbzuchzqeefbzeldftvg.supabase.co/storage/v1/object/public/entity-images/Pre-fab%20Structure.svg";
-const steelImg = "https://qbzuchzqeefbzeldftvg.supabase.co/storage/v1/object/public/entity-images/Steel%20Structure.svg";
-const massTimberImg = "https://qbzuchzqeefbzeldftvg.supabase.co/storage/v1/object/public/entity-images/Mass%20Timber%20Structure.svg";
+import castInPlaceImg from "@/assets/structuraltype_cast-in-place.png";
+import precastImg from "@/assets/structuraltype_precast.png";
+import steelImg from "@/assets/structuraltype_steel.png";
+import massTimberImg from "@/assets/structuraltype_mass_timber.png";
 
 const constructionTypes = [
   { id: "residential", label: "Residential", disabled: false, image: residentialImg },
