@@ -142,6 +142,48 @@ export type Database = {
           },
         ]
       }
+      control_pricing_tiers: {
+        Row: {
+          control_name: string
+          created_at: string
+          id: string
+          max_value: number | null
+          min_value: number | null
+          monthly_cost: number
+          one_time_cost: number
+          tier_label: string
+          tier_type: string
+          unit: string
+          updated_at: string
+        }
+        Insert: {
+          control_name: string
+          created_at?: string
+          id?: string
+          max_value?: number | null
+          min_value?: number | null
+          monthly_cost?: number
+          one_time_cost?: number
+          tier_label: string
+          tier_type: string
+          unit: string
+          updated_at?: string
+        }
+        Update: {
+          control_name?: string
+          created_at?: string
+          id?: string
+          max_value?: number | null
+          min_value?: number | null
+          monthly_cost?: number
+          one_time_cost?: number
+          tier_label?: string
+          tier_type?: string
+          unit?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       control_systems: {
         Row: {
           control_id: string
