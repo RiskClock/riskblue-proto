@@ -304,17 +304,23 @@ export type Database = {
       mitigation_controls: {
         Row: {
           action: string
+          application_component: string | null
           author: string
           category: string
+          concept_hours: number | null
           created_at: string
           description: string
           description_summary: string | null
           display_order: number
           estimated_cost: number | null
+          hourly_rate: number | null
           id: string
           image_url: string
           is_active: boolean
+          monthly_maint_cost: number | null
+          monthly_maint_hours: number | null
           name: string
+          one_time_cost: number | null
           points: number
           popularity: number
           responsible: string
@@ -323,17 +329,23 @@ export type Database = {
         }
         Insert: {
           action: string
+          application_component?: string | null
           author: string
           category: string
+          concept_hours?: number | null
           created_at?: string
           description: string
           description_summary?: string | null
           display_order?: number
           estimated_cost?: number | null
+          hourly_rate?: number | null
           id?: string
           image_url: string
           is_active?: boolean
+          monthly_maint_cost?: number | null
+          monthly_maint_hours?: number | null
           name: string
+          one_time_cost?: number | null
           points?: number
           popularity?: number
           responsible: string
@@ -342,17 +354,23 @@ export type Database = {
         }
         Update: {
           action?: string
+          application_component?: string | null
           author?: string
           category?: string
+          concept_hours?: number | null
           created_at?: string
           description?: string
           description_summary?: string | null
           display_order?: number
           estimated_cost?: number | null
+          hourly_rate?: number | null
           id?: string
           image_url?: string
           is_active?: boolean
+          monthly_maint_cost?: number | null
+          monthly_maint_hours?: number | null
           name?: string
+          one_time_cost?: number | null
           points?: number
           popularity?: number
           responsible?: string
