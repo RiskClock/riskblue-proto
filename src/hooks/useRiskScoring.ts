@@ -199,7 +199,7 @@ export const useRiskScoring = (
           
           const instanceScore: InstanceScore = {
             instanceId: instance.id,
-            riskPoints: isInstanceSelected ? baseRiskPoints : 0,
+            riskPoints: baseRiskPoints, // Risk points are always counted, regardless of selection
             deriskPoints: instanceTotalDerisk,
             selectedDeriskPoints: isInstanceSelected ? instanceSelectedDerisk : 0
           };
@@ -207,10 +207,10 @@ export const useRiskScoring = (
           instanceScoreMap.set(instance.id, instanceScore);
           classScore.instanceScores.push(instanceScore);
           
-          // Only add to class totals if instance is selected
+          // Risk points are always counted; only derisk points depend on selection
+          classScore.riskPoints += baseRiskPoints;
+          classScore.totalDeriskPoints += instanceTotalDerisk;
           if (isInstanceSelected) {
-            classScore.riskPoints += baseRiskPoints;
-            classScore.totalDeriskPoints += instanceTotalDerisk;
             classScore.selectedDeriskPoints += instanceSelectedDerisk;
           }
         });
