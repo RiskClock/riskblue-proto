@@ -144,18 +144,18 @@ const ProjectWizard = () => {
     return processNames.size;
   }, [analysisItems]);
 
-  // Fetch control costs from database
+  // Fetch control costs from database (using one_time_cost as base estimate)
   const { data: controlCosts = [] } = useQuery({
     queryKey: ['control-costs'],
     queryFn: async () => {
       const { data, error } = await supabase
         .from('mitigation_controls')
-        .select('name, estimated_cost')
+        .select('name, one_time_cost')
         .eq('is_active', true);
       if (error) throw error;
       return (data || []).map(c => ({
         name: c.name,
-        cost: Number(c.estimated_cost) || 0
+        cost: Number(c.one_time_cost) || 0
       }));
     }
   });

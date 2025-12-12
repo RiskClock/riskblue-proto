@@ -7,6 +7,7 @@ import { Info, Droplets } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { calculateWaterSystemDuration } from "@/lib/durationCalculator";
+import { calculateControlCost, parseDurationMonths } from "@/lib/costCalculator";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 import { AnalysisItem } from "@/lib/analysisItemMapper";
@@ -92,20 +93,21 @@ export const WaterSystemsStep = ({
     }
   });
 
-  // Fetch mitigation controls for points/author/responsible with estimated_cost and risk_tolerance from DB
+  // Fetch mitigation controls for points/author/responsible with cost fields and risk_tolerance from DB
   const { data: controls = [] } = useQuery({
     queryKey: ['mitigation-controls-with-details'],
     queryFn: async () => {
       const { data, error } = await supabase
         .from('mitigation_controls')
-        .select('name, points, author, responsible, estimated_cost, description, action, category, risk_tolerance')
+        .select('name, points, author, responsible, one_time_cost, monthly_maint_cost, description, action, category, risk_tolerance')
         .eq('is_active', true);
       if (error) throw error;
       return (data || []).map(control => ({
         ...control,
-        estimatedCost: Number(control.estimated_cost) || 0,
+        oneTimeCost: Number(control.one_time_cost) || 0,
+        monthlyMaintCost: Number(control.monthly_maint_cost) || 0,
         riskTolerance: control.risk_tolerance ?? 3
-      })) as { name: string; points: number; author: string; responsible: string; estimatedCost: number; description?: string; action?: string; category?: string; riskTolerance: number }[];
+      })) as { name: string; points: number; author: string; responsible: string; oneTimeCost: number; monthlyMaintCost: number; description?: string; action?: string; category?: string; riskTolerance: number }[];
     }
   });
 
@@ -346,14 +348,19 @@ export const WaterSystemsStep = ({
   const totalCost = useMemo(() => {
     let cost = 0;
     selectedControlIds.forEach(controlId => {
-      const controlName = controlId.split('::')[1];
+      const [instanceId, controlName] = controlId.split('::');
       const control = controls.find(c => c.name === controlName);
-      if (control?.estimatedCost) {
-        cost += control.estimatedCost;
+      if (control) {
+        // Find the instance to get its class duration
+        const instance = systemItems.find(i => i.id === instanceId);
+        const className = instance?.name || '';
+        const durationStr = calculateWaterSystemDuration(className, data);
+        const durationMonths = parseDurationMonths(durationStr);
+        cost += calculateControlCost(control.oneTimeCost, control.monthlyMaintCost, durationMonths);
       }
     });
     return cost;
-  }, [selectedControlIds, controls]);
+  }, [selectedControlIds, controls, systemItems, data]);
 
   // Create risk tolerance lookup maps
   const systemRiskToleranceMap = useMemo(() => {
@@ -442,13 +449,17 @@ export const WaterSystemsStep = ({
           const classScore = riskScore.getClassScore(system.name);
           
           // Calculate class cost to protect based on selected controls
+          const durationStr = calculateWaterSystemDuration(system.name, data);
+          const durationMonths = parseDurationMonths(durationStr);
           let classCost = 0;
           instances.forEach(instance => {
             (instance.controls || []).forEach(controlName => {
               const controlId = getControlId(instance.id, controlName);
               if (selectedControlIds.has(controlId)) {
                 const control = controls.find(c => c.name === controlName);
-                classCost += control?.estimatedCost || 0;
+                if (control) {
+                  classCost += calculateControlCost(control.oneTimeCost, control.monthlyMaintCost, durationMonths);
+                }
               }
             });
           });

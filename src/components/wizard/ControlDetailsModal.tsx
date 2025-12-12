@@ -9,7 +9,8 @@ interface ControlDetails {
   responsible?: string;
   category?: string;
   points?: number;
-  estimatedCost?: number;
+  oneTimeCost?: number;
+  monthlyMaintCost?: number;
 }
 
 interface ControlDetailsModalProps {
@@ -52,9 +53,9 @@ export const ControlDetailsModal = ({
                 {control.points} derisk pts
               </Badge>
             )}
-            {control.estimatedCost !== undefined && (
+            {(control.oneTimeCost !== undefined || control.monthlyMaintCost !== undefined) && (
               <Badge variant="outline" className="text-xs bg-blue-50 text-blue-600 border-blue-200 dark:bg-blue-950 dark:text-blue-300 dark:border-blue-800">
-                {formatCost(control.estimatedCost)}
+                {formatCost(control.oneTimeCost || 0)} + {formatCost(control.monthlyMaintCost || 0)}/mo
               </Badge>
             )}
           </div>
