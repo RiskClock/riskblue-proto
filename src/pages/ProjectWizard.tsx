@@ -67,11 +67,63 @@ const ProjectWizard = () => {
     (projectData.riskTolerance as RiskTolerance) || "low"
   );
 
-  // Compute class counts for subheadings
+  // Normalize asset name for counting (must match CriticalAssetsStep logic)
+  const normalizeAssetName = (name: string): string => {
+    const normalized = name.toLowerCase()
+      .replace(/rooms?/g, 'room')
+      .replace(/risers?/g, 'riser')
+      .replace(/pits?/g, 'pit')
+      .replace(/suites?/g, 'suite')
+      .replace(/guest rooms?/g, 'suite')
+      .replace(/kitchens?/g, 'kitchen')
+      .replace(/washrooms?/g, 'washroom')
+      .replace(/w\/c/g, 'washroom')
+      .replace(/&/g, 'and')
+      .replace(/,/g, '')
+      .replace(/\s+/g, ' ')
+      .trim();
+    
+    if (normalized.includes('electrical') && normalized.includes('room')) return 'electrical rooms';
+    if (normalized.includes('mechanical') && normalized.includes('room')) return 'mechanical rooms';
+    if (normalized.includes('electrical') && normalized.includes('riser')) return 'electrical risers';
+    if (normalized.includes('mechanical') && normalized.includes('riser')) return 'mechanical risers';
+    if (normalized.includes('elevator') && normalized.includes('pit')) return 'elevator pits';
+    if (normalized.includes('suite') || normalized.includes('guest')) return 'suites';
+    if (normalized.includes('kitchen') || normalized.includes('washroom')) return 'kitchens and washrooms';
+    if (normalized.includes('facade') || normalized.includes('envelope') || normalized.includes('exterior') || normalized.includes('roofing')) return 'facade envelope exterior and roofing';
+    if (normalized.includes('mass timber') || normalized.includes('millwork')) return 'mass timber and millwork';
+    
+    return normalized;
+  };
+
+  // Normalize water system name for counting (must match WaterSystemsStep logic)
+  const normalizeSystemName = (name: string): string => {
+    const lower = name.toLowerCase();
+    if (lower.includes('cold') && (lower.includes('domestic') || lower.includes('water'))) return 'cold domestic water';
+    if (lower.includes('hot') && (lower.includes('domestic') || lower.includes('water'))) return 'hot domestic water';
+    if (lower.includes('temporary') && lower.includes('water')) return 'temporary water run';
+    if (lower.includes('main') && lower.includes('city') && lower.includes('water')) return 'main city water supply';
+    if (lower.includes('hydronic')) return 'hydronics';
+    if (lower.includes('fire') && (lower.includes('suppression') || lower.includes('protection') || lower.includes('sprinkler'))) return 'fire suppression system';
+    if (lower.includes('sump') || lower.includes('storm drain') || lower.includes('drainage')) return 'sump pits storm drains and drainages';
+    return lower.replace(/[,&]/g, '').replace(/\s+/g, ' ').trim();
+  };
+
+  // Normalize process name for counting (must match ProcessesStep logic)
+  const normalizeProcessName = (name: string): string => {
+    const lower = name.toLowerCase().trim();
+    if (lower.includes('engineering')) return 'engineering process';
+    if (lower.includes('contractor')) return 'contractor process';
+    if (lower.includes('mechanical')) return 'mechanical contractor process';
+    if (lower.includes('water mitigation') || lower.includes('vendor')) return 'water mitigation vendor process';
+    return lower.replace(/[,&]/g, '').replace(/\s+/g, ' ').trim();
+  };
+
+  // Compute class counts for subheadings using normalized names
   const assetClassCount = useMemo(() => {
     const assetNames = new Set<string>();
     analysisItems.forEach(item => {
-      if (item.category === "Asset") assetNames.add(item.name.toLowerCase());
+      if (item.category === "Asset") assetNames.add(normalizeAssetName(item.name));
     });
     return assetNames.size;
   }, [analysisItems]);
@@ -79,7 +131,7 @@ const ProjectWizard = () => {
   const waterSystemClassCount = useMemo(() => {
     const systemNames = new Set<string>();
     analysisItems.forEach(item => {
-      if (item.category === "Water System") systemNames.add(item.name.toLowerCase());
+      if (item.category === "Water System") systemNames.add(normalizeSystemName(item.name));
     });
     return systemNames.size;
   }, [analysisItems]);
@@ -87,7 +139,7 @@ const ProjectWizard = () => {
   const processClassCount = useMemo(() => {
     const processNames = new Set<string>();
     analysisItems.forEach(item => {
-      if (item.category === "Process") processNames.add(item.name.toLowerCase());
+      if (item.category === "Process") processNames.add(normalizeProcessName(item.name));
     });
     return processNames.size;
   }, [analysisItems]);
