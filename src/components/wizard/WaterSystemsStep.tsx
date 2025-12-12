@@ -7,7 +7,7 @@ import { Info, Droplets } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { calculateWaterSystemDuration } from "@/lib/durationCalculator";
-import { calculateControlCost, parseDurationMonths } from "@/lib/costCalculator";
+import { calculateTieredControlCost, parseDurationMonths, PricingTier } from "@/lib/costCalculator";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 import { AnalysisItem } from "@/lib/analysisItemMapper";
@@ -108,6 +108,19 @@ export const WaterSystemsStep = ({
         monthlyMaintCost: Number(control.monthly_maint_cost) || 0,
         riskTolerance: control.risk_tolerance ?? 3
       })) as { name: string; points: number; author: string; responsible: string; oneTimeCost: number; monthlyMaintCost: number; description?: string; action?: string; category?: string; riskTolerance: number }[];
+    }
+  });
+
+  // Fetch control pricing tiers
+  const { data: pricingTiers = [] } = useQuery({
+    queryKey: ['control-pricing-tiers'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('control_pricing_tiers')
+        .select('*')
+        .order('control_name, min_value');
+      if (error) throw error;
+      return data as PricingTier[];
     }
   });
 
@@ -344,23 +357,38 @@ export const WaterSystemsStep = ({
     addCustomSystemMutation.mutate(newSystem);
   };
 
-  // Calculate total cost based on selected controls - MUST be before early returns
+  // Calculate total cost based on selected controls with tiered pricing - MUST be before early returns
   const totalCost = useMemo(() => {
     let cost = 0;
     selectedControlIds.forEach(controlId => {
       const [instanceId, controlName] = controlId.split('::');
       const control = controls.find(c => c.name === controlName);
       if (control) {
-        // Find the instance to get its class duration
+        // Find the instance to get its class duration and sizing data
         const instance = systemItems.find(i => i.id === instanceId);
         const className = instance?.name || '';
         const durationStr = calculateWaterSystemDuration(className, data);
         const durationMonths = parseDurationMonths(durationStr);
-        cost += calculateControlCost(control.oneTimeCost, control.monthlyMaintCost, durationMonths);
+        
+        const instancePricingData = {
+          width: instance?.width,
+          length: instance?.length,
+          sizeCategory: instance?.sizeCategory,
+          pipeDiameterInches: (instance as any)?.additionalParameters?.pipeDiameterInches || null
+        };
+        
+        cost += calculateTieredControlCost(
+          controlName,
+          instancePricingData,
+          pricingTiers,
+          control.oneTimeCost,
+          control.monthlyMaintCost,
+          durationMonths
+        );
       }
     });
     return cost;
-  }, [selectedControlIds, controls, systemItems, data]);
+  }, [selectedControlIds, controls, systemItems, data, pricingTiers]);
 
   // Create risk tolerance lookup maps
   const systemRiskToleranceMap = useMemo(() => {
@@ -448,17 +476,30 @@ export const WaterSystemsStep = ({
           const instances = getSystemAnalysisItems(system.name);
           const classScore = riskScore.getClassScore(system.name);
           
-          // Calculate class cost to protect based on selected controls
+          // Calculate class cost to protect based on selected controls with tiered pricing
           const durationStr = calculateWaterSystemDuration(system.name, data);
           const durationMonths = parseDurationMonths(durationStr);
           let classCost = 0;
           instances.forEach(instance => {
+            const instancePricingData = {
+              width: instance.width,
+              length: instance.length,
+              sizeCategory: instance.sizeCategory,
+              pipeDiameterInches: (instance as any).additionalParameters?.pipeDiameterInches || null
+            };
             (instance.controls || []).forEach(controlName => {
               const controlId = getControlId(instance.id, controlName);
               if (selectedControlIds.has(controlId)) {
                 const control = controls.find(c => c.name === controlName);
                 if (control) {
-                  classCost += calculateControlCost(control.oneTimeCost, control.monthlyMaintCost, durationMonths);
+                  classCost += calculateTieredControlCost(
+                    controlName,
+                    instancePricingData,
+                    pricingTiers,
+                    control.oneTimeCost,
+                    control.monthlyMaintCost,
+                    durationMonths
+                  );
                 }
               }
             });
@@ -490,6 +531,7 @@ export const WaterSystemsStep = ({
               classRiskPoints={classScore?.riskPoints}
               classDeriskPoints={classScore?.selectedDeriskPoints}
               classCostToProtect={classCost}
+              pricingTiers={pricingTiers}
             />
           );
         })}
