@@ -34,10 +34,10 @@ const buildingTypeConfig: Record<string, { label: string; imagePath: string }> =
 };
 
 const structuralTypeConfig: Record<string, { label: string; imagePath: string }> = {
-  "cast-in-place": { label: "Cast-in-Place Reinforced Concrete", imagePath: "/assets/structuraltype_cast-in-place.png" },
-  "precast": { label: "Precast Concrete", imagePath: "/assets/structuraltype_precast.png" },
-  "steel": { label: "Steel", imagePath: "/assets/structuraltype_steel.png" },
-  "mass-timber": { label: "Mass Timber", imagePath: "/assets/structuraltype_mass_timber.png" },
+  "cast-in-place": { label: "Cast-in-Place Reinforced Concrete", imagePath: "https://qbzuchzqeefbzeldftvg.supabase.co/storage/v1/object/public/entity-images/Cast%20in%20Place%20Structure.svg" },
+  "precast": { label: "Precast Concrete", imagePath: "https://qbzuchzqeefbzeldftvg.supabase.co/storage/v1/object/public/entity-images/Pre-fab%20Structure.svg" },
+  "steel": { label: "Steel", imagePath: "https://qbzuchzqeefbzeldftvg.supabase.co/storage/v1/object/public/entity-images/Steel%20Structure.svg" },
+  "mass-timber": { label: "Mass Timber", imagePath: "https://qbzuchzqeefbzeldftvg.supabase.co/storage/v1/object/public/entity-images/Mass%20Timber%20Structure.svg" },
 };
 
 const towerTypeConfig: Record<string, { label: string; imagePath: string }> = {
