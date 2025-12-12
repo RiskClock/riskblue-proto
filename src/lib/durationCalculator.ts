@@ -80,6 +80,17 @@ export const calculateCriticalAssetDuration = (
       interior_start_date 
     } = timeline;
 
+    // Debug logging - remove after fixing
+    console.log(`[Duration Debug] ${assetName}:`, {
+      construction_end_date,
+      enclosure_end_date,
+      mep_start_date,
+      mep_end_date,
+      elevators_start_date,
+      interior_start_date,
+      fullTimeline: timeline
+    });
+
     if (!construction_end_date) return "N/A";
 
     let startDate: Date | null = null;
