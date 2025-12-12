@@ -71,62 +71,115 @@ export const calculateCriticalAssetDuration = (
   timeline: TimelineData
 ): string => {
   try {
-    const { 
-      construction_end_date, 
-      enclosure_end_date, 
-      mep_start_date, 
-      mep_end_date, 
-      elevators_start_date,
-      interior_start_date 
-    } = timeline;
-
-    // Debug logging - remove after fixing
-    console.log(`[Duration Debug] ${assetName}:`, {
+    const {
       construction_end_date,
+      frame_start_date,
+      enclosure_start_date,
       enclosure_end_date,
       mep_start_date,
       mep_end_date,
       elevators_start_date,
+      elevators_end_date,
       interior_start_date,
-      fullTimeline: timeline
-    });
+      interior_end_date,
+    } = timeline;
 
-    if (!construction_end_date) return "N/A";
+    // Debug logging - remove after stabilizing
+    console.log(`[Duration Debug] ${assetName}:`, {
+      construction_end_date,
+      frame_start_date,
+      enclosure_start_date,
+      enclosure_end_date,
+      mep_start_date,
+      mep_end_date,
+      elevators_start_date,
+      elevators_end_date,
+      interior_start_date,
+      interior_end_date,
+      fullTimeline: timeline,
+    });
 
     let startDate: Date | null = null;
     let endDate: Date | null = null;
 
     switch (assetName) {
+      // Mechanical rooms / risers: MEP end (-60 days) to Construction end
+      case "Mechanical Room":
       case "Mechanical Rooms":
-      case "Mechanical Risers":
-        if (mep_end_date) {
+      case "Mechanical Riser":
+      case "Mechanical Risers": {
+        if (mep_end_date && construction_end_date) {
           startDate = addDays(parseISO(mep_end_date), -60);
           endDate = parseISO(construction_end_date);
         }
         break;
-      
+      }
+
+      // Electrical rooms / risers: MEP start to Enclosure end (or Construction end fallback)
+      case "Electrical Room":
       case "Electrical Rooms":
-      case "Main Electrical Risers":
-        if (enclosure_end_date && mep_start_date) {
+      case "Electrical Riser":
+      case "Main Electrical Risers": {
+        if (mep_start_date && enclosure_end_date) {
           startDate = parseISO(mep_start_date);
           endDate = parseISO(enclosure_end_date);
+        } else if (mep_start_date && construction_end_date) {
+          // Fallback if enclosure end is missing
+          startDate = parseISO(mep_start_date);
+          endDate = parseISO(construction_end_date);
         }
         break;
-      
-      case "Sump Pits":
+      }
+
+      // Elevator / sump pits: Elevators start (-30 days) to Construction end
+      case "Elevator Pit":
       case "Elevator Pits":
-        if (elevators_start_date) {
+      case "Sump Pit":
+      case "Sump Pits": {
+        if (elevators_start_date && construction_end_date) {
           startDate = addDays(parseISO(elevators_start_date), -30);
           endDate = parseISO(construction_end_date);
         }
         break;
-      
-      case "Suites":
-        if (interior_start_date) {
+      }
+
+      // Suites: Interior start (-30 days) to Construction end
+      case "Suite":
+      case "Suites": {
+        if (interior_start_date && construction_end_date) {
           startDate = addDays(parseISO(interior_start_date), -30);
           endDate = parseISO(construction_end_date);
         }
         break;
+      }
+
+      // Mass Timber and Millwork: Structural framing start to Envelope end
+      case "Mass Timber and Millwork": {
+        if (frame_start_date && enclosure_end_date) {
+          startDate = parseISO(frame_start_date);
+          endDate = parseISO(enclosure_end_date);
+        }
+        break;
+      }
+
+      // Facade and Envelope: Envelope start to Envelope end
+      case "Facade and Envelope": {
+        if (enclosure_start_date && enclosure_end_date) {
+          startDate = parseISO(enclosure_start_date);
+          endDate = parseISO(enclosure_end_date);
+        }
+        break;
+      }
+
+      // Kitchens & Washroom: Interior start to Construction end
+      case "Kitchens & Washroom":
+      case "Kitchens and Washrooms": {
+        if (interior_start_date && construction_end_date) {
+          startDate = parseISO(interior_start_date);
+          endDate = parseISO(construction_end_date);
+        }
+        break;
+      }
     }
 
     if (startDate && endDate) {
