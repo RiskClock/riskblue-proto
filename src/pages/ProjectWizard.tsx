@@ -417,11 +417,21 @@ const ProjectWizard = () => {
       });
 
       if (id && id !== "new") {
+        // Fetch existing project_data to merge with new data (preserve fields not in current update)
+        const { data: existingProject } = await supabase
+          .from("projects")
+          .select("project_data")
+          .eq("id", id)
+          .single();
+        
+        const existingProjectData = (existingProject?.project_data as ProjectData) || {};
+        const mergedProjectData = { ...existingProjectData, ...otherData };
+        
         const { error } = await supabase
           .from("projects")
           .update({
             ...tableData,
-            project_data: otherData,
+            project_data: mergedProjectData,
           })
           .eq("id", id);
         if (error) throw error;
