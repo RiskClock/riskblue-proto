@@ -64,27 +64,21 @@ const WATER_SYSTEM_NAME_MAP: Record<string, string> = {
   "Hot Domestic Water": "Domestic Hot Water",
   "Hot Water Return": "Domestic Hot Water",
   
-  // Domestic Cold Water variants
-  "Domestic Cold Water: Main City Entry": "Domestic Cold Water: Main City Entry",
-  "Cold Domestic Water: Main City Entry": "Domestic Cold Water: Main City Entry",
-  "Main City Water Supply": "Domestic Cold Water: Main City Entry",
-  
-  "Domestic Cold Water: Main Entry": "Domestic Cold Water: Main Entry",
-  "Cold Domestic Water: Main Entry": "Domestic Cold Water: Main Entry",
-  "Main Water Entry": "Domestic Cold Water: Main Entry",
-  
-  "Domestic Cold Water: Zone Entry": "Domestic Cold Water: Zone Entry",
-  "Cold Domestic Water: Zone Entry": "Domestic Cold Water: Zone Entry",
-  
-  "Domestic Cold Water: Suite Riser Entry": "Domestic Cold Water: Suite Riser Entry",
-  "Cold Domestic Water: Suite Riser Entry": "Domestic Cold Water: Suite Riser Entry",
-  
-  "Domestic Cold Water: Suite Entry": "Domestic Cold Water: Suite Entry",
-  "Cold Domestic Water: Suite Entry": "Domestic Cold Water: Suite Entry",
-  
-  // Legacy mappings for backward compatibility
-  "Cold Domestic Water": "Domestic Cold Water: Main Entry",
-  "Domestic Cold Water": "Domestic Cold Water: Main Entry",
+  // Domestic Cold Water (consolidated)
+  "Domestic Cold Water": "Domestic Cold Water",
+  "Cold Domestic Water": "Domestic Cold Water",
+  "Domestic Cold Water: Main City Entry": "Domestic Cold Water",
+  "Domestic Cold Water: Main Entry": "Domestic Cold Water",
+  "Domestic Cold Water: Zone Entry": "Domestic Cold Water",
+  "Domestic Cold Water: Suite Riser Entry": "Domestic Cold Water",
+  "Domestic Cold Water: Suite Entry": "Domestic Cold Water",
+  "Cold Domestic Water: Main City Entry": "Domestic Cold Water",
+  "Cold Domestic Water: Main Entry": "Domestic Cold Water",
+  "Cold Domestic Water: Zone Entry": "Domestic Cold Water",
+  "Cold Domestic Water: Suite Riser Entry": "Domestic Cold Water",
+  "Cold Domestic Water: Suite Entry": "Domestic Cold Water",
+  "Main City Water Supply": "Domestic Cold Water",
+  "Main Water Entry": "Domestic Cold Water",
 };
 
 // Map TMU analysis names to database process names
@@ -135,26 +129,9 @@ export function mapToWaterSystemName(analysisName: string): string | null {
   // Try partial matching for common patterns
   const lowerName = analysisName.toLowerCase();
   
-  // Check for specific Domestic Cold Water variants first (order matters!)
-  if (lowerName.includes("main city") && (lowerName.includes("cold") || lowerName.includes("domestic"))) {
-    return "Domestic Cold Water: Main City Entry";
-  }
-  if (lowerName.includes("suite riser") && (lowerName.includes("cold") || lowerName.includes("domestic"))) {
-    return "Domestic Cold Water: Suite Riser Entry";
-  }
-  if (lowerName.includes("suite entry") && (lowerName.includes("cold") || lowerName.includes("domestic"))) {
-    return "Domestic Cold Water: Suite Entry";
-  }
-  if (lowerName.includes("zone") && (lowerName.includes("cold") || lowerName.includes("domestic"))) {
-    return "Domestic Cold Water: Zone Entry";
-  }
-  if (lowerName.includes("main entry") && (lowerName.includes("cold") || lowerName.includes("domestic"))) {
-    return "Domestic Cold Water: Main Entry";
-  }
-  
-  // General cold water (fallback)
+  // Cold water (all variants consolidated to single entry)
   if (lowerName.includes("cold") && (lowerName.includes("domestic") || lowerName.includes("water"))) {
-    return "Domestic Cold Water: Main Entry";
+    return "Domestic Cold Water";
   }
   
   // Hot water
