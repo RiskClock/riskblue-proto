@@ -186,6 +186,11 @@ const ProjectWizard = () => {
     // Project data update will happen via the useEffect that syncs riskTolerance
   }, []);
 
+  // Handle local field changes for immediate UI feedback
+  const handleLocalFieldChange = useCallback((field: string, value: any) => {
+    setProjectData(prev => ({ ...prev, [field]: value }));
+  }, []);
+
   // Sync riskTolerance to projectData when it changes
   useEffect(() => {
     if (projectData.riskTolerance !== riskTolerance) {
@@ -845,26 +850,23 @@ const ProjectWizard = () => {
                   <div className="space-y-6">
                     <ProjectInfoStep 
                       data={projectData} 
-                      onNext={handleStepUpdate}
-                      isProcessingWebhook={isProcessingWebhook}
+                      projectId={id}
+                      onLocalChange={handleLocalFieldChange}
                     />
                   </div>
                   <div className="space-y-6 pt-6 border-t">
                     <h3 className="text-md font-medium">Milestones & Timelines</h3>
                     <ProjectMilestonesStep 
                       data={projectData} 
-                      onNext={handleStepUpdate} 
-                      onBack={() => {}} 
-                      isProcessingWebhook={isProcessingWebhook}
+                      projectId={id}
+                      onLocalChange={handleLocalFieldChange}
                     />
                   </div>
                   <div className="space-y-6 pt-6 border-t">
                     <ConstructionDetailsStep 
                       data={projectData} 
-                      onNext={handleStepUpdate} 
-                      onBack={() => {}} 
                       projectId={id}
-                      isProcessingWebhook={isProcessingWebhook}
+                      onLocalChange={handleLocalFieldChange}
                     />
                   </div>
                 </AccordionContent>
