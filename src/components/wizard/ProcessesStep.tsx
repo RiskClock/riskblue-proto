@@ -7,13 +7,11 @@ import { ExpandableListItem, getControlId } from "./ExpandableListItem";
 import { FileViewerModal } from "./FileViewerModal";
 import type { DriveFileInfo } from "./ProjectFilesUpload";
 import type { RiskTolerance } from "./RiskToleranceSelector";
-import { useProjectMutation } from "@/hooks/useProjectMutation";
+import { useProject } from "@/contexts/ProjectContext";
 
 interface ProcessesStepProps {
-  data?: any;
   onNext?: (data: any) => void;
   isProcessingWebhook?: boolean;
-  projectId?: string;
   analysisItems?: AnalysisItem[];
   driveFiles?: DriveFileInfo[];
   driveAccessToken?: string | null;
@@ -27,10 +25,8 @@ interface ProcessGroup {
 }
 
 export const ProcessesStep = ({ 
-  data = {}, 
   onNext, 
   isProcessingWebhook,
-  projectId,
   analysisItems = [],
   driveFiles = [],
   driveAccessToken = null,
@@ -38,8 +34,9 @@ export const ProcessesStep = ({
 }: ProcessesStepProps) => {
   const hasPendingSave = useRef(false);
   
-  // Project mutation hook for direct field updates
-  const { updateFields } = useProjectMutation(projectId);
+  // Get project context
+  const { projectData, updateFields } = useProject();
+  const data = projectData;
 
   // Fetch processes from database for risk tolerance values
   const { data: processes = [] } = useQuery({

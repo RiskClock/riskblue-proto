@@ -1,6 +1,6 @@
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { useProjectMutation } from "@/hooks/useProjectMutation";
+import { useProject } from "@/contexts/ProjectContext";
 import structuralImg from "@/assets/timeline1-structural.avif";
 import envelopeImg from "@/assets/timeline2-envelope.avif";
 import mepImg from "@/assets/timeline3-MEP.avif";
@@ -8,19 +8,8 @@ import elevatorsImg from "@/assets/timeline4-elevators.avif";
 import fireImg from "@/assets/timeline5-fire.avif";
 import interiorImg from "@/assets/timeline6-interior.avif";
 
-interface ProjectMilestonesStepProps {
-  data: any;
-  projectId?: string;
-  onLocalChange?: (field: string, value: any) => void;
-}
-
-export const ProjectMilestonesStep = ({ data, projectId, onLocalChange }: ProjectMilestonesStepProps) => {
-  const { updateField } = useProjectMutation(projectId);
-
-  const handleChange = (field: string, value: string) => {
-    onLocalChange?.(field, value);
-    updateField(field, value);
-  };
+export const ProjectMilestonesStep = () => {
+  const { projectData, updateField } = useProject();
 
   return (
     <div className="space-y-8">
@@ -31,8 +20,8 @@ export const ProjectMilestonesStep = ({ data, projectId, onLocalChange }: Projec
             <Input
               id="start_date"
               type="date"
-              value={data.construction_start_date || ""}
-              onChange={(e) => handleChange("construction_start_date", e.target.value)}
+              value={projectData.construction_start_date || ""}
+              onChange={(e) => updateField("construction_start_date", e.target.value)}
             />
           </div>
           <div className="space-y-2">
@@ -40,8 +29,8 @@ export const ProjectMilestonesStep = ({ data, projectId, onLocalChange }: Projec
             <Input
               id="end_date"
               type="date"
-              value={data.construction_end_date || ""}
-              onChange={(e) => handleChange("construction_end_date", e.target.value)}
+              value={projectData.construction_end_date || ""}
+              onChange={(e) => updateField("construction_end_date", e.target.value)}
             />
           </div>
         </div>
@@ -59,8 +48,8 @@ export const ProjectMilestonesStep = ({ data, projectId, onLocalChange }: Projec
               <Input
                 id="frame_start"
                 type="date"
-                value={data.frame_start_date || ""}
-                onChange={(e) => handleChange("frame_start_date", e.target.value)}
+                value={projectData.frame_start_date || ""}
+                onChange={(e) => updateField("frame_start_date", e.target.value)}
               />
             </div>
             <div className="space-y-2">
@@ -68,8 +57,8 @@ export const ProjectMilestonesStep = ({ data, projectId, onLocalChange }: Projec
               <Input
                 id="frame_end"
                 type="date"
-                value={data.frame_end_date || ""}
-                onChange={(e) => handleChange("frame_end_date", e.target.value)}
+                value={projectData.frame_end_date || ""}
+                onChange={(e) => updateField("frame_end_date", e.target.value)}
               />
             </div>
           </div>
@@ -86,8 +75,8 @@ export const ProjectMilestonesStep = ({ data, projectId, onLocalChange }: Projec
               <Input
                 id="enclosure_start"
                 type="date"
-                value={data.enclosure_start_date || ""}
-                onChange={(e) => handleChange("enclosure_start_date", e.target.value)}
+                value={projectData.enclosure_start_date || ""}
+                onChange={(e) => updateField("enclosure_start_date", e.target.value)}
               />
             </div>
             <div className="space-y-2">
@@ -95,8 +84,8 @@ export const ProjectMilestonesStep = ({ data, projectId, onLocalChange }: Projec
               <Input
                 id="enclosure_end"
                 type="date"
-                value={data.enclosure_end_date || ""}
-                onChange={(e) => handleChange("enclosure_end_date", e.target.value)}
+                value={projectData.enclosure_end_date || ""}
+                onChange={(e) => updateField("enclosure_end_date", e.target.value)}
               />
             </div>
           </div>
@@ -113,8 +102,8 @@ export const ProjectMilestonesStep = ({ data, projectId, onLocalChange }: Projec
               <Input
                 id="mep_start"
                 type="date"
-                value={data.mep_start_date || ""}
-                onChange={(e) => handleChange("mep_start_date", e.target.value)}
+                value={projectData.mep_start_date || ""}
+                onChange={(e) => updateField("mep_start_date", e.target.value)}
               />
             </div>
             <div className="space-y-2">
@@ -122,8 +111,8 @@ export const ProjectMilestonesStep = ({ data, projectId, onLocalChange }: Projec
               <Input
                 id="mep_end"
                 type="date"
-                value={data.mep_end_date || ""}
-                onChange={(e) => handleChange("mep_end_date", e.target.value)}
+                value={projectData.mep_end_date || ""}
+                onChange={(e) => updateField("mep_end_date", e.target.value)}
               />
             </div>
           </div>
@@ -140,8 +129,8 @@ export const ProjectMilestonesStep = ({ data, projectId, onLocalChange }: Projec
               <Input
                 id="elevators_start"
                 type="date"
-                value={data.elevators_start_date || ""}
-                onChange={(e) => handleChange("elevators_start_date", e.target.value)}
+                value={projectData.elevators_start_date || ""}
+                onChange={(e) => updateField("elevators_start_date", e.target.value)}
               />
             </div>
             <div className="space-y-2">
@@ -149,8 +138,8 @@ export const ProjectMilestonesStep = ({ data, projectId, onLocalChange }: Projec
               <Input
                 id="elevators_end"
                 type="date"
-                value={data.elevators_end_date || ""}
-                onChange={(e) => handleChange("elevators_end_date", e.target.value)}
+                value={projectData.elevators_end_date || ""}
+                onChange={(e) => updateField("elevators_end_date", e.target.value)}
               />
             </div>
           </div>
@@ -167,8 +156,8 @@ export const ProjectMilestonesStep = ({ data, projectId, onLocalChange }: Projec
               <Input
                 id="fire_start"
                 type="date"
-                value={data.fire_start_date || ""}
-                onChange={(e) => handleChange("fire_start_date", e.target.value)}
+                value={projectData.fire_start_date || ""}
+                onChange={(e) => updateField("fire_start_date", e.target.value)}
               />
             </div>
             <div className="space-y-2">
@@ -176,8 +165,8 @@ export const ProjectMilestonesStep = ({ data, projectId, onLocalChange }: Projec
               <Input
                 id="fire_end"
                 type="date"
-                value={data.fire_end_date || ""}
-                onChange={(e) => handleChange("fire_end_date", e.target.value)}
+                value={projectData.fire_end_date || ""}
+                onChange={(e) => updateField("fire_end_date", e.target.value)}
               />
             </div>
           </div>
@@ -194,8 +183,8 @@ export const ProjectMilestonesStep = ({ data, projectId, onLocalChange }: Projec
               <Input
                 id="interior_start"
                 type="date"
-                value={data.interior_start_date || ""}
-                onChange={(e) => handleChange("interior_start_date", e.target.value)}
+                value={projectData.interior_start_date || ""}
+                onChange={(e) => updateField("interior_start_date", e.target.value)}
               />
             </div>
             <div className="space-y-2">
@@ -203,8 +192,8 @@ export const ProjectMilestonesStep = ({ data, projectId, onLocalChange }: Projec
               <Input
                 id="interior_end"
                 type="date"
-                value={data.interior_end_date || ""}
-                onChange={(e) => handleChange("interior_end_date", e.target.value)}
+                value={projectData.interior_end_date || ""}
+                onChange={(e) => updateField("interior_end_date", e.target.value)}
               />
             </div>
           </div>

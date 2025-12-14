@@ -16,8 +16,8 @@ import { FileViewerModal } from "./FileViewerModal";
 import type { DriveFileInfo } from "./ProjectFilesUpload";
 import { useRiskScoring } from "@/hooks/useRiskScoring";
 import { RiskScoreSummary } from "./RiskScoreSummary";
-import { RiskToleranceSelector, RiskTolerance } from "./RiskToleranceSelector";
-import { useProjectMutation } from "@/hooks/useProjectMutation";
+import { RiskTolerance } from "./RiskToleranceSelector";
+import { useProject } from "@/contexts/ProjectContext";
 
 interface WaterSystem {
   id: string;
@@ -32,11 +32,9 @@ interface WaterSystem {
 }
 
 interface WaterSystemsStepProps {
-  data: any;
   onNext: (data: any) => void;
   onBack: () => void;
   isProcessingWebhook?: boolean;
-  projectId?: string;
   analysisItems?: AnalysisItem[];
   driveFiles?: DriveFileInfo[];
   driveAccessToken?: string | null;
@@ -44,11 +42,9 @@ interface WaterSystemsStepProps {
 }
 
 export const WaterSystemsStep = ({
-  data,
   onNext,
   onBack,
   isProcessingWebhook,
-  projectId,
   analysisItems = [],
   driveFiles = [],
   driveAccessToken = null,
@@ -57,8 +53,12 @@ export const WaterSystemsStep = ({
   const { toast } = useToast();
   const queryClient = useQueryClient();
   
-  // Project mutation hook for direct field updates
-  const { updateFields } = useProjectMutation(projectId);
+  // Get project context
+  const { projectId, projectData, updateFields } = useProject();
+  const data = projectData;
+  
+  // Ref to track if risk tolerance filter triggered the state change
+  const isRiskToleranceUpdateRef = useRef(false);
   
   // Ref to track if risk tolerance filter triggered the state change
   const isRiskToleranceUpdateRef = useRef(false);
