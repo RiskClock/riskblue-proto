@@ -7,11 +7,13 @@ import { ExpandableListItem, getControlId } from "./ExpandableListItem";
 import { FileViewerModal } from "./FileViewerModal";
 import type { DriveFileInfo } from "./ProjectFilesUpload";
 import type { RiskTolerance } from "./RiskToleranceSelector";
+import { useProjectMutation } from "@/hooks/useProjectMutation";
 
 interface ProcessesStepProps {
   data?: any;
   onNext?: (data: any) => void;
   isProcessingWebhook?: boolean;
+  projectId?: string;
   analysisItems?: AnalysisItem[];
   driveFiles?: DriveFileInfo[];
   driveAccessToken?: string | null;
@@ -28,12 +30,16 @@ export const ProcessesStep = ({
   data = {}, 
   onNext, 
   isProcessingWebhook,
+  projectId,
   analysisItems = [],
   driveFiles = [],
   driveAccessToken = null,
   riskTolerance: parentRiskTolerance = "low"
 }: ProcessesStepProps) => {
   const hasPendingSave = useRef(false);
+  
+  // Project mutation hook for direct field updates
+  const { updateFields } = useProjectMutation(projectId);
 
   // Fetch processes from database for risk tolerance values
   const { data: processes = [] } = useQuery({
@@ -187,10 +193,8 @@ export const ProcessesStep = ({
     setSelectedControlIds(filteredControlIds);
   }, [parentRiskTolerance, processItems, processRiskToleranceMap, controlRiskToleranceMap, controls.length]);
 
-  // Auto-save with debounce
+  // Auto-save with debounce using useProjectMutation
   useEffect(() => {
-    if (!onNext) return;
-    
     if (isProcessingWebhook) {
       hasPendingSave.current = true;
       return;
@@ -198,7 +202,8 @@ export const ProcessesStep = ({
     
     if (hasPendingSave.current || selectedInstanceIds.length > 0) {
       const timer = setTimeout(() => {
-        onNext({ 
+        // Use direct field update via useProjectMutation
+        updateFields({
           selectedProcessInstances: selectedInstanceIds,
           selectedProcessControls: Array.from(selectedControlIds)
         });
@@ -207,7 +212,7 @@ export const ProcessesStep = ({
 
       return () => clearTimeout(timer);
     }
-  }, [selectedInstanceIds, selectedControlIds, onNext, isProcessingWebhook]);
+  }, [selectedInstanceIds, selectedControlIds, updateFields, isProcessingWebhook]);
 
   const handleToggleInstance = useCallback((instanceId: string) => {
     setSelectedInstanceIds(prev => 

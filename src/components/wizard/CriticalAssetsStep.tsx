@@ -17,6 +17,7 @@ import type { DriveFileInfo } from "./ProjectFilesUpload";
 import { useRiskScoring } from "@/hooks/useRiskScoring";
 import { RiskScoreSummary } from "./RiskScoreSummary";
 import type { RiskTolerance } from "./RiskToleranceSelector";
+import { useProjectMutation } from "@/hooks/useProjectMutation";
 
 interface Asset {
   id: string;
@@ -55,6 +56,9 @@ export const CriticalAssetsStep = ({
 }: CriticalAssetsStepProps) => {
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  
+  // Project mutation hook for direct field updates
+  const { updateFields } = useProjectMutation(projectId);
   
   // Ref to track if risk tolerance filter triggered the state change
   const isRiskToleranceUpdateRef = useRef(false);
@@ -431,19 +435,20 @@ export const CriticalAssetsStep = ({
     setViewerOpen(true);
   }, [driveFiles]);
 
-  // Auto-save with debounce - skip when risk tolerance update is in progress
+  // Auto-save with debounce using useProjectMutation - skip when risk tolerance update is in progress
   useEffect(() => {
     if (isProcessingWebhook) return;
     if (isRiskToleranceUpdateRef.current) return;
     
     const timer = setTimeout(() => {
-      onNext({ 
+      // Use direct field update via useProjectMutation
+      updateFields({
         selectedAssetInstances: selectedInstanceIds,
         selectedAssetControls: Array.from(selectedControlIds)
       });
     }, 500);
     return () => clearTimeout(timer);
-  }, [selectedInstanceIds, selectedControlIds, onNext, isProcessingWebhook]);
+  }, [selectedInstanceIds, selectedControlIds, updateFields, isProcessingWebhook]);
 
   const handleAddAsset = () => {
     if (!newAsset.name || !newAsset.risk_level || !newAsset.duration || !newAsset.cost) {

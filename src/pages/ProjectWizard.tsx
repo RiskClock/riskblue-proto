@@ -935,6 +935,7 @@ const ProjectWizard = () => {
                       data={projectData}
                       onNext={handleStepUpdate}
                       isProcessingWebhook={isProcessingWebhook}
+                      projectId={id}
                       driveFiles={driveFiles}
                       driveAccessToken={driveAccessToken}
                       riskTolerance={riskTolerance}
