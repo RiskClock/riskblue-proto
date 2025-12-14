@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState } from 'react';
+import { useCallback, useRef, useState, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { separateFields } from '@/lib/projectFieldConfig';
@@ -113,6 +113,22 @@ export const useProjectMutation = (
       await executeUpdate(updates);
     }
   }, [executeUpdate]);
+
+  // Flush pending updates on unmount to ensure changes are saved
+  useEffect(() => {
+    return () => {
+      if (debounceTimer.current) {
+        clearTimeout(debounceTimer.current);
+      }
+      // Flush synchronously on unmount
+      const updates = { ...pendingUpdates.current };
+      pendingUpdates.current = {};
+      if (Object.keys(updates).length > 0 && projectId && projectId !== 'new') {
+        // Fire and forget - we can't await in cleanup
+        executeUpdate(updates).catch(console.error);
+      }
+    };
+  }, [projectId, executeUpdate]);
 
   // Update a single field
   const updateField = useCallback(<T>(field: string, value: T) => {
