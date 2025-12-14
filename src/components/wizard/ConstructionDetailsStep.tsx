@@ -1,7 +1,7 @@
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { useProjectMutation } from "@/hooks/useProjectMutation";
+import { useProject } from "@/contexts/ProjectContext";
 
 import residentialImg from "@/assets/type1-residential.avif";
 import mixedUseImg from "@/assets/type2-mixeduse.avif";
@@ -46,26 +46,15 @@ const towerTypes = [
   { id: "multi", label: "Multi-tower", disabled: false, image: multiTowerImg },
 ];
 
-interface ConstructionDetailsStepProps {
-  data: any;
-  projectId?: string;
-  onLocalChange?: (field: string, value: any) => void;
-}
-
-export const ConstructionDetailsStep = ({ data, projectId, onLocalChange }: ConstructionDetailsStepProps) => {
-  const { updateField } = useProjectMutation(projectId);
-
-  const handleChange = (field: string, value: any) => {
-    onLocalChange?.(field, value);
-    updateField(field, value);
-  };
+export const ConstructionDetailsStep = () => {
+  const { projectData, updateField } = useProject();
 
   const toggleStructuralType = (typeId: string) => {
-    const currentTypes = data.structural_types || [];
+    const currentTypes = projectData.structural_types || [];
     const newTypes = currentTypes.includes(typeId)
       ? currentTypes.filter((t: string) => t !== typeId)
       : [...currentTypes, typeId];
-    handleChange("structural_types", newTypes);
+    updateField("structural_types", newTypes);
   };
 
   return (
@@ -79,9 +68,9 @@ export const ConstructionDetailsStep = ({ data, projectId, onLocalChange }: Cons
                 key={type.id}
                 type="button"
                 disabled={type.disabled}
-                onClick={() => handleChange("project_type", type.id)}
+                onClick={() => updateField("project_type", type.id)}
                 className={`relative p-6 rounded-lg transition-all ${
-                  data.project_type === type.id
+                  projectData.project_type === type.id
                     ? "border-4 border-primary bg-primary/5"
                     : "border-2 border-border hover:border-primary/50"
                 } ${type.disabled ? "opacity-50 cursor-not-allowed" : "cursor-pointer"}`}
@@ -108,9 +97,9 @@ export const ConstructionDetailsStep = ({ data, projectId, onLocalChange }: Cons
                 key={type.id}
                 type="button"
                 disabled={type.disabled}
-                onClick={() => handleChange("building_type", type.id)}
+                onClick={() => updateField("building_type", type.id)}
                 className={`relative p-6 rounded-lg transition-all ${
-                  data.building_type === type.id
+                  projectData.building_type === type.id
                     ? "border-4 border-primary bg-primary/5"
                     : "border-2 border-border hover:border-primary/50"
                 } ${type.disabled ? "opacity-50 cursor-not-allowed" : "cursor-pointer"}`}
@@ -133,7 +122,7 @@ export const ConstructionDetailsStep = ({ data, projectId, onLocalChange }: Cons
           <Label className="text-base mb-4 block">Structural Type</Label>
           <div className="grid grid-cols-4 gap-4">
             {structuralTypes.map((type) => {
-              const isSelected = (data.structural_types || []).includes(type.id);
+              const isSelected = (projectData.structural_types || []).includes(type.id);
               return (
                 <button
                   key={type.id}
@@ -164,9 +153,9 @@ export const ConstructionDetailsStep = ({ data, projectId, onLocalChange }: Cons
                 key={type.id}
                 type="button"
                 disabled={type.disabled}
-                onClick={() => handleChange("tower_type", type.id)}
+                onClick={() => updateField("tower_type", type.id)}
                 className={`relative p-6 rounded-lg transition-all ${
-                  data.tower_type === type.id
+                  projectData.tower_type === type.id
                     ? "border-4 border-primary bg-primary/5"
                     : "border-2 border-border hover:border-primary/50"
                 } ${type.disabled ? "opacity-50 cursor-not-allowed" : "cursor-pointer"}`}
@@ -191,8 +180,8 @@ export const ConstructionDetailsStep = ({ data, projectId, onLocalChange }: Cons
             <div className="space-y-2">
               <Label className="text-sm">Podium</Label>
               <Select
-                value={(data.has_podium ?? false).toString()}
-                onValueChange={(value) => handleChange("has_podium", value === "true")}
+                value={(projectData.has_podium ?? false).toString()}
+                onValueChange={(value) => updateField("has_podium", value === "true")}
               >
                 <SelectTrigger>
                   <SelectValue />
@@ -210,8 +199,8 @@ export const ConstructionDetailsStep = ({ data, projectId, onLocalChange }: Cons
               <Input
                 id="total_floors"
                 type="number"
-                value={data.total_floors || ""}
-                onChange={(e) => handleChange("total_floors", e.target.value)}
+                value={projectData.total_floors || ""}
+                onChange={(e) => updateField("total_floors", e.target.value)}
                 placeholder="20"
               />
             </div>
@@ -222,8 +211,8 @@ export const ConstructionDetailsStep = ({ data, projectId, onLocalChange }: Cons
               <Input
                 id="typical_floors"
                 type="number"
-                value={data.typical_floors || ""}
-                onChange={(e) => handleChange("typical_floors", e.target.value)}
+                value={projectData.typical_floors || ""}
+                onChange={(e) => updateField("typical_floors", e.target.value)}
                 placeholder="15"
               />
             </div>
@@ -231,14 +220,14 @@ export const ConstructionDetailsStep = ({ data, projectId, onLocalChange }: Cons
               <Label className="text-sm">Typical Floor Range</Label>
               <div className="flex items-center gap-2">
                 <Input
-                  value={data.typical_floors_start || ""}
-                  onChange={(e) => handleChange("typical_floors_start", e.target.value)}
+                  value={projectData.typical_floors_start || ""}
+                  onChange={(e) => updateField("typical_floors_start", e.target.value)}
                   placeholder="P8"
                 />
                 <span>to</span>
                 <Input
-                  value={data.typical_floors_end || ""}
-                  onChange={(e) => handleChange("typical_floors_end", e.target.value)}
+                  value={projectData.typical_floors_end || ""}
+                  onChange={(e) => updateField("typical_floors_end", e.target.value)}
                   placeholder="9"
                 />
               </div>
@@ -246,8 +235,8 @@ export const ConstructionDetailsStep = ({ data, projectId, onLocalChange }: Cons
             <div className="space-y-2">
               <Label className="text-sm">Underground Parking</Label>
               <Select
-                value={(data.underground_parking ?? false).toString()}
-                onValueChange={(value) => handleChange("underground_parking", value === "true")}
+                value={(projectData.underground_parking ?? false).toString()}
+                onValueChange={(value) => updateField("underground_parking", value === "true")}
               >
                 <SelectTrigger>
                   <SelectValue />

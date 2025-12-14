@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
+import { ProjectProvider, useProject } from "@/contexts/ProjectContext";
 import { supabase } from "@/integrations/supabase/client";
 import { useQuery } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
@@ -25,14 +26,11 @@ import { ProposalsStep } from "@/components/wizard/ProposalsStep";
 import { ImplementationScheduleStep } from "@/components/wizard/ImplementationScheduleStep";
 import { ProjectFilesUpload, DriveFileInfo } from "@/components/wizard/ProjectFilesUpload";
 import { ResponsePlanUploadChat } from "@/components/ResponsePlanUploadChat";
-import { Download, LogOut, FileText, Check } from "lucide-react";
+import { Download, LogOut, FileText, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { ProviderSelectionDialog } from "@/components/ProviderSelectionDialog";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
-import { Badge } from "@/components/ui/badge";
-import { format } from "date-fns";
 import { WaterRiskReport } from "@/components/reports/WaterRiskReport";
 import { generateReportFilename } from "@/lib/reportGenerator";
 import { AnalysisItem, extractSelectedAssets, extractSelectedSystems } from "@/lib/analysisItemMapper";
@@ -41,13 +39,25 @@ interface ProjectData {
   [key: string]: any;
 }
 
-const ProjectWizard = () => {
+// Inner component that uses the ProjectContext
+const ProjectWizardContent = () => {
   const { id } = useParams();
   const { user, signOut } = useAuth();
   const navigate = useNavigate();
   const { toast } = useToast();
+  
+  const { 
+    projectData, 
+    setProjectData, 
+    updateField, 
+    updateFields,
+    isSaving, 
+    hasPendingChanges,
+    flush,
+    isNewProject 
+  } = useProject();
+  
   const [activeTab, setActiveTab] = useState("guideline");
-  const [projectData, setProjectData] = useState<ProjectData>({});
   const [loading, setLoading] = useState(false);
   const [isProcessingWebhook, setIsProcessingWebhook] = useState(false);
   const [isSavingNewProject, setIsSavingNewProject] = useState(false);
@@ -183,20 +193,8 @@ const ProjectWizard = () => {
   // Handle risk tolerance change
   const handleRiskToleranceChange = useCallback((newTolerance: RiskTolerance) => {
     setRiskTolerance(newTolerance);
-    // Project data update will happen via the useEffect that syncs riskTolerance
-  }, []);
-
-  // Handle local field changes for immediate UI feedback
-  const handleLocalFieldChange = useCallback((field: string, value: any) => {
-    setProjectData(prev => ({ ...prev, [field]: value }));
-  }, []);
-
-  // Sync riskTolerance to projectData when it changes
-  useEffect(() => {
-    if (projectData.riskTolerance !== riskTolerance) {
-      setProjectData(prev => ({ ...prev, riskTolerance }));
-    }
-  }, [riskTolerance]);
+    updateField('riskTolerance', newTolerance);
+  }, [updateField]);
 
   // Sync riskTolerance from projectData when it loads
   useEffect(() => {
@@ -279,74 +277,16 @@ const ProjectWizard = () => {
     // Always clear both flags after checking
     sessionStorage.removeItem(oauthFlagKey);
     sessionStorage.removeItem(cachedDataKey);
-  }, [id]);
+  }, [id, setProjectData]);
 
-  useEffect(() => {
-    let mounted = true;
-    
-    const fetchProject = async () => {
-      if (!id || id === "new") return;
-      
-      // Don't fetch if we just restored from cache (OAuth redirect scenario)
-      if (justRestoredFromCache.current) {
-        console.log("Skipping fetchProject - just restored from cache");
-        return;
-      }
-      
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session) return;
-      
-      try {
-        const { data, error } = await supabase
-          .from("projects")
-          .select("*")
-          .eq("id", id)
-          .maybeSingle();
-
-        if (!mounted) return;
-        if (error) throw error;
-        if (!data) return;
-        
-        const { project_data, created_at, updated_at, user_id, id: projectId, ...tableColumns } = data;
-        const mergedData = {
-          ...tableColumns,
-          ...(project_data as ProjectData || {}),
-        };
-        
-        setProjectData(mergedData);
-      } catch (error: any) {
-        if (!mounted) return;
-        console.error("Error fetching project:", error);
-        toast({
-          title: "Error",
-          description: getUserFriendlyError(error),
-          variant: "destructive",
-        });
-      }
-    };
-
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((event) => {
-      if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED' || event === 'INITIAL_SESSION') {
-        fetchProject();
-      }
-    });
-
-    fetchProject();
-    
-    return () => {
-      mounted = false;
-      subscription.unsubscribe();
-    };
-  }, [id, toast]);
-
+  // saveProject for new project creation only
   const saveProject = useCallback(async (data: ProjectData) => {
     // Prevent saving if we're on "new" route and there's no name yet
-    // This prevents duplicate empty projects from being created
     if (id === "new" && (!data.name || data.name.trim() === "" || data.name === "Untitled Project")) {
       return;
     }
     
-    // Prevent concurrent project creation - only one "new" project can be created at a time
+    // Prevent concurrent project creation
     if (id === "new" && (isSavingNewProject || isWebhookCreatingProject.current)) {
       console.log("Preventing duplicate project creation - save already in progress");
       return;
@@ -422,24 +362,8 @@ const ProjectWizard = () => {
       });
 
       if (id && id !== "new") {
-        // Fetch existing project_data to merge with new data (preserve fields not in current update)
-        const { data: existingProject } = await supabase
-          .from("projects")
-          .select("project_data")
-          .eq("id", id)
-          .single();
-        
-        const existingProjectData = (existingProject?.project_data as ProjectData) || {};
-        const mergedProjectData = { ...existingProjectData, ...otherData };
-        
-        const { error } = await supabase
-          .from("projects")
-          .update({
-            ...tableData,
-            project_data: mergedProjectData,
-          })
-          .eq("id", id);
-        if (error) throw error;
+        // For existing projects, use the context's updateFields
+        await flush();
       } else {
         const { data: newProject, error } = await supabase
           .from("projects")
@@ -455,11 +379,8 @@ const ProjectWizard = () => {
         if (error) throw error;
         
         // Navigate with replace to avoid back button issues
-        // The useEffect will fetch the data from the database
         navigate(`/project/${newProject.id}`, { replace: true });
       }
-      
-      // Auto-save silently - no success toast needed
     } catch (error: any) {
       toast({
         title: "Error",
@@ -472,26 +393,16 @@ const ProjectWizard = () => {
         setIsSavingNewProject(false);
       }
     }
-  }, [id, isSavingNewProject, user?.id, navigate, toast]);
+  }, [id, isSavingNewProject, user?.id, navigate, toast, flush]);
 
   const handleStepUpdate = useCallback(async (stepData: any) => {
     try {
-      let dataToSave: ProjectData | undefined;
-      
-      setProjectData(prevData => {
-        dataToSave = { ...prevData, ...stepData };
-        return dataToSave;
-      });
-      
-      // Only save if we have data
-      if (dataToSave) {
-        await saveProject(dataToSave);
-      }
+      // Update via context - this handles both local state and persistence
+      updateFields(stepData);
     } catch (error) {
-      // Silently handle errors - saveProject already shows error toasts
       console.error("Error in handleStepUpdate:", error);
     }
-  }, [saveProject]);
+  }, [updateFields]);
 
   // Handler for SCHEDULE analysis - only fills project information fields
   const handleScheduleDataExtracted = async (extractedData: any) => {
@@ -511,7 +422,6 @@ const ProjectWizard = () => {
     const getBuildingType = () => {
       if (extractedData.height_category) {
         const category = extractedData.height_category.toLowerCase().replace(/ /g, '-');
-        // Valid building types: mid-rise, high-rise, single-house, house-complex
         if (['mid-rise', 'high-rise'].includes(category)) {
           return category;
         }
@@ -541,7 +451,6 @@ const ProjectWizard = () => {
     
     // Schedule analysis ONLY fills project info - no assets/water systems
     const mappedData = {
-      ...projectData,
       // Basic project info
       name: extractedData.project_name || projectData.name,
       construction_start_date: extractedData.project_start_date || projectData.construction_start_date,
@@ -584,28 +493,19 @@ const ProjectWizard = () => {
       interior_end_date: extractedData.milestones?.interior_finishes?.finish || projectData.interior_end_date,
     };
 
-    setProjectData(mappedData);
+    // Update via context
+    updateFields(mappedData);
     
-    try {
-      await saveProject(mappedData);
-      toast({
-        title: "Schedule Data Pre-filled",
-        description: "Project information has been automatically filled from the uploaded schedule.",
-      });
-    } catch (error) {
-      console.error("Error saving schedule data:", error);
-      toast({
-        title: "Error",
-        description: "Failed to save extracted data. Please try again.",
-        variant: "destructive",
-      });
-    } finally {
-      isWebhookCreatingProject.current = false;
-      setIsProcessingWebhook(false);
-    }
+    toast({
+      title: "Schedule Data Pre-filled",
+      description: "Project information has been automatically filled from the uploaded schedule.",
+    });
+    
+    isWebhookCreatingProject.current = false;
+    setIsProcessingWebhook(false);
   };
 
-  // Handler for DRAWING analysis - fills assets/water systems (uses milestones for duration calculation)
+  // Handler for DRAWING analysis - fills assets/water systems
   const handleDrawingDataExtracted = async (extractedData: any) => {
     setIsProcessingWebhook(true);
     isWebhookCreatingProject.current = true;
@@ -643,18 +543,14 @@ const ProjectWizard = () => {
     
     // Drawing analysis fills assets and water systems
     const mappedData = {
-      ...projectData,
       selectedAssets: extractSelectedAssets(items),
       selectedSystems: extractSelectedSystems(items),
     };
 
-    setProjectData(mappedData);
+    // Update via context
+    updateFields(mappedData);
     
     try {
-      // Save project data first
-      await saveProject(mappedData);
-      console.log("Project data saved, now saving analysis items...");
-      
       // Save the detailed analysis items to the database
       await saveAnalysisItems(id, items);
       setAnalysisItems(items);
@@ -736,7 +632,7 @@ const ProjectWizard = () => {
 
       if (error) {
         console.error("Error saving analysis items:", error);
-        throw error; // Propagate error for proper handling
+        throw error;
       } else {
         console.log(`Successfully saved ${data?.length || itemsToInsert.length} analysis items to database`);
       }
@@ -760,12 +656,12 @@ const ProjectWizard = () => {
       sessionStorage.setItem(oauthFlagKey, 'true');
       const dataWithTimestamp = { ...projectData, _cacheTimestamp: Date.now() };
       sessionStorage.setItem(cachedDataKey, JSON.stringify(dataWithTimestamp));
-      // Also try to save to DB, but don't wait for it
+      // Also try to flush pending changes
       if (id !== "new") {
-        saveProject(projectData).catch(console.error);
+        flush().catch(console.error);
       }
     }
-  }, [id, projectData, saveProject]);
+  }, [id, projectData, flush]);
 
   return (
     <div className="min-h-screen bg-background">
@@ -783,6 +679,13 @@ const ProjectWizard = () => {
             onClick={() => navigate("/projects")}
           />
           <div className="flex items-center gap-6">
+            {/* Saving indicator */}
+            {(isSaving || hasPendingChanges) && (
+              <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                <Loader2 className="h-4 w-4 animate-spin" />
+                <span>Saving...</span>
+              </div>
+            )}
             <button onClick={() => navigate("/projects")} className="text-foreground hover:text-primary">
               Projects
             </button>
@@ -848,26 +751,14 @@ const ProjectWizard = () => {
                 </AccordionTrigger>
                 <AccordionContent className="space-y-8 pt-4">
                   <div className="space-y-6">
-                    <ProjectInfoStep 
-                      data={projectData} 
-                      projectId={id}
-                      onLocalChange={handleLocalFieldChange}
-                    />
+                    <ProjectInfoStep />
                   </div>
                   <div className="space-y-6 pt-6 border-t">
                     <h3 className="text-md font-medium">Milestones & Timelines</h3>
-                    <ProjectMilestonesStep 
-                      data={projectData} 
-                      projectId={id}
-                      onLocalChange={handleLocalFieldChange}
-                    />
+                    <ProjectMilestonesStep />
                   </div>
                   <div className="space-y-6 pt-6 border-t">
-                    <ConstructionDetailsStep 
-                      data={projectData} 
-                      projectId={id}
-                      onLocalChange={handleLocalFieldChange}
-                    />
+                    <ConstructionDetailsStep />
                   </div>
                 </AccordionContent>
               </AccordionItem>
@@ -893,11 +784,9 @@ const ProjectWizard = () => {
                       )}
                     </h3>
                     <CriticalAssetsStep 
-                      data={projectData} 
                       onNext={handleStepUpdate} 
                       onBack={() => {}} 
                       isProcessingWebhook={isProcessingWebhook}
-                      projectId={id}
                       analysisItems={analysisItems}
                       driveFiles={driveFiles}
                       driveAccessToken={driveAccessToken}
@@ -912,11 +801,9 @@ const ProjectWizard = () => {
                       )}
                     </h3>
                     <WaterSystemsStep 
-                      data={projectData} 
                       onNext={handleStepUpdate} 
                       onBack={() => {}} 
                       isProcessingWebhook={isProcessingWebhook}
-                      projectId={id}
                       analysisItems={analysisItems}
                       driveFiles={driveFiles}
                       driveAccessToken={driveAccessToken}
@@ -932,10 +819,8 @@ const ProjectWizard = () => {
                     </h3>
                     <ProcessesStep 
                       analysisItems={analysisItems}
-                      data={projectData}
                       onNext={handleStepUpdate}
                       isProcessingWebhook={isProcessingWebhook}
-                      projectId={id}
                       driveFiles={driveFiles}
                       driveAccessToken={driveAccessToken}
                       riskTolerance={riskTolerance}
@@ -1078,6 +963,80 @@ const ProjectWizard = () => {
         onOpenChange={setShowProviderDialog} 
       />
     </div>
+  );
+};
+
+// Wrapper component that provides project data loading and the context
+const ProjectWizard = () => {
+  const { id } = useParams();
+  const { toast } = useToast();
+  const [initialData, setInitialData] = useState<ProjectData>({});
+  const [isLoading, setIsLoading] = useState(true);
+
+  // Fetch project data on mount
+  useEffect(() => {
+    const fetchProject = async () => {
+      if (!id || id === "new") {
+        setIsLoading(false);
+        return;
+      }
+      
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) {
+        setIsLoading(false);
+        return;
+      }
+      
+      try {
+        const { data, error } = await supabase
+          .from("projects")
+          .select("*")
+          .eq("id", id)
+          .maybeSingle();
+
+        if (error) throw error;
+        if (!data) {
+          setIsLoading(false);
+          return;
+        }
+        
+        const { project_data, created_at, updated_at, user_id, id: projectId, ...tableColumns } = data;
+        const mergedData = {
+          ...tableColumns,
+          ...(project_data as ProjectData || {}),
+        };
+        
+        setInitialData(mergedData);
+      } catch (error: any) {
+        console.error("Error fetching project:", error);
+        toast({
+          title: "Error",
+          description: getUserFriendlyError(error),
+          variant: "destructive",
+        });
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    fetchProject();
+  }, [id, toast]);
+
+  if (isLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="text-center">
+          <Loader2 className="h-12 w-12 animate-spin mx-auto mb-4 text-primary" />
+          <p className="text-muted-foreground">Loading project...</p>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <ProjectProvider projectId={id} initialData={initialData}>
+      <ProjectWizardContent />
+    </ProjectProvider>
   );
 };
 
