@@ -32,11 +32,24 @@ export const ProcessesStep = ({
   driveAccessToken = null,
   riskTolerance: parentRiskTolerance = "low"
 }: ProcessesStepProps) => {
-  const hasPendingSave = useRef(false);
-  
   // Get project context
   const { projectData, updateFields } = useProject();
   const data = projectData;
+  
+  // Ref to track if we're initializing to skip auto-save
+  const isInitializingRef = useRef(true);
+  
+  // Ref to track last saved values for change detection
+  const lastSavedRef = useRef<{ instances: string[]; controls: string[] }>({
+    instances: data.selectedProcessInstances || [],
+    controls: data.selectedProcessControls || []
+  });
+  
+  // Ref to track if risk tolerance update is in progress
+  const isRiskToleranceUpdateRef = useRef(false);
+  
+  // Track previous risk tolerance
+  const prevRiskToleranceRef = useRef(parentRiskTolerance);
 
   // Fetch processes from database for risk tolerance values
   const { data: processes = [] } = useQuery({
@@ -106,12 +119,13 @@ export const ProcessesStep = ({
   const [viewerFileId, setViewerFileId] = useState<string>("");
   const [viewerMimeType, setViewerMimeType] = useState<string>("application/pdf");
 
-  // Initialize selection when process items load
+  // Initialize selection when process items load (once)
   useEffect(() => {
     if (processItems.length > 0) {
       if (!data.selectedProcessInstances || data.selectedProcessInstances.length === 0) {
-        setSelectedInstanceIds(processItems.map(p => p.id));
-        hasPendingSave.current = true;
+        const allIds = processItems.map(p => p.id);
+        setSelectedInstanceIds(allIds);
+        lastSavedRef.current.instances = allIds;
       }
       
       // Initialize control selection
@@ -123,19 +137,15 @@ export const ProcessesStep = ({
           });
         });
         setSelectedControlIds(allControlIds);
+        lastSavedRef.current.controls = Array.from(allControlIds);
       }
+      
+      // Mark initialization complete after first load
+      setTimeout(() => {
+        isInitializingRef.current = false;
+      }, 100);
     }
-  }, [processItems.length, data.selectedProcessInstances, data.selectedProcessControls]);
-
-  // Sync incoming data to local state
-  useEffect(() => {
-    if (data.selectedProcessInstances && data.selectedProcessInstances.length > 0) {
-      setSelectedInstanceIds(data.selectedProcessInstances);
-    }
-    if (data.selectedProcessControls) {
-      setSelectedControlIds(new Set(data.selectedProcessControls));
-    }
-  }, [data.selectedProcessInstances, data.selectedProcessControls]);
+  }, [processItems.length]); // Only depend on length to run once
 
   // Create risk tolerance lookup maps
   const processRiskToleranceMap = useMemo(() => {
@@ -165,6 +175,13 @@ export const ProcessesStep = ({
   useEffect(() => {
     if (!processItems.length || !controls.length) return;
     
+    // Only run when risk tolerance actually changes
+    if (prevRiskToleranceRef.current === parentRiskTolerance) return;
+    prevRiskToleranceRef.current = parentRiskTolerance;
+    
+    // Mark that this update is from risk tolerance filter
+    isRiskToleranceUpdateRef.current = true;
+    
     // Filter instances based on their class's risk tolerance
     const filteredInstanceIds = processItems
       .filter(item => {
@@ -188,27 +205,41 @@ export const ProcessesStep = ({
     
     setSelectedInstanceIds(filteredInstanceIds);
     setSelectedControlIds(filteredControlIds);
+    
+    // Reset the flag after a short delay
+    setTimeout(() => {
+      isRiskToleranceUpdateRef.current = false;
+    }, 100);
   }, [parentRiskTolerance, processItems, processRiskToleranceMap, controlRiskToleranceMap, controls.length]);
 
-  // Auto-save with debounce using useProjectMutation
+  // Auto-save with debounce - only when values actually changed
   useEffect(() => {
-    if (isProcessingWebhook) {
-      hasPendingSave.current = true;
-      return;
-    }
+    if (isProcessingWebhook) return;
+    if (isRiskToleranceUpdateRef.current) return;
+    if (isInitializingRef.current) return;
     
-    if (hasPendingSave.current || selectedInstanceIds.length > 0) {
-      const timer = setTimeout(() => {
-        // Use direct field update via useProjectMutation
-        updateFields({
-          selectedProcessInstances: selectedInstanceIds,
-          selectedProcessControls: Array.from(selectedControlIds)
-        });
-        hasPendingSave.current = false;
-      }, 500);
-
-      return () => clearTimeout(timer);
-    }
+    const currentControls = Array.from(selectedControlIds);
+    
+    // Deep comparison to detect actual changes
+    const instancesChanged = JSON.stringify(selectedInstanceIds.sort()) !== 
+      JSON.stringify(lastSavedRef.current.instances.sort());
+    const controlsChanged = JSON.stringify(currentControls.sort()) !== 
+      JSON.stringify(lastSavedRef.current.controls.sort());
+    
+    if (!instancesChanged && !controlsChanged) return;
+    
+    const timer = setTimeout(() => {
+      updateFields({
+        selectedProcessInstances: selectedInstanceIds,
+        selectedProcessControls: currentControls
+      });
+      // Update last saved values
+      lastSavedRef.current = {
+        instances: [...selectedInstanceIds],
+        controls: [...currentControls]
+      };
+    }, 500);
+    return () => clearTimeout(timer);
   }, [selectedInstanceIds, selectedControlIds, updateFields, isProcessingWebhook]);
 
   const handleToggleInstance = useCallback((instanceId: string) => {

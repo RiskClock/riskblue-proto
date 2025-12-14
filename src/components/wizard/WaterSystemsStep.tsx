@@ -59,6 +59,16 @@ export const WaterSystemsStep = ({
   
   // Ref to track if risk tolerance filter triggered the state change
   const isRiskToleranceUpdateRef = useRef(false);
+  
+  // Ref to track if we're initializing to skip auto-save
+  const isInitializingRef = useRef(true);
+  
+  // Ref to track last saved values for change detection
+  const lastSavedRef = useRef<{ instances: string[]; controls: string[] }>({
+    instances: data.selectedSystemInstances || [],
+    controls: data.selectedSystemControls || []
+  });
+  
   // Selected instance IDs (individual items from analysis)
   const [selectedInstanceIds, setSelectedInstanceIds] = useState<string[]>(
     data.selectedSystemInstances || []
@@ -243,7 +253,7 @@ export const WaterSystemsStep = ({
     );
   }, [analysisItems]);
 
-  // Initialize selection with all instances and controls when data loads
+  // Initialize selection with all instances and controls when data loads (once)
   useEffect(() => {
     if (analysisItems.length > 0) {
       const systemItems = analysisItems.filter(i => i.category === "Water System");
@@ -252,6 +262,7 @@ export const WaterSystemsStep = ({
       if (!data.selectedSystemInstances || data.selectedSystemInstances.length === 0) {
         const allIds = systemItems.map(i => i.id);
         setSelectedInstanceIds(allIds);
+        lastSavedRef.current.instances = allIds;
       }
       
       // Initialize control selection (all controls selected by default)
@@ -263,19 +274,15 @@ export const WaterSystemsStep = ({
           });
         });
         setSelectedControlIds(allControlIds);
+        lastSavedRef.current.controls = Array.from(allControlIds);
       }
+      
+      // Mark initialization complete after first load
+      setTimeout(() => {
+        isInitializingRef.current = false;
+      }, 100);
     }
-  }, [analysisItems, data.selectedSystemInstances, data.selectedSystemControls]);
-
-  // Sync props to state
-  useEffect(() => {
-    if (data.selectedSystemInstances) {
-      setSelectedInstanceIds(data.selectedSystemInstances);
-    }
-    if (data.selectedSystemControls) {
-      setSelectedControlIds(new Set(data.selectedSystemControls));
-    }
-  }, [data.selectedSystemInstances, data.selectedSystemControls]);
+  }, [analysisItems.length]); // Only depend on length to run once
 
   const handleToggleInstance = useCallback((instanceId: string) => {
     setSelectedInstanceIds(prev => 
@@ -340,17 +347,32 @@ export const WaterSystemsStep = ({
     setViewerOpen(true);
   }, [driveFiles]);
 
-  // Auto-save with debounce using useProjectMutation - skip when risk tolerance update is in progress
+  // Auto-save with debounce - only when values actually changed
   useEffect(() => {
     if (isProcessingWebhook) return;
     if (isRiskToleranceUpdateRef.current) return;
+    if (isInitializingRef.current) return;
+    
+    const currentControls = Array.from(selectedControlIds);
+    
+    // Deep comparison to detect actual changes
+    const instancesChanged = JSON.stringify(selectedInstanceIds.sort()) !== 
+      JSON.stringify(lastSavedRef.current.instances.sort());
+    const controlsChanged = JSON.stringify(currentControls.sort()) !== 
+      JSON.stringify(lastSavedRef.current.controls.sort());
+    
+    if (!instancesChanged && !controlsChanged) return;
     
     const timer = setTimeout(() => {
-      // Use direct field update via useProjectMutation
       updateFields({
         selectedSystemInstances: selectedInstanceIds,
-        selectedSystemControls: Array.from(selectedControlIds)
+        selectedSystemControls: currentControls
       });
+      // Update last saved values
+      lastSavedRef.current = {
+        instances: [...selectedInstanceIds],
+        controls: [...currentControls]
+      };
     }, 500);
     return () => clearTimeout(timer);
   }, [selectedInstanceIds, selectedControlIds, updateFields, isProcessingWebhook]);
