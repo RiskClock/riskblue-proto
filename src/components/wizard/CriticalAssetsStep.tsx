@@ -60,9 +60,6 @@ export const CriticalAssetsStep = ({
   // Ref to track if risk tolerance filter triggered the state change
   const isRiskToleranceUpdateRef = useRef(false);
   
-  // Ref to track if risk tolerance filter triggered the state change
-  const isRiskToleranceUpdateRef = useRef(false);
-  
   // Selected instance IDs (individual items from analysis)
   const [selectedInstanceIds, setSelectedInstanceIds] = useState<string[]>(
     data.selectedAssetInstances || []
