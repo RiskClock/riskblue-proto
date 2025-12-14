@@ -54,7 +54,12 @@ export const PROJECT_JSON_FIELDS = [
   'selectedAssets',
   'selectedSystems',
   'selectedAssetInstances',
+  'selectedAssetControls',
   'selectedSystemInstances',
+  'selectedSystemControls',
+  'selectedProcessInstances',
+  'selectedProcessControls',
+  'selectedControls',
   
   // Risk settings
   'riskTolerance',
@@ -62,6 +67,7 @@ export const PROJECT_JSON_FIELDS = [
   // Other JSON data
   'uploadedFiles',
   'webhookResponse',
+  'timeline',
 ] as const;
 
 export type TableColumn = typeof PROJECT_TABLE_COLUMNS[number];

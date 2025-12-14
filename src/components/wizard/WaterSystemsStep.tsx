@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useCallback } from "react";
+import { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
@@ -17,6 +17,7 @@ import type { DriveFileInfo } from "./ProjectFilesUpload";
 import { useRiskScoring } from "@/hooks/useRiskScoring";
 import { RiskScoreSummary } from "./RiskScoreSummary";
 import { RiskToleranceSelector, RiskTolerance } from "./RiskToleranceSelector";
+import { useProjectMutation } from "@/hooks/useProjectMutation";
 
 interface WaterSystem {
   id: string;
@@ -56,6 +57,11 @@ export const WaterSystemsStep = ({
   const { toast } = useToast();
   const queryClient = useQueryClient();
   
+  // Project mutation hook for direct field updates
+  const { updateFields } = useProjectMutation(projectId);
+  
+  // Ref to track if risk tolerance filter triggered the state change
+  const isRiskToleranceUpdateRef = useRef(false);
   // Selected instance IDs (individual items from analysis)
   const [selectedInstanceIds, setSelectedInstanceIds] = useState<string[]>(
     data.selectedSystemInstances || []
@@ -337,17 +343,20 @@ export const WaterSystemsStep = ({
     setViewerOpen(true);
   }, [driveFiles]);
 
-  // Auto-save with debounce
+  // Auto-save with debounce using useProjectMutation - skip when risk tolerance update is in progress
   useEffect(() => {
     if (isProcessingWebhook) return;
+    if (isRiskToleranceUpdateRef.current) return;
+    
     const timer = setTimeout(() => {
-      onNext({ 
+      // Use direct field update via useProjectMutation
+      updateFields({
         selectedSystemInstances: selectedInstanceIds,
         selectedSystemControls: Array.from(selectedControlIds)
       });
     }, 500);
     return () => clearTimeout(timer);
-  }, [selectedInstanceIds, selectedControlIds, onNext, isProcessingWebhook]);
+  }, [selectedInstanceIds, selectedControlIds, updateFields, isProcessingWebhook]);
 
   const handleAddSystem = () => {
     if (!newSystem.name || !newSystem.risk_level || !newSystem.duration || !newSystem.cost) {
@@ -415,9 +424,19 @@ export const WaterSystemsStep = ({
     return rt === 3; // Essential: only RT 3
   };
 
+  // Track previous risk tolerance to detect actual changes
+  const prevRiskToleranceRef = useRef(parentRiskTolerance);
+  
   // React to parent risk tolerance changes
   useEffect(() => {
     if (!systemItems.length || !controls.length) return;
+    
+    // Only run when risk tolerance actually changes
+    if (prevRiskToleranceRef.current === parentRiskTolerance) return;
+    prevRiskToleranceRef.current = parentRiskTolerance;
+    
+    // Mark that this update is from risk tolerance filter
+    isRiskToleranceUpdateRef.current = true;
     
     // Filter instances based on their class's risk tolerance
     const filteredInstanceIds = systemItems
@@ -442,6 +461,11 @@ export const WaterSystemsStep = ({
     
     setSelectedInstanceIds(filteredInstanceIds);
     setSelectedControlIds(filteredControlIds);
+    
+    // Reset the flag after a short delay to allow state to settle
+    setTimeout(() => {
+      isRiskToleranceUpdateRef.current = false;
+    }, 100);
   }, [parentRiskTolerance, systemItems, systemRiskToleranceMap, controlRiskToleranceMap, controls.length]);
 
   if (isLoading || isLoadingCustom) {
