@@ -52,25 +52,6 @@
     }
   }
 
-  /* Page footer */
-  .print-page-footer {
-    position: fixed;
-    bottom: 0;
-    left: 0;
-    right: 0;
-    height: 1cm;
-    display: flex !important;
-    align-items: center;
-    justify-content: center;
-    gap: 0.4rem;
-    font-size: 9pt;
-    color: #666;
-    background: white;
-  }
-
-  .print-page-footer img {
-    height: 14px;
-  }
 
   body {
     print-color-adjust: exact;
