@@ -201,8 +201,8 @@ const ProjectWizardContent = () => {
     return Math.max(1, months);
   }, [projectData.construction_start_date, projectData.construction_end_date]);
 
-  // Calculate total cost estimates and coverage for risk tolerance levels using real control costs with tiered pricing
-  const { totalCostEstimates, coverageByLevel } = useMemo(() => {
+  // Calculate total cost estimates, coverage, and control counts for risk tolerance levels using real control costs with tiered pricing
+  const { totalCostEstimates, coverageByLevel, controlCountsByLevel } = useMemo(() => {
     // Create a map of control name to {oneTimeCost, monthlyCost, riskTolerance}
     const controlMap = new Map<string, { oneTimeCost: number; monthlyCost: number; riskTolerance: number }>();
     controlCosts.forEach(c => controlMap.set(c.name, { 
@@ -226,6 +226,11 @@ const ProjectWizardContent = () => {
     const highAssets = new Set<string>();
     const highSystems = new Set<string>();
     const highProcesses = new Set<string>();
+    
+    // Track unique controls per level
+    const lowControls = new Set<string>();
+    const mediumControls = new Set<string>();
+    const highControls = new Set<string>();
     
     analysisItems.forEach(item => {
       const instancePricingData = {
@@ -251,13 +256,16 @@ const ProjectWizardContent = () => {
             projectDurationMonths
           );
           lowCost += totalCost;
+          lowControls.add(controlName);
           hasLowControl = true;
           if (control.riskTolerance >= 2) {
             mediumCost += totalCost;
+            mediumControls.add(controlName);
             hasMediumControl = true;
           }
           if (control.riskTolerance >= 3) {
             highCost += totalCost;
+            highControls.add(controlName);
             hasHighControl = true;
           }
         }
@@ -288,6 +296,11 @@ const ProjectWizardContent = () => {
         low: { assets: lowAssets.size, systems: lowSystems.size, processes: lowProcesses.size },
         medium: { assets: mediumAssets.size, systems: mediumSystems.size, processes: mediumProcesses.size },
         high: { assets: highAssets.size, systems: highSystems.size, processes: highProcesses.size }
+      },
+      controlCountsByLevel: {
+        low: lowControls.size,
+        medium: mediumControls.size,
+        high: highControls.size
       }
     };
   }, [analysisItems, controlCosts, pricingTiers, projectDurationMonths]);
@@ -906,18 +919,11 @@ const ProjectWizardContent = () => {
                   Project Info
                 </AccordionTrigger>
                 <AccordionContent className="space-y-8 pt-4">
-                  <div className="space-y-6">
-                    <ProjectInfoStep />
-                  </div>
-                  
-                  {/* Schedule Analysis - moved here from ProjectFilesUpload */}
-                  <div className="space-y-4 pt-6 border-t">
-                    <div>
-                      <h3 className="text-md font-medium">Schedule Analysis</h3>
-                      <p className="text-sm text-muted-foreground mt-1">
-                        Upload a Project Schedule file to automatically extract project details and milestones.
-                      </p>
-                    </div>
+                  {/* Schedule Analysis - right below Project Info header */}
+                  <div className="space-y-4 mb-6">
+                    <p className="text-sm text-muted-foreground">
+                      Upload a Project Schedule file to automatically extract project details and milestones.
+                    </p>
                     <ProjectFilesUpload 
                       projectId={id || "new"}
                       projectName={projectData.name}
@@ -933,6 +939,10 @@ const ProjectWizardContent = () => {
                       onBeforeOAuthRedirect={handleBeforeOAuthRedirect}
                       mode="schedule"
                     />
+                  </div>
+                  
+                  <div className="space-y-6">
+                    <ProjectInfoStep />
                   </div>
                   
                   <div className="space-y-6 pt-6 border-t">
@@ -952,13 +962,10 @@ const ProjectWizardContent = () => {
                 <AccordionContent className="space-y-8 pt-4">
                   {/* Google Drive Connection - for drawing analysis */}
                   <div className="space-y-4">
-                    <div>
-                      <h3 className="text-md font-medium">Drawing Analysis</h3>
-                      <p className="text-sm text-muted-foreground mt-1">
-                        Connect a Google Drive folder with Drawing files to automatically detect Assets and Water Systems present in the Project.
-                      </p>
-                    </div>
-                    <ProjectFilesUpload 
+                    <p className="text-sm text-muted-foreground">
+                      Connect a Google Drive folder with Drawing files to automatically detect Assets and Water Systems present in the Project.
+                    </p>
+                    <ProjectFilesUpload
                       projectId={id || "new"}
                       projectName={projectData.name}
                       onDrawingDataExtracted={handleDrawingDataExtracted}
@@ -985,6 +992,7 @@ const ProjectWizardContent = () => {
                     lowCoverage={coverageByLevel.low}
                     mediumCoverage={coverageByLevel.medium}
                     highCoverage={coverageByLevel.high}
+                    controlCounts={controlCountsByLevel}
                     hasCustomSelection={hasManualOverride}
                   />
                   
