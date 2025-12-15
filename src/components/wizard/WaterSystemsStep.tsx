@@ -258,11 +258,16 @@ export const WaterSystemsStep = ({
     if (analysisItems.length > 0) {
       const systemItems = analysisItems.filter(i => i.category === "Water System");
       
+      let instanceIds = data.selectedSystemInstances || [];
+      let controlIds = data.selectedSystemControls || [];
+      let shouldPersist = false;
+      
       // Initialize instance selection
       if (!data.selectedSystemInstances || data.selectedSystemInstances.length === 0) {
-        const allIds = systemItems.map(i => i.id);
-        setSelectedInstanceIds(allIds);
-        lastSavedRef.current.instances = allIds;
+        instanceIds = systemItems.map(i => i.id);
+        setSelectedInstanceIds(instanceIds);
+        lastSavedRef.current.instances = instanceIds;
+        shouldPersist = true;
       }
       
       // Initialize control selection (all controls selected by default)
@@ -273,8 +278,18 @@ export const WaterSystemsStep = ({
             allControlIds.add(getControlId(item.id, control));
           });
         });
+        const controlArray = Array.from(allControlIds);
         setSelectedControlIds(allControlIds);
-        lastSavedRef.current.controls = Array.from(allControlIds);
+        lastSavedRef.current.controls = controlArray;
+        controlIds = controlArray;
+        shouldPersist = true;
+      }
+
+      if (shouldPersist) {
+        updateFields({
+          selectedSystemInstances: instanceIds,
+          selectedSystemControls: controlIds
+        });
       }
       
       // Mark initialization complete after first load
@@ -480,12 +495,22 @@ export const WaterSystemsStep = ({
     
     setSelectedInstanceIds(filteredInstanceIds);
     setSelectedControlIds(filteredControlIds);
+
+    const controlArray = Array.from(filteredControlIds);
+    updateFields({
+      selectedSystemInstances: filteredInstanceIds,
+      selectedSystemControls: controlArray
+    });
+    lastSavedRef.current = {
+      instances: [...filteredInstanceIds],
+      controls: controlArray
+    };
     
     // Reset the flag after a short delay to allow state to settle
     setTimeout(() => {
       isRiskToleranceUpdateRef.current = false;
     }, 100);
-  }, [parentRiskTolerance, systemItems, systemRiskToleranceMap, controlRiskToleranceMap, controls.length]);
+  }, [parentRiskTolerance, systemItems, systemRiskToleranceMap, controlRiskToleranceMap, controls.length, updateFields]);
 
   if (isLoading || isLoadingCustom) {
     return (

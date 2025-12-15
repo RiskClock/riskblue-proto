@@ -789,6 +789,7 @@ const ProjectWizardContent = () => {
                     onChange={handleRiskToleranceChange}
                     lowCost={totalCostEstimates.lowCost}
                     mediumCost={totalCostEstimates.mediumCost}
+                    highCost={totalCostEstimates.highCost}
                   />
                   
                   <div className="space-y-6">

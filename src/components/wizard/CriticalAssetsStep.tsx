@@ -275,11 +275,16 @@ export const CriticalAssetsStep = ({
     if (analysisItems.length > 0) {
       const assetItems = analysisItems.filter(i => i.category === "Asset");
       
+      let instanceIds = data.selectedAssetInstances || [];
+      let controlIds = data.selectedAssetControls || [];
+      let shouldPersist = false;
+
       // Initialize instance selection
       if (!data.selectedAssetInstances || data.selectedAssetInstances.length === 0) {
-        const allIds = assetItems.map(i => i.id);
-        setSelectedInstanceIds(allIds);
-        lastSavedRef.current.instances = allIds;
+        instanceIds = assetItems.map(i => i.id);
+        setSelectedInstanceIds(instanceIds);
+        lastSavedRef.current.instances = instanceIds;
+        shouldPersist = true;
       }
       
       // Initialize control selection (all controls selected by default)
@@ -290,8 +295,18 @@ export const CriticalAssetsStep = ({
             allControlIds.add(getControlId(item.id, control));
           });
         });
+        const controlArray = Array.from(allControlIds);
         setSelectedControlIds(allControlIds);
-        lastSavedRef.current.controls = Array.from(allControlIds);
+        lastSavedRef.current.controls = controlArray;
+        controlIds = controlArray;
+        shouldPersist = true;
+      }
+
+      if (shouldPersist) {
+        updateFields({
+          selectedAssetInstances: instanceIds,
+          selectedAssetControls: controlIds
+        });
       }
       
       // Mark initialization complete after first load
@@ -363,12 +378,22 @@ export const CriticalAssetsStep = ({
     
     setSelectedInstanceIds(filteredInstanceIds);
     setSelectedControlIds(filteredControlIds);
+
+    const controlArray = Array.from(filteredControlIds);
+    updateFields({
+      selectedAssetInstances: filteredInstanceIds,
+      selectedAssetControls: controlArray
+    });
+    lastSavedRef.current = {
+      instances: [...filteredInstanceIds],
+      controls: controlArray
+    };
     
     // Reset the flag after a short delay to allow state to settle
     setTimeout(() => {
       isRiskToleranceUpdateRef.current = false;
     }, 100);
-  }, [parentRiskTolerance, assetItems, assetRiskToleranceMap, controlRiskToleranceMap, controls.length]);
+  }, [parentRiskTolerance, assetItems, assetRiskToleranceMap, controlRiskToleranceMap, controls.length, updateFields]);
 
   const handleToggleInstance = useCallback((instanceId: string) => {
     setSelectedInstanceIds(prev => 
