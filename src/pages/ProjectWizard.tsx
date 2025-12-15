@@ -157,30 +157,47 @@ const ProjectWizardContent = () => {
     return processNames.size;
   }, [analysisItems]);
 
-  // Fetch control costs from database (using one_time_cost as base estimate)
+  // Fetch control costs from database (including monthly costs for full calculation)
   const { data: controlCosts = [] } = useQuery({
     queryKey: ['control-costs'],
     queryFn: async () => {
       const { data, error } = await supabase
         .from('mitigation_controls')
-        .select('name, one_time_cost, risk_tolerance')
+        .select('name, one_time_cost, monthly_maint_cost, risk_tolerance')
         .eq('is_active', true);
       if (error) throw error;
       return (data || []).map(c => ({
         name: c.name,
-        cost: Number(c.one_time_cost) || 0,
+        oneTimeCost: Number(c.one_time_cost) || 0,
+        monthlyCost: Number(c.monthly_maint_cost) || 0,
         riskTolerance: c.risk_tolerance || 3
       }));
     }
   });
 
+  // Get project duration in months for cost calculation
+  const projectDurationMonths = useMemo(() => {
+    const startDate = projectData.construction_start_date;
+    const endDate = projectData.construction_end_date;
+    if (!startDate || !endDate) return 12; // Default to 12 months if not set
+    
+    const start = new Date(startDate);
+    const end = new Date(endDate);
+    const months = Math.ceil((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24 * 30));
+    return Math.max(1, months);
+  }, [projectData.construction_start_date, projectData.construction_end_date]);
+
   // Calculate total cost estimates for risk tolerance levels using real control costs
   const totalCostEstimates = useMemo(() => {
-    // Create a map of control name to {cost, riskTolerance}
-    const controlMap = new Map<string, { cost: number; riskTolerance: number }>();
-    controlCosts.forEach(c => controlMap.set(c.name, { cost: c.cost, riskTolerance: c.riskTolerance }));
+    // Create a map of control name to {oneTimeCost, monthlyCost, riskTolerance}
+    const controlMap = new Map<string, { oneTimeCost: number; monthlyCost: number; riskTolerance: number }>();
+    controlCosts.forEach(c => controlMap.set(c.name, { 
+      oneTimeCost: c.oneTimeCost, 
+      monthlyCost: c.monthlyCost, 
+      riskTolerance: c.riskTolerance 
+    }));
     
-    // Calculate costs per tolerance level
+    // Calculate costs per tolerance level (one_time_cost + monthly_cost * duration)
     let lowCost = 0;    // All controls (risk_tolerance 1, 2, 3)
     let mediumCost = 0; // Controls with risk_tolerance 2 or 3
     let highCost = 0;   // Only controls with risk_tolerance 3 (Essential)
@@ -189,20 +206,21 @@ const ProjectWizardContent = () => {
       (item.controls || []).forEach(controlName => {
         const control = controlMap.get(controlName);
         if (control) {
-          lowCost += control.cost;
-          if (control.riskTolerance >= 2) mediumCost += control.cost;
-          if (control.riskTolerance >= 3) highCost += control.cost;
+          const totalCost = control.oneTimeCost + (control.monthlyCost * projectDurationMonths);
+          lowCost += totalCost;
+          if (control.riskTolerance >= 2) mediumCost += totalCost;
+          if (control.riskTolerance >= 3) highCost += totalCost;
         }
       });
     });
     
     return { lowCost, mediumCost, highCost };
-  }, [analysisItems, controlCosts]);
+  }, [analysisItems, controlCosts, projectDurationMonths]);
 
   // Calculate actual cost based on currently selected controls (from manual selections)
   const actualSelectedCost = useMemo(() => {
-    const controlMap = new Map<string, number>();
-    controlCosts.forEach(c => controlMap.set(c.name, c.cost));
+    const controlMap = new Map<string, { oneTimeCost: number; monthlyCost: number }>();
+    controlCosts.forEach(c => controlMap.set(c.name, { oneTimeCost: c.oneTimeCost, monthlyCost: c.monthlyCost }));
     
     // Combine all selected controls from assets, water systems, and processes
     const allSelectedControls = new Set<string>([
@@ -217,12 +235,14 @@ const ProjectWizardContent = () => {
       const controlName = compositeId.includes('::') 
         ? compositeId.split('::')[1] 
         : compositeId;
-      const cost = controlMap.get(controlName);
-      if (cost) totalCost += cost;
+      const control = controlMap.get(controlName);
+      if (control) {
+        totalCost += control.oneTimeCost + (control.monthlyCost * projectDurationMonths);
+      }
     });
     
     return totalCost;
-  }, [projectData.selectedAssetControls, projectData.selectedSystemControls, projectData.selectedProcessControls, controlCosts]);
+  }, [projectData.selectedAssetControls, projectData.selectedSystemControls, projectData.selectedProcessControls, controlCosts, projectDurationMonths]);
 
   // Handle risk tolerance change
   const handleRiskToleranceChange = useCallback((newTolerance: RiskTolerance) => {
