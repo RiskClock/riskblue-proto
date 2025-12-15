@@ -196,6 +196,27 @@ const ProjectWizardContent = () => {
     return { lowCost, mediumCost, highCost };
   }, [analysisItems, controlCosts]);
 
+  // Calculate actual cost based on currently selected controls (from manual selections)
+  const actualSelectedCost = useMemo(() => {
+    const controlMap = new Map<string, number>();
+    controlCosts.forEach(c => controlMap.set(c.name, c.cost));
+    
+    // Combine all selected controls from assets, water systems, and processes
+    const allSelectedControls = new Set<string>([
+      ...(projectData.selectedAssetControls || []),
+      ...(projectData.selectedSystemControls || []),
+      ...(projectData.selectedProcessControls || []),
+    ]);
+    
+    let totalCost = 0;
+    allSelectedControls.forEach(controlName => {
+      const cost = controlMap.get(controlName);
+      if (cost) totalCost += cost;
+    });
+    
+    return totalCost;
+  }, [projectData.selectedAssetControls, projectData.selectedSystemControls, projectData.selectedProcessControls, controlCosts]);
+
   // Handle risk tolerance change
   const handleRiskToleranceChange = useCallback((newTolerance: RiskTolerance) => {
     setRiskTolerance(newTolerance);
@@ -797,6 +818,21 @@ const ProjectWizardContent = () => {
                     mediumCost={totalCostEstimates.mediumCost}
                     highCost={totalCostEstimates.highCost}
                   />
+                  
+                  {/* Cost Estimate - based on actually selected controls */}
+                  <div className="flex flex-col items-center justify-center py-6 px-4 bg-muted/30 rounded-lg border border-border">
+                    <p className="text-sm text-muted-foreground mb-1">Estimated Implementation Cost</p>
+                    <p className="text-3xl font-bold text-primary">
+                      ${actualSelectedCost.toLocaleString()}
+                    </p>
+                    <p className="text-xs text-muted-foreground mt-1">
+                      Based on {new Set([
+                        ...(projectData.selectedAssetControls || []),
+                        ...(projectData.selectedSystemControls || []),
+                        ...(projectData.selectedProcessControls || []),
+                      ]).size} selected controls
+                    </p>
+                  </div>
                   
                   <div className="space-y-6">
                     <h3 className="text-md font-medium">
