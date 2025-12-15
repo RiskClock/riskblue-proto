@@ -10,12 +10,19 @@ import {
 
 export type RiskTolerance = "low" | "medium" | "high";
 
+interface CoverageBreakdown {
+  assets: number;
+  systems: number;
+  processes: number;
+}
+
 interface ImplementationPackage {
   level: RiskTolerance;
   name: string;
   description: string;
   riskLabel: string;
   cost: number;
+  coverage: CoverageBreakdown;
   protectedAssets: string[];
   unprotectedAssets: string[];
 }
@@ -33,7 +40,11 @@ interface RiskToleranceSelectorProps {
   mediumCost: number;
   highCost?: number;
   className?: string;
-  // Asset coverage for each package
+  // Coverage breakdown for each package
+  lowCoverage?: CoverageBreakdown;
+  mediumCoverage?: CoverageBreakdown;
+  highCoverage?: CoverageBreakdown;
+  // Asset coverage for tooltips
   lowProtectedAssets?: string[];
   mediumProtectedAssets?: string[];
   highProtectedAssets?: string[];
@@ -51,6 +62,9 @@ export const RiskToleranceSelector = ({
   mediumCost, 
   highCost = 0,
   className,
+  lowCoverage = { assets: 0, systems: 0, processes: 0 },
+  mediumCoverage = { assets: 0, systems: 0, processes: 0 },
+  highCoverage = { assets: 0, systems: 0, processes: 0 },
   lowProtectedAssets = [],
   mediumProtectedAssets = [],
   highProtectedAssets = [],
@@ -72,6 +86,14 @@ export const RiskToleranceSelector = ({
     return allAssets.filter(a => !protectedAssets.includes(a));
   };
 
+  const formatCoverage = (coverage: CoverageBreakdown) => {
+    const parts: string[] = [];
+    if (coverage.assets > 0) parts.push(`${coverage.assets} asset${coverage.assets !== 1 ? 's' : ''}`);
+    if (coverage.systems > 0) parts.push(`${coverage.systems} system${coverage.systems !== 1 ? 's' : ''}`);
+    if (coverage.processes > 0) parts.push(`${coverage.processes} process${coverage.processes !== 1 ? 'es' : ''}`);
+    return parts.length > 0 ? parts.join(', ') : 'None';
+  };
+
   const packages: ImplementationPackage[] = [
     {
       level: "high",
@@ -79,6 +101,7 @@ export const RiskToleranceSelector = ({
       description: "Core Systems Only. Prioritizes the protection of water systems and primary assets through basic process implementation.",
       riskLabel: "High",
       cost: highCost,
+      coverage: highCoverage,
       protectedAssets: highProtectedAssets,
       unprotectedAssets: getUnprotectedAssets(highProtectedAssets)
     },
@@ -88,6 +111,7 @@ export const RiskToleranceSelector = ({
       description: "Expanded Scope. Increases protection layers to cover standard construction risks, optimizing the balance between site safety and budget.",
       riskLabel: "Medium",
       cost: mediumCost,
+      coverage: mediumCoverage,
       protectedAssets: mediumProtectedAssets,
       unprotectedAssets: getUnprotectedAssets(mediumProtectedAssets)
     },
@@ -97,6 +121,7 @@ export const RiskToleranceSelector = ({
       description: "Turnkey Protection. Complete coverage of all site systems, assets, and processes. Includes full redundancy and maximum monitoring capabilities.",
       riskLabel: "Low",
       cost: lowCost,
+      coverage: lowCoverage,
       protectedAssets: lowProtectedAssets,
       unprotectedAssets: getUnprotectedAssets(lowProtectedAssets)
     }
@@ -196,10 +221,10 @@ export const RiskToleranceSelector = ({
           ))}
         </div>
 
-        {/* Assets Coverage Row */}
+        {/* Coverage Row */}
         <div className="grid grid-cols-4 border-b">
           <div className="p-4 font-medium text-sm text-muted-foreground">
-            Assets Coverage
+            Coverage
           </div>
           <TooltipProvider>
             {packages.map((pkg) => (
@@ -214,7 +239,7 @@ export const RiskToleranceSelector = ({
                 onClick={() => onChange(pkg.level)}
               >
                 <div className="flex items-center gap-2">
-                  <span className="font-medium">{pkg.protectedAssets.length} protected</span>
+                  <span className="font-medium text-xs">{formatCoverage(pkg.coverage)}</span>
                   {(pkg.protectedAssets.length > 0 || pkg.unprotectedAssets.length > 0) && (
                     <Tooltip>
                       <TooltipTrigger asChild>
@@ -222,17 +247,23 @@ export const RiskToleranceSelector = ({
                       </TooltipTrigger>
                       <TooltipContent className="max-w-xs p-3" side="bottom">
                         <div className="space-y-2">
+                          <div className="text-xs">
+                            <p className="font-semibold mb-1">Coverage Breakdown:</p>
+                            <p>• {pkg.coverage.assets} asset{pkg.coverage.assets !== 1 ? 's' : ''}</p>
+                            <p>• {pkg.coverage.systems} water system{pkg.coverage.systems !== 1 ? 's' : ''}</p>
+                            <p>• {pkg.coverage.processes} process{pkg.coverage.processes !== 1 ? 'es' : ''}</p>
+                          </div>
                           {pkg.protectedAssets.length > 0 && (
                             <div>
-                              <p className="text-xs font-semibold text-green-600 mb-1">Protected:</p>
+                              <p className="text-xs font-semibold text-green-600 mb-1">Protected Items:</p>
                               <ul className="text-xs space-y-0.5">
-                                {pkg.protectedAssets.slice(0, 8).map((asset, i) => (
+                                {pkg.protectedAssets.slice(0, 6).map((asset, i) => (
                                   <li key={i} className="flex items-center gap-1">
                                     <span className="text-green-500">✓</span> {asset}
                                   </li>
                                 ))}
-                                {pkg.protectedAssets.length > 8 && (
-                                  <li className="text-muted-foreground">+{pkg.protectedAssets.length - 8} more</li>
+                                {pkg.protectedAssets.length > 6 && (
+                                  <li className="text-muted-foreground">+{pkg.protectedAssets.length - 6} more</li>
                                 )}
                               </ul>
                             </div>
@@ -241,13 +272,13 @@ export const RiskToleranceSelector = ({
                             <div>
                               <p className="text-xs font-semibold text-red-600 mb-1">Not Protected:</p>
                               <ul className="text-xs space-y-0.5">
-                                {pkg.unprotectedAssets.slice(0, 8).map((asset, i) => (
+                                {pkg.unprotectedAssets.slice(0, 6).map((asset, i) => (
                                   <li key={i} className="flex items-center gap-1">
                                     <span className="text-red-500">✗</span> {asset}
                                   </li>
                                 ))}
-                                {pkg.unprotectedAssets.length > 8 && (
-                                  <li className="text-muted-foreground">+{pkg.unprotectedAssets.length - 8} more</li>
+                                {pkg.unprotectedAssets.length > 6 && (
+                                  <li className="text-muted-foreground">+{pkg.unprotectedAssets.length - 6} more</li>
                                 )}
                               </ul>
                             </div>

@@ -201,8 +201,8 @@ const ProjectWizardContent = () => {
     return Math.max(1, months);
   }, [projectData.construction_start_date, projectData.construction_end_date]);
 
-  // Calculate total cost estimates for risk tolerance levels using real control costs with tiered pricing
-  const totalCostEstimates = useMemo(() => {
+  // Calculate total cost estimates and coverage for risk tolerance levels using real control costs with tiered pricing
+  const { totalCostEstimates, coverageByLevel } = useMemo(() => {
     // Create a map of control name to {oneTimeCost, monthlyCost, riskTolerance}
     const controlMap = new Map<string, { oneTimeCost: number; monthlyCost: number; riskTolerance: number }>();
     controlCosts.forEach(c => controlMap.set(c.name, { 
@@ -216,6 +216,17 @@ const ProjectWizardContent = () => {
     let mediumCost = 0; // Controls with risk_tolerance 2 or 3
     let highCost = 0;   // Only controls with risk_tolerance 3 (Essential)
     
+    // Track coverage per level
+    const lowAssets = new Set<string>();
+    const lowSystems = new Set<string>();
+    const lowProcesses = new Set<string>();
+    const mediumAssets = new Set<string>();
+    const mediumSystems = new Set<string>();
+    const mediumProcesses = new Set<string>();
+    const highAssets = new Set<string>();
+    const highSystems = new Set<string>();
+    const highProcesses = new Set<string>();
+    
     analysisItems.forEach(item => {
       const instancePricingData = {
         width: item.width,
@@ -223,6 +234,10 @@ const ProjectWizardContent = () => {
         sizeCategory: item.sizeCategory,
         pipeDiameterInches: null
       };
+      
+      let hasLowControl = false;
+      let hasMediumControl = false;
+      let hasHighControl = false;
       
       (item.controls || []).forEach(controlName => {
         const control = controlMap.get(controlName);
@@ -236,13 +251,45 @@ const ProjectWizardContent = () => {
             projectDurationMonths
           );
           lowCost += totalCost;
-          if (control.riskTolerance >= 2) mediumCost += totalCost;
-          if (control.riskTolerance >= 3) highCost += totalCost;
+          hasLowControl = true;
+          if (control.riskTolerance >= 2) {
+            mediumCost += totalCost;
+            hasMediumControl = true;
+          }
+          if (control.riskTolerance >= 3) {
+            highCost += totalCost;
+            hasHighControl = true;
+          }
         }
       });
+      
+      // Track which items are covered at each level
+      const normalizedName = item.name;
+      if (hasLowControl) {
+        if (item.category === "Asset") lowAssets.add(normalizedName);
+        else if (item.category === "Water System") lowSystems.add(normalizedName);
+        else if (item.category === "Process") lowProcesses.add(normalizedName);
+      }
+      if (hasMediumControl) {
+        if (item.category === "Asset") mediumAssets.add(normalizedName);
+        else if (item.category === "Water System") mediumSystems.add(normalizedName);
+        else if (item.category === "Process") mediumProcesses.add(normalizedName);
+      }
+      if (hasHighControl) {
+        if (item.category === "Asset") highAssets.add(normalizedName);
+        else if (item.category === "Water System") highSystems.add(normalizedName);
+        else if (item.category === "Process") highProcesses.add(normalizedName);
+      }
     });
     
-    return { lowCost, mediumCost, highCost };
+    return {
+      totalCostEstimates: { lowCost, mediumCost, highCost },
+      coverageByLevel: {
+        low: { assets: lowAssets.size, systems: lowSystems.size, processes: lowProcesses.size },
+        medium: { assets: mediumAssets.size, systems: mediumSystems.size, processes: mediumProcesses.size },
+        high: { assets: highAssets.size, systems: highSystems.size, processes: highProcesses.size }
+      }
+    };
   }, [analysisItems, controlCosts, pricingTiers, projectDurationMonths]);
 
   // Calculate actual cost based on currently selected controls using tiered pricing
@@ -899,21 +946,30 @@ const ProjectWizardContent = () => {
                     lowCost={totalCostEstimates.lowCost}
                     mediumCost={totalCostEstimates.mediumCost}
                     highCost={totalCostEstimates.highCost}
+                    lowCoverage={coverageByLevel.low}
+                    mediumCoverage={coverageByLevel.medium}
+                    highCoverage={coverageByLevel.high}
                     hasCustomSelection={hasManualOverride}
                   />
                   
-                  {/* Cost Estimate - based on actually selected controls */}
+                  {/* Cost Estimate - show package cost when not manually overridden */}
                   <div className="flex flex-col items-center justify-center py-6 px-4 bg-muted/30 rounded-lg border border-border">
                     <p className="text-sm text-muted-foreground mb-1">Estimated Implementation Cost</p>
                     <p className="text-3xl font-bold text-primary">
-                      ${actualSelectedCost.toLocaleString()}
+                      ${(hasManualOverride 
+                        ? actualSelectedCost 
+                        : totalCostEstimates[riskTolerance === 'low' ? 'lowCost' : riskTolerance === 'medium' ? 'mediumCost' : 'highCost']
+                      ).toLocaleString()}
                     </p>
                     <p className="text-xs text-muted-foreground mt-1">
-                      Based on {new Set([
-                        ...(projectData.selectedAssetControls || []),
-                        ...(projectData.selectedSystemControls || []),
-                        ...(projectData.selectedProcessControls || []),
-                      ]).size} selected controls
+                      {hasManualOverride 
+                        ? `Based on ${new Set([
+                            ...(projectData.selectedAssetControls || []),
+                            ...(projectData.selectedSystemControls || []),
+                            ...(projectData.selectedProcessControls || []),
+                          ]).size} selected controls`
+                        : `Based on ${riskTolerance === 'low' ? 'Fortified' : riskTolerance === 'medium' ? 'Enhanced' : 'Essential'} package`
+                      }
                     </p>
                   </div>
                   

@@ -4,6 +4,8 @@ import { useToast } from "@/hooks/use-toast";
 import { WaterRiskReport } from "@/components/reports/WaterRiskReport";
 import { generateReportFilename } from "@/lib/reportGenerator";
 import { AnalysisItem } from "@/lib/analysisItemMapper";
+import { useQuery } from "@tanstack/react-query";
+import { supabase } from "@/integrations/supabase/client";
 
 interface WaterMitigationGuidelinesStepProps {
   data: any;
@@ -14,6 +16,24 @@ interface WaterMitigationGuidelinesStepProps {
 
 export const WaterMitigationGuidelinesStep = ({ data, analysisItems = [], onBack, onNext }: WaterMitigationGuidelinesStepProps) => {
   const { toast } = useToast();
+
+  // Fetch control details for the appendix
+  const { data: controlDetails = [] } = useQuery({
+    queryKey: ['mitigation-controls-details'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('mitigation_controls')
+        .select('name, action, description')
+        .eq('is_active', true)
+        .order('name');
+      if (error) throw error;
+      return data.map(c => ({
+        name: c.name,
+        action: c.action,
+        description: c.description
+      }));
+    }
+  });
 
   const handleContinue = async () => {
     onNext(data);
@@ -66,7 +86,13 @@ export const WaterMitigationGuidelinesStep = ({ data, analysisItems = [], onBack
     // Import and render
     import('react-dom/client').then(async ({ createRoot }) => {
       const reactRoot = createRoot(root);
-      reactRoot.render(<WaterRiskReport data={data} analysisItems={analysisItems} />);
+      reactRoot.render(
+        <WaterRiskReport 
+          data={data} 
+          analysisItems={analysisItems} 
+          controlDetails={controlDetails}
+        />
+      );
       
       // Give React time to render, then wait for images
       await new Promise(resolve => setTimeout(resolve, 300));
