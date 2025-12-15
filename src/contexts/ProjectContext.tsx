@@ -23,6 +23,9 @@ const IMMEDIATE_SAVE_FIELDS = [
   'selectedProcessControls',
 ];
 
+// Debounce delay for text fields (ms)
+const DEBOUNCE_DELAY = 800;
+
 interface ProjectContextValue {
   projectId: string | undefined;
   projectData: Record<string, any>;
@@ -74,12 +77,14 @@ export const ProjectProvider: React.FC<ProjectProviderProps> = ({
 
   // Execute the batched update to database
   const executeUpdate = useCallback(async (fields: Record<string, any>): Promise<boolean> => {
-    if (isNewProject) {
-      console.log('[ProjectContext] Skipping update - new project');
+    // Skip if no project ID (truly new, not yet created)
+    if (!projectId || projectId === 'new') {
+      console.log('[ProjectContext] Skipping update - no valid project ID');
       return false;
     }
 
     setIsSaving(true);
+    console.log('[ProjectContext] Starting save for fields:', Object.keys(fields));
     
     try {
       const { tableFields, jsonFields } = separateFields(fields);
@@ -87,7 +92,11 @@ export const ProjectProvider: React.FC<ProjectProviderProps> = ({
       const hasTableFields = Object.keys(tableFields).length > 0;
       const hasJsonFields = Object.keys(jsonFields).length > 0;
       
+      console.log('[ProjectContext] Table fields:', tableFields);
+      console.log('[ProjectContext] JSON fields:', jsonFields);
+      
       if (!hasTableFields && !hasJsonFields) {
+        console.log('[ProjectContext] No fields to save');
         return true;
       }
 
@@ -102,26 +111,37 @@ export const ProjectProvider: React.FC<ProjectProviderProps> = ({
       }
       
       if (hasJsonFields) {
+        console.log('[ProjectContext] Fetching existing project_data for merge...');
         const { data: existing, error: fetchError } = await supabase
           .from('projects')
           .select('project_data')
           .eq('id', projectId)
           .single();
         
-        if (fetchError) throw fetchError;
+        if (fetchError) {
+          console.error('[ProjectContext] Error fetching existing project_data:', fetchError);
+          throw fetchError;
+        }
         
         const existingProjectData = (existing?.project_data as Record<string, any>) || {};
+        console.log('[ProjectContext] Existing project_data:', existingProjectData);
         updateData.project_data = { ...existingProjectData, ...jsonFields };
+        console.log('[ProjectContext] Merged project_data:', updateData.project_data);
       }
 
-      const { error } = await supabase
+      console.log('[ProjectContext] Sending update to Supabase:', updateData);
+      const { data: result, error } = await supabase
         .from('projects')
         .update(updateData)
-        .eq('id', projectId);
+        .eq('id', projectId)
+        .select();
 
-      if (error) throw error;
+      if (error) {
+        console.error('[ProjectContext] Supabase update error:', error);
+        throw error;
+      }
       
-      console.log('[ProjectContext] Saved fields:', Object.keys(fields));
+      console.log('[ProjectContext] Save successful:', Object.keys(fields), 'Result:', result);
       return true;
       
     } catch (error: any) {
@@ -136,7 +156,7 @@ export const ProjectProvider: React.FC<ProjectProviderProps> = ({
       setIsSaving(false);
       setHasPendingChanges(Object.keys(pendingUpdates.current).length > 0);
     }
-  }, [projectId, isNewProject, toast]);
+  }, [projectId, toast]);
 
   // Flush all pending updates immediately
   const flush = useCallback(async (): Promise<void> => {
@@ -186,7 +206,7 @@ export const ProjectProvider: React.FC<ProjectProviderProps> = ({
         pendingUpdates.current = {};
         setHasPendingChanges(false);
         executeUpdate(updates);
-      }, 500);
+      }, DEBOUNCE_DELAY);
     }
   }, [executeUpdate]);
 
@@ -224,7 +244,7 @@ export const ProjectProvider: React.FC<ProjectProviderProps> = ({
         pendingUpdates.current = {};
         setHasPendingChanges(false);
         executeUpdate(updates);
-      }, 500);
+      }, DEBOUNCE_DELAY);
     }
   }, [executeUpdate]);
 
