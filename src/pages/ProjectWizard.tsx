@@ -1091,7 +1091,7 @@ const ProjectWizardContent = () => {
           </TabsContent>
 
           <TabsContent value="response">
-            <ImplementationScheduleStep data={projectData} />
+            <ImplementationScheduleStep data={projectData} analysisItems={analysisItems} />
             
             <div className="max-w-5xl mx-auto">
               <ResponsePlanUploadChat 
