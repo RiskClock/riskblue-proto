@@ -34,6 +34,7 @@ import { Label } from "@/components/ui/label";
 import { WaterRiskReport } from "@/components/reports/WaterRiskReport";
 import { generateReportFilename } from "@/lib/reportGenerator";
 import { AnalysisItem, extractSelectedAssets, extractSelectedSystems } from "@/lib/analysisItemMapper";
+import { PricingTier, calculateTieredControlCost } from "@/lib/costCalculator";
 
 interface ProjectData {
   [key: string]: any;
@@ -175,6 +176,19 @@ const ProjectWizardContent = () => {
     }
   });
 
+  // Fetch pricing tiers for tiered cost calculation
+  const { data: pricingTiers = [] } = useQuery({
+    queryKey: ['control-pricing-tiers'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('control_pricing_tiers')
+        .select('*')
+        .order('control_name, min_value');
+      if (error) throw error;
+      return data as PricingTier[];
+    }
+  });
+
   // Get project duration in months for cost calculation
   const projectDurationMonths = useMemo(() => {
     const startDate = projectData.construction_start_date;
@@ -187,7 +201,7 @@ const ProjectWizardContent = () => {
     return Math.max(1, months);
   }, [projectData.construction_start_date, projectData.construction_end_date]);
 
-  // Calculate total cost estimates for risk tolerance levels using real control costs
+  // Calculate total cost estimates for risk tolerance levels using real control costs with tiered pricing
   const totalCostEstimates = useMemo(() => {
     // Create a map of control name to {oneTimeCost, monthlyCost, riskTolerance}
     const controlMap = new Map<string, { oneTimeCost: number; monthlyCost: number; riskTolerance: number }>();
@@ -197,16 +211,30 @@ const ProjectWizardContent = () => {
       riskTolerance: c.riskTolerance 
     }));
     
-    // Calculate costs per tolerance level (one_time_cost + monthly_cost * duration)
+    // Calculate costs per tolerance level using tiered pricing
     let lowCost = 0;    // All controls (risk_tolerance 1, 2, 3)
     let mediumCost = 0; // Controls with risk_tolerance 2 or 3
     let highCost = 0;   // Only controls with risk_tolerance 3 (Essential)
     
     analysisItems.forEach(item => {
+      const instancePricingData = {
+        width: item.width,
+        length: item.length,
+        sizeCategory: item.sizeCategory,
+        pipeDiameterInches: null
+      };
+      
       (item.controls || []).forEach(controlName => {
         const control = controlMap.get(controlName);
         if (control) {
-          const totalCost = control.oneTimeCost + (control.monthlyCost * projectDurationMonths);
+          const totalCost = calculateTieredControlCost(
+            controlName,
+            instancePricingData,
+            pricingTiers,
+            control.oneTimeCost,
+            control.monthlyCost,
+            projectDurationMonths
+          );
           lowCost += totalCost;
           if (control.riskTolerance >= 2) mediumCost += totalCost;
           if (control.riskTolerance >= 3) highCost += totalCost;
@@ -215,12 +243,16 @@ const ProjectWizardContent = () => {
     });
     
     return { lowCost, mediumCost, highCost };
-  }, [analysisItems, controlCosts, projectDurationMonths]);
+  }, [analysisItems, controlCosts, pricingTiers, projectDurationMonths]);
 
-  // Calculate actual cost based on currently selected controls (from manual selections)
+  // Calculate actual cost based on currently selected controls using tiered pricing
   const actualSelectedCost = useMemo(() => {
     const controlMap = new Map<string, { oneTimeCost: number; monthlyCost: number }>();
     controlCosts.forEach(c => controlMap.set(c.name, { oneTimeCost: c.oneTimeCost, monthlyCost: c.monthlyCost }));
+    
+    // Create a map from item ID to analysis item for quick lookup
+    const itemMap = new Map<string, AnalysisItem>();
+    analysisItems.forEach(item => itemMap.set(item.id, item));
     
     // Combine all selected controls from assets, water systems, and processes
     const allSelectedControls = new Set<string>([
@@ -231,18 +263,35 @@ const ProjectWizardContent = () => {
     
     let totalCost = 0;
     allSelectedControls.forEach(compositeId => {
-      // Extract control name from "instanceId::controlName" format
-      const controlName = compositeId.includes('::') 
-        ? compositeId.split('::')[1] 
-        : compositeId;
+      // Extract instance ID and control name from "instanceId::controlName" format
+      const [instanceId, controlName] = compositeId.includes('::') 
+        ? [compositeId.split('::')[0], compositeId.split('::')[1]]
+        : [null, compositeId];
+      
       const control = controlMap.get(controlName);
       if (control) {
-        totalCost += control.oneTimeCost + (control.monthlyCost * projectDurationMonths);
+        // Get instance data for tiered pricing lookup
+        const item = instanceId ? itemMap.get(instanceId) : null;
+        const instancePricingData = {
+          width: item?.width ?? null,
+          length: item?.length ?? null,
+          sizeCategory: item?.sizeCategory ?? null,
+          pipeDiameterInches: null
+        };
+        
+        totalCost += calculateTieredControlCost(
+          controlName,
+          instancePricingData,
+          pricingTiers,
+          control.oneTimeCost,
+          control.monthlyCost,
+          projectDurationMonths
+        );
       }
     });
     
     return totalCost;
-  }, [projectData.selectedAssetControls, projectData.selectedSystemControls, projectData.selectedProcessControls, controlCosts, projectDurationMonths]);
+  }, [projectData.selectedAssetControls, projectData.selectedSystemControls, projectData.selectedProcessControls, controlCosts, pricingTiers, analysisItems, projectDurationMonths]);
 
   // Handle risk tolerance change
   const handleRiskToleranceChange = useCallback((newTolerance: RiskTolerance) => {
