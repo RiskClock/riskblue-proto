@@ -8,7 +8,9 @@ import { FileViewerModal } from "./FileViewerModal";
 import type { DriveFileInfo } from "./ProjectFilesUpload";
 import type { RiskTolerance } from "./RiskToleranceSelector";
 import { useProject } from "@/contexts/ProjectContext";
-import type { PricingTier } from "@/lib/costCalculator";
+import { calculateTieredControlCost, parseDurationMonths, PricingTier } from "@/lib/costCalculator";
+import { useRiskScoring } from "@/hooks/useRiskScoring";
+import { RiskScoreSummary } from "./RiskScoreSummary";
 
 interface ProcessesStepProps {
   onNext?: (data: any) => void;
@@ -54,33 +56,39 @@ export const ProcessesStep = ({
   // Track previous risk tolerance
   const prevRiskToleranceRef = useRef(parentRiskTolerance);
 
-  // Fetch processes from database for risk tolerance values
+  // Fetch processes from database for risk tolerance and risk_level_points values
   const { data: processes = [] } = useQuery({
-    queryKey: ['processes'],
+    queryKey: ['processes-with-points'],
     queryFn: async () => {
       const { data, error } = await supabase
         .from('processes')
-        .select('name, risk_tolerance')
+        .select('name, risk_tolerance, risk_level_points')
         .eq('is_active', true);
       if (error) throw error;
-      return (data || []) as { name: string; risk_tolerance: number }[];
+      return (data || []) as { name: string; risk_tolerance: number; risk_level_points: number }[];
     }
   });
 
-  // Fetch mitigation controls with cost fields
+  // Fetch mitigation controls with cost fields and points
   const { data: controls = [] } = useQuery({
     queryKey: ['mitigation-controls-processes'],
     queryFn: async () => {
       const { data, error } = await supabase
         .from('mitigation_controls')
-        .select('name, risk_tolerance, one_time_cost, monthly_maint_cost')
+        .select('name, risk_tolerance, one_time_cost, monthly_maint_cost, points, author, responsible, description, action, category')
         .eq('is_active', true);
       if (error) throw error;
       return (data || []).map(c => ({
         name: c.name,
         riskTolerance: c.risk_tolerance ?? 3,
         oneTimeCost: Number(c.one_time_cost) || 0,
-        monthlyMaintCost: Number(c.monthly_maint_cost) || 0
+        monthlyMaintCost: Number(c.monthly_maint_cost) || 0,
+        points: c.points || 0,
+        author: c.author,
+        responsible: c.responsible,
+        description: c.description,
+        action: c.action,
+        category: c.category
       }));
     }
   });
@@ -97,16 +105,6 @@ export const ProcessesStep = ({
       return data as PricingTier[];
     }
   });
-
-  // Helper to get control cost data
-  const getControlPoints = useCallback((controlName: string) => {
-    const control = controls.find(c => c.name === controlName);
-    return {
-      points: 0,
-      oneTimeCost: control?.oneTimeCost || 0,
-      monthlyMaintCost: control?.monthlyMaintCost || 0
-    };
-  }, [controls]);
 
   // Filter only process items
   const processItems = useMemo(() => 
@@ -146,6 +144,31 @@ export const ProcessesStep = ({
   const [viewerItem, setViewerItem] = useState<AnalysisItem | null>(null);
   const [viewerFileId, setViewerFileId] = useState<string>("");
   const [viewerMimeType, setViewerMimeType] = useState<string>("application/pdf");
+
+  // Risk scoring hook - uses processes for risk_level_points
+  const riskScore = useRiskScoring(
+    processItems,
+    selectedInstanceIds,
+    selectedControlIds,
+    {
+      criticalAssets: [],
+      waterSystems: [],
+      controls: controls.map(c => ({
+        name: c.name,
+        points: c.points,
+        oneTimeCost: c.oneTimeCost,
+        monthlyMaintCost: c.monthlyMaintCost,
+        author: c.author,
+        responsible: c.responsible,
+        description: c.description,
+        action: c.action,
+        category: c.category
+      }))
+    }
+  );
+
+  // Default duration for processes (project duration)
+  const defaultDurationMonths = 12;
 
   // Initialize selection when process items load (once)
   useEffect(() => {
@@ -378,28 +401,65 @@ export const ProcessesStep = ({
 
   return (
     <div className="space-y-4">
+      {/* Risk Score Summary */}
+      <RiskScoreSummary riskScore={riskScore} compact />
+
       {/* List of process groups */}
       <div className="space-y-3">
-        {processGroups.map(group => (
-          <ExpandableListItem
-            key={group.name}
-            name={group.name}
-            icon={<Users className="h-6 w-6 text-muted-foreground/50" />}
-            instanceCount={group.instances.length}
-            instances={group.instances}
-            selectedInstanceIds={selectedInstanceIds}
-            onToggleInstance={handleToggleInstance}
-            onToggleAll={handleToggleAll}
-            canViewFiles={canViewFiles}
-            driveFiles={driveFiles}
-            driveAccessToken={driveAccessToken}
-            selectedControlIds={selectedControlIds}
-            onToggleControl={handleToggleControl}
-            onToggleAllControls={handleToggleAllControls}
-            pricingTiers={pricingTiers}
-            getControlPoints={getControlPoints}
-          />
-        ))}
+        {processGroups.map(group => {
+          const classScore = riskScore.getClassScore(group.name);
+          
+          // Calculate class cost to protect based on selected controls with tiered pricing
+          let classCost = 0;
+          group.instances.forEach(instance => {
+            const instancePricingData = {
+              width: instance.width,
+              length: instance.length,
+              sizeCategory: instance.sizeCategory,
+              pipeDiameterInches: null
+            };
+            (instance.controls || []).forEach(controlName => {
+              const controlId = getControlId(instance.id, controlName);
+              if (selectedControlIds.has(controlId)) {
+                const control = controls.find(c => c.name === controlName);
+                if (control) {
+                  classCost += calculateTieredControlCost(
+                    controlName,
+                    instancePricingData,
+                    pricingTiers,
+                    control.oneTimeCost,
+                    control.monthlyMaintCost,
+                    defaultDurationMonths
+                  );
+                }
+              }
+            });
+          });
+          
+          return (
+            <ExpandableListItem
+              key={group.name}
+              name={group.name}
+              icon={<Users className="h-6 w-6 text-muted-foreground/50" />}
+              instanceCount={group.instances.length}
+              instances={group.instances}
+              selectedInstanceIds={selectedInstanceIds}
+              onToggleInstance={handleToggleInstance}
+              onToggleAll={handleToggleAll}
+              canViewFiles={canViewFiles}
+              driveFiles={driveFiles}
+              driveAccessToken={driveAccessToken}
+              selectedControlIds={selectedControlIds}
+              onToggleControl={handleToggleControl}
+              onToggleAllControls={handleToggleAllControls}
+              pricingTiers={pricingTiers}
+              getControlPoints={riskScore.getControlPoints}
+              classRiskPoints={classScore?.riskPoints}
+              classDeriskPoints={classScore?.selectedDeriskPoints}
+              classCostToProtect={classCost}
+            />
+          );
+        })}
       </div>
 
       {/* File Viewer Modal */}

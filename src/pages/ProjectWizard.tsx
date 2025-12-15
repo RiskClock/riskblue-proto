@@ -1082,6 +1082,12 @@ const ProjectWizardContent = () => {
             {/* Bottom Controls */}
             <div className="flex justify-between items-center pt-6">
               <Button variant="outline" onClick={() => {
+                // Show preparing toast
+                toast({
+                  title: "Preparing report...",
+                  description: "Please wait while images are loaded.",
+                });
+                
                 const originalTitle = document.title;
                 document.title = generateReportFilename(projectData.name || "unnamed_project", "WaterRiskDiscovery");
                 
@@ -1099,7 +1105,7 @@ const ProjectWizardContent = () => {
                   const reactRoot = createRoot(root);
                   reactRoot.render(<WaterRiskReport data={projectData} analysisItems={analysisItems} controlDetails={controlDetails} />);
                   
-                  // Wait a bit for rendering, then print
+                  // Wait longer for images to load, then print
                   setTimeout(() => {
                     window.print();
                     document.title = originalTitle;
@@ -1109,7 +1115,7 @@ const ProjectWizardContent = () => {
                       reactRoot.unmount();
                       document.body.removeChild(reportContainer);
                     }, 100);
-                  }, 500);
+                  }, 1500);
                 });
               }}>
                 <Download className="h-4 w-4 mr-2" />
