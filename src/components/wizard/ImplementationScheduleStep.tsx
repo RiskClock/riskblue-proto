@@ -1,3 +1,4 @@
+import { useMemo } from "react";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Calendar } from "lucide-react";
@@ -18,7 +19,25 @@ interface ImplementationScheduleStepProps {
 }
 
 export const ImplementationScheduleStep = ({ data }: ImplementationScheduleStepProps) => {
-  const selectedControls = data.selectedControls || [];
+  // Combine all selected controls from asset, system, and process arrays
+  const selectedControls = useMemo(() => {
+    const allCompositeIds = [
+      ...(data.selectedAssetControls || []),
+      ...(data.selectedSystemControls || []),
+      ...(data.selectedProcessControls || []),
+    ];
+    
+    // Extract unique control names from composite IDs (format: instanceId::controlName)
+    const controlNames = new Set<string>();
+    allCompositeIds.forEach(compositeId => {
+      const controlName = compositeId.includes('::') 
+        ? compositeId.split('::')[1] 
+        : compositeId;
+      controlNames.add(controlName);
+    });
+    
+    return Array.from(controlNames);
+  }, [data.selectedAssetControls, data.selectedSystemControls, data.selectedProcessControls]);
 
   // Fetch mitigation controls from database
   const { data: mitigationControls = [], isLoading } = useQuery({
