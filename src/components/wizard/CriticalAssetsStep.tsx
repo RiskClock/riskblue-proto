@@ -39,6 +39,7 @@ interface CriticalAssetsStepProps {
   driveFiles?: DriveFileInfo[];
   driveAccessToken?: string | null;
   riskTolerance?: RiskTolerance;
+  onManualControlToggle?: () => void;
 }
 
 export const CriticalAssetsStep = ({
@@ -48,7 +49,8 @@ export const CriticalAssetsStep = ({
   analysisItems = [],
   driveFiles = [],
   driveAccessToken = null,
-  riskTolerance: parentRiskTolerance = "low"
+  riskTolerance: parentRiskTolerance = "low",
+  onManualControlToggle
 }: CriticalAssetsStepProps) => {
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -424,7 +426,11 @@ export const CriticalAssetsStep = ({
       }
       return next;
     });
-  }, []);
+    // Notify parent of manual override (only if not from risk tolerance change)
+    if (!isRiskToleranceUpdateRef.current && onManualControlToggle) {
+      onManualControlToggle();
+    }
+  }, [onManualControlToggle]);
 
   const handleToggleAllControls = useCallback((controlIds: string[], selected: boolean) => {
     setSelectedControlIds(prev => {
@@ -438,7 +444,11 @@ export const CriticalAssetsStep = ({
       });
       return next;
     });
-  }, []);
+    // Notify parent of manual override (only if not from risk tolerance change)
+    if (!isRiskToleranceUpdateRef.current && onManualControlToggle) {
+      onManualControlToggle();
+    }
+  }, [onManualControlToggle]);
 
   // File viewer helpers
   const findDriveFile = (fileName: string): DriveFileInfo | undefined => {

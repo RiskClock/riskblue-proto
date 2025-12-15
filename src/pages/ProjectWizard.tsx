@@ -76,6 +76,9 @@ const ProjectWizardContent = () => {
   const [riskTolerance, setRiskTolerance] = useState<RiskTolerance>(
     (projectData.riskTolerance as RiskTolerance) || "low"
   );
+  
+  // Track if user has manually overridden control selections
+  const [hasManualOverride, setHasManualOverride] = useState(false);
 
   // Normalize asset name for counting (must match CriticalAssetsStep logic)
   const normalizeAssetName = (name: string): string => {
@@ -209,7 +212,11 @@ const ProjectWizardContent = () => {
     ]);
     
     let totalCost = 0;
-    allSelectedControls.forEach(controlName => {
+    allSelectedControls.forEach(compositeId => {
+      // Extract control name from "instanceId::controlName" format
+      const controlName = compositeId.includes('::') 
+        ? compositeId.split('::')[1] 
+        : compositeId;
       const cost = controlMap.get(controlName);
       if (cost) totalCost += cost;
     });
@@ -220,8 +227,14 @@ const ProjectWizardContent = () => {
   // Handle risk tolerance change
   const handleRiskToleranceChange = useCallback((newTolerance: RiskTolerance) => {
     setRiskTolerance(newTolerance);
+    setHasManualOverride(false); // Reset manual override when selecting a package
     updateField('riskTolerance', newTolerance);
   }, [updateField]);
+
+  // Callback for when controls are manually toggled
+  const handleManualControlToggle = useCallback(() => {
+    setHasManualOverride(true);
+  }, []);
 
   // Sync riskTolerance from projectData when it loads
   useEffect(() => {
@@ -817,6 +830,7 @@ const ProjectWizardContent = () => {
                     lowCost={totalCostEstimates.lowCost}
                     mediumCost={totalCostEstimates.mediumCost}
                     highCost={totalCostEstimates.highCost}
+                    hasCustomSelection={hasManualOverride}
                   />
                   
                   {/* Cost Estimate - based on actually selected controls */}
@@ -849,6 +863,7 @@ const ProjectWizardContent = () => {
                       driveFiles={driveFiles}
                       driveAccessToken={driveAccessToken}
                       riskTolerance={riskTolerance}
+                      onManualControlToggle={handleManualControlToggle}
                     />
                   </div>
                   <div className="space-y-6 pt-6 border-t">
@@ -866,6 +881,7 @@ const ProjectWizardContent = () => {
                       driveFiles={driveFiles}
                       driveAccessToken={driveAccessToken}
                       riskTolerance={riskTolerance}
+                      onManualControlToggle={handleManualControlToggle}
                     />
                   </div>
                   <div className="space-y-6 pt-6 border-t">
@@ -882,6 +898,7 @@ const ProjectWizardContent = () => {
                       driveFiles={driveFiles}
                       driveAccessToken={driveAccessToken}
                       riskTolerance={riskTolerance}
+                      onManualControlToggle={handleManualControlToggle}
                     />
                   </div>
                 </AccordionContent>

@@ -40,6 +40,8 @@ interface RiskToleranceSelectorProps {
   allAssets?: string[];
   // Risk score summary
   riskScore?: RiskScoreSummaryData;
+  // When true, user has made custom selections - don't highlight any package
+  hasCustomSelection?: boolean;
 }
 
 export const RiskToleranceSelector = ({ 
@@ -53,7 +55,8 @@ export const RiskToleranceSelector = ({
   mediumProtectedAssets = [],
   highProtectedAssets = [],
   allAssets = [],
-  riskScore
+  riskScore,
+  hasCustomSelection = false
 }: RiskToleranceSelectorProps) => {
   const formatCost = (cost: number) => {
     if (cost >= 1000000) {
@@ -148,14 +151,14 @@ export const RiskToleranceSelector = ({
               key={pkg.level}
               className={cn(
                 "p-4 font-semibold text-sm cursor-pointer transition-colors border-l",
-                value === pkg.level 
+                value === pkg.level && !hasCustomSelection
                   ? "bg-primary/10 text-primary" 
                   : "hover:bg-muted/80"
               )}
               onClick={() => onChange(pkg.level)}
             >
               <div className="flex items-center gap-2">
-                {value === pkg.level && (
+                {value === pkg.level && !hasCustomSelection && (
                   <CheckCircle2 className="h-4 w-4 text-primary" />
                 )}
                 {pkg.name}
@@ -174,7 +177,7 @@ export const RiskToleranceSelector = ({
               key={pkg.level}
               className={cn(
                 "p-4 text-sm border-l cursor-pointer transition-colors",
-                value === pkg.level 
+                value === pkg.level && !hasCustomSelection
                   ? "bg-primary/5" 
                   : "hover:bg-muted/30"
               )}
@@ -204,7 +207,7 @@ export const RiskToleranceSelector = ({
                 key={pkg.level}
                 className={cn(
                   "p-4 text-sm border-l cursor-pointer transition-colors",
-                  value === pkg.level 
+                  value === pkg.level && !hasCustomSelection
                     ? "bg-primary/5" 
                     : "hover:bg-muted/30"
                 )}
@@ -269,7 +272,7 @@ export const RiskToleranceSelector = ({
               key={pkg.level}
               className={cn(
                 "p-4 text-sm border-l cursor-pointer transition-colors",
-                value === pkg.level 
+                value === pkg.level && !hasCustomSelection
                   ? "bg-primary/5" 
                   : "hover:bg-muted/30"
               )}
@@ -297,7 +300,7 @@ export const RiskToleranceSelector = ({
               key={pkg.level}
               className={cn(
                 "p-4 text-sm border-l cursor-pointer transition-colors",
-                value === pkg.level 
+                value === pkg.level && !hasCustomSelection
                   ? "bg-primary/5" 
                   : "hover:bg-muted/30"
               )}

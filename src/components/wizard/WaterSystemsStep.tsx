@@ -39,6 +39,7 @@ interface WaterSystemsStepProps {
   driveFiles?: DriveFileInfo[];
   driveAccessToken?: string | null;
   riskTolerance?: RiskTolerance;
+  onManualControlToggle?: () => void;
 }
 
 export const WaterSystemsStep = ({
@@ -48,7 +49,8 @@ export const WaterSystemsStep = ({
   analysisItems = [],
   driveFiles = [],
   driveAccessToken = null,
-  riskTolerance: parentRiskTolerance = "low"
+  riskTolerance: parentRiskTolerance = "low",
+  onManualControlToggle
 }: WaterSystemsStepProps) => {
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -328,7 +330,11 @@ export const WaterSystemsStep = ({
       }
       return next;
     });
-  }, []);
+    // Notify parent of manual override (only if not from risk tolerance change)
+    if (!isRiskToleranceUpdateRef.current && onManualControlToggle) {
+      onManualControlToggle();
+    }
+  }, [onManualControlToggle]);
 
   const handleToggleAllControls = useCallback((controlIds: string[], selected: boolean) => {
     setSelectedControlIds(prev => {
@@ -342,7 +348,11 @@ export const WaterSystemsStep = ({
       });
       return next;
     });
-  }, []);
+    // Notify parent of manual override (only if not from risk tolerance change)
+    if (!isRiskToleranceUpdateRef.current && onManualControlToggle) {
+      onManualControlToggle();
+    }
+  }, [onManualControlToggle]);
 
   // File viewer helpers
   const findDriveFile = (fileName: string): DriveFileInfo | undefined => {
