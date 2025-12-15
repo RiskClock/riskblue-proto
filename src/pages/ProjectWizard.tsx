@@ -994,6 +994,7 @@ const ProjectWizard = () => {
             user_id: user.id,
             name: "Untitled Project",
             status: "draft",
+            country: null, // Explicitly set to null to avoid any database defaults
           }])
           .select()
           .single();

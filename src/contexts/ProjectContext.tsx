@@ -66,12 +66,14 @@ export const ProjectProvider: React.FC<ProjectProviderProps> = ({
   
   const pendingUpdates = useRef<Record<string, any>>({});
   const debounceTimer = useRef<NodeJS.Timeout | null>(null);
+  const hasAppliedInitialData = useRef(false);
   const isNewProject = !projectId || projectId === 'new';
 
-  // Update initial data when it changes (after fetch)
+  // Update initial data only on first load (prevents overwriting user edits)
   useEffect(() => {
-    if (Object.keys(initialData).length > 0) {
+    if (!hasAppliedInitialData.current && Object.keys(initialData).length > 0) {
       setProjectData(initialData);
+      hasAppliedInitialData.current = true;
     }
   }, [initialData]);
 
