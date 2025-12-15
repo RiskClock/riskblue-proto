@@ -4,42 +4,51 @@ import { AnalysisItem } from "@/lib/analysisItemMapper";
 import { getControlId } from "@/components/wizard/ExpandableListItem";
 import { calculateSystemOrAssetDates, TimelineData } from "@/lib/durationCalculator";
 import { differenceInMonths, format } from "date-fns";
+
+// Import all images as ES6 modules for reliable PDF export
 import riskBlueLogo from "@/assets/riskblue-logo.jpg";
+import residentialImg from "@/assets/type1-residential.avif";
+import mixedUseImg from "@/assets/type2-mixeduse.avif";
+import institutionalImg from "@/assets/type3-institutional.avif";
+import commercialImg from "@/assets/type4-commercial.avif";
+import midRiseImg from "@/assets/buildingtype1-mid-rise.avif";
+import highRiseImg from "@/assets/buildingtype2-high-rise.avif";
+import singleHouseImg from "@/assets/buildingtype3-singlehouse.avif";
+import houseComplexImg from "@/assets/buildingtype4-housecomplex.avif";
+import castInPlaceImg from "@/assets/structuraltype_cast-in-place.png";
+import precastImg from "@/assets/structuraltype_precast.png";
+import steelImg from "@/assets/structuraltype_steel.png";
+import massTimberImg from "@/assets/structuraltype_mass_timber.png";
+import singleTowerImg from "@/assets/tower1-single.avif";
+import doubleTowerImg from "@/assets/tower2-double.avif";
+import multiTowerImg from "@/assets/tower3-multi.avif";
 
-// Get the base URL for absolute paths in print - required for browser print to work
-const getAbsoluteUrl = (path: string) => {
-  if (typeof window !== 'undefined') {
-    return `${window.location.origin}${path}`;
-  }
-  return path;
+// Type configuration maps using imported images for reliable PDF export
+const constructionTypeConfig: Record<string, { label: string; image: string }> = {
+  "residential": { label: "Residential", image: residentialImg },
+  "mixed-use": { label: "Mixed Use", image: mixedUseImg },
+  "institutional": { label: "Institutional", image: institutionalImg },
+  "commercial": { label: "Commercial", image: commercialImg },
 };
 
-// Type configuration maps with public paths - using PNG for better print compatibility
-const constructionTypeConfig: Record<string, { label: string; imagePath: string }> = {
-  "residential": { label: "Residential", imagePath: "/assets/type1-residential.avif" },
-  "mixed-use": { label: "Mixed Use", imagePath: "/assets/type2-mixeduse.avif" },
-  "institutional": { label: "Institutional", imagePath: "/assets/type3-institutional.avif" },
-  "commercial": { label: "Commercial", imagePath: "/assets/type4-commercial.avif" },
+const buildingTypeConfig: Record<string, { label: string; image: string }> = {
+  "mid-rise": { label: "Mid-rise", image: midRiseImg },
+  "high-rise": { label: "High-rise", image: highRiseImg },
+  "single-house": { label: "Single House", image: singleHouseImg },
+  "house-complex": { label: "House Complex", image: houseComplexImg },
 };
 
-const buildingTypeConfig: Record<string, { label: string; imagePath: string }> = {
-  "mid-rise": { label: "Mid-rise", imagePath: "/assets/buildingtype1-mid-rise.avif" },
-  "high-rise": { label: "High-rise", imagePath: "/assets/buildingtype2-high-rise.avif" },
-  "single-house": { label: "Single House", imagePath: "/assets/buildingtype3-singlehouse.avif" },
-  "house-complex": { label: "House Complex", imagePath: "/assets/buildingtype4-housecomplex.avif" },
+const structuralTypeConfig: Record<string, { label: string; image: string }> = {
+  "cast-in-place": { label: "Cast-in-Place Reinforced Concrete", image: castInPlaceImg },
+  "precast": { label: "Precast Concrete", image: precastImg },
+  "steel": { label: "Steel", image: steelImg },
+  "mass-timber": { label: "Mass Timber", image: massTimberImg },
 };
 
-const structuralTypeConfig: Record<string, { label: string; imagePath: string }> = {
-  "cast-in-place": { label: "Cast-in-Place Reinforced Concrete", imagePath: "/assets/structuraltype_cast-in-place.png" },
-  "precast": { label: "Precast Concrete", imagePath: "/assets/structuraltype_precast.png" },
-  "steel": { label: "Steel", imagePath: "/assets/structuraltype_steel.png" },
-  "mass-timber": { label: "Mass Timber", imagePath: "/assets/structuraltype_mass_timber.png" },
-};
-
-const towerTypeConfig: Record<string, { label: string; imagePath: string }> = {
-  "single": { label: "Single Tower", imagePath: "/assets/tower1-single.avif" },
-  "double": { label: "Double Tower", imagePath: "/assets/tower2-double.avif" },
-  "multi": { label: "Multi-tower", imagePath: "/assets/tower3-multi.avif" },
+const towerTypeConfig: Record<string, { label: string; image: string }> = {
+  "single": { label: "Single Tower", image: singleTowerImg },
+  "double": { label: "Double Tower", image: doubleTowerImg },
+  "multi": { label: "Multi-tower", image: multiTowerImg },
 };
 
 // Control details type
@@ -240,8 +249,8 @@ export const WaterRiskReport = ({ data, analysisItems = [], controlDetails = [] 
     return null;
   };
 
-  // Generate absolute URLs for images - must use public paths for print to work
-  const placeholderDrawingUrl = getAbsoluteUrl("/assets/placeholder_drawing.png");
+  // Use inline placeholder for drawings since we can't import dynamic paths
+  const placeholderDrawingUrl = "/assets/placeholder_drawing.png";
 
   return (
     <div className="print-report bg-white text-black p-4 max-w-[210mm] mx-auto text-[11px]">
@@ -313,7 +322,7 @@ export const WaterRiskReport = ({ data, analysisItems = [], controlDetails = [] 
                 <p className="text-[10px] font-semibold text-gray-600">Construction Type</p>
                 <div className="flex items-center gap-1.5">
                   <img 
-                    src={getAbsoluteUrl(constructionTypeConfig[data.project_type].imagePath)} 
+                    src={constructionTypeConfig[data.project_type].image} 
                     alt={constructionTypeConfig[data.project_type].label}
                     className="object-contain rounded border border-gray-200 bg-white"
                     style={{ width: '24px', height: '24px', display: 'inline-block' }}
@@ -329,7 +338,7 @@ export const WaterRiskReport = ({ data, analysisItems = [], controlDetails = [] 
                 <p className="text-[10px] font-semibold text-gray-600">Building Type</p>
                 <div className="flex items-center gap-1.5">
                   <img 
-                    src={getAbsoluteUrl(buildingTypeConfig[data.building_type].imagePath)} 
+                    src={buildingTypeConfig[data.building_type].image} 
                     alt={buildingTypeConfig[data.building_type].label}
                     className="object-contain rounded border border-gray-200 bg-white"
                     style={{ width: '24px', height: '24px', display: 'inline-block' }}
@@ -345,7 +354,7 @@ export const WaterRiskReport = ({ data, analysisItems = [], controlDetails = [] 
                 <p className="text-[10px] font-semibold text-gray-600">Tower Configuration</p>
                 <div className="flex items-center gap-1.5">
                   <img 
-                    src={getAbsoluteUrl(towerTypeConfig[data.tower_type].imagePath)} 
+                    src={towerTypeConfig[data.tower_type].image} 
                     alt={towerTypeConfig[data.tower_type].label}
                     className="object-contain rounded border border-gray-200 bg-white"
                     style={{ width: '24px', height: '24px', display: 'inline-block' }}
@@ -368,7 +377,7 @@ export const WaterRiskReport = ({ data, analysisItems = [], controlDetails = [] 
                 return (
                   <div key={typeId} className="flex items-center gap-1.5 bg-gray-50 px-2 py-1 rounded border border-gray-200">
                     <img 
-                      src={getAbsoluteUrl(config.imagePath)} 
+                      src={config.image} 
                       alt={config.label}
                       className="object-contain"
                       style={{ width: '20px', height: '20px', display: 'inline-block' }}
@@ -493,7 +502,7 @@ export const WaterRiskReport = ({ data, analysisItems = [], controlDetails = [] 
                             <img 
                               src={placeholderDrawingUrl} 
                               alt="Drawing preview" 
-                              className="w-64 h-48 object-contain rounded border border-gray-200"
+                              className="w-80 h-60 object-contain rounded border border-gray-200"
                             />
                           </div>
                         </div>
@@ -581,7 +590,7 @@ export const WaterRiskReport = ({ data, analysisItems = [], controlDetails = [] 
                             <img 
                               src={placeholderDrawingUrl} 
                               alt="Drawing preview" 
-                              className="w-64 h-48 object-contain rounded border border-gray-200"
+                              className="w-80 h-60 object-contain rounded border border-gray-200"
                             />
                           </div>
                         </div>
