@@ -969,15 +969,60 @@ const ProjectWizardContent = () => {
 // Wrapper component that provides project data loading and the context
 const ProjectWizard = () => {
   const { id } = useParams();
+  const navigate = useNavigate();
+  const { user } = useAuth();
   const { toast } = useToast();
   const [initialData, setInitialData] = useState<ProjectData>({});
   const [isLoading, setIsLoading] = useState(true);
+  const [projectId, setProjectId] = useState<string | undefined>(id);
+  const isCreatingProject = useRef(false);
 
-  // Fetch project data on mount
+  // Create a new project immediately when navigating to /project/new
+  useEffect(() => {
+    const createNewProject = async () => {
+      if (id !== "new" || !user || isCreatingProject.current) {
+        return;
+      }
+      
+      isCreatingProject.current = true;
+      console.log('[ProjectWizard] Creating new project for user:', user.id);
+      
+      try {
+        const { data: newProject, error } = await supabase
+          .from("projects")
+          .insert([{
+            user_id: user.id,
+            name: "Untitled Project",
+            status: "draft",
+          }])
+          .select()
+          .single();
+        
+        if (error) throw error;
+        
+        console.log('[ProjectWizard] New project created:', newProject.id);
+        
+        // Navigate to the new project URL (replace to avoid back button going to /new)
+        navigate(`/project/${newProject.id}`, { replace: true });
+      } catch (error: any) {
+        console.error('[ProjectWizard] Error creating project:', error);
+        toast({
+          title: "Error creating project",
+          description: getUserFriendlyError(error),
+          variant: "destructive",
+        });
+        isCreatingProject.current = false;
+      }
+    };
+
+    createNewProject();
+  }, [id, user, navigate, toast]);
+
+  // Fetch project data on mount (for existing projects)
   useEffect(() => {
     const fetchProject = async () => {
       if (!id || id === "new") {
-        setIsLoading(false);
+        // Don't set loading false yet - we're creating a new project
         return;
       }
       
@@ -1000,12 +1045,13 @@ const ProjectWizard = () => {
           return;
         }
         
-        const { project_data, created_at, updated_at, user_id, id: projectId, ...tableColumns } = data;
+        const { project_data, created_at, updated_at, user_id, id: dbProjectId, ...tableColumns } = data;
         const mergedData = {
           ...tableColumns,
           ...(project_data as ProjectData || {}),
         };
         
+        setProjectId(dbProjectId);
         setInitialData(mergedData);
       } catch (error: any) {
         console.error("Error fetching project:", error);
@@ -1022,19 +1068,22 @@ const ProjectWizard = () => {
     fetchProject();
   }, [id, toast]);
 
-  if (isLoading) {
+  // Show loading while creating new project or fetching existing
+  if (isLoading || id === "new") {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <div className="text-center">
           <Loader2 className="h-12 w-12 animate-spin mx-auto mb-4 text-primary" />
-          <p className="text-muted-foreground">Loading project...</p>
+          <p className="text-muted-foreground">
+            {id === "new" ? "Creating project..." : "Loading project..."}
+          </p>
         </div>
       </div>
     );
   }
 
   return (
-    <ProjectProvider projectId={id} initialData={initialData}>
+    <ProjectProvider projectId={projectId} initialData={initialData}>
       <ProjectWizardContent />
     </ProjectProvider>
   );

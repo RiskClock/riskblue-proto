@@ -20,6 +20,7 @@ interface Project {
   project_type: string;
   location: string;
   construction_start_date: string;
+  created_at: string;
 }
 
 const Projects = () => {
@@ -168,7 +169,8 @@ const Projects = () => {
                   <th className="px-6 py-3 text-sm font-medium text-foreground">Project Name</th>
                   <th className="px-6 py-3 text-sm font-medium text-foreground">Project Type</th>
                   <th className="px-6 py-3 text-sm font-medium text-foreground">Project Location</th>
-                  <th className="px-6 py-3 text-sm font-medium text-foreground">Construction Start Date</th>
+                  <th className="px-6 py-3 text-sm font-medium text-foreground">Created</th>
+                  <th className="px-6 py-3 text-sm font-medium text-foreground">Construction Start</th>
                   <th className="px-6 py-3 text-sm font-medium text-foreground">Status</th>
                   <th className="px-6 py-3 text-sm font-medium text-foreground">Stakeholders</th>
                   <th className="px-6 py-3 w-[120px]"></th>
@@ -184,6 +186,11 @@ const Projects = () => {
                     <td className="px-6 py-4 text-foreground">{project.name}</td>
                     <td className="px-6 py-4 text-muted-foreground">{project.project_type || "—"}</td>
                     <td className="px-6 py-4 text-muted-foreground">{project.location || "—"}</td>
+                    <td className="px-6 py-4 text-muted-foreground">
+                      {project.created_at
+                        ? format(new Date(project.created_at), "M/dd/yy")
+                        : "—"}
+                    </td>
                     <td className="px-6 py-4 text-muted-foreground">
                       {project.construction_start_date
                         ? format(new Date(project.construction_start_date), "M/dd/yy")
