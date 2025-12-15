@@ -160,34 +160,40 @@ const ProjectWizardContent = () => {
     queryFn: async () => {
       const { data, error } = await supabase
         .from('mitigation_controls')
-        .select('name, one_time_cost')
+        .select('name, one_time_cost, risk_tolerance')
         .eq('is_active', true);
       if (error) throw error;
       return (data || []).map(c => ({
         name: c.name,
-        cost: Number(c.one_time_cost) || 0
+        cost: Number(c.one_time_cost) || 0,
+        riskTolerance: c.risk_tolerance || 3
       }));
     }
   });
 
   // Calculate total cost estimates for risk tolerance levels using real control costs
   const totalCostEstimates = useMemo(() => {
-    // Create a map of control name to cost
-    const costMap = new Map<string, number>();
-    controlCosts.forEach(c => costMap.set(c.name, c.cost));
+    // Create a map of control name to {cost, riskTolerance}
+    const controlMap = new Map<string, { cost: number; riskTolerance: number }>();
+    controlCosts.forEach(c => controlMap.set(c.name, { cost: c.cost, riskTolerance: c.riskTolerance }));
     
-    // Calculate total cost of all controls across all items
-    let lowCost = 0;
+    // Calculate costs per tolerance level
+    let lowCost = 0;    // All controls (risk_tolerance 1, 2, 3)
+    let mediumCost = 0; // Controls with risk_tolerance 2 or 3
+    let highCost = 0;   // Only controls with risk_tolerance 3 (Essential)
+    
     analysisItems.forEach(item => {
       (item.controls || []).forEach(controlName => {
-        lowCost += costMap.get(controlName) || 0;
+        const control = controlMap.get(controlName);
+        if (control) {
+          lowCost += control.cost;
+          if (control.riskTolerance >= 2) mediumCost += control.cost;
+          if (control.riskTolerance >= 3) highCost += control.cost;
+        }
       });
     });
     
-    // Medium is ~50% of controls
-    const mediumCost = Math.floor(lowCost * 0.5);
-    
-    return { lowCost, mediumCost };
+    return { lowCost, mediumCost, highCost };
   }, [analysisItems, controlCosts]);
 
   // Handle risk tolerance change
@@ -418,28 +424,37 @@ const ProjectWizardContent = () => {
       return towerConfig.replace("_tower", "");
     };
 
-    // Map height_category to building_type
+    // Map building_type directly (or fall back to height_category for backward compatibility)
     const getBuildingType = () => {
+      // Check direct building_type first (new format)
+      if (extractedData.building_type) {
+        const type = extractedData.building_type.toLowerCase().replace(/ /g, '-');
+        if (['mid-rise', 'high-rise'].includes(type)) {
+          return type;
+        }
+      }
+      // Fallback to height_category for backward compatibility
       if (extractedData.height_category) {
         const category = extractedData.height_category.toLowerCase().replace(/ /g, '-');
         if (['mid-rise', 'high-rise'].includes(category)) {
           return category;
         }
       }
-      return extractedData.building_type || projectData.building_type;
+      return projectData.building_type;
     };
 
-    // Map structural_types object to array of selected type ids
+    // Map structural_type object to array of selected type ids (new key names with boolean values)
     const getStructuralTypes = () => {
-      if (extractedData.structural_types && typeof extractedData.structural_types === 'object') {
+      const structuralData = extractedData.structural_type || extractedData.structural_types;
+      if (structuralData && typeof structuralData === 'object') {
         const typeMapping: Record<string, string> = {
-          'cast-in-place_reinforced_concrete': 'cast-in-place',
-          'precast_concrete': 'precast',
+          'cast-in-place': 'cast-in-place',
+          'precast': 'precast',
           'steel': 'steel',
-          'mass_timber': 'mass-timber',
+          'mass-timber': 'mass-timber',
         };
         const selectedTypes: string[] = [];
-        Object.entries(extractedData.structural_types).forEach(([key, value]) => {
+        Object.entries(structuralData).forEach(([key, value]) => {
           if (value === true && typeMapping[key]) {
             selectedTypes.push(typeMapping[key]);
           }
@@ -497,8 +512,8 @@ const ProjectWizardContent = () => {
     updateFields(mappedData);
     
     toast({
-      title: "Schedule Data Pre-filled",
-      description: "Project information has been automatically filled from the uploaded schedule.",
+      title: "Project Info Updated",
+      description: "Project information has been automatically updated from the uploaded schedule.",
     });
     
     isWebhookCreatingProject.current = false;
@@ -906,6 +921,7 @@ const ProjectWizardContent = () => {
                   </DialogHeader>
                   <WaterMitigationGuidelinesStep 
                     data={projectData}
+                    analysisItems={analysisItems}
                     onBack={() => {}}
                     onNext={() => {}}
                   />
