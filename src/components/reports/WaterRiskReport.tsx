@@ -392,11 +392,11 @@ export const WaterRiskReport = ({ data, analysisItems = [] }: WaterRiskReportPro
 
       {/* Critical Assets */}
       {assetGroups.length > 0 && (
-        <section className="mb-4 page-break-avoid">
+        <section className="mb-4">
           <h2 className="text-base font-bold text-gray-900 mb-2 border-b border-gray-300 pb-1">Critical Assets</h2>
           <div className="space-y-2">
             {assetGroups.map((group, index) => (
-              <div key={index} className="bg-gray-50 p-2 rounded border border-gray-200">
+              <div key={index} className="bg-gray-50 p-2 rounded border border-gray-200 print-keep-together">
                 <div className="flex justify-between items-start mb-1">
                   <h3 className="font-bold text-[12px] text-gray-900">{group.name}</h3>
                   <span className="px-1.5 py-0.5 rounded text-[9px] font-semibold bg-blue-100 text-blue-800">
@@ -462,11 +462,11 @@ export const WaterRiskReport = ({ data, analysisItems = [] }: WaterRiskReportPro
 
       {/* Water Systems */}
       {systemGroups.length > 0 && (
-        <section className="mb-4 page-break-avoid">
+        <section className="mb-4">
           <h2 className="text-base font-bold text-gray-900 mb-2 border-b border-gray-300 pb-1">Water Systems</h2>
           <div className="space-y-2">
             {systemGroups.map((group, index) => (
-              <div key={index} className="bg-gray-50 p-2 rounded border border-gray-200">
+              <div key={index} className="bg-gray-50 p-2 rounded border border-gray-200 print-keep-together">
                 <div className="flex justify-between items-start mb-1">
                   <h3 className="font-bold text-[12px] text-gray-900">{group.name}</h3>
                   <span className="px-1.5 py-0.5 rounded text-[9px] font-semibold bg-cyan-100 text-cyan-800">
@@ -532,11 +532,11 @@ export const WaterRiskReport = ({ data, analysisItems = [] }: WaterRiskReportPro
 
       {/* Processes */}
       {processGroups.length > 0 && (
-        <section className="mb-4 page-break-avoid">
+        <section className="mb-4">
           <h2 className="text-base font-bold text-gray-900 mb-2 border-b border-gray-300 pb-1">Processes</h2>
           <div className="space-y-2">
             {processGroups.map((group, index) => (
-              <div key={index} className="bg-gray-50 p-2 rounded border border-gray-200">
+              <div key={index} className="bg-gray-50 p-2 rounded border border-gray-200 print-keep-together">
                 <div className="flex justify-between items-start mb-1">
                   <h3 className="font-bold text-[12px] text-gray-900">{group.name}</h3>
                   <span className="px-1.5 py-0.5 rounded text-[9px] font-semibold bg-purple-100 text-purple-800">
