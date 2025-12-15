@@ -122,10 +122,15 @@ export const ProcessesStep = ({
   // Initialize selection when process items load (once)
   useEffect(() => {
     if (processItems.length > 0) {
+      let instanceIds = data.selectedProcessInstances || [];
+      let controlIds = data.selectedProcessControls || [];
+      let shouldPersist = false;
+
       if (!data.selectedProcessInstances || data.selectedProcessInstances.length === 0) {
-        const allIds = processItems.map(p => p.id);
-        setSelectedInstanceIds(allIds);
-        lastSavedRef.current.instances = allIds;
+        instanceIds = processItems.map(p => p.id);
+        setSelectedInstanceIds(instanceIds);
+        lastSavedRef.current.instances = instanceIds;
+        shouldPersist = true;
       }
       
       // Initialize control selection
@@ -136,8 +141,18 @@ export const ProcessesStep = ({
             allControlIds.add(getControlId(item.id, control));
           });
         });
+        const controlArray = Array.from(allControlIds);
         setSelectedControlIds(allControlIds);
-        lastSavedRef.current.controls = Array.from(allControlIds);
+        lastSavedRef.current.controls = controlArray;
+        controlIds = controlArray;
+        shouldPersist = true;
+      }
+
+      if (shouldPersist) {
+        updateFields({
+          selectedProcessInstances: instanceIds,
+          selectedProcessControls: controlIds
+        });
       }
       
       // Mark initialization complete after first load
@@ -205,12 +220,22 @@ export const ProcessesStep = ({
     
     setSelectedInstanceIds(filteredInstanceIds);
     setSelectedControlIds(filteredControlIds);
+
+    const controlArray = Array.from(filteredControlIds);
+    updateFields({
+      selectedProcessInstances: filteredInstanceIds,
+      selectedProcessControls: controlArray
+    });
+    lastSavedRef.current = {
+      instances: [...filteredInstanceIds],
+      controls: controlArray
+    };
     
     // Reset the flag after a short delay
     setTimeout(() => {
       isRiskToleranceUpdateRef.current = false;
     }, 100);
-  }, [parentRiskTolerance, processItems, processRiskToleranceMap, controlRiskToleranceMap, controls.length]);
+  }, [parentRiskTolerance, processItems, processRiskToleranceMap, controlRiskToleranceMap, controls.length, updateFields]);
 
   // Auto-save with debounce - only when values actually changed
   useEffect(() => {

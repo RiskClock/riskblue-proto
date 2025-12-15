@@ -25,6 +25,8 @@
 
   .print-report {
     display: block !important;
+    position: relative;
+    padding-bottom: 2.5cm;
   }
 
   /* Page setup */

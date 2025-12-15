@@ -2,6 +2,7 @@ import { formatDate, formatRiskLevel, getTimelinePhases } from "@/lib/reportGene
 import { normalizeControlName } from "@/lib/utils";
 import { AnalysisItem } from "@/lib/analysisItemMapper";
 import { getControlId } from "@/components/wizard/ExpandableListItem";
+import riskBlueLogo from "@/assets/riskblue-logo.jpg";
 
 // Use public URLs for images - these work in print PDFs
 const getPublicImageUrl = (filename: string) => {
@@ -179,7 +180,7 @@ export const WaterRiskReport = ({ data, analysisItems = [] }: WaterRiskReportPro
   };
 
   // Generate absolute URLs for images
-  const logoUrl = getAbsoluteUrl("/assets/riskblue-logo.png");
+  const logoUrl = riskBlueLogo;
 
   return (
     <div className="print-report bg-white text-black p-4 max-w-[210mm] mx-auto text-[11px]">
