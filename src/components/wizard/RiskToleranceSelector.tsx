@@ -25,6 +25,13 @@ interface ImplementationPackage {
   coverage: CoverageBreakdown;
   protectedAssets: string[];
   unprotectedAssets: string[];
+  controlCount: number;
+}
+
+interface ControlCountsByLevel {
+  low: number;
+  medium: number;
+  high: number;
 }
 
 interface RiskScoreSummaryData {
@@ -40,18 +47,15 @@ interface RiskToleranceSelectorProps {
   mediumCost: number;
   highCost?: number;
   className?: string;
-  // Coverage breakdown for each package
   lowCoverage?: CoverageBreakdown;
   mediumCoverage?: CoverageBreakdown;
   highCoverage?: CoverageBreakdown;
-  // Asset coverage for tooltips
+  controlCounts?: ControlCountsByLevel;
   lowProtectedAssets?: string[];
   mediumProtectedAssets?: string[];
   highProtectedAssets?: string[];
   allAssets?: string[];
-  // Risk score summary
   riskScore?: RiskScoreSummaryData;
-  // When true, user has made custom selections - don't highlight any package
   hasCustomSelection?: boolean;
 }
 
@@ -65,6 +69,7 @@ export const RiskToleranceSelector = ({
   lowCoverage = { assets: 0, systems: 0, processes: 0 },
   mediumCoverage = { assets: 0, systems: 0, processes: 0 },
   highCoverage = { assets: 0, systems: 0, processes: 0 },
+  controlCounts = { low: 0, medium: 0, high: 0 },
   lowProtectedAssets = [],
   mediumProtectedAssets = [],
   highProtectedAssets = [],
@@ -73,18 +78,12 @@ export const RiskToleranceSelector = ({
   hasCustomSelection = false
 }: RiskToleranceSelectorProps) => {
   const formatCost = (cost: number) => {
-    if (cost >= 1000000) {
-      return `$${(cost / 1000000).toFixed(1)}M`;
-    }
-    if (cost >= 1000) {
-      return `$${(cost / 1000).toFixed(0)}K`;
-    }
+    if (cost >= 1000000) return `$${(cost / 1000000).toFixed(1)}M`;
+    if (cost >= 1000) return `$${(cost / 1000).toFixed(0)}K`;
     return `$${cost}`;
   };
 
-  const getUnprotectedAssets = (protectedAssets: string[]) => {
-    return allAssets.filter(a => !protectedAssets.includes(a));
-  };
+  const getUnprotectedAssets = (protectedAssets: string[]) => allAssets.filter(a => !protectedAssets.includes(a));
 
   const formatCoverage = (coverage: CoverageBreakdown) => {
     const parts: string[] = [];
@@ -95,36 +94,9 @@ export const RiskToleranceSelector = ({
   };
 
   const packages: ImplementationPackage[] = [
-    {
-      level: "high",
-      name: "Essential",
-      description: "Core Systems Only. Prioritizes the protection of water systems and primary assets through basic process implementation.",
-      riskLabel: "High",
-      cost: highCost,
-      coverage: highCoverage,
-      protectedAssets: highProtectedAssets,
-      unprotectedAssets: getUnprotectedAssets(highProtectedAssets)
-    },
-    {
-      level: "medium",
-      name: "Enhanced",
-      description: "Expanded Scope. Increases protection layers to cover standard construction risks, optimizing the balance between site safety and budget.",
-      riskLabel: "Medium",
-      cost: mediumCost,
-      coverage: mediumCoverage,
-      protectedAssets: mediumProtectedAssets,
-      unprotectedAssets: getUnprotectedAssets(mediumProtectedAssets)
-    },
-    {
-      level: "low",
-      name: "Fortified",
-      description: "Turnkey Protection. Complete coverage of all site systems, assets, and processes. Includes full redundancy and maximum monitoring capabilities.",
-      riskLabel: "Low",
-      cost: lowCost,
-      coverage: lowCoverage,
-      protectedAssets: lowProtectedAssets,
-      unprotectedAssets: getUnprotectedAssets(lowProtectedAssets)
-    }
+    { level: "high", name: "Essential", description: "Core Systems Only.", riskLabel: "High", cost: highCost, coverage: highCoverage, protectedAssets: highProtectedAssets, unprotectedAssets: getUnprotectedAssets(highProtectedAssets), controlCount: controlCounts.high },
+    { level: "medium", name: "Enhanced", description: "Expanded Scope.", riskLabel: "Medium", cost: mediumCost, coverage: mediumCoverage, protectedAssets: mediumProtectedAssets, unprotectedAssets: getUnprotectedAssets(mediumProtectedAssets), controlCount: controlCounts.medium },
+    { level: "low", name: "Fortified", description: "Turnkey Protection.", riskLabel: "Low", cost: lowCost, coverage: lowCoverage, protectedAssets: lowProtectedAssets, unprotectedAssets: getUnprotectedAssets(lowProtectedAssets), controlCount: controlCounts.low }
   ];
 
   const getRiskColor = (net: number, total: number) => {
@@ -138,151 +110,66 @@ export const RiskToleranceSelector = ({
 
   return (
     <div className={cn("w-full space-y-4", className)}>
-      {/* Risk Score Summary */}
       {riskScore && (
         <div className="flex items-center gap-4 p-3 bg-muted/30 rounded-lg border">
           <div className="flex items-center gap-2">
             <AlertTriangle className="h-4 w-4 text-destructive" />
             <span className="text-sm font-medium">Total Water Risk:</span>
-            <Badge className="text-xs bg-destructive text-destructive-foreground">
-              {riskScore.totalRiskPoints} pts
-            </Badge>
+            <Badge className="text-xs bg-destructive text-destructive-foreground">{riskScore.totalRiskPoints} pts</Badge>
           </div>
           <div className="flex items-center gap-2">
             <Shield className="h-4 w-4 text-green-600" />
             <span className="text-sm text-muted-foreground">DeRisk:</span>
-            <Badge variant="outline" className="text-xs bg-green-50 text-green-700 border-green-200 dark:bg-green-950 dark:text-green-300 dark:border-green-800">
-              -{riskScore.deriskPoints} pts
-            </Badge>
+            <Badge variant="outline" className="text-xs bg-green-50 text-green-700 border-green-200 dark:bg-green-950 dark:text-green-300 dark:border-green-800">-{riskScore.deriskPoints} pts</Badge>
           </div>
           <div className="flex items-center gap-2">
             <span className="text-sm text-muted-foreground">Remaining:</span>
-            <Badge className={cn("text-xs", getRiskColor(riskScore.remainingPoints, riskScore.totalRiskPoints))}>
-              {riskScore.remainingPoints} pts
-            </Badge>
+            <Badge className={cn("text-xs", getRiskColor(riskScore.remainingPoints, riskScore.totalRiskPoints))}>{riskScore.remainingPoints} pts</Badge>
           </div>
         </div>
       )}
 
-      {/* Package Selection Table */}
       <div className="border rounded-lg overflow-hidden bg-card">
         {/* Header Row */}
         <div className="grid grid-cols-4 bg-muted/50 border-b">
-          <div className="p-4 font-medium text-sm text-muted-foreground">
-            Implementation Level
-          </div>
+          <div className="p-4 font-medium text-sm text-muted-foreground">Implementation Level</div>
           {packages.map((pkg) => (
-            <div 
-              key={pkg.level}
-              className={cn(
-                "p-4 font-semibold text-sm cursor-pointer transition-colors border-l",
-                value === pkg.level && !hasCustomSelection
-                  ? "bg-primary/10 text-primary" 
-                  : "hover:bg-muted/80"
-              )}
-              onClick={() => onChange(pkg.level)}
-            >
+            <div key={pkg.level} className={cn("p-4 font-semibold text-sm cursor-pointer transition-colors border-l", value === pkg.level && !hasCustomSelection ? "bg-primary/10 text-primary" : "hover:bg-muted/80")} onClick={() => onChange(pkg.level)}>
               <div className="flex items-center gap-2">
-                {value === pkg.level && !hasCustomSelection && (
-                  <CheckCircle2 className="h-4 w-4 text-primary" />
-                )}
+                {value === pkg.level && !hasCustomSelection && <CheckCircle2 className="h-4 w-4 text-primary" />}
                 {pkg.name}
               </div>
             </div>
           ))}
         </div>
 
-        {/* Description Row */}
+        {/* Risk Tolerance Row */}
         <div className="grid grid-cols-4 border-b">
-          <div className="p-4 font-medium text-sm text-muted-foreground">
-            Description
-          </div>
+          <div className="p-4 font-medium text-sm text-muted-foreground">Risk Tolerance</div>
           {packages.map((pkg) => (
-            <div 
-              key={pkg.level}
-              className={cn(
-                "p-4 text-sm border-l cursor-pointer transition-colors",
-                value === pkg.level && !hasCustomSelection
-                  ? "bg-primary/5" 
-                  : "hover:bg-muted/30"
-              )}
-              onClick={() => onChange(pkg.level)}
-            >
-              <span className="font-semibold">{pkg.name === "Essential" ? "Core Systems Only." : pkg.name === "Enhanced" ? "Expanded Scope." : "Turnkey Protection."}</span>{" "}
-              <span className="text-muted-foreground">
-                {pkg.name === "Essential" 
-                  ? "Prioritizes the protection of water systems and primary assets through basic process implementation."
-                  : pkg.name === "Enhanced"
-                    ? "Increases protection layers to cover standard construction risks, optimizing the balance between site safety and budget."
-                    : "Complete coverage of all site systems, assets, and processes. Includes full redundancy and maximum monitoring capabilities."
-                }
-              </span>
+            <div key={pkg.level} className={cn("p-4 text-sm border-l cursor-pointer transition-colors", value === pkg.level && !hasCustomSelection ? "bg-primary/5" : "hover:bg-muted/30")} onClick={() => onChange(pkg.level)}>
+              <span className={cn("font-medium", pkg.riskLabel === "High" && "text-red-600 dark:text-red-400", pkg.riskLabel === "Medium" && "text-yellow-600 dark:text-yellow-400", pkg.riskLabel === "Low" && "text-green-600 dark:text-green-400")}>{pkg.riskLabel}</span>
             </div>
           ))}
         </div>
 
         {/* Coverage Row */}
         <div className="grid grid-cols-4 border-b">
-          <div className="p-4 font-medium text-sm text-muted-foreground">
-            Coverage
-          </div>
+          <div className="p-4 font-medium text-sm text-muted-foreground">Coverage</div>
           <TooltipProvider>
             {packages.map((pkg) => (
-              <div 
-                key={pkg.level}
-                className={cn(
-                  "p-4 text-sm border-l cursor-pointer transition-colors",
-                  value === pkg.level && !hasCustomSelection
-                    ? "bg-primary/5" 
-                    : "hover:bg-muted/30"
-                )}
-                onClick={() => onChange(pkg.level)}
-              >
+              <div key={pkg.level} className={cn("p-4 text-sm border-l cursor-pointer transition-colors", value === pkg.level && !hasCustomSelection ? "bg-primary/5" : "hover:bg-muted/30")} onClick={() => onChange(pkg.level)}>
                 <div className="flex items-center gap-2">
                   <span className="font-medium text-xs">{formatCoverage(pkg.coverage)}</span>
                   {(pkg.protectedAssets.length > 0 || pkg.unprotectedAssets.length > 0) && (
                     <Tooltip>
-                      <TooltipTrigger asChild>
-                        <Info className="h-4 w-4 text-muted-foreground hover:text-foreground cursor-help" />
-                      </TooltipTrigger>
+                      <TooltipTrigger asChild><Info className="h-4 w-4 text-muted-foreground hover:text-foreground cursor-help" /></TooltipTrigger>
                       <TooltipContent className="max-w-xs p-3" side="bottom">
-                        <div className="space-y-2">
-                          <div className="text-xs">
-                            <p className="font-semibold mb-1">Coverage Breakdown:</p>
-                            <p>• {pkg.coverage.assets} asset{pkg.coverage.assets !== 1 ? 's' : ''}</p>
-                            <p>• {pkg.coverage.systems} water system{pkg.coverage.systems !== 1 ? 's' : ''}</p>
-                            <p>• {pkg.coverage.processes} process{pkg.coverage.processes !== 1 ? 'es' : ''}</p>
-                          </div>
-                          {pkg.protectedAssets.length > 0 && (
-                            <div>
-                              <p className="text-xs font-semibold text-green-600 mb-1">Protected Items:</p>
-                              <ul className="text-xs space-y-0.5">
-                                {pkg.protectedAssets.slice(0, 6).map((asset, i) => (
-                                  <li key={i} className="flex items-center gap-1">
-                                    <span className="text-green-500">✓</span> {asset}
-                                  </li>
-                                ))}
-                                {pkg.protectedAssets.length > 6 && (
-                                  <li className="text-muted-foreground">+{pkg.protectedAssets.length - 6} more</li>
-                                )}
-                              </ul>
-                            </div>
-                          )}
-                          {pkg.unprotectedAssets.length > 0 && (
-                            <div>
-                              <p className="text-xs font-semibold text-red-600 mb-1">Not Protected:</p>
-                              <ul className="text-xs space-y-0.5">
-                                {pkg.unprotectedAssets.slice(0, 6).map((asset, i) => (
-                                  <li key={i} className="flex items-center gap-1">
-                                    <span className="text-red-500">✗</span> {asset}
-                                  </li>
-                                ))}
-                                {pkg.unprotectedAssets.length > 6 && (
-                                  <li className="text-muted-foreground">+{pkg.unprotectedAssets.length - 6} more</li>
-                                )}
-                              </ul>
-                            </div>
-                          )}
+                        <div className="space-y-2 text-xs">
+                          <p className="font-semibold">Coverage Breakdown:</p>
+                          <p>• {pkg.coverage.assets} asset{pkg.coverage.assets !== 1 ? 's' : ''}</p>
+                          <p>• {pkg.coverage.systems} water system{pkg.coverage.systems !== 1 ? 's' : ''}</p>
+                          <p>• {pkg.coverage.processes} process{pkg.coverage.processes !== 1 ? 'es' : ''}</p>
                         </div>
                       </TooltipContent>
                     </Tooltip>
@@ -293,53 +180,22 @@ export const RiskToleranceSelector = ({
           </TooltipProvider>
         </div>
 
-        {/* Risk Tolerance Row */}
+        {/* Total Controls Row */}
         <div className="grid grid-cols-4 border-b">
-          <div className="p-4 font-medium text-sm text-muted-foreground">
-            Risk Tolerance
-          </div>
+          <div className="p-4 font-medium text-sm text-muted-foreground">Total Controls</div>
           {packages.map((pkg) => (
-            <div 
-              key={pkg.level}
-              className={cn(
-                "p-4 text-sm border-l cursor-pointer transition-colors",
-                value === pkg.level && !hasCustomSelection
-                  ? "bg-primary/5" 
-                  : "hover:bg-muted/30"
-              )}
-              onClick={() => onChange(pkg.level)}
-            >
-              <span className={cn(
-                "font-medium",
-                pkg.riskLabel === "High" && "text-red-600 dark:text-red-400",
-                pkg.riskLabel === "Medium" && "text-yellow-600 dark:text-yellow-400",
-                pkg.riskLabel === "Low" && "text-green-600 dark:text-green-400"
-              )}>
-                {pkg.riskLabel}
-              </span>
+            <div key={pkg.level} className={cn("p-4 text-sm border-l cursor-pointer transition-colors", value === pkg.level && !hasCustomSelection ? "bg-primary/5" : "hover:bg-muted/30")} onClick={() => onChange(pkg.level)}>
+              <span className="font-medium">{pkg.controlCount}</span>
             </div>
           ))}
         </div>
 
         {/* Cost Estimate Row */}
         <div className="grid grid-cols-4">
-          <div className="p-4 font-medium text-sm text-muted-foreground">
-            Cost Estimate
-          </div>
+          <div className="p-4 font-medium text-sm text-muted-foreground">Cost Estimate</div>
           {packages.map((pkg) => (
-            <div 
-              key={pkg.level}
-              className={cn(
-                "p-4 text-sm border-l cursor-pointer transition-colors",
-                value === pkg.level && !hasCustomSelection
-                  ? "bg-primary/5" 
-                  : "hover:bg-muted/30"
-              )}
-              onClick={() => onChange(pkg.level)}
-            >
-              <span className="font-semibold text-foreground">
-                {formatCost(pkg.cost)}
-              </span>
+            <div key={pkg.level} className={cn("p-4 text-sm border-l cursor-pointer transition-colors", value === pkg.level && !hasCustomSelection ? "bg-primary/5" : "hover:bg-muted/30")} onClick={() => onChange(pkg.level)}>
+              <span className="font-semibold text-foreground">{formatCost(pkg.cost)}</span>
             </div>
           ))}
         </div>
