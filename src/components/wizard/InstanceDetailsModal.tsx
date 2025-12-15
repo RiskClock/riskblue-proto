@@ -23,6 +23,10 @@ interface InstanceDetailsModalProps {
 // Highlighter green color for bounding boxes
 const BOUNDING_BOX_COLOR = "#39FF14";
 
+// A0 horizontal page dimensions in PDF points (reference for coordinates)
+const A0_HORIZONTAL_WIDTH = 3370.4;
+const A0_HORIZONTAL_HEIGHT = 2383.9;
+
 export const InstanceDetailsModal = ({ 
   isOpen, 
   onClose, 
@@ -43,24 +47,25 @@ export const InstanceDetailsModal = ({
 
   const showDrawing = canViewFile && driveFile && driveAccessToken;
 
-  // Reset state when modal opens/closes or instance changes
+  // Load file when modal opens - single consolidated effect
   useEffect(() => {
-    if (isOpen) {
+    if (isOpen && showDrawing) {
+      // Reset state and load fresh
+      setPageImages([]);
+      setOriginalSize(null);
+      setError(null);
+      setZoom(1);
+      setCurrentPage(1);
+      setLoading(true);
+      loadFile();
+    } else if (!isOpen) {
+      // Cleanup on close
       setPageImages([]);
       setOriginalSize(null);
       setLoading(false);
       setError(null);
-      setZoom(1);
-      setCurrentPage(1);
     }
-  }, [isOpen, instance]);
-
-  // Auto-load file when modal opens and can view
-  useEffect(() => {
-    if (isOpen && showDrawing && pageImages.length === 0) {
-      loadFile();
-    }
-  }, [isOpen, showDrawing]);
+  }, [isOpen, showDrawing, instance]);
 
   const loadFile = async () => {
     if (!driveFile || !driveAccessToken) return;
@@ -206,10 +211,6 @@ export const InstanceDetailsModal = ({
       const coords = instance.coordinates;
       const maxCoord = Math.max(...coords);
       
-      // Get PDF original dimensions for coordinate transformation
-      const pdfWidth = originalSize?.width || img.width;
-      const pdfHeight = originalSize?.height || img.height;
-      
       let scaledX: number, scaledY: number, scaledWidth: number, scaledHeight: number;
       
       if (maxCoord <= 1) {
@@ -220,21 +221,19 @@ export const InstanceDetailsModal = ({
         scaledWidth = w * displayWidth;
         scaledHeight = h * displayHeight;
       } else {
-        // PDF points format: [x0, y0, x1, y1] (bottom-left to top-right)
-        // PDF origin is bottom-left, canvas origin is top-left
+        // PDF points format: [x0, y0, x1, y1] based on A0 horizontal dimensions
         const [x0, y0, x1, y1] = coords;
         
-        // Calculate box dimensions in PDF points
         const boxWidth = x1 - x0;
         const boxHeight = y1 - y0;
         
-        // Scale factors from PDF points to display canvas
-        const scaleX = displayWidth / pdfWidth;
-        const scaleY = displayHeight / pdfHeight;
+        // Scale from A0 reference dimensions to display canvas
+        const scaleX = displayWidth / A0_HORIZONTAL_WIDTH;
+        const scaleY = displayHeight / A0_HORIZONTAL_HEIGHT;
         
-        // Transform: X stays same, Y needs to be flipped
+        // Transform: X stays same, Y flipped (PDF origin is bottom-left)
         scaledX = x0 * scaleX;
-        scaledY = (pdfHeight - y1) * scaleY;  // Flip Y: use y1 (top) and subtract from height
+        scaledY = (A0_HORIZONTAL_HEIGHT - y1) * scaleY;
         scaledWidth = boxWidth * scaleX;
         scaledHeight = boxHeight * scaleY;
       }
