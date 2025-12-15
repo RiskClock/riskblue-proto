@@ -19,9 +19,21 @@ interface Project {
   name: string;
   project_type: string;
   location: string;
+  city: string;
+  country: string;
   construction_start_date: string;
   created_at: string;
 }
+
+const capitalizeFirst = (str: string) => {
+  if (!str) return str;
+  return str.charAt(0).toUpperCase() + str.slice(1);
+};
+
+const formatLocation = (city?: string, country?: string) => {
+  const parts = [city, country].filter(Boolean);
+  return parts.length > 0 ? parts.join(", ") : "—";
+};
 
 const Projects = () => {
   const { user, signOut } = useAuth();
@@ -184,8 +196,8 @@ const Projects = () => {
                     onClick={() => navigate(`/project/${project.id}`)}
                   >
                     <td className="px-6 py-4 text-foreground">{project.name}</td>
-                    <td className="px-6 py-4 text-muted-foreground">{project.project_type || "—"}</td>
-                    <td className="px-6 py-4 text-muted-foreground">{project.location || "—"}</td>
+                    <td className="px-6 py-4 text-muted-foreground">{capitalizeFirst(project.project_type) || "—"}</td>
+                    <td className="px-6 py-4 text-muted-foreground">{formatLocation(project.city, project.country)}</td>
                     <td className="px-6 py-4 text-muted-foreground">
                       {project.created_at
                         ? format(new Date(project.created_at), "M/dd/yy")

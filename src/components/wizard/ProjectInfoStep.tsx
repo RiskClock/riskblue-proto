@@ -57,7 +57,7 @@ export const ProjectInfoStep = () => {
             </div>
             <Input
               id="country"
-              value={projectData.country || "United States"}
+              value={projectData.country || ""}
               onChange={(e) => updateField("country", e.target.value)}
               placeholder="Country"
             />
