@@ -176,6 +176,20 @@ const ProjectWizardContent = () => {
     }
   });
 
+  // Fetch control details for PDF report appendix
+  const { data: controlDetails = [] } = useQuery({
+    queryKey: ['control-details-for-report'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('mitigation_controls')
+        .select('name, action, description')
+        .eq('is_active', true)
+        .order('name');
+      if (error) throw error;
+      return data || [];
+    }
+  });
+
   // Fetch pricing tiers for tiered cost calculation
   const { data: pricingTiers = [] } = useQuery({
     queryKey: ['control-pricing-tiers'],
@@ -1005,16 +1019,6 @@ const ProjectWizardContent = () => {
                         : totalCostEstimates[riskTolerance === 'low' ? 'lowCost' : riskTolerance === 'medium' ? 'mediumCost' : 'highCost']
                       ).toLocaleString()}
                     </p>
-                    <p className="text-xs text-muted-foreground mt-1">
-                      {hasManualOverride 
-                        ? `Based on ${new Set([
-                            ...(projectData.selectedAssetControls || []),
-                            ...(projectData.selectedSystemControls || []),
-                            ...(projectData.selectedProcessControls || []),
-                          ]).size} selected controls`
-                        : `Based on ${riskTolerance === 'low' ? 'Fortified' : riskTolerance === 'medium' ? 'Enhanced' : 'Essential'} package`
-                      }
-                    </p>
                   </div>
                   
                   <div className="space-y-6">
@@ -1093,7 +1097,7 @@ const ProjectWizardContent = () => {
                 // Import and render
                 import('react-dom/client').then(({ createRoot }) => {
                   const reactRoot = createRoot(root);
-                  reactRoot.render(<WaterRiskReport data={projectData} analysisItems={analysisItems} />);
+                  reactRoot.render(<WaterRiskReport data={projectData} analysisItems={analysisItems} controlDetails={controlDetails} />);
                   
                   // Wait a bit for rendering, then print
                   setTimeout(() => {
