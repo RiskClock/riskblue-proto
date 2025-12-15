@@ -447,16 +447,22 @@ const ProjectWizardContent = () => {
     const getStructuralTypes = () => {
       const structuralData = extractedData.structural_type || extractedData.structural_types;
       if (structuralData && typeof structuralData === 'object') {
+        // Map AI response keys (e.g., 'cast-in-place_reinforced_concrete') to our internal IDs
         const typeMapping: Record<string, string> = {
           'cast-in-place': 'cast-in-place',
+          'cast-in-place_reinforced_concrete': 'cast-in-place',
           'precast': 'precast',
+          'precast_concrete': 'precast',
           'steel': 'steel',
           'mass-timber': 'mass-timber',
+          'mass_timber': 'mass-timber',
         };
         const selectedTypes: string[] = [];
         Object.entries(structuralData).forEach(([key, value]) => {
-          if (value === true && typeMapping[key]) {
-            selectedTypes.push(typeMapping[key]);
+          const normalizedKey = key.toLowerCase().replace(/\s+/g, '_');
+          const mappedType = typeMapping[normalizedKey] || typeMapping[key];
+          if (value === true && mappedType && !selectedTypes.includes(mappedType)) {
+            selectedTypes.push(mappedType);
           }
         });
         return selectedTypes.length > 0 ? selectedTypes : projectData.structural_types;
