@@ -254,23 +254,27 @@ export const FileViewerModal = ({
         scaledHeight = h * displayHeight;
         console.log(`Detection ${index} "${detection.lineCode}": normalized [${x},${y},${w},${h}]`);
       } else {
-        // PDF points format: [x0, y0, x1, y1] based on A0 horizontal dimensions
+        // PDF points format: [x0, y0, x1, y1] - use actual PDF dimensions
         const [x0, y0, x1, y1] = coords;
         
         const boxWidth = x1 - x0;
         const boxHeight = y1 - y0;
         
-        // Scale from A0 reference dimensions to display canvas
-        const scaleX = displayWidth / A0_HORIZONTAL_WIDTH;
-        const scaleY = displayHeight / A0_HORIZONTAL_HEIGHT;
+        // Use actual PDF dimensions (from originalSize), fallback to A0 if not available
+        const pdfWidthRef = originalSize?.width || A0_HORIZONTAL_WIDTH;
+        const pdfHeightRef = originalSize?.height || A0_HORIZONTAL_HEIGHT;
+        
+        // Scale from PDF dimensions to display canvas
+        const scaleX = displayWidth / pdfWidthRef;
+        const scaleY = displayHeight / pdfHeightRef;
         
         // Transform: X stays same, Y flipped (PDF origin is bottom-left)
         scaledX = x0 * scaleX;
-        scaledY = (A0_HORIZONTAL_HEIGHT - y1) * scaleY;
+        scaledY = (pdfHeightRef - y1) * scaleY;
         scaledWidth = boxWidth * scaleX;
         scaledHeight = boxHeight * scaleY;
         
-        console.log(`Detection ${index} "${detection.lineCode}": A0 points [${x0},${y0},${x1},${y1}] -> canvas pos(${scaledX.toFixed(0)},${scaledY.toFixed(0)}) size(${scaledWidth.toFixed(0)}x${scaledHeight.toFixed(0)})`);
+        console.log(`Detection ${index} "${detection.lineCode}": PDF [${pdfWidthRef}x${pdfHeightRef}] points [${x0},${y0},${x1},${y1}] -> canvas pos(${scaledX.toFixed(0)},${scaledY.toFixed(0)}) size(${scaledWidth.toFixed(0)}x${scaledHeight.toFixed(0)})`);
       }
 
       const isHovered = hoveredSystem === detection.lineCode;

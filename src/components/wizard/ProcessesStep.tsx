@@ -16,6 +16,7 @@ interface ProcessesStepProps {
   driveFiles?: DriveFileInfo[];
   driveAccessToken?: string | null;
   riskTolerance?: RiskTolerance;
+  onManualControlToggle?: () => void;
 }
 
 // Group processes by name for expandable list view
@@ -30,7 +31,8 @@ export const ProcessesStep = ({
   analysisItems = [],
   driveFiles = [],
   driveAccessToken = null,
-  riskTolerance: parentRiskTolerance = "low"
+  riskTolerance: parentRiskTolerance = "low",
+  onManualControlToggle
 }: ProcessesStepProps) => {
   // Get project context
   const { projectData, updateFields } = useProject();
@@ -296,7 +298,11 @@ export const ProcessesStep = ({
       }
       return next;
     });
-  }, []);
+    // Notify parent of manual override (only if not from risk tolerance change)
+    if (!isRiskToleranceUpdateRef.current && onManualControlToggle) {
+      onManualControlToggle();
+    }
+  }, [onManualControlToggle]);
 
   const handleToggleAllControls = useCallback((controlIds: string[], selected: boolean) => {
     setSelectedControlIds(prev => {
@@ -310,7 +316,11 @@ export const ProcessesStep = ({
       });
       return next;
     });
-  }, []);
+    // Notify parent of manual override (only if not from risk tolerance change)
+    if (!isRiskToleranceUpdateRef.current && onManualControlToggle) {
+      onManualControlToggle();
+    }
+  }, [onManualControlToggle]);
 
   // File viewer helpers
   const findDriveFile = (fileName: string): DriveFileInfo | undefined => {

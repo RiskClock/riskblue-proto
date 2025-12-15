@@ -221,19 +221,23 @@ export const InstanceDetailsModal = ({
         scaledWidth = w * displayWidth;
         scaledHeight = h * displayHeight;
       } else {
-        // PDF points format: [x0, y0, x1, y1] based on A0 horizontal dimensions
+        // PDF points format: [x0, y0, x1, y1] - use actual PDF dimensions
         const [x0, y0, x1, y1] = coords;
         
         const boxWidth = x1 - x0;
         const boxHeight = y1 - y0;
         
-        // Scale from A0 reference dimensions to display canvas
-        const scaleX = displayWidth / A0_HORIZONTAL_WIDTH;
-        const scaleY = displayHeight / A0_HORIZONTAL_HEIGHT;
+        // Use actual PDF dimensions if available, fallback to A0
+        const pdfWidth = originalSize?.width || A0_HORIZONTAL_WIDTH;
+        const pdfHeight = originalSize?.height || A0_HORIZONTAL_HEIGHT;
+        
+        // Scale from PDF dimensions to display canvas
+        const scaleX = displayWidth / pdfWidth;
+        const scaleY = displayHeight / pdfHeight;
         
         // Transform: X stays same, Y flipped (PDF origin is bottom-left)
         scaledX = x0 * scaleX;
-        scaledY = (A0_HORIZONTAL_HEIGHT - y1) * scaleY;
+        scaledY = (pdfHeight - y1) * scaleY;
         scaledWidth = boxWidth * scaleX;
         scaledHeight = boxHeight * scaleY;
       }
