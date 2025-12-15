@@ -175,9 +175,19 @@ export const ExpandableListItem = ({
     setControlModalOpen(true);
   }, [getControlPoints]);
 
-  // Find drive file for the selected instance
+  // Find drive file for the selected instance (uses partial matching for flexibility)
   const findDriveFile = useCallback((fileName: string): DriveFileInfo | undefined => {
-    return driveFiles.find(f => f.name === fileName);
+    // Exact match first
+    const exactMatch = driveFiles.find(f => f.name === fileName);
+    if (exactMatch) return exactMatch;
+    
+    // Partial match: check if the instance fileName is contained in drive file name or vice versa
+    // Normalize by removing extension and comparing base names
+    const normalizedTarget = fileName.toLowerCase().replace(/\.pdf$/i, '').replace(/\s+/g, '-');
+    return driveFiles.find(f => {
+      const normalizedDrive = f.name.toLowerCase().replace(/\.pdf$/i, '').replace(/\s+/g, '-');
+      return normalizedDrive.includes(normalizedTarget) || normalizedTarget.includes(normalizedDrive);
+    });
   }, [driveFiles]);
 
   const handleViewDetails = useCallback((instance: AnalysisItem, e: React.MouseEvent) => {
