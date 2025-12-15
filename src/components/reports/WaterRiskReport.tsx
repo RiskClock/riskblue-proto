@@ -207,9 +207,9 @@ export const WaterRiskReport = ({ data, analysisItems = [], controlDetails = [] 
     if (instance.floor) details.push(`Floor: ${instance.floor}`);
     if (instance.drawingCode) details.push(`Drawing: ${instance.drawingCode}`);
     if (instance.sizeCategory) details.push(`Size: ${instance.sizeCategory}`);
-    if (instance.width && instance.length) details.push(`Dimensions: ${instance.width} × ${instance.length}`);
-    else if (instance.width) details.push(`Width: ${instance.width}`);
-    else if (instance.length) details.push(`Length: ${instance.length}`);
+    if (instance.width && instance.length) details.push(`Dimensions: ${instance.width} × ${instance.length} ft`);
+    else if (instance.width) details.push(`Width: ${instance.width} ft`);
+    else if (instance.length) details.push(`Length: ${instance.length} ft`);
     if (instance.fileName) details.push(`File: ${instance.fileName}`);
     return details;
   };
@@ -253,7 +253,7 @@ export const WaterRiskReport = ({ data, analysisItems = [], controlDetails = [] 
 
   return (
     <div className="print-report bg-white text-black p-4 max-w-[210mm] mx-auto text-[11px]">
-      {/* Fixed footer for subsequent pages */}
+      {/* Fixed footer for all pages - "Built in RiskBlue" with logo */}
       <div className="print-page-footer hidden print:flex">
         <span>Built in</span>
         <img src={logoUrl} alt="RiskBlue" style={{ height: '14px', display: 'inline-block' }} />
@@ -499,19 +499,13 @@ export const WaterRiskReport = ({ data, analysisItems = [], controlDetails = [] 
                               ))}
                             </div>
                           )}
-                          {/* Drawing placeholder */}
-                          <div className="mt-1 p-2 border border-dashed border-gray-300 rounded bg-white">
-                            <div className="flex items-center gap-2">
-                              <img 
-                                src={placeholderDrawingUrl} 
-                                alt="Drawing preview" 
-                                className="w-16 h-12 object-cover rounded border border-gray-200"
-                              />
-                              <div className="text-[9px] text-gray-500">
-                                <p className="font-medium">Drawing: {instance.drawingCode || instance.fileName || "N/A"}</p>
-                                <p className="italic">Bounding box preview (Coming Soon)</p>
-                              </div>
-                            </div>
+                          {/* Drawing placeholder - bigger and centered */}
+                          <div className="mt-2 p-3 border border-gray-200 rounded bg-white flex justify-center">
+                            <img 
+                              src={placeholderDrawingUrl} 
+                              alt="Drawing preview" 
+                              className="w-48 h-32 object-contain rounded border border-gray-200"
+                            />
                           </div>
                         </div>
                       );
@@ -593,19 +587,13 @@ export const WaterRiskReport = ({ data, analysisItems = [], controlDetails = [] 
                               ))}
                             </div>
                           )}
-                          {/* Drawing placeholder */}
-                          <div className="mt-1 p-2 border border-dashed border-gray-300 rounded bg-white">
-                            <div className="flex items-center gap-2">
-                              <img 
-                                src={placeholderDrawingUrl} 
-                                alt="Drawing preview" 
-                                className="w-16 h-12 object-cover rounded border border-gray-200"
-                              />
-                              <div className="text-[9px] text-gray-500">
-                                <p className="font-medium">Drawing: {instance.drawingCode || instance.fileName || "N/A"}</p>
-                                <p className="italic">Bounding box preview (Coming Soon)</p>
-                              </div>
-                            </div>
+                          {/* Drawing placeholder - bigger and centered */}
+                          <div className="mt-2 p-3 border border-gray-200 rounded bg-white flex justify-center">
+                            <img 
+                              src={placeholderDrawingUrl} 
+                              alt="Drawing preview" 
+                              className="w-48 h-32 object-contain rounded border border-gray-200"
+                            />
                           </div>
                         </div>
                       );

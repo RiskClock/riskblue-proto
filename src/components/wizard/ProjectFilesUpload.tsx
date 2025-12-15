@@ -60,6 +60,8 @@ interface ProjectFilesUploadProps {
   setDriveConnected: (connected: boolean) => void;
   // Callback to save project data before OAuth redirect
   onBeforeOAuthRedirect?: () => Promise<void>;
+  // Mode: "schedule" for PDF upload only, "drive" for Google Drive only, undefined for both
+  mode?: "schedule" | "drive";
 }
 
 export const ProjectFilesUpload = ({ 
@@ -74,7 +76,8 @@ export const ProjectFilesUpload = ({
   setDriveAccessToken,
   driveConnected,
   setDriveConnected,
-  onBeforeOAuthRedirect
+  onBeforeOAuthRedirect,
+  mode
 }: ProjectFilesUploadProps) => {
   const { toast } = useToast();
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -108,8 +111,8 @@ export const ProjectFilesUpload = ({
   const [viewerOpen, setViewerOpen] = useState(false);
   const [viewerFile, setViewerFile] = useState<{ id: string; name: string; mimeType: string } | null>(null);
   
-  // Tab state
-  const [activeTab, setActiveTab] = useState("local");
+  // Tab state - default based on mode
+  const [activeTab, setActiveTab] = useState(mode === "drive" ? "drive" : "local");
 
   // Utility function to get or create file search store ID
   const getOrCreateFileSearchStore = async (): Promise<string | null> => {
@@ -610,6 +613,218 @@ export const ProjectFilesUpload = ({
     return `${(size / (1024 * 1024)).toFixed(1)} MB`;
   };
 
+  // If mode is specified, render only that mode's UI without tabs
+  if (mode === "schedule") {
+    return (
+      <div className="space-y-4">
+        {/* Hidden file input */}
+        <Input
+          ref={fileInputRef}
+          type="file"
+          onChange={handleFileChange}
+          disabled={uploading}
+          className="hidden"
+          accept=".pdf"
+        />
+        
+        {/* Visual upload zone */}
+        <div className="flex gap-2 items-center">
+          <button
+            onClick={() => fileInputRef.current?.click()}
+            disabled={uploading}
+            className="flex-1 border-2 border-dashed border-muted-foreground/30 rounded-lg p-4 hover:border-muted-foreground/50 hover:bg-muted/50 transition-all cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            <div className="flex items-center gap-3">
+              <div className="p-2 rounded-md bg-muted transition-colors">
+                {uploadedFile ? (
+                  <FileText className="w-5 h-5 text-muted-foreground" />
+                ) : (
+                  <Upload className="w-5 h-5 text-muted-foreground" />
+                )}
+              </div>
+              <div className="text-left flex-1">
+                {uploadedFile ? (
+                  <>
+                    <p className="text-sm font-medium text-foreground truncate">{uploadedFile.name}</p>
+                    <p className="text-xs text-muted-foreground">Click to change file</p>
+                  </>
+                ) : (
+                  <>
+                    <p className="text-sm font-medium text-foreground">Click to select PDF</p>
+                    <p className="text-xs text-muted-foreground">Drag and drop or click to browse</p>
+                  </>
+                )}
+              </div>
+            </div>
+          </button>
+          
+          <Button 
+            onClick={uploading ? handleStop : handleUpload} 
+            disabled={!uploadedFile && !uploading}
+            variant={uploading ? "destructive" : "default"}
+          >
+            {uploading ? (
+              <>
+                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                Stop
+              </>
+            ) : (
+              "Upload"
+            )}
+          </Button>
+        </div>
+
+        {/* PDF Analysis Animation */}
+        {analyzing && pdfMetadata && (
+          <PDFAnalysisAnimation
+            pageCount={pdfMetadata.pageCount}
+            currentPage={currentPage}
+            extractedText={extractedText}
+            extractedDates={extractedDates}
+            extractedMilestones={extractedMilestones}
+            isComplete={webhookComplete}
+          />
+        )}
+
+        {showDebugInfo && responseData && (
+          <div className="space-y-2 pt-4 border-t">
+            <label className="text-sm font-medium">Response</label>
+            <pre className="bg-muted/30 rounded-lg p-4 overflow-auto max-h-[400px] text-xs">
+              {responseData}
+            </pre>
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  if (mode === "drive") {
+    return (
+      <div className="space-y-4">
+        {!driveConnected ? (
+          <div className="border-2 border-dashed border-muted-foreground/30 rounded-lg p-6 text-center">
+            <FolderOpen className="w-10 h-10 text-muted-foreground mx-auto mb-3" />
+            <p className="text-sm font-medium mb-2">Connect to Google Drive</p>
+            <p className="text-xs text-muted-foreground mb-4">
+              Sign in with your Google account to access files from your Drive
+            </p>
+            <Button onClick={handleConnectGoogleDrive} disabled={connectingDrive}>
+              {connectingDrive ? (
+                <>
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  Connecting...
+                </>
+              ) : (
+                <>
+                  <Link2 className="w-4 h-4 mr-2" />
+                  Connect Google Drive
+                </>
+              )}
+            </Button>
+          </div>
+        ) : (
+          <div className="space-y-4">
+            <div className="flex items-center justify-between p-3 bg-muted/50 rounded-lg">
+              <div className="flex items-center gap-2">
+                <Check className="w-4 h-4 text-green-500" />
+                <span className="text-sm font-medium">Google Drive Connected</span>
+              </div>
+              <Button variant="ghost" size="sm" onClick={handleDisconnectDrive}>
+                <X className="w-4 h-4" />
+              </Button>
+            </div>
+            
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Folder ID</label>
+              <p className="text-xs text-muted-foreground">
+                Enter the Google Drive folder ID (the string at the end of the folder URL)
+              </p>
+              <div className="flex gap-2">
+                <Input
+                  placeholder="e.g., 1ABC123xyz..."
+                  value={folderId}
+                  onChange={(e) => setFolderId(e.target.value)}
+                  disabled={loadingDriveFiles}
+                />
+                <Button onClick={handleLoadDriveFiles} disabled={loadingDriveFiles || !folderId.trim()}>
+                  {loadingDriveFiles ? (
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                  ) : (
+                    "Load Files"
+                  )}
+                </Button>
+              </div>
+            </div>
+
+            {/* Drive files list */}
+            {driveFiles.length > 0 && (
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <label className="text-sm font-medium">Files in Folder ({driveFiles.length})</label>
+                  <Button 
+                    onClick={handleAnalyzeFiles} 
+                    disabled={analyzingFiles}
+                    size="sm"
+                    className="gap-2"
+                  >
+                    {analyzingFiles ? (
+                      <>
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                        Analyzing...
+                      </>
+                    ) : (
+                      <>
+                        <Sparkles className="w-4 h-4" />
+                        Analyze with AI
+                      </>
+                    )}
+                  </Button>
+                </div>
+                <div className="border rounded-lg divide-y max-h-48 overflow-y-auto">
+                  {driveFiles.map((file) => (
+                    <div key={file.id} className="flex items-center gap-3 p-3 hover:bg-muted/50">
+                      <div className="p-1.5 rounded bg-muted">
+                        <File className="w-4 h-4 text-muted-foreground" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium truncate">{file.name}</p>
+                        <p className="text-xs text-muted-foreground">
+                          {formatFileSize(file.size)} • {new Date(file.modifiedTime).toLocaleDateString()}
+                        </p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+                
+                {/* AI Analysis Result with Chat */}
+                {analysisData && (
+                  <DriveFilesChat 
+                    analysisResult={analysisData.text} 
+                    detectedSystems={analysisData.systems}
+                  />
+                )}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* File Viewer Modal */}
+        {viewerFile && driveAccessToken && (
+          <FileViewerModal
+            isOpen={viewerOpen}
+            onClose={() => setViewerOpen(false)}
+            fileId={viewerFile.id}
+            fileName={viewerFile.name}
+            mimeType={viewerFile.mimeType}
+            accessToken={driveAccessToken}
+            detections={analysisData?.systems || []}
+          />
+        )}
+      </div>
+    );
+  }
+
+  // Default: show full UI with tabs
   return (
     <Card className="p-6 space-y-4 mb-6">
       <div className="space-y-3">

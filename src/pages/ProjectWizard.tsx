@@ -73,9 +73,9 @@ const ProjectWizardContent = () => {
   const [driveAccessToken, setDriveAccessToken] = useState<string | null>(null);
   const [driveConnected, setDriveConnected] = useState(false);
   
-  // Risk tolerance state (shared across all AWP sections)
+  // Risk tolerance state (shared across all AWP sections) - default to "high" (Essential package)
   const [riskTolerance, setRiskTolerance] = useState<RiskTolerance>(
-    (projectData.riskTolerance as RiskTolerance) || "low"
+    (projectData.riskTolerance as RiskTolerance) || "high"
   );
   
   // Track if user has manually overridden control selections
@@ -900,21 +900,6 @@ const ProjectWizardContent = () => {
           </div>
 
           <TabsContent value="guideline" className="max-w-5xl mx-auto">
-            <ProjectFilesUpload 
-              projectId={id || "new"}
-              projectName={projectData.name}
-              onScheduleDataExtracted={handleScheduleDataExtracted}
-              onDrawingDataExtracted={handleDrawingDataExtracted}
-              isProcessingWebhook={isProcessingWebhook}
-              setIsProcessingWebhook={setIsProcessingWebhook}
-              driveFiles={driveFiles}
-              setDriveFiles={setDriveFiles}
-              driveAccessToken={driveAccessToken}
-              setDriveAccessToken={setDriveAccessToken}
-              driveConnected={driveConnected}
-              setDriveConnected={setDriveConnected}
-              onBeforeOAuthRedirect={handleBeforeOAuthRedirect}
-            />
             <Accordion type="multiple" defaultValue={["basic-info", "assets-systems"]} className="space-y-4">
               <AccordionItem value="basic-info" className="border rounded-lg px-6">
                 <AccordionTrigger className="text-lg font-semibold">
@@ -924,6 +909,32 @@ const ProjectWizardContent = () => {
                   <div className="space-y-6">
                     <ProjectInfoStep />
                   </div>
+                  
+                  {/* Schedule Analysis - moved here from ProjectFilesUpload */}
+                  <div className="space-y-4 pt-6 border-t">
+                    <div>
+                      <h3 className="text-md font-medium">Schedule Analysis</h3>
+                      <p className="text-sm text-muted-foreground mt-1">
+                        Upload a Project Schedule file to automatically extract project details and milestones.
+                      </p>
+                    </div>
+                    <ProjectFilesUpload 
+                      projectId={id || "new"}
+                      projectName={projectData.name}
+                      onScheduleDataExtracted={handleScheduleDataExtracted}
+                      isProcessingWebhook={isProcessingWebhook}
+                      setIsProcessingWebhook={setIsProcessingWebhook}
+                      driveFiles={[]}
+                      setDriveFiles={() => {}}
+                      driveAccessToken={null}
+                      setDriveAccessToken={() => {}}
+                      driveConnected={false}
+                      setDriveConnected={() => {}}
+                      onBeforeOAuthRedirect={handleBeforeOAuthRedirect}
+                      mode="schedule"
+                    />
+                  </div>
+                  
                   <div className="space-y-6 pt-6 border-t">
                     <h3 className="text-md font-medium">Milestones & Timelines</h3>
                     <ProjectMilestonesStep />
@@ -939,6 +950,31 @@ const ProjectWizardContent = () => {
                   Assets, Water Systems & Processes
                 </AccordionTrigger>
                 <AccordionContent className="space-y-8 pt-4">
+                  {/* Google Drive Connection - for drawing analysis */}
+                  <div className="space-y-4">
+                    <div>
+                      <h3 className="text-md font-medium">Drawing Analysis</h3>
+                      <p className="text-sm text-muted-foreground mt-1">
+                        Connect a Google Drive folder with Drawing files to automatically detect Assets and Water Systems present in the Project.
+                      </p>
+                    </div>
+                    <ProjectFilesUpload 
+                      projectId={id || "new"}
+                      projectName={projectData.name}
+                      onDrawingDataExtracted={handleDrawingDataExtracted}
+                      isProcessingWebhook={isProcessingWebhook}
+                      setIsProcessingWebhook={setIsProcessingWebhook}
+                      driveFiles={driveFiles}
+                      setDriveFiles={setDriveFiles}
+                      driveAccessToken={driveAccessToken}
+                      setDriveAccessToken={setDriveAccessToken}
+                      driveConnected={driveConnected}
+                      setDriveConnected={setDriveConnected}
+                      onBeforeOAuthRedirect={handleBeforeOAuthRedirect}
+                      mode="drive"
+                    />
+                  </div>
+
                   {/* Risk Tolerance Selector - applies to all AWP sections */}
                   <RiskToleranceSelector
                     value={riskTolerance}
