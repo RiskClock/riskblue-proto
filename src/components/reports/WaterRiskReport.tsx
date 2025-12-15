@@ -4,6 +4,7 @@ import { AnalysisItem } from "@/lib/analysisItemMapper";
 import { getControlId } from "@/components/wizard/ExpandableListItem";
 import { calculateSystemOrAssetDates, TimelineData } from "@/lib/durationCalculator";
 import { differenceInMonths, format } from "date-fns";
+import riskBlueLogo from "@/assets/riskblue-logo.jpg";
 
 // Get the base URL for absolute paths in print - required for browser print to work
 const getAbsoluteUrl = (path: string) => {
@@ -240,24 +241,20 @@ export const WaterRiskReport = ({ data, analysisItems = [], controlDetails = [] 
   };
 
   // Generate absolute URLs for images - must use public paths for print to work
-  const logoUrl = getAbsoluteUrl("/assets/riskblue-logo.png");
   const placeholderDrawingUrl = getAbsoluteUrl("/assets/placeholder_drawing.png");
 
   return (
     <div className="print-report bg-white text-black p-4 max-w-[210mm] mx-auto text-[11px]">
-      {/* Fixed footer for all pages - "Built in RiskBlue" with logo */}
-      <div className="print-page-footer hidden print:flex">
-        <span>Built in</span>
-        <img src={logoUrl} alt="RiskBlue" style={{ height: '14px', display: 'inline-block' }} />
-      </div>
-
-      {/* Header with Logo */}
+      {/* Header with Logo and "Built in RiskBlue" */}
       <div className="print-header flex justify-between items-start mb-4 pb-2 border-b-2 border-gray-300">
         <div>
           <h1 className="text-xl font-bold text-gray-900 mb-1">Water Mitigation Guideline</h1>
           <p className="text-[10px] text-gray-600">Generated: {formatDate(new Date())}</p>
         </div>
-        <img src={logoUrl} alt="RiskBlue" style={{ height: '32px', display: 'inline-block' }} />
+        <div className="flex items-center gap-2">
+          <span className="text-sm text-gray-500">Built in</span>
+          <img src={riskBlueLogo} alt="RiskBlue Logo" style={{ height: '32px', display: 'inline-block' }} />
+        </div>
       </div>
 
       {/* Executive Summary */}
@@ -496,7 +493,7 @@ export const WaterRiskReport = ({ data, analysisItems = [], controlDetails = [] 
                             <img 
                               src={placeholderDrawingUrl} 
                               alt="Drawing preview" 
-                              className="w-48 h-32 object-contain rounded border border-gray-200"
+                              className="w-64 h-48 object-contain rounded border border-gray-200"
                             />
                           </div>
                         </div>
@@ -584,7 +581,7 @@ export const WaterRiskReport = ({ data, analysisItems = [], controlDetails = [] 
                             <img 
                               src={placeholderDrawingUrl} 
                               alt="Drawing preview" 
-                              className="w-48 h-32 object-contain rounded border border-gray-200"
+                              className="w-64 h-48 object-contain rounded border border-gray-200"
                             />
                           </div>
                         </div>
@@ -703,7 +700,11 @@ export const WaterRiskReport = ({ data, analysisItems = [], controlDetails = [] 
           <h2 className="text-base font-bold text-gray-900 mb-2 border-b border-gray-300 pb-1">Appendix: Control Reference</h2>
           <div className="space-y-2">
             {controlDetails
-              .filter(control => allUsedControlNames.has(control.name))
+              .filter(control => 
+                Array.from(allUsedControlNames).some(
+                  usedName => normalizeControlName(usedName).toLowerCase() === normalizeControlName(control.name).toLowerCase()
+                )
+              )
               .map((control, index) => (
                 <div key={index} className="bg-gray-50 p-2 rounded border border-gray-200 print-keep-together">
                   <h3 className="font-bold text-[11px] text-gray-900 mb-1">{control.name}</h3>
