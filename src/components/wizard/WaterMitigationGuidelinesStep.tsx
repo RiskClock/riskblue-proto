@@ -32,27 +32,59 @@ export const WaterMitigationGuidelinesStep = ({ data, analysisItems = [], onBack
     const root = document.createElement('div');
     reportContainer.appendChild(root);
     
+    // Wait for all images to load
+    const waitForImages = (container: HTMLElement): Promise<void> => {
+      return new Promise((resolve) => {
+        const images = container.querySelectorAll('img');
+        if (images.length === 0) {
+          resolve();
+          return;
+        }
+        
+        let loadedCount = 0;
+        const checkComplete = () => {
+          loadedCount++;
+          if (loadedCount >= images.length) {
+            resolve();
+          }
+        };
+        
+        images.forEach((img) => {
+          if (img.complete && img.naturalHeight !== 0) {
+            checkComplete();
+          } else {
+            img.onload = checkComplete;
+            img.onerror = checkComplete; // Don't block on failed images
+          }
+        });
+        
+        // Fallback timeout of 3 seconds
+        setTimeout(resolve, 3000);
+      });
+    };
+    
     // Import and render
-    import('react-dom/client').then(({ createRoot }) => {
+    import('react-dom/client').then(async ({ createRoot }) => {
       const reactRoot = createRoot(root);
       reactRoot.render(<WaterRiskReport data={data} analysisItems={analysisItems} />);
       
-      // Wait for rendering, then print
+      // Give React time to render, then wait for images
+      await new Promise(resolve => setTimeout(resolve, 300));
+      await waitForImages(reportContainer);
+      
+      window.print();
+      document.title = originalTitle;
+      
+      toast({
+        title: "Export Ready",
+        description: "Your report is ready to save as PDF.",
+      });
+      
+      // Cleanup after print
       setTimeout(() => {
-        window.print();
-        document.title = originalTitle;
-        
-        toast({
-          title: "Export Ready",
-          description: "Your report is ready to save as PDF.",
-        });
-        
-        // Cleanup after print
-        setTimeout(() => {
-          reactRoot.unmount();
-          document.body.removeChild(reportContainer);
-        }, 100);
-      }, 500);
+        reactRoot.unmount();
+        document.body.removeChild(reportContainer);
+      }, 100);
     });
   };
 
