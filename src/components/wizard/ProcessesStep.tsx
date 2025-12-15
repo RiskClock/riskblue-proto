@@ -8,6 +8,7 @@ import { FileViewerModal } from "./FileViewerModal";
 import type { DriveFileInfo } from "./ProjectFilesUpload";
 import type { RiskTolerance } from "./RiskToleranceSelector";
 import { useProject } from "@/contexts/ProjectContext";
+import type { PricingTier } from "@/lib/costCalculator";
 
 interface ProcessesStepProps {
   onNext?: (data: any) => void;
@@ -66,21 +67,46 @@ export const ProcessesStep = ({
     }
   });
 
-  // Fetch mitigation controls for risk_tolerance
+  // Fetch mitigation controls with cost fields
   const { data: controls = [] } = useQuery({
-    queryKey: ['mitigation-controls-risk-tolerance'],
+    queryKey: ['mitigation-controls-processes'],
     queryFn: async () => {
       const { data, error } = await supabase
         .from('mitigation_controls')
-        .select('name, risk_tolerance')
+        .select('name, risk_tolerance, one_time_cost, monthly_maint_cost')
         .eq('is_active', true);
       if (error) throw error;
       return (data || []).map(c => ({
         name: c.name,
-        riskTolerance: c.risk_tolerance ?? 3
-      })) as { name: string; riskTolerance: number }[];
+        riskTolerance: c.risk_tolerance ?? 3,
+        oneTimeCost: Number(c.one_time_cost) || 0,
+        monthlyMaintCost: Number(c.monthly_maint_cost) || 0
+      }));
     }
   });
+
+  // Fetch pricing tiers for cost calculation
+  const { data: pricingTiers = [] } = useQuery({
+    queryKey: ['control-pricing-tiers-processes'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('control_pricing_tiers')
+        .select('*')
+        .order('control_name, min_value');
+      if (error) throw error;
+      return data as PricingTier[];
+    }
+  });
+
+  // Helper to get control cost data
+  const getControlPoints = useCallback((controlName: string) => {
+    const control = controls.find(c => c.name === controlName);
+    return {
+      points: 0,
+      oneTimeCost: control?.oneTimeCost || 0,
+      monthlyMaintCost: control?.monthlyMaintCost || 0
+    };
+  }, [controls]);
 
   // Filter only process items
   const processItems = useMemo(() => 
@@ -370,6 +396,8 @@ export const ProcessesStep = ({
             selectedControlIds={selectedControlIds}
             onToggleControl={handleToggleControl}
             onToggleAllControls={handleToggleAllControls}
+            pricingTiers={pricingTiers}
+            getControlPoints={getControlPoints}
           />
         ))}
       </div>
