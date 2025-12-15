@@ -11,10 +11,10 @@ import pdfjsWorker from "pdfjs-dist/build/pdf.worker.min.mjs?url";
 // Set worker path
 pdfjsLib.GlobalWorkerOptions.workerSrc = pdfjsWorker;
 
-interface InstanceDetailsModalProps {
+interface LocationDetailsModalProps {
   isOpen: boolean;
   onClose: () => void;
-  instance: AnalysisItem | null;
+  location: AnalysisItem | null;
   canViewFile?: boolean;
   driveFile?: DriveFileInfo;
   driveAccessToken?: string | null;
@@ -27,14 +27,14 @@ const BOUNDING_BOX_COLOR = "#39FF14";
 const A0_HORIZONTAL_WIDTH = 3370.4;
 const A0_HORIZONTAL_HEIGHT = 2383.9;
 
-export const InstanceDetailsModal = ({ 
+export const LocationDetailsModal = ({ 
   isOpen, 
   onClose, 
-  instance, 
+  location, 
   canViewFile = false,
   driveFile,
   driveAccessToken
-}: InstanceDetailsModalProps) => {
+}: LocationDetailsModalProps) => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [zoom, setZoom] = useState(1);
@@ -65,7 +65,7 @@ export const InstanceDetailsModal = ({
       setLoading(false);
       setError(null);
     }
-  }, [isOpen, showDrawing, instance]);
+  }, [isOpen, showDrawing, location]);
 
   const loadFile = async () => {
     if (!driveFile || !driveAccessToken) return;
@@ -206,9 +206,9 @@ export const InstanceDetailsModal = ({
     // Draw image
     ctx.drawImage(img, 0, 0, displayWidth, displayHeight);
 
-    // Draw bounding box for instance if coordinates exist
-    if (instance?.coordinates && instance.coordinates.length === 4) {
-      const coords = instance.coordinates;
+    // Draw bounding box for location if coordinates exist
+    if (location?.coordinates && location.coordinates.length === 4) {
+      const coords = location.coordinates;
       const maxCoord = Math.max(...coords);
       
       let scaledX: number, scaledY: number, scaledWidth: number, scaledHeight: number;
@@ -252,7 +252,7 @@ export const InstanceDetailsModal = ({
       ctx.fillRect(scaledX, scaledY, scaledWidth, scaledHeight);
 
       // Draw label
-      const label = instance.id;
+      const label = location.id;
       ctx.font = `bold 14px sans-serif`;
       const textMetrics = ctx.measureText(label);
       const padding = 6;
@@ -263,14 +263,14 @@ export const InstanceDetailsModal = ({
       ctx.fillStyle = "#000000";
       ctx.fillText(label, scaledX + padding, scaledY - 7);
     }
-  }, [pageImages, currentPage, zoom, loading, instance, originalSize]);
+  }, [pageImages, currentPage, zoom, loading, location, originalSize]);
 
-  if (!instance) return null;
+  if (!location) return null;
 
   const capitalize = (str: string) => str.charAt(0).toUpperCase() + str.slice(1).toLowerCase();
   
   // Get additional parameters if available
-  const additionalParams = (instance as any).additionalParameters;
+  const additionalParams = (location as any).additionalParameters;
   const pipeInfo = additionalParams?.pipeDiameterMM 
     ? `${additionalParams.pipeDiameterMM}mm` 
     : additionalParams?.pipeDiameterInches 
@@ -280,9 +280,9 @@ export const InstanceDetailsModal = ({
     ? capitalize(additionalParams.mainPipeDirection)
     : null;
 
-  const sizeDisplay = instance.sizeCategory ? `${capitalize(instance.sizeCategory)} Room` : null;
-  const dimensionDisplay = instance.length && instance.width 
-    ? `${instance.length} ft × ${instance.width} ft` 
+  const sizeDisplay = location.sizeCategory ? `${capitalize(location.sizeCategory)} Room` : null;
+  const dimensionDisplay = location.length && location.width 
+    ? `${location.length} ft × ${location.width} ft` 
     : null;
 
   return (
@@ -290,8 +290,8 @@ export const InstanceDetailsModal = ({
       <DialogContent className={showDrawing ? "sm:max-w-5xl h-[85vh] flex flex-col p-0" : "sm:max-w-md"}>
         <DialogHeader className="px-6 pt-6 pb-4 border-b flex-shrink-0">
           <DialogTitle className="flex items-center gap-2">
-            <span className="text-muted-foreground text-sm">{instance.id}:</span>
-            {instance.areaName || instance.name}
+            <span className="text-muted-foreground text-sm">{location.id}:</span>
+            {location.areaName || location.name}
           </DialogTitle>
         </DialogHeader>
         
@@ -304,12 +304,12 @@ export const InstanceDetailsModal = ({
                 <div className="grid grid-cols-2 gap-4">
                   <div>
                     <label className="text-xs text-muted-foreground font-medium uppercase tracking-wide">Category</label>
-                    <p className="text-sm font-medium mt-1">{instance.category}</p>
+                    <p className="text-sm font-medium mt-1">{location.category}</p>
                   </div>
-                  {instance.floor && (
+                  {location.floor && (
                     <div>
                       <label className="text-xs text-muted-foreground font-medium uppercase tracking-wide">Floor</label>
-                      <p className="text-sm font-medium mt-1">{instance.floor}</p>
+                      <p className="text-sm font-medium mt-1">{location.floor}</p>
                     </div>
                   )}
                 </div>
@@ -351,29 +351,29 @@ export const InstanceDetailsModal = ({
                 )}
 
                 {/* Drawing Info */}
-                {(instance.drawingCode || instance.fileName) && (
+                {(location.drawingCode || location.fileName) && (
                   <div className="space-y-3">
-                    {instance.drawingCode && (
+                    {location.drawingCode && (
                       <div>
                         <label className="text-xs text-muted-foreground font-medium uppercase tracking-wide">Drawing Code</label>
-                        <p className="text-sm font-medium mt-1">{instance.drawingCode}</p>
+                        <p className="text-sm font-medium mt-1">{location.drawingCode}</p>
                       </div>
                     )}
-                    {instance.fileName && (
+                    {location.fileName && (
                       <div>
                         <label className="text-xs text-muted-foreground font-medium uppercase tracking-wide">Source File</label>
-                        <p className="text-sm font-medium mt-1 truncate" title={instance.fileName}>{instance.fileName}</p>
+                        <p className="text-sm font-medium mt-1 truncate" title={location.fileName}>{location.fileName}</p>
                       </div>
                     )}
                   </div>
                 )}
 
                 {/* Controls */}
-                {instance.controls && instance.controls.length > 0 && (
+                {location.controls && location.controls.length > 0 && (
                   <div>
                     <label className="text-xs text-muted-foreground font-medium uppercase tracking-wide">Recommended Controls</label>
                     <div className="flex flex-wrap gap-1 mt-2">
-                      {instance.controls.map((control, idx) => (
+                      {location.controls.map((control, idx) => (
                         <Badge key={idx} variant="outline" className="text-xs">
                           {control}
                         </Badge>
@@ -443,7 +443,10 @@ export const InstanceDetailsModal = ({
                   </div>
                 ) : (
                   <div className="flex items-center justify-center min-h-full">
-                    <canvas ref={canvasRef} />
+                    <canvas
+                      ref={canvasRef}
+                      className="max-w-full h-auto rounded shadow-sm"
+                    />
                   </div>
                 )}
               </div>
@@ -455,12 +458,12 @@ export const InstanceDetailsModal = ({
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <label className="text-xs text-muted-foreground font-medium uppercase tracking-wide">Category</label>
-                <p className="text-sm font-medium mt-1">{instance.category}</p>
+                <p className="text-sm font-medium mt-1">{location.category}</p>
               </div>
-              {instance.floor && (
+              {location.floor && (
                 <div>
                   <label className="text-xs text-muted-foreground font-medium uppercase tracking-wide">Floor</label>
-                  <p className="text-sm font-medium mt-1">{instance.floor}</p>
+                  <p className="text-sm font-medium mt-1">{location.floor}</p>
                 </div>
               )}
             </div>
@@ -502,29 +505,29 @@ export const InstanceDetailsModal = ({
             )}
 
             {/* Drawing Info */}
-            {(instance.drawingCode || instance.fileName) && (
+            {(location.drawingCode || location.fileName) && (
               <div className="grid grid-cols-2 gap-4">
-                {instance.drawingCode && (
+                {location.drawingCode && (
                   <div>
                     <label className="text-xs text-muted-foreground font-medium uppercase tracking-wide">Drawing Code</label>
-                    <p className="text-sm font-medium mt-1">{instance.drawingCode}</p>
+                    <p className="text-sm font-medium mt-1">{location.drawingCode}</p>
                   </div>
                 )}
-                {instance.fileName && (
+                {location.fileName && (
                   <div>
                     <label className="text-xs text-muted-foreground font-medium uppercase tracking-wide">Source File</label>
-                    <p className="text-sm font-medium mt-1 truncate">{instance.fileName}</p>
+                    <p className="text-sm font-medium mt-1 truncate">{location.fileName}</p>
                   </div>
                 )}
               </div>
             )}
 
             {/* Controls */}
-            {instance.controls && instance.controls.length > 0 && (
+            {location.controls && location.controls.length > 0 && (
               <div>
                 <label className="text-xs text-muted-foreground font-medium uppercase tracking-wide">Recommended Controls</label>
                 <div className="flex flex-wrap gap-1 mt-2">
-                  {instance.controls.map((control, idx) => (
+                  {location.controls.map((control, idx) => (
                     <Badge key={idx} variant="outline" className="text-xs">
                       {control}
                     </Badge>

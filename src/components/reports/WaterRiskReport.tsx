@@ -168,10 +168,10 @@ export const WaterRiskReport = ({ data, analysisItems = [], controlDetails = [] 
     interior_end_date: data.interior_end_date,
   };
   
-  // Get selected instance IDs
-  const selectedAssetInstanceIds = new Set<string>(data.selectedAssetInstances || []);
-  const selectedSystemInstanceIds = new Set<string>(data.selectedSystemInstances || []);
-  const selectedProcessInstanceIds = new Set<string>(data.selectedProcessInstances || []);
+  // Get selected location IDs
+  const selectedAssetLocationIds = new Set<string>(data.selectedAssetInstances || []);
+  const selectedSystemLocationIds = new Set<string>(data.selectedSystemInstances || []);
+  const selectedProcessLocationIds = new Set<string>(data.selectedProcessInstances || []);
   
   // Get selected control IDs
   const selectedAssetControlIds = new Set<string>(data.selectedAssetControls || []);
@@ -180,65 +180,65 @@ export const WaterRiskReport = ({ data, analysisItems = [], controlDetails = [] 
 
   // Filter analysis items by category and selection
   const selectedAssetItems = analysisItems.filter(
-    item => item.category === "Asset" && selectedAssetInstanceIds.has(item.id)
+    item => item.category === "Asset" && selectedAssetLocationIds.has(item.id)
   );
   const selectedSystemItems = analysisItems.filter(
-    item => item.category === "Water System" && selectedSystemInstanceIds.has(item.id)
+    item => item.category === "Water System" && selectedSystemLocationIds.has(item.id)
   );
   const selectedProcessItems = analysisItems.filter(
-    item => item.category === "Process" && selectedProcessInstanceIds.has(item.id)
+    item => item.category === "Process" && selectedProcessLocationIds.has(item.id)
   );
 
-  // Group items by name, with controls that differ per instance shown separately
+  // Group items by name, with controls that differ per location shown separately
   const groupByNameWithControlVariance = (items: AnalysisItem[], selectedControlIds: Set<string>) => {
     const groups = new Map<string, { 
-      instances: Array<{ item: AnalysisItem; controls: string[] }>;
+      locations: Array<{ item: AnalysisItem; controls: string[] }>;
       commonControls: Set<string>;
     }>();
     
     items.forEach(item => {
       if (!groups.has(item.name)) {
-        groups.set(item.name, { instances: [], commonControls: new Set() });
+        groups.set(item.name, { locations: [], commonControls: new Set() });
       }
       const group = groups.get(item.name)!;
       
-      // Get selected controls for this instance
-      const instanceControls: string[] = [];
+      // Get selected controls for this location
+      const locationControls: string[] = [];
       (item.controls || []).forEach(control => {
         const controlId = getControlId(item.id, control);
         if (selectedControlIds.has(controlId)) {
-          instanceControls.push(control);
+          locationControls.push(control);
         }
       });
       
-      group.instances.push({ item, controls: instanceControls });
+      group.locations.push({ item, controls: locationControls });
     });
     
-    // Determine common controls across all instances
+    // Determine common controls across all locations
     groups.forEach((group) => {
-      if (group.instances.length > 0) {
-        // Start with controls from first instance
-        const firstInstanceControls = new Set(group.instances[0].controls);
+      if (group.locations.length > 0) {
+        // Start with controls from first location
+        const firstLocationControls = new Set(group.locations[0].controls);
         
-        // Find intersection with all other instances
-        group.instances.forEach(({ controls }) => {
+        // Find intersection with all other locations
+        group.locations.forEach(({ controls }) => {
           const controlSet = new Set(controls);
-          firstInstanceControls.forEach(control => {
+          firstLocationControls.forEach(control => {
             if (!controlSet.has(control)) {
-              firstInstanceControls.delete(control);
+              firstLocationControls.delete(control);
             }
           });
         });
         
-        group.commonControls = firstInstanceControls;
+        group.commonControls = firstLocationControls;
       }
     });
     
     return Array.from(groups.entries()).map(([name, groupData]) => {
-      // Find instances with different controls than common
-      const instancesWithDifferentControls = groupData.instances.filter(({ controls }) => {
+      // Find locations with different controls than common
+      const locationsWithDifferentControls = groupData.locations.filter(({ controls }) => {
         const controlSet = new Set(controls);
-        // Check if this instance has different controls than common
+        // Check if this location has different controls than common
         if (controlSet.size !== groupData.commonControls.size) return true;
         for (const c of controls) {
           if (!groupData.commonControls.has(c)) return true;
@@ -248,29 +248,29 @@ export const WaterRiskReport = ({ data, analysisItems = [], controlDetails = [] 
 
       return {
         name,
-        instances: groupData.instances.map(i => i.item),
+        locations: groupData.locations.map(i => i.item),
         commonControls: Array.from(groupData.commonControls),
-        instancesWithDifferentControls: instancesWithDifferentControls.map(({ item, controls }) => ({
-          instance: item,
+        locationsWithDifferentControls: locationsWithDifferentControls.map(({ item, controls }) => ({
+          location: item,
           controls: controls.filter(c => !groupData.commonControls.has(c))
         }))
       };
     });
   };
 
-  // Group and sort by instance count (descending) to match web app order
+  // Group and sort by location count (descending) to match web app order
   const assetGroups = groupByNameWithControlVariance(selectedAssetItems, selectedAssetControlIds)
-    .sort((a, b) => b.instances.length - a.instances.length);
+    .sort((a, b) => b.locations.length - a.locations.length);
   const systemGroups = groupByNameWithControlVariance(selectedSystemItems, selectedSystemControlIds)
-    .sort((a, b) => b.instances.length - a.instances.length);
+    .sort((a, b) => b.locations.length - a.locations.length);
   const processGroups = groupByNameWithControlVariance(selectedProcessItems, selectedProcessControlIds)
-    .sort((a, b) => b.instances.length - a.instances.length);
+    .sort((a, b) => b.locations.length - a.locations.length);
 
   // Collect all unique control names used
   const allUsedControlNames = new Set<string>();
   [...assetGroups, ...systemGroups, ...processGroups].forEach(group => {
     group.commonControls.forEach(c => allUsedControlNames.add(c));
-    group.instancesWithDifferentControls.forEach(({ controls }) => {
+    group.locationsWithDifferentControls.forEach(({ controls }) => {
       controls.forEach(c => allUsedControlNames.add(c));
     });
   });
@@ -284,22 +284,22 @@ export const WaterRiskReport = ({ data, analysisItems = [], controlDetails = [] 
   // Get structural types
   const structuralTypes = data.structural_types || [];
 
-  // Helper to check if instance has additional parameters
-  const hasAdditionalParams = (instance: AnalysisItem) => {
-    return instance.floor || instance.drawingCode || instance.fileName || 
-           instance.width || instance.length || instance.sizeCategory;
+  // Helper to check if location has additional parameters
+  const hasAdditionalParams = (location: AnalysisItem) => {
+    return location.floor || location.drawingCode || location.fileName || 
+           location.width || location.length || location.sizeCategory;
   };
 
-  // Render instance details with additional parameters
-  const renderInstanceDetails = (instance: AnalysisItem) => {
+  // Render location details with additional parameters
+  const renderLocationDetails = (location: AnalysisItem) => {
     const details: string[] = [];
-    if (instance.floor) details.push(`Floor: ${instance.floor}`);
-    if (instance.drawingCode) details.push(`Drawing: ${instance.drawingCode}`);
-    if (instance.sizeCategory) details.push(`Size: ${instance.sizeCategory}`);
-    if (instance.width && instance.length) details.push(`Dimensions: ${instance.width} × ${instance.length} ft`);
-    else if (instance.width) details.push(`Width: ${instance.width} ft`);
-    else if (instance.length) details.push(`Length: ${instance.length} ft`);
-    if (instance.fileName) details.push(`File: ${instance.fileName}`);
+    if (location.floor) details.push(`Floor: ${location.floor}`);
+    if (location.drawingCode) details.push(`Drawing: ${location.drawingCode}`);
+    if (location.sizeCategory) details.push(`Size: ${location.sizeCategory}`);
+    if (location.width && location.length) details.push(`Dimensions: ${location.width} × ${location.length} ft`);
+    else if (location.width) details.push(`Width: ${location.width} ft`);
+    else if (location.length) details.push(`Length: ${location.length} ft`);
+    if (location.fileName) details.push(`File: ${location.fileName}`);
     return details;
   };
 
@@ -338,6 +338,194 @@ export const WaterRiskReport = ({ data, analysisItems = [], controlDetails = [] 
 
   // Use inline placeholder for drawings since we can't import dynamic paths
   const placeholderDrawingUrl = "/assets/placeholder_drawing.png";
+
+  // Render AWP section WITHOUT drawings (for main content)
+  const renderAWPSection = (
+    title: string, 
+    groups: typeof assetGroups, 
+    category: string,
+    badgeColor: string,
+    borderColor: string
+  ) => {
+    if (groups.length === 0) return null;
+    
+    return (
+      <section className="mb-4">
+        <h2 className="text-base font-bold text-gray-900 mb-2 border-b border-gray-300 pb-1">{title}</h2>
+        <div className="space-y-3">
+          {groups.map((group, index) => {
+            const durationInfo = getDurationInfo(group.name, category);
+            return (
+              <div key={index} className="bg-gray-50 p-2 rounded border border-gray-200 print-keep-together">
+                <div className="flex justify-between items-start mb-1">
+                  <div>
+                    <h3 className="font-bold text-[12px] text-gray-900">{group.name}</h3>
+                    {durationInfo && (
+                      <p className="text-[10px] text-gray-600 mt-0.5">
+                        {durationInfo.startDate} – {durationInfo.endDate} ({durationInfo.duration})
+                      </p>
+                    )}
+                  </div>
+                  <span className={`px-1.5 py-0.5 rounded text-[9px] font-semibold ${badgeColor}`}>
+                    {group.locations.length} {group.locations.length === 1 ? 'Location' : 'Locations'}
+                  </span>
+                </div>
+                
+                {/* Location list WITHOUT drawings */}
+                <div className="space-y-0.5">
+                  {group.locations.map((location, i) => {
+                    const details = renderLocationDetails(location);
+                    return (
+                      <div key={i} className={`text-[10px] text-gray-700 border-l-2 ${borderColor} pl-2`}>
+                        <div className="flex gap-1 items-start">
+                          <span className="text-gray-500 font-medium">{location.id}:</span>
+                          <span>{location.areaName || location.name}</span>
+                        </div>
+                        {details.length > 0 && (
+                          <div className="flex flex-wrap gap-x-2 text-[9px] text-gray-500 mt-0.5">
+                            {details.map((detail, j) => (
+                              <span key={j}>{detail}</span>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+                
+                {/* Common Controls */}
+                {group.commonControls.length > 0 && (
+                  <div className="mt-2 pt-1.5 border-t border-gray-200">
+                    <p className="text-[10px] font-semibold text-gray-700 mb-0.5">Controls:</p>
+                    <ul className="list-disc list-inside text-[10px] text-gray-700 space-y-0">
+                      {group.commonControls.map((control, i) => (
+                        <li key={i}>{control}</li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+
+                {/* Location-specific controls (if different from common) */}
+                {group.locationsWithDifferentControls.length > 0 && group.locationsWithDifferentControls.some(i => i.controls.length > 0) && (
+                  <div className="mt-1.5 pt-1.5 border-t border-gray-200">
+                    <p className="text-[10px] font-semibold text-gray-700 mb-0.5">Location-Specific Controls:</p>
+                    {group.locationsWithDifferentControls.filter(i => i.controls.length > 0).map(({ location, controls }, i) => (
+                      <div key={i} className="ml-2 mb-1">
+                        <p className="text-[10px] text-gray-600 font-medium">{location.id}:</p>
+                        <ul className="list-disc list-inside text-[10px] text-gray-700 ml-1">
+                          {controls.map((control, j) => (
+                            <li key={j}>{control}</li>
+                          ))}
+                        </ul>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      </section>
+    );
+  };
+
+  // Render Appendix A section WITH drawings (for locations appendix)
+  const renderAppendixASection = (
+    title: string, 
+    groups: typeof assetGroups, 
+    category: string,
+    badgeColor: string,
+    borderColor: string
+  ) => {
+    if (groups.length === 0) return null;
+    
+    return (
+      <div className="mb-4">
+        <h3 className="text-sm font-bold text-gray-900 mb-2 border-b border-gray-200 pb-1">{title}</h3>
+        <div className="space-y-3">
+          {groups.map((group, index) => {
+            const durationInfo = getDurationInfo(group.name, category);
+            return (
+              <div key={index} className="bg-gray-50 p-2 rounded border border-gray-200 print-keep-together">
+                <div className="flex justify-between items-start mb-1">
+                  <div>
+                    <h4 className="font-bold text-[12px] text-gray-900">{group.name}</h4>
+                    {durationInfo && (
+                      <p className="text-[10px] text-gray-600 mt-0.5">
+                        {durationInfo.startDate} – {durationInfo.endDate} ({durationInfo.duration})
+                      </p>
+                    )}
+                  </div>
+                  <span className={`px-1.5 py-0.5 rounded text-[9px] font-semibold ${badgeColor}`}>
+                    {group.locations.length} {group.locations.length === 1 ? 'Location' : 'Locations'}
+                  </span>
+                </div>
+                
+                {/* Location list WITH drawings */}
+                <div className="space-y-2">
+                  {group.locations.map((location, i) => {
+                    const details = renderLocationDetails(location);
+                    return (
+                      <div key={i} className={`text-[10px] text-gray-700 border-l-2 ${borderColor} pl-2`}>
+                        <div className="flex gap-1 items-start">
+                          <span className="text-gray-500 font-medium">{location.id}:</span>
+                          <span>{location.areaName || location.name}</span>
+                        </div>
+                        {details.length > 0 && (
+                          <div className="flex flex-wrap gap-x-2 text-[9px] text-gray-500 mt-0.5">
+                            {details.map((detail, j) => (
+                              <span key={j}>{detail}</span>
+                            ))}
+                          </div>
+                        )}
+                        {/* Drawing placeholder - bigger and centered */}
+                        <div className="mt-2 p-3 border border-gray-200 rounded bg-white flex justify-center">
+                          <img 
+                            src={placeholderDrawingUrl} 
+                            alt="Drawing preview" 
+                            className="w-80 h-60 object-contain rounded border border-gray-200"
+                          />
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+                
+                {/* Common Controls */}
+                {group.commonControls.length > 0 && (
+                  <div className="mt-2 pt-1.5 border-t border-gray-200">
+                    <p className="text-[10px] font-semibold text-gray-700 mb-0.5">Controls:</p>
+                    <ul className="list-disc list-inside text-[10px] text-gray-700 space-y-0">
+                      {group.commonControls.map((control, i) => (
+                        <li key={i}>{control}</li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+
+                {/* Location-specific controls */}
+                {group.locationsWithDifferentControls.length > 0 && group.locationsWithDifferentControls.some(i => i.controls.length > 0) && (
+                  <div className="mt-1.5 pt-1.5 border-t border-gray-200">
+                    <p className="text-[10px] font-semibold text-gray-700 mb-0.5">Location-Specific Controls:</p>
+                    {group.locationsWithDifferentControls.filter(i => i.controls.length > 0).map(({ location, controls }, i) => (
+                      <div key={i} className="ml-2 mb-1">
+                        <p className="text-[10px] text-gray-600 font-medium">{location.id}:</p>
+                        <ul className="list-disc list-inside text-[10px] text-gray-700 ml-1">
+                          {controls.map((control, j) => (
+                            <li key={j}>{control}</li>
+                          ))}
+                        </ul>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    );
+  };
 
   return (
     <div className="print-report bg-white text-black p-4 max-w-[210mm] mx-auto text-[11px]">
@@ -544,256 +732,28 @@ export const WaterRiskReport = ({ data, analysisItems = [], controlDetails = [] 
         </section>
       )}
 
-      {/* Critical Assets */}
-      {assetGroups.length > 0 && (
-        <section className="mb-4">
-          <h2 className="text-base font-bold text-gray-900 mb-2 border-b border-gray-300 pb-1">Critical Assets</h2>
-          <div className="space-y-3">
-            {assetGroups.map((group, index) => {
-              const durationInfo = getDurationInfo(group.name, "Asset");
-              return (
-                <div key={index} className="bg-gray-50 p-2 rounded border border-gray-200 print-keep-together">
-                  <div className="flex justify-between items-start mb-1">
-                    <div>
-                      <h3 className="font-bold text-[12px] text-gray-900">{group.name}</h3>
-                      {durationInfo && (
-                        <p className="text-[10px] text-gray-600 mt-0.5">
-                          {durationInfo.startDate} – {durationInfo.endDate} ({durationInfo.duration})
-                        </p>
-                      )}
-                    </div>
-                    <span className="px-1.5 py-0.5 rounded text-[9px] font-semibold bg-blue-100 text-blue-800">
-                      {group.instances.length} {group.instances.length === 1 ? 'Instance' : 'Instances'}
-                    </span>
-                  </div>
-                  
-                  {/* Instance list with drawing placeholders */}
-                  <div className="space-y-2">
-                    {group.instances.map((instance, i) => {
-                      const details = renderInstanceDetails(instance);
-                      return (
-                        <div key={i} className="text-[10px] text-gray-700 border-l-2 border-blue-200 pl-2">
-                          <div className="flex gap-1 items-start">
-                            <span className="text-gray-500 font-medium">{instance.id}:</span>
-                            <span>{instance.areaName || instance.name}</span>
-                          </div>
-                          {details.length > 0 && (
-                            <div className="flex flex-wrap gap-x-2 text-[9px] text-gray-500 mt-0.5">
-                              {details.map((detail, j) => (
-                                <span key={j}>{detail}</span>
-                              ))}
-                            </div>
-                          )}
-                          {/* Drawing placeholder - bigger and centered */}
-                          <div className="mt-2 p-3 border border-gray-200 rounded bg-white flex justify-center">
-                            <img 
-                              src={placeholderDrawingUrl} 
-                              alt="Drawing preview" 
-                              className="w-80 h-60 object-contain rounded border border-gray-200"
-                            />
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                  
-                  {/* Common Controls */}
-                  {group.commonControls.length > 0 && (
-                    <div className="mt-2 pt-1.5 border-t border-gray-200">
-                      <p className="text-[10px] font-semibold text-gray-700 mb-0.5">Controls:</p>
-                      <ul className="list-disc list-inside text-[10px] text-gray-700 space-y-0">
-                        {group.commonControls.map((control, i) => (
-                          <li key={i}>{control}</li>
-                        ))}
-                      </ul>
-                    </div>
-                  )}
+      {/* AWP Sections - WITHOUT drawings */}
+      {renderAWPSection("Critical Assets", assetGroups, "Asset", "bg-blue-100 text-blue-800", "border-blue-200")}
+      {renderAWPSection("Water Systems", systemGroups, "Water System", "bg-cyan-100 text-cyan-800", "border-cyan-200")}
+      {renderAWPSection("Processes", processGroups, "Process", "bg-purple-100 text-purple-800", "border-purple-200")}
 
-                  {/* Instance-specific controls (if different from common) */}
-                  {group.instancesWithDifferentControls.length > 0 && group.instancesWithDifferentControls.some(i => i.controls.length > 0) && (
-                    <div className="mt-1.5 pt-1.5 border-t border-gray-200">
-                      <p className="text-[10px] font-semibold text-gray-700 mb-0.5">Instance-Specific Controls:</p>
-                      {group.instancesWithDifferentControls.filter(i => i.controls.length > 0).map(({ instance, controls }, i) => (
-                        <div key={i} className="ml-2 mb-1">
-                          <p className="text-[10px] text-gray-600 font-medium">{instance.id}:</p>
-                          <ul className="list-disc list-inside text-[10px] text-gray-700 ml-1">
-                            {controls.map((control, j) => (
-                              <li key={j}>{control}</li>
-                            ))}
-                          </ul>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              );
-            })}
-          </div>
-        </section>
-      )}
-
-      {/* Water Systems */}
-      {systemGroups.length > 0 && (
+      {/* Appendix A: Locations - WITH drawings */}
+      {(assetGroups.length > 0 || systemGroups.length > 0 || processGroups.length > 0) && (
         <section className="mb-4 page-break-before">
-          <h2 className="text-base font-bold text-gray-900 mb-2 border-b border-gray-300 pb-1">Water Systems</h2>
-          <div className="space-y-3">
-            {systemGroups.map((group, index) => {
-              const durationInfo = getDurationInfo(group.name, "Water System");
-              return (
-                <div key={index} className="bg-gray-50 p-2 rounded border border-gray-200 print-keep-together">
-                  <div className="flex justify-between items-start mb-1">
-                    <div>
-                      <h3 className="font-bold text-[12px] text-gray-900">{group.name}</h3>
-                      {durationInfo && (
-                        <p className="text-[10px] text-gray-600 mt-0.5">
-                          {durationInfo.startDate} – {durationInfo.endDate} ({durationInfo.duration})
-                        </p>
-                      )}
-                    </div>
-                    <span className="px-1.5 py-0.5 rounded text-[9px] font-semibold bg-cyan-100 text-cyan-800">
-                      {group.instances.length} {group.instances.length === 1 ? 'Instance' : 'Instances'}
-                    </span>
-                  </div>
-                  
-                  {/* Instance list */}
-                  <div className="space-y-2">
-                    {group.instances.map((instance, i) => {
-                      const details = renderInstanceDetails(instance);
-                      return (
-                        <div key={i} className="text-[10px] text-gray-700 border-l-2 border-cyan-200 pl-2">
-                          <div className="flex gap-1 items-start">
-                            <span className="text-gray-500 font-medium">{instance.id}:</span>
-                            <span>{instance.areaName || instance.name}</span>
-                          </div>
-                          {details.length > 0 && (
-                            <div className="flex flex-wrap gap-x-2 text-[9px] text-gray-500 mt-0.5">
-                              {details.map((detail, j) => (
-                                <span key={j}>{detail}</span>
-                              ))}
-                            </div>
-                          )}
-                          {/* Drawing placeholder - bigger and centered */}
-                          <div className="mt-2 p-3 border border-gray-200 rounded bg-white flex justify-center">
-                            <img 
-                              src={placeholderDrawingUrl} 
-                              alt="Drawing preview" 
-                              className="w-80 h-60 object-contain rounded border border-gray-200"
-                            />
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                  
-                  {/* Common Controls */}
-                  {group.commonControls.length > 0 && (
-                    <div className="mt-2 pt-1.5 border-t border-gray-200">
-                      <p className="text-[10px] font-semibold text-gray-700 mb-0.5">Controls:</p>
-                      <ul className="list-disc list-inside text-[10px] text-gray-700 space-y-0">
-                        {group.commonControls.map((control, i) => (
-                          <li key={i}>{control}</li>
-                        ))}
-                      </ul>
-                    </div>
-                  )}
-
-                  {/* Instance-specific controls */}
-                  {group.instancesWithDifferentControls.length > 0 && group.instancesWithDifferentControls.some(i => i.controls.length > 0) && (
-                    <div className="mt-1.5 pt-1.5 border-t border-gray-200">
-                      <p className="text-[10px] font-semibold text-gray-700 mb-0.5">Instance-Specific Controls:</p>
-                      {group.instancesWithDifferentControls.filter(i => i.controls.length > 0).map(({ instance, controls }, i) => (
-                        <div key={i} className="ml-2 mb-1">
-                          <p className="text-[10px] text-gray-600 font-medium">{instance.id}:</p>
-                          <ul className="list-disc list-inside text-[10px] text-gray-700 ml-1">
-                            {controls.map((control, j) => (
-                              <li key={j}>{control}</li>
-                            ))}
-                          </ul>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              );
-            })}
-          </div>
+          <h2 className="text-base font-bold text-gray-900 mb-2 border-b border-gray-300 pb-1">Appendix A: Locations</h2>
+          <p className="text-[10px] text-gray-600 mb-3">
+            Detailed location information with drawing references for all selected assets, water systems, and processes.
+          </p>
+          {renderAppendixASection("Critical Assets", assetGroups, "Asset", "bg-blue-100 text-blue-800", "border-blue-200")}
+          {renderAppendixASection("Water Systems", systemGroups, "Water System", "bg-cyan-100 text-cyan-800", "border-cyan-200")}
+          {renderAppendixASection("Processes", processGroups, "Process", "bg-purple-100 text-purple-800", "border-purple-200")}
         </section>
       )}
 
-      {/* Processes */}
-      {processGroups.length > 0 && (
-        <section className="mb-4 page-break-before">
-          <h2 className="text-base font-bold text-gray-900 mb-2 border-b border-gray-300 pb-1">Processes</h2>
-          <div className="space-y-3">
-            {processGroups.map((group, index) => (
-              <div key={index} className="bg-gray-50 p-2 rounded border border-gray-200 print-keep-together">
-                <div className="flex justify-between items-start mb-1">
-                  <h3 className="font-bold text-[12px] text-gray-900">{group.name}</h3>
-                  <span className="px-1.5 py-0.5 rounded text-[9px] font-semibold bg-purple-100 text-purple-800">
-                    {group.instances.length} {group.instances.length === 1 ? 'Instance' : 'Instances'}
-                  </span>
-                </div>
-                
-                {/* Instance list */}
-                <div className="space-y-0.5">
-                  {group.instances.map((instance, i) => {
-                    const details = renderInstanceDetails(instance);
-                    return (
-                      <div key={i} className="text-[10px] text-gray-700">
-                        <div className="flex gap-1 items-start">
-                          <span className="text-gray-500 font-medium">{instance.id}:</span>
-                          <span>{instance.areaName || instance.name}</span>
-                        </div>
-                        {details.length > 0 && (
-                          <div className="ml-3 flex flex-wrap gap-x-2 text-[9px] text-gray-500">
-                            {details.map((detail, j) => (
-                              <span key={j}>{detail}</span>
-                            ))}
-                          </div>
-                        )}
-                      </div>
-                    );
-                  })}
-                </div>
-                
-                {/* Common Controls */}
-                {group.commonControls.length > 0 && (
-                  <div className="mt-2 pt-1.5 border-t border-gray-200">
-                    <p className="text-[10px] font-semibold text-gray-700 mb-0.5">Controls:</p>
-                    <ul className="list-disc list-inside text-[10px] text-gray-700 space-y-0">
-                      {group.commonControls.map((control, i) => (
-                        <li key={i}>{control}</li>
-                      ))}
-                    </ul>
-                  </div>
-                )}
-
-                {/* Instance-specific controls */}
-                {group.instancesWithDifferentControls.length > 0 && group.instancesWithDifferentControls.some(i => i.controls.length > 0) && (
-                  <div className="mt-1.5 pt-1.5 border-t border-gray-200">
-                    <p className="text-[10px] font-semibold text-gray-700 mb-0.5">Instance-Specific Controls:</p>
-                    {group.instancesWithDifferentControls.filter(i => i.controls.length > 0).map(({ instance, controls }, i) => (
-                      <div key={i} className="ml-2 mb-1">
-                        <p className="text-[10px] text-gray-600 font-medium">{instance.id}:</p>
-                        <ul className="list-disc list-inside text-[10px] text-gray-700 ml-1">
-                          {controls.map((control, j) => (
-                            <li key={j}>{control}</li>
-                          ))}
-                        </ul>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-            ))}
-          </div>
-        </section>
-      )}
-
-      {/* Appendix: Control Reference */}
+      {/* Appendix B: Control Reference */}
       {controlDetails.length > 0 && allUsedControlNames.size > 0 && (
         <section className="mb-4 page-break-before">
-          <h2 className="text-base font-bold text-gray-900 mb-2 border-b border-gray-300 pb-1">Appendix: Control Reference</h2>
+          <h2 className="text-base font-bold text-gray-900 mb-2 border-b border-gray-300 pb-1">Appendix B: Control Reference</h2>
           <div className="space-y-2">
             {controlDetails
               .filter(control => 
