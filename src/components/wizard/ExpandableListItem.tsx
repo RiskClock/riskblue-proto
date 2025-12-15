@@ -6,7 +6,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { cn } from "@/lib/utils";
 import { AnalysisItem } from "@/lib/analysisItemMapper";
 import { ClassRiskBadges } from "./RiskScoreSummary";
-import { InstanceDetailsModal } from "./InstanceDetailsModal";
+import { LocationDetailsModal } from "./LocationDetailsModal";
 import { ControlDetailsModal } from "./ControlDetailsModal";
 import type { DriveFileInfo } from "./ProjectFilesUpload";
 import { 
@@ -639,11 +639,11 @@ export const ExpandableListItem = ({
         </div>
       )}
 
-      {/* Instance Details Modal - combined with file viewer */}
-      <InstanceDetailsModal
+      {/* Location Details Modal - combined with file viewer */}
+      <LocationDetailsModal
         isOpen={detailsModalOpen}
         onClose={() => setDetailsModalOpen(false)}
-        instance={selectedDetailInstance}
+        location={selectedDetailInstance}
         canViewFile={canViewFiles && !!selectedDetailInstance?.fileName}
         driveFile={selectedDetailInstance?.fileName ? findDriveFile(selectedDetailInstance.fileName) : undefined}
         driveAccessToken={driveAccessToken}
