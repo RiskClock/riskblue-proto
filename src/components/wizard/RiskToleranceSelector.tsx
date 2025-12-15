@@ -1,12 +1,6 @@
 import { cn } from "@/lib/utils";
-import { CheckCircle2, AlertTriangle, Shield, Info } from "lucide-react";
+import { CheckCircle2, AlertTriangle, Shield } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from "@/components/ui/tooltip";
 
 export type RiskTolerance = "low" | "medium" | "high";
 
@@ -85,12 +79,12 @@ export const RiskToleranceSelector = ({
 
   const getUnprotectedAssets = (protectedAssets: string[]) => allAssets.filter(a => !protectedAssets.includes(a));
 
-  const formatCoverage = (coverage: CoverageBreakdown) => {
-    const parts: string[] = [];
-    if (coverage.assets > 0) parts.push(`${coverage.assets} asset${coverage.assets !== 1 ? 's' : ''}`);
-    if (coverage.systems > 0) parts.push(`${coverage.systems} system${coverage.systems !== 1 ? 's' : ''}`);
-    if (coverage.processes > 0) parts.push(`${coverage.processes} process${coverage.processes !== 1 ? 'es' : ''}`);
-    return parts.length > 0 ? parts.join(', ') : 'None';
+  const formatCoverageLines = (coverage: CoverageBreakdown) => {
+    const lines: string[] = [];
+    lines.push(`${coverage.assets} Asset${coverage.assets !== 1 ? 's' : ''}`);
+    lines.push(`${coverage.systems} Water System${coverage.systems !== 1 ? 's' : ''}`);
+    lines.push(`${coverage.processes} Process${coverage.processes !== 1 ? 'es' : ''}`);
+    return lines;
   };
 
   const packages: ImplementationPackage[] = [
@@ -153,31 +147,18 @@ export const RiskToleranceSelector = ({
           ))}
         </div>
 
-        {/* Coverage Row */}
+        {/* Coverage Row - multiline display */}
         <div className="grid grid-cols-4 border-b">
           <div className="p-4 font-medium text-sm text-muted-foreground">Coverage</div>
-          <TooltipProvider>
-            {packages.map((pkg) => (
-              <div key={pkg.level} className={cn("p-4 text-sm border-l cursor-pointer transition-colors", value === pkg.level && !hasCustomSelection ? "bg-primary/5" : "hover:bg-muted/30")} onClick={() => onChange(pkg.level)}>
-                <div className="flex items-center gap-2">
-                  <span className="font-medium text-xs">{formatCoverage(pkg.coverage)}</span>
-                  {(pkg.protectedAssets.length > 0 || pkg.unprotectedAssets.length > 0) && (
-                    <Tooltip>
-                      <TooltipTrigger asChild><Info className="h-4 w-4 text-muted-foreground hover:text-foreground cursor-help" /></TooltipTrigger>
-                      <TooltipContent className="max-w-xs p-3" side="bottom">
-                        <div className="space-y-2 text-xs">
-                          <p className="font-semibold">Coverage Breakdown:</p>
-                          <p>• {pkg.coverage.assets} asset{pkg.coverage.assets !== 1 ? 's' : ''}</p>
-                          <p>• {pkg.coverage.systems} water system{pkg.coverage.systems !== 1 ? 's' : ''}</p>
-                          <p>• {pkg.coverage.processes} process{pkg.coverage.processes !== 1 ? 'es' : ''}</p>
-                        </div>
-                      </TooltipContent>
-                    </Tooltip>
-                  )}
-                </div>
+          {packages.map((pkg) => (
+            <div key={pkg.level} className={cn("p-4 text-sm border-l cursor-pointer transition-colors", value === pkg.level && !hasCustomSelection ? "bg-primary/5" : "hover:bg-muted/30")} onClick={() => onChange(pkg.level)}>
+              <div className="space-y-0.5">
+                {formatCoverageLines(pkg.coverage).map((line, i) => (
+                  <div key={i} className="text-xs text-foreground">{line}</div>
+                ))}
               </div>
-            ))}
-          </TooltipProvider>
+            </div>
+          ))}
         </div>
 
         {/* Total Controls Row */}

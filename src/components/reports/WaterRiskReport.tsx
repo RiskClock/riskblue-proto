@@ -4,16 +4,8 @@ import { AnalysisItem } from "@/lib/analysisItemMapper";
 import { getControlId } from "@/components/wizard/ExpandableListItem";
 import { calculateSystemOrAssetDates, TimelineData } from "@/lib/durationCalculator";
 import { differenceInMonths, format } from "date-fns";
-import riskBlueLogo from "@/assets/riskblue-logo.jpg";
 
-// Use public URLs for images - these work in print PDFs
-const getPublicImageUrl = (filename: string) => {
-  // In production, use window.location.origin, in dev use relative path
-  const baseUrl = typeof window !== 'undefined' ? window.location.origin : '';
-  return `${baseUrl}/assets/${filename}`;
-};
-
-// Get the base URL for absolute paths in print
+// Get the base URL for absolute paths in print - required for browser print to work
 const getAbsoluteUrl = (path: string) => {
   if (typeof window !== 'undefined') {
     return `${window.location.origin}${path}`;
@@ -247,8 +239,8 @@ export const WaterRiskReport = ({ data, analysisItems = [], controlDetails = [] 
     return null;
   };
 
-  // Generate absolute URLs for images
-  const logoUrl = riskBlueLogo;
+  // Generate absolute URLs for images - must use public paths for print to work
+  const logoUrl = getAbsoluteUrl("/assets/riskblue-logo.png");
   const placeholderDrawingUrl = getAbsoluteUrl("/assets/placeholder_drawing.png");
 
   return (
