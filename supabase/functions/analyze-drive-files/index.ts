@@ -22,9 +22,9 @@ interface AnalysisItem {
   fileName: string | null;
   width: number | null;
   length: number | null;
-  sizeCategory: "small" | "medium" | "large" | "very large" | null;
+  sizeCategory: "very small" | "small" | "medium" | "large" | "very large" | null;
   controls: string[];
-  coordinates: [number, number, number, number] | null;
+  coordinates: number[] | null;
   additionalParameters?: {
     mainPipeDirection?: string;
     pipeDiameterInches?: string | null;
@@ -32,40 +32,19 @@ interface AnalysisItem {
   };
 }
 
-// Complete TMU Mock data with exact file names from provided mock data
-// Mock data with PDF point coordinates [x0, y0, x1, y1] (bottom-left to top-right)
-// A0 horizontal: 3370.4 x 2383.9 points
+// AWP Mock data with controls
 const MOCK_ASSETS_WATER_SYSTEMS_PROCESSES: AnalysisItem[] = [
   {
     "id": "ERM001",
     "name": "Electrical Rooms",
     "category": "Asset",
-    "areaName": "ELECTRICAL",
+    "areaName": "IT ROOM",
     "floor": "Lower Level",
     "drawingCode": null,
     "fileName": "A2.01-LOWER-LEVEL-Rev.18.pdf",
     "width": 36.7,
     "length": 20.7,
-    "sizeCategory": "large",
-    "controls": [
-      "Presence of Water Monitoring",
-      "Water Piping in and Around Electrical Rooms",
-      "Water-Sensitive and High-Value Equipment Protection",
-      "Temporary Enclosures Plan"
-    ],
-    "coordinates": [1236.6, 1308.7, 1988.1, 2046.0]
-  },
-  {
-    "id": "ERM002",
-    "name": "Electrical Rooms",
-    "category": "Asset",
-    "areaName": "SUBSTATION ROOM",
-    "floor": "Lower Level",
-    "drawingCode": null,
-    "fileName": "A2.01-LOWER-LEVEL-Rev.18.pdf",
-    "width": 12.1,
-    "length": 34.7,
-    "sizeCategory": "medium",
+    "sizeCategory": "very small",
     "controls": [
       "Presence of Water Monitoring",
       "Water Piping in and Around Electrical Rooms",
@@ -75,7 +54,45 @@ const MOCK_ASSETS_WATER_SYSTEMS_PROCESSES: AnalysisItem[] = [
     "coordinates": [1115.3, 1548.5, 1852.7, 2285.8]
   },
   {
+    "id": "ERM002",
+    "name": "Electrical Rooms",
+    "category": "Asset",
+    "areaName": "ELECTRICAL",
+    "floor": "Lower Level",
+    "drawingCode": null,
+    "fileName": "A2.01-LOWER-LEVEL-Rev.18.pdf",
+    "width": 12.1,
+    "length": 34.7,
+    "sizeCategory": "small",
+    "controls": [
+      "Presence of Water Monitoring",
+      "Water Piping in and Around Electrical Rooms",
+      "Water-Sensitive and High-Value Equipment Protection",
+      "Temporary Enclosures Plan"
+    ],
+    "coordinates": [1236.6, 1308.7, 1988.1, 2046.0]
+  },
+  {
     "id": "ERM003",
+    "name": "Electrical Rooms",
+    "category": "Asset",
+    "areaName": "HYDRO VAULT",
+    "floor": "Lower Level",
+    "drawingCode": null,
+    "fileName": "A2.01-LOWER-LEVEL-Rev.18.pdf",
+    "width": 27.9,
+    "length": 34.7,
+    "sizeCategory": "medium",
+    "controls": [
+      "Presence of Water Monitoring",
+      "Water Piping in and Around Electrical Rooms",
+      "Water-Sensitive and High-Value Equipment Protection",
+      "Temporary Enclosures Plan"
+    ],
+    "coordinates": [715.7, 1213.7, 1674.3, 2150.8]
+  },
+  {
+    "id": "ERM004",
     "name": "Electrical Rooms",
     "category": "Asset",
     "areaName": "IT ROOM",
@@ -84,7 +101,7 @@ const MOCK_ASSETS_WATER_SYSTEMS_PROCESSES: AnalysisItem[] = [
     "fileName": "A2.05-FOURTH-FLOOR-Rev.16.pdf",
     "width": 10.5,
     "length": 32.5,
-    "sizeCategory": "medium",
+    "sizeCategory": "very small",
     "controls": [
       "Presence of Water Monitoring",
       "Water Piping in and Around Electrical Rooms",
@@ -94,7 +111,7 @@ const MOCK_ASSETS_WATER_SYSTEMS_PROCESSES: AnalysisItem[] = [
     "coordinates": [1677.5, 1668.4, 2418.6, 2384.0]
   },
   {
-    "id": "ERM004",
+    "id": "ERM005",
     "name": "Electrical Rooms",
     "category": "Asset",
     "areaName": "IT ROOM",
@@ -103,7 +120,7 @@ const MOCK_ASSETS_WATER_SYSTEMS_PROCESSES: AnalysisItem[] = [
     "fileName": "A2.07-SIXTH-FLOOR-Rev.18.1.pdf",
     "width": 36.9,
     "length": 37.8,
-    "sizeCategory": "very large",
+    "sizeCategory": "very small",
     "controls": [
       "Presence of Water Monitoring",
       "Water Piping in and Around Electrical Rooms",
@@ -113,7 +130,7 @@ const MOCK_ASSETS_WATER_SYSTEMS_PROCESSES: AnalysisItem[] = [
     "coordinates": [1678.1, 1655.5, 2419.4, 2384.0]
   },
   {
-    "id": "ERM005",
+    "id": "ERM006",
     "name": "Electrical Rooms",
     "category": "Asset",
     "areaName": "ELECTRICAL ROOM",
@@ -122,7 +139,7 @@ const MOCK_ASSETS_WATER_SYSTEMS_PROCESSES: AnalysisItem[] = [
     "fileName": "A2.10-ROOF-PLAN-Rev.14.pdf",
     "width": 37.7,
     "length": 26.4,
-    "sizeCategory": "very large",
+    "sizeCategory": "very small",
     "controls": [
       "Presence of Water Monitoring",
       "Water Piping in and Around Electrical Rooms",
@@ -130,25 +147,6 @@ const MOCK_ASSETS_WATER_SYSTEMS_PROCESSES: AnalysisItem[] = [
       "Temporary Enclosures Plan"
     ],
     "coordinates": [1657.6, 1346.9, 2436.8, 2084.2]
-  },
-  {
-    "id": "ERM006",
-    "name": "Electrical Rooms",
-    "category": "Asset",
-    "areaName": "HYDRO VAULT",
-    "floor": "Lower Level",
-    "drawingCode": null,
-    "fileName": "A2.01-LOWER-LEVEL-Rev.18.pdf",
-    "width": 27.9,
-    "length": 34.7,
-    "sizeCategory": "very large",
-    "controls": [
-      "Presence of Water Monitoring",
-      "Water Piping in and Around Electrical Rooms",
-      "Water-Sensitive and High-Value Equipment Protection",
-      "Temporary Enclosures Plan"
-    ],
-    "coordinates": [715.7, 1213.7, 1674.3, 2150.8]
   },
   {
     "id": "MRM001",
@@ -433,7 +431,7 @@ const MOCK_ASSETS_WATER_SYSTEMS_PROCESSES: AnalysisItem[] = [
     "floor": null,
     "drawingCode": null,
     "fileName": "A2.01-LOWER-LEVEL-Rev.18.pdf",
-    "width": 17.0,
+    "width": 17,
     "length": 31.2,
     "sizeCategory": "medium",
     "controls": [
@@ -946,7 +944,7 @@ Based on the analysis of your uploaded construction drawings, we have identified
 5. **Building Envelope**: Facade and roofing systems with weather monitoring controls
 
 ### Recommended Controls
-Each identified asset and water system has been mapped to appropriate mitigation controls based on industry best practices and TMU (Technology and Mitigation Utilization) guidelines.`;
+Each identified asset and water system has been mapped to appropriate mitigation controls based on industry best practices and AWP (Advanced Water Protection) guidelines.`;
 
 serve(async (req) => {
   // Handle CORS preflight requests
