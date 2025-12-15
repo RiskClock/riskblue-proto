@@ -203,23 +203,41 @@ export const InstanceDetailsModal = ({
 
     // Draw bounding box for instance if coordinates exist
     if (instance?.coordinates && instance.coordinates.length === 4) {
-      const [x, y, w, h] = instance.coordinates;
+      const coords = instance.coordinates;
+      const maxCoord = Math.max(...coords);
       
-      // Auto-detect coordinate scale
-      const maxCoord = Math.max(x, y, w, h);
-      let coordScale: number;
+      // Get PDF original dimensions for coordinate transformation
+      const pdfWidth = originalSize?.width || img.width;
+      const pdfHeight = originalSize?.height || img.height;
+      
+      let scaledX: number, scaledY: number, scaledWidth: number, scaledHeight: number;
+      
       if (maxCoord <= 1) {
-        coordScale = 1;
-      } else if (maxCoord <= 1000) {
-        coordScale = 1000;
+        // Normalized 0-1 format: [x, y, width, height]
+        const [x, y, w, h] = coords;
+        scaledX = x * displayWidth;
+        scaledY = y * displayHeight;
+        scaledWidth = w * displayWidth;
+        scaledHeight = h * displayHeight;
       } else {
-        coordScale = Math.max(originalSize?.width || img.width, originalSize?.height || img.height);
+        // PDF points format: [x0, y0, x1, y1] (bottom-left to top-right)
+        // PDF origin is bottom-left, canvas origin is top-left
+        const [x0, y0, x1, y1] = coords;
+        
+        // Calculate box dimensions in PDF points
+        const boxWidth = x1 - x0;
+        const boxHeight = y1 - y0;
+        
+        // Scale factors from PDF points to display canvas
+        const scaleX = displayWidth / pdfWidth;
+        const scaleY = displayHeight / pdfHeight;
+        
+        // Transform: X stays same, Y needs to be flipped
+        scaledX = x0 * scaleX;
+        scaledY = (pdfHeight - y1) * scaleY;  // Flip Y: use y1 (top) and subtract from height
+        scaledWidth = boxWidth * scaleX;
+        scaledHeight = boxHeight * scaleY;
       }
-
-      const scaledX = (x / coordScale) * displayWidth;
-      const scaledY = (y / coordScale) * displayHeight;
-      const scaledWidth = (w / coordScale) * displayWidth;
-      const scaledHeight = (h / coordScale) * displayHeight;
 
       // Draw rectangle
       ctx.strokeStyle = BOUNDING_BOX_COLOR;

@@ -18,7 +18,7 @@ interface SystemDetection {
   lineMonitored: string;
   lineCode: string;
   systemType: string;
-  coordinates: [number, number, number, number]; // [x, y, width, height] - normalized 0-1 values
+  coordinates: [number, number, number, number]; // [x0, y0, x1, y1] PDF points or [x, y, w, h] normalized 0-1
   fileName?: string;
 }
 
@@ -217,40 +217,50 @@ export const FileViewerModal = ({
     // Draw image
     ctx.drawImage(img, 0, 0, displayWidth, displayHeight);
 
-    // Auto-detect coordinate scale based on max values
-    // Gemini can return: 0-1 (normalized), 0-1000, or actual pixel values
-    let maxCoord = 0;
-    fileDetections.forEach(d => {
-      const coords = d.coordinates;
-      maxCoord = Math.max(maxCoord, ...coords);
-    });
+    // Get PDF original dimensions for coordinate transformation
+    const pdfWidth = originalSize?.width || img.width;
+    const pdfHeight = originalSize?.height || img.height;
     
-    // Determine scale: if max <= 1 it's 0-1, if max <= 1000 it's 0-1000, else pixels
-    let coordScale: number;
-    if (maxCoord <= 1) {
-      coordScale = 1; // 0-1 normalized
-    } else if (maxCoord <= 1000) {
-      coordScale = 1000; // 0-1000 normalized
-    } else {
-      // Actual pixel coordinates - use original PDF size
-      coordScale = Math.max(originalSize?.width || img.width, originalSize?.height || img.height);
-    }
-    
-    console.log("Drawing", fileDetections.length, "detections, maxCoord:", maxCoord, "scale:", coordScale);
+    console.log("Drawing", fileDetections.length, "detections, PDF size:", pdfWidth, "x", pdfHeight);
 
     // Draw bounding boxes
     fileDetections.forEach((detection, index) => {
-      // Coordinates are [x, y, width, height] - normalized values
-      const [x, y, w, h] = detection.coordinates;
+      const coords = detection.coordinates;
       const color = BOUNDING_BOX_COLOR;
-
-      // Scale from normalized coordinates to display canvas size
-      const scaledX = (x / coordScale) * displayWidth;
-      const scaledY = (y / coordScale) * displayHeight;
-      const scaledWidth = (w / coordScale) * displayWidth;
-      const scaledHeight = (h / coordScale) * displayHeight;
-
-      console.log(`Detection ${index} "${detection.lineCode}": [${x},${y},${w},${h}] -> pos(${scaledX.toFixed(0)},${scaledY.toFixed(0)}) size(${scaledWidth.toFixed(0)}x${scaledHeight.toFixed(0)})`);
+      const maxCoord = Math.max(...coords);
+      
+      let scaledX: number, scaledY: number, scaledWidth: number, scaledHeight: number;
+      
+      if (maxCoord <= 1) {
+        // Normalized 0-1 format: [x, y, width, height]
+        const [x, y, w, h] = coords;
+        scaledX = x * displayWidth;
+        scaledY = y * displayHeight;
+        scaledWidth = w * displayWidth;
+        scaledHeight = h * displayHeight;
+        console.log(`Detection ${index} "${detection.lineCode}": normalized [${x},${y},${w},${h}]`);
+      } else {
+        // PDF points format: [x0, y0, x1, y1] (bottom-left to top-right)
+        // PDF origin is bottom-left, canvas origin is top-left
+        const [x0, y0, x1, y1] = coords;
+        
+        // Calculate box dimensions in PDF points
+        const boxWidth = x1 - x0;
+        const boxHeight = y1 - y0;
+        
+        // Scale factors from PDF points to display canvas
+        const scaleX = displayWidth / pdfWidth;
+        const scaleY = displayHeight / pdfHeight;
+        
+        // Transform: X stays same, Y needs to be flipped
+        // y1 is the top in PDF coords, which becomes the top in canvas after flip
+        scaledX = x0 * scaleX;
+        scaledY = (pdfHeight - y1) * scaleY;  // Flip Y: use y1 (top) and subtract from height
+        scaledWidth = boxWidth * scaleX;
+        scaledHeight = boxHeight * scaleY;
+        
+        console.log(`Detection ${index} "${detection.lineCode}": PDF points [${x0},${y0},${x1},${y1}] -> canvas pos(${scaledX.toFixed(0)},${scaledY.toFixed(0)}) size(${scaledWidth.toFixed(0)}x${scaledHeight.toFixed(0)})`);
+      }
 
       const isHovered = hoveredSystem === detection.lineCode;
 

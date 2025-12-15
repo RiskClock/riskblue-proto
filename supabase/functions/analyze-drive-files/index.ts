@@ -33,6 +33,8 @@ interface AnalysisItem {
 }
 
 // Complete TMU Mock data with exact file names from provided mock data
+// Mock data with PDF point coordinates [x0, y0, x1, y1] (bottom-left to top-right)
+// A0 horizontal: 3370.4 x 2383.9 points
 const MOCK_ASSETS_WATER_SYSTEMS_PROCESSES: AnalysisItem[] = [
   {
     "id": "ERM001",
@@ -51,7 +53,7 @@ const MOCK_ASSETS_WATER_SYSTEMS_PROCESSES: AnalysisItem[] = [
       "Water-Sensitive and High-Value Equipment Protection",
       "Temporary Enclosure Plan"
     ],
-    "coordinates": [0.595, 0.1923, 0.1755, 0.2434]
+    "coordinates": [1236.6, 1308.7, 1988.1, 2046.0]
   },
   {
     "id": "ERM002",
@@ -60,7 +62,7 @@ const MOCK_ASSETS_WATER_SYSTEMS_PROCESSES: AnalysisItem[] = [
     "areaName": "SUBSTATION ROOM",
     "floor": "Lower Level",
     "drawingCode": null,
-    "fileName": "A2.02-GROUND-FLOOR-Rev.19.pdf",
+    "fileName": "A2.01-LOWER-LEVEL-Rev.18.pdf",
     "width": 12.1,
     "length": 34.7,
     "sizeCategory": "medium",
@@ -70,7 +72,7 @@ const MOCK_ASSETS_WATER_SYSTEMS_PROCESSES: AnalysisItem[] = [
       "Water-Sensitive and High-Value Equipment Protection",
       "Temporary Enclosure Plan"
     ],
-    "coordinates": [0.0268, 0.6475, 0.2073, 0.288]
+    "coordinates": [1115.3, 1548.5, 1852.7, 2285.8]
   },
   {
     "id": "ERM003",
@@ -79,7 +81,7 @@ const MOCK_ASSETS_WATER_SYSTEMS_PROCESSES: AnalysisItem[] = [
     "areaName": "IT ROOM",
     "floor": "4th Floor",
     "drawingCode": null,
-    "fileName": "A2.03-SECOND-FLOOR-Rev.20.pdf",
+    "fileName": "A2.05-FOURTH-FLOOR-Rev.16.pdf",
     "width": 10.5,
     "length": 32.5,
     "sizeCategory": "medium",
@@ -89,7 +91,7 @@ const MOCK_ASSETS_WATER_SYSTEMS_PROCESSES: AnalysisItem[] = [
       "Water-Sensitive and High-Value Equipment Protection",
       "Temporary Enclosure Plan"
     ],
-    "coordinates": [0.9206, 0.0748, 0.059, 0.1157]
+    "coordinates": [1677.5, 1668.4, 2418.6, 2384.0]
   },
   {
     "id": "ERM004",
@@ -98,7 +100,7 @@ const MOCK_ASSETS_WATER_SYSTEMS_PROCESSES: AnalysisItem[] = [
     "areaName": "IT ROOM",
     "floor": "7th Floor",
     "drawingCode": null,
-    "fileName": "A2.04-THIRD-FLOOR-Rev.15.pdf",
+    "fileName": "A2.07-SIXTH-FLOOR-Rev.18.1.pdf",
     "width": 36.9,
     "length": 37.8,
     "sizeCategory": "very large",
@@ -108,7 +110,7 @@ const MOCK_ASSETS_WATER_SYSTEMS_PROCESSES: AnalysisItem[] = [
       "Water-Sensitive and High-Value Equipment Protection",
       "Temporary Enclosure Plan"
     ],
-    "coordinates": [0.5121, 0.1132, 0.1462, 0.153]
+    "coordinates": [1678.1, 1655.5, 2419.4, 2384.0]
   },
   {
     "id": "ERM005",
@@ -117,7 +119,7 @@ const MOCK_ASSETS_WATER_SYSTEMS_PROCESSES: AnalysisItem[] = [
     "areaName": "ELECTRICAL ROOM",
     "floor": "Roof",
     "drawingCode": null,
-    "fileName": "A2.05-FOURTH-FLOOR-Rev.16.pdf",
+    "fileName": "A2.10-ROOF-PLAN-Rev.14.pdf",
     "width": 37.7,
     "length": 26.4,
     "sizeCategory": "very large",
@@ -127,7 +129,7 @@ const MOCK_ASSETS_WATER_SYSTEMS_PROCESSES: AnalysisItem[] = [
       "Water-Sensitive and High-Value Equipment Protection",
       "Temporary Enclosure Plan"
     ],
-    "coordinates": [0.6006, 0.1699, 0.0992, 0.1853]
+    "coordinates": [1657.6, 1346.9, 2436.8, 2084.2]
   },
   {
     "id": "ERM006",
@@ -136,7 +138,7 @@ const MOCK_ASSETS_WATER_SYSTEMS_PROCESSES: AnalysisItem[] = [
     "areaName": "HYDRO VAULT",
     "floor": "Lower Level",
     "drawingCode": null,
-    "fileName": "A2.06-FIFTH-FLOOR-Rev.14.pdf",
+    "fileName": "A2.01-LOWER-LEVEL-Rev.18.pdf",
     "width": 27.9,
     "length": 34.7,
     "sizeCategory": "very large",
@@ -146,7 +148,7 @@ const MOCK_ASSETS_WATER_SYSTEMS_PROCESSES: AnalysisItem[] = [
       "Water-Sensitive and High-Value Equipment Protection",
       "Temporary Enclosure Plan"
     ],
-    "coordinates": [0.5344, 0.3189, 0.1756, 0.1463]
+    "coordinates": [715.7, 1213.7, 1674.3, 2150.8]
   },
   {
     "id": "MRM001",
