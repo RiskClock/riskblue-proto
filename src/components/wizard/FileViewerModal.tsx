@@ -35,6 +35,10 @@ interface FileViewerModalProps {
 // Highlighter green color for all bounding boxes
 const BOUNDING_BOX_COLOR = "#39FF14"; // highlighter green
 
+// A0 horizontal page dimensions in PDF points (reference for coordinates)
+const A0_HORIZONTAL_WIDTH = 3370.4;
+const A0_HORIZONTAL_HEIGHT = 2383.9;
+
 export const FileViewerModal = ({
   isOpen,
   onClose,
@@ -64,14 +68,24 @@ export const FileViewerModal = ({
     console.log("FileViewerModal - fileDetections count:", fileDetections.length);
   }, [detections, fileDetections]);
 
+  // Load file when modal opens - consolidated effect to prevent race conditions
   useEffect(() => {
     if (isOpen && fileId && accessToken) {
-      loadFile();
-    }
-    return () => {
+      // Reset and load fresh
       setPageImages([]);
       setOriginalSize(null);
-    };
+      setError(null);
+      setZoom(1);
+      setCurrentPage(1);
+      setLoading(true);
+      loadFile();
+    } else if (!isOpen) {
+      // Cleanup on close
+      setPageImages([]);
+      setOriginalSize(null);
+      setLoading(false);
+      setError(null);
+    }
   }, [isOpen, fileId, accessToken]);
 
   const loadFile = async () => {
@@ -240,26 +254,23 @@ export const FileViewerModal = ({
         scaledHeight = h * displayHeight;
         console.log(`Detection ${index} "${detection.lineCode}": normalized [${x},${y},${w},${h}]`);
       } else {
-        // PDF points format: [x0, y0, x1, y1] (bottom-left to top-right)
-        // PDF origin is bottom-left, canvas origin is top-left
+        // PDF points format: [x0, y0, x1, y1] based on A0 horizontal dimensions
         const [x0, y0, x1, y1] = coords;
         
-        // Calculate box dimensions in PDF points
         const boxWidth = x1 - x0;
         const boxHeight = y1 - y0;
         
-        // Scale factors from PDF points to display canvas
-        const scaleX = displayWidth / pdfWidth;
-        const scaleY = displayHeight / pdfHeight;
+        // Scale from A0 reference dimensions to display canvas
+        const scaleX = displayWidth / A0_HORIZONTAL_WIDTH;
+        const scaleY = displayHeight / A0_HORIZONTAL_HEIGHT;
         
-        // Transform: X stays same, Y needs to be flipped
-        // y1 is the top in PDF coords, which becomes the top in canvas after flip
+        // Transform: X stays same, Y flipped (PDF origin is bottom-left)
         scaledX = x0 * scaleX;
-        scaledY = (pdfHeight - y1) * scaleY;  // Flip Y: use y1 (top) and subtract from height
+        scaledY = (A0_HORIZONTAL_HEIGHT - y1) * scaleY;
         scaledWidth = boxWidth * scaleX;
         scaledHeight = boxHeight * scaleY;
         
-        console.log(`Detection ${index} "${detection.lineCode}": PDF points [${x0},${y0},${x1},${y1}] -> canvas pos(${scaledX.toFixed(0)},${scaledY.toFixed(0)}) size(${scaledWidth.toFixed(0)}x${scaledHeight.toFixed(0)})`);
+        console.log(`Detection ${index} "${detection.lineCode}": A0 points [${x0},${y0},${x1},${y1}] -> canvas pos(${scaledX.toFixed(0)},${scaledY.toFixed(0)}) size(${scaledWidth.toFixed(0)}x${scaledHeight.toFixed(0)})`);
       }
 
       const isHovered = hoveredSystem === detection.lineCode;
