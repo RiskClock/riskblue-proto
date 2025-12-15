@@ -51,7 +51,7 @@ const MOCK_ASSETS_WATER_SYSTEMS_PROCESSES: AnalysisItem[] = [
       "Presence of Water Monitoring",
       "Water Piping in and Around Electrical Rooms",
       "Water-Sensitive and High-Value Equipment Protection",
-      "Temporary Enclosure Plan"
+      "Temporary Enclosures Plan"
     ],
     "coordinates": [1236.6, 1308.7, 1988.1, 2046.0]
   },
@@ -70,7 +70,7 @@ const MOCK_ASSETS_WATER_SYSTEMS_PROCESSES: AnalysisItem[] = [
       "Presence of Water Monitoring",
       "Water Piping in and Around Electrical Rooms",
       "Water-Sensitive and High-Value Equipment Protection",
-      "Temporary Enclosure Plan"
+      "Temporary Enclosures Plan"
     ],
     "coordinates": [1115.3, 1548.5, 1852.7, 2285.8]
   },
@@ -89,7 +89,7 @@ const MOCK_ASSETS_WATER_SYSTEMS_PROCESSES: AnalysisItem[] = [
       "Presence of Water Monitoring",
       "Water Piping in and Around Electrical Rooms",
       "Water-Sensitive and High-Value Equipment Protection",
-      "Temporary Enclosure Plan"
+      "Temporary Enclosures Plan"
     ],
     "coordinates": [1677.5, 1668.4, 2418.6, 2384.0]
   },
@@ -108,7 +108,7 @@ const MOCK_ASSETS_WATER_SYSTEMS_PROCESSES: AnalysisItem[] = [
       "Presence of Water Monitoring",
       "Water Piping in and Around Electrical Rooms",
       "Water-Sensitive and High-Value Equipment Protection",
-      "Temporary Enclosure Plan"
+      "Temporary Enclosures Plan"
     ],
     "coordinates": [1678.1, 1655.5, 2419.4, 2384.0]
   },
@@ -127,7 +127,7 @@ const MOCK_ASSETS_WATER_SYSTEMS_PROCESSES: AnalysisItem[] = [
       "Presence of Water Monitoring",
       "Water Piping in and Around Electrical Rooms",
       "Water-Sensitive and High-Value Equipment Protection",
-      "Temporary Enclosure Plan"
+      "Temporary Enclosures Plan"
     ],
     "coordinates": [1657.6, 1346.9, 2436.8, 2084.2]
   },
@@ -146,7 +146,7 @@ const MOCK_ASSETS_WATER_SYSTEMS_PROCESSES: AnalysisItem[] = [
       "Presence of Water Monitoring",
       "Water Piping in and Around Electrical Rooms",
       "Water-Sensitive and High-Value Equipment Protection",
-      "Temporary Enclosure Plan"
+      "Temporary Enclosures Plan"
     ],
     "coordinates": [715.7, 1213.7, 1674.3, 2150.8]
   },
@@ -189,7 +189,7 @@ const MOCK_ASSETS_WATER_SYSTEMS_PROCESSES: AnalysisItem[] = [
     "controls": [
       "Presence of Water Monitoring",
       "Floor Penetrations Water Seals",
-      "Temporary Enclosure Plan"
+      "Temporary Enclosures Plan"
     ],
     "coordinates": [0.5331, 0.0274, 0.0808, 0.2157]
   },
