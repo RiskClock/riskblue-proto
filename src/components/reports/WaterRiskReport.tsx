@@ -23,6 +23,89 @@ import singleTowerImg from "@/assets/tower1-single.avif";
 import doubleTowerImg from "@/assets/tower2-double.avif";
 import multiTowerImg from "@/assets/tower3-multi.avif";
 
+// Import control images for appendix
+import control100YearFlood from "@/assets/control_100-Year_Flood_and_Wind_Storm_Report.avif";
+import controlAdditionalFillTests from "@/assets/control_Additional_Fill_Tests_Ensuring_Water_System_Integrity.avif";
+import controlAirPressureTests from "@/assets/control_Air_Pressure_or_Water_Tests_in_Plumbing_System.avif";
+import controlColdDomesticFlow from "@/assets/control_Cold_Domestic_Water_Abnormal_Flow_Monitoring.avif";
+import controlElectricalRoomWater from "@/assets/control_Electrical_Room_Presence_of_Water_Monitoring.avif";
+import controlFireSuppressionFlow from "@/assets/control_Fire_Suppression_System_Abnormal_Flow_Monitoring.avif";
+import controlFloodControlMeasures from "@/assets/control_Flood_Control_Measures.avif";
+import controlFloorPenetrations from "@/assets/control_Floor_Penetrations_Water_Seals.avif";
+import controlHeatTrace from "@/assets/control_Heat_trace_and_Insulation.avif";
+import controlHistoricalIncidents from "@/assets/control_Historical_Project_Water_Incident_Reports.avif";
+import controlHotDomesticFlow from "@/assets/control_Hot_Domestic_Water_Abnormal_Flow_Monitoring.avif";
+import controlInstallationIntegrity from "@/assets/control_Installation_Integrity_Joints_Bolts_and_Piping.avif";
+import controlMainElectricalRiserWater from "@/assets/control_Main_Electrical_Riser_Presence_of_Water_Monitoring.avif";
+import controlMainRiserAutoShut from "@/assets/control_Main_Riser_Section_Automatic_Shut_OpenClose_Cold_Domestic_Water.avif";
+import controlMechanicalRisersWater from "@/assets/control_Mechanical_Risers_Presence_of_Water_Monitoring.avif";
+import controlMechanicalRoomWater from "@/assets/control_Mechanical_Room_Presence_of_Water_Monitoring.avif";
+import controlPrequalificationEnvelope from "@/assets/control_Pre-qualification_of_Envelope_Systems.avif";
+import controlPressureReducingValve from "@/assets/control_Pressure_Reducing_Valve_Maintenance_Plan_Safeguarding_System_Performance.avif";
+import controlProperZoning from "@/assets/control_Proper_Zoning_Configuration_Optimizing_Pressure_System.avif";
+import controlSpillKit from "@/assets/control_Spill_Kit.avif";
+import controlSuiteDrains from "@/assets/control_Suite_Drains.avif";
+import controlTemporaryEnclosures from "@/assets/control_Temporary_Enclosures_Plan.avif";
+import controlTemporaryWaterRun from "@/assets/control_Temporary_Water_Run.avif";
+import controlTemporaryWaterRunFlow from "@/assets/control_Temporary_Water_Run_Abnormal_Flow_Monitoring.avif";
+import controlTriggerValve from "@/assets/control_Trigger_Valve_Shut_Off_on_Abnormal_Flow_Detection.avif";
+import controlWarrantiesInsurance from "@/assets/control_Water_Mitigation_Components_Warranties_and_Insurance.avif";
+import controlEquipmentAcceptance from "@/assets/control_Water_Mitigation_Equipment_Acceptance_Test.avif";
+import controlEquipmentLabeling from "@/assets/control_Water_Mitigation_Equipment_Labeling.avif";
+
+// Control image mapping
+const controlImageMap: Record<string, string> = {
+  "100-Year Flood and Wind Storm Report": control100YearFlood,
+  "Additional Fill Tests Ensuring Water System Integrity": controlAdditionalFillTests,
+  "Air Pressure or Water Tests in Plumbing System": controlAirPressureTests,
+  "Cold Domestic Water Abnormal Flow Monitoring": controlColdDomesticFlow,
+  "Electrical Room Presence of Water Monitoring": controlElectricalRoomWater,
+  "Fire Suppression System Abnormal Flow Monitoring": controlFireSuppressionFlow,
+  "Flood Control Measures": controlFloodControlMeasures,
+  "Floor Penetrations Water Seals": controlFloorPenetrations,
+  "Heat trace and Insulation": controlHeatTrace,
+  "Historical Project Water Incident Reports": controlHistoricalIncidents,
+  "Hot Domestic Water Abnormal Flow Monitoring": controlHotDomesticFlow,
+  "Installation Integrity Joints Bolts and Piping": controlInstallationIntegrity,
+  "Main Electrical Riser Presence of Water Monitoring": controlMainElectricalRiserWater,
+  "Main Riser Section Automatic Shut Open/Close Cold Domestic Water": controlMainRiserAutoShut,
+  "Mechanical Risers Presence of Water Monitoring": controlMechanicalRisersWater,
+  "Mechanical Room Presence of Water Monitoring": controlMechanicalRoomWater,
+  "Pre-qualification of Envelope Systems": controlPrequalificationEnvelope,
+  "Pressure Reducing Valve Maintenance Plan Safeguarding System Performance": controlPressureReducingValve,
+  "Proper Zoning Configuration Optimizing Pressure System": controlProperZoning,
+  "Spill Kit": controlSpillKit,
+  "Suite Drains": controlSuiteDrains,
+  "Temporary Enclosures Plan": controlTemporaryEnclosures,
+  "Temporary Water Run": controlTemporaryWaterRun,
+  "Temporary Water Run Abnormal Flow Monitoring": controlTemporaryWaterRunFlow,
+  "Trigger Valve Shut Off on Abnormal Flow Detection": controlTriggerValve,
+  "Water Mitigation Components Warranties and Insurance": controlWarrantiesInsurance,
+  "Water Mitigation Equipment Acceptance Test": controlEquipmentAcceptance,
+  "Water Mitigation Equipment Labeling": controlEquipmentLabeling,
+};
+
+// Helper to find control image by name (case-insensitive partial match)
+const getControlImage = (controlName: string): string | null => {
+  const normalizedName = controlName.toLowerCase().replace(/[^a-z0-9\s]/g, '');
+  for (const [key, value] of Object.entries(controlImageMap)) {
+    const normalizedKey = key.toLowerCase().replace(/[^a-z0-9\s]/g, '');
+    if (normalizedKey.includes(normalizedName) || normalizedName.includes(normalizedKey)) {
+      return value;
+    }
+  }
+  // Try matching by significant keywords
+  const keywords = normalizedName.split(' ').filter(k => k.length > 3);
+  for (const [key, value] of Object.entries(controlImageMap)) {
+    const normalizedKey = key.toLowerCase().replace(/[^a-z0-9\s]/g, '');
+    const matchCount = keywords.filter(kw => normalizedKey.includes(kw)).length;
+    if (matchCount >= 2) {
+      return value;
+    }
+  }
+  return null;
+};
+
 // Type configuration maps using imported images for reliable PDF export
 const constructionTypeConfig: Record<string, { label: string; image: string }> = {
   "residential": { label: "Residential", image: residentialImg },
@@ -175,9 +258,13 @@ export const WaterRiskReport = ({ data, analysisItems = [], controlDetails = [] 
     });
   };
 
-  const assetGroups = groupByNameWithControlVariance(selectedAssetItems, selectedAssetControlIds);
-  const systemGroups = groupByNameWithControlVariance(selectedSystemItems, selectedSystemControlIds);
-  const processGroups = groupByNameWithControlVariance(selectedProcessItems, selectedProcessControlIds);
+  // Group and sort by instance count (descending) to match web app order
+  const assetGroups = groupByNameWithControlVariance(selectedAssetItems, selectedAssetControlIds)
+    .sort((a, b) => b.instances.length - a.instances.length);
+  const systemGroups = groupByNameWithControlVariance(selectedSystemItems, selectedSystemControlIds)
+    .sort((a, b) => b.instances.length - a.instances.length);
+  const processGroups = groupByNameWithControlVariance(selectedProcessItems, selectedProcessControlIds)
+    .sort((a, b) => b.instances.length - a.instances.length);
 
   // Collect all unique control names used
   const allUsedControlNames = new Set<string>();
@@ -547,7 +634,7 @@ export const WaterRiskReport = ({ data, analysisItems = [], controlDetails = [] 
 
       {/* Water Systems */}
       {systemGroups.length > 0 && (
-        <section className="mb-4">
+        <section className="mb-4 page-break-before">
           <h2 className="text-base font-bold text-gray-900 mb-2 border-b border-gray-300 pb-1">Water Systems</h2>
           <div className="space-y-3">
             {systemGroups.map((group, index) => {
@@ -635,7 +722,7 @@ export const WaterRiskReport = ({ data, analysisItems = [], controlDetails = [] 
 
       {/* Processes */}
       {processGroups.length > 0 && (
-        <section className="mb-4">
+        <section className="mb-4 page-break-before">
           <h2 className="text-base font-bold text-gray-900 mb-2 border-b border-gray-300 pb-1">Processes</h2>
           <div className="space-y-3">
             {processGroups.map((group, index) => (
@@ -714,23 +801,38 @@ export const WaterRiskReport = ({ data, analysisItems = [], controlDetails = [] 
                   usedName => normalizeControlName(usedName).toLowerCase() === normalizeControlName(control.name).toLowerCase()
                 )
               )
-              .map((control, index) => (
-                <div key={index} className="bg-gray-50 p-2 rounded border border-gray-200 print-keep-together">
-                  <h3 className="font-bold text-[11px] text-gray-900 mb-1">{control.name}</h3>
-                  {control.action && (
-                    <div className="mb-1">
-                      <span className="text-[9px] font-semibold text-gray-600">Action: </span>
-                      <span className="text-[10px] text-gray-700">{control.action}</span>
+              .map((control, index) => {
+                const controlImage = getControlImage(control.name);
+                return (
+                  <div key={index} className="bg-gray-50 p-2 rounded border border-gray-200 print-keep-together">
+                    <div className="flex gap-3">
+                      {controlImage && (
+                        <img 
+                          src={controlImage} 
+                          alt={control.name} 
+                          className="w-20 h-16 object-cover rounded border border-gray-200 flex-shrink-0"
+                          style={{ display: 'inline-block' }}
+                        />
+                      )}
+                      <div className="flex-1">
+                        <h3 className="font-bold text-[11px] text-gray-900 mb-1">{control.name}</h3>
+                        {control.action && (
+                          <div className="mb-1">
+                            <span className="text-[9px] font-semibold text-gray-600">Action: </span>
+                            <span className="text-[10px] text-gray-700">{control.action}</span>
+                          </div>
+                        )}
+                        {control.description && (
+                          <div>
+                            <span className="text-[9px] font-semibold text-gray-600">Description: </span>
+                            <span className="text-[10px] text-gray-700">{control.description}</span>
+                          </div>
+                        )}
+                      </div>
                     </div>
-                  )}
-                  {control.description && (
-                    <div>
-                      <span className="text-[9px] font-semibold text-gray-600">Description: </span>
-                      <span className="text-[10px] text-gray-700">{control.description}</span>
-                    </div>
-                  )}
-                </div>
-              ))}
+                  </div>
+                );
+              })}
           </div>
         </section>
       )}

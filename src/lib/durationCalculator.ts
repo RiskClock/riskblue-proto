@@ -154,7 +154,9 @@ export const calculateCriticalAssetDuration = (
       }
 
       // Mass Timber and Millwork: Structural framing start to Envelope end
-      case "Mass Timber and Millwork": {
+      case "Mass Timber and Millwork":
+      case "Mass Timber":
+      case "Millwork": {
         if (frame_start_date && enclosure_end_date) {
           startDate = parseISO(frame_start_date);
           endDate = parseISO(enclosure_end_date);
@@ -163,7 +165,12 @@ export const calculateCriticalAssetDuration = (
       }
 
       // Facade and Envelope: Envelope start to Envelope end
-      case "Facade and Envelope": {
+      case "Facade and Envelope":
+      case "Facade, Envelope, Exterior, and Roofing":
+      case "Facade":
+      case "Envelope":
+      case "Exterior":
+      case "Roofing": {
         if (enclosure_start_date && enclosure_end_date) {
           startDate = parseISO(enclosure_start_date);
           endDate = parseISO(enclosure_end_date);

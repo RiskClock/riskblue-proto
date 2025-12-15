@@ -60,6 +60,12 @@
   }
 
   /* Prevent page breaks inside key elements - but NOT sections */
+  /* Force page break before elements with this class */
+  .page-break-before {
+    page-break-before: always !important;
+    break-before: page !important;
+  }
+
   .page-break-avoid,
   .accordion-item,
   .card,
