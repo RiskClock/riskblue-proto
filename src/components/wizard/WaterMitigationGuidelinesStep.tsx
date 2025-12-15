@@ -3,14 +3,16 @@ import { Download, Send } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { WaterRiskReport } from "@/components/reports/WaterRiskReport";
 import { generateReportFilename } from "@/lib/reportGenerator";
+import { AnalysisItem } from "@/lib/analysisItemMapper";
 
 interface WaterMitigationGuidelinesStepProps {
   data: any;
+  analysisItems?: AnalysisItem[];
   onBack: () => void;
   onNext: (data: any) => void;
 }
 
-export const WaterMitigationGuidelinesStep = ({ data, onBack, onNext }: WaterMitigationGuidelinesStepProps) => {
+export const WaterMitigationGuidelinesStep = ({ data, analysisItems = [], onBack, onNext }: WaterMitigationGuidelinesStepProps) => {
   const { toast } = useToast();
 
   const handleContinue = async () => {
@@ -33,7 +35,7 @@ export const WaterMitigationGuidelinesStep = ({ data, onBack, onNext }: WaterMit
     // Import and render
     import('react-dom/client').then(({ createRoot }) => {
       const reactRoot = createRoot(root);
-      reactRoot.render(<WaterRiskReport data={data} />);
+      reactRoot.render(<WaterRiskReport data={data} analysisItems={analysisItems} />);
       
       // Wait for rendering, then print
       setTimeout(() => {
@@ -61,6 +63,11 @@ export const WaterMitigationGuidelinesStep = ({ data, onBack, onNext }: WaterMit
     });
   };
 
+  // Count unique items from analysisItems
+  const assetCount = new Set(analysisItems.filter(i => i.category === "Asset").map(i => i.name)).size;
+  const systemCount = new Set(analysisItems.filter(i => i.category === "Water System").map(i => i.name)).size;
+  const controlCount = new Set(analysisItems.flatMap(i => i.controls || [])).size;
+
   return (
     <div>
       <div className="mb-6">
@@ -78,15 +85,15 @@ export const WaterMitigationGuidelinesStep = ({ data, onBack, onNext }: WaterMit
           <div className="grid md:grid-cols-3 gap-6 mb-6">
             <div>
               <p className="text-sm text-muted-foreground mb-1">Critical Assets Protected</p>
-              <p className="text-2xl font-bold">{data.selectedAssets?.length || 0}</p>
+              <p className="text-2xl font-bold">{assetCount}</p>
             </div>
             <div>
               <p className="text-sm text-muted-foreground mb-1">Water Systems Monitored</p>
-              <p className="text-2xl font-bold">{data.selectedSystems?.length || 0}</p>
+              <p className="text-2xl font-bold">{systemCount}</p>
             </div>
             <div>
               <p className="text-sm text-muted-foreground mb-1">Mitigation Controls</p>
-              <p className="text-2xl font-bold">{data.selectedControls?.length || 0}</p>
+              <p className="text-2xl font-bold">{controlCount}</p>
             </div>
           </div>
 

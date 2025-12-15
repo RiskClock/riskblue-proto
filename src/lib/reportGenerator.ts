@@ -47,64 +47,64 @@ export const getTimelinePhases = (data: any) => {
     });
   }
   
-  if (data.structural_frame_start) {
+  if (data.frame_start_date) {
     phases.push({
       name: "Structural Frame",
-      startDate: data.structural_frame_start,
-      endDate: data.structural_frame_finish,
+      startDate: data.frame_start_date,
+      endDate: data.frame_end_date,
       description: "Building structure phase"
     });
   }
   
-  if (data.building_envelope_start) {
+  if (data.enclosure_start_date) {
     phases.push({
       name: "Building Envelope",
-      startDate: data.building_envelope_start,
-      endDate: data.building_envelope_finish,
+      startDate: data.enclosure_start_date,
+      endDate: data.enclosure_end_date,
       description: "Exterior enclosure phase"
     });
   }
   
-  if (data.mep_roughins_start) {
+  if (data.mep_start_date) {
     phases.push({
       name: "MEP Rough-ins",
-      startDate: data.mep_roughins_start,
-      endDate: data.mep_roughins_finish,
+      startDate: data.mep_start_date,
+      endDate: data.mep_end_date,
       description: "Mechanical, electrical, plumbing systems"
     });
   }
   
-  if (data.elevators_start) {
+  if (data.elevators_start_date) {
     phases.push({
       name: "Elevators",
-      startDate: data.elevators_start,
-      endDate: data.elevators_finish,
+      startDate: data.elevators_start_date,
+      endDate: data.elevators_end_date,
       description: "Elevator installation"
     });
   }
   
-  if (data.fire_suppression_start) {
+  if (data.fire_start_date) {
     phases.push({
       name: "Fire Suppression",
-      startDate: data.fire_suppression_start,
-      endDate: data.fire_suppression_finish,
+      startDate: data.fire_start_date,
+      endDate: data.fire_end_date,
       description: "Fire protection systems"
     });
   }
   
-  if (data.interior_finishes_start) {
+  if (data.interior_start_date) {
     phases.push({
       name: "Interior Finishes",
-      startDate: data.interior_finishes_start,
-      endDate: data.interior_finishes_finish,
+      startDate: data.interior_start_date,
+      endDate: data.interior_end_date,
       description: "Final interior work"
     });
   }
   
-  if (data.construction_finish_date) {
+  if (data.construction_end_date) {
     phases.push({
       name: "Construction Complete",
-      date: data.construction_finish_date,
+      date: data.construction_end_date,
       description: "Project completion"
     });
   }
