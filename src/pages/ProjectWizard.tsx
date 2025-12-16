@@ -34,7 +34,33 @@ import { Label } from "@/components/ui/label";
 import { WaterRiskReport } from "@/components/reports/WaterRiskReport";
 import { generateReportFilename } from "@/lib/reportGenerator";
 import { AnalysisItem, extractSelectedAssets, extractSelectedSystems } from "@/lib/analysisItemMapper";
-import { PricingTier, calculateTieredControlCost, getSizeCategory } from "@/lib/costCalculator";
+import { PricingTier, calculateTieredControlCost, getSizeCategory, parseDurationMonths } from "@/lib/costCalculator";
+import { calculateCriticalAssetDuration, calculateWaterSystemDuration } from "@/lib/durationCalculator";
+
+// Helper function to extract class name from instance name for duration lookup
+const getClassNameFromInstance = (instanceName: string): string => {
+  const lowerName = instanceName.toLowerCase();
+  
+  // Asset mappings
+  if (lowerName.includes('mechanical') && lowerName.includes('room')) return 'Mechanical Rooms';
+  if (lowerName.includes('electrical') && lowerName.includes('room')) return 'Electrical Rooms';
+  if (lowerName.includes('mechanical') && lowerName.includes('riser')) return 'Mechanical Risers';
+  if ((lowerName.includes('electrical') || lowerName.includes('main')) && lowerName.includes('riser')) return 'Main Electrical Risers';
+  if (lowerName.includes('elevator')) return 'Elevator Pits';
+  if (lowerName.includes('sump')) return 'Sump Pits';
+  if (lowerName.includes('suite')) return 'Suites';
+  
+  // Water system mappings
+  if (lowerName.includes('domestic cold') || lowerName.includes('dcw')) return 'Domestic Cold Water';
+  if (lowerName.includes('domestic hot') || lowerName.includes('dhw')) return 'Domestic Hot Water';
+  if (lowerName.includes('temporary')) return 'Temporary Water Run';
+  if (lowerName.includes('fire')) return 'Fire Suppression System';
+  if (lowerName.includes('hydronic')) return 'Hydronics';
+  if (lowerName.includes('main') && lowerName.includes('water') || lowerName.includes('city')) return 'Main City Water Supply';
+  if (lowerName.includes('sump') || lowerName.includes('storm') || lowerName.includes('drainage')) return 'Sump Pit, Storm Drain, and Drainage';
+  
+  return instanceName;
+};
 
 interface ProjectData {
   [key: string]: any;
@@ -258,6 +284,19 @@ const ProjectWizardContent = () => {
         additionalParameters: additionalParams,
       };
       
+      // Calculate item-specific duration based on category and class name
+      let itemDurationMonths = projectDurationMonths; // fallback
+      const className = getClassNameFromInstance(item.name);
+      
+      if (item.category === "Asset") {
+        const durationStr = calculateCriticalAssetDuration(className, projectData);
+        itemDurationMonths = parseDurationMonths(durationStr) ?? projectDurationMonths;
+      } else if (item.category === "Water System") {
+        const durationStr = calculateWaterSystemDuration(className, projectData);
+        itemDurationMonths = parseDurationMonths(durationStr) ?? projectDurationMonths;
+      }
+      // Processes use projectDurationMonths (default)
+      
       let hasLowControl = false;
       let hasMediumControl = false;
       let hasHighControl = false;
@@ -271,7 +310,7 @@ const ProjectWizardContent = () => {
             pricingTiers,
             control.oneTimeCost,
             control.monthlyCost,
-            projectDurationMonths,
+            itemDurationMonths, // Use item-specific duration instead of projectDurationMonths
             item.name // Pass instance name for sensor count logic
           );
           lowCost += totalCost;
