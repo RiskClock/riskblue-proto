@@ -229,30 +229,36 @@ export const calculateSystemOrAssetDates = (
         calculatedFrom = "Construction start to Construction end";
       }
     }
-    // Critical Assets
-    else if (name === "Mechanical Rooms" || name === "Mechanical Risers") {
+    // Critical Assets - handle both singular and plural forms
+    else if (name === "Mechanical Rooms" || name === "Mechanical Room" || name === "Mechanical Risers" || name === "Mechanical Riser") {
       if (mep_end_date) {
         startDate = addDays(parseISO(mep_end_date), -60);
         endDate = parseISO(construction_end_date);
         calculatedFrom = "MEP end (-60 days) to Construction end";
       }
-    } else if (name === "Electrical Rooms" || name === "Main Electrical Risers") {
+    } else if (name === "Electrical Rooms" || name === "Electrical Room" || name === "Main Electrical Risers" || name === "Electrical Riser") {
       if (mep_start_date && enclosure_end_date) {
         startDate = parseISO(mep_start_date);
         endDate = parseISO(enclosure_end_date);
         calculatedFrom = "MEP start to Enclosure end";
       }
-    } else if (name === "Sump Pits" || name === "Elevator Pits") {
+    } else if (name === "Sump Pits" || name === "Sump Pit" || name === "Elevator Pits" || name === "Elevator Pit") {
       if (elevators_start_date) {
         startDate = addDays(parseISO(elevators_start_date), -30);
         endDate = parseISO(construction_end_date);
         calculatedFrom = "Elevators start (-30 days) to Construction end";
       }
-    } else if (name === "Suites") {
+    } else if (name === "Suites" || name === "Suite") {
       if (interior_start_date) {
         startDate = addDays(parseISO(interior_start_date), -30);
         endDate = parseISO(construction_end_date);
         calculatedFrom = "Interior start (-30 days) to Construction end";
+      }
+    } else if (name === "Facade, Envelope, Exterior, and Roofing" || name === "Facade and Envelope") {
+      if (timeline.enclosure_start_date && enclosure_end_date) {
+        startDate = parseISO(timeline.enclosure_start_date);
+        endDate = parseISO(enclosure_end_date);
+        calculatedFrom = "Enclosure start to Enclosure end";
       }
     }
     // Water Systems

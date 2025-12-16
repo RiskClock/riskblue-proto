@@ -58,17 +58,20 @@ const controlImageMap: Record<string, string> = {
   "100-Year Flood and Wind Storm Report": control100YearFlood,
   "Additional Fill Tests Ensuring Water System Integrity": controlAdditionalFillTests,
   "Air Pressure or Water Tests in Plumbing System": controlAirPressureTests,
-  "Cold Domestic Water Abnormal Flow Monitoring": controlColdDomesticFlow,
+  "Domestic Cold Water Abnormal Flow Monitoring": controlColdDomesticFlow,
+  "DCW Abnormal Flow Monitoring": controlColdDomesticFlow,
   "Electrical Room Presence of Water Monitoring": controlElectricalRoomWater,
   "Fire Suppression System Abnormal Flow Monitoring": controlFireSuppressionFlow,
   "Flood Control Measures": controlFloodControlMeasures,
   "Floor Penetrations Water Seals": controlFloorPenetrations,
   "Heat trace and Insulation": controlHeatTrace,
   "Historical Project Water Incident Reports": controlHistoricalIncidents,
-  "Hot Domestic Water Abnormal Flow Monitoring": controlHotDomesticFlow,
+  "Domestic Hot Water Abnormal Flow Monitoring": controlHotDomesticFlow,
+  "DHW Abnormal Flow Monitoring": controlHotDomesticFlow,
   "Installation Integrity Joints Bolts and Piping": controlInstallationIntegrity,
   "Main Electrical Riser Presence of Water Monitoring": controlMainElectricalRiserWater,
-  "Main Riser Section Automatic Shut Open/Close Cold Domestic Water": controlMainRiserAutoShut,
+  "Main Riser Section Automatic Shut Open/Close Domestic Cold Water": controlMainRiserAutoShut,
+  "Main Riser Section Automatic Shut Open/Close DCW": controlMainRiserAutoShut,
   "Mechanical Risers Presence of Water Monitoring": controlMechanicalRisersWater,
   "Mechanical Room Presence of Water Monitoring": controlMechanicalRoomWater,
   "Pre-qualification of Envelope Systems": controlPrequalificationEnvelope,
@@ -287,7 +290,7 @@ export const WaterRiskReport = ({ data, analysisItems = [], controlDetails = [] 
   // Helper to check if location has additional parameters
   const hasAdditionalParams = (location: AnalysisItem) => {
     return location.floor || location.drawingCode || location.fileName || 
-           location.width || location.length || location.sizeCategory;
+           location.areaSqft || location.width || location.length || location.sizeCategory;
   };
 
   // Render location details with additional parameters
@@ -296,9 +299,12 @@ export const WaterRiskReport = ({ data, analysisItems = [], controlDetails = [] 
     if (location.floor) details.push(`Floor: ${location.floor}`);
     if (location.drawingCode) details.push(`Drawing: ${location.drawingCode}`);
     if (location.sizeCategory) details.push(`Size: ${location.sizeCategory}`);
-    if (location.width && location.length) details.push(`Dimensions: ${location.width} × ${location.length} ft`);
-    else if (location.width) details.push(`Width: ${location.width} ft`);
-    else if (location.length) details.push(`Length: ${location.length} ft`);
+    // Show area instead of dimensions
+    if (location.areaSqft) {
+      details.push(`Area: ${location.areaSqft.toLocaleString()} sq ft`);
+    } else if (location.width && location.length) {
+      details.push(`Area: ${(location.width * location.length).toLocaleString()} sq ft`);
+    }
     if (location.fileName) details.push(`File: ${location.fileName}`);
     return details;
   };

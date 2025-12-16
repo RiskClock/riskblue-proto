@@ -380,7 +380,7 @@ export const ExpandableListItem = ({
             </Badge>
           )}
           <Badge variant="secondary" className="text-xs cursor-default">
-            {instanceCount} {instanceCount === 1 ? 'Instance' : 'Instances'}
+            {instanceCount} {instanceCount === 1 ? 'Location' : 'Locations'}
           </Badge>
           <ChevronDown 
             className={cn(
