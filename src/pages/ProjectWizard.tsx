@@ -1099,7 +1099,7 @@ const ProjectWizardContent = () => {
                 // Show preparing toast
                 toast({
                   title: "Preparing report...",
-                  description: "Please wait while images are loaded.",
+                  description: "Please wait while the file is being prepared.",
                 });
                 
                 const originalTitle = document.title;

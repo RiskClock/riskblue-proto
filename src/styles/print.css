@@ -139,6 +139,20 @@
     print-color-adjust: exact;
     -webkit-print-color-adjust: exact;
   }
+
+  /* Floating logo on each page - top right corner */
+  .print-floating-logo {
+    position: fixed;
+    top: 0.5cm;
+    right: 0;
+    z-index: 9999;
+    opacity: 0.8;
+  }
+
+  .print-floating-logo img {
+    height: 24px !important;
+    max-height: 24px !important;
+  }
 }
 
 /* Hide print report by default on screen */
