@@ -4,6 +4,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Loader2, ZoomIn, ZoomOut, RotateCw, AlertCircle, ChevronLeft, ChevronRight, FileImage } from "lucide-react";
 import { AnalysisItem } from "@/lib/analysisItemMapper";
+import { getDrawingImage } from "@/lib/drawingMapper";
 import type { DriveFileInfo } from "./ProjectFilesUpload";
 import * as pdfjsLib from "pdfjs-dist";
 import pdfjsWorker from "pdfjs-dist/build/pdf.worker.min.mjs?url";
@@ -45,13 +46,14 @@ export const LocationDetailsModal = ({
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
 
-  // Check if we can show a drawing (either from Google Drive or placeholder needed)
+  // Check for static drawing first, then Google Drive
+  const staticDrawingUrl = location ? getDrawingImage(location.id) : null;
   const hasGoogleDriveDrawing = canViewFile && driveFile && driveAccessToken;
-  const showDrawing = hasGoogleDriveDrawing;
+  const showDrawingViewer = staticDrawingUrl || hasGoogleDriveDrawing;
 
   // Load file when modal opens - single consolidated effect
   useEffect(() => {
-    if (isOpen && showDrawing) {
+    if (isOpen && showDrawingViewer) {
       // Reset state and load fresh
       setPageImages([]);
       setOriginalSize(null);
@@ -59,7 +61,12 @@ export const LocationDetailsModal = ({
       setZoom(1);
       setCurrentPage(1);
       setLoading(true);
-      loadFile();
+      
+      if (staticDrawingUrl) {
+        loadStaticImage(staticDrawingUrl);
+      } else if (hasGoogleDriveDrawing) {
+        loadFile();
+      }
     } else if (!isOpen) {
       // Cleanup on close
       setPageImages([]);
@@ -67,7 +74,23 @@ export const LocationDetailsModal = ({
       setLoading(false);
       setError(null);
     }
-  }, [isOpen, showDrawing, location]);
+  }, [isOpen, showDrawingViewer, location, staticDrawingUrl, hasGoogleDriveDrawing]);
+
+  // Load static image from public folder
+  const loadStaticImage = (url: string) => {
+    const img = new Image();
+    img.onload = () => {
+      setPageImages([img]);
+      setTotalPages(1);
+      setOriginalSize({ width: img.naturalWidth, height: img.naturalHeight });
+      setLoading(false);
+    };
+    img.onerror = () => {
+      setError("Failed to load drawing image");
+      setLoading(false);
+    };
+    img.src = url;
+  };
 
   const loadFile = async () => {
     if (!driveFile || !driveAccessToken) return;
@@ -291,7 +314,7 @@ export const LocationDetailsModal = ({
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className={showDrawing ? "sm:max-w-5xl h-[85vh] flex flex-col p-0" : "sm:max-w-md"}>
+      <DialogContent className={showDrawingViewer ? "sm:max-w-5xl h-[85vh] flex flex-col p-0" : "sm:max-w-md"}>
         <DialogHeader className="px-6 pt-6 pb-4 border-b flex-shrink-0">
           <DialogTitle className="flex items-center gap-2">
             <span className="text-muted-foreground text-sm">{location.id}:</span>
@@ -299,7 +322,7 @@ export const LocationDetailsModal = ({
           </DialogTitle>
         </DialogHeader>
         
-        {showDrawing ? (
+        {showDrawingViewer ? (
           <div className="flex-1 flex min-h-0 overflow-hidden">
             {/* Left side - Details */}
             <div className="w-80 flex-shrink-0 border-r overflow-y-auto p-6">

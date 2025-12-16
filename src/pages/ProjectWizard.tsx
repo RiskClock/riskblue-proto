@@ -250,6 +250,7 @@ const ProjectWizardContent = () => {
       const instancePricingData = {
         width: item.width,
         length: item.length,
+        areaSqft: item.areaSqft ?? item.area_sqft ?? null,
         sizeCategory: item.sizeCategory,
         pipeDiameterInches: null
       };
@@ -349,6 +350,7 @@ const ProjectWizardContent = () => {
         const instancePricingData = {
           width: item?.width ?? null,
           length: item?.length ?? null,
+          areaSqft: item?.areaSqft ?? (item as any)?.area_sqft ?? null,
           sizeCategory: item?.sizeCategory ?? null,
           pipeDiameterInches: null
         };

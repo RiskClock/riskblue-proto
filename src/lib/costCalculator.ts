@@ -19,21 +19,24 @@ export interface PricingTier {
 export interface InstancePricingData {
   width?: number | null;
   length?: number | null;
+  areaSqft?: number | null;
   sizeCategory?: string | null;
   pipeDiameterInches?: number | null;
 }
 
 /**
- * Calculate total control cost based on upfront cost + (monthly cost × duration)
+ * Calculate total control cost based on upfront cost + (monthly cost × duration × sensor count)
  * If duration is unknown, returns just the upfront cost
+ * @param sensorCount Number of sensors required (multiplies monthly cost)
  */
 export const calculateControlCost = (
   oneTimeCost: number,
   monthlyMaintCost: number,
-  durationMonths: number | null
+  durationMonths: number | null,
+  sensorCount: number = 1
 ): number => {
   if (durationMonths && durationMonths > 0) {
-    return oneTimeCost + (monthlyMaintCost * durationMonths);
+    return oneTimeCost + (monthlyMaintCost * durationMonths * sensorCount);
   }
   return oneTimeCost;
 };
@@ -163,6 +166,7 @@ export const lookupPricingTier = (
 /**
  * Calculate tiered control cost for a specific instance
  * Falls back to direct costs if no tier is found
+ * Automatically multiplies monthly cost by sensor count based on room size
  */
 export const calculateTieredControlCost = (
   controlName: string,
@@ -172,12 +176,23 @@ export const calculateTieredControlCost = (
   fallbackMonthlyCost: number,
   durationMonths: number | null
 ): number => {
+  // Determine size category for sensor count calculation
+  let sizeCategory = instanceData.sizeCategory;
+  if (!sizeCategory && instanceData.areaSqft) {
+    sizeCategory = getSizeCategory(instanceData.areaSqft);
+  } else if (!sizeCategory && instanceData.width && instanceData.length) {
+    sizeCategory = getSizeCategory(instanceData.width * instanceData.length);
+  }
+  
+  // Get sensor count based on room size
+  const sensorCount = getSensorCount(sizeCategory || null);
+  
   const tier = lookupPricingTier(controlName, instanceData, pricingTiers);
   
   if (tier) {
-    return calculateControlCost(tier.one_time_cost, tier.monthly_cost, durationMonths);
+    return calculateControlCost(tier.one_time_cost, tier.monthly_cost, durationMonths, sensorCount);
   }
   
   // Fallback to direct costs from mitigation_controls
-  return calculateControlCost(fallbackOneTimeCost, fallbackMonthlyCost, durationMonths);
+  return calculateControlCost(fallbackOneTimeCost, fallbackMonthlyCost, durationMonths, sensorCount);
 };
