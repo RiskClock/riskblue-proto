@@ -34,7 +34,7 @@ import { Label } from "@/components/ui/label";
 import { WaterRiskReport } from "@/components/reports/WaterRiskReport";
 import { generateReportFilename } from "@/lib/reportGenerator";
 import { AnalysisItem, extractSelectedAssets, extractSelectedSystems } from "@/lib/analysisItemMapper";
-import { PricingTier, calculateTieredControlCost } from "@/lib/costCalculator";
+import { PricingTier, calculateTieredControlCost, getSizeCategory } from "@/lib/costCalculator";
 
 interface ProjectData {
   [key: string]: any;
@@ -805,23 +805,30 @@ const ProjectWizardContent = () => {
         console.error("Error deleting existing analysis items:", deleteError);
       }
 
-      // Insert new items
-      const itemsToInsert = items.map(item => ({
-        project_id: projectId,
-        item_id: item.id,
-        name: item.name,
-        category: item.category,
-        area_name: item.areaName || null,
-        floor: item.floor || null,
-        drawing_code: item.drawingCode || null,
-        file_name: item.fileName || null,
-        width: item.width || null,
-        length: item.length || null,
-        area_sqft: item.areaSqft || null,
-        size_category: item.sizeCategory || null,
-        controls: item.controls || [],
-        coordinates: item.coordinates || null,
-      }));
+      // Insert new items - handle both area_sqft (snake_case from edge function) and areaSqft (camelCase)
+      const itemsToInsert = items.map(item => {
+        // Get area from either format
+        const area = item.area_sqft ?? item.areaSqft ?? null;
+        // Auto-derive size category if not provided
+        const derivedSizeCategory = item.sizeCategory || getSizeCategory(area);
+        
+        return {
+          project_id: projectId,
+          item_id: item.id,
+          name: item.name,
+          category: item.category,
+          area_name: item.areaName || null,
+          floor: item.floor || null,
+          drawing_code: item.drawingCode || null,
+          file_name: item.fileName || null,
+          width: item.width || null,
+          length: item.length || null,
+          area_sqft: area,
+          size_category: derivedSizeCategory,
+          controls: item.controls || [],
+          coordinates: item.coordinates || null,
+        };
+      });
 
       console.log("Inserting analysis items:", itemsToInsert);
       
