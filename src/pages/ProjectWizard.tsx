@@ -33,34 +33,17 @@ import { ProviderSelectionDialog } from "@/components/ProviderSelectionDialog";
 import { Label } from "@/components/ui/label";
 import { WaterRiskReport } from "@/components/reports/WaterRiskReport";
 import { generateReportFilename } from "@/lib/reportGenerator";
-import { AnalysisItem, extractSelectedAssets, extractSelectedSystems } from "@/lib/analysisItemMapper";
+import { 
+  AnalysisItem, 
+  extractSelectedAssets, 
+  extractSelectedSystems,
+  mapToAssetName,
+  mapToWaterSystemName,
+  mapToProcessName,
+  groupByCategory
+} from "@/lib/analysisItemMapper";
 import { PricingTier, calculateTieredControlCost, getSizeCategory, parseDurationMonths } from "@/lib/costCalculator";
 import { calculateCriticalAssetDuration, calculateWaterSystemDuration } from "@/lib/durationCalculator";
-
-// Helper function to extract class name from instance name for duration lookup
-const getClassNameFromInstance = (instanceName: string): string => {
-  const lowerName = instanceName.toLowerCase();
-  
-  // Asset mappings
-  if (lowerName.includes('mechanical') && lowerName.includes('room')) return 'Mechanical Rooms';
-  if (lowerName.includes('electrical') && lowerName.includes('room')) return 'Electrical Rooms';
-  if (lowerName.includes('mechanical') && lowerName.includes('riser')) return 'Mechanical Risers';
-  if ((lowerName.includes('electrical') || lowerName.includes('main')) && lowerName.includes('riser')) return 'Main Electrical Risers';
-  if (lowerName.includes('elevator')) return 'Elevator Pits';
-  if (lowerName.includes('sump')) return 'Sump Pits';
-  if (lowerName.includes('suite')) return 'Suites';
-  
-  // Water system mappings
-  if (lowerName.includes('domestic cold') || lowerName.includes('dcw')) return 'Domestic Cold Water';
-  if (lowerName.includes('domestic hot') || lowerName.includes('dhw')) return 'Domestic Hot Water';
-  if (lowerName.includes('temporary')) return 'Temporary Water Run';
-  if (lowerName.includes('fire')) return 'Fire Suppression System';
-  if (lowerName.includes('hydronic')) return 'Hydronics';
-  if (lowerName.includes('main') && lowerName.includes('water') || lowerName.includes('city')) return 'Main City Water Supply';
-  if (lowerName.includes('sump') || lowerName.includes('storm') || lowerName.includes('drainage')) return 'Sump Pit, Storm Drain, and Drainage';
-  
-  return instanceName;
-};
 
 interface ProjectData {
   [key: string]: any;
@@ -242,6 +225,7 @@ const ProjectWizardContent = () => {
   }, [projectData.construction_start_date, projectData.construction_end_date]);
 
   // Calculate total cost estimates, coverage, and control counts for risk tolerance levels using real control costs with tiered pricing
+  // Uses the SAME mapper functions as CriticalAssetsStep/WaterSystemsStep for consistent class names and durations
   const { totalCostEstimates, coverageByLevel, controlCountsByLevel } = useMemo(() => {
     // Create a map of control name to {oneTimeCost, monthlyCost, riskTolerance}
     const controlMap = new Map<string, { oneTimeCost: number; monthlyCost: number; riskTolerance: number }>();
@@ -250,6 +234,37 @@ const ProjectWizardContent = () => {
       monthlyCost: c.monthlyCost, 
       riskTolerance: c.riskTolerance 
     }));
+    
+    // Group analysis items by category using the same grouping as class-level components
+    const { assets, waterSystems, processes } = groupByCategory(analysisItems);
+    
+    // Group items by their DATABASE class name (matching CriticalAssetsStep/WaterSystemsStep)
+    const assetsByClass = new Map<string, AnalysisItem[]>();
+    assets.forEach(item => {
+      const className = mapToAssetName(item.name);
+      if (className) {
+        if (!assetsByClass.has(className)) assetsByClass.set(className, []);
+        assetsByClass.get(className)!.push(item);
+      }
+    });
+    
+    const systemsByClass = new Map<string, AnalysisItem[]>();
+    waterSystems.forEach(item => {
+      const className = mapToWaterSystemName(item.name);
+      if (className) {
+        if (!systemsByClass.has(className)) systemsByClass.set(className, []);
+        systemsByClass.get(className)!.push(item);
+      }
+    });
+    
+    const processesByClass = new Map<string, AnalysisItem[]>();
+    processes.forEach(item => {
+      const className = mapToProcessName(item.name);
+      if (className) {
+        if (!processesByClass.has(className)) processesByClass.set(className, []);
+        processesByClass.get(className)!.push(item);
+      }
+    });
     
     // Calculate costs per tolerance level using tiered pricing
     let lowCost = 0;    // All controls (risk_tolerance 1, 2, 3)
@@ -272,80 +287,98 @@ const ProjectWizardContent = () => {
     const mediumControls = new Set<string>();
     const highControls = new Set<string>();
     
-    analysisItems.forEach(item => {
-      // Extract additionalParameters for pipe diameter lookup
-      const additionalParams = (item as any).additionalParameters;
-      const instancePricingData = {
-        width: item.width,
-        length: item.length,
-        areaSqft: item.areaSqft ?? (item as any).area_sqft ?? null,
-        sizeCategory: item.sizeCategory,
-        pipeDiameterInches: additionalParams?.pipeDiameterInches ?? null,
-        additionalParameters: additionalParams,
-      };
+    // Helper to process instances for a class
+    const processInstances = (
+      instances: AnalysisItem[], 
+      className: string, 
+      durationMonths: number | null,
+      category: "Asset" | "Water System" | "Process"
+    ) => {
+      const effectiveDuration = durationMonths ?? projectDurationMonths;
       
-      // Calculate item-specific duration based on category and class name
-      let itemDurationMonths = projectDurationMonths; // fallback
-      const className = getClassNameFromInstance(item.name);
-      
-      if (item.category === "Asset") {
-        const durationStr = calculateCriticalAssetDuration(className, projectData);
-        itemDurationMonths = parseDurationMonths(durationStr) ?? projectDurationMonths;
-      } else if (item.category === "Water System") {
-        const durationStr = calculateWaterSystemDuration(className, projectData);
-        itemDurationMonths = parseDurationMonths(durationStr) ?? projectDurationMonths;
-      }
-      // Processes use projectDurationMonths (default)
-      
-      let hasLowControl = false;
-      let hasMediumControl = false;
-      let hasHighControl = false;
-      
-      (item.controls || []).forEach(controlName => {
-        const control = controlMap.get(controlName);
-        if (control) {
-          const totalCost = calculateTieredControlCost(
-            controlName,
-            instancePricingData,
-            pricingTiers,
-            control.oneTimeCost,
-            control.monthlyCost,
-            itemDurationMonths, // Use item-specific duration instead of projectDurationMonths
-            item.name // Pass instance name for sensor count logic
-          );
-          lowCost += totalCost;
-          lowControls.add(controlName);
-          hasLowControl = true;
-          if (control.riskTolerance >= 2) {
-            mediumCost += totalCost;
-            mediumControls.add(controlName);
-            hasMediumControl = true;
+      instances.forEach(instance => {
+        // Build instancePricingData exactly like CriticalAssetsStep does
+        const additionalParams = (instance as any).additionalParameters;
+        const instancePricingData = {
+          width: instance.width,
+          length: instance.length,
+          areaSqft: instance.areaSqft ?? (instance as any).area_sqft ?? null,
+          sizeCategory: instance.sizeCategory,
+          pipeDiameterInches: additionalParams?.pipeDiameterInches ?? null,
+          additionalParameters: additionalParams,
+        };
+        
+        let hasLowControl = false;
+        let hasMediumControl = false;
+        let hasHighControl = false;
+        
+        (instance.controls || []).forEach(controlName => {
+          const control = controlMap.get(controlName);
+          if (control) {
+            // Calculate cost using the SAME function as CriticalAssetsStep
+            const totalCost = calculateTieredControlCost(
+              controlName,
+              instancePricingData,
+              pricingTiers,
+              control.oneTimeCost,
+              control.monthlyCost,
+              effectiveDuration,
+              instance.name
+            );
+            
+            lowCost += totalCost;
+            lowControls.add(controlName);
+            hasLowControl = true;
+            
+            if (control.riskTolerance >= 2) {
+              mediumCost += totalCost;
+              mediumControls.add(controlName);
+              hasMediumControl = true;
+            }
+            if (control.riskTolerance >= 3) {
+              highCost += totalCost;
+              highControls.add(controlName);
+              hasHighControl = true;
+            }
           }
-          if (control.riskTolerance >= 3) {
-            highCost += totalCost;
-            highControls.add(controlName);
-            hasHighControl = true;
-          }
+        });
+        
+        // Track coverage using instance name
+        if (hasLowControl) {
+          if (category === "Asset") lowAssets.add(instance.name);
+          else if (category === "Water System") lowSystems.add(instance.name);
+          else lowProcesses.add(instance.name);
+        }
+        if (hasMediumControl) {
+          if (category === "Asset") mediumAssets.add(instance.name);
+          else if (category === "Water System") mediumSystems.add(instance.name);
+          else mediumProcesses.add(instance.name);
+        }
+        if (hasHighControl) {
+          if (category === "Asset") highAssets.add(instance.name);
+          else if (category === "Water System") highSystems.add(instance.name);
+          else highProcesses.add(instance.name);
         }
       });
-      
-      // Track which items are covered at each level
-      const normalizedName = item.name;
-      if (hasLowControl) {
-        if (item.category === "Asset") lowAssets.add(normalizedName);
-        else if (item.category === "Water System") lowSystems.add(normalizedName);
-        else if (item.category === "Process") lowProcesses.add(normalizedName);
-      }
-      if (hasMediumControl) {
-        if (item.category === "Asset") mediumAssets.add(normalizedName);
-        else if (item.category === "Water System") mediumSystems.add(normalizedName);
-        else if (item.category === "Process") mediumProcesses.add(normalizedName);
-      }
-      if (hasHighControl) {
-        if (item.category === "Asset") highAssets.add(normalizedName);
-        else if (item.category === "Water System") highSystems.add(normalizedName);
-        else if (item.category === "Process") highProcesses.add(normalizedName);
-      }
+    };
+    
+    // Process assets - calculate duration ONCE per class (like CriticalAssetsStep does)
+    assetsByClass.forEach((instances, className) => {
+      const durationStr = calculateCriticalAssetDuration(className, projectData);
+      const durationMonths = parseDurationMonths(durationStr);
+      processInstances(instances, className, durationMonths, "Asset");
+    });
+    
+    // Process water systems - calculate duration ONCE per class (like WaterSystemsStep does)
+    systemsByClass.forEach((instances, className) => {
+      const durationStr = calculateWaterSystemDuration(className, projectData);
+      const durationMonths = parseDurationMonths(durationStr);
+      processInstances(instances, className, durationMonths, "Water System");
+    });
+    
+    // Process processes - use project duration
+    processesByClass.forEach((instances, className) => {
+      processInstances(instances, className, projectDurationMonths, "Process");
     });
     
     return {
