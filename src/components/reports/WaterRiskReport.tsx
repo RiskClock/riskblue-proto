@@ -496,16 +496,16 @@ export const WaterRiskReport = ({ data, analysisItems = [], controlDetails = [] 
                         {(() => {
                           const drawingUrl = getDrawingImage(location.id);
                           return drawingUrl ? (
-                            <div className="mt-2 p-3 border border-gray-200 rounded bg-white flex justify-center">
+                            <div className="mt-2 p-2 border border-gray-200 rounded bg-white flex justify-center">
                               <img 
                                 src={drawingUrl} 
                                 alt={`Drawing for ${location.id}`} 
-                                className="max-w-full max-h-96 object-contain rounded border border-gray-200"
+                                className="max-w-full max-h-64 object-contain rounded border border-gray-200"
                               />
                             </div>
                           ) : (
-                            <div className="mt-2 p-3 border-2 border-dashed border-gray-300 rounded bg-gray-50 flex flex-col items-center justify-center h-32">
-                              <p className="text-sm text-gray-400">No drawing available</p>
+                            <div className="mt-2 p-2 border-2 border-dashed border-gray-300 rounded bg-gray-50 flex flex-col items-center justify-center h-16">
+                              <p className="text-xs text-gray-400">No drawing available</p>
                             </div>
                           );
                         })()}
