@@ -45,7 +45,9 @@ export const LocationDetailsModal = ({
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
 
-  const showDrawing = canViewFile && driveFile && driveAccessToken;
+  // Check if we can show a drawing (either from Google Drive or placeholder needed)
+  const hasGoogleDriveDrawing = canViewFile && driveFile && driveAccessToken;
+  const showDrawing = hasGoogleDriveDrawing;
 
   // Load file when modal opens - single consolidated effect
   useEffect(() => {
@@ -443,19 +445,39 @@ export const LocationDetailsModal = ({
                       <p className="text-sm text-destructive">{error}</p>
                     </div>
                   </div>
-                ) : (
+                ) : pageImages.length > 0 ? (
                   <div className="flex items-center justify-center min-h-full">
                     <canvas
                       ref={canvasRef}
                       className="max-w-full h-auto rounded shadow-sm"
                     />
                   </div>
+                ) : (
+                  <div className="flex items-center justify-center h-full">
+                    <div className="text-center space-y-3">
+                      <div className="w-20 h-20 mx-auto rounded-lg bg-muted flex items-center justify-center">
+                        <FileImage className="w-10 h-10 text-muted-foreground/50" />
+                      </div>
+                      <p className="text-sm text-muted-foreground">No drawing associated with this location</p>
+                    </div>
+                  </div>
                 )}
               </div>
             </div>
           </div>
         ) : (
+          /* Non-drawing view with placeholder */
           <div className="space-y-4 p-6">
+            {/* Grey placeholder for items without drawings */}
+            <div className="rounded-lg bg-muted/50 border-2 border-dashed border-muted-foreground/20 p-6 mb-4">
+              <div className="flex flex-col items-center justify-center text-center space-y-2">
+                <div className="w-12 h-12 rounded-lg bg-muted flex items-center justify-center">
+                  <FileImage className="w-6 h-6 text-muted-foreground/50" />
+                </div>
+                <p className="text-sm text-muted-foreground">No drawing associated with this location</p>
+              </div>
+            </div>
+            
             {/* Category & Floor */}
             <div className="grid grid-cols-2 gap-4">
               <div>

@@ -10,7 +10,9 @@ export interface AnalysisItem {
   width: number | null;
   length: number | null;
   areaSqft: number | null;
-  sizeCategory: "small" | "medium" | "large" | "very large" | null;
+  // Also support snake_case from edge function
+  area_sqft?: number | null;
+  sizeCategory: "very small" | "small" | "medium" | "large" | "very large" | null;
   controls: string[];
   coordinates: [number, number, number, number] | null;
 }

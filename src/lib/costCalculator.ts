@@ -63,14 +63,56 @@ export const parseDurationMonths = (duration: string | null | undefined): number
 };
 
 /**
+ * Size category thresholds (max sq ft for each category)
+ */
+export const SIZE_THRESHOLDS = {
+  VERY_SMALL_MAX: 149,
+  SMALL_MAX: 300,
+  MEDIUM_MAX: 600,
+  LARGE_MAX: 1200,
+};
+
+/**
+ * Sensor count required per room size category
+ */
+export const SENSOR_COUNT_BY_SIZE: Record<string, number> = {
+  'very small': 1,
+  'small': 1,
+  'medium': 2,
+  'large': 3,
+  'very large': 5,
+};
+
+/**
  * Default room sizes (in sq ft) for each size category
  */
 const SIZE_CATEGORY_DEFAULTS: Record<string, number> = {
-  small: 150,
-  medium: 350,
-  large: 750,
-  'extra large': 1500,
+  'very small': 75,
+  small: 225,
+  medium: 450,
+  large: 900,
+  'very large': 1500,
 };
+
+/**
+ * Derive size category from area in square feet
+ */
+export function getSizeCategory(areaSqft: number | null): 'very small' | 'small' | 'medium' | 'large' | 'very large' | null {
+  if (!areaSqft || areaSqft <= 0) return null;
+  if (areaSqft <= SIZE_THRESHOLDS.VERY_SMALL_MAX) return 'very small';
+  if (areaSqft <= SIZE_THRESHOLDS.SMALL_MAX) return 'small';
+  if (areaSqft <= SIZE_THRESHOLDS.MEDIUM_MAX) return 'medium';
+  if (areaSqft <= SIZE_THRESHOLDS.LARGE_MAX) return 'large';
+  return 'very large';
+}
+
+/**
+ * Get the number of sensors required for a room size category
+ */
+export function getSensorCount(sizeCategory: string | null): number {
+  if (!sizeCategory) return 1;
+  return SENSOR_COUNT_BY_SIZE[sizeCategory.toLowerCase()] || 1;
+}
 
 /**
  * Look up the appropriate pricing tier for a control based on instance data
