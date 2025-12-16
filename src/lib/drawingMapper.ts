@@ -49,6 +49,9 @@ const DRAWING_IMAGES: Record<string, string> = {
   'MRM001': '/assets/drawings/MRM001.png',
   
   // Electrical Rooms
+  'ERM001': '/assets/drawings/ERM001.png',
+  'ERM002': '/assets/drawings/ERM002.png',
+  'ERM003': '/assets/drawings/ERM003.png',
   'ERM004': '/assets/drawings/ERM004.png',
   'ERM005': '/assets/drawings/ERM005.png',
   'ERM006': '/assets/drawings/ERM006.png',
