@@ -412,7 +412,8 @@ const ProjectWizardContent = () => {
             areaSqft: d.area_sqft ? Number(d.area_sqft) : null,
             sizeCategory: d.size_category as any,
             controls: d.controls || [],
-            coordinates: d.coordinates as any
+            coordinates: d.coordinates as any,
+            additionalParameters: (d as any).additional_parameters || undefined,
           }));
           setAnalysisItems(items);
         }
@@ -829,6 +830,7 @@ const ProjectWizardContent = () => {
           size_category: derivedSizeCategory,
           controls: item.controls || [],
           coordinates: item.coordinates || null,
+          additional_parameters: item.additionalParameters || null,
         };
       });
 

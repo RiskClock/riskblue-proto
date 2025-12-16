@@ -436,7 +436,8 @@ export const WaterSystemsStep = ({
           pricingTiers,
           control.oneTimeCost,
           control.monthlyMaintCost,
-          durationMonths
+          durationMonths,
+          instance?.name // Pass instance name for sensor count logic
         );
       }
     });
@@ -576,7 +577,8 @@ export const WaterSystemsStep = ({
                     pricingTiers,
                     control.oneTimeCost,
                     control.monthlyMaintCost,
-                    durationMonths
+                    durationMonths,
+                    instance.name
                   );
                 }
               }

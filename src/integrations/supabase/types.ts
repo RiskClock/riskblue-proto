@@ -507,6 +507,7 @@ export type Database = {
       }
       project_analysis_items: {
         Row: {
+          additional_parameters: Json | null
           area_name: string | null
           area_sqft: number | null
           category: string
@@ -526,6 +527,7 @@ export type Database = {
           width: number | null
         }
         Insert: {
+          additional_parameters?: Json | null
           area_name?: string | null
           area_sqft?: number | null
           category: string
@@ -545,6 +547,7 @@ export type Database = {
           width?: number | null
         }
         Update: {
+          additional_parameters?: Json | null
           area_name?: string | null
           area_sqft?: number | null
           category?: string

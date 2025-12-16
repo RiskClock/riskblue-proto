@@ -15,6 +15,12 @@ export interface AnalysisItem {
   sizeCategory: "very small" | "small" | "medium" | "large" | "very large" | null;
   controls: string[];
   coordinates: [number, number, number, number] | null;
+  // Additional parameters for water systems (pipe diameter, etc.)
+  additionalParameters?: {
+    mainPipeDirection?: string;
+    pipeDiameterInches?: number | null;
+    pipeDiameterMM?: number | null;
+  };
 }
 
 // Map TMU analysis names to database asset names
