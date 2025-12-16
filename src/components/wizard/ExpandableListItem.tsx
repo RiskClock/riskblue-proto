@@ -400,7 +400,15 @@ export const ExpandableListItem = ({
             const hasControls = instance.controls && instance.controls.length > 0;
             const controlState = getInstanceControlSelectionState(instance);
             const capitalize = (str: string) => str.charAt(0).toUpperCase() + str.slice(1).toLowerCase();
-            const sizeDisplay = instance.sizeCategory ? `${capitalize(instance.sizeCategory)} Room` : null;
+            // Combine sizeCategory and areaSqft: "Medium (343 sq ft)"
+            const areaSqft = instance.areaSqft || (instance as any).area_sqft;
+            const sizeDisplay = instance.sizeCategory && areaSqft 
+              ? `${capitalize(instance.sizeCategory)} (${areaSqft.toLocaleString()} sq ft)` 
+              : areaSqft 
+                ? `${areaSqft.toLocaleString()} sq ft`
+                : instance.sizeCategory 
+                  ? `${capitalize(instance.sizeCategory)} Room`
+                  : null;
             const pipeDiameter = getPipeDiameter(instance);
 
             // Calculate instance cost and derisk points based on selected controls

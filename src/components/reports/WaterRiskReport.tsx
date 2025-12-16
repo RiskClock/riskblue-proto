@@ -299,13 +299,20 @@ export const WaterRiskReport = ({ data, analysisItems = [], controlDetails = [] 
     const details: string[] = [];
     if (location.floor) details.push(`Floor: ${location.floor}`);
     if (location.drawingCode) details.push(`Drawing: ${location.drawingCode}`);
-    if (location.sizeCategory) details.push(`Size: ${location.sizeCategory}`);
-    // Show area instead of dimensions
-    if (location.areaSqft) {
-      details.push(`Area: ${location.areaSqft.toLocaleString()} sq ft`);
-    } else if (location.width && location.length) {
-      details.push(`Area: ${(location.width * location.length).toLocaleString()} sq ft`);
+    
+    // Combine sizeCategory and areaSqft: "Size: Medium (343 sq ft)"
+    const areaSqft = location.areaSqft || (location as any).area_sqft;
+    const calculatedArea = location.width && location.length ? location.width * location.length : null;
+    const area = areaSqft || calculatedArea;
+    
+    if (location.sizeCategory && area) {
+      details.push(`Size: ${location.sizeCategory} (${area.toLocaleString()} sq ft)`);
+    } else if (area) {
+      details.push(`Area: ${area.toLocaleString()} sq ft`);
+    } else if (location.sizeCategory) {
+      details.push(`Size: ${location.sizeCategory}`);
     }
+    
     if (location.fileName) details.push(`File: ${location.fileName}`);
     return details;
   };
