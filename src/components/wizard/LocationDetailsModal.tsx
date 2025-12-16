@@ -244,9 +244,9 @@ export const LocationDetailsModal = ({
 
   const sizeDisplay = location.sizeCategory ? `${capitalize(location.sizeCategory)} Room` : null;
   const areaDisplay = location.areaSqft 
-    ? `${location.areaSqft.toLocaleString()} sq ft` 
+    ? `${location.areaSqft.toLocaleString()} ft²` 
     : (location.length && location.width 
-      ? `${(location.length * location.width).toLocaleString()} sq ft` 
+      ? `${(location.length * location.width).toLocaleString()} ft²`
       : null);
 
   return (

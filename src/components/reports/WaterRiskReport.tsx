@@ -300,15 +300,15 @@ export const WaterRiskReport = ({ data, analysisItems = [], controlDetails = [] 
     if (location.floor) details.push(`Floor: ${location.floor}`);
     if (location.drawingCode) details.push(`Drawing: ${location.drawingCode}`);
     
-    // Combine sizeCategory and areaSqft: "Size: Medium (343 sq ft)"
+    // Combine sizeCategory and areaSqft: "Size: Medium (343 ft²)"
     const areaSqft = location.areaSqft || (location as any).area_sqft;
     const calculatedArea = location.width && location.length ? location.width * location.length : null;
     const area = areaSqft || calculatedArea;
     
     if (location.sizeCategory && area) {
-      details.push(`Size: ${location.sizeCategory} (${area.toLocaleString()} sq ft)`);
+      details.push(`Size: ${location.sizeCategory} (${area.toLocaleString()} ft²)`);
     } else if (area) {
-      details.push(`Area: ${area.toLocaleString()} sq ft`);
+      details.push(`Area: ${area.toLocaleString()} ft²`);
     } else if (location.sizeCategory) {
       details.push(`Size: ${location.sizeCategory}`);
     }

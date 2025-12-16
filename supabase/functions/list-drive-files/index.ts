@@ -63,6 +63,8 @@ serve(async (req) => {
       q: `'${folderId}' in parents and trashed = false`,
       fields: "nextPageToken, files(id, name, mimeType, size, modifiedTime, webViewLink, iconLink)",
       pageSize: "100",
+      supportsAllDrives: "true",
+      includeItemsFromAllDrives: "true",
     });
 
     if (pageToken) {

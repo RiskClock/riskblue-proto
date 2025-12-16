@@ -1,4 +1,10 @@
-import { differenceInMonths, addDays, parseISO } from "date-fns";
+import { differenceInDays, addDays, parseISO } from "date-fns";
+
+// Calculate months difference and round up (e.g., 5.3 months → 6 months)
+const calculateMonthsRoundUp = (startDate: Date, endDate: Date): number => {
+  const days = differenceInDays(endDate, startDate);
+  return Math.ceil(days / 30.44); // Average days per month
+};
 
 export interface TimelineData {
   construction_start_date?: string;
@@ -56,7 +62,7 @@ export const calculateWaterSystemDuration = (
     }
 
     if (startDate && endDate) {
-      const months = differenceInMonths(endDate, startDate);
+      const months = calculateMonthsRoundUp(startDate, endDate);
       return `${months} months`;
     }
 
@@ -190,7 +196,7 @@ export const calculateCriticalAssetDuration = (
     }
 
     if (startDate && endDate) {
-      const months = differenceInMonths(endDate, startDate);
+      const months = calculateMonthsRoundUp(startDate, endDate);
       return `${months} months`;
     }
 
