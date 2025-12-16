@@ -22,7 +22,22 @@ export interface InstancePricingData {
   areaSqft?: number | null;
   sizeCategory?: string | null;
   pipeDiameterInches?: number | null;
+  additionalParameters?: {
+    pipeDiameterInches?: number | null;
+    pipeDiameterMM?: number | null;
+    mainPipeDirection?: string;
+  };
 }
+
+/**
+ * Controls that scale by sensor count based on room size
+ */
+export const SENSOR_SCALED_CONTROLS = ['Presence of Water Monitoring'];
+
+/**
+ * Instance types that always use single sensor regardless of room size
+ */
+export const SINGLE_SENSOR_INSTANCE_TYPES = ['Sump Pit', 'Storm Drain', 'Drainage'];
 
 /**
  * Calculate total control cost based on upfront cost + (monthly cost × duration × sensor count)
@@ -166,7 +181,9 @@ export const lookupPricingTier = (
 /**
  * Calculate tiered control cost for a specific instance
  * Falls back to direct costs if no tier is found
- * Automatically multiplies monthly cost by sensor count based on room size
+ * Only applies sensor count multiplier for SENSOR_SCALED_CONTROLS (e.g., "Presence of Water Monitoring")
+ * and excludes SINGLE_SENSOR_INSTANCE_TYPES (e.g., Sump Pits) which always use 1 sensor
+ * @param instanceName Optional instance name to check for single-sensor instance types
  */
 export const calculateTieredControlCost = (
   controlName: string,
@@ -174,20 +191,43 @@ export const calculateTieredControlCost = (
   pricingTiers: PricingTier[],
   fallbackOneTimeCost: number,
   fallbackMonthlyCost: number,
-  durationMonths: number | null
+  durationMonths: number | null,
+  instanceName?: string
 ): number => {
-  // Determine size category for sensor count calculation
-  let sizeCategory = instanceData.sizeCategory;
-  if (!sizeCategory && instanceData.areaSqft) {
-    sizeCategory = getSizeCategory(instanceData.areaSqft);
-  } else if (!sizeCategory && instanceData.width && instanceData.length) {
-    sizeCategory = getSizeCategory(instanceData.width * instanceData.length);
+  // Default sensor count to 1
+  let sensorCount = 1;
+  
+  // Only scale by sensors for specific controls (e.g., "Presence of Water Monitoring")
+  if (SENSOR_SCALED_CONTROLS.includes(controlName)) {
+    // Check if this is a single-sensor instance type (Sump Pit, Storm Drain, Drainage)
+    const isSingleSensorInstance = instanceName && 
+      SINGLE_SENSOR_INSTANCE_TYPES.some(type => 
+        instanceName.toLowerCase().includes(type.toLowerCase())
+      );
+    
+    if (!isSingleSensorInstance) {
+      // Calculate sensor count from room size
+      let sizeCategory = instanceData.sizeCategory;
+      if (!sizeCategory && instanceData.areaSqft) {
+        sizeCategory = getSizeCategory(instanceData.areaSqft);
+      } else if (!sizeCategory && instanceData.width && instanceData.length) {
+        sizeCategory = getSizeCategory(instanceData.width * instanceData.length);
+      }
+      sensorCount = getSensorCount(sizeCategory || null);
+    }
   }
   
-  // Get sensor count based on room size
-  const sensorCount = getSensorCount(sizeCategory || null);
+  // Get pipe diameter from additionalParameters if available
+  const pipeDiameter = instanceData.pipeDiameterInches ?? 
+    instanceData.additionalParameters?.pipeDiameterInches ?? null;
   
-  const tier = lookupPricingTier(controlName, instanceData, pricingTiers);
+  // Create lookup data with resolved pipe diameter
+  const lookupData: InstancePricingData = {
+    ...instanceData,
+    pipeDiameterInches: pipeDiameter,
+  };
+  
+  const tier = lookupPricingTier(controlName, lookupData, pricingTiers);
   
   if (tier) {
     return calculateControlCost(tier.one_time_cost, tier.monthly_cost, durationMonths, sensorCount);

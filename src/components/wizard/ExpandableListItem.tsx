@@ -418,8 +418,10 @@ export const ExpandableListItem = ({
             const instancePricingData: InstancePricingData = {
               width: instance.width,
               length: instance.length,
+              areaSqft: instance.areaSqft || (instance as any).area_sqft,
               sizeCategory: instance.sizeCategory,
-              pipeDiameterInches: (instance as any).additionalParameters?.pipeDiameterInches || null
+              pipeDiameterInches: (instance as any).additionalParameters?.pipeDiameterInches || null,
+              additionalParameters: (instance as any).additionalParameters,
             };
             
             const instanceCost = (instance.controls || []).reduce((sum, control) => {
@@ -432,7 +434,8 @@ export const ExpandableListItem = ({
                   pricingTiers,
                   controlData?.oneTimeCost || 0,
                   controlData?.monthlyMaintCost || 0,
-                  durationMonths
+                  durationMonths,
+                  instance.name // Pass instance name for sensor count logic
                 );
               }
               return sum;
