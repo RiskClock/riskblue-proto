@@ -54,7 +54,7 @@ export const ProcessesStep = ({
   const isRiskToleranceUpdateRef = useRef(false);
   
   // Track previous risk tolerance
-  const prevRiskToleranceRef = useRef(parentRiskTolerance);
+  const prevRiskToleranceRef = useRef<RiskTolerance | null>(null);
 
   // Fetch processes from database for risk tolerance and risk_level_points values
   const { data: processes = [] } = useQuery({
@@ -237,11 +237,11 @@ export const ProcessesStep = ({
     return rt === 3; // Essential: only RT 3
   };
 
-  // React to parent risk tolerance changes
+  // React to parent risk tolerance changes (including initial application)
   useEffect(() => {
     if (!processItems.length || !controls.length) return;
     
-    // Only run when risk tolerance actually changes
+    // Run on initial load (when prevRef is null) OR when tolerance actually changes
     if (prevRiskToleranceRef.current === parentRiskTolerance) return;
     prevRiskToleranceRef.current = parentRiskTolerance;
     

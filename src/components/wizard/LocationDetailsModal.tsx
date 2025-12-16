@@ -223,67 +223,9 @@ export const LocationDetailsModal = ({
     canvas.width = displayWidth;
     canvas.height = displayHeight;
 
-    // Draw image
+    // Draw image only (no bounding box overlay)
     ctx.drawImage(img, 0, 0, displayWidth, displayHeight);
-
-    // Draw bounding box for location if coordinates exist
-    if (location?.coordinates && location.coordinates.length === 4) {
-      const coords = location.coordinates;
-      const maxCoord = Math.max(...coords);
-      
-      let scaledX: number, scaledY: number, scaledWidth: number, scaledHeight: number;
-      
-      if (maxCoord <= 1) {
-        // Normalized 0-1 format: [x, y, width, height]
-        const [x, y, w, h] = coords;
-        scaledX = x * displayWidth;
-        scaledY = y * displayHeight;
-        scaledWidth = w * displayWidth;
-        scaledHeight = h * displayHeight;
-      } else {
-        // PDF points format: [x0, y0, x1, y1] - use actual PDF dimensions
-        const [x0, y0, x1, y1] = coords;
-        
-        const boxWidth = x1 - x0;
-        const boxHeight = y1 - y0;
-        
-        // Use actual PDF dimensions if available, fallback to A0
-        const pdfWidth = originalSize?.width || A0_HORIZONTAL_WIDTH;
-        const pdfHeight = originalSize?.height || A0_HORIZONTAL_HEIGHT;
-        
-        // Scale from PDF dimensions to display canvas
-        const scaleX = displayWidth / pdfWidth;
-        const scaleY = displayHeight / pdfHeight;
-        
-        // Transform: X stays same, Y flipped (PDF origin is bottom-left)
-        scaledX = x0 * scaleX;
-        scaledY = (pdfHeight - y1) * scaleY;
-        scaledWidth = boxWidth * scaleX;
-        scaledHeight = boxHeight * scaleY;
-      }
-
-      // Draw rectangle
-      ctx.strokeStyle = BOUNDING_BOX_COLOR;
-      ctx.lineWidth = 3;
-      ctx.strokeRect(scaledX, scaledY, scaledWidth, scaledHeight);
-
-      // Draw semi-transparent fill
-      ctx.fillStyle = `${BOUNDING_BOX_COLOR}30`;
-      ctx.fillRect(scaledX, scaledY, scaledWidth, scaledHeight);
-
-      // Draw label
-      const label = location.id;
-      ctx.font = `bold 14px sans-serif`;
-      const textMetrics = ctx.measureText(label);
-      const padding = 6;
-
-      ctx.fillStyle = BOUNDING_BOX_COLOR;
-      ctx.fillRect(scaledX, scaledY - 24, textMetrics.width + padding * 2, 24);
-
-      ctx.fillStyle = "#000000";
-      ctx.fillText(label, scaledX + padding, scaledY - 7);
-    }
-  }, [pageImages, currentPage, zoom, loading, location, originalSize]);
+  }, [pageImages, currentPage, zoom, loading]);
 
   if (!location) return null;
 
