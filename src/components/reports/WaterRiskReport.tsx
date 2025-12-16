@@ -3,6 +3,7 @@ import { normalizeControlName } from "@/lib/utils";
 import { AnalysisItem } from "@/lib/analysisItemMapper";
 import { getControlId } from "@/components/wizard/ExpandableListItem";
 import { calculateSystemOrAssetDates, TimelineData } from "@/lib/durationCalculator";
+import { getDrawingImage } from "@/lib/drawingMapper";
 import { differenceInMonths, format } from "date-fns";
 
 // Import all images as ES6 modules for reliable PDF export
@@ -484,14 +485,23 @@ export const WaterRiskReport = ({ data, analysisItems = [], controlDetails = [] 
                             ))}
                           </div>
                         )}
-                        {/* Drawing placeholder - bigger and centered */}
-                        <div className="mt-2 p-3 border border-gray-200 rounded bg-white flex justify-center">
-                          <img 
-                            src={placeholderDrawingUrl} 
-                            alt="Drawing preview" 
-                            className="w-80 h-60 object-contain rounded border border-gray-200"
-                          />
-                        </div>
+                        {/* Drawing image or placeholder */}
+                        {(() => {
+                          const drawingUrl = getDrawingImage(location.id);
+                          return drawingUrl ? (
+                            <div className="mt-2 p-3 border border-gray-200 rounded bg-white flex justify-center">
+                              <img 
+                                src={drawingUrl} 
+                                alt={`Drawing for ${location.id}`} 
+                                className="max-w-full max-h-96 object-contain rounded border border-gray-200"
+                              />
+                            </div>
+                          ) : (
+                            <div className="mt-2 p-3 border-2 border-dashed border-gray-300 rounded bg-gray-50 flex flex-col items-center justify-center h-32">
+                              <p className="text-sm text-gray-400">No drawing available</p>
+                            </div>
+                          );
+                        })()}
                       </div>
                     );
                   })}
