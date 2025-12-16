@@ -217,9 +217,14 @@ export const calculateTieredControlCost = (
     }
   }
   
-  // Get pipe diameter from additionalParameters if available
-  const pipeDiameter = instanceData.pipeDiameterInches ?? 
+  // Get pipe diameter from additionalParameters - convert MM to inches if needed
+  let pipeDiameter = instanceData.pipeDiameterInches ?? 
     instanceData.additionalParameters?.pipeDiameterInches ?? null;
+  
+  // If no inches value, convert from MM (1 inch = 25.4mm)
+  if (pipeDiameter === null && instanceData.additionalParameters?.pipeDiameterMM) {
+    pipeDiameter = instanceData.additionalParameters.pipeDiameterMM / 25.4;
+  }
   
   // Create lookup data with resolved pipe diameter
   const lookupData: InstancePricingData = {

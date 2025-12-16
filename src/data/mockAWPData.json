@@ -577,7 +577,8 @@
             "area_sqft": null,
             "controls": [
                 "Automatic Shut Off Valve",
-                "Ultrasonic Flow Sensors"
+                "Ultrasonic Flow Sensors",
+                "Inline Flow Sensors"
             ],
             "coordinates": [
                 0.5711,

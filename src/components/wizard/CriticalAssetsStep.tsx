@@ -543,11 +543,14 @@ export const CriticalAssetsStep = ({
           const durationMonths = parseDurationMonths(durationStr);
           let classCost = 0;
           instances.forEach(instance => {
+            const additionalParams = (instance as any).additionalParameters;
             const instancePricingData = {
               width: instance.width,
               length: instance.length,
+              areaSqft: instance.areaSqft || (instance as any).area_sqft,
               sizeCategory: instance.sizeCategory,
-              pipeDiameterInches: (instance as any).additionalParameters?.pipeDiameterInches || null
+              pipeDiameterInches: additionalParams?.pipeDiameterInches ?? null,
+              additionalParameters: additionalParams,
             };
             (instance.controls || []).forEach(controlName => {
               const controlId = getControlId(instance.id, controlName);
