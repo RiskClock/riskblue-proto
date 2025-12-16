@@ -551,10 +551,10 @@ export const WaterRiskReport = ({ data, analysisItems = [], controlDetails = [] 
   };
 
   return (
-    <div className="print-report bg-white text-black p-4 max-w-[210mm] mx-auto text-[11px]">
-      {/* Floating logo on each page */}
-      <div className="print-floating-logo">
-        <img src={riskBlueLogo} alt="RiskBlue" style={{ height: '24px' }} />
+    <div className="print-report bg-white text-black p-4 max-w-[210mm] mx-auto text-[11px] relative">
+      {/* Logo positioned in top-right corner */}
+      <div className="print-corner-logo">
+        <img src={riskBlueLogo} alt="RiskBlue" />
       </div>
       {/* Header with Logo and "Built in RiskBlue" */}
       <div className="print-header flex justify-between items-start mb-4 pb-2 border-b-2 border-gray-300">

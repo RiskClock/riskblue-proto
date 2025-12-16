@@ -140,18 +140,18 @@
     -webkit-print-color-adjust: exact;
   }
 
-  /* Floating logo on each page - top right corner */
-  .print-floating-logo {
-    position: fixed;
-    top: 0.5cm;
+  /* Logo in top-right corner of report */
+  .print-corner-logo {
+    position: absolute;
+    top: 0;
     right: 0;
-    z-index: 9999;
-    opacity: 0.8;
+    z-index: 100;
   }
 
-  .print-floating-logo img {
+  .print-corner-logo img {
     height: 24px !important;
     max-height: 24px !important;
+    opacity: 0.9;
   }
 }
 
@@ -167,6 +167,9 @@
 
 @media screen {
   .print-report {
+    display: none;
+  }
+  .print-corner-logo {
     display: none;
   }
 }
