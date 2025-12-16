@@ -361,7 +361,7 @@ const ProjectWizardContent = () => {
         high: highControls.size
       }
     };
-  }, [analysisItems, controlCosts, pricingTiers, projectDurationMonths]);
+  }, [analysisItems, controlCosts, pricingTiers, projectDurationMonths, projectData]);
 
   // Calculate actual cost based on currently selected controls using tiered pricing
   const actualSelectedCost = useMemo(() => {
