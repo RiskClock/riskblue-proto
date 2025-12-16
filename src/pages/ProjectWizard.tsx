@@ -397,6 +397,7 @@ const ProjectWizardContent = () => {
   }, [analysisItems, controlCosts, pricingTiers, projectDurationMonths, projectData]);
 
   // Calculate actual cost based on currently selected controls using tiered pricing
+  // Uses class-specific durations (matching totalCostEstimates logic)
   const actualSelectedCost = useMemo(() => {
     const controlMap = new Map<string, { oneTimeCost: number; monthlyCost: number }>();
     controlCosts.forEach(c => controlMap.set(c.name, { oneTimeCost: c.oneTimeCost, monthlyCost: c.monthlyCost }));
@@ -412,6 +413,9 @@ const ProjectWizardContent = () => {
       ...(projectData.selectedProcessControls || []),
     ]);
     
+    // Pre-calculate durations per class (matching totalCostEstimates approach)
+    const classDurationCache = new Map<string, number | null>();
+    
     let totalCost = 0;
     allSelectedControls.forEach(compositeId => {
       // Extract instance ID and control name from "instanceId::controlName" format
@@ -423,12 +427,41 @@ const ProjectWizardContent = () => {
       if (control) {
         // Get instance data for tiered pricing lookup
         const item = instanceId ? itemMap.get(instanceId) : null;
+        
+        // Determine the class name and duration based on category
+        let durationMonths: number | null = null;
+        
+        if (item) {
+          let className: string | null = null;
+          
+          if (item.category === 'Asset') {
+            className = mapToAssetName(item.name);
+            if (className && !classDurationCache.has(`asset:${className}`)) {
+              const durationStr = calculateCriticalAssetDuration(className, projectData);
+              classDurationCache.set(`asset:${className}`, parseDurationMonths(durationStr));
+            }
+            durationMonths = className ? classDurationCache.get(`asset:${className}`) ?? null : null;
+          } else if (item.category === 'Water System') {
+            className = mapToWaterSystemName(item.name);
+            if (className && !classDurationCache.has(`system:${className}`)) {
+              const durationStr = calculateWaterSystemDuration(className, projectData);
+              classDurationCache.set(`system:${className}`, parseDurationMonths(durationStr));
+            }
+            durationMonths = className ? classDurationCache.get(`system:${className}`) ?? null : null;
+          } else if (item.category === 'Process') {
+            durationMonths = projectDurationMonths;
+          }
+        }
+        
+        // Build instance pricing data
+        const additionalParams = (item as any)?.additionalParameters;
         const instancePricingData = {
           width: item?.width ?? null,
           length: item?.length ?? null,
           areaSqft: item?.areaSqft ?? (item as any)?.area_sqft ?? null,
           sizeCategory: item?.sizeCategory ?? null,
-          pipeDiameterInches: null
+          pipeDiameterInches: additionalParams?.pipeDiameterInches ?? null,
+          additionalParameters: additionalParams,
         };
         
         totalCost += calculateTieredControlCost(
@@ -437,13 +470,14 @@ const ProjectWizardContent = () => {
           pricingTiers,
           control.oneTimeCost,
           control.monthlyCost,
-          projectDurationMonths
+          durationMonths,  // Use class-specific duration instead of projectDurationMonths
+          item?.name
         );
       }
     });
     
     return totalCost;
-  }, [projectData.selectedAssetControls, projectData.selectedSystemControls, projectData.selectedProcessControls, controlCosts, pricingTiers, analysisItems, projectDurationMonths]);
+  }, [projectData.selectedAssetControls, projectData.selectedSystemControls, projectData.selectedProcessControls, controlCosts, pricingTiers, analysisItems, projectDurationMonths, projectData]);
 
   // Handle risk tolerance change
   const handleRiskToleranceChange = useCallback((newTolerance: RiskTolerance) => {
