@@ -23,6 +23,16 @@ const DRAWING_IMAGES: Record<string, string> = {
   'SPSDD002': '/assets/drawings/SPSDD002.png',
   
   // Kitchens & Washrooms
+  'KW004': '/assets/drawings/KW004.png',
+  'KW005': '/assets/drawings/KW005.png',
+  'KW006': '/assets/drawings/KW006.png',
+  'KW007': '/assets/drawings/KW007.png',
+  'KW008': '/assets/drawings/KW008.png',
+  'KW009': '/assets/drawings/KW009.png',
+  'KW010': '/assets/drawings/KW010.png',
+  'KW011': '/assets/drawings/KW011.png',
+  'KW012': '/assets/drawings/KW012.png',
+  'KW013': '/assets/drawings/KW013.png',
   'KW014': '/assets/drawings/KW014.png',
 };
 

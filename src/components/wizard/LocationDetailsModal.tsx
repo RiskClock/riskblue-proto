@@ -46,14 +46,13 @@ export const LocationDetailsModal = ({
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
 
-  // Check for static drawing first, then Google Drive
+  // Only use static drawings - no Google Drive fallback
   const staticDrawingUrl = location ? getDrawingImage(location.id) : null;
-  const hasGoogleDriveDrawing = canViewFile && driveFile && driveAccessToken;
-  const showDrawingViewer = staticDrawingUrl || hasGoogleDriveDrawing;
+  const showDrawingViewer = !!staticDrawingUrl;
 
   // Load file when modal opens - single consolidated effect
   useEffect(() => {
-    if (isOpen && showDrawingViewer) {
+    if (isOpen && showDrawingViewer && staticDrawingUrl) {
       // Reset state and load fresh
       setPageImages([]);
       setOriginalSize(null);
@@ -62,11 +61,7 @@ export const LocationDetailsModal = ({
       setCurrentPage(1);
       setLoading(true);
       
-      if (staticDrawingUrl) {
-        loadStaticImage(staticDrawingUrl);
-      } else if (hasGoogleDriveDrawing) {
-        loadFile();
-      }
+      loadStaticImage(staticDrawingUrl);
     } else if (!isOpen) {
       // Cleanup on close
       setPageImages([]);
@@ -74,7 +69,7 @@ export const LocationDetailsModal = ({
       setLoading(false);
       setError(null);
     }
-  }, [isOpen, showDrawingViewer, location, staticDrawingUrl, hasGoogleDriveDrawing]);
+  }, [isOpen, showDrawingViewer, location, staticDrawingUrl]);
 
   // Load static image from public folder
   const loadStaticImage = (url: string) => {

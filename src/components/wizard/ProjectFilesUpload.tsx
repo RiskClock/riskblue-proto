@@ -8,7 +8,6 @@ import { extractPDFData, extractKeyInformation, PDFMetadata, formatFileSize as f
 import { PDFAnalysisAnimation } from "../PDFAnalysisAnimation";
 import { supabase } from "@/integrations/supabase/client";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { DriveFilesChat } from "./DriveFilesChat";
 import { useDriveToken } from "@/hooks/useDriveToken";
 import { FileViewerModal } from "./FileViewerModal";
 
@@ -795,14 +794,6 @@ export const ProjectFilesUpload = ({
                     </div>
                   ))}
                 </div>
-                
-                {/* AI Analysis Result with Chat */}
-                {analysisData && (
-                  <DriveFilesChat 
-                    analysisResult={analysisData.text} 
-                    detectedSystems={analysisData.systems}
-                  />
-                )}
               </div>
             )}
           </div>
@@ -1002,14 +993,6 @@ export const ProjectFilesUpload = ({
                         </div>
                       ))}
                     </div>
-                    
-                    {/* AI Analysis Result with Chat */}
-                    {analysisData && (
-                      <DriveFilesChat 
-                        analysisResult={analysisData.text} 
-                        detectedSystems={analysisData.systems}
-                      />
-                    )}
                   </div>
                 )}
               </div>
