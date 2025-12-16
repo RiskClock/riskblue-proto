@@ -1,0 +1,815 @@
+{
+    "assets_water_systems_processes": [
+        {
+            "id": "ERM001",
+            "name": "Electrical Rooms",
+            "category": "Asset",
+            "areaName": "IT ROOM",
+            "floor": "Lower Level",
+            "drawingCode": null,
+            "fileName": "A2.01-LOWER-LEVEL-Rev.18.pdf",
+            "area_sqft": 97,
+            "controls": [
+                "Presence of Water Monitoring",
+                "Water Piping in and Around Electrical Rooms",
+                "Water-Sensitive and High-Value Equipment Protection",
+                "Temporary Enclosures Plan"
+            ],
+            "coordinates": [
+                1115.3,1548.5,1852.7,2285.8
+            ]
+        },
+        {
+            "id": "ERM002",
+            "name": "Electrical Rooms",
+            "category": "Asset",
+            "areaName": "ELECTRICAL",
+            "floor": "Lower Level",
+            "drawingCode": null,
+            "fileName": "A2.01-LOWER-LEVEL-Rev.18.pdf",
+            "area_sqft": 184,
+            "controls": [
+                "Presence of Water Monitoring",
+                "Water Piping in and Around Electrical Rooms",
+                "Water-Sensitive and High-Value Equipment Protection",
+                "Temporary Enclosures Plan"
+            ],
+            "coordinates": [
+                1236.6,1308.7,1988.1,2046.0
+            ]
+        },
+        {
+            "id": "ERM003",
+            "name": "Electrical Rooms",
+            "category": "Asset",
+            "areaName": "HYDRO VAULT",
+            "floor": "Lower Level",
+            "drawingCode": null,
+            "fileName": "A2.01-LOWER-LEVEL-Rev.18.pdf",
+            "area_sqft": 343,
+            "controls": [
+                "Presence of Water Monitoring",
+                "Water Piping in and Around Electrical Rooms",
+                "Water-Sensitive and High-Value Equipment Protection",
+                "Temporary Enclosures Plan"
+            ],
+            "coordinates": [
+                715.7,1213.7,1674.3,2150.8
+            ]
+        },
+        {
+            "id": "ERM004",
+            "name": "Electrical Rooms",
+            "category": "Asset",
+            "areaName": "IT ROOM",
+            "floor": "4th Floor",
+            "drawingCode": null,
+            "fileName": "A2.05-FOURTH-FLOOR-Rev.16.pdf",
+            "area_sqft": 103,
+            "controls": [
+                "Presence of Water Monitoring",
+                "Water Piping in and Around Electrical Rooms",
+                "Water-Sensitive and High-Value Equipment Protection",
+                "Temporary Enclosures Plan"
+            ],
+            "coordinates": [
+                1677.5,1668.4,2418.6,2384.0
+            ]
+        },
+        {
+            "id": "ERM005",
+            "name": "Electrical Rooms",
+            "category": "Asset",
+            "areaName": "IT ROOM",
+            "floor": "7th Floor",
+            "drawingCode": null,
+            "fileName": "A2.07-SIXTH-FLOOR-Rev.18.1.pdf",
+            "area_sqft": 103,
+            "controls": [
+                "Presence of Water Monitoring",
+                "Water Piping in and Around Electrical Rooms",
+                "Water-Sensitive and High-Value Equipment Protection",
+                "Temporary Enclosures Plan"
+            ],
+            "coordinates": [
+                1678.1,1655.5,2419.4,2384.0
+            ]
+        },
+        {
+            "id": "ERM006",
+            "name": "Electrical Rooms",
+            "category": "Asset",
+            "areaName": "ELECTRICAL ROOM",
+            "floor": "Roof",
+            "drawingCode": null,
+            "fileName": "A2.10-ROOF-PLAN-Rev.14.pdf",
+            "area_sqft": 60,
+            "controls": [
+                "Presence of Water Monitoring",
+                "Water Piping in and Around Electrical Rooms",
+                "Water-Sensitive and High-Value Equipment Protection",
+                "Temporary Enclosures Plan"
+            ],
+            "coordinates": [
+                1657.6,1346.9,2436.8,2084.2
+            ]
+        },
+        {
+            "id": "MRM001",
+            "name": "Mechanical Rooms",
+            "category": "Asset",
+            "areaName": "MECHANICAL",
+            "floor": "Lower Level",
+            "drawingCode": null,
+            "fileName": "A2.07-SIXTH-FLOOR-Rev.18.1.pdf",
+            "area_sqft": 429,
+            "controls": [
+                "Presence of Water Monitoring",
+                "Spill Kit",
+                "Air Pressure or Water Tests in Plumbing System",
+                "Water Commissioning Activities and Water Mitigation Equipment Coordination",
+                "Additional Fill Tests: Ensuring Water System Integrity",
+                "Installation Integrity: Joints, Bolts, and Piping",
+                "Disinfection Process Reviews: Protecting System Integrity",
+                "Appropriate Material Review: Ensuring Compatibility and Durability",
+                "Floor Penetrations Water Seals",
+                "Mechanical Room Sleeves"
+            ],
+            "coordinates": [
+                0.3363,
+                0.5887,
+                0.1182,
+                0.0702
+            ]
+        },
+        {
+            "id": "ERS001",
+            "name": "Electrical Risers",
+            "category": "Asset",
+            "areaName": "ELECTRICAL RISER",
+            "floor": "Lower Level - 8th Floor",
+            "drawingCode": null,
+            "fileName": "A2.08-SEVENTH-FLOOR-Rev.17.1.pdf",
+            "area_sqft": 11,
+            "controls": [
+                "Presence of Water Monitoring",
+                "Floor Penetrations Water Seals",
+                "Temporary Enclosures Plan"
+            ],
+            "coordinates": [
+                0.5331,
+                0.0274,
+                0.0808,
+                0.2157
+            ]
+        },
+        {
+            "id": "ELVP001",
+            "name": "Elevator Pits",
+            "category": "Asset",
+            "areaName": "ELEVATOR 1",
+            "floor": "Lower Level",
+            "drawingCode": null,
+            "fileName": "A2.09-EIGHTH-FLOOR-Rev.17.1.pdf",
+            "area_sqft": null,
+            "controls": [
+                "Presence of Water Monitoring"
+            ],
+            "coordinates": [
+                0.6492,
+                0.0339,
+                0.151,
+                0.2247
+            ]
+        },
+        {
+            "id": "ELVP002",
+            "name": "Elevator Pits",
+            "category": "Asset",
+            "areaName": "ELEVATOR 2",
+            "floor": "Lower Level",
+            "drawingCode": null,
+            "fileName": "A2.10-ROOF-PLAN-Rev.14.pdf",
+            "area_sqft": null,
+            "controls": [
+                "Presence of Water Monitoring"
+            ],
+            "coordinates": [
+                0.2113,
+                0.4045,
+                0.204,
+                0.0555
+            ]
+        },
+        {
+            "id": "KW001",
+            "name": "Kitchens & Washrooms",
+            "category": "Asset",
+            "areaName": "STAFF KITCHEN",
+            "floor": "4th Floor",
+            "drawingCode": "SWC-408",
+            "fileName": "A2.11-PARAPET-Rev.14.pdf",
+            "area_sqft": 100,
+            "controls": [
+                "Presence of Water Monitoring"
+            ],
+            "coordinates": [
+                0.6155,
+                0.1094,
+                0.1531,
+                0.2747
+            ]
+        },
+        {
+            "id": "KW002",
+            "name": "Kitchens & Washrooms",
+            "category": "Asset",
+            "areaName": "BF W/C",
+            "floor": "8th Floor",
+            "drawingCode": "SWC-801",
+            "fileName": "M-200B1-PLUMBING-BASEMENT-FLOOR-PLAN-Rev.20.pdf",
+            "area_sqft": 100,
+            "controls": [
+                "Presence of Water Monitoring"
+            ],
+            "coordinates": [
+                0.1874,
+                0.0833,
+                0.0856,
+                0.1966
+            ]
+        },
+        {
+            "id": "KW003",
+            "name": "Kitchens & Washrooms",
+            "category": "Asset",
+            "areaName": "BF W/C",
+            "floor": "7th Floor",
+            "drawingCode": "SWC-701",
+            "fileName": "A2.01-LOWER-LEVEL-Rev.18.pdf",
+            "area_sqft": 100,
+            "controls": [
+                "Presence of Water Monitoring"
+            ],
+            "coordinates": [
+                0.1074,
+                0.4066,
+                0.1961,
+                0.1761
+            ]
+        },
+        {
+            "id": "KW004",
+            "name": "Kitchens & Washrooms",
+            "category": "Asset",
+            "areaName": "BF W/C",
+            "floor": "6th Floor",
+            "drawingCode": "SWC-601",
+            "fileName": "A2.02-GROUND-FLOOR-Rev.19.pdf",
+            "area_sqft": 100,
+            "controls": [
+                "Presence of Water Monitoring"
+            ],
+            "coordinates": [
+                0.4799,
+                0.6361,
+                0.1096,
+                0.1265
+            ]
+        },
+        {
+            "id": "KW005",
+            "name": "Kitchens & Washrooms",
+            "category": "Asset",
+            "areaName": "BF W/C",
+            "floor": "5th Floor",
+            "drawingCode": "SWC-501",
+            "fileName": "A2.03-SECOND-FLOOR-Rev.20.pdf",
+            "area_sqft": 100,
+            "controls": [
+                "Presence of Water Monitoring"
+            ],
+            "coordinates": [
+                0.545,
+                0.0838,
+                0.2456,
+                0.0962
+            ]
+        },
+        {
+            "id": "KW006",
+            "name": "Kitchens & Washrooms",
+            "category": "Asset",
+            "areaName": "BF W/C",
+            "floor": "4th Floor",
+            "drawingCode": "SWC-401",
+            "fileName": "A2.04-THIRD-FLOOR-Rev.15.pdf",
+            "area_sqft": 100,
+            "controls": [
+                "Presence of Water Monitoring"
+            ],
+            "coordinates": [
+                0.1585,
+                0.2517,
+                0.196,
+                0.1849
+            ]
+        },
+        {
+            "id": "KW007",
+            "name": "Kitchens & Washrooms",
+            "category": "Asset",
+            "areaName": "BF W/C",
+            "floor": "3rd Floor",
+            "drawingCode": "SWC-301",
+            "fileName": "A2.05-FOURTH-FLOOR-Rev.16.pdf",
+            "area_sqft": 100,
+            "controls": [
+                "Presence of Water Monitoring"
+            ],
+            "coordinates": [
+                0.145,
+                0.3328,
+                0.1552,
+                0.0602
+            ]
+        },
+        {
+            "id": "KW008",
+            "name": "Kitchens & Washrooms",
+            "category": "Asset",
+            "areaName": "BF W/C",
+            "floor": "2nd Floor",
+            "drawingCode": "SWC-219",
+            "fileName": "A2.06-FIFTH-FLOOR-Rev.14.pdf",
+            "area_sqft": 100,
+            "controls": [
+                "Presence of Water Monitoring"
+            ],
+            "coordinates": [
+                0.0553,
+                0.7265,
+                0.2349,
+                0.0892
+            ]
+        },
+        {
+            "id": "KW009",
+            "name": "Kitchens & Washrooms",
+            "category": "Asset",
+            "areaName": "BF W/C",
+            "floor": "2nd Floor",
+            "drawingCode": "SWC-201",
+            "fileName": "A2.07-SIXTH-FLOOR-Rev.18.1.pdf",
+            "area_sqft": 100,
+            "controls": [
+                "Presence of Water Monitoring"
+            ],
+            "coordinates": [
+                0.1312,
+                0.385,
+                0.2594,
+                0.0522
+            ]
+        },
+        {
+            "id": "KW010",
+            "name": "Kitchens & Washrooms",
+            "category": "Asset",
+            "areaName": "W/C",
+            "floor": "1st Floor",
+            "drawingCode": "SWC-102",
+            "fileName": "A2.08-SEVENTH-FLOOR-Rev.17.1.pdf",
+            "area_sqft": 100,
+            "controls": [
+                "Presence of Water Monitoring"
+            ],
+            "coordinates": [
+                0.4909,
+                0.0697,
+                0.0677,
+                0.132
+            ]
+        },
+        {
+            "id": "KW011",
+            "name": "Kitchens & Washrooms",
+            "category": "Asset",
+            "areaName": "W/C",
+            "floor": "1st Floor",
+            "drawingCode": "SWC-103",
+            "fileName": "A2.09-EIGHTH-FLOOR-Rev.17.1.pdf",
+            "area_sqft": 100,
+            "controls": [
+                "Presence of Water Monitoring"
+            ],
+            "coordinates": [
+                0.0084,
+                0.743,
+                0.1305,
+                0.0768
+            ]
+        },
+        {
+            "id": "KW012",
+            "name": "Kitchens & Washrooms",
+            "category": "Asset",
+            "areaName": "UNIVERSAL W/C",
+            "floor": "1st Floor",
+            "drawingCode": "SWC-104",
+            "fileName": "A2.10-ROOF-PLAN-Rev.14.pdf",
+            "area_sqft": 100,
+            "controls": [
+                "Presence of Water Monitoring"
+            ],
+            "coordinates": [
+                0.1415,
+                0.0786,
+                0.1232,
+                0.2582
+            ]
+        },
+        {
+            "id": "KW013",
+            "name": "Kitchens & Washrooms",
+            "category": "Asset",
+            "areaName": "UNIVERSAL W/C",
+            "floor": "1st Floor",
+            "drawingCode": "SWC-B08",
+            "fileName": "A2.11-PARAPET-Rev.14.pdf",
+            "area_sqft": 100,
+            "controls": [
+                "Presence of Water Monitoring"
+            ],
+            "coordinates": [
+                0.3572,
+                0.3494,
+                0.2267,
+                0.1312
+            ]
+        },
+        {
+            "id": "KW014",
+            "name": "Kitchens & Washrooms",
+            "category": "Asset",
+            "areaName": "UNIVERSAL W/C",
+            "floor": "3rd Floor",
+            "drawingCode": "SWC-303",
+            "fileName": "A2.11-PARAPET-Rev.14.pdf",
+            "area_sqft": 100,
+            "controls": [
+                "Presence of Water Monitoring"
+            ],
+            "coordinates": [
+                0.3572,
+                0.3494,
+                0.2267,
+                0.1312
+            ]
+        },
+        {
+            "id": "FEER",
+            "name": "Facade, Envelope, Exterior, and Roofing",
+            "category": "Asset",
+            "areaName": null,
+            "floor": null,
+            "drawingCode": null,
+            "fileName": "M-200B1-PLUMBING-BASEMENT-FLOOR-PLAN-Rev.20.pdf",
+            "area_sqft": null,
+            "controls": [
+                "Roofing Strategy",
+                "Air and Water Barriers Continuity",
+                "Pre-qualification of Envelope Systems",
+                "Envelope System Performance Criteria",
+                "Weather Station",
+                "Permanent Drainage Systems Installation and Monitoring",
+                "Facade Designed as a Rainscreen"
+            ],
+            "coordinates": [
+                0.4465,
+                0.4053,
+                0.0782,
+                0.0639
+            ]
+        },
+        {
+            "id": "MTM001",
+            "name": "Mass Timber and Millwork",
+            "category": "Asset",
+            "areaName": null,
+            "floor": null,
+            "drawingCode": null,
+            "fileName": "A2.01-LOWER-LEVEL-Rev.18.pdf",
+            "area_sqft": null,
+            "controls": [
+                "Weather Station",
+                "Measure Relative Humidity Sensors",
+                "Lumber Moisture Content Sensors",
+                "Presence of Water Monitoring"
+            ],
+            "coordinates": [
+                0.3464,
+                0.2396,
+                0.1298,
+                0.2826
+            ]
+        },
+        {
+            "id": "DCW-MCE001",
+            "name": "Domestic Cold Water: Main City Entry",
+            "category": "Water System",
+            "areaName": null,
+            "floor": null,
+            "drawingCode": null,
+            "fileName": "A2.02-GROUND-FLOOR-Rev.19.pdf",
+            "area_sqft": null,
+            "controls": [
+                "Automatic Shut Off Valve",
+                "Ultrasonic Flow Sensors",
+                "Inline Flow Sensors"
+            ],
+            "coordinates": [
+                0.4387,
+                0.0886,
+                0.2008,
+                0.2104
+            ],
+              "additionalParameters": {
+                "mainPipeDirection": "horizontal",
+                "pipeDiameterInches": 4,
+                "pipeDiameterMM": 100
+              }
+        },
+        {
+            "id": "DCW-ME001",
+            "name": "Domestic Cold Water: Main Entry",
+            "category": "Water System",
+            "areaName": null,
+            "floor": null,
+            "drawingCode": null,
+            "fileName": "A2.03-SECOND-FLOOR-Rev.20.pdf",
+            "area_sqft": null,
+            "controls": [
+                "Automatic Shut Off Valve",
+                "Ultrasonic Flow Sensors",
+                "Inline Flow Sensors"
+            ],
+            "coordinates": [
+                0.515,
+                0.4133,
+                0.1028,
+                0.2108
+            ],
+              "additionalParameters": {
+                "mainPipeDirection": "horizontal",
+                "pipeDiameterInches": 4,
+                "pipeDiameterMM": 100
+              }
+        },
+        {
+            "id": "DCW-ZE001",
+            "name": "Domestic Cold Water: Zone Entry",
+            "category": "Water System",
+            "areaName": null,
+            "floor": null,
+            "drawingCode": "Ø80 CW UP",
+            "fileName": "A2.04-THIRD-FLOOR-Rev.15.pdf",
+            "area_sqft": null,
+            "controls": [
+                "Automatic Shut Off Valve",
+                "Ultrasonic Flow Sensors"
+            ],
+            "coordinates": [
+                0.5711,
+                0.2303,
+                0.2296,
+                0.0887
+            ],
+            "additionalParameters": {
+                "mainPipeDirection": "vertical",
+                "pipeDiameterInches": null,
+                "pipeDiameterMM": 80
+            }
+        },
+        {
+            "id": "SPSDD001",
+            "name": "Sump Pit, Storm Drain, and Drainage",
+            "category": "Water System",
+            "areaName": "ELEVATOR / SANITARY SUMP PIT",
+            "floor": "Lower Level",
+            "drawingCode": null,
+            "fileName": "A2.09-EIGHTH-FLOOR-Rev.17.1.pdf",
+            "area_sqft": null,
+            "controls": [
+                "Presence of Water Monitoring",
+                "Temporary and Permanent Sump Pump Installation"
+            ],
+            "coordinates": [
+                0.7033,
+                0.3048,
+                0.2379,
+                0.0909
+            ]
+        },
+        {
+            "id": "SPSDD002",
+            "name": "Sump Pit, Storm Drain, and Drainage",
+            "category": "Water System",
+            "areaName": "BACKWATER VALVE PIT",
+            "floor": "Lower Level",
+            "drawingCode": null,
+            "fileName": "A2.09-EIGHTH-FLOOR-Rev.17.1.pdf",
+            "area_sqft": null,
+            "controls": [
+                "Presence of Water Monitoring",
+                "Temporary and Permanent Sump Pump Installation"
+            ],
+            "coordinates": [
+                0.7033,
+                0.3048,
+                0.2379,
+                0.0909
+            ]
+        },
+        {
+            "id": "FS001",
+            "name": "Fire Suppression System",
+            "category": "Water System",
+            "areaName": "DIA FIRE PROTECTION SERVICES LINE",
+            "floor": "Lower Level",
+            "drawingCode": null,
+            "fileName": "A2.10-ROOF-PLAN-Rev.14.pdf",
+            "area_sqft": null,
+            "controls": [
+                "Ultrasonic Flow Sensors",
+                "Inline Flow Sensors"
+            ],
+            "coordinates": [
+                0.5916,
+                0.2067,
+                0.1433,
+                0.2302
+            ],
+            "additionalParameters": {
+                "mainPipeDirection": "horizontal",
+                "pipeDiameterInches": null,
+                "pipeDiameterMM": 150
+            }
+        },
+        {
+            "id": "DHW-HWR001",
+            "name": "Domestic Hot Water: Hot Water Return",
+            "category": "Water System",
+            "areaName": null,
+            "floor": "Lower Level",
+            "drawingCode": null,
+            "fileName": "A2.11-PARAPET-Rev.14.pdf",
+            "area_sqft": null,
+            "controls": [
+                "Inline Flow Sensors",
+                "Ultrasonic Flow Sensors",
+                "Domestic Hot Water Run Flow Patterns"
+            ],
+            "coordinates": [
+                0.1233,
+                0.425,
+                0.0845,
+                0.1908
+            ],
+            "additionalParameters": {
+                "mainPipeDirection": "horizontal",
+                "pipeDiameterInches": null,
+                "pipeDiameterMM": 15
+            }
+        },
+        {
+            "id": "TWR001",
+            "name": "Temporary Water Run",
+            "category": "Water System",
+            "areaName": null,
+            "floor": null,
+            "drawingCode": null,
+            "fileName": "M-200B1-PLUMBING-BASEMENT-FLOOR-PLAN-Rev.20.pdf",
+            "width": null,
+            "length": null,
+            "sizeCategory": null,
+            "controls": [
+                "Presence of Water Monitoring",
+                "Automatic Shut Off Valve",
+                "Ultrasonic Flow Sensors",
+                "Inline Flow Sensors"
+            ],
+            "coordinates": [
+                0.4864,
+                0.5104,
+                0.0908,
+                0.2761
+            ],
+            "additionalParameters": {
+                "mainPipeDirection": "vertical",
+                "pipeDiameterInches": 1,
+                "pipeDiameterMM": null
+            }
+        },
+        {
+            "id": "CT001",
+            "name": "Contractor Team",
+            "category": "Process",
+            "areaName": null,
+            "floor": null,
+            "drawingCode": null,
+            "fileName": null,
+            "width": null,
+            "length": null,
+            "sizeCategory": null,
+            "controls": [
+                "Yearly Risk Controls Inspection",
+                "No Sole Contractor Design Responsibility",
+                "Water Mitigation Equipment Acceptance Test",
+                "Material Substitution Process: Ensuring System Integrity",
+                "Appropriate Material Review: Ensuring Compatibility and Durability",
+                "Design Phase Review Process: Ensuring System Reliability",
+                "Water Watch Real-time Rounds Verification",
+                "Water Leak and Equipment Housekeeping Orientation",
+                "Water Commissioning Activities and Water Mitigation Equipment Coordination",
+                "Construction Activities and Envelope Coordination",
+                "Water Leak Accountability Agreement",
+                "Water Mitigation Equipment Power Re-establishment",
+                "Temporary Ambient Heating Systems",
+                "Water-Sensitive and High-Value Equipment Protection",
+                "Spill Kit",
+                "Temporary Enclosures Plan",
+                "Power Outage Reports",
+                "Water Response Team",
+                "Water Response Plan",
+                "Water Technology Bid Strategy",
+                "Accidental Sprinkler Discharge Response Plan",
+                "Accidental Sprinkler Discharge Protection"
+            ],
+            "coordinates": null
+        },
+        {
+            "id": "WMV001",
+            "name": "Water Mitigation Vendor",
+            "category": "Process",
+            "areaName": null,
+            "floor": null,
+            "drawingCode": null,
+            "fileName": null,
+            "width": null,
+            "length": null,
+            "sizeCategory": null,
+            "controls": [
+                "Periodic and Realtime Water Mitigation Equipment Inspections and Functionality Tests",
+                "Water Mitigation Cybersecurity",
+                "Water Mitigation Components Warranties and Insurance",
+                "Water Mitigation Equipment Labeling",
+                "Risk Notification and Acknowledgement Method",
+                "Water Mitigation System Expansion or Update",
+                "Water Mitigation System Uptime and Decommissioning Notice",
+                "Power Outage Reports",
+                "Maintenance Subcontractor Readiness",
+                "Historical Project Water Incident Reports",
+                "100-Year Flood and Wind Storm Report",
+                "Inclement Water Plan",
+                "Water Response Plan Minimal Procedures",
+                "Water Response Team Minimal Composition",
+                "Water Mitigation Equipment Water Re-establishment"
+            ],
+            "coordinates": null
+        },
+        {
+            "id": "MCE001",
+            "name": "Mechanical Contractor and Engineering",
+            "category": "Process",
+            "areaName": null,
+            "floor": null,
+            "drawingCode": null,
+            "fileName": null,
+            "width": null,
+            "length": null,
+            "sizeCategory": null,
+            "controls": [
+                "Water Leak Accountability Agreement",
+                "Installation Integrity: Joints, Bolts, and Piping",
+                "Water Commissioning Activities and Water Mitigation Equipment Coordination",
+                "Air Pressure or Water Tests in Plumbing System",
+                "Additional Fill Tests: Ensuring Water System Integrity",
+                "Disinfection Process Reviews: Protecting System Integrity",
+                "Appropriate Material Review: Ensuring Compatibility and Durability",
+                "Material Substitution Process: Ensuring System Integrity",
+                "Pressure Reducing Valve Maintenance Plan: Safeguarding System Performance",
+                "Proper Zoning Configuration: Optimizing Pressure Systems",
+                "Thermal Expansion Review: Mitigating Pressure Risk",
+                "Hot Water Velocity Review: Preventing Pipe Wear and System Damage",
+                "Hot Water Recirculating Pumps: Enhancing System Efficiency",
+                "Drip Trays",
+                "Heat Trace and Insulation",
+                "Suite Drains",
+                "Fire Suppression System Integration to Building Automation System",
+                "Fire Suppression System Commissioning"
+            ],
+            "coordinates": null
+        }
+    ]
+}
