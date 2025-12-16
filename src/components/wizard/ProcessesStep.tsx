@@ -169,6 +169,7 @@ export const ProcessesStep = ({
 
   // Default duration for processes (project duration)
   const defaultDurationMonths = 12;
+  const durationString = `${defaultDurationMonths} months`;
 
   // Initialize selection when process items load (once)
   useEffect(() => {
@@ -412,11 +413,14 @@ export const ProcessesStep = ({
           // Calculate class cost to protect based on selected controls with tiered pricing
           let classCost = 0;
           group.instances.forEach(instance => {
+            const additionalParams = (instance as any).additionalParameters;
             const instancePricingData = {
               width: instance.width,
               length: instance.length,
+              areaSqft: instance.areaSqft || (instance as any).area_sqft,
               sizeCategory: instance.sizeCategory,
-              pipeDiameterInches: null
+              pipeDiameterInches: additionalParams?.pipeDiameterInches ?? null,
+              additionalParameters: additionalParams,
             };
             (instance.controls || []).forEach(controlName => {
               const controlId = getControlId(instance.id, controlName);
@@ -429,7 +433,8 @@ export const ProcessesStep = ({
                     pricingTiers,
                     control.oneTimeCost,
                     control.monthlyMaintCost,
-                    defaultDurationMonths
+                    defaultDurationMonths,
+                    instance.name // Pass instance name for sensor count logic
                   );
                 }
               }
@@ -441,6 +446,7 @@ export const ProcessesStep = ({
               key={group.name}
               name={group.name}
               icon={<Users className="h-6 w-6 text-muted-foreground/50" />}
+              duration={durationString}
               instanceCount={group.instances.length}
               instances={group.instances}
               selectedInstanceIds={selectedInstanceIds}

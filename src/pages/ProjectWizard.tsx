@@ -247,12 +247,15 @@ const ProjectWizardContent = () => {
     const highControls = new Set<string>();
     
     analysisItems.forEach(item => {
+      // Extract additionalParameters for pipe diameter lookup
+      const additionalParams = (item as any).additionalParameters;
       const instancePricingData = {
         width: item.width,
         length: item.length,
-        areaSqft: item.areaSqft ?? item.area_sqft ?? null,
+        areaSqft: item.areaSqft ?? (item as any).area_sqft ?? null,
         sizeCategory: item.sizeCategory,
-        pipeDiameterInches: null
+        pipeDiameterInches: additionalParams?.pipeDiameterInches ?? null,
+        additionalParameters: additionalParams,
       };
       
       let hasLowControl = false;
@@ -268,7 +271,8 @@ const ProjectWizardContent = () => {
             pricingTiers,
             control.oneTimeCost,
             control.monthlyCost,
-            projectDurationMonths
+            projectDurationMonths,
+            item.name // Pass instance name for sensor count logic
           );
           lowCost += totalCost;
           lowControls.add(controlName);
