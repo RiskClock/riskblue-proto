@@ -23,6 +23,9 @@ const DRAWING_IMAGES: Record<string, string> = {
   'SPSDD002': '/assets/drawings/SPSDD002.png',
   
   // Kitchens & Washrooms
+  'KW001': '/assets/drawings/KW001.png',
+  'KW002': '/assets/drawings/KW002.png',
+  'KW003': '/assets/drawings/KW003.png',
   'KW004': '/assets/drawings/KW004.png',
   'KW005': '/assets/drawings/KW005.png',
   'KW006': '/assets/drawings/KW006.png',
@@ -34,6 +37,21 @@ const DRAWING_IMAGES: Record<string, string> = {
   'KW012': '/assets/drawings/KW012.png',
   'KW013': '/assets/drawings/KW013.png',
   'KW014': '/assets/drawings/KW014.png',
+  
+  // Elevator Pits
+  'ELVP001': '/assets/drawings/ELVP001.png',
+  'ELVP002': '/assets/drawings/ELVP002.png',
+  
+  // Electrical Riser Shafts
+  'ERS001': '/assets/drawings/ERS001.png',
+  
+  // Mechanical Room
+  'MRM001': '/assets/drawings/MRM001.png',
+  
+  // Electrical Rooms
+  'ERM004': '/assets/drawings/ERM004.png',
+  'ERM005': '/assets/drawings/ERM005.png',
+  'ERM006': '/assets/drawings/ERM006.png',
 };
 
 /**
