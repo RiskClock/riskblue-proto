@@ -20,19 +20,17 @@ interface AnalysisItem {
   floor: string | null;
   drawingCode: string | null;
   fileName: string | null;
-  width: number | null;
-  length: number | null;
-  sizeCategory: "very small" | "small" | "medium" | "large" | "very large" | null;
+  area_sqft: number | null;
   controls: string[];
   coordinates: number[] | null;
   additionalParameters?: {
     mainPipeDirection?: string;
-    pipeDiameterInches?: string | null;
-    pipeDiameterMM?: string;
+    pipeDiameterInches?: number | null;
+    pipeDiameterMM?: number | null;
   };
 }
 
-// AWP Mock data with controls
+// AWP Mock data with controls - Updated with correct naming (DCW/DHW) and area_sqft
 const MOCK_ASSETS_WATER_SYSTEMS_PROCESSES: AnalysisItem[] = [
   {
     "id": "ERM001",
@@ -42,9 +40,7 @@ const MOCK_ASSETS_WATER_SYSTEMS_PROCESSES: AnalysisItem[] = [
     "floor": "Lower Level",
     "drawingCode": null,
     "fileName": "A2.01-LOWER-LEVEL-Rev.18.pdf",
-    "width": 36.7,
-    "length": 20.7,
-    "sizeCategory": "very small",
+    "area_sqft": 97,
     "controls": [
       "Presence of Water Monitoring",
       "Water Piping in and Around Electrical Rooms",
@@ -61,9 +57,7 @@ const MOCK_ASSETS_WATER_SYSTEMS_PROCESSES: AnalysisItem[] = [
     "floor": "Lower Level",
     "drawingCode": null,
     "fileName": "A2.01-LOWER-LEVEL-Rev.18.pdf",
-    "width": 12.1,
-    "length": 34.7,
-    "sizeCategory": "small",
+    "area_sqft": 184,
     "controls": [
       "Presence of Water Monitoring",
       "Water Piping in and Around Electrical Rooms",
@@ -80,9 +74,7 @@ const MOCK_ASSETS_WATER_SYSTEMS_PROCESSES: AnalysisItem[] = [
     "floor": "Lower Level",
     "drawingCode": null,
     "fileName": "A2.01-LOWER-LEVEL-Rev.18.pdf",
-    "width": 27.9,
-    "length": 34.7,
-    "sizeCategory": "medium",
+    "area_sqft": 343,
     "controls": [
       "Presence of Water Monitoring",
       "Water Piping in and Around Electrical Rooms",
@@ -99,9 +91,7 @@ const MOCK_ASSETS_WATER_SYSTEMS_PROCESSES: AnalysisItem[] = [
     "floor": "4th Floor",
     "drawingCode": null,
     "fileName": "A2.05-FOURTH-FLOOR-Rev.16.pdf",
-    "width": 10.5,
-    "length": 32.5,
-    "sizeCategory": "very small",
+    "area_sqft": 103,
     "controls": [
       "Presence of Water Monitoring",
       "Water Piping in and Around Electrical Rooms",
@@ -118,9 +108,7 @@ const MOCK_ASSETS_WATER_SYSTEMS_PROCESSES: AnalysisItem[] = [
     "floor": "7th Floor",
     "drawingCode": null,
     "fileName": "A2.07-SIXTH-FLOOR-Rev.18.1.pdf",
-    "width": 36.9,
-    "length": 37.8,
-    "sizeCategory": "very small",
+    "area_sqft": 103,
     "controls": [
       "Presence of Water Monitoring",
       "Water Piping in and Around Electrical Rooms",
@@ -137,9 +125,7 @@ const MOCK_ASSETS_WATER_SYSTEMS_PROCESSES: AnalysisItem[] = [
     "floor": "Roof",
     "drawingCode": null,
     "fileName": "A2.10-ROOF-PLAN-Rev.14.pdf",
-    "width": 37.7,
-    "length": 26.4,
-    "sizeCategory": "very small",
+    "area_sqft": 60,
     "controls": [
       "Presence of Water Monitoring",
       "Water Piping in and Around Electrical Rooms",
@@ -156,9 +142,7 @@ const MOCK_ASSETS_WATER_SYSTEMS_PROCESSES: AnalysisItem[] = [
     "floor": "Lower Level",
     "drawingCode": null,
     "fileName": "A2.07-SIXTH-FLOOR-Rev.18.1.pdf",
-    "width": 35.7,
-    "length": 10.9,
-    "sizeCategory": "large",
+    "area_sqft": 429,
     "controls": [
       "Presence of Water Monitoring",
       "Spill Kit",
@@ -181,9 +165,7 @@ const MOCK_ASSETS_WATER_SYSTEMS_PROCESSES: AnalysisItem[] = [
     "floor": "Lower Level - 8th Floor",
     "drawingCode": null,
     "fileName": "A2.08-SEVENTH-FLOOR-Rev.17.1.pdf",
-    "width": 39.8,
-    "length": 25.9,
-    "sizeCategory": "very large",
+    "area_sqft": 11,
     "controls": [
       "Presence of Water Monitoring",
       "Floor Penetrations Water Seals",
@@ -199,9 +181,7 @@ const MOCK_ASSETS_WATER_SYSTEMS_PROCESSES: AnalysisItem[] = [
     "floor": "Lower Level",
     "drawingCode": null,
     "fileName": "A2.09-EIGHTH-FLOOR-Rev.17.1.pdf",
-    "width": 18.9,
-    "length": 27.2,
-    "sizeCategory": "medium",
+    "area_sqft": null,
     "controls": ["Presence of Water Monitoring"],
     "coordinates": [0.6492, 0.0339, 0.151, 0.2247]
   },
@@ -213,9 +193,7 @@ const MOCK_ASSETS_WATER_SYSTEMS_PROCESSES: AnalysisItem[] = [
     "floor": "Lower Level",
     "drawingCode": null,
     "fileName": "A2.10-ROOF-PLAN-Rev.14.pdf",
-    "width": 29.2,
-    "length": 22.7,
-    "sizeCategory": "large",
+    "area_sqft": null,
     "controls": ["Presence of Water Monitoring"],
     "coordinates": [0.2113, 0.4045, 0.204, 0.0555]
   },
@@ -227,9 +205,7 @@ const MOCK_ASSETS_WATER_SYSTEMS_PROCESSES: AnalysisItem[] = [
     "floor": "4th Floor",
     "drawingCode": "SWC-408",
     "fileName": "A2.11-PARAPET-Rev.14.pdf",
-    "width": 34.5,
-    "length": 30.8,
-    "sizeCategory": "very large",
+    "area_sqft": 100,
     "controls": ["Presence of Water Monitoring"],
     "coordinates": [0.6155, 0.1094, 0.1531, 0.2747]
   },
@@ -241,9 +217,7 @@ const MOCK_ASSETS_WATER_SYSTEMS_PROCESSES: AnalysisItem[] = [
     "floor": "8th Floor",
     "drawingCode": "SWC-801",
     "fileName": "M-200B1-PLUMBING-BASEMENT-FLOOR-PLAN-Rev.20.pdf",
-    "width": 31.5,
-    "length": 13.4,
-    "sizeCategory": "large",
+    "area_sqft": 100,
     "controls": ["Presence of Water Monitoring"],
     "coordinates": [0.1874, 0.0833, 0.0856, 0.1966]
   },
@@ -255,11 +229,9 @@ const MOCK_ASSETS_WATER_SYSTEMS_PROCESSES: AnalysisItem[] = [
     "floor": "7th Floor",
     "drawingCode": "SWC-701",
     "fileName": "A2.01-LOWER-LEVEL-Rev.18.pdf",
-    "width": 16.6,
-    "length": 20.7,
-    "sizeCategory": "small",
+    "area_sqft": 100,
     "controls": ["Presence of Water Monitoring"],
-    "coordinates": [0.1074, 0.4066, 0.1961, 0.1761]
+    "coordinates": null
   },
   {
     "id": "KW004",
@@ -269,9 +241,7 @@ const MOCK_ASSETS_WATER_SYSTEMS_PROCESSES: AnalysisItem[] = [
     "floor": "6th Floor",
     "drawingCode": "SWC-601",
     "fileName": "A2.02-GROUND-FLOOR-Rev.19.pdf",
-    "width": 29.7,
-    "length": 35.9,
-    "sizeCategory": "very large",
+    "area_sqft": 100,
     "controls": ["Presence of Water Monitoring"],
     "coordinates": [0.4799, 0.6361, 0.1096, 0.1265]
   },
@@ -283,9 +253,7 @@ const MOCK_ASSETS_WATER_SYSTEMS_PROCESSES: AnalysisItem[] = [
     "floor": "5th Floor",
     "drawingCode": "SWC-501",
     "fileName": "A2.03-SECOND-FLOOR-Rev.20.pdf",
-    "width": 23.9,
-    "length": 33.3,
-    "sizeCategory": "large",
+    "area_sqft": 100,
     "controls": ["Presence of Water Monitoring"],
     "coordinates": [0.545, 0.0838, 0.2456, 0.0962]
   },
@@ -297,9 +265,7 @@ const MOCK_ASSETS_WATER_SYSTEMS_PROCESSES: AnalysisItem[] = [
     "floor": "4th Floor",
     "drawingCode": "SWC-401",
     "fileName": "A2.04-THIRD-FLOOR-Rev.15.pdf",
-    "width": 30.6,
-    "length": 25.3,
-    "sizeCategory": "large",
+    "area_sqft": 100,
     "controls": ["Presence of Water Monitoring"],
     "coordinates": [0.1585, 0.2517, 0.196, 0.1849]
   },
@@ -311,9 +277,7 @@ const MOCK_ASSETS_WATER_SYSTEMS_PROCESSES: AnalysisItem[] = [
     "floor": "3rd Floor",
     "drawingCode": "SWC-301",
     "fileName": "A2.05-FOURTH-FLOOR-Rev.16.pdf",
-    "width": 33.3,
-    "length": 31.7,
-    "sizeCategory": "very large",
+    "area_sqft": 100,
     "controls": ["Presence of Water Monitoring"],
     "coordinates": [0.145, 0.3328, 0.1552, 0.0602]
   },
@@ -323,11 +287,9 @@ const MOCK_ASSETS_WATER_SYSTEMS_PROCESSES: AnalysisItem[] = [
     "category": "Asset",
     "areaName": "BF W/C",
     "floor": "2nd Floor",
-    "drawingCode": "SWC-291",
+    "drawingCode": "SWC-219",
     "fileName": "A2.06-FIFTH-FLOOR-Rev.14.pdf",
-    "width": 26.4,
-    "length": 35.6,
-    "sizeCategory": "very large",
+    "area_sqft": 100,
     "controls": ["Presence of Water Monitoring"],
     "coordinates": [0.0553, 0.7265, 0.2349, 0.0892]
   },
@@ -339,9 +301,7 @@ const MOCK_ASSETS_WATER_SYSTEMS_PROCESSES: AnalysisItem[] = [
     "floor": "2nd Floor",
     "drawingCode": "SWC-201",
     "fileName": "A2.07-SIXTH-FLOOR-Rev.18.1.pdf",
-    "width": 27.7,
-    "length": 18.9,
-    "sizeCategory": "medium",
+    "area_sqft": 100,
     "controls": ["Presence of Water Monitoring"],
     "coordinates": [0.1312, 0.385, 0.2594, 0.0522]
   },
@@ -353,11 +313,9 @@ const MOCK_ASSETS_WATER_SYSTEMS_PROCESSES: AnalysisItem[] = [
     "floor": "1st Floor",
     "drawingCode": "SWC-102",
     "fileName": "A2.08-SEVENTH-FLOOR-Rev.17.1.pdf",
-    "width": 16.7,
-    "length": 12.2,
-    "sizeCategory": "small",
+    "area_sqft": null,
     "controls": ["Presence of Water Monitoring"],
-    "coordinates": [0.4909, 0.0697, 0.0677, 0.132]
+    "coordinates": null
   },
   {
     "id": "KW011",
@@ -367,9 +325,7 @@ const MOCK_ASSETS_WATER_SYSTEMS_PROCESSES: AnalysisItem[] = [
     "floor": "1st Floor",
     "drawingCode": "SWC-103",
     "fileName": "A2.09-EIGHTH-FLOOR-Rev.17.1.pdf",
-    "width": 33.1,
-    "length": 18.9,
-    "sizeCategory": "large",
+    "area_sqft": 100,
     "controls": ["Presence of Water Monitoring"],
     "coordinates": [0.0084, 0.743, 0.1305, 0.0768]
   },
@@ -381,9 +337,7 @@ const MOCK_ASSETS_WATER_SYSTEMS_PROCESSES: AnalysisItem[] = [
     "floor": "1st Floor",
     "drawingCode": "SWC-104",
     "fileName": "A2.10-ROOF-PLAN-Rev.14.pdf",
-    "width": 27.7,
-    "length": 17.9,
-    "sizeCategory": "medium",
+    "area_sqft": 100,
     "controls": ["Presence of Water Monitoring"],
     "coordinates": [0.1415, 0.0786, 0.1232, 0.2582]
   },
@@ -395,9 +349,19 @@ const MOCK_ASSETS_WATER_SYSTEMS_PROCESSES: AnalysisItem[] = [
     "floor": "1st Floor",
     "drawingCode": "SWC-B08",
     "fileName": "A2.11-PARAPET-Rev.14.pdf",
-    "width": 32.1,
-    "length": 8.7,
-    "sizeCategory": "small",
+    "area_sqft": 100,
+    "controls": ["Presence of Water Monitoring"],
+    "coordinates": [0.3572, 0.3494]
+  },
+  {
+    "id": "KW014",
+    "name": "Kitchens & Washrooms",
+    "category": "Asset",
+    "areaName": "UNIVERSAL W/C",
+    "floor": "3rd Floor",
+    "drawingCode": "SWC-303",
+    "fileName": "A2.11-PARAPET-Rev.14.pdf",
+    "area_sqft": 100,
     "controls": ["Presence of Water Monitoring"],
     "coordinates": [0.3572, 0.3494, 0.2267, 0.1312]
   },
@@ -409,9 +373,7 @@ const MOCK_ASSETS_WATER_SYSTEMS_PROCESSES: AnalysisItem[] = [
     "floor": null,
     "drawingCode": null,
     "fileName": "M-200B1-PLUMBING-BASEMENT-FLOOR-PLAN-Rev.20.pdf",
-    "width": 32.8,
-    "length": 14.7,
-    "sizeCategory": "large",
+    "area_sqft": null,
     "controls": [
       "Roofing Strategy",
       "Air and Water Barriers Continuity",
@@ -431,28 +393,24 @@ const MOCK_ASSETS_WATER_SYSTEMS_PROCESSES: AnalysisItem[] = [
     "floor": null,
     "drawingCode": null,
     "fileName": "A2.01-LOWER-LEVEL-Rev.18.pdf",
-    "width": 17,
-    "length": 31.2,
-    "sizeCategory": "medium",
+    "area_sqft": null,
     "controls": [
       "Weather Station",
       "Measure Relative Humidity Sensors",
       "Lumber Moisture Content Sensors",
       "Presence of Water Monitoring"
     ],
-    "coordinates": [0.3464, 0.2396, 0.1298, 0.2826]
+    "coordinates": null
   },
   {
-    "id": "CDW-MCE001",
-    "name": "Cold Domestic Water: Main City Entry",
+    "id": "DCW-MCE001",
+    "name": "Domestic Cold Water: Main City Entry",
     "category": "Water System",
     "areaName": null,
     "floor": null,
     "drawingCode": null,
     "fileName": "A2.02-GROUND-FLOOR-Rev.19.pdf",
-    "width": null,
-    "length": null,
-    "sizeCategory": null,
+    "area_sqft": null,
     "controls": [
       "Automatic Shut Off Valve",
       "Ultrasonic Flow Sensors",
@@ -461,21 +419,19 @@ const MOCK_ASSETS_WATER_SYSTEMS_PROCESSES: AnalysisItem[] = [
     "coordinates": [0.4387, 0.0886, 0.2008, 0.2104],
     "additionalParameters": {
       "mainPipeDirection": "horizontal",
-      "pipeDiameterInches": "4",
-      "pipeDiameterMM": "100"
+      "pipeDiameterInches": 4,
+      "pipeDiameterMM": 100
     }
   },
   {
-    "id": "CDW-ME001",
-    "name": "Cold Domestic Water: Main Entry",
+    "id": "DCW-ME001",
+    "name": "Domestic Cold Water: Main Entry",
     "category": "Water System",
     "areaName": null,
     "floor": null,
     "drawingCode": null,
     "fileName": "A2.03-SECOND-FLOOR-Rev.20.pdf",
-    "width": null,
-    "length": null,
-    "sizeCategory": null,
+    "area_sqft": null,
     "controls": [
       "Automatic Shut Off Valve",
       "Ultrasonic Flow Sensors",
@@ -484,288 +440,41 @@ const MOCK_ASSETS_WATER_SYSTEMS_PROCESSES: AnalysisItem[] = [
     "coordinates": [0.515, 0.4133, 0.1028, 0.2108],
     "additionalParameters": {
       "mainPipeDirection": "horizontal",
-      "pipeDiameterInches": "4",
-      "pipeDiameterMM": "100"
+      "pipeDiameterInches": 4,
+      "pipeDiameterMM": 100
     }
   },
   {
-    "id": "CDW-ZE001",
-    "name": "Cold Domestic Water: Zone Entry",
+    "id": "DCW-ZE001",
+    "name": "Domestic Cold Water: Zone Entry",
     "category": "Water System",
     "areaName": null,
     "floor": null,
-    "drawingCode": null,
+    "drawingCode": "Ø80 CW UP",
     "fileName": "A2.04-THIRD-FLOOR-Rev.15.pdf",
-    "width": null,
-    "length": null,
-    "sizeCategory": null,
+    "area_sqft": null,
     "controls": [
       "Automatic Shut Off Valve",
-      "Ultrasonic Flow Sensors",
-      "Inline Flow Sensors"
+      "Ultrasonic Flow Sensors"
     ],
-    "coordinates": [0.5711, 0.2303, 0.2296, 0.0887]
-  },
-  {
-    "id": "CDW-ZE002",
-    "name": "Cold Domestic Water: Zone Entry",
-    "category": "Water System",
-    "areaName": null,
-    "floor": null,
-    "drawingCode": null,
-    "fileName": "A2.05-FOURTH-FLOOR-Rev.16.pdf",
-    "width": null,
-    "length": null,
-    "sizeCategory": null,
-    "controls": [
-      "Automatic Shut Off Valve",
-      "Ultrasonic Flow Sensors",
-      "Inline Flow Sensors"
-    ],
-    "coordinates": [0.6831, 0.312, 0.2046, 0.2427]
-  },
-  {
-    "id": "CDW-ZE003",
-    "name": "Cold Domestic Water: Zone Entry",
-    "category": "Water System",
-    "areaName": null,
-    "floor": null,
-    "drawingCode": null,
-    "fileName": "A2.06-FIFTH-FLOOR-Rev.14.pdf",
-    "width": null,
-    "length": null,
-    "sizeCategory": null,
-    "controls": [
-      "Automatic Shut Off Valve",
-      "Ultrasonic Flow Sensors",
-      "Inline Flow Sensors"
-    ],
-    "coordinates": [0.4639, 0.2522, 0.2146, 0.114]
-  },
-  {
-    "id": "CDW-ZE004",
-    "name": "Cold Domestic Water: Zone Entry",
-    "category": "Water System",
-    "areaName": null,
-    "floor": null,
-    "drawingCode": "Ø25 CW UP",
-    "fileName": "A2.01-LOWER-LEVEL-Rev.18.pdf",
-    "width": null,
-    "length": null,
-    "sizeCategory": null,
-    "controls": [
-      "Automatic Shut Off Valve",
-      "Ultrasonic Flow Sensors",
-      "Inline Flow Sensors"
-    ],
-    "coordinates": [0.2, 0.15, 0.1, 0.08],
+    "coordinates": [0.5711, 0.2303, 0.2296, 0.0887],
     "additionalParameters": {
       "mainPipeDirection": "vertical",
       "pipeDiameterInches": null,
-      "pipeDiameterMM": "25"
+      "pipeDiameterMM": 80
     }
-  },
-  {
-    "id": "CDW-ZE005",
-    "name": "Cold Domestic Water: Zone Entry",
-    "category": "Water System",
-    "areaName": null,
-    "floor": null,
-    "drawingCode": "Ø25 CW UP",
-    "fileName": "A2.03-SECOND-FLOOR-Rev.20.pdf",
-    "width": null,
-    "length": null,
-    "sizeCategory": null,
-    "controls": [
-      "Automatic Shut Off Valve",
-      "Ultrasonic Flow Sensors",
-      "Inline Flow Sensors"
-    ],
-    "coordinates": [0.35, 0.22, 0.09, 0.07],
-    "additionalParameters": {
-      "mainPipeDirection": "vertical",
-      "pipeDiameterInches": null,
-      "pipeDiameterMM": "25"
-    }
-  },
-  {
-    "id": "CDW-ZE006",
-    "name": "Cold Domestic Water: Zone Entry",
-    "category": "Water System",
-    "areaName": null,
-    "floor": null,
-    "drawingCode": "Ø25 CW UP",
-    "fileName": "A2.05-FOURTH-FLOOR-Rev.16.pdf",
-    "width": null,
-    "length": null,
-    "sizeCategory": null,
-    "controls": [
-      "Automatic Shut Off Valve",
-      "Ultrasonic Flow Sensors",
-      "Inline Flow Sensors"
-    ],
-    "coordinates": [0.48, 0.18, 0.12, 0.06],
-    "additionalParameters": {
-      "mainPipeDirection": "vertical",
-      "pipeDiameterInches": null,
-      "pipeDiameterMM": "25"
-    }
-  },
-  {
-    "id": "CDW-ZE007",
-    "name": "Cold Domestic Water: Zone Entry",
-    "category": "Water System",
-    "areaName": null,
-    "floor": null,
-    "drawingCode": "Ø20 CW UP",
-    "fileName": "A2.07-SIXTH-FLOOR-Rev.18.1.pdf",
-    "width": null,
-    "length": null,
-    "sizeCategory": null,
-    "controls": [
-      "Automatic Shut Off Valve",
-      "Ultrasonic Flow Sensors",
-      "Inline Flow Sensors"
-    ],
-    "coordinates": [0.6, 0.3, 0.08, 0.09],
-    "additionalParameters": {
-      "mainPipeDirection": "vertical",
-      "pipeDiameterInches": null,
-      "pipeDiameterMM": "20"
-    }
-  },
-  {
-    "id": "CDW-ZE008",
-    "name": "Cold Domestic Water: Zone Entry",
-    "category": "Water System",
-    "areaName": null,
-    "floor": null,
-    "drawingCode": "Ø20 CW UP",
-    "fileName": "A2.09-EIGHTH-FLOOR-Rev.17.1.pdf",
-    "width": null,
-    "length": null,
-    "sizeCategory": null,
-    "controls": [
-      "Automatic Shut Off Valve",
-      "Ultrasonic Flow Sensors",
-      "Inline Flow Sensors"
-    ],
-    "coordinates": [0.72, 0.4, 0.07, 0.08],
-    "additionalParameters": {
-      "mainPipeDirection": "vertical",
-      "pipeDiameterInches": null,
-      "pipeDiameterMM": "20"
-    }
-  },
-  {
-    "id": "CDW-ZE009",
-    "name": "Cold Domestic Water: Zone Entry",
-    "category": "Water System",
-    "areaName": null,
-    "floor": null,
-    "drawingCode": "Ø20 CW UP",
-    "fileName": "A2.11-PARAPET-Rev.14.pdf",
-    "width": null,
-    "length": null,
-    "sizeCategory": null,
-    "controls": [
-      "Automatic Shut Off Valve",
-      "Ultrasonic Flow Sensors",
-      "Inline Flow Sensors"
-    ],
-    "coordinates": [0.15, 0.5, 0.1, 0.1],
-    "additionalParameters": {
-      "mainPipeDirection": "vertical",
-      "pipeDiameterInches": null,
-      "pipeDiameterMM": "20"
-    }
-  },
-  {
-    "id": "CDW-ZE010",
-    "name": "Cold Domestic Water: Zone Entry",
-    "category": "Water System",
-    "areaName": null,
-    "floor": null,
-    "drawingCode": "Ø15 CW UP",
-    "fileName": "A2.02-GROUND-FLOOR-Rev.19.pdf",
-    "width": null,
-    "length": null,
-    "sizeCategory": null,
-    "controls": [
-      "Automatic Shut Off Valve",
-      "Ultrasonic Flow Sensors",
-      "Inline Flow Sensors"
-    ],
-    "coordinates": [0.3, 0.6, 0.09, 0.12],
-    "additionalParameters": {
-      "mainPipeDirection": "vertical",
-      "pipeDiameterInches": null,
-      "pipeDiameterMM": "15"
-    }
-  },
-  {
-    "id": "CDW-ZE011",
-    "name": "Cold Domestic Water: Zone Entry",
-    "category": "Water System",
-    "areaName": null,
-    "floor": null,
-    "drawingCode": "Ø15 CW UP",
-    "fileName": "M-200B1-PLUMBING-BASEMENT-FLOOR-PLAN-Rev.20.pdf",
-    "width": null,
-    "length": null,
-    "sizeCategory": null,
-    "controls": [
-      "Automatic Shut Off Valve",
-      "Ultrasonic Flow Sensors",
-      "Inline Flow Sensors"
-    ],
-    "coordinates": [0.45, 0.7, 0.08, 0.09],
-    "additionalParameters": {
-      "mainPipeDirection": "vertical",
-      "pipeDiameterInches": null,
-      "pipeDiameterMM": "15"
-    }
-  },
-  {
-    "id": "CDW-SRE001",
-    "name": "Cold Domestic Water: Suite Riser Entry",
-    "category": "Water System",
-    "areaName": null,
-    "floor": null,
-    "drawingCode": null,
-    "fileName": "A2.07-SIXTH-FLOOR-Rev.18.1.pdf",
-    "width": null,
-    "length": null,
-    "sizeCategory": null,
-    "controls": [],
-    "coordinates": [0.4529, 0.1701, 0.2686, 0.2675]
-  },
-  {
-    "id": "CDW-SE001",
-    "name": "Cold Domestic Water: Suite Entry",
-    "category": "Water System",
-    "areaName": null,
-    "floor": null,
-    "drawingCode": null,
-    "fileName": "A2.08-SEVENTH-FLOOR-Rev.17.1.pdf",
-    "width": null,
-    "length": null,
-    "sizeCategory": null,
-    "controls": [],
-    "coordinates": [0.163, 0.274, 0.1175, 0.1807]
   },
   {
     "id": "SPSDD001",
     "name": "Sump Pit, Storm Drain, and Drainage",
     "category": "Water System",
-    "areaName": null,
-    "floor": null,
+    "areaName": "ELEVATOR / SANITARY SUMP PIT",
+    "floor": "Lower Level",
     "drawingCode": null,
     "fileName": "A2.09-EIGHTH-FLOOR-Rev.17.1.pdf",
-    "width": null,
-    "length": null,
-    "sizeCategory": null,
+    "area_sqft": null,
     "controls": [
+      "Presence of Water Monitoring",
       "Temporary and Permanent Sump Pump Installation",
       "Permanent Drainage Systems Installation and Monitoring",
       "Flood Control Measures",
@@ -774,16 +483,29 @@ const MOCK_ASSETS_WATER_SYSTEMS_PROCESSES: AnalysisItem[] = [
     "coordinates": [0.7033, 0.3048, 0.2379, 0.0909]
   },
   {
+    "id": "SPSDD002",
+    "name": "Sump Pit, Storm Drain, and Drainage",
+    "category": "Water System",
+    "areaName": "BACKWATER VALVE PIT",
+    "floor": "Lower Level",
+    "drawingCode": null,
+    "fileName": "A2.09-EIGHTH-FLOOR-Rev.17.1.pdf",
+    "area_sqft": null,
+    "controls": [
+      "Presence of Water Monitoring",
+      "Temporary and Permanent Sump Pump Installation"
+    ],
+    "coordinates": null
+  },
+  {
     "id": "FS001",
     "name": "Fire Suppression System",
     "category": "Water System",
-    "areaName": null,
-    "floor": null,
+    "areaName": "DIA FIRE PROTECTION SERVICES LINE",
+    "floor": "Lower Level",
     "drawingCode": null,
     "fileName": "A2.10-ROOF-PLAN-Rev.14.pdf",
-    "width": null,
-    "length": null,
-    "sizeCategory": null,
+    "area_sqft": null,
     "controls": [
       "Ultrasonic Flow Sensors",
       "Inline Flow Sensors"
@@ -791,21 +513,46 @@ const MOCK_ASSETS_WATER_SYSTEMS_PROCESSES: AnalysisItem[] = [
     "coordinates": [0.5916, 0.2067, 0.1433, 0.2302]
   },
   {
-    "id": "HDW001",
-    "name": "Hot Domestic Water",
+    "id": "DHW-HWR001",
+    "name": "Domestic Hot Water: Hot Water Return",
     "category": "Water System",
     "areaName": null,
-    "floor": null,
+    "floor": "Lower Level",
     "drawingCode": null,
     "fileName": "A2.11-PARAPET-Rev.14.pdf",
-    "width": null,
-    "length": null,
-    "sizeCategory": null,
+    "area_sqft": null,
     "controls": [
       "Inline Flow Sensors",
-      "Ultrasonic Flow Sensors"
+      "Ultrasonic Flow Sensors",
+      "Domestic Hot Water Run Flow Patterns"
     ],
-    "coordinates": [0.1233, 0.425, 0.0845, 0.1908]
+    "coordinates": [0.1233, 0.425, 0.0845, 0.1908],
+    "additionalParameters": {
+      "mainPipeDirection": "horizontal",
+      "pipeDiameterInches": null,
+      "pipeDiameterMM": 15
+    }
+  },
+  {
+    "id": "DHW-ZE001",
+    "name": "Domestic Hot Water: Zone Exit",
+    "category": "Water System",
+    "areaName": null,
+    "floor": "Lower Level",
+    "drawingCode": null,
+    "fileName": "A2.11-PARAPET-Rev.14.pdf",
+    "area_sqft": null,
+    "controls": [
+      "Inline Flow Sensors",
+      "Ultrasonic Flow Sensors",
+      "Domestic Hot Water Run Flow Patterns"
+    ],
+    "coordinates": null,
+    "additionalParameters": {
+      "mainPipeDirection": "horizontal",
+      "pipeDiameterInches": null,
+      "pipeDiameterMM": 15
+    }
   },
   {
     "id": "TWR001",
@@ -815,15 +562,19 @@ const MOCK_ASSETS_WATER_SYSTEMS_PROCESSES: AnalysisItem[] = [
     "floor": null,
     "drawingCode": null,
     "fileName": "M-200B1-PLUMBING-BASEMENT-FLOOR-PLAN-Rev.20.pdf",
-    "width": null,
-    "length": null,
-    "sizeCategory": null,
+    "area_sqft": null,
     "controls": [
       "Presence of Water Monitoring",
-      "Abnormal Flow Monitoring",
-      "Automatic Shut Off Valve"
+      "Automatic Shut Off Valve",
+      "Ultrasonic Flow Sensors",
+      "Inline Flow Sensors"
     ],
-    "coordinates": [0.4864, 0.5104, 0.0908, 0.2761]
+    "coordinates": [0.4864, 0.5104, 0.0908, 0.2761],
+    "additionalParameters": {
+      "mainPipeDirection": "vertical",
+      "pipeDiameterInches": 1,
+      "pipeDiameterMM": null
+    }
   },
   {
     "id": "CT001",
@@ -833,9 +584,7 @@ const MOCK_ASSETS_WATER_SYSTEMS_PROCESSES: AnalysisItem[] = [
     "floor": null,
     "drawingCode": null,
     "fileName": null,
-    "width": null,
-    "length": null,
-    "sizeCategory": null,
+    "area_sqft": null,
     "controls": [
       "Yearly Risk Controls Inspection",
       "No Sole Contractor Design Responsibility",
@@ -870,9 +619,7 @@ const MOCK_ASSETS_WATER_SYSTEMS_PROCESSES: AnalysisItem[] = [
     "floor": null,
     "drawingCode": null,
     "fileName": null,
-    "width": null,
-    "length": null,
-    "sizeCategory": null,
+    "area_sqft": null,
     "controls": [
       "Periodic and Realtime Water Mitigation Equipment Inspections and Functionality Tests",
       "Water Mitigation Cybersecurity",
@@ -900,9 +647,7 @@ const MOCK_ASSETS_WATER_SYSTEMS_PROCESSES: AnalysisItem[] = [
     "floor": null,
     "drawingCode": null,
     "fileName": null,
-    "width": null,
-    "length": null,
-    "sizeCategory": null,
+    "area_sqft": null,
     "controls": [
       "Water Leak Accountability Agreement",
       "Installation Integrity: Joints, Bolts, and Piping",
@@ -939,9 +684,10 @@ Based on the analysis of your uploaded construction drawings, we have identified
 ### Key Findings
 1. **Electrical Infrastructure**: Multiple electrical rooms and risers identified across floors
 2. **Mechanical Systems**: Mechanical rooms with comprehensive plumbing controls
-3. **Water Entry Points**: Multiple cold domestic water entry points with flow monitoring
+3. **Domestic Water Entry Points**: Multiple domestic cold and hot water entry points with flow monitoring
 4. **Critical Spaces**: Elevator pits, kitchens, and washrooms requiring water protection
-5. **Building Envelope**: Facade and roofing systems with weather monitoring controls
+5. **Building Envelope**: Facade, envelope, exterior, and roofing systems with weather monitoring controls
+6. **Drainage Systems**: Sump pits, storm drains, and drainage systems identified
 
 ### Recommended Controls
 Each identified asset and water system has been mapped to appropriate mitigation controls based on industry best practices and AWP (Advanced Water Protection) guidelines.`;
