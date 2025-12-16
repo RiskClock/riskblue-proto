@@ -113,8 +113,8 @@ const ProjectWizardContent = () => {
   // Normalize water system name for counting (must match WaterSystemsStep logic)
   const normalizeSystemName = (name: string): string => {
     const lower = name.toLowerCase();
-    if (lower.includes('cold') && (lower.includes('domestic') || lower.includes('water'))) return 'cold domestic water';
-    if (lower.includes('hot') && (lower.includes('domestic') || lower.includes('water'))) return 'hot domestic water';
+    if (lower.includes('cold') && (lower.includes('domestic') || lower.includes('water'))) return 'domestic cold water';
+    if (lower.includes('hot') && (lower.includes('domestic') || lower.includes('water'))) return 'domestic hot water';
     if (lower.includes('temporary') && lower.includes('water')) return 'temporary water run';
     if (lower.includes('main') && lower.includes('city') && lower.includes('water')) return 'main city water supply';
     if (lower.includes('hydronic')) return 'hydronics';
@@ -407,6 +407,7 @@ const ProjectWizardContent = () => {
             fileName: d.file_name,
             width: d.width ? Number(d.width) : null,
             length: d.length ? Number(d.length) : null,
+            areaSqft: d.area_sqft ? Number(d.area_sqft) : null,
             sizeCategory: d.size_category as any,
             controls: d.controls || [],
             coordinates: d.coordinates as any
@@ -816,6 +817,7 @@ const ProjectWizardContent = () => {
         file_name: item.fileName || null,
         width: item.width || null,
         length: item.length || null,
+        area_sqft: item.areaSqft || null,
         size_category: item.sizeCategory || null,
         controls: item.controls || [],
         coordinates: item.coordinates || null,
@@ -997,30 +999,6 @@ const ProjectWizardContent = () => {
                   </div>
 
                   {/* Risk Tolerance Selector - applies to all AWP sections */}
-                  <RiskToleranceSelector
-                    value={riskTolerance}
-                    onChange={handleRiskToleranceChange}
-                    lowCost={totalCostEstimates.lowCost}
-                    mediumCost={totalCostEstimates.mediumCost}
-                    highCost={totalCostEstimates.highCost}
-                    lowCoverage={coverageByLevel.low}
-                    mediumCoverage={coverageByLevel.medium}
-                    highCoverage={coverageByLevel.high}
-                    controlCounts={controlCountsByLevel}
-                    hasCustomSelection={hasManualOverride}
-                  />
-                  
-                  {/* Cost Estimate - show package cost when not manually overridden */}
-                  <div className="flex flex-col items-center justify-center py-6 px-4 bg-muted/30 rounded-lg border border-border">
-                    <p className="text-sm text-muted-foreground mb-1">Estimated Implementation Cost</p>
-                    <p className="text-3xl font-bold text-primary">
-                      ${(hasManualOverride 
-                        ? actualSelectedCost 
-                        : totalCostEstimates[riskTolerance === 'low' ? 'lowCost' : riskTolerance === 'medium' ? 'mediumCost' : 'highCost']
-                      ).toLocaleString()}
-                    </p>
-                  </div>
-                  
                   <div className="space-y-6">
                     <h3 className="text-md font-medium">
                       Critical Assets
@@ -1073,6 +1051,33 @@ const ProjectWizardContent = () => {
                       riskTolerance={riskTolerance}
                       onManualControlToggle={handleManualControlToggle}
                     />
+                  </div>
+                  
+                  {/* Implementation Level Selector - moved below Processes */}
+                  <div className="pt-6 border-t">
+                    <RiskToleranceSelector
+                      value={riskTolerance}
+                      onChange={handleRiskToleranceChange}
+                      lowCost={totalCostEstimates.lowCost}
+                      mediumCost={totalCostEstimates.mediumCost}
+                      highCost={totalCostEstimates.highCost}
+                      lowCoverage={coverageByLevel.low}
+                      mediumCoverage={coverageByLevel.medium}
+                      highCoverage={coverageByLevel.high}
+                      controlCounts={controlCountsByLevel}
+                      hasCustomSelection={hasManualOverride}
+                    />
+                    
+                    {/* Cost Estimate - show package cost when not manually overridden */}
+                    <div className="flex flex-col items-center justify-center py-6 px-4 bg-muted/30 rounded-lg border border-border mt-4">
+                      <p className="text-sm text-muted-foreground mb-1">Estimated Implementation Cost</p>
+                      <p className="text-3xl font-bold text-primary">
+                        ${(hasManualOverride 
+                          ? actualSelectedCost 
+                          : totalCostEstimates[riskTolerance === 'low' ? 'lowCost' : riskTolerance === 'medium' ? 'mediumCost' : 'highCost']
+                        ).toLocaleString()}
+                      </p>
+                    </div>
                   </div>
                 </AccordionContent>
               </AccordionItem>

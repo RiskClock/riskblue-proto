@@ -281,9 +281,11 @@ export const LocationDetailsModal = ({
     : null;
 
   const sizeDisplay = location.sizeCategory ? `${capitalize(location.sizeCategory)} Room` : null;
-  const dimensionDisplay = location.length && location.width 
-    ? `${location.length} ft × ${location.width} ft` 
-    : null;
+  const areaDisplay = location.areaSqft 
+    ? `${location.areaSqft.toLocaleString()} sq ft` 
+    : (location.length && location.width 
+      ? `${(location.length * location.width).toLocaleString()} sq ft` 
+      : null);
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
@@ -314,8 +316,8 @@ export const LocationDetailsModal = ({
                   )}
                 </div>
 
-                {/* Size & Dimensions */}
-                {(sizeDisplay || dimensionDisplay) && (
+                {/* Size & Area */}
+                {(sizeDisplay || areaDisplay) && (
                   <div className="grid grid-cols-2 gap-4">
                     {sizeDisplay && (
                       <div>
@@ -323,10 +325,10 @@ export const LocationDetailsModal = ({
                         <p className="text-sm font-medium mt-1">{sizeDisplay}</p>
                       </div>
                     )}
-                    {dimensionDisplay && (
+                    {areaDisplay && (
                       <div>
-                        <label className="text-xs text-muted-foreground font-medium uppercase tracking-wide">Dimensions</label>
-                        <p className="text-sm font-medium mt-1">{dimensionDisplay}</p>
+                        <label className="text-xs text-muted-foreground font-medium uppercase tracking-wide">Area</label>
+                        <p className="text-sm font-medium mt-1">{areaDisplay}</p>
                       </div>
                     )}
                   </div>
@@ -468,8 +470,8 @@ export const LocationDetailsModal = ({
               )}
             </div>
 
-            {/* Size & Dimensions */}
-            {(sizeDisplay || dimensionDisplay) && (
+            {/* Size & Area */}
+            {(sizeDisplay || areaDisplay) && (
               <div className="grid grid-cols-2 gap-4">
                 {sizeDisplay && (
                   <div>
@@ -477,10 +479,10 @@ export const LocationDetailsModal = ({
                     <p className="text-sm font-medium mt-1">{sizeDisplay}</p>
                   </div>
                 )}
-                {dimensionDisplay && (
+                {areaDisplay && (
                   <div>
-                    <label className="text-xs text-muted-foreground font-medium uppercase tracking-wide">Dimensions</label>
-                    <p className="text-sm font-medium mt-1">{dimensionDisplay}</p>
+                    <label className="text-xs text-muted-foreground font-medium uppercase tracking-wide">Area</label>
+                    <p className="text-sm font-medium mt-1">{areaDisplay}</p>
                   </div>
                 )}
               </div>

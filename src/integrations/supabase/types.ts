@@ -508,6 +508,7 @@ export type Database = {
       project_analysis_items: {
         Row: {
           area_name: string | null
+          area_sqft: number | null
           category: string
           controls: string[] | null
           coordinates: number[] | null
@@ -526,6 +527,7 @@ export type Database = {
         }
         Insert: {
           area_name?: string | null
+          area_sqft?: number | null
           category: string
           controls?: string[] | null
           coordinates?: number[] | null
@@ -544,6 +546,7 @@ export type Database = {
         }
         Update: {
           area_name?: string | null
+          area_sqft?: number | null
           category?: string
           controls?: string[] | null
           coordinates?: number[] | null
