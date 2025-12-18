@@ -854,9 +854,17 @@ const ProjectWizardContent = () => {
     }
     
     // Drawing analysis fills assets and water systems
+    // IMPORTANT: Clear old instance/control selections so CriticalAssetsStep and WaterSystemsStep reinitialize with new items
     const mappedData = {
       selectedAssets: extractSelectedAssets(items),
       selectedSystems: extractSelectedSystems(items),
+      // Clear stale selections from previous analysis - these will be reinitialized by child components
+      selectedAssetInstances: [],
+      selectedAssetControls: [],
+      selectedWaterSystemInstances: [],
+      selectedWaterSystemControls: [],
+      selectedProcessInstances: [],
+      selectedProcessControls: [],
     };
 
     // Update via context
