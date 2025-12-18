@@ -288,17 +288,18 @@ export const WaterRiskReport = ({ data, analysisItems = [], controlDetails = [] 
   // Get structural types
   const structuralTypes = data.structural_types || [];
 
-  // Helper to check if location has additional parameters
+  // Helper to check if location has additional parameters (excluding drawing/file info for main sections)
   const hasAdditionalParams = (location: AnalysisItem) => {
-    return location.floor || location.drawingCode || location.fileName || 
-           location.areaSqft || location.width || location.length || location.sizeCategory;
+    return location.floor || location.areaSqft || location.width || location.length || location.sizeCategory;
   };
 
-  // Render location details with additional parameters
-  const renderLocationDetails = (location: AnalysisItem) => {
+  // Render location details WITHOUT drawing/file info (for main AWP sections)
+  const renderLocationDetails = (location: AnalysisItem, includeDrawingInfo: boolean = false) => {
     const details: string[] = [];
     if (location.floor) details.push(`Floor: ${location.floor}`);
-    if (location.drawingCode) details.push(`Drawing: ${location.drawingCode}`);
+    
+    // Only include drawing/file info if requested (for appendix)
+    if (includeDrawingInfo && location.drawingCode) details.push(`Drawing: ${location.drawingCode}`);
     
     // Combine sizeCategory and areaSqft: "Size: Medium (343 ft²)"
     const areaSqft = location.areaSqft || (location as any).area_sqft;
@@ -313,11 +314,12 @@ export const WaterRiskReport = ({ data, analysisItems = [], controlDetails = [] 
       details.push(`Size: ${location.sizeCategory}`);
     }
     
-    if (location.fileName) details.push(`File: ${location.fileName}`);
+    // Only include file info if requested (for appendix)
+    if (includeDrawingInfo && location.fileName) details.push(`File: ${location.fileName}`);
     return details;
   };
 
-  // Calculate duration string for a group name
+  // Calculate duration string for a group name (including months and days)
   const getDurationInfo = (name: string, category: string) => {
     // Map group names to expected names for the duration calculator
     let lookupName = name;
@@ -341,13 +343,56 @@ export const WaterRiskReport = ({ data, analysisItems = [], controlDetails = [] 
     const dates = calculateSystemOrAssetDates(lookupName, timelineData);
     if (dates.startDate && dates.endDate) {
       const months = differenceInMonths(dates.endDate, dates.startDate);
+      // Calculate remaining days after full months
+      const endOfMonths = new Date(dates.startDate);
+      endOfMonths.setMonth(endOfMonths.getMonth() + months);
+      const remainingDays = Math.floor((dates.endDate.getTime() - endOfMonths.getTime()) / (1000 * 60 * 60 * 24));
+      
+      let durationStr = '';
+      if (months > 0 && remainingDays > 0) {
+        durationStr = `${months} month${months !== 1 ? 's' : ''}, ${remainingDays} day${remainingDays !== 1 ? 's' : ''}`;
+      } else if (months > 0) {
+        durationStr = `${months} month${months !== 1 ? 's' : ''}`;
+      } else if (remainingDays > 0) {
+        durationStr = `${remainingDays} day${remainingDays !== 1 ? 's' : ''}`;
+      } else {
+        durationStr = '0 days';
+      }
+      
       return {
         startDate: format(dates.startDate, "MMM d, yyyy"),
         endDate: format(dates.endDate, "MMM d, yyyy"),
-        duration: `${months} months`
+        duration: durationStr
       };
     }
     return null;
+  };
+
+  // Calculate milestone duration in months and days
+  const calculateMilestoneDuration = (startDate: string | Date | undefined, endDate: string | Date | undefined): string => {
+    if (!startDate || !endDate) return '';
+    try {
+      const start = typeof startDate === 'string' ? new Date(startDate) : startDate;
+      const end = typeof endDate === 'string' ? new Date(endDate) : endDate;
+      
+      if (isNaN(start.getTime()) || isNaN(end.getTime())) return '';
+      
+      const months = differenceInMonths(end, start);
+      const endOfMonths = new Date(start);
+      endOfMonths.setMonth(endOfMonths.getMonth() + months);
+      const remainingDays = Math.floor((end.getTime() - endOfMonths.getTime()) / (1000 * 60 * 60 * 24));
+      
+      if (months > 0 && remainingDays > 0) {
+        return `${months} mo, ${remainingDays} d`;
+      } else if (months > 0) {
+        return `${months} mo`;
+      } else if (remainingDays > 0) {
+        return `${remainingDays} d`;
+      }
+      return '';
+    } catch {
+      return '';
+    }
   };
 
   // Use inline placeholder for drawings since we can't import dynamic paths
@@ -552,11 +597,12 @@ export const WaterRiskReport = ({ data, analysisItems = [], controlDetails = [] 
 
   return (
     <div className="print-report bg-white text-black p-4 max-w-[210mm] mx-auto text-[11px] relative">
-      {/* Logo positioned in top-right corner */}
-      <div className="print-corner-logo">
+      {/* Running header for subsequent pages - logo only */}
+      <div className="print-running-header">
         <img src={riskBlueLogo} alt="RiskBlue" />
       </div>
-      {/* Header with Logo and "Built in RiskBlue" */}
+      
+      {/* Header with Logo and "Built in RiskBlue" - first page only */}
       <div className="print-header flex justify-between items-start mb-4 pb-2 border-b-2 border-gray-300">
         <div>
           <h1 className="text-xl font-bold text-gray-900 mb-1">Water Mitigation Guideline</h1>
@@ -568,25 +614,37 @@ export const WaterRiskReport = ({ data, analysisItems = [], controlDetails = [] 
         </div>
       </div>
 
-      {/* Executive Summary */}
+      {/* Executive Summary - Split into Risks and Mitigation */}
       <section className="mb-4">
         <h2 className="text-base font-bold text-gray-900 mb-2 border-b border-gray-300 pb-1">Executive Summary</h2>
-        <div className="grid grid-cols-4 gap-2">
-          <div className="bg-gray-50 p-2 rounded border border-gray-200 flex flex-col items-center justify-center text-center">
-            <p className="text-[10px] text-gray-600">Critical Assets</p>
-            <p className="text-xl font-bold text-gray-900">{totalAssets}</p>
+        
+        {/* Risks Section */}
+        <div className="mb-3">
+          <p className="text-[10px] font-semibold text-gray-700 mb-1.5">Identified Risks</p>
+          <div className="grid grid-cols-3 gap-2">
+            <div className="bg-blue-50 p-2 rounded border border-blue-200 flex flex-col items-center justify-center text-center">
+              <p className="text-[10px] text-blue-700">Critical Assets</p>
+              <p className="text-xl font-bold text-blue-900">{totalAssets}</p>
+            </div>
+            <div className="bg-cyan-50 p-2 rounded border border-cyan-200 flex flex-col items-center justify-center text-center">
+              <p className="text-[10px] text-cyan-700">Water Systems</p>
+              <p className="text-xl font-bold text-cyan-900">{totalSystems}</p>
+            </div>
+            <div className="bg-purple-50 p-2 rounded border border-purple-200 flex flex-col items-center justify-center text-center">
+              <p className="text-[10px] text-purple-700">Processes</p>
+              <p className="text-xl font-bold text-purple-900">{totalProcesses}</p>
+            </div>
           </div>
-          <div className="bg-gray-50 p-2 rounded border border-gray-200 flex flex-col items-center justify-center text-center">
-            <p className="text-[10px] text-gray-600">Water Systems</p>
-            <p className="text-xl font-bold text-gray-900">{totalSystems}</p>
-          </div>
-          <div className="bg-gray-50 p-2 rounded border border-gray-200 flex flex-col items-center justify-center text-center">
-            <p className="text-[10px] text-gray-600">Processes</p>
-            <p className="text-xl font-bold text-gray-900">{totalProcesses}</p>
-          </div>
-          <div className="bg-gray-50 p-2 rounded border border-gray-200 flex flex-col items-center justify-center text-center">
-            <p className="text-[10px] text-gray-600">Controls</p>
-            <p className="text-xl font-bold text-gray-900">{totalControls}</p>
+        </div>
+        
+        {/* Mitigation Measures Section */}
+        <div>
+          <p className="text-[10px] font-semibold text-gray-700 mb-1.5">Mitigation Measures</p>
+          <div className="grid grid-cols-1 gap-2">
+            <div className="bg-green-50 p-2 rounded border border-green-200 flex flex-col items-center justify-center text-center">
+              <p className="text-[10px] text-green-700">Controls Implemented</p>
+              <p className="text-xl font-bold text-green-900">{totalControls}</p>
+            </div>
           </div>
         </div>
       </section>
@@ -604,11 +662,7 @@ export const WaterRiskReport = ({ data, analysisItems = [], controlDetails = [] 
               <p className="text-[10px] font-semibold text-gray-600">Address</p>
               <p className="text-[11px] text-gray-900">{data.address_1 || data.address || "—"}</p>
               <p className="text-[11px] text-gray-900">
-                {data.city && data.state && data.zip_code
-                  ? `${data.city}, ${data.state} ${data.zip_code}`
-                  : data.city && data.state
-                  ? `${data.city}, ${data.state}`
-                  : "—"}
+                {[data.city, data.state, data.zip_code].filter(Boolean).join(', ') || "—"}
               </p>
               {data.country && <p className="text-[11px] text-gray-900">{data.country}</p>}
             </div>
@@ -737,24 +791,30 @@ export const WaterRiskReport = ({ data, analysisItems = [], controlDetails = [] 
         <section className="mb-4 page-break-avoid">
           <h2 className="text-base font-bold text-gray-900 mb-2 border-b border-gray-300 pb-1">Milestones & Timeline</h2>
           <div className="space-y-0.5">
-            {timelinePhases.map((phase, index) => (
-              <div key={index} className="flex justify-between items-center py-1 border-b border-gray-200">
-                <div>
-                  <p className="font-semibold text-[11px] text-gray-900">{phase.name}</p>
-                  <p className="text-[10px] text-gray-600">{phase.description}</p>
+            {timelinePhases.map((phase, index) => {
+              const duration = phase.startDate && phase.endDate 
+                ? calculateMilestoneDuration(phase.startDate, phase.endDate) 
+                : '';
+              return (
+                <div key={index} className="flex justify-between items-center py-1 border-b border-gray-200">
+                  <div>
+                    <p className="font-semibold text-[11px] text-gray-900">{phase.name}</p>
+                    <p className="text-[10px] text-gray-600">{phase.description}</p>
+                  </div>
+                  <div className="text-right text-[10px] text-gray-700">
+                    {phase.date ? (
+                      <p>{formatDate(phase.date)}</p>
+                    ) : (
+                      <>
+                        <p>Start: {formatDate(phase.startDate)}</p>
+                        <p>End: {formatDate(phase.endDate)}</p>
+                        {duration && <p className="text-[9px] text-gray-500 font-medium">({duration})</p>}
+                      </>
+                    )}
+                  </div>
                 </div>
-                <div className="text-right text-[10px] text-gray-700">
-                  {phase.date ? (
-                    <p>{formatDate(phase.date)}</p>
-                  ) : (
-                    <>
-                      <p>Start: {formatDate(phase.startDate)}</p>
-                      <p>End: {formatDate(phase.endDate)}</p>
-                    </>
-                  )}
-                </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         </section>
       )}

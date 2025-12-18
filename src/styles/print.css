@@ -39,17 +39,40 @@
     margin-top: 1.5cm;
   }
 
-  /* Hide URL from footer - browser default */
-  @page {
-    @bottom-center {
-      content: none;
-    }
-    @bottom-left {
-      content: none;
-    }
-    @bottom-right {
-      content: none;
-    }
+  /* Hide corner logo on first page */
+  .print-corner-logo {
+    display: none !important;
+  }
+
+  /* Show running header on subsequent pages only */
+  .print-running-header {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    display: flex !important;
+    justify-content: flex-end;
+    padding: 0.5cm 1.5cm;
+    z-index: 1000;
+  }
+
+  .print-running-header img {
+    height: 20px !important;
+    max-height: 20px !important;
+    opacity: 0.8;
+  }
+
+  /* Hide running header on first page using CSS counter/position tricks */
+  .print-report::before {
+    content: "";
+    display: block;
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 1cm;
+    background: white;
+    z-index: 999;
   }
 
 
@@ -140,18 +163,20 @@
     -webkit-print-color-adjust: exact;
   }
 
-  /* Logo in top-right corner of report */
+  /* Logo in top-right corner of report - hidden on first page */
   .print-corner-logo {
-    position: absolute;
-    top: 0;
-    right: 0;
-    z-index: 100;
+    display: none !important;
   }
+}
 
-  .print-corner-logo img {
-    height: 24px !important;
-    max-height: 24px !important;
-    opacity: 0.9;
+/* Running header styles - hidden on screen, shown in print on subsequent pages */
+.print-running-header {
+  display: none;
+}
+
+@media screen {
+  .print-running-header {
+    display: none !important;
   }
 }
 
