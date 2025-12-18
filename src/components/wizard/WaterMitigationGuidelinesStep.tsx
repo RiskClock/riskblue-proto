@@ -7,6 +7,7 @@ import { AnalysisItem } from "@/lib/analysisItemMapper";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import html2pdf from "html2pdf.js";
+import riskBlueLogo from "@/assets/riskblue-logo.jpg";
 
 interface WaterMitigationGuidelinesStepProps {
   data: any;
@@ -89,16 +90,20 @@ export const WaterMitigationGuidelinesStep = ({ data, analysisItems = [], onBack
     const getImageBase64 = (imgSrc: string): Promise<string> => {
       return new Promise((resolve) => {
         const img = new Image();
-        img.crossOrigin = 'Anonymous';
         img.onload = () => {
-          const canvas = document.createElement('canvas');
-          canvas.width = img.width;
-          canvas.height = img.height;
-          const ctx = canvas.getContext('2d');
+          const canvas = document.createElement("canvas");
+          canvas.width = img.naturalWidth || img.width;
+          canvas.height = img.naturalHeight || img.height;
+          const ctx = canvas.getContext("2d");
           ctx?.drawImage(img, 0, 0);
-          resolve(canvas.toDataURL('image/jpeg', 0.9));
+          const base64 = canvas.toDataURL("image/jpeg", 0.92);
+          console.log("[PDF] image->base64 ok", { src: imgSrc, length: base64.length });
+          resolve(base64);
         };
-        img.onerror = () => resolve('');
+        img.onerror = (e) => {
+          console.warn("[PDF] image->base64 failed", { src: imgSrc, error: e });
+          resolve("");
+        };
         img.src = imgSrc;
       });
     };
@@ -119,8 +124,7 @@ export const WaterMitigationGuidelinesStep = ({ data, analysisItems = [], onBack
       await waitForImages(reportContainer);
 
       // Get the logo as base64 for footer
-      const logoImg = reportContainer.querySelector('.print-header img') as HTMLImageElement;
-      const logoBase64 = logoImg ? await getImageBase64(logoImg.src) : '';
+      const logoBase64 = await getImageBase64(riskBlueLogo);
       
       // Generate PDF using html2pdf with jsPDF callback for footer
       const opt = {
@@ -153,12 +157,15 @@ export const WaterMitigationGuidelinesStep = ({ data, analysisItems = [], onBack
           
           // Add logo to bottom-right corner of pages 2+ (page 1 has "Built in RiskBlue" header)
           if (logoBase64) {
+            console.log("[PDF] Adding footer logo", { totalPages });
             for (let i = 2; i <= totalPages; i++) {
               pdf.setPage(i);
               // Position: right-aligned with 15mm margin, 8mm from bottom
               // Logo dimensions: 18mm wide x 6mm tall (maintains aspect ratio)
-              pdf.addImage(logoBase64, 'JPEG', pageWidth - 33, pageHeight - 12, 18, 6);
+              pdf.addImage(logoBase64, "JPEG", pageWidth - 33, pageHeight - 12, 18, 6);
             }
+          } else {
+            console.warn("[PDF] Footer logo missing (empty base64); skipping.");
           }
           
           return pdf;
