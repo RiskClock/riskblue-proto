@@ -6,6 +6,7 @@ import { generateReportFilename } from "@/lib/reportGenerator";
 import { AnalysisItem } from "@/lib/analysisItemMapper";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import html2pdf from "html2pdf.js";
 
 interface WaterMitigationGuidelinesStepProps {
   data: any;
@@ -40,12 +41,14 @@ export const WaterMitigationGuidelinesStep = ({ data, analysisItems = [], onBack
   };
 
   const handleExportPDF = () => {
-    const originalTitle = document.title;
-    document.title = generateReportFilename(data.name || "unnamed_project", "WaterMitigationGuidelines");
+    const filename = generateReportFilename(data.name || "unnamed_project", "WaterMitigationGuidelines");
     
     // Create a temporary container for the report
     const reportContainer = document.createElement('div');
     reportContainer.className = 'print-report-container';
+    reportContainer.style.position = 'absolute';
+    reportContainer.style.left = '-9999px';
+    reportContainer.style.top = '0';
     document.body.appendChild(reportContainer);
     
     // Render the report
@@ -74,12 +77,11 @@ export const WaterMitigationGuidelinesStep = ({ data, analysisItems = [], onBack
             checkComplete();
           } else {
             img.onload = checkComplete;
-            img.onerror = checkComplete; // Don't block on failed images
+            img.onerror = checkComplete;
           }
         });
         
-        // Fallback timeout of 3 seconds
-        setTimeout(resolve, 3000);
+        setTimeout(resolve, 5000);
       });
     };
     
@@ -95,22 +97,38 @@ export const WaterMitigationGuidelinesStep = ({ data, analysisItems = [], onBack
       );
       
       // Give React time to render, then wait for images
-      await new Promise(resolve => setTimeout(resolve, 300));
+      await new Promise(resolve => setTimeout(resolve, 500));
       await waitForImages(reportContainer);
       
-      window.print();
-      document.title = originalTitle;
-      
-      toast({
-        title: "Export Ready",
-        description: "Your report is ready to save as PDF.",
-      });
-      
-      // Cleanup after print
-      setTimeout(() => {
+      // Generate PDF using html2pdf
+      const opt = {
+        margin: [15, 15, 20, 15], // top, left, bottom, right in mm
+        filename: `${filename}.pdf`,
+        image: { type: 'jpeg', quality: 0.98 },
+        html2canvas: { 
+          scale: 2, 
+          useCORS: true,
+          logging: false,
+          letterRendering: true
+        },
+        jsPDF: { 
+          unit: 'mm', 
+          format: 'a4', 
+          orientation: 'portrait' 
+        },
+        pagebreak: { mode: ['avoid-all', 'css', 'legacy'] }
+      };
+
+      html2pdf().set(opt).from(reportContainer).save().then(() => {
+        toast({
+          title: "PDF Exported",
+          description: "Your report has been saved as PDF.",
+        });
+        
+        // Cleanup
         reactRoot.unmount();
         document.body.removeChild(reportContainer);
-      }, 100);
+      });
     });
   };
 

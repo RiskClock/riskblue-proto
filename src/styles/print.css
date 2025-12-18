@@ -29,46 +29,11 @@
     padding-bottom: 1cm;
   }
 
-  /* Page setup - no extra margin for running header since we hide it on first page */
+  /* Page setup */
   @page {
-    margin: 1.5cm 1.5cm 1.5cm 1.5cm;
+    margin: 1.5cm 1.5cm 2cm 1.5cm;
     size: A4;
   }
-
-  @page :first {
-    margin-top: 1.5cm;
-  }
-
-  /* Hide running header completely - only show via position:fixed */
-  .print-running-header {
-    position: fixed;
-    top: 0;
-    left: 0;
-    right: 0;
-    display: flex !important;
-    justify-content: flex-end;
-    padding: 0.3cm 1.5cm;
-    z-index: 1000;
-    background: white;
-  }
-
-  .print-running-header img {
-    height: 18px !important;
-    max-height: 18px !important;
-    opacity: 0.7;
-  }
-
-  /* Hide running header on first page by placing white overlay */
-  .print-first-page-mask {
-    position: fixed;
-    top: 0;
-    left: 0;
-    right: 0;
-    height: 0.8cm;
-    background: white;
-    z-index: 1001;
-  }
-
 
   body {
     print-color-adjust: exact;
@@ -76,7 +41,6 @@
     background: white;
   }
 
-  /* Prevent page breaks inside key elements - but NOT sections */
   /* Force page break before elements with this class */
   .page-break-before {
     page-break-before: always !important;
@@ -120,6 +84,24 @@
     max-height: 32px;
   }
 
+  /* Page footer with logo - fixed at bottom of each page */
+  .print-page-footer {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    display: flex !important;
+    justify-content: flex-end;
+    padding: 0.3cm 1.5cm;
+    background: white;
+  }
+
+  .print-page-footer img {
+    height: 16px !important;
+    max-height: 16px !important;
+    opacity: 0.7;
+  }
+
   /* Ensure images print */
   img {
     max-width: 100%;
@@ -156,16 +138,10 @@
     print-color-adjust: exact;
     -webkit-print-color-adjust: exact;
   }
-
-  /* Logo in top-right corner of report - hidden on first page */
-  .print-corner-logo {
-    display: none !important;
-  }
 }
 
-/* Running header and first page mask - hidden on screen */
-.print-running-header,
-.print-first-page-mask {
+/* Hide print-only elements on screen */
+.print-page-footer {
   display: none;
 }
 
