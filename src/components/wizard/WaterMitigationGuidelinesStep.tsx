@@ -84,6 +84,24 @@ export const WaterMitigationGuidelinesStep = ({ data, analysisItems = [], onBack
         setTimeout(resolve, 5000);
       });
     };
+
+    // Convert image to base64 for jsPDF
+    const getImageBase64 = (imgSrc: string): Promise<string> => {
+      return new Promise((resolve) => {
+        const img = new Image();
+        img.crossOrigin = 'Anonymous';
+        img.onload = () => {
+          const canvas = document.createElement('canvas');
+          canvas.width = img.width;
+          canvas.height = img.height;
+          const ctx = canvas.getContext('2d');
+          ctx?.drawImage(img, 0, 0);
+          resolve(canvas.toDataURL('image/jpeg', 0.9));
+        };
+        img.onerror = () => resolve('');
+        img.src = imgSrc;
+      });
+    };
     
     // Import and render
     import('react-dom/client').then(async ({ createRoot }) => {
@@ -99,10 +117,14 @@ export const WaterMitigationGuidelinesStep = ({ data, analysisItems = [], onBack
       // Give React time to render, then wait for images
       await new Promise(resolve => setTimeout(resolve, 500));
       await waitForImages(reportContainer);
+
+      // Get the logo as base64 for footer
+      const logoImg = reportContainer.querySelector('.print-header img') as HTMLImageElement;
+      const logoBase64 = logoImg ? await getImageBase64(logoImg.src) : '';
       
-      // Generate PDF using html2pdf
+      // Generate PDF using html2pdf with jsPDF callback for footer
       const opt = {
-        margin: [15, 15, 20, 15], // top, left, bottom, right in mm
+        margin: [15, 15, 25, 15], // top, left, bottom, right in mm - increased bottom for footer
         filename: `${filename}.pdf`,
         image: { type: 'jpeg', quality: 0.98 },
         html2canvas: { 
@@ -119,16 +141,39 @@ export const WaterMitigationGuidelinesStep = ({ data, analysisItems = [], onBack
         pagebreak: { mode: ['avoid-all', 'css', 'legacy'] }
       };
 
-      html2pdf().set(opt).from(reportContainer).save().then(() => {
-        toast({
-          title: "PDF Exported",
-          description: "Your report has been saved as PDF.",
+      html2pdf()
+        .set(opt)
+        .from(reportContainer)
+        .toPdf()
+        .get('pdf')
+        .then((pdf: any) => {
+          const totalPages = pdf.internal.getNumberOfPages();
+          const pageWidth = pdf.internal.pageSize.getWidth();
+          const pageHeight = pdf.internal.pageSize.getHeight();
+          
+          // Add logo to bottom-right corner of pages 2+ (page 1 has "Built in RiskBlue" header)
+          if (logoBase64) {
+            for (let i = 2; i <= totalPages; i++) {
+              pdf.setPage(i);
+              // Position: right-aligned with 15mm margin, 8mm from bottom
+              // Logo dimensions: 18mm wide x 6mm tall (maintains aspect ratio)
+              pdf.addImage(logoBase64, 'JPEG', pageWidth - 33, pageHeight - 12, 18, 6);
+            }
+          }
+          
+          return pdf;
+        })
+        .save()
+        .then(() => {
+          toast({
+            title: "PDF Exported",
+            description: "Your report has been saved as PDF.",
+          });
+          
+          // Cleanup
+          reactRoot.unmount();
+          document.body.removeChild(reportContainer);
         });
-        
-        // Cleanup
-        reactRoot.unmount();
-        document.body.removeChild(reportContainer);
-      });
     });
   };
 

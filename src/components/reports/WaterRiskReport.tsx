@@ -619,10 +619,6 @@ export const WaterRiskReport = ({ data, analysisItems = [], controlDetails = [] 
 
   return (
     <div className="print-report bg-white text-black p-4 max-w-[210mm] mx-auto text-[11px] relative">
-      {/* Footer with logo - appears at bottom of each page via CSS */}
-      <div className="print-page-footer">
-        <img src={riskBlueLogo} alt="RiskBlue" />
-      </div>
       
       {/* Header with Logo and "Built in RiskBlue" - first page only */}
       <div className="print-header flex justify-between items-start mb-4 pb-2 border-b-2 border-gray-300">

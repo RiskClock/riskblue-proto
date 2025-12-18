@@ -84,23 +84,7 @@
     max-height: 32px;
   }
 
-  /* Page footer with logo - fixed at bottom of each page */
-  .print-page-footer {
-    position: fixed;
-    bottom: 0;
-    left: 0;
-    right: 0;
-    display: flex !important;
-    justify-content: flex-end;
-    padding: 0.3cm 1.5cm;
-    background: white;
-  }
-
-  .print-page-footer img {
-    height: 16px !important;
-    max-height: 16px !important;
-    opacity: 0.7;
-  }
+  /* Footer is now added programmatically via jsPDF */
 
   /* Ensure images print */
   img {
@@ -140,10 +124,7 @@
   }
 }
 
-/* Hide print-only elements on screen */
-.print-page-footer {
-  display: none;
-}
+/* Footer is added programmatically via jsPDF, no CSS needed */
 
 /* Hide print report by default on screen */
 .print-report-container {
