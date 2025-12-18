@@ -107,7 +107,7 @@ const MOCK_ASSETS_WATER_SYSTEMS_PROCESSES: AnalysisItem[] = [
     "areaName": "IT ROOM",
     "floor": "7th Floor",
     "drawingCode": null,
-    "fileName": "A2.07-SIXTH-FLOOR-Rev.18.1.pdf",
+    "fileName": "A2.08-SEVENTH-FLOOR-Rev.17.1.pdf",
     "area_sqft": 103,
     "controls": [
       "Presence of Water Monitoring",
@@ -141,7 +141,7 @@ const MOCK_ASSETS_WATER_SYSTEMS_PROCESSES: AnalysisItem[] = [
     "areaName": "MECHANICAL",
     "floor": "Lower Level",
     "drawingCode": null,
-    "fileName": "A2.07-SIXTH-FLOOR-Rev.18.1.pdf",
+    "fileName": "A2.01-LOWER-LEVEL-Rev.18.pdf",
     "area_sqft": 429,
     "controls": [
       "Presence of Water Monitoring",
@@ -164,7 +164,7 @@ const MOCK_ASSETS_WATER_SYSTEMS_PROCESSES: AnalysisItem[] = [
     "areaName": "ELECTRICAL RISER",
     "floor": "Lower Level - 8th Floor",
     "drawingCode": null,
-    "fileName": "A2.08-SEVENTH-FLOOR-Rev.17.1.pdf",
+    "fileName": "A2.09-EIGHTH-FLOOR-Rev.17.1.pdf",
     "area_sqft": 11,
     "controls": [
       "Presence of Water Monitoring",
@@ -180,8 +180,8 @@ const MOCK_ASSETS_WATER_SYSTEMS_PROCESSES: AnalysisItem[] = [
     "areaName": "ELEVATOR 1",
     "floor": "Lower Level",
     "drawingCode": null,
-    "fileName": "A2.09-EIGHTH-FLOOR-Rev.17.1.pdf",
-    "area_sqft": null,
+    "fileName": "A2.01-LOWER-LEVEL-Rev.18.pdf",
+    "area_sqft": 50,
     "controls": ["Presence of Water Monitoring"],
     "coordinates": [0.6492, 0.0339, 0.151, 0.2247]
   },
@@ -192,8 +192,8 @@ const MOCK_ASSETS_WATER_SYSTEMS_PROCESSES: AnalysisItem[] = [
     "areaName": "ELEVATOR 2",
     "floor": "Lower Level",
     "drawingCode": null,
-    "fileName": "A2.10-ROOF-PLAN-Rev.14.pdf",
-    "area_sqft": null,
+    "fileName": "A2.01-LOWER-LEVEL-Rev.18.pdf",
+    "area_sqft": 50,
     "controls": ["Presence of Water Monitoring"],
     "coordinates": [0.2113, 0.4045, 0.204, 0.0555]
   },
@@ -204,7 +204,7 @@ const MOCK_ASSETS_WATER_SYSTEMS_PROCESSES: AnalysisItem[] = [
     "areaName": "STAFF KITCHEN",
     "floor": "4th Floor",
     "drawingCode": "SWC-408",
-    "fileName": "A2.11-PARAPET-Rev.14.pdf",
+    "fileName": "A2.05-FOURTH-FLOOR-Rev.16.pdf",
     "area_sqft": 100,
     "controls": ["Presence of Water Monitoring"],
     "coordinates": [0.6155, 0.1094, 0.1531, 0.2747]
@@ -216,7 +216,7 @@ const MOCK_ASSETS_WATER_SYSTEMS_PROCESSES: AnalysisItem[] = [
     "areaName": "BF W/C",
     "floor": "8th Floor",
     "drawingCode": "SWC-801",
-    "fileName": "M-200B1-PLUMBING-BASEMENT-FLOOR-PLAN-Rev.20.pdf",
+    "fileName": "A2.09-EIGHTH-FLOOR-Rev.17.1.pdf",
     "area_sqft": 100,
     "controls": ["Presence of Water Monitoring"],
     "coordinates": [0.1874, 0.0833, 0.0856, 0.1966]
@@ -228,10 +228,10 @@ const MOCK_ASSETS_WATER_SYSTEMS_PROCESSES: AnalysisItem[] = [
     "areaName": "BF W/C",
     "floor": "7th Floor",
     "drawingCode": "SWC-701",
-    "fileName": "A2.01-LOWER-LEVEL-Rev.18.pdf",
+    "fileName": "A2.08-SEVENTH-FLOOR-Rev.17.1.pdf",
     "area_sqft": 100,
     "controls": ["Presence of Water Monitoring"],
-    "coordinates": null
+    "coordinates": [0.1074, 0.4066, 0.1961, 0.1761]
   },
   {
     "id": "KW004",
@@ -240,7 +240,7 @@ const MOCK_ASSETS_WATER_SYSTEMS_PROCESSES: AnalysisItem[] = [
     "areaName": "BF W/C",
     "floor": "6th Floor",
     "drawingCode": "SWC-601",
-    "fileName": "A2.02-GROUND-FLOOR-Rev.19.pdf",
+    "fileName": "A2.07-SIXTH-FLOOR-Rev.18.1.pdf",
     "area_sqft": 100,
     "controls": ["Presence of Water Monitoring"],
     "coordinates": [0.4799, 0.6361, 0.1096, 0.1265]
@@ -252,7 +252,7 @@ const MOCK_ASSETS_WATER_SYSTEMS_PROCESSES: AnalysisItem[] = [
     "areaName": "BF W/C",
     "floor": "5th Floor",
     "drawingCode": "SWC-501",
-    "fileName": "A2.03-SECOND-FLOOR-Rev.20.pdf",
+    "fileName": "A2.06-FIFTH-FLOOR-Rev.14.pdf",
     "area_sqft": 100,
     "controls": ["Presence of Water Monitoring"],
     "coordinates": [0.545, 0.0838, 0.2456, 0.0962]
@@ -264,7 +264,7 @@ const MOCK_ASSETS_WATER_SYSTEMS_PROCESSES: AnalysisItem[] = [
     "areaName": "BF W/C",
     "floor": "4th Floor",
     "drawingCode": "SWC-401",
-    "fileName": "A2.04-THIRD-FLOOR-Rev.15.pdf",
+    "fileName": "A2.05-FOURTH-FLOOR-Rev.16.pdf",
     "area_sqft": 100,
     "controls": ["Presence of Water Monitoring"],
     "coordinates": [0.1585, 0.2517, 0.196, 0.1849]
@@ -276,7 +276,7 @@ const MOCK_ASSETS_WATER_SYSTEMS_PROCESSES: AnalysisItem[] = [
     "areaName": "BF W/C",
     "floor": "3rd Floor",
     "drawingCode": "SWC-301",
-    "fileName": "A2.05-FOURTH-FLOOR-Rev.16.pdf",
+    "fileName": "A2.04-THIRD-FLOOR-Rev.15.pdf",
     "area_sqft": 100,
     "controls": ["Presence of Water Monitoring"],
     "coordinates": [0.145, 0.3328, 0.1552, 0.0602]
@@ -288,7 +288,7 @@ const MOCK_ASSETS_WATER_SYSTEMS_PROCESSES: AnalysisItem[] = [
     "areaName": "BF W/C",
     "floor": "2nd Floor",
     "drawingCode": "SWC-219",
-    "fileName": "A2.06-FIFTH-FLOOR-Rev.14.pdf",
+    "fileName": "A2.03-SECOND-FLOOR-Rev.20.pdf",
     "area_sqft": 100,
     "controls": ["Presence of Water Monitoring"],
     "coordinates": [0.0553, 0.7265, 0.2349, 0.0892]
@@ -300,7 +300,7 @@ const MOCK_ASSETS_WATER_SYSTEMS_PROCESSES: AnalysisItem[] = [
     "areaName": "BF W/C",
     "floor": "2nd Floor",
     "drawingCode": "SWC-201",
-    "fileName": "A2.07-SIXTH-FLOOR-Rev.18.1.pdf",
+    "fileName": "A2.03-SECOND-FLOOR-Rev.20.pdf",
     "area_sqft": 100,
     "controls": ["Presence of Water Monitoring"],
     "coordinates": [0.1312, 0.385, 0.2594, 0.0522]
@@ -312,10 +312,10 @@ const MOCK_ASSETS_WATER_SYSTEMS_PROCESSES: AnalysisItem[] = [
     "areaName": "W/C",
     "floor": "1st Floor",
     "drawingCode": "SWC-102",
-    "fileName": "A2.08-SEVENTH-FLOOR-Rev.17.1.pdf",
-    "area_sqft": null,
+    "fileName": "A2.02-GROUND-FLOOR-Rev.19.pdf",
+    "area_sqft": 100,
     "controls": ["Presence of Water Monitoring"],
-    "coordinates": null
+    "coordinates": [0.4909, 0.0697, 0.0677, 0.132]
   },
   {
     "id": "KW011",
@@ -324,7 +324,7 @@ const MOCK_ASSETS_WATER_SYSTEMS_PROCESSES: AnalysisItem[] = [
     "areaName": "W/C",
     "floor": "1st Floor",
     "drawingCode": "SWC-103",
-    "fileName": "A2.09-EIGHTH-FLOOR-Rev.17.1.pdf",
+    "fileName": "A2.02-GROUND-FLOOR-Rev.19.pdf",
     "area_sqft": 100,
     "controls": ["Presence of Water Monitoring"],
     "coordinates": [0.0084, 0.743, 0.1305, 0.0768]
@@ -336,7 +336,7 @@ const MOCK_ASSETS_WATER_SYSTEMS_PROCESSES: AnalysisItem[] = [
     "areaName": "UNIVERSAL W/C",
     "floor": "1st Floor",
     "drawingCode": "SWC-104",
-    "fileName": "A2.10-ROOF-PLAN-Rev.14.pdf",
+    "fileName": "A2.02-GROUND-FLOOR-Rev.19.pdf",
     "area_sqft": 100,
     "controls": ["Presence of Water Monitoring"],
     "coordinates": [0.1415, 0.0786, 0.1232, 0.2582]
@@ -348,10 +348,10 @@ const MOCK_ASSETS_WATER_SYSTEMS_PROCESSES: AnalysisItem[] = [
     "areaName": "UNIVERSAL W/C",
     "floor": "1st Floor",
     "drawingCode": "SWC-B08",
-    "fileName": "A2.11-PARAPET-Rev.14.pdf",
+    "fileName": "A2.02-GROUND-FLOOR-Rev.19.pdf",
     "area_sqft": 100,
     "controls": ["Presence of Water Monitoring"],
-    "coordinates": [0.3572, 0.3494]
+    "coordinates": [0.3572, 0.3494, 0.2267, 0.1312]
   },
   {
     "id": "KW014",
@@ -360,7 +360,7 @@ const MOCK_ASSETS_WATER_SYSTEMS_PROCESSES: AnalysisItem[] = [
     "areaName": "UNIVERSAL W/C",
     "floor": "3rd Floor",
     "drawingCode": "SWC-303",
-    "fileName": "A2.11-PARAPET-Rev.14.pdf",
+    "fileName": "A2.04-THIRD-FLOOR-Rev.15.pdf",
     "area_sqft": 100,
     "controls": ["Presence of Water Monitoring"],
     "coordinates": [0.3572, 0.3494, 0.2267, 0.1312]
@@ -372,7 +372,7 @@ const MOCK_ASSETS_WATER_SYSTEMS_PROCESSES: AnalysisItem[] = [
     "areaName": null,
     "floor": null,
     "drawingCode": null,
-    "fileName": "M-200B1-PLUMBING-BASEMENT-FLOOR-PLAN-Rev.20.pdf",
+    "fileName": null,
     "area_sqft": null,
     "controls": [
       "Roofing Strategy",
@@ -392,15 +392,14 @@ const MOCK_ASSETS_WATER_SYSTEMS_PROCESSES: AnalysisItem[] = [
     "areaName": null,
     "floor": null,
     "drawingCode": null,
-    "fileName": "A2.01-LOWER-LEVEL-Rev.18.pdf",
+    "fileName": null,
     "area_sqft": null,
     "controls": [
       "Weather Station",
-      "Measure Relative Humidity Sensors",
-      "Lumber Moisture Content Sensors",
+      "Lumber Moisture Content",
       "Presence of Water Monitoring"
     ],
-    "coordinates": null
+    "coordinates": [0.3464, 0.2396, 0.1298, 0.2826]
   },
   {
     "id": "DCW-MCE001",
@@ -409,12 +408,12 @@ const MOCK_ASSETS_WATER_SYSTEMS_PROCESSES: AnalysisItem[] = [
     "areaName": null,
     "floor": null,
     "drawingCode": null,
-    "fileName": "A2.02-GROUND-FLOOR-Rev.19.pdf",
+    "fileName": null,
     "area_sqft": null,
     "controls": [
       "Automatic Shut Off Valve",
       "Ultrasonic Flow Sensors",
-      "Inline Flow Sensors"
+      "In-line Flow Monitoring"
     ],
     "coordinates": [0.4387, 0.0886, 0.2008, 0.2104],
     "additionalParameters": {
@@ -430,12 +429,12 @@ const MOCK_ASSETS_WATER_SYSTEMS_PROCESSES: AnalysisItem[] = [
     "areaName": null,
     "floor": null,
     "drawingCode": null,
-    "fileName": "A2.03-SECOND-FLOOR-Rev.20.pdf",
+    "fileName": null,
     "area_sqft": null,
     "controls": [
       "Automatic Shut Off Valve",
       "Ultrasonic Flow Sensors",
-      "Inline Flow Sensors"
+      "In-line Flow Monitoring"
     ],
     "coordinates": [0.515, 0.4133, 0.1028, 0.2108],
     "additionalParameters": {
@@ -451,11 +450,12 @@ const MOCK_ASSETS_WATER_SYSTEMS_PROCESSES: AnalysisItem[] = [
     "areaName": null,
     "floor": null,
     "drawingCode": "Ø80 CW UP",
-    "fileName": "A2.04-THIRD-FLOOR-Rev.15.pdf",
+    "fileName": null,
     "area_sqft": null,
     "controls": [
       "Automatic Shut Off Valve",
-      "Ultrasonic Flow Sensors"
+      "Ultrasonic Flow Sensors",
+      "In-line Flow Monitoring"
     ],
     "coordinates": [0.5711, 0.2303, 0.2296, 0.0887],
     "additionalParameters": {
@@ -471,14 +471,11 @@ const MOCK_ASSETS_WATER_SYSTEMS_PROCESSES: AnalysisItem[] = [
     "areaName": "ELEVATOR / SANITARY SUMP PIT",
     "floor": "Lower Level",
     "drawingCode": null,
-    "fileName": "A2.09-EIGHTH-FLOOR-Rev.17.1.pdf",
+    "fileName": "A2.01-LOWER-LEVEL-Rev.18.pdf",
     "area_sqft": null,
     "controls": [
       "Presence of Water Monitoring",
-      "Temporary and Permanent Sump Pump Installation",
-      "Permanent Drainage Systems Installation and Monitoring",
-      "Flood Control Measures",
-      "Below Grade Water Response Plan"
+      "Temporary and Permanent Sump Pumps Installation"
     ],
     "coordinates": [0.7033, 0.3048, 0.2379, 0.0909]
   },
@@ -489,13 +486,13 @@ const MOCK_ASSETS_WATER_SYSTEMS_PROCESSES: AnalysisItem[] = [
     "areaName": "BACKWATER VALVE PIT",
     "floor": "Lower Level",
     "drawingCode": null,
-    "fileName": "A2.09-EIGHTH-FLOOR-Rev.17.1.pdf",
+    "fileName": "A2.01-LOWER-LEVEL-Rev.18.pdf",
     "area_sqft": null,
     "controls": [
       "Presence of Water Monitoring",
-      "Temporary and Permanent Sump Pump Installation"
+      "Temporary and Permanent Sump Pumps Installation"
     ],
-    "coordinates": null
+    "coordinates": [0.7033, 0.3048, 0.2379, 0.0909]
   },
   {
     "id": "FS001",
@@ -504,13 +501,18 @@ const MOCK_ASSETS_WATER_SYSTEMS_PROCESSES: AnalysisItem[] = [
     "areaName": "DIA FIRE PROTECTION SERVICES LINE",
     "floor": "Lower Level",
     "drawingCode": null,
-    "fileName": "A2.10-ROOF-PLAN-Rev.14.pdf",
+    "fileName": "A2.01-LOWER-LEVEL-Rev.18.pdf",
     "area_sqft": null,
     "controls": [
       "Ultrasonic Flow Sensors",
-      "Inline Flow Sensors"
+      "In-line Flow Monitoring"
     ],
-    "coordinates": [0.5916, 0.2067, 0.1433, 0.2302]
+    "coordinates": [0.5916, 0.2067, 0.1433, 0.2302],
+    "additionalParameters": {
+      "mainPipeDirection": "horizontal",
+      "pipeDiameterInches": null,
+      "pipeDiameterMM": 150
+    }
   },
   {
     "id": "DHW-HWR001",
@@ -519,10 +521,10 @@ const MOCK_ASSETS_WATER_SYSTEMS_PROCESSES: AnalysisItem[] = [
     "areaName": null,
     "floor": "Lower Level",
     "drawingCode": null,
-    "fileName": "A2.11-PARAPET-Rev.14.pdf",
+    "fileName": "A2.01-LOWER-LEVEL-Rev.18.pdf",
     "area_sqft": null,
     "controls": [
-      "Inline Flow Sensors",
+      "In-line Flow Monitoring",
       "Ultrasonic Flow Sensors",
       "Domestic Hot Water Run Flow Patterns"
     ],
@@ -540,18 +542,18 @@ const MOCK_ASSETS_WATER_SYSTEMS_PROCESSES: AnalysisItem[] = [
     "areaName": null,
     "floor": "Lower Level",
     "drawingCode": null,
-    "fileName": "A2.11-PARAPET-Rev.14.pdf",
+    "fileName": "A2.01-LOWER-LEVEL-Rev.18.pdf",
     "area_sqft": null,
     "controls": [
-      "Inline Flow Sensors",
+      "In-line Flow Monitoring",
       "Ultrasonic Flow Sensors",
       "Domestic Hot Water Run Flow Patterns"
     ],
-    "coordinates": null,
+    "coordinates": [0.1233, 0.425, 0.0845, 0.1908],
     "additionalParameters": {
       "mainPipeDirection": "horizontal",
       "pipeDiameterInches": null,
-      "pipeDiameterMM": 15
+      "pipeDiameterMM": 50
     }
   },
   {
@@ -561,13 +563,13 @@ const MOCK_ASSETS_WATER_SYSTEMS_PROCESSES: AnalysisItem[] = [
     "areaName": null,
     "floor": null,
     "drawingCode": null,
-    "fileName": "M-200B1-PLUMBING-BASEMENT-FLOOR-PLAN-Rev.20.pdf",
+    "fileName": null,
     "area_sqft": null,
     "controls": [
       "Presence of Water Monitoring",
       "Automatic Shut Off Valve",
       "Ultrasonic Flow Sensors",
-      "Inline Flow Sensors"
+      "In-line Flow Monitoring"
     ],
     "coordinates": [0.4864, 0.5104, 0.0908, 0.2761],
     "additionalParameters": {
