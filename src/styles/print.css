@@ -29,9 +29,9 @@
     padding-bottom: 1cm;
   }
 
-  /* Page setup */
+  /* Page setup - no extra margin for running header since we hide it on first page */
   @page {
-    margin: 2cm 1.5cm 2cm 1.5cm;
+    margin: 1.5cm 1.5cm 1.5cm 1.5cm;
     size: A4;
   }
 
@@ -39,12 +39,7 @@
     margin-top: 1.5cm;
   }
 
-  /* Hide corner logo on first page */
-  .print-corner-logo {
-    display: none !important;
-  }
-
-  /* Show running header on subsequent pages only */
+  /* Hide running header completely - only show via position:fixed */
   .print-running-header {
     position: fixed;
     top: 0;
@@ -52,27 +47,26 @@
     right: 0;
     display: flex !important;
     justify-content: flex-end;
-    padding: 0.5cm 1.5cm;
+    padding: 0.3cm 1.5cm;
     z-index: 1000;
+    background: white;
   }
 
   .print-running-header img {
-    height: 20px !important;
-    max-height: 20px !important;
-    opacity: 0.8;
+    height: 18px !important;
+    max-height: 18px !important;
+    opacity: 0.7;
   }
 
-  /* Hide running header on first page using CSS counter/position tricks */
-  .print-report::before {
-    content: "";
-    display: block;
+  /* Hide running header on first page by placing white overlay */
+  .print-first-page-mask {
     position: fixed;
     top: 0;
     left: 0;
     right: 0;
-    height: 1cm;
+    height: 0.8cm;
     background: white;
-    z-index: 999;
+    z-index: 1001;
   }
 
 
@@ -169,15 +163,10 @@
   }
 }
 
-/* Running header styles - hidden on screen, shown in print on subsequent pages */
-.print-running-header {
+/* Running header and first page mask - hidden on screen */
+.print-running-header,
+.print-first-page-mask {
   display: none;
-}
-
-@media screen {
-  .print-running-header {
-    display: none !important;
-  }
 }
 
 /* Hide print report by default on screen */
@@ -188,13 +177,4 @@
 /* Hide print header on screen */
 .print-header {
   display: none;
-}
-
-@media screen {
-  .print-report {
-    display: none;
-  }
-  .print-corner-logo {
-    display: none;
-  }
 }
