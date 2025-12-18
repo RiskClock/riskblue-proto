@@ -262,13 +262,50 @@ export const WaterRiskReport = ({ data, analysisItems = [], controlDetails = [] 
     });
   };
 
-  // Group and sort by location count (descending) to match web app order
+  // Priority order maps based on database display_order (lower = higher priority)
+  const assetPriorityOrder: Record<string, number> = {
+    "Electrical Rooms": 1, "Electrical Room": 1,
+    "Elevator Pits": 2, "Elevator Pit": 2,
+    "Mechanical Rooms": 3, "Mechanical Room": 3,
+    "Main Electrical Risers": 4, "Electrical Riser": 4, "Main Electrical Riser": 4,
+    "Mechanical Risers": 5, "Mechanical Riser": 5,
+    "Sump Pits": 6, "Sump Pit": 6,
+    "Suites": 7, "Suite": 7,
+    "Kitchens & Washrooms": 8, "Kitchen & Washroom": 8, "Kitchen": 8, "Washroom": 8,
+  };
+  const systemPriorityOrder: Record<string, number> = {
+    "Main City Water Supply": 1, "Main Water Entry": 1,
+    "Domestic Cold Water": 2, "Cold Water": 2,
+    "Domestic Hot Water": 3, "Hot Water": 3,
+    "Fire Suppression System": 4, "Fire Suppression": 4,
+    "Hydronics": 5, "Hydronic": 5,
+    "Temporary Water Run": 6,
+  };
+  const processPriorityOrder: Record<string, number> = {
+    "Structural": 1, "Framing": 1,
+    "Envelope": 2,
+    "MEP": 3, "Mechanical": 3, "Electrical": 3, "Plumbing": 3,
+    "Elevators": 4, "Elevator": 4,
+    "Fire": 5, "Fire Protection": 5,
+    "Interior": 6, "Interior Finishing": 6,
+  };
+
+  const getPriority = (name: string, priorityMap: Record<string, number>) => {
+    for (const [key, priority] of Object.entries(priorityMap)) {
+      if (name.toLowerCase().includes(key.toLowerCase()) || key.toLowerCase().includes(name.toLowerCase())) {
+        return priority;
+      }
+    }
+    return 999; // Unknown items go to end
+  };
+
+  // Group and sort by display_order priority to match web app order
   const assetGroups = groupByNameWithControlVariance(selectedAssetItems, selectedAssetControlIds)
-    .sort((a, b) => b.locations.length - a.locations.length);
+    .sort((a, b) => getPriority(a.name, assetPriorityOrder) - getPriority(b.name, assetPriorityOrder));
   const systemGroups = groupByNameWithControlVariance(selectedSystemItems, selectedSystemControlIds)
-    .sort((a, b) => b.locations.length - a.locations.length);
+    .sort((a, b) => getPriority(a.name, systemPriorityOrder) - getPriority(b.name, systemPriorityOrder));
   const processGroups = groupByNameWithControlVariance(selectedProcessItems, selectedProcessControlIds)
-    .sort((a, b) => b.locations.length - a.locations.length);
+    .sort((a, b) => getPriority(a.name, processPriorityOrder) - getPriority(b.name, processPriorityOrder));
 
   // Collect all unique control names used
   const allUsedControlNames = new Set<string>();
@@ -342,19 +379,14 @@ export const WaterRiskReport = ({ data, analysisItems = [], controlDetails = [] 
 
     const dates = calculateSystemOrAssetDates(lookupName, timelineData);
     if (dates.startDate && dates.endDate) {
-      const months = differenceInMonths(dates.endDate, dates.startDate);
-      // Calculate remaining days after full months
-      const endOfMonths = new Date(dates.startDate);
-      endOfMonths.setMonth(endOfMonths.getMonth() + months);
-      const remainingDays = Math.floor((dates.endDate.getTime() - endOfMonths.getTime()) / (1000 * 60 * 60 * 24));
+      const totalDays = Math.floor((dates.endDate.getTime() - dates.startDate.getTime()) / (1000 * 60 * 60 * 24));
+      const decimalMonths = totalDays / 30.44;
       
       let durationStr = '';
-      if (months > 0 && remainingDays > 0) {
-        durationStr = `${months} month${months !== 1 ? 's' : ''}, ${remainingDays} day${remainingDays !== 1 ? 's' : ''}`;
-      } else if (months > 0) {
-        durationStr = `${months} month${months !== 1 ? 's' : ''}`;
-      } else if (remainingDays > 0) {
-        durationStr = `${remainingDays} day${remainingDays !== 1 ? 's' : ''}`;
+      if (decimalMonths >= 1) {
+        durationStr = `${decimalMonths.toFixed(1)} months`;
+      } else if (totalDays > 0) {
+        durationStr = `${totalDays} days`;
       } else {
         durationStr = '0 days';
       }
@@ -368,7 +400,7 @@ export const WaterRiskReport = ({ data, analysisItems = [], controlDetails = [] 
     return null;
   };
 
-  // Calculate milestone duration in months and days
+  // Calculate milestone duration as decimal months (e.g., "10.1 months") or days if <1 month
   const calculateMilestoneDuration = (startDate: string | Date | undefined, endDate: string | Date | undefined): string => {
     if (!startDate || !endDate) return '';
     try {
@@ -377,17 +409,13 @@ export const WaterRiskReport = ({ data, analysisItems = [], controlDetails = [] 
       
       if (isNaN(start.getTime()) || isNaN(end.getTime())) return '';
       
-      const months = differenceInMonths(end, start);
-      const endOfMonths = new Date(start);
-      endOfMonths.setMonth(endOfMonths.getMonth() + months);
-      const remainingDays = Math.floor((end.getTime() - endOfMonths.getTime()) / (1000 * 60 * 60 * 24));
+      const totalDays = Math.floor((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24));
+      const decimalMonths = totalDays / 30.44; // Average days per month
       
-      if (months > 0 && remainingDays > 0) {
-        return `${months} mo, ${remainingDays} d`;
-      } else if (months > 0) {
-        return `${months} mo`;
-      } else if (remainingDays > 0) {
-        return `${remainingDays} d`;
+      if (decimalMonths >= 1) {
+        return `${decimalMonths.toFixed(1)} months`;
+      } else if (totalDays > 0) {
+        return `${totalDays} days`;
       }
       return '';
     } catch {
@@ -430,22 +458,18 @@ export const WaterRiskReport = ({ data, analysisItems = [], controlDetails = [] 
                   </span>
                 </div>
                 
-                {/* Location list WITHOUT drawings */}
+                {/* Location list - inline with details right-aligned */}
                 <div className="space-y-0.5">
                   {group.locations.map((location, i) => {
                     const details = renderLocationDetails(location);
                     return (
-                      <div key={i} className={`text-[10px] text-gray-700 border-l-2 ${borderColor} pl-2`}>
-                        <div className="flex gap-1 items-start">
+                      <div key={i} className={`text-[10px] text-gray-700 border-l-2 ${borderColor} pl-2 flex justify-between items-baseline`}>
+                        <div className="flex gap-1 items-baseline">
                           <span className="text-gray-500 font-medium">{location.id}:</span>
                           <span>{location.areaName || location.name}</span>
                         </div>
                         {details.length > 0 && (
-                          <div className="flex flex-wrap gap-x-2 text-[9px] text-gray-500 mt-0.5">
-                            {details.map((detail, j) => (
-                              <span key={j}>{detail}</span>
-                            ))}
-                          </div>
+                          <span className="text-[9px] text-gray-500 ml-2">{details.join('  •  ')}</span>
                         )}
                       </div>
                     );
@@ -523,20 +547,18 @@ export const WaterRiskReport = ({ data, analysisItems = [], controlDetails = [] 
                 {/* Location list WITH drawings */}
                 <div className="space-y-2">
                   {group.locations.map((location, i) => {
-                    const details = renderLocationDetails(location);
+                    const details = renderLocationDetails(location, true);
                     return (
                       <div key={i} className={`text-[10px] text-gray-700 border-l-2 ${borderColor} pl-2`}>
-                        <div className="flex gap-1 items-start">
-                          <span className="text-gray-500 font-medium">{location.id}:</span>
-                          <span>{location.areaName || location.name}</span>
-                        </div>
-                        {details.length > 0 && (
-                          <div className="flex flex-wrap gap-x-2 text-[9px] text-gray-500 mt-0.5">
-                            {details.map((detail, j) => (
-                              <span key={j}>{detail}</span>
-                            ))}
+                        <div className="flex justify-between items-baseline">
+                          <div className="flex gap-1 items-baseline">
+                            <span className="text-gray-500 font-medium">{location.id}:</span>
+                            <span>{location.areaName || location.name}</span>
                           </div>
-                        )}
+                          {details.length > 0 && (
+                            <span className="text-[9px] text-gray-500 ml-2">{details.join('  •  ')}</span>
+                          )}
+                        </div>
                         {/* Drawing image or placeholder */}
                         {(() => {
                           const drawingUrl = getDrawingImage(location.id);
@@ -597,6 +619,9 @@ export const WaterRiskReport = ({ data, analysisItems = [], controlDetails = [] 
 
   return (
     <div className="print-report bg-white text-black p-4 max-w-[210mm] mx-auto text-[11px] relative">
+      {/* Mask to hide running header on first page */}
+      <div className="print-first-page-mask" aria-hidden="true" />
+      
       {/* Running header for subsequent pages - logo only */}
       <div className="print-running-header">
         <img src={riskBlueLogo} alt="RiskBlue" />
@@ -622,17 +647,17 @@ export const WaterRiskReport = ({ data, analysisItems = [], controlDetails = [] 
         <div className="mb-3">
           <p className="text-[10px] font-semibold text-gray-700 mb-1.5">Identified Risks</p>
           <div className="grid grid-cols-3 gap-2">
-            <div className="bg-blue-50 p-2 rounded border border-blue-200 flex flex-col items-center justify-center text-center">
-              <p className="text-[10px] text-blue-700">Critical Assets</p>
-              <p className="text-xl font-bold text-blue-900">{totalAssets}</p>
+            <div className="bg-gray-50 p-2 rounded border border-gray-200 flex flex-col items-center justify-center text-center">
+              <p className="text-[10px] text-gray-600">Critical Assets</p>
+              <p className="text-xl font-bold text-gray-900">{totalAssets}</p>
             </div>
-            <div className="bg-cyan-50 p-2 rounded border border-cyan-200 flex flex-col items-center justify-center text-center">
-              <p className="text-[10px] text-cyan-700">Water Systems</p>
-              <p className="text-xl font-bold text-cyan-900">{totalSystems}</p>
+            <div className="bg-gray-50 p-2 rounded border border-gray-200 flex flex-col items-center justify-center text-center">
+              <p className="text-[10px] text-gray-600">Water Systems</p>
+              <p className="text-xl font-bold text-gray-900">{totalSystems}</p>
             </div>
-            <div className="bg-purple-50 p-2 rounded border border-purple-200 flex flex-col items-center justify-center text-center">
-              <p className="text-[10px] text-purple-700">Processes</p>
-              <p className="text-xl font-bold text-purple-900">{totalProcesses}</p>
+            <div className="bg-gray-50 p-2 rounded border border-gray-200 flex flex-col items-center justify-center text-center">
+              <p className="text-[10px] text-gray-600">Processes</p>
+              <p className="text-xl font-bold text-gray-900">{totalProcesses}</p>
             </div>
           </div>
         </div>
@@ -641,9 +666,9 @@ export const WaterRiskReport = ({ data, analysisItems = [], controlDetails = [] 
         <div>
           <p className="text-[10px] font-semibold text-gray-700 mb-1.5">Mitigation Measures</p>
           <div className="grid grid-cols-1 gap-2">
-            <div className="bg-green-50 p-2 rounded border border-green-200 flex flex-col items-center justify-center text-center">
-              <p className="text-[10px] text-green-700">Controls Implemented</p>
-              <p className="text-xl font-bold text-green-900">{totalControls}</p>
+            <div className="bg-gray-50 p-2 rounded border border-gray-200 flex flex-col items-center justify-center text-center">
+              <p className="text-[10px] text-gray-600">Controls to be Implemented</p>
+              <p className="text-xl font-bold text-gray-900">{totalControls}</p>
             </div>
           </div>
         </div>
@@ -801,15 +826,14 @@ export const WaterRiskReport = ({ data, analysisItems = [], controlDetails = [] 
                     <p className="font-semibold text-[11px] text-gray-900">{phase.name}</p>
                     <p className="text-[10px] text-gray-600">{phase.description}</p>
                   </div>
-                  <div className="text-right text-[10px] text-gray-700">
+                  <div className="text-right text-[10px] text-gray-700 whitespace-nowrap">
                     {phase.date ? (
                       <p>{formatDate(phase.date)}</p>
                     ) : (
-                      <>
-                        <p>Start: {formatDate(phase.startDate)}</p>
-                        <p>End: {formatDate(phase.endDate)}</p>
-                        {duration && <p className="text-[9px] text-gray-500 font-medium">({duration})</p>}
-                      </>
+                      <p>
+                        {formatDate(phase.startDate)} – {formatDate(phase.endDate)}
+                        {duration && <span className="text-gray-500 ml-1">({duration})</span>}
+                      </p>
                     )}
                   </div>
                 </div>
