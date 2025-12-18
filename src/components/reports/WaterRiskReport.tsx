@@ -619,11 +619,8 @@ export const WaterRiskReport = ({ data, analysisItems = [], controlDetails = [] 
 
   return (
     <div className="print-report bg-white text-black p-4 max-w-[210mm] mx-auto text-[11px] relative">
-      {/* Mask to hide running header on first page */}
-      <div className="print-first-page-mask" aria-hidden="true" />
-      
-      {/* Running header for subsequent pages - logo only */}
-      <div className="print-running-header">
+      {/* Footer with logo - appears at bottom of each page via CSS */}
+      <div className="print-page-footer">
         <img src={riskBlueLogo} alt="RiskBlue" />
       </div>
       
@@ -887,16 +884,16 @@ export const WaterRiskReport = ({ data, analysisItems = [], controlDetails = [] 
                       )}
                       <div className="flex-1">
                         <h3 className="font-bold text-[11px] text-gray-900 mb-1">{control.name}</h3>
-                        {control.action && (
-                          <div className="mb-1">
-                            <span className="text-[9px] font-semibold text-gray-600">Action: </span>
-                            <span className="text-[10px] text-gray-700">{control.action}</span>
-                          </div>
-                        )}
                         {control.description && (
-                          <div>
+                          <div className="mb-1">
                             <span className="text-[9px] font-semibold text-gray-600">Description: </span>
                             <span className="text-[10px] text-gray-700">{control.description}</span>
+                          </div>
+                        )}
+                        {control.action && (
+                          <div>
+                            <span className="text-[9px] font-semibold text-gray-600">Action: </span>
+                            <span className="text-[10px] text-gray-700">{control.action}</span>
                           </div>
                         )}
                       </div>
