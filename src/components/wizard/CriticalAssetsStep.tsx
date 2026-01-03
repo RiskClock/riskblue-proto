@@ -6,7 +6,7 @@ import { Label } from "@/components/ui/label";
 import { Info, Building2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { calculateCriticalAssetDuration } from "@/lib/durationCalculator";
+import { calculateCriticalAssetDuration, calculateSystemOrAssetDates } from "@/lib/durationCalculator";
 import { calculateTieredControlCost, parseDurationMonths, PricingTier } from "@/lib/costCalculator";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
@@ -571,6 +571,8 @@ export const CriticalAssetsStep = ({
             });
           });
           
+          const durationDetails = calculateSystemOrAssetDates(asset.name, data);
+          
           return (
             <ExpandableListItem
               key={asset.id}
@@ -581,6 +583,7 @@ export const CriticalAssetsStep = ({
               riskPoints={asset.risk_level_points}
               threat={asset.threat}
               duration={calculateCriticalAssetDuration(asset.name, data)}
+              durationDetails={durationDetails}
               cost={asset.cost}
               instanceCount={instances.length}
               instances={instances}

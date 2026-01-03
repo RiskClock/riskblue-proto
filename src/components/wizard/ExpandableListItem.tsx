@@ -15,6 +15,8 @@ import {
   PricingTier,
   InstancePricingData
 } from "@/lib/costCalculator";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { format } from "date-fns";
 
 interface ControlPoints {
   points: number;
@@ -35,6 +37,11 @@ interface ExpandableListItemProps {
   riskPoints?: number;
   threat?: string;
   duration?: string;
+  durationDetails?: {
+    startDate: Date | null;
+    endDate: Date | null;
+    calculatedFrom?: string;
+  };
   cost?: string;
   instanceCount: number;
   instances: AnalysisItem[];
@@ -124,6 +131,7 @@ export const ExpandableListItem = ({
   riskPoints,
   threat,
   duration,
+  durationDetails,
   instanceCount,
   instances,
   selectedInstanceIds,
@@ -362,7 +370,33 @@ export const ExpandableListItem = ({
           {(threat || duration) && (
             <div className="flex items-center gap-3 text-xs text-muted-foreground mt-1">
               {threat && <span className="truncate">{threat}</span>}
-              {duration && <span>Duration: {duration}</span>}
+              {duration && (
+                <TooltipProvider>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <span className="cursor-help underline decoration-dotted underline-offset-2">
+                        Duration: {duration}
+                      </span>
+                    </TooltipTrigger>
+                    <TooltipContent className="max-w-xs">
+                      <div className="space-y-1 text-xs">
+                        {durationDetails?.calculatedFrom && (
+                          <p className="font-medium">{durationDetails.calculatedFrom}</p>
+                        )}
+                        {durationDetails?.startDate && (
+                          <p>Start: {format(durationDetails.startDate, "MMM d, yyyy")}</p>
+                        )}
+                        {durationDetails?.endDate && (
+                          <p>End: {format(durationDetails.endDate, "MMM d, yyyy")}</p>
+                        )}
+                        {!durationDetails?.startDate && !durationDetails?.endDate && (
+                          <p className="text-muted-foreground">Date details not available</p>
+                        )}
+                      </div>
+                    </TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
+              )}
             </div>
           )}
         </div>
