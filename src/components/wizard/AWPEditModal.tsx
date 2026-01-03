@@ -3,13 +3,15 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
-import { Plus, Trash2, Pencil } from "lucide-react";
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Plus, Trash2, Pencil, ChevronsUpDown, Check } from "lucide-react";
 import { AnalysisItem } from "@/lib/analysisItemMapper";
 import { AWPItemEditModal } from "./AWPItemEditModal";
+import { cn } from "@/lib/utils";
 import {
   CLASSES_BY_CATEGORY,
   CLASS_TO_CATEGORY_MAP,
@@ -43,14 +45,26 @@ interface NewRowItem {
   pipeDiameterMM: number | null;
 }
 
+interface ChangesSummary {
+  edited: { id: string; name: string; areaName?: string }[];
+  removed: { id: string; name: string; areaName?: string }[];
+  added: { name: string; areaName?: string }[];
+}
+
 export const AWPEditModal = ({
   isOpen,
   onClose,
   analysisItems,
   onUpdateItems,
 }: AWPEditModalProps) => {
+  // Original items for comparison
+  const [originalItems, setOriginalItems] = useState<AnalysisItem[]>([]);
+  
   // Existing items (left pane)
   const [existingItems, setExistingItems] = useState<AnalysisItem[]>([]);
+  
+  // Track deleted item IDs
+  const [deletedItemIds, setDeletedItemIds] = useState<Set<string>>(new Set());
   
   // New items being added (right pane)
   const [newRows, setNewRows] = useState<NewRowItem[]>([]);
@@ -58,26 +72,43 @@ export const AWPEditModal = ({
   // Edit modal state
   const [editingItem, setEditingItem] = useState<AnalysisItem | null>(null);
   
-  // Delete confirmation state
-  const [deletingItemId, setDeletingItemId] = useState<string | null>(null);
+  // Save confirmation state
+  const [showSaveConfirmation, setShowSaveConfirmation] = useState(false);
+  const [changesSummary, setChangesSummary] = useState<ChangesSummary | null>(null);
   
   // Units for right pane
   const [areaUnit, setAreaUnit] = useState<AreaUnit>("sqft");
   const [pipeUnit, setPipeUnit] = useState<PipeUnit>("in");
+  
+  // Combobox state for new rows
+  const [openCombobox, setOpenCombobox] = useState<string | null>(null);
 
   // Initialize when modal opens
   useMemo(() => {
     if (isOpen) {
+      setOriginalItems(analysisItems.map(item => ({ ...item })));
       setExistingItems(analysisItems.map(item => ({ ...item })));
+      setDeletedItemIds(new Set());
       setNewRows([]);
     }
   }, [isOpen, analysisItems]);
 
+  // Visible existing items (excluding deleted)
+  const visibleExistingItems = useMemo(() => 
+    existingItems.filter(item => !deletedItemIds.has(item.id)), [existingItems, deletedItemIds]);
+
   // Check if any existing item is an Asset or Water System for column visibility
   const hasAssets = useMemo(() => 
-    existingItems.some(item => isAssetClass(item.name)), [existingItems]);
+    visibleExistingItems.some(item => isAssetClass(item.name)), [visibleExistingItems]);
   const hasWaterSystems = useMemo(() => 
-    existingItems.some(item => isWaterSystemClass(item.name)), [existingItems]);
+    visibleExistingItems.some(item => isWaterSystemClass(item.name)), [visibleExistingItems]);
+
+  // All class options for combobox
+  const allClassOptions = useMemo(() => [
+    ...CLASSES_BY_CATEGORY.Asset.map(cls => ({ value: cls, category: "Asset" })),
+    ...CLASSES_BY_CATEGORY["Water System"].map(cls => ({ value: cls, category: "Water System" })),
+    ...CLASSES_BY_CATEGORY.Process.map(cls => ({ value: cls, category: "Process" })),
+  ], []);
 
   // Add new row to right pane
   const handleAddRow = useCallback(() => {
@@ -115,13 +146,10 @@ export const AWPEditModal = ({
     setEditingItem(null);
   }, [editingItem]);
 
-  // Handle delete confirmation
-  const handleDeleteConfirm = useCallback(() => {
-    if (deletingItemId) {
-      setExistingItems(prev => prev.filter(item => item.id !== deletingItemId));
-      setDeletingItemId(null);
-    }
-  }, [deletingItemId]);
+  // Handle delete (mark for deletion without confirmation)
+  const handleDelete = useCallback((itemId: string) => {
+    setDeletedItemIds(prev => new Set([...prev, itemId]));
+  }, []);
 
   // Handle area change for new row
   const handleNewRowAreaChange = useCallback((tempId: string, value: string) => {
@@ -159,14 +187,64 @@ export const AWPEditModal = ({
     return row.pipeDiameterMM || "";
   }, [pipeUnit]);
 
-  // Save all changes
-  const handleSave = useCallback(() => {
+  // Calculate changes summary
+  const calculateChanges = useCallback((): ChangesSummary => {
+    const edited: ChangesSummary["edited"] = [];
+    const removed: ChangesSummary["removed"] = [];
+    const added: ChangesSummary["added"] = [];
+
+    // Find edited items
+    existingItems.forEach(current => {
+      if (deletedItemIds.has(current.id)) return;
+      const original = originalItems.find(o => o.id === current.id);
+      if (original) {
+        const hasChanges = JSON.stringify(current) !== JSON.stringify(original);
+        if (hasChanges) {
+          edited.push({ id: current.id, name: current.name, areaName: current.areaName });
+        }
+      }
+    });
+
+    // Find removed items
+    deletedItemIds.forEach(id => {
+      const original = originalItems.find(o => o.id === id);
+      if (original) {
+        removed.push({ id: original.id, name: original.name, areaName: original.areaName });
+      }
+    });
+
+    // Find added items
+    newRows.filter(row => row.name).forEach(row => {
+      added.push({ name: row.name, areaName: row.areaName });
+    });
+
+    return { edited, removed, added };
+  }, [existingItems, originalItems, deletedItemIds, newRows]);
+
+  // Handle save click - show confirmation if there are changes
+  const handleSaveClick = useCallback(() => {
+    const changes = calculateChanges();
+    const hasChanges = changes.edited.length > 0 || changes.removed.length > 0 || changes.added.length > 0;
+    
+    if (hasChanges) {
+      setChangesSummary(changes);
+      setShowSaveConfirmation(true);
+    } else {
+      onClose();
+    }
+  }, [calculateChanges, onClose]);
+
+  // Confirm save
+  const handleConfirmSave = useCallback(() => {
+    // Filter out deleted items
+    const remainingItems = existingItems.filter(item => !deletedItemIds.has(item.id));
+    
     // Convert new rows to AnalysisItems
     const newItems: AnalysisItem[] = newRows
-      .filter(row => row.name) // Only include rows with a class selected
+      .filter(row => row.name)
       .map(row => {
         const category = CLASS_TO_CATEGORY_MAP[row.name];
-        const id = generateNextId(row.name, [...existingItems]);
+        const id = generateNextId(row.name, [...remainingItems]);
         
         return {
           id,
@@ -189,23 +267,23 @@ export const AWPEditModal = ({
         };
       });
 
-    // Combine existing and new items
-    const allItems = [...existingItems, ...newItems];
+    const allItems = [...remainingItems, ...newItems];
     onUpdateItems(allItems);
+    setShowSaveConfirmation(false);
     onClose();
-  }, [existingItems, newRows, onUpdateItems, onClose]);
+  }, [existingItems, deletedItemIds, newRows, onUpdateItems, onClose]);
 
   // Get size display for existing item
   const getItemSizeDisplay = (item: AnalysisItem) => {
     const sqft = item.areaSqft || (item as any)?.area_sqft;
-    return sqft ? `${Math.round(sqft)} sqft` : "-";
+    return sqft ? `${Math.round(sqft)} ft²` : "-";
   };
 
   // Get pipe display for existing item
   const getItemPipeDisplay = (item: AnalysisItem) => {
     const params = item.additionalParameters as any;
     if (params?.pipeDiameterInches) {
-      return `${params.pipeDiameterInches}" / ${Math.round(params.pipeDiameterMM || 0)}mm`;
+      return `${params.pipeDiameterInches}"`;
     }
     return "-";
   };
@@ -222,78 +300,78 @@ export const AWPEditModal = ({
             {/* Left Pane - Existing Items Table */}
             <div className="w-3/5 flex flex-col border rounded-lg overflow-hidden">
               <div className="p-2 border-b bg-muted/50 text-sm font-medium">
-                Existing Items ({existingItems.length})
+                Existing Items ({visibleExistingItems.length})
               </div>
-              <ScrollArea className="flex-1">
+              <div className="flex-1 overflow-auto">
                 <Table>
-                  <TableHeader>
+                  <TableHeader className="sticky top-0 bg-background z-10">
                     <TableRow>
-                      <TableHead className="w-[140px]">Name</TableHead>
-                      <TableHead className="w-[160px]">Type</TableHead>
-                      <TableHead className="w-[90px]">ID</TableHead>
-                      <TableHead className="w-[80px]">Floor</TableHead>
-                      {hasAssets && <TableHead className="w-[90px]">Size</TableHead>}
-                      {hasWaterSystems && <TableHead className="w-[120px]">Pipe Ø</TableHead>}
-                      <TableHead className="w-[80px]">Actions</TableHead>
+                      <TableHead className="w-[140px] py-2 text-xs">Name</TableHead>
+                      <TableHead className="w-[160px] py-2 text-xs">Type</TableHead>
+                      <TableHead className="w-[90px] py-2 text-xs">ID</TableHead>
+                      <TableHead className="w-[60px] py-2 text-xs">Floor</TableHead>
+                      {hasAssets && <TableHead className="w-[70px] py-2 text-xs">Size</TableHead>}
+                      {hasWaterSystems && <TableHead className="w-[60px] py-2 text-xs">Pipe Ø</TableHead>}
+                      <TableHead className="w-[70px] py-2 text-xs">Actions</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {existingItems.map((item) => (
-                      <TableRow key={item.id}>
-                        <TableCell className="py-2">
-                          <span className="text-sm truncate block max-w-[130px]" title={item.areaName}>
+                    {visibleExistingItems.map((item) => (
+                      <TableRow key={item.id} className="h-8">
+                        <TableCell className="py-1 px-2">
+                          <span className="text-xs truncate block max-w-[130px]" title={item.areaName}>
                             {item.areaName || "-"}
                           </span>
                         </TableCell>
-                        <TableCell className="py-2">
+                        <TableCell className="py-1 px-2">
                           <span className="text-xs truncate block max-w-[150px]" title={item.name}>
                             {item.name}
                           </span>
                         </TableCell>
-                        <TableCell className="py-2 font-mono text-xs">{item.id}</TableCell>
-                        <TableCell className="py-2 text-sm">{item.floor || "-"}</TableCell>
+                        <TableCell className="py-1 px-2 font-mono text-xs">{item.id}</TableCell>
+                        <TableCell className="py-1 px-2 text-xs">{item.floor || "-"}</TableCell>
                         {hasAssets && (
-                          <TableCell className="py-2 text-sm">
+                          <TableCell className="py-1 px-2 text-xs">
                             {isAssetClass(item.name) ? getItemSizeDisplay(item) : "-"}
                           </TableCell>
                         )}
                         {hasWaterSystems && (
-                          <TableCell className="py-2 text-sm">
+                          <TableCell className="py-1 px-2 text-xs">
                             {isWaterSystemClass(item.name) ? getItemPipeDisplay(item) : "-"}
                           </TableCell>
                         )}
-                        <TableCell className="py-2">
-                          <div className="flex gap-1">
+                        <TableCell className="py-1 px-2">
+                          <div className="flex gap-0.5">
                             <Button
                               variant="ghost"
                               size="icon"
-                              className="h-7 w-7"
+                              className="h-6 w-6"
                               onClick={() => setEditingItem(item)}
                             >
-                              <Pencil className="h-3.5 w-3.5" />
+                              <Pencil className="h-3 w-3" />
                             </Button>
                             <Button
                               variant="ghost"
                               size="icon"
-                              className="h-7 w-7 text-destructive hover:text-destructive"
-                              onClick={() => setDeletingItemId(item.id)}
+                              className="h-6 w-6 text-destructive hover:text-destructive"
+                              onClick={() => handleDelete(item.id)}
                             >
-                              <Trash2 className="h-3.5 w-3.5" />
+                              <Trash2 className="h-3 w-3" />
                             </Button>
                           </div>
                         </TableCell>
                       </TableRow>
                     ))}
-                    {existingItems.length === 0 && (
+                    {visibleExistingItems.length === 0 && (
                       <TableRow>
-                        <TableCell colSpan={hasAssets && hasWaterSystems ? 7 : hasAssets || hasWaterSystems ? 6 : 5} className="text-center py-8 text-muted-foreground">
+                        <TableCell colSpan={hasAssets && hasWaterSystems ? 7 : hasAssets || hasWaterSystems ? 6 : 5} className="text-center py-8 text-muted-foreground text-xs">
                           No existing items
                         </TableCell>
                       </TableRow>
                     )}
                   </TableBody>
                 </Table>
-              </ScrollArea>
+              </div>
             </div>
 
             {/* Right Pane - Add New Items */}
@@ -324,32 +402,73 @@ export const AWPEditModal = ({
                           </Button>
                         </div>
                         
-                        {/* Type */}
-                        <Select value={row.name} onValueChange={(v) => updateNewRow(row.tempId, "name", v)}>
-                          <SelectTrigger className="h-8 text-sm">
-                            <SelectValue placeholder="Select type..." />
-                          </SelectTrigger>
-                          <SelectContent className="bg-background">
-                            <SelectGroup>
-                              <SelectLabel className="font-semibold text-foreground">Asset</SelectLabel>
-                              {CLASSES_BY_CATEGORY.Asset.map((cls) => (
-                                <SelectItem key={cls} value={cls} className="text-sm">{cls}</SelectItem>
-                              ))}
-                            </SelectGroup>
-                            <SelectGroup>
-                              <SelectLabel className="font-semibold text-foreground">Water System</SelectLabel>
-                              {CLASSES_BY_CATEGORY["Water System"].map((cls) => (
-                                <SelectItem key={cls} value={cls} className="text-sm">{cls}</SelectItem>
-                              ))}
-                            </SelectGroup>
-                            <SelectGroup>
-                              <SelectLabel className="font-semibold text-foreground">Process</SelectLabel>
-                              {CLASSES_BY_CATEGORY.Process.map((cls) => (
-                                <SelectItem key={cls} value={cls} className="text-sm">{cls}</SelectItem>
-                              ))}
-                            </SelectGroup>
-                          </SelectContent>
-                        </Select>
+                        {/* Type - Searchable Combobox */}
+                        <Popover open={openCombobox === row.tempId} onOpenChange={(open) => setOpenCombobox(open ? row.tempId : null)}>
+                          <PopoverTrigger asChild>
+                            <Button
+                              variant="outline"
+                              role="combobox"
+                              aria-expanded={openCombobox === row.tempId}
+                              className="w-full justify-between h-8 text-sm font-normal"
+                            >
+                              {row.name || "Select type..."}
+                              <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                            </Button>
+                          </PopoverTrigger>
+                          <PopoverContent className="w-[300px] p-0 bg-background" align="start">
+                            <Command>
+                              <CommandInput placeholder="Search type..." className="h-9" />
+                              <CommandList>
+                                <CommandEmpty>No type found.</CommandEmpty>
+                                <CommandGroup heading="Asset">
+                                  {CLASSES_BY_CATEGORY.Asset.map((cls) => (
+                                    <CommandItem
+                                      key={cls}
+                                      value={cls}
+                                      onSelect={() => {
+                                        updateNewRow(row.tempId, "name", cls);
+                                        setOpenCombobox(null);
+                                      }}
+                                    >
+                                      {cls}
+                                      <Check className={cn("ml-auto h-4 w-4", row.name === cls ? "opacity-100" : "opacity-0")} />
+                                    </CommandItem>
+                                  ))}
+                                </CommandGroup>
+                                <CommandGroup heading="Water System">
+                                  {CLASSES_BY_CATEGORY["Water System"].map((cls) => (
+                                    <CommandItem
+                                      key={cls}
+                                      value={cls}
+                                      onSelect={() => {
+                                        updateNewRow(row.tempId, "name", cls);
+                                        setOpenCombobox(null);
+                                      }}
+                                    >
+                                      {cls}
+                                      <Check className={cn("ml-auto h-4 w-4", row.name === cls ? "opacity-100" : "opacity-0")} />
+                                    </CommandItem>
+                                  ))}
+                                </CommandGroup>
+                                <CommandGroup heading="Process">
+                                  {CLASSES_BY_CATEGORY.Process.map((cls) => (
+                                    <CommandItem
+                                      key={cls}
+                                      value={cls}
+                                      onSelect={() => {
+                                        updateNewRow(row.tempId, "name", cls);
+                                        setOpenCombobox(null);
+                                      }}
+                                    >
+                                      {cls}
+                                      <Check className={cn("ml-auto h-4 w-4", row.name === cls ? "opacity-100" : "opacity-0")} />
+                                    </CommandItem>
+                                  ))}
+                                </CommandGroup>
+                              </CommandList>
+                            </Command>
+                          </PopoverContent>
+                        </Popover>
 
                         {/* Name & Floor in row */}
                         <div className="grid grid-cols-2 gap-2">
@@ -391,8 +510,8 @@ export const AWPEditModal = ({
                               onValueChange={(v) => v && setAreaUnit(v as AreaUnit)}
                               className="border rounded-md"
                             >
-                              <ToggleGroupItem value="sqft" className="px-2 text-xs h-8">sqft</ToggleGroupItem>
-                              <ToggleGroupItem value="sqm" className="px-2 text-xs h-8">sqm</ToggleGroupItem>
+                              <ToggleGroupItem value="sqft" className="px-2 text-xs h-8">ft²</ToggleGroupItem>
+                              <ToggleGroupItem value="sqm" className="px-2 text-xs h-8">m²</ToggleGroupItem>
                             </ToggleGroup>
                           </div>
                         )}
@@ -436,7 +555,7 @@ export const AWPEditModal = ({
             <Button variant="outline" onClick={onClose}>
               Cancel
             </Button>
-            <Button onClick={handleSave}>
+            <Button onClick={handleSaveClick}>
               Save Changes
             </Button>
           </div>
@@ -454,19 +573,50 @@ export const AWPEditModal = ({
         />
       )}
 
-      {/* Delete Confirmation Dialog */}
-      <AlertDialog open={!!deletingItemId} onOpenChange={(open) => !open && setDeletingItemId(null)}>
+      {/* Save Confirmation Dialog */}
+      <AlertDialog open={showSaveConfirmation} onOpenChange={setShowSaveConfirmation}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Delete Item?</AlertDialogTitle>
-            <AlertDialogDescription>
-              This will permanently remove this item from the list. This action cannot be undone.
+            <AlertDialogTitle>Confirm Changes</AlertDialogTitle>
+            <AlertDialogDescription asChild>
+              <div className="space-y-3 text-sm">
+                {changesSummary?.edited.length ? (
+                  <div>
+                    <span className="font-medium text-foreground">Edited ({changesSummary.edited.length}):</span>
+                    <ul className="list-disc list-inside mt-1 text-muted-foreground">
+                      {changesSummary.edited.map((item, i) => (
+                        <li key={i} className="truncate">{item.areaName || item.name} ({item.id})</li>
+                      ))}
+                    </ul>
+                  </div>
+                ) : null}
+                {changesSummary?.removed.length ? (
+                  <div>
+                    <span className="font-medium text-destructive">Removed ({changesSummary.removed.length}):</span>
+                    <ul className="list-disc list-inside mt-1 text-muted-foreground">
+                      {changesSummary.removed.map((item, i) => (
+                        <li key={i} className="truncate">{item.areaName || item.name} ({item.id})</li>
+                      ))}
+                    </ul>
+                  </div>
+                ) : null}
+                {changesSummary?.added.length ? (
+                  <div>
+                    <span className="font-medium text-green-600">Added ({changesSummary.added.length}):</span>
+                    <ul className="list-disc list-inside mt-1 text-muted-foreground">
+                      {changesSummary.added.map((item, i) => (
+                        <li key={i} className="truncate">{item.areaName || item.name}</li>
+                      ))}
+                    </ul>
+                  </div>
+                ) : null}
+              </div>
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={handleDeleteConfirm} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
-              Delete
+            <AlertDialogAction onClick={handleConfirmSave}>
+              Confirm
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
