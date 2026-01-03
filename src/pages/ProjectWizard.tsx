@@ -1106,22 +1106,7 @@ const ProjectWizardContent = () => {
 
               <AccordionItem value="assets-systems" className="border rounded-lg px-6">
                 <AccordionTrigger className="text-lg font-semibold">
-                  <div className="flex items-center gap-2">
-                    Assets, Water Systems & Processes
-                    {analysisItems.length > 0 && (
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setShowAWPEditModal(true);
-                        }}
-                        className="ml-2 text-xs"
-                      >
-                        Edit AWP
-                      </Button>
-                    )}
-                  </div>
+                  Assets, Water Systems & Processes
                 </AccordionTrigger>
                 <AccordionContent className="space-y-8 pt-4">
                   {/* Google Drive Connection - for drawing analysis */}
@@ -1144,6 +1129,17 @@ const ProjectWizardContent = () => {
                       onBeforeOAuthRedirect={handleBeforeOAuthRedirect}
                       mode="drive"
                     />
+                    
+                    {/* Edit List Button - below Google Drive */}
+                    {analysisItems.length > 0 && (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setShowAWPEditModal(true)}
+                      >
+                        Edit List
+                      </Button>
+                    )}
                   </div>
 
                   {/* Risk Tolerance Selector - applies to all AWP sections */}
