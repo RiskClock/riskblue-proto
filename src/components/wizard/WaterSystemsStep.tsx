@@ -6,7 +6,7 @@ import { Label } from "@/components/ui/label";
 import { Info, Droplets } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { calculateWaterSystemDuration } from "@/lib/durationCalculator";
+import { calculateWaterSystemDuration, calculateSystemOrAssetDates } from "@/lib/durationCalculator";
 import { calculateTieredControlCost, parseDurationMonths, PricingTier } from "@/lib/costCalculator";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
@@ -588,6 +588,8 @@ export const WaterSystemsStep = ({
             });
           });
           
+          const durationDetails = calculateSystemOrAssetDates(system.name, data);
+          
           return (
             <ExpandableListItem
               key={system.id}
@@ -598,6 +600,7 @@ export const WaterSystemsStep = ({
               riskPoints={system.risk_level_points}
               threat={system.threat}
               duration={calculateWaterSystemDuration(system.name, data)}
+              durationDetails={durationDetails}
               cost={system.cost}
               instanceCount={instances.length}
               instances={instances}

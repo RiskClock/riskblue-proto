@@ -18,6 +18,7 @@ import { CriticalAssetsStep } from "@/components/wizard/CriticalAssetsStep";
 import { WaterSystemsStep } from "@/components/wizard/WaterSystemsStep";
 
 import { ProcessesStep } from "@/components/wizard/ProcessesStep";
+import { AWPEditModal } from "@/components/wizard/AWPEditModal";
 import { MitigationResponsePlanStep } from "@/components/wizard/MitigationResponsePlanStep";
 import { WaterMitigationGuidelinesStep } from "@/components/wizard/WaterMitigationGuidelinesStep";
 import { CollaboratorManagementStep } from "@/components/wizard/CollaboratorManagementStep";
@@ -89,6 +90,9 @@ const ProjectWizardContent = () => {
   
   // Track if user has manually overridden control selections
   const [hasManualOverride, setHasManualOverride] = useState(false);
+  
+  // AWP Edit Modal state
+  const [showAWPEditModal, setShowAWPEditModal] = useState(false);
 
   // Normalize asset name for counting (must match CriticalAssetsStep logic)
   const normalizeAssetName = (name: string): string => {
@@ -1102,7 +1106,22 @@ const ProjectWizardContent = () => {
 
               <AccordionItem value="assets-systems" className="border rounded-lg px-6">
                 <AccordionTrigger className="text-lg font-semibold">
-                  Assets, Water Systems & Processes
+                  <div className="flex items-center gap-2">
+                    Assets, Water Systems & Processes
+                    {analysisItems.length > 0 && (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setShowAWPEditModal(true);
+                        }}
+                        className="ml-2 text-xs"
+                      >
+                        Edit AWP
+                      </Button>
+                    )}
+                  </div>
                 </AccordionTrigger>
                 <AccordionContent className="space-y-8 pt-4">
                   {/* Google Drive Connection - for drawing analysis */}
@@ -1350,6 +1369,24 @@ const ProjectWizardContent = () => {
       <ProviderSelectionDialog 
         open={showProviderDialog} 
         onOpenChange={setShowProviderDialog} 
+      />
+      
+      <AWPEditModal
+        isOpen={showAWPEditModal}
+        onClose={() => setShowAWPEditModal(false)}
+        analysisItems={analysisItems}
+        onUpdateItems={(items) => {
+          setAnalysisItems(items);
+          // Clear existing selections so they reinitialize with updated items
+          updateFields({
+            selectedAssetInstances: [],
+            selectedAssetControls: [],
+            selectedWaterSystemInstances: [],
+            selectedWaterSystemControls: [],
+            selectedProcessInstances: [],
+            selectedProcessControls: [],
+          });
+        }}
       />
     </div>
   );
