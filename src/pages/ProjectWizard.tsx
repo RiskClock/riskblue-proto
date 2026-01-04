@@ -22,18 +22,20 @@ import { AWPEditModal } from "@/components/wizard/AWPEditModal";
 import { MitigationResponsePlanStep } from "@/components/wizard/MitigationResponsePlanStep";
 import { WaterMitigationGuidelinesStep } from "@/components/wizard/WaterMitigationGuidelinesStep";
 import { CollaboratorManagementStep } from "@/components/wizard/CollaboratorManagementStep";
+import { CollaboratorsModal } from "@/components/wizard/CollaboratorsModal";
 import { RiskToleranceSelector, RiskTolerance } from "@/components/wizard/RiskToleranceSelector";
 import { ProposalsStep } from "@/components/wizard/ProposalsStep";
 import { ImplementationScheduleStep } from "@/components/wizard/ImplementationScheduleStep";
 import { ProjectFilesUpload, DriveFileInfo } from "@/components/wizard/ProjectFilesUpload";
 import { ResponsePlanUploadChat } from "@/components/ResponsePlanUploadChat";
-import { Download, LogOut, FileText, Loader2 } from "lucide-react";
+import { Download, LogOut, FileText, Loader2, Users } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { ProviderSelectionDialog } from "@/components/ProviderSelectionDialog";
 import { Label } from "@/components/ui/label";
 import { WaterRiskReport } from "@/components/reports/WaterRiskReport";
 import { generateReportFilename } from "@/lib/reportGenerator";
+import { useProjectRole } from "@/hooks/useProjectRole";
 import { 
   AnalysisItem, 
   extractSelectedAssets, 
@@ -68,6 +70,9 @@ const ProjectWizardContent = () => {
     isNewProject 
   } = useProject();
   
+  // Check user's role for this project
+  const { isAdmin, loading: roleLoading } = useProjectRole(id);
+  
   const [activeTab, setActiveTab] = useState("guideline");
   const [loading, setLoading] = useState(false);
   const [isProcessingWebhook, setIsProcessingWebhook] = useState(false);
@@ -76,6 +81,7 @@ const ProjectWizardContent = () => {
   const justRestoredFromCache = useRef(false);
   const [showProviderDialog, setShowProviderDialog] = useState(false);
   const [showGuidelinesDialog, setShowGuidelinesDialog] = useState(false);
+  const [showCollaboratorsModal, setShowCollaboratorsModal] = useState(false);
   const [analysisItems, setAnalysisItems] = useState<AnalysisItem[]>([]);
   
   // Lifted Google Drive state (shared between ProjectFilesUpload and MitigationControlsStep)
@@ -1045,10 +1051,21 @@ const ProjectWizardContent = () => {
       <div className="container mx-auto px-6 pb-8">
         <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
           <div className="sticky top-[73px] z-10 bg-background pt-8 pb-4 -mx-6 px-6 border-b">
-            <div className="flex items-center gap-6 mb-2">
+            <div className="flex items-center gap-4 mb-2">
               <h2 className="text-md font-medium text-foreground">
                 {projectData.name || "Unnamed Project"}
               </h2>
+              {isAdmin && id && id !== "new" && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setShowCollaboratorsModal(true)}
+                  className="flex items-center gap-2"
+                >
+                  <Users className="h-4 w-4" />
+                  Manage Collaborators
+                </Button>
+              )}
             </div>
             <TabsList className="w-full justify-start">
               <TabsTrigger value="guideline">
@@ -1382,6 +1399,14 @@ const ProjectWizardContent = () => {
           setDriveAccessToken(accessToken);
           setDriveConnected(true);
         }}
+      />
+      
+      {/* Collaborators Modal */}
+      <CollaboratorsModal
+        isOpen={showCollaboratorsModal}
+        onClose={() => setShowCollaboratorsModal(false)}
+        projectId={id || ""}
+        projectName={projectData.name || "Untitled Project"}
       />
     </div>
   );
