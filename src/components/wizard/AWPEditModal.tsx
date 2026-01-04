@@ -1,4 +1,4 @@
-import { useState, useMemo, useCallback } from "react";
+import { useState, useMemo, useCallback, useEffect } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
@@ -8,9 +8,11 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { Plus, Trash2, Pencil, ChevronsUpDown, Check } from "lucide-react";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { Plus, Trash2, Pencil, ChevronsUpDown, Check, ChevronDown, FolderOpen } from "lucide-react";
 import { AnalysisItem } from "@/lib/analysisItemMapper";
 import { AWPItemEditModal } from "./AWPItemEditModal";
+import { RepositoryConnectionDialog } from "./RepositoryConnectionDialog";
 import { cn } from "@/lib/utils";
 import {
   CLASSES_BY_CATEGORY,
@@ -24,11 +26,18 @@ import {
   mmToInches,
 } from "@/lib/awpIdGenerator";
 
+import googleDriveIcon from "@/assets/icon_googledrive.png";
+import procoreIcon from "@/assets/icon_procore.png";
+
 interface AWPEditModalProps {
   isOpen: boolean;
   onClose: () => void;
   analysisItems: AnalysisItem[];
   onUpdateItems: (items: AnalysisItem[]) => void;
+  projectId: string;
+  projectName?: string;
+  onBeforeOAuthRedirect?: () => Promise<void>;
+  onFilesLoaded?: (files: any[], accessToken: string) => void;
 }
 
 type AreaUnit = "sqft" | "sqm";
@@ -56,6 +65,10 @@ export const AWPEditModal = ({
   onClose,
   analysisItems,
   onUpdateItems,
+  projectId,
+  projectName,
+  onBeforeOAuthRedirect,
+  onFilesLoaded,
 }: AWPEditModalProps) => {
   // Original items for comparison
   const [originalItems, setOriginalItems] = useState<AnalysisItem[]>([]);
@@ -66,7 +79,7 @@ export const AWPEditModal = ({
   // Track deleted item IDs
   const [deletedItemIds, setDeletedItemIds] = useState<Set<string>>(new Set());
   
-  // New items being added (right pane)
+  // New items being added (right pane) - now as table rows
   const [newRows, setNewRows] = useState<NewRowItem[]>([]);
   
   // Edit modal state
@@ -76,15 +89,19 @@ export const AWPEditModal = ({
   const [showSaveConfirmation, setShowSaveConfirmation] = useState(false);
   const [changesSummary, setChangesSummary] = useState<ChangesSummary | null>(null);
   
-  // Units for right pane
+  // Units for new rows
   const [areaUnit, setAreaUnit] = useState<AreaUnit>("sqft");
   const [pipeUnit, setPipeUnit] = useState<PipeUnit>("in");
   
   // Combobox state for new rows
   const [openCombobox, setOpenCombobox] = useState<string | null>(null);
+  
+  // Repository connection dialog
+  const [showRepositoryDialog, setShowRepositoryDialog] = useState(false);
+  const [repositoryType, setRepositoryType] = useState<"google-drive" | "procore" | null>(null);
 
   // Initialize when modal opens
-  useMemo(() => {
+  useEffect(() => {
     if (isOpen) {
       setOriginalItems(analysisItems.map(item => ({ ...item })));
       setExistingItems(analysisItems.map(item => ({ ...item })));
@@ -97,11 +114,13 @@ export const AWPEditModal = ({
   const visibleExistingItems = useMemo(() => 
     existingItems.filter(item => !deletedItemIds.has(item.id)), [existingItems, deletedItemIds]);
 
-  // Check if any existing item is an Asset or Water System for column visibility
+  // Check if any item needs Size or Pipe column
   const hasAssets = useMemo(() => 
-    visibleExistingItems.some(item => isAssetClass(item.name)), [visibleExistingItems]);
+    visibleExistingItems.some(item => isAssetClass(item.name)) || newRows.some(row => isAssetClass(row.name)), 
+    [visibleExistingItems, newRows]);
   const hasWaterSystems = useMemo(() => 
-    visibleExistingItems.some(item => isWaterSystemClass(item.name)), [visibleExistingItems]);
+    visibleExistingItems.some(item => isWaterSystemClass(item.name)) || newRows.some(row => isWaterSystemClass(row.name)), 
+    [visibleExistingItems, newRows]);
 
   // All class options for combobox
   const allClassOptions = useMemo(() => [
@@ -110,7 +129,7 @@ export const AWPEditModal = ({
     ...CLASSES_BY_CATEGORY.Process.map(cls => ({ value: cls, category: "Process" })),
   ], []);
 
-  // Add new row to right pane
+  // Add new row
   const handleAddRow = useCallback(() => {
     const newRow: NewRowItem = {
       tempId: `NEW-${Date.now()}`,
@@ -288,12 +307,29 @@ export const AWPEditModal = ({
     return "-";
   };
 
+  // Handle repository files loaded
+  const handleRepositoryFilesLoaded = useCallback((files: any[], accessToken: string) => {
+    setShowRepositoryDialog(false);
+    setRepositoryType(null);
+    if (onFilesLoaded) {
+      onFilesLoaded(files, accessToken);
+    }
+  }, [onFilesLoaded]);
+
+  // Determine column count for colSpan
+  const getColSpan = () => {
+    let cols = 5; // Name, Type, ID, Floor, Actions
+    if (hasAssets) cols++;
+    if (hasWaterSystems) cols++;
+    return cols;
+  };
+
   return (
     <>
       <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
         <DialogContent className="max-w-7xl h-[85vh] flex flex-col">
           <DialogHeader>
-            <DialogTitle>Edit List</DialogTitle>
+            <DialogTitle>Assets, Water Systems, and Processes List</DialogTitle>
           </DialogHeader>
           
           <div className="flex-1 flex gap-4 overflow-hidden">
@@ -364,7 +400,7 @@ export const AWPEditModal = ({
                     ))}
                     {visibleExistingItems.length === 0 && (
                       <TableRow>
-                        <TableCell colSpan={hasAssets && hasWaterSystems ? 7 : hasAssets || hasWaterSystems ? 6 : 5} className="text-center py-8 text-muted-foreground text-xs">
+                        <TableCell colSpan={getColSpan()} className="text-center py-8 text-muted-foreground text-xs">
                           No existing items
                         </TableCell>
                       </TableRow>
@@ -376,177 +412,222 @@ export const AWPEditModal = ({
 
             {/* Right Pane - Add New Items */}
             <div className="w-2/5 flex flex-col border rounded-lg overflow-hidden">
-              <div className="p-2 border-b bg-muted/50 flex items-center justify-between">
-                <span className="text-sm font-medium">Add New Items</span>
-                <Button onClick={handleAddRow} size="sm" variant="outline">
-                  <Plus className="w-4 h-4 mr-1" /> Add Row
-                </Button>
+              <div className="p-2 border-b bg-muted/50 text-sm font-medium">
+                Add New Items
               </div>
-              <ScrollArea className="flex-1 p-3">
-                <div className="space-y-4">
-                  {newRows.map((row) => {
-                    const isAsset = row.name ? isAssetClass(row.name) : false;
-                    const isWaterSystem = row.name ? isWaterSystemClass(row.name) : false;
-                    
-                    return (
-                      <div key={row.tempId} className="p-3 border rounded-lg space-y-3 bg-card">
-                        <div className="flex justify-between items-start">
-                          <span className="text-xs text-muted-foreground">New Item</span>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-6 w-6 text-destructive hover:text-destructive"
-                            onClick={() => deleteNewRow(row.tempId)}
-                          >
-                            <Trash2 className="h-3.5 w-3.5" />
-                          </Button>
-                        </div>
-                        
-                        {/* Type - Searchable Combobox */}
-                        <Popover open={openCombobox === row.tempId} onOpenChange={(open) => setOpenCombobox(open ? row.tempId : null)}>
-                          <PopoverTrigger asChild>
+              
+              <div className="flex-1 overflow-auto">
+                <Table>
+                  <TableHeader className="sticky top-0 bg-background z-10">
+                    <TableRow>
+                      <TableHead className="w-[120px] py-2 text-xs">Type</TableHead>
+                      <TableHead className="w-[80px] py-2 text-xs">Name</TableHead>
+                      <TableHead className="w-[50px] py-2 text-xs">Floor</TableHead>
+                      {hasAssets && <TableHead className="w-[60px] py-2 text-xs">Size</TableHead>}
+                      {hasWaterSystems && <TableHead className="w-[50px] py-2 text-xs">Pipe</TableHead>}
+                      <TableHead className="w-[40px] py-2 text-xs"></TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {newRows.map((row) => {
+                      const isAsset = row.name ? isAssetClass(row.name) : false;
+                      const isWaterSystem = row.name ? isWaterSystemClass(row.name) : false;
+                      
+                      return (
+                        <TableRow key={row.tempId} className="h-8">
+                          {/* Type - Searchable Combobox */}
+                          <TableCell className="py-1 px-1">
+                            <Popover open={openCombobox === row.tempId} onOpenChange={(open) => setOpenCombobox(open ? row.tempId : null)}>
+                              <PopoverTrigger asChild>
+                                <Button
+                                  variant="outline"
+                                  role="combobox"
+                                  className="w-full justify-between h-6 text-xs font-normal px-2"
+                                >
+                                  <span className="truncate max-w-[90px]">{row.name || "Select..."}</span>
+                                  <ChevronsUpDown className="ml-1 h-3 w-3 shrink-0 opacity-50" />
+                                </Button>
+                              </PopoverTrigger>
+                              <PopoverContent className="w-[280px] p-0 bg-background" align="start">
+                                <Command>
+                                  <CommandInput placeholder="Search type..." className="h-8 text-xs" />
+                                  <CommandList>
+                                    <CommandEmpty>No type found.</CommandEmpty>
+                                    <CommandGroup heading="Asset">
+                                      {CLASSES_BY_CATEGORY.Asset.map((cls) => (
+                                        <CommandItem
+                                          key={cls}
+                                          value={cls}
+                                          onSelect={() => {
+                                            updateNewRow(row.tempId, "name", cls);
+                                            setOpenCombobox(null);
+                                          }}
+                                          className="text-xs"
+                                        >
+                                          {cls}
+                                          <Check className={cn("ml-auto h-3 w-3", row.name === cls ? "opacity-100" : "opacity-0")} />
+                                        </CommandItem>
+                                      ))}
+                                    </CommandGroup>
+                                    <CommandGroup heading="Water System">
+                                      {CLASSES_BY_CATEGORY["Water System"].map((cls) => (
+                                        <CommandItem
+                                          key={cls}
+                                          value={cls}
+                                          onSelect={() => {
+                                            updateNewRow(row.tempId, "name", cls);
+                                            setOpenCombobox(null);
+                                          }}
+                                          className="text-xs"
+                                        >
+                                          {cls}
+                                          <Check className={cn("ml-auto h-3 w-3", row.name === cls ? "opacity-100" : "opacity-0")} />
+                                        </CommandItem>
+                                      ))}
+                                    </CommandGroup>
+                                    <CommandGroup heading="Process">
+                                      {CLASSES_BY_CATEGORY.Process.map((cls) => (
+                                        <CommandItem
+                                          key={cls}
+                                          value={cls}
+                                          onSelect={() => {
+                                            updateNewRow(row.tempId, "name", cls);
+                                            setOpenCombobox(null);
+                                          }}
+                                          className="text-xs"
+                                        >
+                                          {cls}
+                                          <Check className={cn("ml-auto h-3 w-3", row.name === cls ? "opacity-100" : "opacity-0")} />
+                                        </CommandItem>
+                                      ))}
+                                    </CommandGroup>
+                                  </CommandList>
+                                </Command>
+                              </PopoverContent>
+                            </Popover>
+                          </TableCell>
+                          
+                          {/* Name */}
+                          <TableCell className="py-1 px-1">
+                            <Input
+                              className="h-6 text-xs px-2"
+                              placeholder="Name"
+                              value={row.areaName}
+                              onChange={(e) => updateNewRow(row.tempId, "areaName", e.target.value)}
+                            />
+                          </TableCell>
+                          
+                          {/* Floor */}
+                          <TableCell className="py-1 px-1">
+                            <Input
+                              className="h-6 text-xs px-2"
+                              placeholder="Fl"
+                              value={row.floor}
+                              onChange={(e) => updateNewRow(row.tempId, "floor", e.target.value)}
+                            />
+                          </TableCell>
+                          
+                          {/* Size (Assets) */}
+                          {hasAssets && (
+                            <TableCell className="py-1 px-1">
+                              {isAsset ? (
+                                <Input
+                                  type="number"
+                                  className="h-6 text-xs px-2"
+                                  placeholder="ft²"
+                                  value={getNewRowAreaDisplay(row)}
+                                  onChange={(e) => handleNewRowAreaChange(row.tempId, e.target.value)}
+                                />
+                              ) : (
+                                <span className="text-xs text-muted-foreground">-</span>
+                              )}
+                            </TableCell>
+                          )}
+                          
+                          {/* Pipe Diameter (Water Systems) */}
+                          {hasWaterSystems && (
+                            <TableCell className="py-1 px-1">
+                              {isWaterSystem ? (
+                                <Input
+                                  type="number"
+                                  className="h-6 text-xs px-2"
+                                  placeholder="in"
+                                  value={getNewRowPipeDisplay(row)}
+                                  onChange={(e) => handleNewRowPipeChange(row.tempId, e.target.value)}
+                                />
+                              ) : (
+                                <span className="text-xs text-muted-foreground">-</span>
+                              )}
+                            </TableCell>
+                          )}
+                          
+                          {/* Delete */}
+                          <TableCell className="py-1 px-1">
                             <Button
-                              variant="outline"
-                              role="combobox"
-                              aria-expanded={openCombobox === row.tempId}
-                              className="w-full justify-between h-8 text-sm font-normal"
+                              variant="ghost"
+                              size="icon"
+                              className="h-6 w-6 text-destructive hover:text-destructive"
+                              onClick={() => deleteNewRow(row.tempId)}
                             >
-                              {row.name || "Select type..."}
-                              <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                              <Trash2 className="h-3 w-3" />
                             </Button>
-                          </PopoverTrigger>
-                          <PopoverContent className="w-[300px] p-0 bg-background" align="start">
-                            <Command>
-                              <CommandInput placeholder="Search type..." className="h-9" />
-                              <CommandList>
-                                <CommandEmpty>No type found.</CommandEmpty>
-                                <CommandGroup heading="Asset">
-                                  {CLASSES_BY_CATEGORY.Asset.map((cls) => (
-                                    <CommandItem
-                                      key={cls}
-                                      value={cls}
-                                      onSelect={() => {
-                                        updateNewRow(row.tempId, "name", cls);
-                                        setOpenCombobox(null);
-                                      }}
-                                    >
-                                      {cls}
-                                      <Check className={cn("ml-auto h-4 w-4", row.name === cls ? "opacity-100" : "opacity-0")} />
-                                    </CommandItem>
-                                  ))}
-                                </CommandGroup>
-                                <CommandGroup heading="Water System">
-                                  {CLASSES_BY_CATEGORY["Water System"].map((cls) => (
-                                    <CommandItem
-                                      key={cls}
-                                      value={cls}
-                                      onSelect={() => {
-                                        updateNewRow(row.tempId, "name", cls);
-                                        setOpenCombobox(null);
-                                      }}
-                                    >
-                                      {cls}
-                                      <Check className={cn("ml-auto h-4 w-4", row.name === cls ? "opacity-100" : "opacity-0")} />
-                                    </CommandItem>
-                                  ))}
-                                </CommandGroup>
-                                <CommandGroup heading="Process">
-                                  {CLASSES_BY_CATEGORY.Process.map((cls) => (
-                                    <CommandItem
-                                      key={cls}
-                                      value={cls}
-                                      onSelect={() => {
-                                        updateNewRow(row.tempId, "name", cls);
-                                        setOpenCombobox(null);
-                                      }}
-                                    >
-                                      {cls}
-                                      <Check className={cn("ml-auto h-4 w-4", row.name === cls ? "opacity-100" : "opacity-0")} />
-                                    </CommandItem>
-                                  ))}
-                                </CommandGroup>
-                              </CommandList>
-                            </Command>
-                          </PopoverContent>
-                        </Popover>
-
-                        {/* Name & Floor in row */}
-                        <div className="grid grid-cols-2 gap-2">
-                          <Input
-                            className="h-8 text-sm"
-                            placeholder="Name"
-                            value={row.areaName}
-                            onChange={(e) => updateNewRow(row.tempId, "areaName", e.target.value)}
-                          />
-                          <Input
-                            className="h-8 text-sm"
-                            placeholder="Floor"
-                            value={row.floor}
-                            onChange={(e) => updateNewRow(row.tempId, "floor", e.target.value)}
-                          />
-                        </div>
-
-                        {/* Drawing Code */}
-                        <Input
-                          className="h-8 text-sm"
-                          placeholder="Drawing Code"
-                          value={row.drawingCode}
-                          onChange={(e) => updateNewRow(row.tempId, "drawingCode", e.target.value)}
-                        />
-
-                        {/* Size (Assets) */}
-                        {isAsset && (
-                          <div className="flex gap-2">
-                            <Input
-                              type="number"
-                              className="h-8 text-sm flex-1"
-                              placeholder="Size"
-                              value={getNewRowAreaDisplay(row)}
-                              onChange={(e) => handleNewRowAreaChange(row.tempId, e.target.value)}
-                            />
-                            <ToggleGroup
-                              type="single"
-                              value={areaUnit}
-                              onValueChange={(v) => v && setAreaUnit(v as AreaUnit)}
-                              className="border rounded-md"
-                            >
-                              <ToggleGroupItem value="sqft" className="px-2 text-xs h-8">ft²</ToggleGroupItem>
-                              <ToggleGroupItem value="sqm" className="px-2 text-xs h-8">m²</ToggleGroupItem>
-                            </ToggleGroup>
-                          </div>
-                        )}
-
-                        {/* Pipe Diameter (Water Systems) */}
-                        {isWaterSystem && (
-                          <div className="flex gap-2">
-                            <Input
-                              type="number"
-                              className="h-8 text-sm flex-1"
-                              placeholder="Pipe Diameter"
-                              value={getNewRowPipeDisplay(row)}
-                              onChange={(e) => handleNewRowPipeChange(row.tempId, e.target.value)}
-                            />
-                            <ToggleGroup
-                              type="single"
-                              value={pipeUnit}
-                              onValueChange={(v) => v && setPipeUnit(v as PipeUnit)}
-                              className="border rounded-md"
-                            >
-                              <ToggleGroupItem value="in" className="px-2 text-xs h-8">in</ToggleGroupItem>
-                              <ToggleGroupItem value="mm" className="px-2 text-xs h-8">mm</ToggleGroupItem>
-                            </ToggleGroup>
-                          </div>
-                        )}
-                      </div>
-                    );
-                  })}
-                  {newRows.length === 0 && (
-                    <div className="text-center py-8 text-muted-foreground text-sm">
-                      Click "Add Row" to add new items
-                    </div>
-                  )}
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })}
+                    {newRows.length === 0 && (
+                      <TableRow>
+                        <TableCell colSpan={hasAssets && hasWaterSystems ? 6 : hasAssets || hasWaterSystems ? 5 : 4} className="text-center py-6 text-muted-foreground text-xs">
+                          Click "Add Row" to add new items
+                        </TableCell>
+                      </TableRow>
+                    )}
+                  </TableBody>
+                </Table>
+                
+                {/* Add Row button at bottom of table */}
+                <div className="p-2 border-t">
+                  <Button onClick={handleAddRow} size="sm" variant="outline" className="w-full">
+                    <Plus className="w-3 h-3 mr-1" /> Add Row
+                  </Button>
                 </div>
-              </ScrollArea>
+              </div>
+              
+              {/* Docked Analyze Drawing Files section */}
+              <div className="p-3 border-t bg-muted/30">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-medium text-muted-foreground">Analyze Drawing Files</span>
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button variant="outline" size="sm" className="gap-1">
+                        <FolderOpen className="w-3.5 h-3.5" />
+                        Connect Repository
+                        <ChevronDown className="w-3 h-3 ml-1" />
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end" className="w-48">
+                      <DropdownMenuItem 
+                        onClick={() => {
+                          setRepositoryType("google-drive");
+                          setShowRepositoryDialog(true);
+                        }}
+                        className="gap-2"
+                      >
+                        <img src={googleDriveIcon} alt="" className="w-4 h-4" />
+                        Google Drive
+                      </DropdownMenuItem>
+                      <DropdownMenuItem 
+                        disabled
+                        className="gap-2 opacity-50"
+                      >
+                        <img src={procoreIcon} alt="" className="w-4 h-4" />
+                        <span>Procore</span>
+                        <span className="ml-auto text-[10px] text-muted-foreground">Coming Soon</span>
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                </div>
+              </div>
             </div>
           </div>
 
@@ -570,6 +651,21 @@ export const AWPEditModal = ({
           item={editingItem}
           allItems={existingItems}
           onSave={handleEditSave}
+        />
+      )}
+
+      {/* Repository Connection Dialog */}
+      {repositoryType === "google-drive" && (
+        <RepositoryConnectionDialog
+          isOpen={showRepositoryDialog}
+          onClose={() => {
+            setShowRepositoryDialog(false);
+            setRepositoryType(null);
+          }}
+          projectId={projectId}
+          projectName={projectName}
+          onFilesLoaded={handleRepositoryFilesLoaded}
+          onBeforeOAuthRedirect={onBeforeOAuthRedirect}
         />
       )}
 

@@ -1106,41 +1106,32 @@ const ProjectWizardContent = () => {
 
               <AccordionItem value="assets-systems" className="border rounded-lg px-6">
                 <AccordionTrigger className="text-lg font-semibold">
-                  Assets, Water Systems & Processes
+                  <div className="flex items-center justify-between w-full pr-4">
+                    <span>Assets, Water Systems & Processes</span>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setShowAWPEditModal(true);
+                      }}
+                    >
+                      {analysisItems.length === 0 ? "Add New" : "Add New or Edit"}
+                    </Button>
+                  </div>
                 </AccordionTrigger>
                 <AccordionContent className="space-y-8 pt-4">
-                  {/* Google Drive Connection - for drawing analysis */}
-                  <div className="space-y-4">
-                    <p className="text-sm text-muted-foreground">
-                      Connect a Google Drive folder with Drawing files to automatically detect Assets and Water Systems present in the Project.
-                    </p>
-                    <ProjectFilesUpload
-                      projectId={id || "new"}
-                      projectName={projectData.name}
-                      onDrawingDataExtracted={handleDrawingDataExtracted}
-                      isProcessingWebhook={isProcessingWebhook}
-                      setIsProcessingWebhook={setIsProcessingWebhook}
-                      driveFiles={driveFiles}
-                      setDriveFiles={setDriveFiles}
-                      driveAccessToken={driveAccessToken}
-                      setDriveAccessToken={setDriveAccessToken}
-                      driveConnected={driveConnected}
-                      setDriveConnected={setDriveConnected}
-                      onBeforeOAuthRedirect={handleBeforeOAuthRedirect}
-                      mode="drive"
-                    />
-                    
-                    {/* Edit List Button - below Google Drive */}
-                    {analysisItems.length > 0 && (
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => setShowAWPEditModal(true)}
-                      >
-                        Edit List
-                      </Button>
-                    )}
-                  </div>
+                  {/* Empty state when no items */}
+                  {analysisItems.length === 0 && (
+                    <div className="text-center py-8 border rounded-lg bg-muted/30">
+                      <p className="text-sm text-muted-foreground mb-2">
+                        No assets, water systems, or processes have been added yet.
+                      </p>
+                      <p className="text-xs text-muted-foreground">
+                        Click "Add New" to manually add items or connect a repository to analyze drawing files.
+                      </p>
+                    </div>
+                  )}
 
                   {/* Risk Tolerance Selector - applies to all AWP sections */}
                   <div className="space-y-6">
@@ -1382,6 +1373,14 @@ const ProjectWizardContent = () => {
             selectedProcessInstances: [],
             selectedProcessControls: [],
           });
+        }}
+        projectId={id || "new"}
+        projectName={projectData.name}
+        onBeforeOAuthRedirect={handleBeforeOAuthRedirect}
+        onFilesLoaded={(files, accessToken) => {
+          setDriveFiles(files);
+          setDriveAccessToken(accessToken);
+          setDriveConnected(true);
         }}
       />
     </div>
