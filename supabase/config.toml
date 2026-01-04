@@ -14,3 +14,12 @@ verify_jwt = true
 
 [functions.google-drive-oauth]
 verify_jwt = false
+
+[functions.send-collaborator-invite]
+verify_jwt = true
+
+[functions.accept-invite]
+verify_jwt = false
+
+[functions.complete-invite-signup]
+verify_jwt = false
