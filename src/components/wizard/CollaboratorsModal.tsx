@@ -49,11 +49,19 @@ export const CollaboratorsModal = ({
   const { user } = useAuth();
   const { toast } = useToast();
   
+  // Create empty row helper
+  const createEmptyRow = (): NewCollaboratorRow => ({
+    tempId: `new-${Date.now()}-${Math.random()}`,
+    name: "",
+    email: "",
+    role: "contributor",
+  });
+  
   // State
   const [collaborators, setCollaborators] = useState<Collaborator[]>([]);
   const [originalCollaborators, setOriginalCollaborators] = useState<Collaborator[]>([]);
   const [removedIds, setRemovedIds] = useState<Set<string>>(new Set());
-  const [newRows, setNewRows] = useState<NewCollaboratorRow[]>([]);
+  const [newRows, setNewRows] = useState<NewCollaboratorRow[]>([createEmptyRow()]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [showDiscardConfirm, setShowDiscardConfirm] = useState(false);
@@ -65,7 +73,6 @@ export const CollaboratorsModal = ({
   const fetchCollaborators = useCallback(async () => {
     if (!projectId) return;
     
-    setLoading(true);
     try {
       // Fetch existing collaborators with their roles
       const { data: roles, error: rolesError } = await supabase
@@ -125,10 +132,6 @@ export const CollaboratorsModal = ({
       const allCollaborators = [...collaboratorsList, ...pendingInvites];
       setCollaborators(allCollaborators);
       setOriginalCollaborators(allCollaborators);
-      setRemovedIds(new Set());
-      
-      // Add first empty row for new collaborators
-      setNewRows([createEmptyRow()]);
     } catch (error) {
       console.error("Error fetching collaborators:", error);
       toast({
@@ -154,20 +157,22 @@ export const CollaboratorsModal = ({
     setUserProfile(data);
   }, [user?.id]);
 
+  // Reset state and fetch when modal opens (Issue 2: prevents flash of old data)
   useEffect(() => {
     if (isOpen) {
+      // Reset state immediately to prevent flash of old data
+      setCollaborators([]);
+      setOriginalCollaborators([]);
+      setRemovedIds(new Set());
+      setNewRows([createEmptyRow()]);
+      setLoading(true);
+      setChangesSummary(null);
+      
+      // Then fetch fresh data
       fetchCollaborators();
       fetchUserProfile();
     }
   }, [isOpen, fetchCollaborators, fetchUserProfile]);
-
-  // Create empty row
-  const createEmptyRow = (): NewCollaboratorRow => ({
-    tempId: `new-${Date.now()}-${Math.random()}`,
-    name: "",
-    email: "",
-    role: "contributor",
-  });
 
   // Visible collaborators (excluding removed)
   const visibleCollaborators = useMemo(() => 
@@ -199,14 +204,27 @@ export const CollaboratorsModal = ({
     return { invited, removed };
   }, [newRows, collaborators, removedIds]);
 
+  // Get dynamic confirmation button text (Issue 4)
+  const getConfirmButtonText = useCallback(() => {
+    if (!changesSummary) return "Confirm";
+    const hasInvites = changesSummary.invited.length > 0;
+    const hasRemovals = changesSummary.removed.length > 0;
+    
+    if (hasInvites && hasRemovals) return "Confirm Changes";
+    if (hasInvites) return "Confirm & Send Invitations";
+    return "Confirm Removals";
+  }, [changesSummary]);
+
   // Handle close with unsaved changes check
   const handleClose = useCallback(() => {
     if (hasUnsavedChanges) {
+      // Calculate changes for discard summary (Issue 3)
+      setChangesSummary(calculateChanges());
       setShowDiscardConfirm(true);
     } else {
       onClose();
     }
-  }, [hasUnsavedChanges, onClose]);
+  }, [hasUnsavedChanges, calculateChanges, onClose]);
 
   // Handle remove collaborator
   const handleRemove = useCallback((id: string) => {
@@ -261,7 +279,7 @@ export const CollaboratorsModal = ({
     setShowSaveConfirm(true);
   }, [calculateChanges, newRows, onClose, toast]);
 
-  // Confirm and save changes
+  // Confirm and save changes (Issue 1: Fixed email sending)
   const handleConfirmSave = useCallback(async () => {
     setSaving(true);
     try {
@@ -300,35 +318,55 @@ export const CollaboratorsModal = ({
           invited_by: user?.id,
         }));
 
+        console.log("Inserting invitations:", invitationsToInsert);
+
         const { data: insertedInvitations, error: insertError } = await supabase
           .from("project_invitations")
           .insert(invitationsToInsert)
           .select("id, email, name, role, token");
 
-        if (insertError) throw insertError;
+        if (insertError) {
+          console.error("Error inserting invitations:", insertError);
+          throw insertError;
+        }
 
-        // Send invitation emails
-        const { error: emailError } = await supabase.functions.invoke("send-collaborator-invite", {
-          body: {
-            projectId,
-            projectName,
-            invitations: insertedInvitations?.map(inv => ({
-              email: inv.email,
-              name: inv.name,
-              role: inv.role,
-              token: inv.token,
-            })),
-            invitedByName: inviterName,
-          },
-        });
+        console.log("Inserted invitations with tokens:", insertedInvitations);
 
-        if (emailError) {
-          console.error("Error sending invitation emails:", emailError);
-          toast({
-            title: "Warning",
-            description: "Collaborators added but some invitation emails may not have been sent",
-            variant: "destructive",
+        // Send invitation emails via edge function
+        if (insertedInvitations && insertedInvitations.length > 0) {
+          console.log("Calling send-collaborator-invite edge function...");
+          
+          const { data: emailData, error: emailError } = await supabase.functions.invoke("send-collaborator-invite", {
+            body: {
+              projectId,
+              projectName,
+              invitations: insertedInvitations.map(inv => ({
+                email: inv.email,
+                name: inv.name,
+                role: inv.role,
+                token: inv.token,
+              })),
+              invitedByName: inviterName,
+            },
           });
+
+          console.log("Edge function response:", emailData, emailError);
+
+          if (emailError) {
+            console.error("Error sending invitation emails:", emailError);
+            toast({
+              title: "Warning",
+              description: "Collaborators added but some invitation emails may not have been sent",
+              variant: "destructive",
+            });
+          } else if (emailData && !emailData.success) {
+            console.warn("Some emails failed to send:", emailData);
+            toast({
+              title: "Warning",
+              description: `${emailData.summary?.sent || 0} email(s) sent, ${emailData.summary?.failed || 0} failed`,
+              variant: "destructive",
+            });
+          }
         }
       }
 
@@ -354,7 +392,8 @@ export const CollaboratorsModal = ({
   return (
     <>
       <Dialog open={isOpen} onOpenChange={(open) => !open && handleClose()}>
-        <DialogContent className="max-w-5xl h-[80vh] flex flex-col">
+        {/* Issue 6: Increased modal width to max-w-6xl */}
+        <DialogContent className="max-w-6xl h-[80vh] flex flex-col">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <Users className="h-5 w-5" />
@@ -362,10 +401,11 @@ export const CollaboratorsModal = ({
             </DialogTitle>
           </DialogHeader>
 
+          {/* Issue 7: Dynamic pane widths using flex-1 and shrink-0 */}
           <div className="flex-1 flex gap-4 overflow-hidden">
             {/* Left Pane - Collaborators List */}
-            <div className="w-1/2 flex flex-col border rounded-lg overflow-hidden">
-              <div className="p-2 border-b bg-muted/50 text-sm font-medium">
+            <div className="flex-1 flex flex-col border rounded-lg overflow-hidden min-w-0">
+              <div className="p-2 border-b bg-muted/50 text-sm font-medium shrink-0">
                 Collaborators List ({visibleCollaborators.length})
               </div>
               <div className="flex-1 overflow-auto">
@@ -379,7 +419,8 @@ export const CollaboratorsModal = ({
                       <TableRow>
                         <TableHead className="py-2 text-xs">Name</TableHead>
                         <TableHead className="py-2 text-xs">Email</TableHead>
-                        <TableHead className="py-2 text-xs w-[100px]">Account Type</TableHead>
+                        {/* Issue 8: Fixed min-width for Account Type column */}
+                        <TableHead className="py-2 text-xs min-w-[110px] w-[110px]">Account Type</TableHead>
                         <TableHead className="py-2 text-xs w-[60px]"></TableHead>
                       </TableRow>
                     </TableHeader>
@@ -400,7 +441,8 @@ export const CollaboratorsModal = ({
                             <TableCell className="py-1 px-2 text-sm text-muted-foreground truncate max-w-[150px]">
                               {collab.email || "—"}
                             </TableCell>
-                            <TableCell className="py-1 px-2">
+                            {/* Issue 8: Fixed min-width for Account Type cells */}
+                            <TableCell className="py-1 px-2 min-w-[110px]">
                               <Badge variant={collab.role === "admin" ? "default" : "secondary"}>
                                 {collab.role === "admin" ? "Admin" : "Contributor"}
                               </Badge>
@@ -434,8 +476,8 @@ export const CollaboratorsModal = ({
             </div>
 
             {/* Right Pane - Add New Collaborators */}
-            <div className="w-1/2 flex flex-col border rounded-lg overflow-hidden">
-              <div className="p-2 border-b bg-muted/50 text-sm font-medium">
+            <div className="w-[380px] shrink-0 flex flex-col border rounded-lg overflow-hidden">
+              <div className="p-2 border-b bg-muted/50 text-sm font-medium shrink-0">
                 Add New Collaborators
               </div>
               <div className="flex-1 overflow-auto">
@@ -444,7 +486,8 @@ export const CollaboratorsModal = ({
                     <TableRow>
                       <TableHead className="py-2 text-xs">Name</TableHead>
                       <TableHead className="py-2 text-xs">Email</TableHead>
-                      <TableHead className="py-2 text-xs w-[110px]">Account Type</TableHead>
+                      {/* Issue 8: Fixed min-width for Account Type column */}
+                      <TableHead className="py-2 text-xs min-w-[110px] w-[110px]">Account Type</TableHead>
                       <TableHead className="py-2 text-xs w-[40px]"></TableHead>
                     </TableRow>
                   </TableHeader>
@@ -469,7 +512,8 @@ export const CollaboratorsModal = ({
                             className="h-8 text-sm"
                           />
                         </TableCell>
-                        <TableCell className="py-1 px-1">
+                        {/* Issue 8: Fixed min-width */}
+                        <TableCell className="py-1 px-1 min-w-[110px]">
                           <Select
                             value={row.role}
                             onValueChange={(value) => updateNewRow(row.tempId, "role", value)}
@@ -498,7 +542,8 @@ export const CollaboratorsModal = ({
                   </TableBody>
                 </Table>
               </div>
-              <div className="p-2 border-t">
+              {/* Issue 5: Removed border-t, reduced padding */}
+              <div className="p-2">
                 <Button
                   variant="outline"
                   size="sm"
@@ -525,13 +570,39 @@ export const CollaboratorsModal = ({
         </DialogContent>
       </Dialog>
 
-      {/* Discard Changes Confirmation */}
+      {/* Discard Changes Confirmation - Issue 3: Shows summary of changes */}
       <AlertDialog open={showDiscardConfirm} onOpenChange={setShowDiscardConfirm}>
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Discard Changes?</AlertDialogTitle>
-            <AlertDialogDescription>
-              You have unsaved changes. Are you sure you want to discard them?
+            <AlertDialogDescription asChild>
+              <div className="space-y-4">
+                <p>You have unsaved changes. Are you sure you want to discard them?</p>
+                
+                {changesSummary && changesSummary.invited.length > 0 && (
+                  <div>
+                    <p className="font-medium text-foreground">Pending invitations ({changesSummary.invited.length}):</p>
+                    <ul className="list-disc list-inside text-sm mt-1 space-y-0.5">
+                      {changesSummary.invited.map((inv, i) => (
+                        <li key={i}>
+                          {inv.name} ({inv.email}) as <span className="font-medium">{inv.role}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+
+                {changesSummary && changesSummary.removed.length > 0 && (
+                  <div>
+                    <p className="font-medium text-foreground">Pending removals ({changesSummary.removed.length}):</p>
+                    <ul className="list-disc list-inside text-sm mt-1 space-y-0.5">
+                      {changesSummary.removed.map((rem, i) => (
+                        <li key={i}>{rem.name} {rem.email && `(${rem.email})`}</li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+              </div>
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -543,7 +614,7 @@ export const CollaboratorsModal = ({
         </AlertDialogContent>
       </AlertDialog>
 
-      {/* Save Confirmation */}
+      {/* Save Confirmation - Issue 4: Dynamic button text */}
       <AlertDialog open={showSaveConfirm} onOpenChange={setShowSaveConfirm}>
         <AlertDialogContent>
           <AlertDialogHeader>
@@ -582,7 +653,7 @@ export const CollaboratorsModal = ({
             <AlertDialogCancel disabled={saving}>Cancel</AlertDialogCancel>
             <AlertDialogAction onClick={handleConfirmSave} disabled={saving}>
               {saving && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
-              Confirm & Send Invitations
+              {getConfirmButtonText()}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

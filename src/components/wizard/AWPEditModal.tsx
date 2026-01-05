@@ -3,7 +3,6 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
@@ -60,6 +59,26 @@ interface ChangesSummary {
   added: { name: string; areaName?: string }[];
 }
 
+// Issue 18: Preload icons
+const preloadImages = () => {
+  const img1 = new Image();
+  img1.src = googleDriveIcon;
+  const img2 = new Image();
+  img2.src = procoreIcon;
+};
+
+// Create empty row helper
+const createEmptyRow = (): NewRowItem => ({
+  tempId: `NEW-${Date.now()}-${Math.random()}`,
+  name: "",
+  areaName: "",
+  floor: "",
+  drawingCode: "",
+  areaSqft: null,
+  pipeDiameterInches: null,
+  pipeDiameterMM: null,
+});
+
 export const AWPEditModal = ({
   isOpen,
   onClose,
@@ -80,7 +99,7 @@ export const AWPEditModal = ({
   const [deletedItemIds, setDeletedItemIds] = useState<Set<string>>(new Set());
   
   // New items being added (right pane) - now as table rows
-  const [newRows, setNewRows] = useState<NewRowItem[]>([]);
+  const [newRows, setNewRows] = useState<NewRowItem[]>([createEmptyRow()]);
   
   // Edit modal state
   const [editingItem, setEditingItem] = useState<AnalysisItem | null>(null);
@@ -88,6 +107,9 @@ export const AWPEditModal = ({
   // Save confirmation state
   const [showSaveConfirmation, setShowSaveConfirmation] = useState(false);
   const [changesSummary, setChangesSummary] = useState<ChangesSummary | null>(null);
+  
+  // Issue 15: Discard confirmation state
+  const [showDiscardConfirm, setShowDiscardConfirm] = useState(false);
   
   // Units for new rows
   const [areaUnit, setAreaUnit] = useState<AreaUnit>("sqft");
@@ -100,13 +122,19 @@ export const AWPEditModal = ({
   const [showRepositoryDialog, setShowRepositoryDialog] = useState(false);
   const [repositoryType, setRepositoryType] = useState<"google-drive" | "procore" | null>(null);
 
-  // Initialize when modal opens
+  // Issue 18: Preload icons on mount
+  useEffect(() => {
+    preloadImages();
+  }, []);
+
+  // Initialize when modal opens - Issue 11: Start with one default row
   useEffect(() => {
     if (isOpen) {
       setOriginalItems(analysisItems.map(item => ({ ...item })));
       setExistingItems(analysisItems.map(item => ({ ...item })));
       setDeletedItemIds(new Set());
-      setNewRows([]);
+      setNewRows([createEmptyRow()]); // Issue 11: Default row
+      setChangesSummary(null);
     }
   }, [isOpen, analysisItems]);
 
@@ -129,18 +157,20 @@ export const AWPEditModal = ({
     ...CLASSES_BY_CATEGORY.Process.map(cls => ({ value: cls, category: "Process" })),
   ], []);
 
+  // Issue 15: Check for unsaved changes
+  const hasUnsavedChanges = useMemo(() => {
+    const hasEdits = existingItems.some((current) => {
+      const original = originalItems.find(o => o.id === current.id);
+      return original && JSON.stringify(current) !== JSON.stringify(original);
+    });
+    const hasDeletions = deletedItemIds.size > 0;
+    const hasAdditions = newRows.some(row => row.name);
+    return hasEdits || hasDeletions || hasAdditions;
+  }, [existingItems, originalItems, deletedItemIds, newRows]);
+
   // Add new row
   const handleAddRow = useCallback(() => {
-    const newRow: NewRowItem = {
-      tempId: `NEW-${Date.now()}`,
-      name: "",
-      areaName: "",
-      floor: "",
-      drawingCode: "",
-      areaSqft: null,
-      pipeDiameterInches: null,
-      pipeDiameterMM: null,
-    };
+    const newRow = createEmptyRow();
     setNewRows(prev => [...prev, newRow]);
   }, []);
 
@@ -154,7 +184,11 @@ export const AWPEditModal = ({
 
   // Delete a new row
   const deleteNewRow = useCallback((tempId: string) => {
-    setNewRows(prev => prev.filter(row => row.tempId !== tempId));
+    setNewRows(prev => {
+      const filtered = prev.filter(row => row.tempId !== tempId);
+      // Always keep at least one row
+      return filtered.length === 0 ? [createEmptyRow()] : filtered;
+    });
   }, []);
 
   // Handle edit item save
@@ -240,6 +274,16 @@ export const AWPEditModal = ({
     return { edited, removed, added };
   }, [existingItems, originalItems, deletedItemIds, newRows]);
 
+  // Issue 15: Handle close with unsaved changes check
+  const handleClose = useCallback(() => {
+    if (hasUnsavedChanges) {
+      setChangesSummary(calculateChanges());
+      setShowDiscardConfirm(true);
+    } else {
+      onClose();
+    }
+  }, [hasUnsavedChanges, calculateChanges, onClose]);
+
   // Handle save click - show confirmation if there are changes
   const handleSaveClick = useCallback(() => {
     const changes = calculateChanges();
@@ -324,10 +368,20 @@ export const AWPEditModal = ({
     return cols;
   };
 
+  // Issue 17: Get column span for right pane
+  const getRightColSpan = () => {
+    let cols = 4; // Name, Type, Floor, Actions
+    if (hasAssets) cols++;
+    if (hasWaterSystems) cols++;
+    return cols;
+  };
+
   return (
     <>
-      <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
-        <DialogContent className="max-w-7xl h-[85vh] flex flex-col">
+      {/* Issue 15: Use handleClose for onOpenChange */}
+      <Dialog open={isOpen} onOpenChange={(open) => !open && handleClose()}>
+        {/* Issue 13: Increased modal width to 95vw */}
+        <DialogContent className="max-w-[95vw] w-full h-[90vh] flex flex-col">
           <DialogHeader>
             <DialogTitle>Assets, Water Systems, and Processes List</DialogTitle>
           </DialogHeader>
@@ -343,7 +397,8 @@ export const AWPEditModal = ({
                   <TableHeader className="sticky top-0 bg-background z-10">
                     <TableRow>
                       <TableHead className="w-[140px] py-2 text-xs">Name</TableHead>
-                      <TableHead className="w-[160px] py-2 text-xs">Type</TableHead>
+                      {/* Issue 16: Adjusted max-width for Type column */}
+                      <TableHead className="w-[180px] py-2 text-xs">Type</TableHead>
                       <TableHead className="w-[90px] py-2 text-xs">ID</TableHead>
                       <TableHead className="w-[60px] py-2 text-xs">Floor</TableHead>
                       {hasAssets && <TableHead className="w-[70px] py-2 text-xs">Size</TableHead>}
@@ -359,8 +414,9 @@ export const AWPEditModal = ({
                             {item.areaName || "-"}
                           </span>
                         </TableCell>
+                        {/* Issue 16: Removed excessive trailing space, adjusted max-width */}
                         <TableCell className="py-1 px-2">
-                          <span className="text-xs truncate block max-w-[150px]" title={item.name}>
+                          <span className="text-xs truncate block max-w-[170px]" title={item.name}>
                             {item.name}
                           </span>
                         </TableCell>
@@ -418,10 +474,11 @@ export const AWPEditModal = ({
               
               <div className="flex-1 overflow-auto">
                 <Table>
+                  {/* Issue 17: Reordered columns - Name, Type, Floor, Size */}
                   <TableHeader className="sticky top-0 bg-background z-10">
                     <TableRow>
-                      <TableHead className="w-[120px] py-2 text-xs">Type</TableHead>
-                      <TableHead className="w-[80px] py-2 text-xs">Name</TableHead>
+                      <TableHead className="w-[100px] py-2 text-xs">Name</TableHead>
+                      <TableHead className="w-[140px] py-2 text-xs">Type</TableHead>
                       <TableHead className="w-[50px] py-2 text-xs">Floor</TableHead>
                       {hasAssets && <TableHead className="w-[60px] py-2 text-xs">Size</TableHead>}
                       {hasWaterSystems && <TableHead className="w-[50px] py-2 text-xs">Pipe</TableHead>}
@@ -435,7 +492,17 @@ export const AWPEditModal = ({
                       
                       return (
                         <TableRow key={row.tempId} className="h-8">
-                          {/* Type - Searchable Combobox */}
+                          {/* Issue 17: Name column first */}
+                          <TableCell className="py-1 px-1">
+                            <Input
+                              className="h-6 text-xs px-2"
+                              placeholder="Name"
+                              value={row.areaName}
+                              onChange={(e) => updateNewRow(row.tempId, "areaName", e.target.value)}
+                            />
+                          </TableCell>
+                          
+                          {/* Issue 17: Type column second */}
                           <TableCell className="py-1 px-1">
                             <Popover open={openCombobox === row.tempId} onOpenChange={(open) => setOpenCombobox(open ? row.tempId : null)}>
                               <PopoverTrigger asChild>
@@ -444,7 +511,8 @@ export const AWPEditModal = ({
                                   role="combobox"
                                   className="w-full justify-between h-6 text-xs font-normal px-2"
                                 >
-                                  <span className="truncate max-w-[90px]">{row.name || "Select..."}</span>
+                                  {/* Issue 16: Adjusted truncation */}
+                                  <span className="truncate max-w-[110px]">{row.name || "Select..."}</span>
                                   <ChevronsUpDown className="ml-1 h-3 w-3 shrink-0 opacity-50" />
                                 </Button>
                               </PopoverTrigger>
@@ -507,16 +575,6 @@ export const AWPEditModal = ({
                             </Popover>
                           </TableCell>
                           
-                          {/* Name */}
-                          <TableCell className="py-1 px-1">
-                            <Input
-                              className="h-6 text-xs px-2"
-                              placeholder="Name"
-                              value={row.areaName}
-                              onChange={(e) => updateNewRow(row.tempId, "areaName", e.target.value)}
-                            />
-                          </TableCell>
-                          
                           {/* Floor */}
                           <TableCell className="py-1 px-1">
                             <Input
@@ -575,18 +633,11 @@ export const AWPEditModal = ({
                         </TableRow>
                       );
                     })}
-                    {newRows.length === 0 && (
-                      <TableRow>
-                        <TableCell colSpan={hasAssets && hasWaterSystems ? 6 : hasAssets || hasWaterSystems ? 5 : 4} className="text-center py-6 text-muted-foreground text-xs">
-                          Click "Add Row" to add new items
-                        </TableCell>
-                      </TableRow>
-                    )}
                   </TableBody>
                 </Table>
                 
-                {/* Add Row button at bottom of table */}
-                <div className="p-2 border-t">
+                {/* Issue 12: Removed border-t from Add Row button */}
+                <div className="p-2">
                   <Button onClick={handleAddRow} size="sm" variant="outline" className="w-full">
                     <Plus className="w-3 h-3 mr-1" /> Add Row
                   </Button>
@@ -631,9 +682,9 @@ export const AWPEditModal = ({
             </div>
           </div>
 
-          {/* Footer */}
+          {/* Footer - Issue 15: Use handleClose instead of onClose */}
           <div className="flex justify-end gap-2 pt-4 border-t">
-            <Button variant="outline" onClick={onClose}>
+            <Button variant="outline" onClick={handleClose}>
               Cancel
             </Button>
             <Button onClick={handleSaveClick}>
@@ -668,6 +719,57 @@ export const AWPEditModal = ({
           onBeforeOAuthRedirect={onBeforeOAuthRedirect}
         />
       )}
+
+      {/* Issue 15: Discard Confirmation Dialog */}
+      <AlertDialog open={showDiscardConfirm} onOpenChange={setShowDiscardConfirm}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Discard Changes?</AlertDialogTitle>
+            <AlertDialogDescription asChild>
+              <div className="space-y-3 text-sm">
+                <p>You have unsaved changes. Are you sure you want to discard them?</p>
+                
+                {changesSummary?.edited.length ? (
+                  <div>
+                    <span className="font-medium text-foreground">Pending edits ({changesSummary.edited.length}):</span>
+                    <ul className="list-disc list-inside mt-1 text-muted-foreground">
+                      {changesSummary.edited.map((item, i) => (
+                        <li key={i} className="truncate">{item.areaName || item.name} ({item.id})</li>
+                      ))}
+                    </ul>
+                  </div>
+                ) : null}
+                {changesSummary?.removed.length ? (
+                  <div>
+                    <span className="font-medium text-destructive">Pending removals ({changesSummary.removed.length}):</span>
+                    <ul className="list-disc list-inside mt-1 text-muted-foreground">
+                      {changesSummary.removed.map((item, i) => (
+                        <li key={i} className="truncate">{item.areaName || item.name} ({item.id})</li>
+                      ))}
+                    </ul>
+                  </div>
+                ) : null}
+                {changesSummary?.added.length ? (
+                  <div>
+                    <span className="font-medium text-green-600">Pending additions ({changesSummary.added.length}):</span>
+                    <ul className="list-disc list-inside mt-1 text-muted-foreground">
+                      {changesSummary.added.map((item, i) => (
+                        <li key={i} className="truncate">{item.areaName || item.name}</li>
+                      ))}
+                    </ul>
+                  </div>
+                ) : null}
+              </div>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Continue Editing</AlertDialogCancel>
+            <AlertDialogAction onClick={() => { setShowDiscardConfirm(false); onClose(); }}>
+              Discard Changes
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {/* Save Confirmation Dialog */}
       <AlertDialog open={showSaveConfirmation} onOpenChange={setShowSaveConfirmation}>

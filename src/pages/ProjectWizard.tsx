@@ -1121,22 +1121,24 @@ const ProjectWizardContent = () => {
                 </AccordionContent>
               </AccordionItem>
 
+              {/* Issue 9 & 10: Button moved outside AccordionTrigger */}
               <AccordionItem value="assets-systems" className="border rounded-lg px-6">
-                <AccordionTrigger className="text-lg font-semibold">
-                  <div className="flex items-center justify-between w-full pr-4">
+                <div className="flex items-center justify-between">
+                  <AccordionTrigger className="text-lg font-semibold flex-1">
                     <span>Assets, Water Systems & Processes</span>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setShowAWPEditModal(true);
-                      }}
-                    >
-                      {analysisItems.length === 0 ? "Add New" : "Add New or Edit"}
-                    </Button>
-                  </div>
-                </AccordionTrigger>
+                  </AccordionTrigger>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="ml-4 no-underline hover:no-underline"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setShowAWPEditModal(true);
+                    }}
+                  >
+                    {analysisItems.length === 0 ? "Add New" : "Edit List"}
+                  </Button>
+                </div>
                 <AccordionContent className="space-y-8 pt-4">
                   {/* Empty state when no items */}
                   {analysisItems.length === 0 && (
@@ -1379,8 +1381,20 @@ const ProjectWizardContent = () => {
         isOpen={showAWPEditModal}
         onClose={() => setShowAWPEditModal(false)}
         analysisItems={analysisItems}
-        onUpdateItems={(items) => {
+        onUpdateItems={async (items) => {
           setAnalysisItems(items);
+          // Issue 14: Save to database
+          if (id && id !== "new") {
+            try {
+              await saveAnalysisItems(id, items);
+              toast({
+                title: "Saved",
+                description: `${items.length} item(s) saved successfully`,
+              });
+            } catch (error) {
+              console.error("Error saving analysis items:", error);
+            }
+          }
           // Clear existing selections so they reinitialize with updated items
           updateFields({
             selectedAssetInstances: [],
