@@ -1,4 +1,4 @@
-import { useState, useMemo, useCallback, useEffect } from "react";
+import { useState, useMemo, useCallback, useEffect, useLayoutEffect } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
@@ -59,14 +59,6 @@ interface ChangesSummary {
   added: { name: string; areaName?: string }[];
 }
 
-// Issue 18: Preload icons
-const preloadImages = () => {
-  const img1 = new Image();
-  img1.src = googleDriveIcon;
-  const img2 = new Image();
-  img2.src = procoreIcon;
-};
-
 // Create empty row helper
 const createEmptyRow = (): NewRowItem => ({
   tempId: `NEW-${Date.now()}-${Math.random()}`,
@@ -122,9 +114,12 @@ export const AWPEditModal = ({
   const [showRepositoryDialog, setShowRepositoryDialog] = useState(false);
   const [repositoryType, setRepositoryType] = useState<"google-drive" | "procore" | null>(null);
 
-  // Issue 18: Preload icons on mount
-  useEffect(() => {
-    preloadImages();
+  // Issue 21: Preload icons immediately using useLayoutEffect
+  useLayoutEffect(() => {
+    const img1 = new Image();
+    img1.src = googleDriveIcon;
+    const img2 = new Image();
+    img2.src = procoreIcon;
   }, []);
 
   // Initialize when modal opens - Issue 11: Start with one default row
@@ -157,14 +152,20 @@ export const AWPEditModal = ({
     ...CLASSES_BY_CATEGORY.Process.map(cls => ({ value: cls, category: "Process" })),
   ], []);
 
-  // Issue 15: Check for unsaved changes
+  // Issue 24: Fix hasUnsavedChanges to not trigger on empty default row
   const hasUnsavedChanges = useMemo(() => {
+    // Check for edits to existing items
     const hasEdits = existingItems.some((current) => {
       const original = originalItems.find(o => o.id === current.id);
       return original && JSON.stringify(current) !== JSON.stringify(original);
     });
+    
+    // Check for deletions
     const hasDeletions = deletedItemIds.size > 0;
-    const hasAdditions = newRows.some(row => row.name);
+    
+    // Check for additions - only count rows with a type selected (row.name is the class type)
+    const hasAdditions = newRows.some(row => row.name.trim() !== '');
+    
     return hasEdits || hasDeletions || hasAdditions;
   }, [existingItems, originalItems, deletedItemIds, newRows]);
 
@@ -297,19 +298,23 @@ export const AWPEditModal = ({
     }
   }, [calculateChanges, onClose]);
 
-  // Confirm save
+  // Issue 22: Confirm save - generate IDs incrementally to avoid duplicates
   const handleConfirmSave = useCallback(() => {
     // Filter out deleted items
     const remainingItems = existingItems.filter(item => !deletedItemIds.has(item.id));
     
-    // Convert new rows to AnalysisItems
-    const newItems: AnalysisItem[] = newRows
+    // Convert new rows to AnalysisItems - accumulate items for proper ID generation
+    const allCurrentItems = [...remainingItems];
+    const newItems: AnalysisItem[] = [];
+    
+    newRows
       .filter(row => row.name)
-      .map(row => {
+      .forEach(row => {
         const category = CLASS_TO_CATEGORY_MAP[row.name];
-        const id = generateNextId(row.name, [...remainingItems]);
+        // Issue 22: Pass accumulated items so each new item gets incrementing ID
+        const id = generateNextId(row.name, allCurrentItems);
         
-        return {
+        const newItem: AnalysisItem = {
           id,
           name: row.name,
           category: category || "Asset",
@@ -328,6 +333,10 @@ export const AWPEditModal = ({
             pipeDiameterMM: row.pipeDiameterMM,
           } : undefined,
         };
+        
+        // Add to accumulated list for next ID generation
+        allCurrentItems.push(newItem);
+        newItems.push(newItem);
       });
 
     const allItems = [...remainingItems, ...newItems];
@@ -387,52 +396,52 @@ export const AWPEditModal = ({
           </DialogHeader>
           
           <div className="flex-1 flex gap-4 overflow-hidden">
-            {/* Left Pane - Existing Items Table */}
+            {/* Left Pane - Existing Items Table - Issue 25: table-fixed for stable widths */}
             <div className="w-3/5 flex flex-col border rounded-lg overflow-hidden">
               <div className="p-2 border-b bg-muted/50 text-sm font-medium">
                 Existing Items ({visibleExistingItems.length})
               </div>
               <div className="flex-1 overflow-auto">
-                <Table>
+                <Table className="table-fixed">
                   <TableHeader className="sticky top-0 bg-background z-10">
                     <TableRow>
-                      <TableHead className="w-[140px] py-2 text-xs">Name</TableHead>
-                      {/* Issue 16: Adjusted max-width for Type column */}
-                      <TableHead className="w-[180px] py-2 text-xs">Type</TableHead>
+                      <TableHead className="w-[130px] py-2 text-xs">Name</TableHead>
+                      {/* Issue 19: Wider Type column */}
+                      <TableHead className="w-[200px] py-2 text-xs">Type</TableHead>
                       <TableHead className="w-[90px] py-2 text-xs">ID</TableHead>
                       <TableHead className="w-[60px] py-2 text-xs">Floor</TableHead>
-                      {hasAssets && <TableHead className="w-[70px] py-2 text-xs">Size</TableHead>}
-                      {hasWaterSystems && <TableHead className="w-[60px] py-2 text-xs">Pipe Ø</TableHead>}
-                      <TableHead className="w-[70px] py-2 text-xs">Actions</TableHead>
+                      {hasAssets && <TableHead className="w-[80px] py-2 text-xs">Size</TableHead>}
+                      {hasWaterSystems && <TableHead className="w-[70px] py-2 text-xs">Pipe Ø</TableHead>}
+                      <TableHead className="w-[80px] py-2 text-xs">Actions</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
                     {visibleExistingItems.map((item) => (
                       <TableRow key={item.id} className="h-8">
-                        <TableCell className="py-1 px-2">
-                          <span className="text-xs truncate block max-w-[130px]" title={item.areaName}>
+                        <TableCell className="py-1 px-2 w-[130px]">
+                          <span className="text-xs truncate block" title={item.areaName}>
                             {item.areaName || "-"}
                           </span>
                         </TableCell>
-                        {/* Issue 16: Removed excessive trailing space, adjusted max-width */}
-                        <TableCell className="py-1 px-2">
-                          <span className="text-xs truncate block max-w-[170px]" title={item.name}>
+                        {/* Issue 19: Wider Type column with tooltip */}
+                        <TableCell className="py-1 px-2 w-[200px]">
+                          <span className="text-xs truncate block" title={item.name}>
                             {item.name}
                           </span>
                         </TableCell>
-                        <TableCell className="py-1 px-2 font-mono text-xs">{item.id}</TableCell>
-                        <TableCell className="py-1 px-2 text-xs">{item.floor || "-"}</TableCell>
+                        <TableCell className="py-1 px-2 font-mono text-xs w-[90px]">{item.id}</TableCell>
+                        <TableCell className="py-1 px-2 text-xs w-[60px]">{item.floor || "-"}</TableCell>
                         {hasAssets && (
-                          <TableCell className="py-1 px-2 text-xs">
+                          <TableCell className="py-1 px-2 text-xs w-[80px]">
                             {isAssetClass(item.name) ? getItemSizeDisplay(item) : "-"}
                           </TableCell>
                         )}
                         {hasWaterSystems && (
-                          <TableCell className="py-1 px-2 text-xs">
+                          <TableCell className="py-1 px-2 text-xs w-[70px]">
                             {isWaterSystemClass(item.name) ? getItemPipeDisplay(item) : "-"}
                           </TableCell>
                         )}
-                        <TableCell className="py-1 px-2">
+                        <TableCell className="py-1 px-2 w-[80px]">
                           <div className="flex gap-0.5">
                             <Button
                               variant="ghost"
@@ -466,22 +475,22 @@ export const AWPEditModal = ({
               </div>
             </div>
 
-            {/* Right Pane - Add New Items */}
+            {/* Right Pane - Add New Items - Issue 25: table-fixed for stable widths */}
             <div className="w-2/5 flex flex-col border rounded-lg overflow-hidden">
               <div className="p-2 border-b bg-muted/50 text-sm font-medium">
                 Add New Items
               </div>
               
               <div className="flex-1 overflow-auto">
-                <Table>
+                <Table className="table-fixed">
                   {/* Issue 17: Reordered columns - Name, Type, Floor, Size */}
                   <TableHeader className="sticky top-0 bg-background z-10">
                     <TableRow>
                       <TableHead className="w-[100px] py-2 text-xs">Name</TableHead>
-                      <TableHead className="w-[140px] py-2 text-xs">Type</TableHead>
+                      <TableHead className="w-[150px] py-2 text-xs">Type</TableHead>
                       <TableHead className="w-[50px] py-2 text-xs">Floor</TableHead>
-                      {hasAssets && <TableHead className="w-[60px] py-2 text-xs">Size</TableHead>}
-                      {hasWaterSystems && <TableHead className="w-[50px] py-2 text-xs">Pipe</TableHead>}
+                      {hasAssets && <TableHead className="w-[70px] py-2 text-xs">Size</TableHead>}
+                      {hasWaterSystems && <TableHead className="w-[60px] py-2 text-xs">Pipe</TableHead>}
                       <TableHead className="w-[40px] py-2 text-xs"></TableHead>
                     </TableRow>
                   </TableHeader>
@@ -492,8 +501,8 @@ export const AWPEditModal = ({
                       
                       return (
                         <TableRow key={row.tempId} className="h-8">
-                          {/* Issue 17: Name column first */}
-                          <TableCell className="py-1 px-1">
+                          {/* Issue 17: Name column first - Issue 25: fixed width */}
+                          <TableCell className="py-1 px-1 w-[100px]">
                             <Input
                               className="h-6 text-xs px-2"
                               placeholder="Name"
@@ -502,8 +511,8 @@ export const AWPEditModal = ({
                             />
                           </TableCell>
                           
-                          {/* Issue 17: Type column second */}
-                          <TableCell className="py-1 px-1">
+                          {/* Issue 17: Type column second - Issue 25: fixed width */}
+                          <TableCell className="py-1 px-1 w-[150px]">
                             <Popover open={openCombobox === row.tempId} onOpenChange={(open) => setOpenCombobox(open ? row.tempId : null)}>
                               <PopoverTrigger asChild>
                                 <Button
@@ -511,8 +520,8 @@ export const AWPEditModal = ({
                                   role="combobox"
                                   className="w-full justify-between h-6 text-xs font-normal px-2"
                                 >
-                                  {/* Issue 16: Adjusted truncation */}
-                                  <span className="truncate max-w-[110px]">{row.name || "Select..."}</span>
+                                  {/* Issue 19: Wider truncation with tooltip */}
+                                  <span className="truncate max-w-[120px]" title={row.name || undefined}>{row.name || "Select..."}</span>
                                   <ChevronsUpDown className="ml-1 h-3 w-3 shrink-0 opacity-50" />
                                 </Button>
                               </PopoverTrigger>
@@ -575,8 +584,8 @@ export const AWPEditModal = ({
                             </Popover>
                           </TableCell>
                           
-                          {/* Floor */}
-                          <TableCell className="py-1 px-1">
+                          {/* Floor - Issue 25: fixed width */}
+                          <TableCell className="py-1 px-1 w-[50px]">
                             <Input
                               className="h-6 text-xs px-2"
                               placeholder="Fl"
@@ -585,9 +594,9 @@ export const AWPEditModal = ({
                             />
                           </TableCell>
                           
-                          {/* Size (Assets) */}
+                          {/* Size (Assets) - Issue 25: fixed width */}
                           {hasAssets && (
-                            <TableCell className="py-1 px-1">
+                            <TableCell className="py-1 px-1 w-[70px]">
                               {isAsset ? (
                                 <Input
                                   type="number"
@@ -602,9 +611,9 @@ export const AWPEditModal = ({
                             </TableCell>
                           )}
                           
-                          {/* Pipe Diameter (Water Systems) */}
+                          {/* Pipe Diameter (Water Systems) - Issue 25: fixed width */}
                           {hasWaterSystems && (
-                            <TableCell className="py-1 px-1">
+                            <TableCell className="py-1 px-1 w-[60px]">
                               {isWaterSystem ? (
                                 <Input
                                   type="number"
@@ -619,8 +628,8 @@ export const AWPEditModal = ({
                             </TableCell>
                           )}
                           
-                          {/* Delete */}
-                          <TableCell className="py-1 px-1">
+                          {/* Delete - Issue 25: fixed width */}
+                          <TableCell className="py-1 px-1 w-[40px]">
                             <Button
                               variant="ghost"
                               size="icon"

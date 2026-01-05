@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo } from "react";
+import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
@@ -68,6 +68,10 @@ export const CollaboratorsModal = ({
   const [showSaveConfirm, setShowSaveConfirm] = useState(false);
   const [changesSummary, setChangesSummary] = useState<ChangesSummary | null>(null);
   const [userProfile, setUserProfile] = useState<{ display_name: string | null } | null>(null);
+  // Issue 8: Track invalid rows for red outline
+  const [invalidRowIds, setInvalidRowIds] = useState<Set<string>>(new Set());
+  // Issue 6: Ref for focusing new row name input
+  const lastRowNameRef = useRef<HTMLInputElement>(null);
 
   // Fetch collaborators and pending invitations
   const fetchCollaborators = useCallback(async () => {
@@ -247,12 +251,14 @@ export const CollaboratorsModal = ({
     });
   }, []);
 
-  // Add new row
+  // Issue 6: Add new row and focus name input
   const handleAddRow = useCallback(() => {
     setNewRows(prev => [...prev, createEmptyRow()]);
+    // Focus after render
+    setTimeout(() => lastRowNameRef.current?.focus(), 0);
   }, []);
 
-  // Handle save click
+  // Handle save click - Issue 8 & 9: Mark invalid rows with red outline and show generic message
   const handleSaveClick = useCallback(() => {
     const changes = calculateChanges();
     if (changes.invited.length === 0 && changes.removed.length === 0) {
@@ -260,21 +266,27 @@ export const CollaboratorsModal = ({
       return;
     }
 
-    // Validate new entries
-    const invalidRows = newRows.filter(row => {
-      if (!row.name && !row.email) return false; // Empty rows are fine
-      return !row.name || !row.email || !row.email.includes("@");
+    // Validate new entries - find rows with partial data
+    const incompleteRows = newRows.filter(row => {
+      const hasAnyData = row.name || row.email;
+      const isComplete = row.name && row.email && row.email.includes("@");
+      return hasAnyData && !isComplete;
     });
 
-    if (invalidRows.length > 0) {
+    if (incompleteRows.length > 0) {
+      // Issue 8: Mark invalid rows for red outline
+      setInvalidRowIds(new Set(incompleteRows.map(r => r.tempId)));
+      // Issue 9: Generic validation message
       toast({
-        title: "Validation Error",
-        description: "Please fill in all fields for new collaborators with valid email addresses",
+        title: "Incomplete Information",
+        description: "Please complete all fields for each collaborator before saving.",
         variant: "destructive",
       });
       return;
     }
 
+    // Clear any previous invalid state
+    setInvalidRowIds(new Set());
     setChangesSummary(changes);
     setShowSaveConfirm(true);
   }, [calculateChanges, newRows, onClose, toast]);
@@ -392,8 +404,8 @@ export const CollaboratorsModal = ({
   return (
     <>
       <Dialog open={isOpen} onOpenChange={(open) => !open && handleClose()}>
-        {/* Issue 6: Increased modal width to max-w-6xl */}
-        <DialogContent className="max-w-6xl h-[80vh] flex flex-col">
+        {/* Issue 10: Increased modal width to 85vw */}
+        <DialogContent className="max-w-[85vw] h-[80vh] flex flex-col">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <Users className="h-5 w-5" />
@@ -414,13 +426,14 @@ export const CollaboratorsModal = ({
                     <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
                   </div>
                 ) : (
-                  <Table>
+                  <Table className="table-fixed">
                     <TableHeader className="sticky top-0 bg-background z-10">
                       <TableRow>
-                        <TableHead className="py-2 text-xs">Name</TableHead>
-                        <TableHead className="py-2 text-xs">Email</TableHead>
-                        {/* Issue 8: Fixed min-width for Account Type column */}
-                        <TableHead className="py-2 text-xs min-w-[110px] w-[110px]">Account Type</TableHead>
+                        {/* Issue 10: Equal fixed widths for Name and Email */}
+                        <TableHead className="py-2 text-xs w-[180px]">Name</TableHead>
+                        <TableHead className="py-2 text-xs w-[180px]">Email</TableHead>
+                        {/* Issue 11: Fixed width for Account Type column */}
+                        <TableHead className="py-2 text-xs w-[140px] min-w-[140px]">Account Type</TableHead>
                         <TableHead className="py-2 text-xs w-[60px]"></TableHead>
                       </TableRow>
                     </TableHeader>
@@ -430,19 +443,20 @@ export const CollaboratorsModal = ({
                         
                         return (
                           <TableRow key={collab.id} className="h-10">
-                            <TableCell className="py-1 px-2">
+                            {/* Issue 10: Fixed width cells */}
+                            <TableCell className="py-1 px-2 w-[180px]">
                               <div className="flex items-center gap-2">
-                                <span className="text-sm truncate max-w-[120px]">{collab.name}</span>
+                                <span className="text-sm truncate max-w-[140px]">{collab.name}</span>
                                 {collab.isPending && (
                                   <Badge variant="secondary" className="text-xs">Pending</Badge>
                                 )}
                               </div>
                             </TableCell>
-                            <TableCell className="py-1 px-2 text-sm text-muted-foreground truncate max-w-[150px]">
+                            <TableCell className="py-1 px-2 text-sm text-muted-foreground truncate w-[180px]">
                               {collab.email || "—"}
                             </TableCell>
-                            {/* Issue 8: Fixed min-width for Account Type cells */}
-                            <TableCell className="py-1 px-2 min-w-[110px]">
+                            {/* Issue 11: Fixed width for Account Type cells */}
+                            <TableCell className="py-1 px-2 w-[140px] min-w-[140px]">
                               <Badge variant={collab.role === "admin" ? "default" : "secondary"}>
                                 {collab.role === "admin" ? "Admin" : "Contributor"}
                               </Badge>
@@ -476,74 +490,96 @@ export const CollaboratorsModal = ({
             </div>
 
             {/* Right Pane - Add New Collaborators */}
-            <div className="w-[380px] shrink-0 flex flex-col border rounded-lg overflow-hidden">
+            <div className="w-[420px] shrink-0 flex flex-col border rounded-lg overflow-hidden">
               <div className="p-2 border-b bg-muted/50 text-sm font-medium shrink-0">
                 Add New Collaborators
               </div>
               <div className="flex-1 overflow-auto">
-                <Table>
+                <Table className="table-fixed">
                   <TableHeader className="sticky top-0 bg-background z-10">
                     <TableRow>
-                      <TableHead className="py-2 text-xs">Name</TableHead>
-                      <TableHead className="py-2 text-xs">Email</TableHead>
-                      {/* Issue 8: Fixed min-width for Account Type column */}
-                      <TableHead className="py-2 text-xs min-w-[110px] w-[110px]">Account Type</TableHead>
+                      {/* Issue 10: Equal fixed widths for Name and Email */}
+                      <TableHead className="py-2 text-xs w-[120px]">Name</TableHead>
+                      <TableHead className="py-2 text-xs w-[140px]">Email</TableHead>
+                      {/* Issue 11: Fixed width for Account Type column */}
+                      <TableHead className="py-2 text-xs w-[110px] min-w-[110px]">Account Type</TableHead>
                       <TableHead className="py-2 text-xs w-[40px]"></TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {newRows.map((row, index) => (
-                      <TableRow key={row.tempId} className="h-10">
-                        <TableCell className="py-1 px-1">
-                          <Input
-                            placeholder="Name"
-                            value={row.name}
-                            onChange={(e) => updateNewRow(row.tempId, "name", e.target.value)}
-                            className="h-8 text-sm"
-                            autoFocus={index === 0}
-                          />
-                        </TableCell>
-                        <TableCell className="py-1 px-1">
-                          <Input
-                            type="email"
-                            placeholder="Email"
-                            value={row.email}
-                            onChange={(e) => updateNewRow(row.tempId, "email", e.target.value)}
-                            className="h-8 text-sm"
-                          />
-                        </TableCell>
-                        {/* Issue 8: Fixed min-width */}
-                        <TableCell className="py-1 px-1 min-w-[110px]">
-                          <Select
-                            value={row.role}
-                            onValueChange={(value) => updateNewRow(row.tempId, "role", value)}
-                          >
-                            <SelectTrigger className="h-8 text-sm">
-                              <SelectValue />
-                            </SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="admin">Admin</SelectItem>
-                              <SelectItem value="contributor">Contributor</SelectItem>
-                            </SelectContent>
-                          </Select>
-                        </TableCell>
-                        <TableCell className="py-1 px-1">
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-7 w-7 text-destructive hover:text-destructive"
-                            onClick={() => deleteNewRow(row.tempId)}
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
-                        </TableCell>
-                      </TableRow>
-                    ))}
+                    {newRows.map((row, index) => {
+                      // Issue 8: Check if row is invalid for red outline
+                      const isInvalid = invalidRowIds.has(row.tempId);
+                      const isLastRow = index === newRows.length - 1;
+                      
+                      return (
+                        <TableRow key={row.tempId} className="h-10">
+                          <TableCell className="py-1 px-1 w-[120px]">
+                            <Input
+                              ref={isLastRow ? lastRowNameRef : undefined}
+                              placeholder="Name"
+                              value={row.name}
+                              onChange={(e) => {
+                                updateNewRow(row.tempId, "name", e.target.value);
+                                // Clear invalid state on change
+                                if (isInvalid) setInvalidRowIds(prev => {
+                                  const next = new Set(prev);
+                                  next.delete(row.tempId);
+                                  return next;
+                                });
+                              }}
+                              className={`h-8 text-sm ${isInvalid && !row.name ? "border-red-500" : ""}`}
+                            />
+                          </TableCell>
+                          <TableCell className="py-1 px-1 w-[140px]">
+                            <Input
+                              type="email"
+                              placeholder="Email"
+                              value={row.email}
+                              onChange={(e) => {
+                                updateNewRow(row.tempId, "email", e.target.value);
+                                if (isInvalid) setInvalidRowIds(prev => {
+                                  const next = new Set(prev);
+                                  next.delete(row.tempId);
+                                  return next;
+                                });
+                              }}
+                              className={`h-8 text-sm ${isInvalid && (!row.email || !row.email.includes("@")) ? "border-red-500" : ""}`}
+                            />
+                          </TableCell>
+                          {/* Issue 11: Fixed width */}
+                          <TableCell className="py-1 px-1 w-[110px] min-w-[110px]">
+                            <Select
+                              value={row.role}
+                              onValueChange={(value) => updateNewRow(row.tempId, "role", value)}
+                            >
+                              <SelectTrigger className="h-8 text-sm">
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="admin">Admin</SelectItem>
+                                <SelectItem value="contributor">Contributor</SelectItem>
+                              </SelectContent>
+                            </Select>
+                          </TableCell>
+                          <TableCell className="py-1 px-1">
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-7 w-7 text-destructive hover:text-destructive"
+                              onClick={() => deleteNewRow(row.tempId)}
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })}
                   </TableBody>
                 </Table>
               </div>
-              {/* Issue 5: Removed border-t, reduced padding */}
-              <div className="p-2">
+              {/* Issue 5: Button directly below last row */}
+              <div className="px-2 py-1">
                 <Button
                   variant="outline"
                   size="sm"
