@@ -1121,16 +1121,24 @@ const ProjectWizardContent = () => {
                 </AccordionContent>
               </AccordionItem>
 
-              {/* Issue 9 & 10: Button moved outside AccordionTrigger */}
+              {/* Issue 12: Button inline with section title, not inside trigger */}
               <AccordionItem value="assets-systems" className="border rounded-lg px-6">
-                <div className="flex items-center justify-between">
-                  <AccordionTrigger className="text-lg font-semibold flex-1">
-                    <span>Assets, Water Systems & Processes</span>
+                <div className="flex items-center">
+                  <AccordionTrigger className="text-lg font-semibold flex-1 hover:no-underline">
+                    <div className="flex items-center gap-2">
+                      <span>Assets, Water Systems & Processes</span>
+                      {/* Issue 23: Show instance count, not class count */}
+                      {analysisItems.length > 0 && (
+                        <span className="text-sm font-normal text-muted-foreground">
+                          ({analysisItems.length})
+                        </span>
+                      )}
+                    </div>
                   </AccordionTrigger>
                   <Button
-                    variant="outline"
+                    variant="link"
                     size="sm"
-                    className="ml-4 no-underline hover:no-underline"
+                    className="text-blue-600 hover:text-blue-800 p-0 h-auto ml-2"
                     onClick={(e) => {
                       e.stopPropagation();
                       setShowAWPEditModal(true);
