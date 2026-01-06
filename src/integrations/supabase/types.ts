@@ -16,24 +16,34 @@ export type Database = {
     Tables: {
       awp_class_control_mappings: {
         Row: {
+          awp_class_id: string | null
           awp_class_name: string
           control_id: string
           created_at: string | null
           id: string
         }
         Insert: {
+          awp_class_id?: string | null
           awp_class_name: string
           control_id: string
           created_at?: string | null
           id?: string
         }
         Update: {
+          awp_class_id?: string | null
           awp_class_name?: string
           control_id?: string
           created_at?: string | null
           id?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "awp_class_control_mappings_awp_class_id_fkey"
+            columns: ["awp_class_id"]
+            isOneToOne: false
+            referencedRelation: "awp_classes"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "awp_class_control_mappings_control_id_fkey"
             columns: ["control_id"]
@@ -42,6 +52,36 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      awp_classes: {
+        Row: {
+          category: string
+          created_at: string | null
+          display_order: number | null
+          id: string
+          id_prefix: string
+          is_active: boolean | null
+          name: string
+        }
+        Insert: {
+          category: string
+          created_at?: string | null
+          display_order?: number | null
+          id?: string
+          id_prefix: string
+          is_active?: boolean | null
+          name: string
+        }
+        Update: {
+          category?: string
+          created_at?: string | null
+          display_order?: number | null
+          id?: string
+          id_prefix?: string
+          is_active?: boolean | null
+          name?: string
+        }
+        Relationships: []
       }
       company_proposals: {
         Row: {
@@ -539,6 +579,7 @@ export type Database = {
           additional_parameters: Json | null
           area_name: string | null
           area_sqft: number | null
+          awp_class_id: string | null
           category: string
           controls: string[] | null
           coordinates: number[] | null
@@ -560,6 +601,7 @@ export type Database = {
           additional_parameters?: Json | null
           area_name?: string | null
           area_sqft?: number | null
+          awp_class_id?: string | null
           category: string
           controls?: string[] | null
           coordinates?: number[] | null
@@ -581,6 +623,7 @@ export type Database = {
           additional_parameters?: Json | null
           area_name?: string | null
           area_sqft?: number | null
+          awp_class_id?: string | null
           category?: string
           controls?: string[] | null
           coordinates?: number[] | null
@@ -599,6 +642,13 @@ export type Database = {
           width?: number | null
         }
         Relationships: [
+          {
+            foreignKeyName: "project_analysis_items_awp_class_id_fkey"
+            columns: ["awp_class_id"]
+            isOneToOne: false
+            referencedRelation: "awp_classes"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "project_analysis_items_project_id_fkey"
             columns: ["project_id"]

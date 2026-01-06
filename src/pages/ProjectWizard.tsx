@@ -1115,34 +1115,32 @@ const ProjectWizardContent = () => {
                 </AccordionContent>
               </AccordionItem>
 
-              {/* Issue 12: Button BEFORE chevron using custom AccordionPrimitive layout */}
+              {/* Issue 12: Button after title, chevron inside trigger for animation */}
               <AccordionItem value="assets-systems" className="border rounded-lg px-6">
                 <AccordionPrimitive.Header className="flex items-center py-4">
-                  <AccordionPrimitive.Trigger className="flex flex-1 items-center text-lg font-semibold hover:no-underline [&[data-state=open]>svg]:rotate-180">
-                    <div className="flex items-center gap-2 flex-1">
+                  <AccordionPrimitive.Trigger className="flex flex-1 items-center justify-between text-lg font-semibold hover:no-underline group">
+                    <div className="flex items-center gap-2">
                       <span>Assets, Water Systems & Processes</span>
-                      {/* Issue 23: Show instance count, not class count */}
                       {analysisItems.length > 0 && (
                         <span className="text-sm font-normal text-muted-foreground">
                           ({analysisItems.length})
                         </span>
                       )}
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="ml-2"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setAwpModalKey(prev => prev + 1);
+                          setShowAWPEditModal(true);
+                        }}
+                      >
+                        {analysisItems.length === 0 ? "Add New" : "Edit List"}
+                      </Button>
                     </div>
+                    <ChevronDown className="h-4 w-4 shrink-0 transition-transform duration-200 group-data-[state=open]:rotate-180" />
                   </AccordionPrimitive.Trigger>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="flex items-center gap-2 mx-2"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      // Bug 2: Increment key to force remount
-                      setAwpModalKey(prev => prev + 1);
-                      setShowAWPEditModal(true);
-                    }}
-                  >
-                    {analysisItems.length === 0 ? "Add New" : "Edit List"}
-                  </Button>
-                  <ChevronDown className="h-4 w-4 shrink-0 transition-transform duration-200" />
                 </AccordionPrimitive.Header>
                 <AccordionContent className="space-y-8 pt-4">
                   {/* Empty state when no items */}
