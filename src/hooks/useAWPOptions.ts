@@ -5,10 +5,13 @@ export interface AWPOption {
   id: string;
   name: string;
   category: "Asset" | "Water System" | "Process";
+  idPrefix: string | null;
+  defaultControlIds: string[];
 }
 
 /**
  * Fetches AWP options from critical_assets, water_systems, and processes tables
+ * Now includes id_prefix and default_control_ids for ID generation and control assignment
  */
 export function useAWPOptions() {
   return useQuery({
@@ -18,17 +21,17 @@ export function useAWPOptions() {
       const [assetsRes, systemsRes, processesRes] = await Promise.all([
         supabase
           .from("critical_assets")
-          .select("id, name, display_order")
+          .select("id, name, display_order, id_prefix, default_control_ids")
           .eq("is_active", true)
           .order("display_order"),
         supabase
           .from("water_systems")
-          .select("id, name, display_order")
+          .select("id, name, display_order, id_prefix, default_control_ids")
           .eq("is_active", true)
           .order("display_order"),
         supabase
           .from("processes")
-          .select("id, name, display_order")
+          .select("id, name, display_order, id_prefix, default_control_ids")
           .eq("is_active", true)
           .order("display_order"),
       ]);
@@ -47,18 +50,24 @@ export function useAWPOptions() {
         id: a.id,
         name: a.name,
         category: "Asset" as const,
+        idPrefix: a.id_prefix || null,
+        defaultControlIds: (a.default_control_ids as string[]) || [],
       }));
 
       const systems: AWPOption[] = (systemsRes.data || []).map((s) => ({
         id: s.id,
         name: s.name,
         category: "Water System" as const,
+        idPrefix: s.id_prefix || null,
+        defaultControlIds: (s.default_control_ids as string[]) || [],
       }));
 
       const processes: AWPOption[] = (processesRes.data || []).map((p) => ({
         id: p.id,
         name: p.name,
         category: "Process" as const,
+        idPrefix: p.id_prefix || null,
+        defaultControlIds: (p.default_control_ids as string[]) || [],
       }));
 
       return [...assets, ...systems, ...processes];
@@ -86,6 +95,29 @@ export function groupAWPOptionsByCategory(options: AWPOption[]): Record<string, 
 export function getCategoryForName(options: AWPOption[], name: string): "Asset" | "Water System" | "Process" | null {
   const found = options.find((o) => o.name === name);
   return found?.category || null;
+}
+
+/**
+ * Get AWP option by name
+ */
+export function getOptionByName(options: AWPOption[], name: string): AWPOption | undefined {
+  return options.find((o) => o.name === name);
+}
+
+/**
+ * Get ID prefix for a given AWP name
+ */
+export function getIdPrefixForName(options: AWPOption[], name: string): string | null {
+  const found = options.find((o) => o.name === name);
+  return found?.idPrefix || null;
+}
+
+/**
+ * Get default control IDs for a given AWP name
+ */
+export function getDefaultControlIdsForName(options: AWPOption[], name: string): string[] {
+  const found = options.find((o) => o.name === name);
+  return found?.defaultControlIds || [];
 }
 
 /**

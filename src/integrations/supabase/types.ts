@@ -280,10 +280,12 @@ export type Database = {
         Row: {
           cost: string
           created_at: string
+          default_control_ids: string[]
           display_order: number
           duration: string | null
           end_date_formula: string | null
           id: string
+          id_prefix: string | null
           image_url: string
           is_active: boolean
           name: string
@@ -297,10 +299,12 @@ export type Database = {
         Insert: {
           cost: string
           created_at?: string
+          default_control_ids?: string[]
           display_order?: number
           duration?: string | null
           end_date_formula?: string | null
           id?: string
+          id_prefix?: string | null
           image_url: string
           is_active?: boolean
           name: string
@@ -314,10 +318,12 @@ export type Database = {
         Update: {
           cost?: string
           created_at?: string
+          default_control_ids?: string[]
           display_order?: number
           duration?: string | null
           end_date_formula?: string | null
           id?: string
+          id_prefix?: string | null
           image_url?: string
           is_active?: boolean
           name?: string
@@ -497,10 +503,12 @@ export type Database = {
         Row: {
           cost: string
           created_at: string
+          default_control_ids: string[]
           display_order: number
           duration: string | null
           end_date_formula: string | null
           id: string
+          id_prefix: string | null
           image_url: string
           is_active: boolean
           name: string
@@ -514,10 +522,12 @@ export type Database = {
         Insert: {
           cost: string
           created_at?: string
+          default_control_ids?: string[]
           display_order?: number
           duration?: string | null
           end_date_formula?: string | null
           id?: string
+          id_prefix?: string | null
           image_url?: string
           is_active?: boolean
           name: string
@@ -531,10 +541,12 @@ export type Database = {
         Update: {
           cost?: string
           created_at?: string
+          default_control_ids?: string[]
           display_order?: number
           duration?: string | null
           end_date_formula?: string | null
           id?: string
+          id_prefix?: string | null
           image_url?: string
           is_active?: boolean
           name?: string
@@ -982,10 +994,12 @@ export type Database = {
         Row: {
           cost: string
           created_at: string
+          default_control_ids: string[]
           display_order: number
           duration: string | null
           end_date_formula: string | null
           id: string
+          id_prefix: string | null
           image_url: string
           is_active: boolean
           name: string
@@ -999,10 +1013,12 @@ export type Database = {
         Insert: {
           cost: string
           created_at?: string
+          default_control_ids?: string[]
           display_order?: number
           duration?: string | null
           end_date_formula?: string | null
           id?: string
+          id_prefix?: string | null
           image_url: string
           is_active?: boolean
           name: string
@@ -1016,10 +1032,12 @@ export type Database = {
         Update: {
           cost?: string
           created_at?: string
+          default_control_ids?: string[]
           display_order?: number
           duration?: string | null
           end_date_formula?: string | null
           id?: string
+          id_prefix?: string | null
           image_url?: string
           is_active?: boolean
           name?: string
