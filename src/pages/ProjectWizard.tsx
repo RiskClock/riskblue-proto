@@ -152,30 +152,21 @@ const ProjectWizardContent = () => {
     return lower.replace(/[,&]/g, '').replace(/\s+/g, ' ').trim();
   };
 
-  // Compute class counts for subheadings using normalized names
-  const assetClassCount = useMemo(() => {
-    const assetNames = new Set<string>();
-    analysisItems.forEach(item => {
-      if (item.category === "Asset") assetNames.add(normalizeAssetName(item.name));
-    });
-    return assetNames.size;
-  }, [analysisItems]);
+  // Issue 23: Compute INSTANCE counts for subheadings (not unique class counts)
+  const assetInstanceCount = useMemo(() => 
+    analysisItems.filter(item => item.category === "Asset").length, 
+    [analysisItems]
+  );
 
-  const waterSystemClassCount = useMemo(() => {
-    const systemNames = new Set<string>();
-    analysisItems.forEach(item => {
-      if (item.category === "Water System") systemNames.add(normalizeSystemName(item.name));
-    });
-    return systemNames.size;
-  }, [analysisItems]);
+  const waterSystemInstanceCount = useMemo(() => 
+    analysisItems.filter(item => item.category === "Water System").length, 
+    [analysisItems]
+  );
 
-  const processClassCount = useMemo(() => {
-    const processNames = new Set<string>();
-    analysisItems.forEach(item => {
-      if (item.category === "Process") processNames.add(normalizeProcessName(item.name));
-    });
-    return processNames.size;
-  }, [analysisItems]);
+  const processInstanceCount = useMemo(() => 
+    analysisItems.filter(item => item.category === "Process").length, 
+    [analysisItems]
+  );
 
   // Fetch control costs from database (including monthly costs for full calculation)
   const { data: controlCosts = [] } = useQuery({
@@ -1164,8 +1155,8 @@ const ProjectWizardContent = () => {
                   <div className="space-y-6">
                     <h3 className="text-md font-medium">
                       Critical Assets
-                      {assetClassCount > 0 && (
-                        <span className="ml-2 text-muted-foreground font-normal">({assetClassCount})</span>
+                      {assetInstanceCount > 0 && (
+                        <span className="ml-2 text-muted-foreground font-normal">({assetInstanceCount})</span>
                       )}
                     </h3>
                     <CriticalAssetsStep 
@@ -1182,8 +1173,8 @@ const ProjectWizardContent = () => {
                   <div className="space-y-6 pt-6 border-t">
                     <h3 className="text-md font-medium">
                       Water Systems
-                      {waterSystemClassCount > 0 && (
-                        <span className="ml-2 text-muted-foreground font-normal">({waterSystemClassCount})</span>
+                      {waterSystemInstanceCount > 0 && (
+                        <span className="ml-2 text-muted-foreground font-normal">({waterSystemInstanceCount})</span>
                       )}
                     </h3>
                     <WaterSystemsStep 
@@ -1200,8 +1191,8 @@ const ProjectWizardContent = () => {
                   <div className="space-y-6 pt-6 border-t">
                     <h3 className="text-md font-medium">
                       Processes
-                      {processClassCount > 0 && (
-                        <span className="ml-2 text-muted-foreground font-normal">({processClassCount})</span>
+                      {processInstanceCount > 0 && (
+                        <span className="ml-2 text-muted-foreground font-normal">({processInstanceCount})</span>
                       )}
                     </h3>
                     <ProcessesStep 

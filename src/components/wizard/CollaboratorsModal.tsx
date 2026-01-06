@@ -254,8 +254,12 @@ export const CollaboratorsModal = ({
   // Issue 6: Add new row and focus name input
   const handleAddRow = useCallback(() => {
     setNewRows(prev => [...prev, createEmptyRow()]);
-    // Focus after render
-    setTimeout(() => lastRowNameRef.current?.focus(), 0);
+    // Focus after render - use requestAnimationFrame for more reliable timing
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        lastRowNameRef.current?.focus();
+      });
+    });
   }, []);
 
   // Handle save click - Issue 8 & 9: Mark invalid rows with red outline and show generic message
@@ -416,7 +420,7 @@ export const CollaboratorsModal = ({
           {/* Issue 7: Dynamic pane widths using flex-1 and shrink-0 */}
           <div className="flex-1 flex gap-4 overflow-hidden">
             {/* Left Pane - Collaborators List */}
-            <div className="flex-1 flex flex-col border rounded-lg overflow-hidden min-w-0">
+            <div className="w-[55%] flex flex-col border rounded-lg overflow-hidden min-w-0">
               <div className="p-2 border-b bg-muted/50 text-sm font-medium shrink-0">
                 Collaborators List ({visibleCollaborators.length})
               </div>
@@ -489,8 +493,8 @@ export const CollaboratorsModal = ({
               </div>
             </div>
 
-            {/* Right Pane - Add New Collaborators */}
-            <div className="w-[420px] shrink-0 flex flex-col border rounded-lg overflow-hidden">
+            {/* Right Pane - Add New Collaborators - Issue 28: More balanced split */}
+            <div className="w-[45%] min-w-[400px] flex flex-col border rounded-lg overflow-hidden">
               <div className="p-2 border-b bg-muted/50 text-sm font-medium shrink-0">
                 Add New Collaborators
               </div>
@@ -578,13 +582,13 @@ export const CollaboratorsModal = ({
                   </TableBody>
                 </Table>
               </div>
-              {/* Issue 5: Button directly below last row */}
-              <div className="px-2 py-1">
+              {/* Issue 5: Button directly below last row - removed padding */}
+              <div>
                 <Button
                   variant="outline"
                   size="sm"
                   onClick={handleAddRow}
-                  className="w-full"
+                  className="w-full rounded-none border-x-0 border-b-0"
                 >
                   <Plus className="h-4 w-4 mr-1" />
                   Add Row
