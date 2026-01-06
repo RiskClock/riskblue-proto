@@ -1,11 +1,12 @@
-import { useState, useMemo, useCallback, useEffect, useLayoutEffect } from "react";
+import { useState, useMemo, useCallback, useEffect, useLayoutEffect, useRef } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
-import { Plus, Trash2, Pencil, ChevronDown, FolderOpen } from "lucide-react";
+import { Plus, Trash2, Pencil, ChevronDown, FolderOpen, Paperclip, X } from "lucide-react";
+import { supabase } from "@/integrations/supabase/client";
 import { AnalysisItem } from "@/lib/analysisItemMapper";
 import { AWPItemEditModal } from "./AWPItemEditModal";
 import { RepositoryConnectionDialog } from "./RepositoryConnectionDialog";
@@ -35,6 +36,7 @@ interface AWPEditModalProps {
   projectName?: string;
   onBeforeOAuthRedirect?: () => Promise<void>;
   onFilesLoaded?: (files: any[], accessToken: string) => void;
+  initialNewItems?: AnalysisItem[]; // Phase 5: Pre-populate from analysis results
 }
 
 type AreaUnit = "sqft" | "sqm";
@@ -49,6 +51,8 @@ interface NewRowItem {
   areaSqft: number | null;
   pipeDiameterInches: number | null;
   pipeDiameterMM: number | null;
+  drawingFile: File | null; // Phase 3: Drawing upload
+  drawingUrl: string | null; // Phase 3: Existing drawing URL
 }
 
 interface ChangesSummary {
@@ -67,6 +71,22 @@ const createEmptyRow = (): NewRowItem => ({
   areaSqft: null,
   pipeDiameterInches: null,
   pipeDiameterMM: null,
+  drawingFile: null,
+  drawingUrl: null,
+});
+
+// Convert AnalysisItem to NewRowItem for pre-population
+const analysisItemToNewRow = (item: AnalysisItem): NewRowItem => ({
+  tempId: `NEW-${Date.now()}-${Math.random()}-${item.id}`,
+  name: item.name,
+  areaName: item.areaName || "",
+  floor: item.floor || "",
+  drawingCode: item.drawingCode || "",
+  areaSqft: item.areaSqft || null,
+  pipeDiameterInches: (item.additionalParameters as any)?.pipeDiameterInches || null,
+  pipeDiameterMM: (item.additionalParameters as any)?.pipeDiameterMM || null,
+  drawingFile: null,
+  drawingUrl: item.drawingUrl || null,
 });
 
 export const AWPEditModal = ({
@@ -78,7 +98,10 @@ export const AWPEditModal = ({
   projectName,
   onBeforeOAuthRedirect,
   onFilesLoaded,
+  initialNewItems,
 }: AWPEditModalProps) => {
+  // Hidden file input refs for drawing uploads
+  const fileInputRefs = useRef<Map<string, HTMLInputElement>>(new Map());
   // Original items for comparison
   const [originalItems, setOriginalItems] = useState<AnalysisItem[]>([]);
   
@@ -125,7 +148,15 @@ export const AWPEditModal = ({
       setOriginalItems(deepCopyItems);
       setExistingItems(analysisItems.map(item => JSON.parse(JSON.stringify(item))));
       setDeletedItemIds(new Set());
-      setNewRows([createEmptyRow()]); // Fresh default row
+      
+      // Phase 5: Pre-populate with initialNewItems if provided
+      if (initialNewItems && initialNewItems.length > 0) {
+        const prePopulatedRows = initialNewItems.map(item => analysisItemToNewRow(item));
+        setNewRows([...prePopulatedRows, createEmptyRow()]);
+      } else {
+        setNewRows([createEmptyRow()]); // Fresh default row
+      }
+      
       setChangesSummary(null);
       setShowSaveConfirmation(false);
       setShowDiscardConfirm(false);
@@ -133,7 +164,7 @@ export const AWPEditModal = ({
       setAreaUnit("sqft");
       setPipeUnit("in");
     }
-  }, [isOpen, analysisItems]);
+  }, [isOpen, analysisItems, initialNewItems]);
 
   // Visible existing items (excluding deleted)
   const visibleExistingItems = useMemo(() => 
@@ -300,7 +331,22 @@ export const AWPEditModal = ({
     }
   }, [calculateChanges, onClose]);
 
+  // Phase 3: Handle drawing file selection
+  const handleDrawingFileChange = useCallback((tempId: string, file: File | null) => {
+    updateNewRow(tempId, "drawingFile", file);
+    if (file) {
+      updateNewRow(tempId, "drawingUrl", null); // Clear URL when new file selected
+    }
+  }, [updateNewRow]);
+
+  // Phase 3: Remove drawing from row
+  const handleRemoveDrawing = useCallback((tempId: string) => {
+    updateNewRow(tempId, "drawingFile", null);
+    updateNewRow(tempId, "drawingUrl", null);
+  }, [updateNewRow]);
+
   // Issue 22: Confirm save - generate IDs incrementally to avoid duplicates
+  // Phase 3: Upload drawings to storage
   // Phase 5: Auto-assign default controls based on class name
   const handleConfirmSave = useCallback(async () => {
     // Filter out deleted items
@@ -314,46 +360,72 @@ export const AWPEditModal = ({
     const { fetchControlMappings } = await import("@/lib/controlAutoAssignment");
     const controlMappings = await fetchControlMappings();
     
-    newRows
-      .filter(row => row.name)
-      .forEach(row => {
-        const category = CLASS_TO_CATEGORY_MAP[row.name];
-        // Issue 22: Pass accumulated items so each new item gets incrementing ID
-        const id = generateNextId(row.name, allCurrentItems);
-        
-        // Phase 5: Get default controls for this class
-        const defaultControls = controlMappings.get(row.name) || [];
-        
-        const newItem: AnalysisItem = {
-          id,
-          name: row.name,
-          category: category || "Asset",
-          areaName: row.areaName || undefined,
-          floor: row.floor || undefined,
-          drawingCode: row.drawingCode || undefined,
-          fileName: undefined,
-          areaSqft: row.areaSqft || undefined,
-          width: undefined,
-          length: undefined,
-          sizeCategory: undefined,
-          coordinates: undefined,
-          controls: defaultControls, // Auto-assigned default controls
-          additionalParameters: row.pipeDiameterInches ? {
-            pipeDiameterInches: row.pipeDiameterInches,
-            pipeDiameterMM: row.pipeDiameterMM,
-          } : undefined,
-        };
-        
-        // Add to accumulated list for next ID generation
-        allCurrentItems.push(newItem);
-        newItems.push(newItem);
-      });
+    // Phase 3: Upload drawings and collect URLs
+    const rowsWithDrawings = newRows.filter(row => row.name && row.drawingFile);
+    const uploadPromises = rowsWithDrawings.map(async (row) => {
+      const file = row.drawingFile!;
+      const fileName = `${projectId}/${Date.now()}-${file.name}`;
+      const { data, error } = await supabase.storage
+        .from('awp-drawings')
+        .upload(fileName, file);
+      
+      if (error) {
+        console.error('Error uploading drawing:', error);
+        return { tempId: row.tempId, url: null };
+      }
+      
+      const { data: urlData } = supabase.storage
+        .from('awp-drawings')
+        .getPublicUrl(data.path);
+      
+      return { tempId: row.tempId, url: urlData.publicUrl };
+    });
+    
+    const uploadResults = await Promise.all(uploadPromises);
+    const drawingUrlMap = new Map(uploadResults.map(r => [r.tempId, r.url]));
+    
+    for (const row of newRows.filter(row => row.name)) {
+      const category = CLASS_TO_CATEGORY_MAP[row.name];
+      // Issue 22: Pass accumulated items so each new item gets incrementing ID
+      const id = generateNextId(row.name, allCurrentItems);
+      
+      // Phase 5: Get default controls for this class
+      const defaultControls = controlMappings.get(row.name) || [];
+      
+      // Phase 3: Get drawing URL (uploaded or existing)
+      const drawingUrl = drawingUrlMap.get(row.tempId) || row.drawingUrl || undefined;
+      
+      const newItem: AnalysisItem = {
+        id,
+        name: row.name,
+        category: category || "Asset",
+        areaName: row.areaName || undefined,
+        floor: row.floor || undefined,
+        drawingCode: row.drawingCode || undefined,
+        fileName: undefined,
+        areaSqft: row.areaSqft || undefined,
+        width: undefined,
+        length: undefined,
+        sizeCategory: undefined,
+        coordinates: undefined,
+        controls: defaultControls, // Auto-assigned default controls
+        drawingUrl, // Phase 3: Drawing URL
+        additionalParameters: row.pipeDiameterInches ? {
+          pipeDiameterInches: row.pipeDiameterInches,
+          pipeDiameterMM: row.pipeDiameterMM,
+        } : undefined,
+      };
+      
+      // Add to accumulated list for next ID generation
+      allCurrentItems.push(newItem);
+      newItems.push(newItem);
+    }
 
     const allItems = [...remainingItems, ...newItems];
     onUpdateItems(allItems);
     setShowSaveConfirmation(false);
     onClose();
-  }, [existingItems, deletedItemIds, newRows, onUpdateItems, onClose]);
+  }, [existingItems, deletedItemIds, newRows, onUpdateItems, onClose, projectId]);
 
   // Get size display for existing item
   const getItemSizeDisplay = (item: AnalysisItem) => {
@@ -497,11 +569,12 @@ export const AWPEditModal = ({
                   <TableHeader className="sticky top-0 bg-background z-10">
                     <TableRow>
                       <TableHead className="w-[100px] min-w-[100px] py-2 text-xs">Name</TableHead>
-                      <TableHead className="w-[150px] min-w-[150px] py-2 text-xs">Type</TableHead>
-                      <TableHead className="w-[50px] min-w-[50px] py-2 text-xs">Floor</TableHead>
-                      {hasAssets && <TableHead className="w-[70px] min-w-[70px] py-2 text-xs">Size</TableHead>}
-                      {hasWaterSystems && <TableHead className="w-[60px] min-w-[60px] py-2 text-xs">Pipe</TableHead>}
-                      <TableHead className="w-[40px] min-w-[40px] py-2 text-xs"></TableHead>
+                      <TableHead className="w-[130px] min-w-[130px] py-2 text-xs">Type</TableHead>
+                      <TableHead className="w-[40px] min-w-[40px] py-2 text-xs">Fl</TableHead>
+                      <TableHead className="w-[50px] min-w-[50px] py-2 text-xs">Drawing</TableHead>
+                      {hasAssets && <TableHead className="w-[60px] min-w-[60px] py-2 text-xs">Size</TableHead>}
+                      {hasWaterSystems && <TableHead className="w-[50px] min-w-[50px] py-2 text-xs">Pipe</TableHead>}
+                      <TableHead className="w-[36px] min-w-[36px] py-2 text-xs"></TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -531,14 +604,47 @@ export const AWPEditModal = ({
                             />
                           </TableCell>
                           
-                          {/* Floor - Issue 25: fixed width with min-w */}
-                          <TableCell className="py-1 px-1 w-[50px] min-w-[50px]">
+                          {/* Floor */}
+                          <TableCell className="py-1 px-1 w-[40px] min-w-[40px]">
                             <Input
-                              className="h-6 text-xs px-2"
+                              className="h-6 text-xs px-1"
                               placeholder="Fl"
                               value={row.floor}
                               onChange={(e) => updateNewRow(row.tempId, "floor", e.target.value)}
                             />
+                          </TableCell>
+                          
+                          {/* Phase 3: Drawing upload */}
+                          <TableCell className="py-1 px-1 w-[50px] min-w-[50px]">
+                            <input
+                              type="file"
+                              accept=".jpg,.jpeg,.png"
+                              className="hidden"
+                              ref={(el) => { if (el) fileInputRefs.current.set(row.tempId, el); }}
+                              onChange={(e) => handleDrawingFileChange(row.tempId, e.target.files?.[0] || null)}
+                            />
+                            {row.drawingFile || row.drawingUrl ? (
+                              <div className="flex items-center gap-0.5">
+                                <Paperclip className="h-3 w-3 text-green-600" />
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-4 w-4 p-0"
+                                  onClick={() => handleRemoveDrawing(row.tempId)}
+                                >
+                                  <X className="h-2.5 w-2.5 text-muted-foreground" />
+                                </Button>
+                              </div>
+                            ) : (
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-6 w-6"
+                                onClick={() => fileInputRefs.current.get(row.tempId)?.click()}
+                              >
+                                <Paperclip className="h-3 w-3 text-muted-foreground" />
+                              </Button>
+                            )}
                           </TableCell>
                           
                           {/* Size (Assets) - Issue 25: fixed width with min-w */}
