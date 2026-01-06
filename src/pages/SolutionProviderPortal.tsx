@@ -191,8 +191,13 @@ export default function SolutionProviderPortal() {
             <button onClick={() => navigate("/projects")} className="text-foreground hover:text-primary">
               Projects
             </button>
-            <button onClick={handleExitPortal} className="text-foreground hover:text-primary">
-              Exit Portal
+            {user?.email?.endsWith("@riskclock.com") && (
+              <button onClick={() => navigate("/configuration")} className="text-foreground hover:text-primary">
+                Configuration
+              </button>
+            )}
+            <button onClick={handleExitPortal} className="text-primary font-medium">
+              Solution Provider Portal
             </button>
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
