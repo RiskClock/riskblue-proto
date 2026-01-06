@@ -25,8 +25,9 @@ import {
   mmToInches,
 } from "@/lib/awpIdGenerator";
 
-import googleDriveIcon from "@/assets/icon_googledrive.png";
-import procoreIcon from "@/assets/icon_procore.png";
+// Bug 6: Use public folder paths for preloading
+const googleDriveIcon = "/icons/icon_googledrive.png";
+const procoreIcon = "/icons/icon_procore.png";
 
 interface AWPEditModalProps {
   isOpen: boolean;
@@ -109,17 +110,19 @@ export const AWPEditModal = ({
   
   // Combobox state for new rows
   const [openCombobox, setOpenCombobox] = useState<string | null>(null);
+  // Bug 3: Track search/filter value per row for MUI-style combobox
+  const [comboboxSearch, setComboboxSearch] = useState<Record<string, string>>({});
   
   // Repository connection dialog
   const [showRepositoryDialog, setShowRepositoryDialog] = useState(false);
   const [repositoryType, setRepositoryType] = useState<"google-drive" | "procore" | null>(null);
 
-  // Issue 21: Preload icons immediately using useLayoutEffect
+  // Bug 6: Preload icons from public folder
   useLayoutEffect(() => {
     const img1 = new Image();
-    img1.src = googleDriveIcon;
+    img1.src = "/icons/icon_googledrive.png";
     const img2 = new Image();
-    img2.src = procoreIcon;
+    img2.src = "/icons/icon_procore.png";
   }, []);
 
   // Initialize when modal opens - Issue 11: Start with one default row
@@ -514,77 +517,68 @@ export const AWPEditModal = ({
                             />
                           </TableCell>
                           
-                          {/* Issue 17: Type column second - Issue 25: fixed width - Issue 29: wider truncation */}
-                          <TableCell className="py-1 px-1 w-[150px] min-w-[150px]">
-                            <Popover open={openCombobox === row.tempId} onOpenChange={(open) => setOpenCombobox(open ? row.tempId : null)}>
-                              <PopoverTrigger asChild>
-                                <Button
-                                  variant="outline"
-                                  role="combobox"
-                                  className="w-full justify-between h-6 text-xs font-normal px-2"
-                                >
-                                  {/* Issue 29: Increased max-width for better text visibility */}
-                                  <span className="truncate max-w-[130px]" title={row.name || undefined}>{row.name || "Select..."}</span>
-                                  <ChevronsUpDown className="ml-1 h-3 w-3 shrink-0 opacity-50" />
-                                </Button>
-                              </PopoverTrigger>
-                              <PopoverContent className="w-[280px] p-0 bg-background" align="start">
-                                <Command>
-                                  <CommandInput placeholder="Search type..." className="h-8 text-xs" />
-                                  <CommandList>
-                                    <CommandEmpty>No type found.</CommandEmpty>
-                                    <CommandGroup heading="Asset">
-                                      {CLASSES_BY_CATEGORY.Asset.map((cls) => (
-                                        <CommandItem
-                                          key={cls}
-                                          value={cls}
-                                          onSelect={() => {
-                                            updateNewRow(row.tempId, "name", cls);
-                                            setOpenCombobox(null);
-                                          }}
-                                          className="text-xs"
-                                        >
-                                          {cls}
-                                          <Check className={cn("ml-auto h-3 w-3", row.name === cls ? "opacity-100" : "opacity-0")} />
-                                        </CommandItem>
-                                      ))}
-                                    </CommandGroup>
-                                    <CommandGroup heading="Water System">
-                                      {CLASSES_BY_CATEGORY["Water System"].map((cls) => (
-                                        <CommandItem
-                                          key={cls}
-                                          value={cls}
-                                          onSelect={() => {
-                                            updateNewRow(row.tempId, "name", cls);
-                                            setOpenCombobox(null);
-                                          }}
-                                          className="text-xs"
-                                        >
-                                          {cls}
-                                          <Check className={cn("ml-auto h-3 w-3", row.name === cls ? "opacity-100" : "opacity-0")} />
-                                        </CommandItem>
-                                      ))}
-                                    </CommandGroup>
-                                    <CommandGroup heading="Process">
-                                      {CLASSES_BY_CATEGORY.Process.map((cls) => (
-                                        <CommandItem
-                                          key={cls}
-                                          value={cls}
-                                          onSelect={() => {
-                                            updateNewRow(row.tempId, "name", cls);
-                                            setOpenCombobox(null);
-                                          }}
-                                          className="text-xs"
-                                        >
-                                          {cls}
-                                          <Check className={cn("ml-auto h-3 w-3", row.name === cls ? "opacity-100" : "opacity-0")} />
-                                        </CommandItem>
-                                      ))}
-                                    </CommandGroup>
-                                  </CommandList>
-                                </Command>
-                              </PopoverContent>
-                            </Popover>
+                          {/* Bug 3: MUI-style inline searchable Type field */}
+                          <TableCell className="py-1 px-1 w-[150px] min-w-[150px] relative">
+                            <div className="relative">
+                              <Input
+                                className="h-6 text-xs px-2 pr-6"
+                                placeholder="Type to search..."
+                                value={openCombobox === row.tempId ? (comboboxSearch[row.tempId] ?? "") : row.name}
+                                onChange={(e) => {
+                                  setComboboxSearch(prev => ({ ...prev, [row.tempId]: e.target.value }));
+                                  if (openCombobox !== row.tempId) {
+                                    setOpenCombobox(row.tempId);
+                                  }
+                                }}
+                                onFocus={() => {
+                                  setOpenCombobox(row.tempId);
+                                  setComboboxSearch(prev => ({ ...prev, [row.tempId]: "" }));
+                                }}
+                                onKeyDown={(e) => {
+                                  if (e.key === "Escape") {
+                                    setOpenCombobox(null);
+                                  }
+                                }}
+                              />
+                              <ChevronsUpDown className="absolute right-2 top-1/2 -translate-y-1/2 h-3 w-3 opacity-50 pointer-events-none" />
+                              
+                              {openCombobox === row.tempId && (
+                                <div className="absolute z-50 top-full left-0 w-[280px] mt-1 bg-background border rounded-md shadow-lg max-h-[300px] overflow-auto">
+                                  <Command>
+                                    <CommandList>
+                                      <CommandEmpty>No type found.</CommandEmpty>
+                                      {["Asset", "Water System", "Process"].map((category) => {
+                                        const options = CLASSES_BY_CATEGORY[category as keyof typeof CLASSES_BY_CATEGORY];
+                                        const search = (comboboxSearch[row.tempId] ?? "").toLowerCase();
+                                        const filtered = options.filter(cls => 
+                                          !search || cls.toLowerCase().includes(search)
+                                        );
+                                        if (filtered.length === 0) return null;
+                                        return (
+                                          <CommandGroup key={category} heading={category}>
+                                            {filtered.map((cls) => (
+                                              <CommandItem
+                                                key={cls}
+                                                value={cls}
+                                                onSelect={() => {
+                                                  updateNewRow(row.tempId, "name", cls);
+                                                  setOpenCombobox(null);
+                                                  setComboboxSearch(prev => ({ ...prev, [row.tempId]: "" }));
+                                                }}
+                                                className="text-xs cursor-pointer"
+                                              >
+                                                {cls}
+                                                <Check className={cn("ml-auto h-3 w-3", row.name === cls ? "opacity-100" : "opacity-0")} />
+                                              </CommandItem>
+                                            ))}
+                                          </CommandGroup>
+                                        );
+                                      })}
+                                    </CommandList>
+                                  </Command>
+                                </div>
+                              )}
+                            </div>
                           </TableCell>
                           
                           {/* Floor - Issue 25: fixed width with min-w */}

@@ -184,10 +184,11 @@ export const CollaboratorsModal = ({
     [collaborators, removedIds]
   );
 
-  // Check for unsaved changes
+  // Check for unsaved changes - Bug 5: Detect partial data
   const hasUnsavedChanges = useMemo(() => {
     const hasRemovals = removedIds.size > 0;
-    const hasNewEntries = newRows.some(row => row.name && row.email);
+    // Count any row with ANY data (partial or complete)
+    const hasNewEntries = newRows.some(row => row.name || row.email);
     return hasRemovals || hasNewEntries;
   }, [removedIds, newRows]);
 
@@ -532,7 +533,7 @@ export const CollaboratorsModal = ({
                                   return next;
                                 });
                               }}
-                              className={`h-8 text-sm ${isInvalid && !row.name ? "border-red-500" : ""}`}
+                              className={`h-8 text-sm ${isInvalid ? "border-red-500" : ""}`}
                             />
                           </TableCell>
                           <TableCell className="py-1 px-1 w-[140px]">
@@ -548,7 +549,7 @@ export const CollaboratorsModal = ({
                                   return next;
                                 });
                               }}
-                              className={`h-8 text-sm ${isInvalid && (!row.email || !row.email.includes("@")) ? "border-red-500" : ""}`}
+                              className={`h-8 text-sm ${isInvalid ? "border-red-500" : ""}`}
                             />
                           </TableCell>
                           {/* Issue 11: Fixed width */}
@@ -581,18 +582,19 @@ export const CollaboratorsModal = ({
                     })}
                   </TableBody>
                 </Table>
-              </div>
-              {/* Issue 5: Button directly below last row - removed padding */}
-              <div>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={handleAddRow}
-                  className="w-full rounded-none border-x-0 border-b-0"
-                >
-                  <Plus className="h-4 w-4 mr-1" />
-                  Add Row
-                </Button>
+                
+                {/* Bug 4: Button inside scroll container, directly after table */}
+                <div className="p-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={handleAddRow}
+                    className="w-full"
+                  >
+                    <Plus className="h-4 w-4 mr-1" />
+                    Add Row
+                  </Button>
+                </div>
               </div>
             </div>
           </div>
