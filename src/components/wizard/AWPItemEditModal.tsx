@@ -6,12 +6,9 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { AnalysisItem } from "@/lib/analysisItemMapper";
+import { useAWPOptions, groupAWPOptionsByCategory, isAssetName, isWaterSystemName, getCategoryForName } from "@/hooks/useAWPOptions";
 import {
-  CLASSES_BY_CATEGORY,
-  CLASS_TO_CATEGORY_MAP,
   generateNextId,
-  isAssetClass,
-  isWaterSystemClass,
   sqftToSqm,
   sqmToSqft,
   inchesToMm,
@@ -36,6 +33,10 @@ export const AWPItemEditModal = ({
   allItems,
   onSave,
 }: AWPItemEditModalProps) => {
+  // Fetch AWP options from DB
+  const { data: awpOptions = [] } = useAWPOptions();
+  const groupedOptions = useMemo(() => groupAWPOptionsByCategory(awpOptions), [awpOptions]);
+  
   const [localItem, setLocalItem] = useState<AnalysisItem>({ ...item });
   const [areaUnit, setAreaUnit] = useState<AreaUnit>("sqft");
   const [pipeUnit, setPipeUnit] = useState<PipeUnit>("in");
@@ -53,7 +54,7 @@ export const AWPItemEditModal = ({
       
       // If class name changed, update category and regenerate ID
       if (updates.name && updates.name !== prev.name) {
-        const newCategory = CLASS_TO_CATEGORY_MAP[updates.name];
+        const newCategory = getCategoryForName(awpOptions, updates.name);
         if (newCategory) {
           updated.category = newCategory;
           // Regenerate ID based on new class
@@ -64,7 +65,7 @@ export const AWPItemEditModal = ({
       
       return updated;
     });
-  }, [allItems]);
+  }, [allItems, awpOptions]);
 
   const handleAreaChange = useCallback((value: string, unit: AreaUnit) => {
     const numValue = parseFloat(value) || 0;
@@ -117,8 +118,8 @@ export const AWPItemEditModal = ({
     return params?.pipeDiameterMM || 0;
   }, [localItem, pipeUnit]);
 
-  const isItemAsset = localItem?.name ? isAssetClass(localItem.name) : false;
-  const isItemWaterSystem = localItem?.name ? isWaterSystemClass(localItem.name) : false;
+  const isItemAsset = localItem?.name ? isAssetName(awpOptions, localItem.name) : false;
+  const isItemWaterSystem = localItem?.name ? isWaterSystemName(awpOptions, localItem.name) : false;
 
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
@@ -142,24 +143,30 @@ export const AWPItemEditModal = ({
                 <SelectValue placeholder="Select a class" />
               </SelectTrigger>
               <SelectContent className="bg-background">
-                <SelectGroup>
-                  <SelectLabel className="font-semibold text-foreground">Asset</SelectLabel>
-                  {CLASSES_BY_CATEGORY.Asset.map((cls) => (
-                    <SelectItem key={cls} value={cls}>{cls}</SelectItem>
-                  ))}
-                </SelectGroup>
-                <SelectGroup>
-                  <SelectLabel className="font-semibold text-foreground">Water System</SelectLabel>
-                  {CLASSES_BY_CATEGORY["Water System"].map((cls) => (
-                    <SelectItem key={cls} value={cls}>{cls}</SelectItem>
-                  ))}
-                </SelectGroup>
-                <SelectGroup>
-                  <SelectLabel className="font-semibold text-foreground">Process</SelectLabel>
-                  {CLASSES_BY_CATEGORY.Process.map((cls) => (
-                    <SelectItem key={cls} value={cls}>{cls}</SelectItem>
-                  ))}
-                </SelectGroup>
+                {groupedOptions["Asset"] && groupedOptions["Asset"].length > 0 && (
+                  <SelectGroup>
+                    <SelectLabel className="font-semibold text-foreground">Asset</SelectLabel>
+                    {groupedOptions["Asset"].map((opt) => (
+                      <SelectItem key={opt.id} value={opt.name}>{opt.name}</SelectItem>
+                    ))}
+                  </SelectGroup>
+                )}
+                {groupedOptions["Water System"] && groupedOptions["Water System"].length > 0 && (
+                  <SelectGroup>
+                    <SelectLabel className="font-semibold text-foreground">Water System</SelectLabel>
+                    {groupedOptions["Water System"].map((opt) => (
+                      <SelectItem key={opt.id} value={opt.name}>{opt.name}</SelectItem>
+                    ))}
+                  </SelectGroup>
+                )}
+                {groupedOptions["Process"] && groupedOptions["Process"].length > 0 && (
+                  <SelectGroup>
+                    <SelectLabel className="font-semibold text-foreground">Process</SelectLabel>
+                    {groupedOptions["Process"].map((opt) => (
+                      <SelectItem key={opt.id} value={opt.name}>{opt.name}</SelectItem>
+                    ))}
+                  </SelectGroup>
+                )}
               </SelectContent>
             </Select>
           </div>
