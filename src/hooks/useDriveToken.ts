@@ -72,15 +72,19 @@ export function useDriveToken() {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) return false;
 
-      const response = await supabase.functions.invoke("google-drive-oauth", {
-        body: {},
+      // Call the refresh action with proper query parameter
+      const functionUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/google-drive-oauth?action=refresh`;
+      const response = await fetch(functionUrl, {
+        method: "POST",
         headers: {
           Authorization: `Bearer ${session.access_token}`,
+          "Content-Type": "application/json",
         },
       });
 
-      if (response.error) {
-        console.error("Token refresh error:", response.error);
+      if (!response.ok) {
+        const errorData = await response.json();
+        console.error("Token refresh error:", errorData);
         return false;
       }
 
