@@ -10,6 +10,8 @@ import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import riskBlueLogo from "@/assets/riskblue-logo.jpg";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
+import * as AccordionPrimitive from "@radix-ui/react-accordion";
+import { ChevronDown } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { ProjectInfoStep } from "@/components/wizard/ProjectInfoStep";
 import { ProjectMilestonesStep } from "@/components/wizard/ProjectMilestonesStep";
@@ -1113,11 +1115,11 @@ const ProjectWizardContent = () => {
                 </AccordionContent>
               </AccordionItem>
 
-              {/* Issue 12: Button inline with section title, not inside trigger */}
+              {/* Issue 12: Button BEFORE chevron using custom AccordionPrimitive layout */}
               <AccordionItem value="assets-systems" className="border rounded-lg px-6">
-                <div className="flex items-center">
-                  <AccordionTrigger className="text-lg font-semibold flex-1 hover:no-underline">
-                    <div className="flex items-center gap-2">
+                <AccordionPrimitive.Header className="flex items-center py-4">
+                  <AccordionPrimitive.Trigger className="flex flex-1 items-center text-lg font-semibold hover:no-underline [&[data-state=open]>svg]:rotate-180">
+                    <div className="flex items-center gap-2 flex-1">
                       <span>Assets, Water Systems & Processes</span>
                       {/* Issue 23: Show instance count, not class count */}
                       {analysisItems.length > 0 && (
@@ -1126,11 +1128,11 @@ const ProjectWizardContent = () => {
                         </span>
                       )}
                     </div>
-                  </AccordionTrigger>
+                  </AccordionPrimitive.Trigger>
                   <Button
                     variant="outline"
                     size="sm"
-                    className="flex items-center gap-2 ml-2"
+                    className="flex items-center gap-2 mx-2"
                     onClick={(e) => {
                       e.stopPropagation();
                       // Bug 2: Increment key to force remount
@@ -1140,7 +1142,8 @@ const ProjectWizardContent = () => {
                   >
                     {analysisItems.length === 0 ? "Add New" : "Edit List"}
                   </Button>
-                </div>
+                  <ChevronDown className="h-4 w-4 shrink-0 transition-transform duration-200" />
+                </AccordionPrimitive.Header>
                 <AccordionContent className="space-y-8 pt-4">
                   {/* Empty state when no items */}
                   {analysisItems.length === 0 && (
