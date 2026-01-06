@@ -97,8 +97,9 @@ const ProjectWizardContent = () => {
   // Track if user has manually overridden control selections
   const [hasManualOverride, setHasManualOverride] = useState(false);
   
-  // AWP Edit Modal state
+  // AWP Edit Modal state - Bug 2: key forces remount for proper reset
   const [showAWPEditModal, setShowAWPEditModal] = useState(false);
+  const [awpModalKey, setAwpModalKey] = useState(0);
 
   // Normalize asset name for counting (must match CriticalAssetsStep logic)
   const normalizeAssetName = (name: string): string => {
@@ -1132,6 +1133,8 @@ const ProjectWizardContent = () => {
                     className="text-blue-600 hover:text-blue-800 p-0 h-auto ml-2"
                     onClick={(e) => {
                       e.stopPropagation();
+                      // Bug 2: Increment key to force remount
+                      setAwpModalKey(prev => prev + 1);
                       setShowAWPEditModal(true);
                     }}
                   >
@@ -1376,7 +1379,9 @@ const ProjectWizardContent = () => {
         onOpenChange={setShowProviderDialog} 
       />
       
+      {/* Bug 2: Key forces remount for proper state reset */}
       <AWPEditModal
+        key={awpModalKey}
         isOpen={showAWPEditModal}
         onClose={() => setShowAWPEditModal(false)}
         analysisItems={analysisItems}
