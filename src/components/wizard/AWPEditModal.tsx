@@ -301,7 +301,8 @@ export const AWPEditModal = ({
   }, [calculateChanges, onClose]);
 
   // Issue 22: Confirm save - generate IDs incrementally to avoid duplicates
-  const handleConfirmSave = useCallback(() => {
+  // Phase 5: Auto-assign default controls based on class name
+  const handleConfirmSave = useCallback(async () => {
     // Filter out deleted items
     const remainingItems = existingItems.filter(item => !deletedItemIds.has(item.id));
     
@@ -309,12 +310,19 @@ export const AWPEditModal = ({
     const allCurrentItems = [...remainingItems];
     const newItems: AnalysisItem[] = [];
     
+    // Fetch control mappings for auto-assignment
+    const { fetchControlMappings } = await import("@/lib/controlAutoAssignment");
+    const controlMappings = await fetchControlMappings();
+    
     newRows
       .filter(row => row.name)
       .forEach(row => {
         const category = CLASS_TO_CATEGORY_MAP[row.name];
         // Issue 22: Pass accumulated items so each new item gets incrementing ID
         const id = generateNextId(row.name, allCurrentItems);
+        
+        // Phase 5: Get default controls for this class
+        const defaultControls = controlMappings.get(row.name) || [];
         
         const newItem: AnalysisItem = {
           id,
@@ -329,7 +337,7 @@ export const AWPEditModal = ({
           length: undefined,
           sizeCategory: undefined,
           coordinates: undefined,
-          controls: [],
+          controls: defaultControls, // Auto-assigned default controls
           additionalParameters: row.pipeDiameterInches ? {
             pipeDiameterInches: row.pipeDiameterInches,
             pipeDiameterMM: row.pipeDiameterMM,

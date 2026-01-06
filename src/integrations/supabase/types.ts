@@ -970,6 +970,7 @@ export type Database = {
         }
         Returns: boolean
       }
+      is_internal_user: { Args: { _user_id: string }; Returns: boolean }
       is_project_member: {
         Args: { _project_id: string; _user_id: string }
         Returns: boolean
