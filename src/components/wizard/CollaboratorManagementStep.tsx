@@ -112,7 +112,12 @@ export const CollaboratorManagementStep = ({ projectId }: CollaboratorManagement
         .order("created_at", { ascending: false });
 
       if (error) throw error;
-      setCollaborators(data || []);
+      
+      // Phase 4: Filter out @riskclock.com users unless explicitly added
+      const filteredData = (data || []).filter(
+        collab => !collab.email.toLowerCase().endsWith("@riskclock.com")
+      );
+      setCollaborators(filteredData);
     } catch (error: any) {
       console.error("Error fetching collaborators:", error);
     }
