@@ -1,5 +1,4 @@
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2.76.1";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -25,9 +24,9 @@ const handler = async (req: Request): Promise<Response> => {
   }
 
   try {
-    const postmarkApiKey = Deno.env.get("POSTMARK_SERVER_API_KEY");
-    if (!postmarkApiKey) {
-      console.error("POSTMARK_SERVER_API_KEY is not configured");
+    const resendApiKey = Deno.env.get("RESEND_API_KEY");
+    if (!resendApiKey) {
+      console.error("RESEND_API_KEY is not configured");
       throw new Error("Email service not configured");
     }
 
@@ -75,53 +74,47 @@ const handler = async (req: Request): Promise<Response> => {
 </html>
       `;
 
-      const textBody = `
-Hi ${invitation.name},
-
-${invitedByName} has invited you to collaborate on the project "${projectName}" as a ${roleDisplay}.
-
-Accept the invitation by clicking this link:
-${inviteLink}
-
-This invitation will expire in 7 days.
-
-If you didn't expect this invitation, you can safely ignore this email.
-      `;
-
       console.log(`Sending invitation email to ${invitation.email}`);
 
-      const postmarkResponse = await fetch("https://api.postmarkapp.com/email", {
-        method: "POST",
-        headers: {
-          "Accept": "application/json",
-          "Content-Type": "application/json",
-          "X-Postmark-Server-Token": postmarkApiKey,
-        },
-        body: JSON.stringify({
-          From: "noreply@riskclock.com",
-          To: invitation.email,
-          Subject: `You've been invited to collaborate on "${projectName}"`,
-          HtmlBody: htmlBody,
-          TextBody: textBody,
-          MessageStream: "outbound",
-        }),
-      });
+      try {
+        // Use Resend API directly via fetch
+        const response = await fetch("https://api.resend.com/emails", {
+          method: "POST",
+          headers: {
+            "Authorization": `Bearer ${resendApiKey}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            from: "RiskBlue <onboarding@resend.dev>",
+            to: [invitation.email],
+            subject: `You've been invited to collaborate on "${projectName}"`,
+            html: htmlBody,
+          }),
+        });
 
-      const postmarkResult = await postmarkResponse.json();
+        const result = await response.json();
 
-      if (!postmarkResponse.ok) {
-        console.error(`Failed to send email to ${invitation.email}:`, postmarkResult);
+        if (!response.ok) {
+          console.error(`Failed to send email to ${invitation.email}:`, result);
+          emailResults.push({
+            email: invitation.email,
+            success: false,
+            error: result.message || "Failed to send email",
+          });
+        } else {
+          console.log(`Email sent successfully to ${invitation.email}:`, result);
+          emailResults.push({
+            email: invitation.email,
+            success: true,
+            messageId: result.id,
+          });
+        }
+      } catch (emailError: any) {
+        console.error(`Failed to send email to ${invitation.email}:`, emailError);
         emailResults.push({
           email: invitation.email,
           success: false,
-          error: postmarkResult.Message || "Failed to send email",
-        });
-      } else {
-        console.log(`Email sent successfully to ${invitation.email}:`, postmarkResult.MessageID);
-        emailResults.push({
-          email: invitation.email,
-          success: true,
-          messageId: postmarkResult.MessageID,
+          error: emailError.message || "Failed to send email",
         });
       }
     }
