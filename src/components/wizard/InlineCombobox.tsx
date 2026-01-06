@@ -55,7 +55,7 @@ export const InlineCombobox = ({
           variant="outline"
           role="combobox"
           aria-expanded={open}
-          className={cn("h-6 justify-between text-xs px-2", className)}
+          className={cn("h-6 justify-between text-xs px-2 font-normal", className)}
         >
           <span className="truncate max-w-[160px]">
             {value || placeholder}
@@ -63,9 +63,9 @@ export const InlineCombobox = ({
           <ChevronsUpDown className="ml-1 h-3 w-3 shrink-0 opacity-50" />
         </Button>
       </PopoverTrigger>
-      <PopoverContent className="w-[280px] p-0" align="start">
+      <PopoverContent className="w-[280px] p-0 pointer-events-auto" align="start">
         <Command>
-          <CommandInput placeholder="Search..." className="h-8 text-xs" />
+          <CommandInput placeholder="Search AWP..." className="h-9" />
           <CommandList>
             <CommandEmpty>No option found.</CommandEmpty>
             {Object.entries(groupedOptions).map(([category, items]) => (
@@ -78,11 +78,10 @@ export const InlineCombobox = ({
                       onChange(currentValue);
                       setOpen(false);
                     }}
-                    className="text-xs"
                   >
                     <Check
                       className={cn(
-                        "mr-2 h-3 w-3",
+                        "mr-2 h-4 w-4",
                         value === opt.value ? "opacity-100" : "opacity-0"
                       )}
                     />
