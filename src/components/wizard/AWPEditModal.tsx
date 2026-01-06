@@ -4,15 +4,12 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
-import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
-import { Plus, Trash2, Pencil, ChevronsUpDown, Check, ChevronDown, FolderOpen } from "lucide-react";
+import { Plus, Trash2, Pencil, ChevronDown, FolderOpen } from "lucide-react";
 import { AnalysisItem } from "@/lib/analysisItemMapper";
 import { AWPItemEditModal } from "./AWPItemEditModal";
 import { RepositoryConnectionDialog } from "./RepositoryConnectionDialog";
-import { cn } from "@/lib/utils";
+import { InlineCombobox } from "./InlineCombobox";
 import {
   CLASSES_BY_CATEGORY,
   CLASS_TO_CATEGORY_MAP,
@@ -108,16 +105,11 @@ export const AWPEditModal = ({
   const [areaUnit, setAreaUnit] = useState<AreaUnit>("sqft");
   const [pipeUnit, setPipeUnit] = useState<PipeUnit>("in");
   
-  // Combobox state for new rows
-  const [openCombobox, setOpenCombobox] = useState<string | null>(null);
-  // Bug 3: Track search/filter value per row for MUI-style combobox
-  const [comboboxSearch, setComboboxSearch] = useState<Record<string, string>>({});
-  
   // Repository connection dialog
   const [showRepositoryDialog, setShowRepositoryDialog] = useState(false);
   const [repositoryType, setRepositoryType] = useState<"google-drive" | "procore" | null>(null);
 
-  // Bug 6: Preload icons from public folder
+  // Preload icons from public folder
   useLayoutEffect(() => {
     const img1 = new Image();
     img1.src = "/icons/icon_googledrive.png";
@@ -125,8 +117,7 @@ export const AWPEditModal = ({
     img2.src = "/icons/icon_procore.png";
   }, []);
 
-  // Initialize when modal opens - Issue 11: Start with one default row
-  // Issue 24: Create deep copies to prevent reference issues
+  // Initialize/reset ALL state when modal opens
   useEffect(() => {
     if (isOpen) {
       // Deep copy each item to prevent reference equality issues
@@ -134,8 +125,13 @@ export const AWPEditModal = ({
       setOriginalItems(deepCopyItems);
       setExistingItems(analysisItems.map(item => JSON.parse(JSON.stringify(item))));
       setDeletedItemIds(new Set());
-      setNewRows([createEmptyRow()]); // Issue 11: Default row
+      setNewRows([createEmptyRow()]); // Fresh default row
       setChangesSummary(null);
+      setShowSaveConfirmation(false);
+      setShowDiscardConfirm(false);
+      setEditingItem(null);
+      setAreaUnit("sqft");
+      setPipeUnit("in");
     }
   }, [isOpen, analysisItems]);
 
@@ -517,68 +513,14 @@ export const AWPEditModal = ({
                             />
                           </TableCell>
                           
-                          {/* Bug 3: MUI-style inline searchable Type field */}
-                          <TableCell className="py-1 px-1 w-[150px] min-w-[150px] relative">
-                            <div className="relative">
-                              <Input
-                                className="h-6 text-xs px-2 pr-6"
-                                placeholder="Type to search..."
-                                value={openCombobox === row.tempId ? (comboboxSearch[row.tempId] ?? "") : row.name}
-                                onChange={(e) => {
-                                  setComboboxSearch(prev => ({ ...prev, [row.tempId]: e.target.value }));
-                                  if (openCombobox !== row.tempId) {
-                                    setOpenCombobox(row.tempId);
-                                  }
-                                }}
-                                onFocus={() => {
-                                  setOpenCombobox(row.tempId);
-                                  setComboboxSearch(prev => ({ ...prev, [row.tempId]: "" }));
-                                }}
-                                onKeyDown={(e) => {
-                                  if (e.key === "Escape") {
-                                    setOpenCombobox(null);
-                                  }
-                                }}
-                              />
-                              <ChevronsUpDown className="absolute right-2 top-1/2 -translate-y-1/2 h-3 w-3 opacity-50 pointer-events-none" />
-                              
-                              {openCombobox === row.tempId && (
-                                <div className="absolute z-50 top-full left-0 w-[280px] mt-1 bg-background border rounded-md shadow-lg max-h-[300px] overflow-auto">
-                                  <Command>
-                                    <CommandList>
-                                      <CommandEmpty>No type found.</CommandEmpty>
-                                      {["Asset", "Water System", "Process"].map((category) => {
-                                        const options = CLASSES_BY_CATEGORY[category as keyof typeof CLASSES_BY_CATEGORY];
-                                        const search = (comboboxSearch[row.tempId] ?? "").toLowerCase();
-                                        const filtered = options.filter(cls => 
-                                          !search || cls.toLowerCase().includes(search)
-                                        );
-                                        if (filtered.length === 0) return null;
-                                        return (
-                                          <CommandGroup key={category} heading={category}>
-                                            {filtered.map((cls) => (
-                                              <CommandItem
-                                                key={cls}
-                                                value={cls}
-                                                onSelect={() => {
-                                                  updateNewRow(row.tempId, "name", cls);
-                                                  setOpenCombobox(null);
-                                                  setComboboxSearch(prev => ({ ...prev, [row.tempId]: "" }));
-                                                }}
-                                                className="text-xs cursor-pointer"
-                                              >
-                                                {cls}
-                                                <Check className={cn("ml-auto h-3 w-3", row.name === cls ? "opacity-100" : "opacity-0")} />
-                                              </CommandItem>
-                                            ))}
-                                          </CommandGroup>
-                                        );
-                                      })}
-                                    </CommandList>
-                                  </Command>
-                                </div>
-                              )}
-                            </div>
+                          {/* Type field using InlineCombobox with portal */}
+                          <TableCell className="py-1 px-1 w-[150px] min-w-[150px]">
+                            <InlineCombobox
+                              value={row.name}
+                              options={allClassOptions}
+                              onChange={(val) => updateNewRow(row.tempId, "name", val)}
+                              placeholder="Type to search..."
+                            />
                           </TableCell>
                           
                           {/* Floor - Issue 25: fixed width with min-w */}
