@@ -5,7 +5,9 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
-import { Plus, Trash2, Pencil, ChevronDown, FolderOpen, Paperclip, X } from "lucide-react";
+import { Plus, Trash2, Pencil, ChevronDown, FolderOpen, Paperclip, X, Loader2 } from "lucide-react";
+import { useToast } from "@/hooks/use-toast";
+import { countByCategory } from "@/lib/analysisItemMapper";
 import { supabase } from "@/integrations/supabase/client";
 import { AnalysisItem } from "@/lib/analysisItemMapper";
 import { AWPItemEditModal } from "./AWPItemEditModal";
@@ -131,6 +133,10 @@ export const AWPEditModal = ({
   // Repository connection dialog
   const [showRepositoryDialog, setShowRepositoryDialog] = useState(false);
   const [repositoryType, setRepositoryType] = useState<"google-drive" | "procore" | null>(null);
+  
+  // Phase 5: Analysis state
+  const [analyzingFiles, setAnalyzingFiles] = useState(false);
+  const { toast } = useToast();
 
   // Preload icons from public folder
   useLayoutEffect(() => {
@@ -442,14 +448,115 @@ export const AWPEditModal = ({
     return "-";
   };
 
-  // Handle repository files loaded
-  const handleRepositoryFilesLoaded = useCallback((files: any[], accessToken: string) => {
+  // Phase 5: Handle repository files loaded - trigger analysis and populate Add New Items pane
+  const handleRepositoryFilesLoaded = useCallback(async (files: any[], accessToken: string) => {
     setShowRepositoryDialog(false);
     setRepositoryType(null);
+    
+    // Pass files to parent for state sync
     if (onFilesLoaded) {
       onFilesLoaded(files, accessToken);
     }
-  }, [onFilesLoaded]);
+    
+    // Validate project is saved before analysis
+    if (!projectId || projectId === "new") {
+      toast({
+        title: "Save Project First",
+        description: "Please save the project before running analysis. Enter a project name and save.",
+        variant: "destructive",
+      });
+      return;
+    }
+    
+    if (files.length === 0) {
+      toast({
+        title: "No Files",
+        description: "No files found in the folder.",
+      });
+      return;
+    }
+    
+    // Start analysis
+    setAnalyzingFiles(true);
+    
+    try {
+      // Get or create file search store ID
+      const { data: projectData } = await supabase
+        .from("projects")
+        .select("filesearch_store_id")
+        .eq("id", projectId)
+        .single();
+      
+      let fileSearchStoreId = projectData?.filesearch_store_id;
+      
+      if (!fileSearchStoreId) {
+        const storeResponse = await supabase.functions.invoke("create-filesearch-store", {
+          body: { projectId },
+        });
+        if (storeResponse.data?.storeId) {
+          fileSearchStoreId = storeResponse.data.storeId;
+          await supabase
+            .from("projects")
+            .update({ filesearch_store_id: fileSearchStoreId })
+            .eq("id", projectId);
+        }
+      }
+      
+      // Invoke analysis edge function
+      const response = await supabase.functions.invoke("analyze-drive-files", {
+        body: {
+          files,
+          accessToken,
+          filesearch_store_id: fileSearchStoreId,
+        },
+      });
+      
+      if (response.error) {
+        throw new Error(response.error.message);
+      }
+      
+      const data = response.data;
+      if (data.error) {
+        throw new Error(data.error);
+      }
+      
+      // Parse results - handle both response formats
+      const assetsWaterSystemsProcesses: AnalysisItem[] = Array.isArray(data.analysis)
+        ? data.analysis
+        : (data.assets_water_systems_processes || []);
+      
+      if (assetsWaterSystemsProcesses.length === 0) {
+        toast({
+          title: "No Items Found",
+          description: "The analysis did not detect any assets, water systems, or processes in the files.",
+        });
+        return;
+      }
+      
+      // Convert to NewRowItem and add to the Add New Items pane
+      const newRowItems = assetsWaterSystemsProcesses.map(item => analysisItemToNewRow(item));
+      setNewRows(prev => {
+        // Remove empty default row if present, then add new items + fresh empty row
+        const nonEmpty = prev.filter(row => row.name.trim() !== "");
+        return [...nonEmpty, ...newRowItems, createEmptyRow()];
+      });
+      
+      const counts = countByCategory(assetsWaterSystemsProcesses);
+      toast({
+        title: "Analysis Complete",
+        description: `Found ${counts.assets} assets, ${counts.waterSystems} water systems, ${counts.processes} processes. Review and save to confirm.`,
+      });
+    } catch (error) {
+      console.error("Analysis error:", error);
+      toast({
+        title: "Analysis Error",
+        description: error instanceof Error ? error.message : "Failed to analyze files",
+        variant: "destructive",
+      });
+    } finally {
+      setAnalyzingFiles(false);
+    }
+  }, [onFilesLoaded, projectId, toast]);
 
   // Determine column count for colSpan
   const getColSpan = () => {
@@ -709,12 +816,18 @@ export const AWPEditModal = ({
               {/* Docked Analyze Drawing Files section */}
               <div className="p-3 border-t bg-muted/30">
                 <div className="flex items-center justify-between">
-                  <span className="text-xs font-medium text-muted-foreground">Analyze Drawing Files</span>
+                  <span className="text-xs font-medium text-muted-foreground">
+                    {analyzingFiles ? "Analyzing files..." : "Analyze Drawing Files"}
+                  </span>
                   <DropdownMenu>
                     <DropdownMenuTrigger asChild>
-                      <Button variant="outline" size="sm" className="gap-1">
-                        <FolderOpen className="w-3.5 h-3.5" />
-                        Connect Repository
+                      <Button variant="outline" size="sm" className="gap-1" disabled={analyzingFiles}>
+                        {analyzingFiles ? (
+                          <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                        ) : (
+                          <FolderOpen className="w-3.5 h-3.5" />
+                        )}
+                        {analyzingFiles ? "Analyzing..." : "Connect Repository"}
                         <ChevronDown className="w-3 h-3 ml-1" />
                       </Button>
                     </DropdownMenuTrigger>
