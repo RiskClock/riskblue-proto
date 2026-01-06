@@ -136,7 +136,12 @@ const Projects = () => {
         <div className="container mx-auto px-6 py-4 flex items-center justify-between">
           <img src={riskBlueLogo} alt="RiskBlue" className="h-8" />
           <div className="flex items-center gap-6">
-            <button className="text-foreground hover:text-primary">Projects</button>
+            <button className="text-primary font-medium">Projects</button>
+            {user?.email?.endsWith("@riskclock.com") && (
+              <button onClick={() => navigate("/configuration")} className="text-foreground hover:text-primary">
+                Configuration
+              </button>
+            )}
             <button onClick={() => setShowProviderDialog(true)} className="text-foreground hover:text-primary">
               Solution Provider Portal
             </button>
