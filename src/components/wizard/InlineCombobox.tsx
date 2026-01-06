@@ -168,7 +168,7 @@ export const InlineCombobox = ({
   const dropdown = isOpen ? (
     <div
       ref={dropdownRef}
-      className="fixed bg-popover border border-border rounded-md shadow-lg max-h-[300px] overflow-auto"
+      className="fixed pointer-events-auto bg-popover text-popover-foreground border border-border rounded-md shadow-lg max-h-[300px] overflow-auto"
       style={{
         top: dropdownPosition.top,
         left: dropdownPosition.left,
@@ -198,7 +198,13 @@ export const InlineCombobox = ({
                     isHighlighted && "bg-accent text-accent-foreground",
                     !isHighlighted && "hover:bg-accent/50"
                   )}
-                  onClick={() => handleSelect(opt.value)}
+                  onMouseDown={(e) => {
+                    // Important: in modals, outside-pointer-events can block clicks on portaled elements.
+                    // Handling selection on mousedown (and stopping propagation) ensures the option is selectable.
+                    e.preventDefault();
+                    e.stopPropagation();
+                    handleSelect(opt.value);
+                  }}
                   onMouseEnter={() => setHighlightedIndex(index)}
                 >
                   <span className="truncate">{opt.value}</span>
