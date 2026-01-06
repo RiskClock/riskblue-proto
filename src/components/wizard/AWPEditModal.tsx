@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { ScrollArea } from "@/components/ui/scroll-area";
 import { Plus, Trash2, Pencil, ChevronDown, FolderOpen, Paperclip, X, Loader2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { countByCategory } from "@/lib/analysisItemMapper";
@@ -12,6 +13,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { AnalysisItem } from "@/lib/analysisItemMapper";
 import { AWPItemEditModal } from "./AWPItemEditModal";
 import { RepositoryConnectionDialog } from "./RepositoryConnectionDialog";
+import { FileAnalysisModal } from "./FileAnalysisModal";
 import { InlineCombobox } from "./InlineCombobox";
 import { useAWPOptions, isAssetName, isWaterSystemName, getCategoryForName, getDefaultControlIdsForName } from "@/hooks/useAWPOptions";
 import {
@@ -137,6 +139,11 @@ export const AWPEditModal = ({
   
   // Phase 5: Analysis state
   const [analyzingFiles, setAnalyzingFiles] = useState(false);
+  
+  // File analysis animation modal
+  const [showAnalysisModal, setShowAnalysisModal] = useState(false);
+  const [analysisFiles, setAnalysisFiles] = useState<{ name: string; id: string }[]>([]);
+  const [pendingAnalysisCallback, setPendingAnalysisCallback] = useState<(() => void) | null>(null);
   const { toast } = useToast();
 
   // Preload icons from public folder
@@ -467,7 +474,7 @@ export const AWPEditModal = ({
     return "-";
   };
 
-  // Phase 5: Handle repository files loaded - trigger analysis and populate Add New Items pane
+  // Phase 5: Handle repository files loaded - trigger analysis with animation modal
   const handleRepositoryFilesLoaded = useCallback(async (files: any[], accessToken: string) => {
     setShowRepositoryDialog(false);
     setRepositoryType(null);
@@ -495,87 +502,107 @@ export const AWPEditModal = ({
       return;
     }
     
-    // Start analysis
+    // Show analysis animation modal with file list
+    setAnalysisFiles(files.map((f: any) => ({ name: f.name, id: f.id })));
+    setShowAnalysisModal(true);
+    
+    // Start analysis in background
     setAnalyzingFiles(true);
     
-    try {
-      // Get or create file search store ID
-      const { data: projectData } = await supabase
-        .from("projects")
-        .select("filesearch_store_id")
-        .eq("id", projectId)
-        .single();
-      
-      let fileSearchStoreId = projectData?.filesearch_store_id;
-      
-      if (!fileSearchStoreId) {
-        const storeResponse = await supabase.functions.invoke("create-filesearch-store", {
-          body: { projectId },
-        });
-        if (storeResponse.data?.storeId) {
-          fileSearchStoreId = storeResponse.data.storeId;
-          await supabase
-            .from("projects")
-            .update({ filesearch_store_id: fileSearchStoreId })
-            .eq("id", projectId);
+    // Since we're using mock data, simulate for 30 seconds
+    // The actual analysis will complete but we wait for the animation
+    const runAnalysis = async () => {
+      try {
+        // Get or create file search store ID
+        const { data: projectData } = await supabase
+          .from("projects")
+          .select("filesearch_store_id")
+          .eq("id", projectId)
+          .single();
+        
+        let fileSearchStoreId = projectData?.filesearch_store_id;
+        
+        if (!fileSearchStoreId) {
+          const storeResponse = await supabase.functions.invoke("create-filesearch-store", {
+            body: { projectId },
+          });
+          if (storeResponse.data?.storeId) {
+            fileSearchStoreId = storeResponse.data.storeId;
+            await supabase
+              .from("projects")
+              .update({ filesearch_store_id: fileSearchStoreId })
+              .eq("id", projectId);
+          }
         }
-      }
-      
-      // Invoke analysis edge function
-      const response = await supabase.functions.invoke("analyze-drive-files", {
-        body: {
-          files,
-          accessToken,
-          filesearch_store_id: fileSearchStoreId,
-        },
-      });
-      
-      if (response.error) {
-        throw new Error(response.error.message);
-      }
-      
-      const data = response.data;
-      if (data.error) {
-        throw new Error(data.error);
-      }
-      
-      // Parse results - handle both response formats
-      const assetsWaterSystemsProcesses: AnalysisItem[] = Array.isArray(data.analysis)
-        ? data.analysis
-        : (data.assets_water_systems_processes || []);
-      
-      if (assetsWaterSystemsProcesses.length === 0) {
-        toast({
-          title: "No Items Found",
-          description: "The analysis did not detect any assets, water systems, or processes in the files.",
+        
+        // Invoke analysis edge function
+        const response = await supabase.functions.invoke("analyze-drive-files", {
+          body: {
+            files,
+            accessToken,
+            filesearch_store_id: fileSearchStoreId,
+          },
         });
-        return;
+        
+        if (response.error) {
+          throw new Error(response.error.message);
+        }
+        
+        const data = response.data;
+        if (data.error) {
+          throw new Error(data.error);
+        }
+        
+        // Parse results - handle both response formats
+        const assetsWaterSystemsProcesses: AnalysisItem[] = Array.isArray(data.analysis)
+          ? data.analysis
+          : (data.assets_water_systems_processes || []);
+        
+        if (assetsWaterSystemsProcesses.length === 0) {
+          toast({
+            title: "No Items Found",
+            description: "The analysis did not detect any assets, water systems, or processes in the files.",
+          });
+          return;
+        }
+        
+        // Convert to NewRowItem and add to the Add New Items pane
+        const newRowItems = assetsWaterSystemsProcesses.map(item => analysisItemToNewRow(item));
+        setNewRows(prev => {
+          // Remove empty default row if present, then add new items + fresh empty row
+          const nonEmpty = prev.filter(row => row.name.trim() !== "");
+          return [...nonEmpty, ...newRowItems, createEmptyRow()];
+        });
+        
+        const counts = countByCategory(assetsWaterSystemsProcesses);
+        toast({
+          title: "Analysis Complete",
+          description: `Found ${counts.assets} assets, ${counts.waterSystems} water systems, ${counts.processes} processes. Review and save to confirm.`,
+        });
+      } catch (error) {
+        console.error("Analysis error:", error);
+        toast({
+          title: "Analysis Error",
+          description: error instanceof Error ? error.message : "Failed to analyze files",
+          variant: "destructive",
+        });
+      } finally {
+        setAnalyzingFiles(false);
       }
-      
-      // Convert to NewRowItem and add to the Add New Items pane
-      const newRowItems = assetsWaterSystemsProcesses.map(item => analysisItemToNewRow(item));
-      setNewRows(prev => {
-        // Remove empty default row if present, then add new items + fresh empty row
-        const nonEmpty = prev.filter(row => row.name.trim() !== "");
-        return [...nonEmpty, ...newRowItems, createEmptyRow()];
-      });
-      
-      const counts = countByCategory(assetsWaterSystemsProcesses);
-      toast({
-        title: "Analysis Complete",
-        description: `Found ${counts.assets} assets, ${counts.waterSystems} water systems, ${counts.processes} processes. Review and save to confirm.`,
-      });
-    } catch (error) {
-      console.error("Analysis error:", error);
-      toast({
-        title: "Analysis Error",
-        description: error instanceof Error ? error.message : "Failed to analyze files",
-        variant: "destructive",
-      });
-    } finally {
-      setAnalyzingFiles(false);
-    }
+    };
+    
+    // Store the callback to run after modal animation completes
+    setPendingAnalysisCallback(() => runAnalysis);
   }, [onFilesLoaded, projectId, toast]);
+  
+  // Handle analysis modal completion
+  const handleAnalysisModalComplete = useCallback(() => {
+    setShowAnalysisModal(false);
+    if (pendingAnalysisCallback) {
+      pendingAnalysisCallback();
+      setPendingAnalysisCallback(null);
+    }
+  }, [pendingAnalysisCallback]);
 
   // Determine column count for colSpan
   const getColSpan = () => {
@@ -914,11 +941,20 @@ export const AWPEditModal = ({
         />
       )}
 
-      {/* Issue 15: Discard Confirmation Dialog */}
+      {/* File Analysis Animation Modal */}
+      <FileAnalysisModal
+        isOpen={showAnalysisModal}
+        files={analysisFiles}
+        onComplete={handleAnalysisModalComplete}
+      />
+
+      {/* Issue 15: Discard Confirmation Dialog - Scrollable */}
       <AlertDialog open={showDiscardConfirm} onOpenChange={setShowDiscardConfirm}>
-        <AlertDialogContent>
+        <AlertDialogContent className="max-h-[85vh] flex flex-col">
           <AlertDialogHeader>
             <AlertDialogTitle>Discard Changes?</AlertDialogTitle>
+          </AlertDialogHeader>
+          <ScrollArea className="flex-1 max-h-[60vh] pr-4">
             <AlertDialogDescription asChild>
               <div className="space-y-3 text-sm">
                 <p>You have unsaved changes. Are you sure you want to discard them?</p>
@@ -955,8 +991,8 @@ export const AWPEditModal = ({
                 ) : null}
               </div>
             </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
+          </ScrollArea>
+          <AlertDialogFooter className="mt-4">
             <AlertDialogCancel>Continue Editing</AlertDialogCancel>
             <AlertDialogAction onClick={() => { setShowDiscardConfirm(false); onClose(); }}>
               Discard Changes
@@ -965,11 +1001,13 @@ export const AWPEditModal = ({
         </AlertDialogContent>
       </AlertDialog>
 
-      {/* Save Confirmation Dialog */}
+      {/* Save Confirmation Dialog - Scrollable */}
       <AlertDialog open={showSaveConfirmation} onOpenChange={setShowSaveConfirmation}>
-        <AlertDialogContent>
+        <AlertDialogContent className="max-h-[85vh] flex flex-col">
           <AlertDialogHeader>
             <AlertDialogTitle>Confirm Changes</AlertDialogTitle>
+          </AlertDialogHeader>
+          <ScrollArea className="flex-1 max-h-[60vh] pr-4">
             <AlertDialogDescription asChild>
               <div className="space-y-3 text-sm">
                 {changesSummary?.edited.length ? (
@@ -1004,8 +1042,8 @@ export const AWPEditModal = ({
                 ) : null}
               </div>
             </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
+          </ScrollArea>
+          <AlertDialogFooter className="mt-4">
             <AlertDialogCancel>Cancel</AlertDialogCancel>
             <AlertDialogAction onClick={handleConfirmSave}>
               Confirm

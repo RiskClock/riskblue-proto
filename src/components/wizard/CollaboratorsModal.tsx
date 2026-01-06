@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
+import { ScrollArea } from "@/components/ui/scroll-area";
 import { Trash2, Plus, Loader2, Users } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
@@ -612,11 +613,13 @@ export const CollaboratorsModal = ({
         </DialogContent>
       </Dialog>
 
-      {/* Discard Changes Confirmation - Issue 3: Shows summary of changes */}
+      {/* Discard Changes Confirmation - Issue 3: Shows summary of changes - Scrollable */}
       <AlertDialog open={showDiscardConfirm} onOpenChange={setShowDiscardConfirm}>
-        <AlertDialogContent>
+        <AlertDialogContent className="max-h-[85vh] flex flex-col">
           <AlertDialogHeader>
             <AlertDialogTitle>Discard Changes?</AlertDialogTitle>
+          </AlertDialogHeader>
+          <ScrollArea className="flex-1 max-h-[60vh] pr-4">
             <AlertDialogDescription asChild>
               <div className="space-y-4">
                 <p>You have unsaved changes. Are you sure you want to discard them?</p>
@@ -646,8 +649,8 @@ export const CollaboratorsModal = ({
                 )}
               </div>
             </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
+          </ScrollArea>
+          <AlertDialogFooter className="mt-4">
             <AlertDialogCancel>Continue Editing</AlertDialogCancel>
             <AlertDialogAction onClick={() => { setShowDiscardConfirm(false); onClose(); }}>
               Discard Changes
@@ -656,11 +659,13 @@ export const CollaboratorsModal = ({
         </AlertDialogContent>
       </AlertDialog>
 
-      {/* Save Confirmation - Issue 4: Dynamic button text */}
+      {/* Save Confirmation - Issue 4: Dynamic button text - Scrollable */}
       <AlertDialog open={showSaveConfirm} onOpenChange={setShowSaveConfirm}>
-        <AlertDialogContent>
+        <AlertDialogContent className="max-h-[85vh] flex flex-col">
           <AlertDialogHeader>
             <AlertDialogTitle>Confirm Changes</AlertDialogTitle>
+          </AlertDialogHeader>
+          <ScrollArea className="flex-1 max-h-[60vh] pr-4">
             <AlertDialogDescription asChild>
               <div className="space-y-4">
                 <p>You are about to make the following changes:</p>
@@ -690,8 +695,8 @@ export const CollaboratorsModal = ({
                 )}
               </div>
             </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
+          </ScrollArea>
+          <AlertDialogFooter className="mt-4">
             <AlertDialogCancel disabled={saving}>Cancel</AlertDialogCancel>
             <AlertDialogAction onClick={handleConfirmSave} disabled={saving}>
               {saving && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
