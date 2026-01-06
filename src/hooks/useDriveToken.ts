@@ -124,20 +124,9 @@ export function useDriveToken() {
           return;
         }
 
-        // Build the OAuth URL for popup callback
-        const functionUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/google-drive-oauth`;
-        const callbackUri = `${functionUrl}?action=callback`;
-        
-        const params = new URLSearchParams({
-          action: "authorize",
-          redirect_uri: callbackUri,
-          user_id: user.id,
-          project_path: projectPath,
-          app_origin: window.location.origin,
-          popup_mode: "true", // Signal to edge function to return HTML for popup
-        });
-
-        const authUrl = `${functionUrl}?${params.toString()}`;
+        // Open popup to our own domain first (Option B - clean approach)
+        // This page will read the session and call the edge function with Authorization header
+        const popupUrl = `${window.location.origin}/connect/google-drive?redirectPath=${encodeURIComponent(projectPath)}`;
 
         // Clean up any existing handler
         if (messageHandlerRef.current) {
@@ -173,14 +162,14 @@ export function useDriveToken() {
         messageHandlerRef.current = messageHandler;
         window.addEventListener("message", messageHandler);
 
-        // Open popup
+        // Open popup to our connect page
         const width = 500;
         const height = 600;
         const left = window.screenX + (window.outerWidth - width) / 2;
         const top = window.screenY + (window.outerHeight - height) / 2;
         
         const popup = window.open(
-          authUrl,
+          popupUrl,
           "google-oauth",
           `width=${width},height=${height},left=${left},top=${top},popup=1`
         );

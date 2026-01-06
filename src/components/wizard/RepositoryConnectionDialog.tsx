@@ -54,29 +54,14 @@ export const RepositoryConnectionDialog = ({
         await onBeforeOAuthRedirect();
       }
       const projectPath = window.location.pathname;
-      // Open in new window to preserve modal state
-      const authUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/google-drive-oauth?action=authorize&redirect_path=${encodeURIComponent(projectPath)}`;
-      const authWindow = window.open(authUrl, "_blank", "width=600,height=700");
-      
-      // Poll for connection
-      const pollInterval = setInterval(async () => {
-        await refreshToken();
-        if (driveToken) {
-          clearInterval(pollInterval);
-          setConnectingDrive(false);
-        }
-      }, 2000);
-
-      // Stop polling after 2 minutes
-      setTimeout(() => {
-        clearInterval(pollInterval);
-        setConnectingDrive(false);
-      }, 120000);
+      // Use the connectDrive function from the hook (Option B - clean approach)
+      await connectDrive(projectPath);
+      setConnectingDrive(false);
     } catch (error) {
       console.error("Google Drive connection error:", error);
       toast({
         title: "Connection Failed",
-        description: "Could not connect to Google Drive. Please try again.",
+        description: error instanceof Error ? error.message : "Could not connect to Google Drive. Please try again.",
         variant: "destructive",
       });
       setConnectingDrive(false);

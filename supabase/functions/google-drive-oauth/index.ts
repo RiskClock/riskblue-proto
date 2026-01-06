@@ -18,10 +18,81 @@ serve(async (req) => {
   }
 
   const url = new URL(req.url);
-  const action = url.searchParams.get("action");
+  // Support action from query params (GET) or body (POST)
+  let action = url.searchParams.get("action");
+  let bodyData: any = {};
+  
+  if (req.method === "POST") {
+    try {
+      bodyData = await req.json();
+      if (bodyData.action) {
+        action = bodyData.action;
+      }
+    } catch {
+      // No body or invalid JSON
+    }
+  }
 
   try {
-    // Step 1: Generate OAuth URL and redirect user
+    // NEW: Get auth URL action - called from same-origin popup page with Authorization header
+    if (action === "get-auth-url") {
+      const authHeader = req.headers.get("Authorization");
+      if (!authHeader) {
+        return new Response(
+          JSON.stringify({ error: "Authorization required" }),
+          { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+
+      // Verify the user's JWT
+      const jwt = authHeader.replace("Bearer ", "");
+      const supabaseClient = createClient(
+        SUPABASE_URL,
+        Deno.env.get("SUPABASE_ANON_KEY")!,
+        { global: { headers: { Authorization: `Bearer ${jwt}` } } }
+      );
+      
+      const { data: { user }, error: authError } = await supabaseClient.auth.getUser();
+
+      if (authError || !user) {
+        return new Response(
+          JSON.stringify({ error: "Invalid token" }),
+          { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+
+      const redirectPath = bodyData.redirectPath || "/projects";
+      const appOrigin = bodyData.appOrigin || "";
+      
+      // Build callback URI
+      const callbackUri = `${SUPABASE_URL}/functions/v1/google-drive-oauth?action=callback`;
+      
+      // Store state with user info
+      const state = btoa(JSON.stringify({ 
+        userId: user.id, 
+        projectPath: redirectPath, 
+        appOrigin, 
+        popupMode: true 
+      }));
+
+      const googleAuthUrl = new URL("https://accounts.google.com/o/oauth2/v2/auth");
+      googleAuthUrl.searchParams.set("client_id", GOOGLE_CLIENT_ID);
+      googleAuthUrl.searchParams.set("redirect_uri", callbackUri);
+      googleAuthUrl.searchParams.set("response_type", "code");
+      googleAuthUrl.searchParams.set("scope", "https://www.googleapis.com/auth/drive.readonly email");
+      googleAuthUrl.searchParams.set("access_type", "offline");
+      googleAuthUrl.searchParams.set("prompt", "consent");
+      googleAuthUrl.searchParams.set("state", state);
+
+      console.log("Returning Google OAuth URL for user:", user.id);
+
+      return new Response(
+        JSON.stringify({ authUrl: googleAuthUrl.toString() }),
+        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    // Step 1: Generate OAuth URL and redirect user (legacy - for direct calls)
     if (action === "authorize") {
       const redirectUri = url.searchParams.get("redirect_uri");
       const userId = url.searchParams.get("user_id");

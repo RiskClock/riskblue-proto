@@ -10,6 +10,7 @@ import ProjectWizard from "./pages/ProjectWizard";
 import SolutionProviderPortal from "./pages/SolutionProviderPortal";
 import AcceptInvite from "./pages/AcceptInvite";
 import OAuthCallback from "./pages/OAuthCallback";
+import GoogleDriveConnect from "./pages/GoogleDriveConnect";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -40,6 +41,7 @@ const App = () => (
             <Route path="/solution-provider-portal" element={<ProtectedRoute><SolutionProviderPortal /></ProtectedRoute>} />
             <Route path="/accept-invite" element={<AcceptInvite />} />
             <Route path="/oauth/callback" element={<OAuthCallback />} />
+            <Route path="/connect/google-drive" element={<GoogleDriveConnect />} />
             <Route path="/" element={<Navigate to="/projects" />} />
             <Route path="*" element={<NotFound />} />
           </Routes>
