@@ -13,12 +13,9 @@ import { AnalysisItem } from "@/lib/analysisItemMapper";
 import { AWPItemEditModal } from "./AWPItemEditModal";
 import { RepositoryConnectionDialog } from "./RepositoryConnectionDialog";
 import { InlineCombobox } from "./InlineCombobox";
+import { useAWPOptions, isAssetName, isWaterSystemName, getCategoryForName } from "@/hooks/useAWPOptions";
 import {
-  CLASSES_BY_CATEGORY,
-  CLASS_TO_CATEGORY_MAP,
   generateNextId,
-  isAssetClass,
-  isWaterSystemClass,
   sqftToSqm,
   sqmToSqft,
   inchesToMm,
@@ -102,6 +99,9 @@ export const AWPEditModal = ({
   onFilesLoaded,
   initialNewItems,
 }: AWPEditModalProps) => {
+  // Fetch AWP options from DB
+  const { data: awpOptions = [] } = useAWPOptions();
+  
   // Hidden file input refs for drawing uploads
   const fileInputRefs = useRef<Map<string, HTMLInputElement>>(new Map());
   // Original items for comparison
@@ -178,18 +178,16 @@ export const AWPEditModal = ({
 
   // Check if any item needs Size or Pipe column
   const hasAssets = useMemo(() => 
-    visibleExistingItems.some(item => isAssetClass(item.name)) || newRows.some(row => isAssetClass(row.name)), 
-    [visibleExistingItems, newRows]);
+    visibleExistingItems.some(item => isAssetName(awpOptions, item.name)) || newRows.some(row => isAssetName(awpOptions, row.name)), 
+    [visibleExistingItems, newRows, awpOptions]);
   const hasWaterSystems = useMemo(() => 
-    visibleExistingItems.some(item => isWaterSystemClass(item.name)) || newRows.some(row => isWaterSystemClass(row.name)), 
-    [visibleExistingItems, newRows]);
+    visibleExistingItems.some(item => isWaterSystemName(awpOptions, item.name)) || newRows.some(row => isWaterSystemName(awpOptions, row.name)), 
+    [visibleExistingItems, newRows, awpOptions]);
 
-  // All class options for combobox
-  const allClassOptions = useMemo(() => [
-    ...CLASSES_BY_CATEGORY.Asset.map(cls => ({ value: cls, category: "Asset" })),
-    ...CLASSES_BY_CATEGORY["Water System"].map(cls => ({ value: cls, category: "Water System" })),
-    ...CLASSES_BY_CATEGORY.Process.map(cls => ({ value: cls, category: "Process" })),
-  ], []);
+  // All class options for combobox - from DB
+  const allClassOptions = useMemo(() => 
+    awpOptions.map(opt => ({ value: opt.name, category: opt.category })),
+    [awpOptions]);
 
   // Issue 24: Fix hasUnsavedChanges to not trigger on empty default row
   const hasUnsavedChanges = useMemo(() => {
@@ -391,7 +389,7 @@ export const AWPEditModal = ({
     const drawingUrlMap = new Map(uploadResults.map(r => [r.tempId, r.url]));
     
     for (const row of newRows.filter(row => row.name)) {
-      const category = CLASS_TO_CATEGORY_MAP[row.name];
+      const category = getCategoryForName(awpOptions, row.name);
       // Issue 22: Pass accumulated items so each new item gets incrementing ID
       const id = generateNextId(row.name, allCurrentItems);
       
@@ -622,12 +620,12 @@ export const AWPEditModal = ({
                         <TableCell className="py-1 px-2 text-xs w-[60px] min-w-[60px]">{item.floor || "-"}</TableCell>
                         {hasAssets && (
                           <TableCell className="py-1 px-2 text-xs w-[80px] min-w-[80px]">
-                            {isAssetClass(item.name) ? getItemSizeDisplay(item) : "-"}
+                            {isAssetName(awpOptions, item.name) ? getItemSizeDisplay(item) : "-"}
                           </TableCell>
                         )}
                         {hasWaterSystems && (
                           <TableCell className="py-1 px-2 text-xs w-[70px] min-w-[70px]">
-                            {isWaterSystemClass(item.name) ? getItemPipeDisplay(item) : "-"}
+                            {isWaterSystemName(awpOptions, item.name) ? getItemPipeDisplay(item) : "-"}
                           </TableCell>
                         )}
                         <TableCell className="py-1 px-2 w-[80px]">
@@ -686,8 +684,8 @@ export const AWPEditModal = ({
                   </TableHeader>
                   <TableBody>
                     {newRows.map((row) => {
-                      const isAsset = row.name ? isAssetClass(row.name) : false;
-                      const isWaterSystem = row.name ? isWaterSystemClass(row.name) : false;
+                      const isAsset = row.name ? isAssetName(awpOptions, row.name) : false;
+                      const isWaterSystem = row.name ? isWaterSystemName(awpOptions, row.name) : false;
                       
                       return (
                         <TableRow key={row.tempId} className="h-8">
