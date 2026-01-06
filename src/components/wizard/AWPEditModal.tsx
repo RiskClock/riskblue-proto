@@ -364,7 +364,7 @@ export const AWPEditModal = ({
     
     // Fetch control mappings for auto-assignment
     const { fetchControlMappings } = await import("@/lib/controlAutoAssignment");
-    const controlMappings = await fetchControlMappings();
+    const { byName: controlMappings } = await fetchControlMappings();
     
     // Phase 3: Upload drawings and collect URLs
     const rowsWithDrawings = newRows.filter(row => row.name && row.drawingFile);
