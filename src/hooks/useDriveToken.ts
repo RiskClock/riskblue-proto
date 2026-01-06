@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { supabase } from "@/integrations/supabase/client";
 
 interface DriveToken {
@@ -11,6 +11,8 @@ export function useDriveToken() {
   const [driveToken, setDriveToken] = useState<DriveToken | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const popupRef = useRef<Window | null>(null);
+  const messageHandlerRef = useRef<((event: MessageEvent) => void) | null>(null);
 
   const fetchToken = useCallback(async () => {
     try {
@@ -47,7 +49,7 @@ export function useDriveToken() {
 
       if (isExpired) {
         // Try to refresh the token
-        const refreshed = await refreshToken();
+        const refreshed = await refreshTokenInternal();
         if (!refreshed) {
           setDriveToken(null);
         }
@@ -67,7 +69,7 @@ export function useDriveToken() {
     }
   }, []);
 
-  const refreshToken = async (): Promise<boolean> => {
+  const refreshTokenInternal = async (): Promise<boolean> => {
     try {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) return false;
@@ -113,32 +115,120 @@ export function useDriveToken() {
     }
   };
 
-  const connectDrive = async (projectPath: string) => {
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) {
-      throw new Error("User not authenticated");
-    }
+  const connectDrive = useCallback(async (projectPath: string): Promise<void> => {
+    return new Promise(async (resolve, reject) => {
+      try {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) {
+          reject(new Error("User not authenticated"));
+          return;
+        }
 
-    // Build the OAuth URL
-    const functionUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/google-drive-oauth`;
-    const callbackUri = `${functionUrl}?action=callback`;
-    
-    const params = new URLSearchParams({
-      action: "authorize",
-      redirect_uri: callbackUri,
-      user_id: user.id,
-      project_path: projectPath,
-      app_origin: window.location.origin,
+        // Build the OAuth URL for popup callback
+        const functionUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/google-drive-oauth`;
+        const callbackUri = `${functionUrl}?action=callback`;
+        
+        const params = new URLSearchParams({
+          action: "authorize",
+          redirect_uri: callbackUri,
+          user_id: user.id,
+          project_path: projectPath,
+          app_origin: window.location.origin,
+          popup_mode: "true", // Signal to edge function to return HTML for popup
+        });
+
+        const authUrl = `${functionUrl}?${params.toString()}`;
+
+        // Clean up any existing handler
+        if (messageHandlerRef.current) {
+          window.removeEventListener("message", messageHandlerRef.current);
+        }
+
+        // Set up message listener for popup response
+        const messageHandler = (event: MessageEvent) => {
+          // Verify origin
+          if (event.origin !== window.location.origin) return;
+          
+          const data = event.data;
+          if (data?.type === "google-oauth-callback") {
+            // Clean up
+            window.removeEventListener("message", messageHandler);
+            messageHandlerRef.current = null;
+            
+            if (popupRef.current && !popupRef.current.closed) {
+              popupRef.current.close();
+            }
+            popupRef.current = null;
+
+            if (data.success) {
+              // Refresh token state
+              fetchToken();
+              resolve();
+            } else {
+              reject(new Error(data.error || "Authentication failed"));
+            }
+          }
+        };
+
+        messageHandlerRef.current = messageHandler;
+        window.addEventListener("message", messageHandler);
+
+        // Open popup
+        const width = 500;
+        const height = 600;
+        const left = window.screenX + (window.outerWidth - width) / 2;
+        const top = window.screenY + (window.outerHeight - height) / 2;
+        
+        const popup = window.open(
+          authUrl,
+          "google-oauth",
+          `width=${width},height=${height},left=${left},top=${top},popup=1`
+        );
+
+        if (!popup || popup.closed) {
+          window.removeEventListener("message", messageHandler);
+          messageHandlerRef.current = null;
+          reject(new Error("Popup was blocked. Please allow popups for this site."));
+          return;
+        }
+
+        popupRef.current = popup;
+
+        // Poll to check if popup was closed without completing auth
+        const pollTimer = setInterval(() => {
+          if (popup.closed) {
+            clearInterval(pollTimer);
+            if (messageHandlerRef.current) {
+              window.removeEventListener("message", messageHandlerRef.current);
+              messageHandlerRef.current = null;
+            }
+            // Don't reject here - user may have completed auth
+          }
+        }, 500);
+
+        // Timeout after 5 minutes
+        setTimeout(() => {
+          clearInterval(pollTimer);
+          if (messageHandlerRef.current) {
+            window.removeEventListener("message", messageHandlerRef.current);
+            messageHandlerRef.current = null;
+          }
+          if (popupRef.current && !popupRef.current.closed) {
+            popupRef.current.close();
+          }
+          reject(new Error("Authentication timed out"));
+        }, 5 * 60 * 1000);
+
+      } catch (err) {
+        reject(err);
+      }
     });
-
-    // Redirect to the edge function
-    window.location.href = `${functionUrl}?${params.toString()}`;
-  };
+  }, [fetchToken]);
 
   useEffect(() => {
     fetchToken();
 
-    // Check for successful connection from URL params
+    // Check for successful connection from URL params (fallback for redirect flow)
     const urlParams = new URLSearchParams(window.location.search);
     if (urlParams.get("drive_connected") === "true") {
       // Clean up URL
@@ -147,6 +237,13 @@ export function useDriveToken() {
       // Refresh token state
       fetchToken();
     }
+
+    // Cleanup on unmount
+    return () => {
+      if (messageHandlerRef.current) {
+        window.removeEventListener("message", messageHandlerRef.current);
+      }
+    };
   }, [fetchToken]);
 
   return {

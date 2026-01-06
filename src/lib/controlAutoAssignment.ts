@@ -1,10 +1,10 @@
 import { supabase } from "@/integrations/supabase/client";
 
-// Cache for control mappings
+// Cache for control mappings (maps AWP class name -> control names)
 let controlMappingsCache: Map<string, string[]> | null = null;
 
 /**
- * Fetches and caches control mappings from the mitigation_controls table.
+ * Fetches and caches control mappings from the awp_class_control_mappings table.
  * Maps each AWP class name to an array of control names.
  */
 export const fetchControlMappings = async (): Promise<Map<string, string[]>> => {
@@ -12,10 +12,16 @@ export const fetchControlMappings = async (): Promise<Map<string, string[]>> => 
     return controlMappingsCache;
   }
 
+  // Query the new mapping table with join to get control names
   const { data, error } = await supabase
-    .from("mitigation_controls")
-    .select("name, application_component")
-    .not("application_component", "is", null);
+    .from("awp_class_control_mappings")
+    .select(`
+      awp_class_name,
+      control_id,
+      mitigation_controls!inner (
+        name
+      )
+    `);
 
   if (error) {
     console.error("Error fetching control mappings:", error);
@@ -24,18 +30,17 @@ export const fetchControlMappings = async (): Promise<Map<string, string[]>> => 
 
   const mappings = new Map<string, string[]>();
 
-  data?.forEach((control) => {
-    const components = control.application_component?.split(",").map((c: string) => c.trim()) || [];
+  data?.forEach((mapping: any) => {
+    const className = mapping.awp_class_name;
+    const controlName = mapping.mitigation_controls?.name;
     
-    components.forEach((component: string) => {
-      if (!component) return;
-      
-      const existing = mappings.get(component) || [];
-      if (!existing.includes(control.name)) {
-        existing.push(control.name);
-      }
-      mappings.set(component, existing);
-    });
+    if (!className || !controlName) return;
+    
+    const existing = mappings.get(className) || [];
+    if (!existing.includes(controlName)) {
+      existing.push(controlName);
+    }
+    mappings.set(className, existing);
   });
 
   controlMappingsCache = mappings;

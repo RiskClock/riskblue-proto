@@ -15,6 +15,8 @@ export interface AnalysisItem {
   sizeCategory: "very small" | "small" | "medium" | "large" | "very large" | null;
   controls: string[];
   coordinates: [number, number, number, number] | null;
+  // Drawing file URL (uploaded by user)
+  drawingUrl?: string | null;
   // Additional parameters for water systems (pipe diameter, etc.)
   additionalParameters?: {
     mainPipeDirection?: string;

@@ -1128,9 +1128,9 @@ const ProjectWizardContent = () => {
                     </div>
                   </AccordionTrigger>
                   <Button
-                    variant="link"
+                    variant="outline"
                     size="sm"
-                    className="text-blue-600 hover:text-blue-800 p-0 h-auto ml-2"
+                    className="flex items-center gap-2 ml-2"
                     onClick={(e) => {
                       e.stopPropagation();
                       // Bug 2: Increment key to force remount

@@ -14,6 +14,35 @@ export type Database = {
   }
   public: {
     Tables: {
+      awp_class_control_mappings: {
+        Row: {
+          awp_class_name: string
+          control_id: string
+          created_at: string | null
+          id: string
+        }
+        Insert: {
+          awp_class_name: string
+          control_id: string
+          created_at?: string | null
+          id?: string
+        }
+        Update: {
+          awp_class_name?: string
+          control_id?: string
+          created_at?: string | null
+          id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "awp_class_control_mappings_control_id_fkey"
+            columns: ["control_id"]
+            isOneToOne: false
+            referencedRelation: "mitigation_controls"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       company_proposals: {
         Row: {
           collaborator_id: string
@@ -515,6 +544,7 @@ export type Database = {
           coordinates: number[] | null
           created_at: string
           drawing_code: string | null
+          drawing_url: string | null
           file_name: string | null
           floor: string | null
           id: string
@@ -535,6 +565,7 @@ export type Database = {
           coordinates?: number[] | null
           created_at?: string
           drawing_code?: string | null
+          drawing_url?: string | null
           file_name?: string | null
           floor?: string | null
           id?: string
@@ -555,6 +586,7 @@ export type Database = {
           coordinates?: number[] | null
           created_at?: string
           drawing_code?: string | null
+          drawing_url?: string | null
           file_name?: string | null
           floor?: string | null
           id?: string
