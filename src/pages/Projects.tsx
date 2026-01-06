@@ -8,9 +8,8 @@ import { useToast } from "@/hooks/use-toast";
 import { getUserFriendlyError } from "@/lib/errorHandling";
 import riskBlueLogo from "@/assets/riskblue-logo.jpg";
 import { format } from "date-fns";
-import { Trash2, MessageSquare, LogOut } from "lucide-react";
+import { Trash2, LogOut } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
-import { FieldAgentChat } from "@/components/FieldAgentChat";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { ProviderSelectionDialog } from "@/components/ProviderSelectionDialog";
 
@@ -23,6 +22,12 @@ interface Project {
   country: string;
   construction_start_date: string;
   created_at: string;
+  user_id: string;
+  status?: string;
+}
+
+interface ProjectWithCreator extends Project {
+  creator_name: string;
 }
 
 const capitalizeFirst = (str: string) => {
@@ -37,17 +42,13 @@ const formatLocation = (city?: string, country?: string) => {
 
 const Projects = () => {
   const { user, signOut } = useAuth();
-  const [projects, setProjects] = useState<Project[]>([]);
+  const [projects, setProjects] = useState<ProjectWithCreator[]>([]);
   const [loading, setLoading] = useState(true);
   const navigate = useNavigate();
   const { toast } = useToast();
-  const [chatOpen, setChatOpen] = useState(false);
-  const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
   const [showProviderDialog, setShowProviderDialog] = useState(false);
 
   useEffect(() => {
-    // Wait for user to be available before fetching projects
-    // This handles OAuth redirect where user state takes a moment to restore
     if (user) {
       fetchProjects();
     }
@@ -55,13 +56,35 @@ const Projects = () => {
 
   const fetchProjects = async () => {
     try {
-      const { data, error } = await supabase
+      // First fetch projects
+      const { data: projectsData, error: projectsError } = await supabase
         .from("projects")
         .select("*")
         .order("created_at", { ascending: false });
 
-      if (error) throw error;
-      setProjects(data || []);
+      if (projectsError) throw projectsError;
+
+      // Get unique user IDs
+      const userIds = [...new Set((projectsData || []).map(p => p.user_id))];
+      
+      // Fetch profiles for those users
+      const { data: profilesData } = await supabase
+        .from("profiles")
+        .select("user_id, display_name")
+        .in("user_id", userIds);
+
+      // Create a map of user_id to display_name
+      const profilesMap = new Map(
+        (profilesData || []).map(p => [p.user_id, p.display_name])
+      );
+
+      // Merge projects with creator names
+      const projectsWithCreators: ProjectWithCreator[] = (projectsData || []).map(project => ({
+        ...project,
+        creator_name: profilesMap.get(project.user_id) || "Unknown"
+      }));
+
+      setProjects(projectsWithCreators);
     } catch (error: any) {
       toast({
         title: "Error",
@@ -107,12 +130,6 @@ const Projects = () => {
     }
   };
 
-  const handleOpenFieldAgent = (projectId: string, e: React.MouseEvent) => {
-    e.stopPropagation();
-    setSelectedProjectId(projectId);
-    setChatOpen(true);
-  };
-
   return (
     <div className="min-h-screen bg-background">
       <header className="border-b bg-card">
@@ -141,16 +158,13 @@ const Projects = () => {
       </header>
 
       <main className="container mx-auto px-6 py-8">
-          <div className="mb-8">
+        <div className="mb-8">
           <div className="flex items-center justify-between mb-4">
             <div>
               <h1 className="text-3xl font-bold text-foreground">Projects</h1>
-              <p className="text-muted-foreground">{projects.length} result{projects.length !== 1 ? 's' : ''}</p>
             </div>
             <div className="flex gap-3">
-              <Button variant="outline">Sort</Button>
-              <Button variant="outline">Filter</Button>
-              <Button onClick={handleNewProject}>New</Button>
+              <Button onClick={handleNewProject}>Add New Project</Button>
             </div>
           </div>
 
@@ -178,14 +192,15 @@ const Projects = () => {
             <table className="w-full">
               <thead className="bg-muted/50">
                 <tr className="text-left">
-                  <th className="px-6 py-3 text-sm font-medium text-foreground">Project Name</th>
+                  <th className="px-6 py-3 text-sm font-medium text-foreground">
+                    Project Name ({projects.length})
+                  </th>
                   <th className="px-6 py-3 text-sm font-medium text-foreground">Project Type</th>
-                  <th className="px-6 py-3 text-sm font-medium text-foreground">Project Location</th>
-                  <th className="px-6 py-3 text-sm font-medium text-foreground">Created</th>
+                  <th className="px-6 py-3 text-sm font-medium text-foreground">Location</th>
+                  <th className="px-6 py-3 text-sm font-medium text-foreground">Created By</th>
+                  <th className="px-6 py-3 text-sm font-medium text-foreground">Created On</th>
                   <th className="px-6 py-3 text-sm font-medium text-foreground">Construction Start</th>
-                  <th className="px-6 py-3 text-sm font-medium text-foreground">Status</th>
-                  <th className="px-6 py-3 text-sm font-medium text-foreground">Stakeholders</th>
-                  <th className="px-6 py-3 w-[120px]"></th>
+                  <th className="px-6 py-3 w-[80px]"></th>
                 </tr>
               </thead>
               <tbody>
@@ -195,9 +210,20 @@ const Projects = () => {
                     className="border-t hover:bg-muted/30 cursor-pointer"
                     onClick={() => navigate(`/project/${project.id}`)}
                   >
-                    <td className="px-6 py-4 text-foreground">{project.name}</td>
+                    <td className="px-6 py-4">
+                      <div className="flex items-center gap-2">
+                        <span className="text-foreground">{project.name}</span>
+                        <Badge
+                          variant={project.status === "completed" ? "default" : "secondary"}
+                          className="text-xs"
+                        >
+                          {project.status || "draft"}
+                        </Badge>
+                      </div>
+                    </td>
                     <td className="px-6 py-4 text-muted-foreground">{capitalizeFirst(project.project_type) || "—"}</td>
                     <td className="px-6 py-4 text-muted-foreground">{formatLocation(project.city, project.country)}</td>
+                    <td className="px-6 py-4 text-muted-foreground">{project.creator_name}</td>
                     <td className="px-6 py-4 text-muted-foreground">
                       {project.created_at
                         ? format(new Date(project.created_at), "M/dd/yy")
@@ -209,37 +235,13 @@ const Projects = () => {
                         : "—"}
                     </td>
                     <td className="px-6 py-4">
-                      <Badge
-                        variant={(project as any).status === "completed" ? "default" : "secondary"}
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={(e) => handleDeleteProject(project.id, e)}
                       >
-                        {(project as any).status || "draft"}
-                      </Badge>
-                    </td>
-                    <td className="px-6 py-4">
-                      <div className="flex -space-x-2">
-                        <Avatar className="w-8 h-8 border-2 border-background">
-                          <AvatarFallback className="text-xs">{user?.email?.[0].toUpperCase()}</AvatarFallback>
-                        </Avatar>
-                      </div>
-                    </td>
-                    <td className="px-6 py-4">
-                      <div className="flex gap-2">
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          onClick={(e) => handleOpenFieldAgent(project.id, e)}
-                          title="Open Field Agent"
-                        >
-                          <MessageSquare className="h-4 w-4" />
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          onClick={(e) => handleDeleteProject(project.id, e)}
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
-                      </div>
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
                     </td>
                   </tr>
                 ))}
@@ -248,14 +250,6 @@ const Projects = () => {
           </div>
         )}
       </main>
-
-      {selectedProjectId && (
-        <FieldAgentChat
-          open={chatOpen}
-          onClose={() => setChatOpen(false)}
-          projectId={selectedProjectId}
-        />
-      )}
 
       <ProviderSelectionDialog 
         open={showProviderDialog} 
