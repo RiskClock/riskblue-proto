@@ -168,12 +168,13 @@ export const InlineCombobox = ({
   const dropdown = isOpen ? (
     <div
       ref={dropdownRef}
-      className="fixed pointer-events-auto bg-popover text-popover-foreground border border-border rounded-md shadow-lg max-h-[300px] overflow-auto"
+      className="fixed bg-popover text-popover-foreground border border-border rounded-md shadow-lg max-h-[300px] overflow-y-auto overscroll-contain"
       style={{
         top: dropdownPosition.top,
         left: dropdownPosition.left,
         width: dropdownPosition.width,
         zIndex: 99999,
+        pointerEvents: 'auto',
       }}
     >
       {flatOptionsWithMeta.length === 0 ? (
