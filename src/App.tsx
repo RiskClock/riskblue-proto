@@ -9,6 +9,7 @@ import Projects from "./pages/Projects";
 import ProjectWizard from "./pages/ProjectWizard";
 import SolutionProviderPortal from "./pages/SolutionProviderPortal";
 import AcceptInvite from "./pages/AcceptInvite";
+import OAuthCallback from "./pages/OAuthCallback";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -38,6 +39,7 @@ const App = () => (
             <Route path="/project/:id" element={<ProtectedRoute><ProjectWizard /></ProtectedRoute>} />
             <Route path="/solution-provider-portal" element={<ProtectedRoute><SolutionProviderPortal /></ProtectedRoute>} />
             <Route path="/accept-invite" element={<AcceptInvite />} />
+            <Route path="/oauth/callback" element={<OAuthCallback />} />
             <Route path="/" element={<Navigate to="/projects" />} />
             <Route path="*" element={<NotFound />} />
           </Routes>

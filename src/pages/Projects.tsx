@@ -197,9 +197,9 @@ const Projects = () => {
                   </th>
                   <th className="px-6 py-3 text-sm font-medium text-foreground">Project Type</th>
                   <th className="px-6 py-3 text-sm font-medium text-foreground">Location</th>
+                  <th className="px-6 py-3 text-sm font-medium text-foreground">Construction Start</th>
                   <th className="px-6 py-3 text-sm font-medium text-foreground">Created By</th>
                   <th className="px-6 py-3 text-sm font-medium text-foreground">Created On</th>
-                  <th className="px-6 py-3 text-sm font-medium text-foreground">Construction Start</th>
                   <th className="px-6 py-3 w-[80px]"></th>
                 </tr>
               </thead>
@@ -223,15 +223,15 @@ const Projects = () => {
                     </td>
                     <td className="px-6 py-4 text-muted-foreground">{capitalizeFirst(project.project_type) || "—"}</td>
                     <td className="px-6 py-4 text-muted-foreground">{formatLocation(project.city, project.country)}</td>
+                    <td className="px-6 py-4 text-muted-foreground">
+                      {project.construction_start_date
+                        ? format(new Date(project.construction_start_date), "M/dd/yy")
+                        : "—"}
+                    </td>
                     <td className="px-6 py-4 text-muted-foreground">{project.creator_name}</td>
                     <td className="px-6 py-4 text-muted-foreground">
                       {project.created_at
                         ? format(new Date(project.created_at), "M/dd/yy")
-                        : "—"}
-                    </td>
-                    <td className="px-6 py-4 text-muted-foreground">
-                      {project.construction_start_date
-                        ? format(new Date(project.construction_start_date), "M/dd/yy")
                         : "—"}
                     </td>
                     <td className="px-6 py-4">

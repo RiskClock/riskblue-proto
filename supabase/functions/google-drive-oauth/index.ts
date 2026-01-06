@@ -27,6 +27,7 @@ serve(async (req) => {
       const userId = url.searchParams.get("user_id");
       const projectPath = url.searchParams.get("project_path");
       const appOrigin = url.searchParams.get("app_origin");
+      const popupMode = url.searchParams.get("popup_mode") === "true";
 
       if (!redirectUri || !userId) {
         return new Response(
@@ -35,8 +36,8 @@ serve(async (req) => {
         );
       }
 
-      // Store state in the state parameter (user_id + project_path + app_origin)
-      const state = btoa(JSON.stringify({ userId, projectPath, appOrigin }));
+      // Store state in the state parameter (user_id + project_path + app_origin + popup_mode)
+      const state = btoa(JSON.stringify({ userId, projectPath, appOrigin, popupMode }));
 
       const googleAuthUrl = new URL("https://accounts.google.com/o/oauth2/v2/auth");
       googleAuthUrl.searchParams.set("client_id", GOOGLE_CLIENT_ID);
@@ -68,7 +69,7 @@ serve(async (req) => {
       }
 
       // Parse state
-      let stateData: { userId: string; projectPath: string; appOrigin: string };
+      let stateData: { userId: string; projectPath: string; appOrigin: string; popupMode?: boolean };
       try {
         stateData = JSON.parse(atob(state));
       } catch {
@@ -134,7 +135,13 @@ serve(async (req) => {
 
       console.log("Tokens stored successfully for user:", stateData.userId);
 
-      // Redirect back to the project page with success indicator using the stored app origin
+      // For popup mode, redirect to the callback page which will post message to opener
+      if (stateData.popupMode) {
+        const callbackPageUrl = `${stateData.appOrigin}/oauth/callback?drive_connected=true`;
+        return Response.redirect(callbackPageUrl, 302);
+      }
+
+      // For redirect mode (fallback), redirect back to the project page with success indicator
       const redirectUrl = `${stateData.appOrigin}${stateData.projectPath}?drive_connected=true`;
       return Response.redirect(redirectUrl, 302);
     }
