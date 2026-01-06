@@ -8,7 +8,7 @@ import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { AnalysisItem } from "@/lib/analysisItemMapper";
 import { useAWPOptions, groupAWPOptionsByCategory, isAssetName, isWaterSystemName, getCategoryForName } from "@/hooks/useAWPOptions";
 import {
-  generateNextId,
+  generateNextIdFromOptions,
   sqftToSqm,
   sqmToSqft,
   inchesToMm,
@@ -59,7 +59,7 @@ export const AWPItemEditModal = ({
           updated.category = newCategory;
           // Regenerate ID based on new class
           const otherItems = allItems.filter(i => i.id !== prev.id);
-          updated.id = generateNextId(updates.name, otherItems);
+          updated.id = generateNextIdFromOptions(updates.name, awpOptions, otherItems);
         }
       }
       

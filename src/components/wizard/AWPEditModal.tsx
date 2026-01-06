@@ -13,14 +13,15 @@ import { AnalysisItem } from "@/lib/analysisItemMapper";
 import { AWPItemEditModal } from "./AWPItemEditModal";
 import { RepositoryConnectionDialog } from "./RepositoryConnectionDialog";
 import { InlineCombobox } from "./InlineCombobox";
-import { useAWPOptions, isAssetName, isWaterSystemName, getCategoryForName } from "@/hooks/useAWPOptions";
+import { useAWPOptions, isAssetName, isWaterSystemName, getCategoryForName, getDefaultControlIdsForName } from "@/hooks/useAWPOptions";
 import {
-  generateNextId,
+  generateNextIdFromOptions,
   sqftToSqm,
   sqmToSqft,
   inchesToMm,
   mmToInches,
 } from "@/lib/awpIdGenerator";
+import { resolveControlIdsToNames } from "@/lib/controlAutoAssignment";
 
 // Bug 6: Use public folder paths for preloading
 const googleDriveIcon = "/icons/icon_googledrive.png";
@@ -351,7 +352,7 @@ export const AWPEditModal = ({
 
   // Issue 22: Confirm save - generate IDs incrementally to avoid duplicates
   // Phase 3: Upload drawings to storage
-  // Phase 5: Auto-assign default controls based on class name
+  // Phase 5: Auto-assign default controls based on class name (now using DB arrays)
   const handleConfirmSave = useCallback(async () => {
     // Filter out deleted items
     const remainingItems = existingItems.filter(item => !deletedItemIds.has(item.id));
@@ -360,9 +361,25 @@ export const AWPEditModal = ({
     const allCurrentItems = [...remainingItems];
     const newItems: AnalysisItem[] = [];
     
-    // Fetch control mappings for auto-assignment
-    const { fetchControlMappings } = await import("@/lib/controlAutoAssignment");
-    const { byName: controlMappings } = await fetchControlMappings();
+    // Collect all control IDs needed for resolution
+    const controlIdsToResolve = new Set<string>();
+    newRows.filter(row => row.name).forEach(row => {
+      const controlIds = getDefaultControlIdsForName(awpOptions, row.name);
+      controlIds.forEach(id => controlIdsToResolve.add(id));
+    });
+    
+    // Resolve control IDs to names in one batch
+    const controlNames = await resolveControlIdsToNames(Array.from(controlIdsToResolve));
+    const idToNameMap = new Map<string, string>();
+    
+    // Build the mapping from IDs to names
+    if (controlIdsToResolve.size > 0) {
+      const { data } = await supabase
+        .from("mitigation_controls")
+        .select("id, name")
+        .in("id", Array.from(controlIdsToResolve));
+      data?.forEach((c: any) => idToNameMap.set(c.id, c.name));
+    }
     
     // Phase 3: Upload drawings and collect URLs
     const rowsWithDrawings = newRows.filter(row => row.name && row.drawingFile);
@@ -391,10 +408,14 @@ export const AWPEditModal = ({
     for (const row of newRows.filter(row => row.name)) {
       const category = getCategoryForName(awpOptions, row.name);
       // Issue 22: Pass accumulated items so each new item gets incrementing ID
-      const id = generateNextId(row.name, allCurrentItems);
+      // Now uses AWP options from DB for ID prefix
+      const id = generateNextIdFromOptions(row.name, awpOptions, allCurrentItems);
       
-      // Phase 5: Get default controls for this class
-      const defaultControls = controlMappings.get(row.name) || [];
+      // Phase 5: Get default controls for this class from DB array
+      const defaultControlIds = getDefaultControlIdsForName(awpOptions, row.name);
+      const defaultControls = defaultControlIds
+        .map(id => idToNameMap.get(id))
+        .filter((name): name is string => !!name);
       
       // Phase 3: Get drawing URL (uploaded or existing)
       const drawingUrl = drawingUrlMap.get(row.tempId) || row.drawingUrl || undefined;
@@ -412,7 +433,7 @@ export const AWPEditModal = ({
         length: undefined,
         sizeCategory: undefined,
         coordinates: undefined,
-        controls: defaultControls, // Auto-assigned default controls
+        controls: defaultControls, // Auto-assigned default controls from DB
         drawingUrl, // Phase 3: Drawing URL
         additionalParameters: row.pipeDiameterInches ? {
           pipeDiameterInches: row.pipeDiameterInches,
@@ -429,7 +450,7 @@ export const AWPEditModal = ({
     onUpdateItems(allItems);
     setShowSaveConfirmation(false);
     onClose();
-  }, [existingItems, deletedItemIds, newRows, onUpdateItems, onClose, projectId]);
+  }, [existingItems, deletedItemIds, newRows, onUpdateItems, onClose, projectId, awpOptions]);
 
   // Get size display for existing item
   const getItemSizeDisplay = (item: AnalysisItem) => {
