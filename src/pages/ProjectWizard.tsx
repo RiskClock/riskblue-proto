@@ -1148,9 +1148,19 @@ const ProjectWizardContent = () => {
                       <p className="text-sm text-muted-foreground mb-2">
                         No assets, water systems, or processes have been added yet.
                       </p>
-                      <p className="text-xs text-muted-foreground">
+                      <p className="text-xs text-muted-foreground mb-4">
                         Click "Add New" to manually add items or connect a repository to analyze drawing files.
                       </p>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => {
+                          setAwpModalKey(prev => prev + 1);
+                          setShowAWPEditModal(true);
+                        }}
+                      >
+                        Add New
+                      </Button>
                     </div>
                   )}
 

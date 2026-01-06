@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useCallback } from "react";
+import { useState, useRef, useEffect, useCallback, useMemo } from "react";
 import { createPortal } from "react-dom";
 import { Input } from "@/components/ui/input";
 import { ChevronsUpDown, Check } from "lucide-react";
@@ -33,27 +33,42 @@ export const InlineCombobox = ({
   const [dropdownPosition, setDropdownPosition] = useState({ top: 0, left: 0, width: 0 });
 
   // Filter options based on search
-  const filteredOptions = options.filter(
-    (opt) => !search || opt.value.toLowerCase().includes(search.toLowerCase())
+  const filteredOptions = useMemo(() => 
+    options.filter(
+      (opt) => !search || opt.value.toLowerCase().includes(search.toLowerCase())
+    ),
+    [options, search]
   );
 
   // Group options by category
-  const groupedOptions = filteredOptions.reduce((acc, opt) => {
-    if (!acc[opt.category]) acc[opt.category] = [];
-    acc[opt.category].push(opt);
-    return acc;
-  }, {} as Record<string, ComboboxOption[]>);
+  const groupedOptions = useMemo(() => 
+    filteredOptions.reduce((acc, opt) => {
+      if (!acc[opt.category]) acc[opt.category] = [];
+      acc[opt.category].push(opt);
+      return acc;
+    }, {} as Record<string, ComboboxOption[]>),
+    [filteredOptions]
+  );
 
-  // Flat list for keyboard navigation
-  const flatOptions = Object.values(groupedOptions).flat();
+  // Pre-compute flat list with indices for consistent highlighting
+  const flatOptionsWithMeta = useMemo(() => {
+    let index = 0;
+    const result: Array<{ opt: ComboboxOption; index: number; category: string }> = [];
+    Object.entries(groupedOptions).forEach(([category, opts]) => {
+      opts.forEach((opt) => {
+        result.push({ opt, index: index++, category });
+      });
+    });
+    return result;
+  }, [groupedOptions]);
 
-  // Update dropdown position when opening
+  // Update dropdown position when opening - use fixed positioning relative to viewport
   const updatePosition = useCallback(() => {
     if (containerRef.current) {
       const rect = containerRef.current.getBoundingClientRect();
       setDropdownPosition({
-        top: rect.bottom + window.scrollY + 4,
-        left: rect.left + window.scrollX,
+        top: rect.bottom + 4, // Fixed positioning - no scrollY needed
+        left: rect.left,
         width: Math.max(280, rect.width),
       });
     }
@@ -106,7 +121,7 @@ export const InlineCombobox = ({
       case "ArrowDown":
         e.preventDefault();
         setHighlightedIndex((prev) =>
-          prev < flatOptions.length - 1 ? prev + 1 : prev
+          prev < flatOptionsWithMeta.length - 1 ? prev + 1 : prev
         );
         break;
       case "ArrowUp":
@@ -115,8 +130,8 @@ export const InlineCombobox = ({
         break;
       case "Enter":
         e.preventDefault();
-        if (flatOptions[highlightedIndex]) {
-          onChange(flatOptions[highlightedIndex].value);
+        if (flatOptionsWithMeta[highlightedIndex]) {
+          onChange(flatOptionsWithMeta[highlightedIndex].opt.value);
           setIsOpen(false);
           setSearch("");
         }
@@ -140,32 +155,39 @@ export const InlineCombobox = ({
     inputRef.current?.focus();
   };
 
-  // Track running index for highlighting across groups
-  let runningIndex = 0;
+  // Group the flat list back for rendering with categories
+  const groupedForRender = useMemo(() => {
+    const groups: Record<string, Array<{ opt: ComboboxOption; index: number }>> = {};
+    flatOptionsWithMeta.forEach((item) => {
+      if (!groups[item.category]) groups[item.category] = [];
+      groups[item.category].push({ opt: item.opt, index: item.index });
+    });
+    return groups;
+  }, [flatOptionsWithMeta]);
 
   const dropdown = isOpen ? (
     <div
       ref={dropdownRef}
-      className="fixed z-[9999] bg-popover border rounded-md shadow-lg max-h-[300px] overflow-auto"
+      className="fixed bg-popover border border-border rounded-md shadow-lg max-h-[300px] overflow-auto"
       style={{
         top: dropdownPosition.top,
         left: dropdownPosition.left,
         width: dropdownPosition.width,
+        zIndex: 99999,
       }}
     >
-      {flatOptions.length === 0 ? (
+      {flatOptionsWithMeta.length === 0 ? (
         <div className="py-4 text-center text-sm text-muted-foreground">
           No type found.
         </div>
       ) : (
-        Object.entries(groupedOptions).map(([category, opts]) => (
+        Object.entries(groupedForRender).map(([category, items]) => (
           <div key={category}>
             <div className="px-2 py-1.5 text-xs font-medium text-muted-foreground bg-muted/50">
               {category}
             </div>
-            {opts.map((opt) => {
-              const currentIndex = runningIndex++;
-              const isHighlighted = currentIndex === highlightedIndex;
+            {items.map(({ opt, index }) => {
+              const isHighlighted = index === highlightedIndex;
               const isSelected = value === opt.value;
 
               return (
@@ -177,7 +199,7 @@ export const InlineCombobox = ({
                     !isHighlighted && "hover:bg-accent/50"
                   )}
                   onClick={() => handleSelect(opt.value)}
-                  onMouseEnter={() => setHighlightedIndex(currentIndex)}
+                  onMouseEnter={() => setHighlightedIndex(index)}
                 >
                   <span className="truncate">{opt.value}</span>
                   <Check
