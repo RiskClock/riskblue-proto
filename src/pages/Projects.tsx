@@ -47,6 +47,7 @@ const Projects = () => {
   const [projects, setProjects] = useState<ProjectWithCreator[]>([]);
   const [loading, setLoading] = useState(true);
   const [userProjectRoles, setUserProjectRoles] = useState<Map<string, string>>(new Map());
+  const [userDisplayName, setUserDisplayName] = useState<string | null>(null);
   const navigate = useNavigate();
   const { toast } = useToast();
   const [showProviderDialog, setShowProviderDialog] = useState(false);
@@ -54,6 +55,17 @@ const Projects = () => {
   useEffect(() => {
     if (user) {
       fetchProjects();
+      // Fetch current user's display name
+      supabase
+        .from("profiles")
+        .select("display_name")
+        .eq("user_id", user.id)
+        .single()
+        .then(({ data }) => {
+          if (data?.display_name) {
+            setUserDisplayName(data.display_name);
+          }
+        });
     }
   }, [user]);
 
@@ -195,7 +207,7 @@ const Projects = () => {
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Avatar className="cursor-pointer">
-                  <AvatarFallback>{user?.email?.[0].toUpperCase()}</AvatarFallback>
+                  <AvatarFallback>{(userDisplayName?.[0] || user?.email?.[0] || "?").toUpperCase()}</AvatarFallback>
                 </Avatar>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="w-48">
