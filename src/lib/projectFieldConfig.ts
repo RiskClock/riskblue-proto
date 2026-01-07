@@ -68,6 +68,7 @@ export const PROJECT_JSON_FIELDS = [
   'uploadedFiles',
   'webhookResponse',
   'timeline',
+  'schedule_file_name',
 ] as const;
 
 export type TableColumn = typeof PROJECT_TABLE_COLUMNS[number];

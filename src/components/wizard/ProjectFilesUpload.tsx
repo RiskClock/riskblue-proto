@@ -61,6 +61,10 @@ interface ProjectFilesUploadProps {
   onBeforeOAuthRedirect?: () => Promise<void>;
   // Mode: "schedule" for PDF upload only, "drive" for Google Drive only, undefined for both
   mode?: "schedule" | "drive";
+  // Saved schedule file name from database
+  savedScheduleFileName?: string;
+  // Callback when a file is successfully uploaded
+  onScheduleFileUploaded?: (fileName: string) => void;
 }
 
 export const ProjectFilesUpload = ({ 
@@ -76,7 +80,9 @@ export const ProjectFilesUpload = ({
   driveConnected,
   setDriveConnected,
   onBeforeOAuthRedirect,
-  mode
+  mode,
+  savedScheduleFileName,
+  onScheduleFileUploaded
 }: ProjectFilesUploadProps) => {
   const { toast } = useToast();
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -272,12 +278,20 @@ export const ProjectFilesUpload = ({
           if (onScheduleDataExtracted) {
             onScheduleDataExtracted(parsedData);
           }
+          // Save the file name after successful upload
+          if (onScheduleFileUploaded && uploadedFile) {
+            onScheduleFileUploaded(uploadedFile.name);
+          }
           toast({
             title: "Success",
             description: "File uploaded and analyzed. Information has been pre-filled.",
           });
         } catch (e) {
           console.log("Response is not JSON, skipping auto-fill");
+          // Still save the file name even if response isn't JSON
+          if (onScheduleFileUploaded && uploadedFile) {
+            onScheduleFileUploaded(uploadedFile.name);
+          }
           toast({
             title: "File uploaded",
             description: "Document processed successfully",
@@ -627,51 +641,60 @@ export const ProjectFilesUpload = ({
         />
         
         {/* Visual upload zone */}
-        <div className="flex gap-2 items-center">
-          <button
-            onClick={() => fileInputRef.current?.click()}
-            disabled={uploading}
-            className="flex-1 border-2 border-dashed border-muted-foreground/30 rounded-lg p-4 hover:border-muted-foreground/50 hover:bg-muted/50 transition-all cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            <div className="flex items-center gap-3">
-              <div className="p-2 rounded-md bg-muted transition-colors">
-                {uploadedFile ? (
-                  <FileText className="w-5 h-5 text-muted-foreground" />
-                ) : (
-                  <Upload className="w-5 h-5 text-muted-foreground" />
-                )}
-              </div>
-              <div className="text-left flex-1">
-                {uploadedFile ? (
-                  <>
-                    <p className="text-sm font-medium text-foreground truncate">{uploadedFile.name}</p>
-                    <p className="text-xs text-muted-foreground">Click to change file</p>
-                  </>
-                ) : (
-                  <>
-                    <p className="text-sm font-medium text-foreground">Click to select PDF</p>
-                    <p className="text-xs text-muted-foreground">Drag and drop or click to browse</p>
-                  </>
-                )}
-              </div>
-            </div>
-          </button>
+        {(() => {
+          const displayFileName = uploadedFile?.name || savedScheduleFileName;
+          const hasNewFileSelected = !!uploadedFile;
           
-          <Button 
-            onClick={uploading ? handleStop : handleUpload} 
-            disabled={!uploadedFile && !uploading}
-            variant={uploading ? "destructive" : "default"}
-          >
-            {uploading ? (
-              <>
-                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                Stop
-              </>
-            ) : (
-              "Upload"
-            )}
-          </Button>
-        </div>
+          return (
+            <div className="flex gap-2 items-center">
+              <button
+                onClick={() => fileInputRef.current?.click()}
+                disabled={uploading}
+                className="flex-1 border-2 border-dashed border-muted-foreground/30 rounded-lg p-4 hover:border-muted-foreground/50 hover:bg-muted/50 transition-all cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                <div className="flex items-center gap-3">
+                  <div className="p-2 rounded-md bg-muted transition-colors">
+                    {displayFileName ? (
+                      <FileText className="w-5 h-5 text-muted-foreground" />
+                    ) : (
+                      <Upload className="w-5 h-5 text-muted-foreground" />
+                    )}
+                  </div>
+                  <div className="text-left flex-1">
+                    {displayFileName ? (
+                      <>
+                        <p className="text-sm font-medium text-foreground truncate">{displayFileName}</p>
+                        {hasNewFileSelected && (
+                          <p className="text-xs text-muted-foreground">Click to change file</p>
+                        )}
+                      </>
+                    ) : (
+                      <>
+                        <p className="text-sm font-medium text-foreground">Click to select PDF</p>
+                        <p className="text-xs text-muted-foreground">Drag and drop or click to browse</p>
+                      </>
+                    )}
+                  </div>
+                </div>
+              </button>
+              
+              <Button 
+                onClick={uploading ? handleStop : handleUpload} 
+                disabled={!uploadedFile && !uploading}
+                variant={uploading ? "destructive" : "default"}
+              >
+                {uploading ? (
+                  <>
+                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                    Stop
+                  </>
+                ) : (
+                  "Upload"
+                )}
+              </Button>
+            </div>
+          );
+        })()}
 
         {/* PDF Analysis Animation */}
         {analyzing && pdfMetadata && (
