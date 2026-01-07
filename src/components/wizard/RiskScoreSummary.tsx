@@ -39,11 +39,6 @@ export const ClassRiskBadges = ({
       {/* Visual separator before totals */}
       <div className="h-6 w-px bg-border mx-1" />
       
-      {locationCount !== undefined && locationCount > 0 && (
-        <Badge variant="secondary" className="text-xs cursor-default">
-          {locationCount} {locationCount === 1 ? 'location' : 'locations'}
-        </Badge>
-      )}
       {riskPoints !== undefined && riskPoints > 0 && (
         <Badge variant="outline" className="text-xs bg-red-50 text-red-600 border-red-200 dark:bg-red-950 dark:text-red-300 dark:border-red-800">
           {showRiskLabel && <AlertTriangle className="h-3 w-3 mr-1" />}
