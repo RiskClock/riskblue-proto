@@ -287,8 +287,10 @@ export type Database = {
           id: string
           id_prefix: string | null
           image_url: string
+          impact: number
           is_active: boolean
           name: string
+          probability: number
           risk_level: string
           risk_level_points: number
           risk_tolerance: number | null
@@ -306,8 +308,10 @@ export type Database = {
           id?: string
           id_prefix?: string | null
           image_url: string
+          impact?: number
           is_active?: boolean
           name: string
+          probability?: number
           risk_level: string
           risk_level_points?: number
           risk_tolerance?: number | null
@@ -325,8 +329,10 @@ export type Database = {
           id?: string
           id_prefix?: string | null
           image_url?: string
+          impact?: number
           is_active?: boolean
           name?: string
+          probability?: number
           risk_level?: string
           risk_level_points?: number
           risk_tolerance?: number | null
@@ -510,8 +516,10 @@ export type Database = {
           id: string
           id_prefix: string | null
           image_url: string
+          impact: number
           is_active: boolean
           name: string
+          probability: number
           risk_level: string
           risk_level_points: number
           risk_tolerance: number
@@ -529,8 +537,10 @@ export type Database = {
           id?: string
           id_prefix?: string | null
           image_url?: string
+          impact?: number
           is_active?: boolean
           name: string
+          probability?: number
           risk_level: string
           risk_level_points?: number
           risk_tolerance?: number
@@ -548,8 +558,10 @@ export type Database = {
           id?: string
           id_prefix?: string | null
           image_url?: string
+          impact?: number
           is_active?: boolean
           name?: string
+          probability?: number
           risk_level?: string
           risk_level_points?: number
           risk_tolerance?: number
@@ -1001,8 +1013,10 @@ export type Database = {
           id: string
           id_prefix: string | null
           image_url: string
+          impact: number
           is_active: boolean
           name: string
+          probability: number
           risk_level: string
           risk_level_points: number
           risk_tolerance: number | null
@@ -1020,8 +1034,10 @@ export type Database = {
           id?: string
           id_prefix?: string | null
           image_url: string
+          impact?: number
           is_active?: boolean
           name: string
+          probability?: number
           risk_level: string
           risk_level_points?: number
           risk_tolerance?: number | null
@@ -1039,8 +1055,10 @@ export type Database = {
           id?: string
           id_prefix?: string | null
           image_url?: string
+          impact?: number
           is_active?: boolean
           name?: string
+          probability?: number
           risk_level?: string
           risk_level_points?: number
           risk_tolerance?: number | null

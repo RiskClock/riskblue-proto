@@ -24,7 +24,8 @@ interface Asset {
   name: string;
   threat: string;
   risk_level: string;
-  risk_level_points?: number;
+  probability?: number;
+  impact?: number;
   duration: string;
   cost: string;
   image_url: string;
@@ -183,7 +184,8 @@ export const CriticalAssetsStep = ({
     name: a.name,
     threat: 'Custom asset',
     risk_level: a.risk_level,
-    risk_level_points: 10, // default for custom
+    probability: 3, // default for custom
+    impact: 3, // default for custom
     duration: a.duration,
     cost: a.cost,
     image_url: '',
@@ -202,8 +204,9 @@ export const CriticalAssetsStep = ({
     selectedInstanceIds,
     selectedControlIds,
     {
-      criticalAssets: allAssets.map(a => ({ name: a.name, risk_level_points: a.risk_level_points || 0 })),
+      criticalAssets: allAssets.map(a => ({ name: a.name, probability: a.probability || 3, impact: a.impact || 3 })),
       waterSystems: [],
+      processes: [],
       controls
     }
   );
@@ -230,7 +233,7 @@ export const CriticalAssetsStep = ({
     if (normalized.includes('mechanical') && normalized.includes('riser')) return 'mechanical risers';
     if (normalized.includes('elevator') && normalized.includes('pit')) return 'elevator pits';
     if (normalized.includes('suite') || normalized.includes('guest')) return 'suites';
-    if (normalized.includes('kitchen') || normalized.includes('washroom')) return 'kitchens and washrooms';
+    if (normalized.includes('kitchen') || normalized.includes('washroom')) return 'kitchens & washrooms';
     if (normalized.includes('facade') || normalized.includes('envelope') || normalized.includes('exterior') || normalized.includes('roofing')) return 'facade envelope exterior and roofing';
     if (normalized.includes('mass timber') || normalized.includes('millwork')) return 'mass timber and millwork';
     
@@ -580,7 +583,7 @@ export const CriticalAssetsStep = ({
               imageUrl={asset.image_url}
               icon={<Building2 className="h-6 w-6 text-muted-foreground/50" />}
               riskLevel={asset.risk_level}
-              riskPoints={asset.risk_level_points}
+              riskPoints={(asset.probability || 3) * (asset.impact || 3)}
               threat={asset.threat}
               duration={calculateCriticalAssetDuration(asset.name, data)}
               durationDetails={durationDetails}

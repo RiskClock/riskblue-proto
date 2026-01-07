@@ -56,16 +56,16 @@ export const ProcessesStep = ({
   // Track previous risk tolerance
   const prevRiskToleranceRef = useRef<RiskTolerance | null>(null);
 
-  // Fetch processes from database for risk tolerance and risk_level_points values
+  // Fetch processes from database for risk tolerance and probability/impact values
   const { data: processes = [] } = useQuery({
     queryKey: ['processes-with-points'],
     queryFn: async () => {
       const { data, error } = await supabase
         .from('processes')
-        .select('name, risk_tolerance, risk_level_points')
+        .select('name, risk_tolerance, probability, impact')
         .eq('is_active', true);
       if (error) throw error;
-      return (data || []) as { name: string; risk_tolerance: number; risk_level_points: number }[];
+      return (data || []) as { name: string; risk_tolerance: number; probability: number; impact: number }[];
     }
   });
 
@@ -145,7 +145,7 @@ export const ProcessesStep = ({
   const [viewerFileId, setViewerFileId] = useState<string>("");
   const [viewerMimeType, setViewerMimeType] = useState<string>("application/pdf");
 
-  // Risk scoring hook - uses processes for risk_level_points
+  // Risk scoring hook - uses processes for probability/impact
   const riskScore = useRiskScoring(
     processItems,
     selectedInstanceIds,
@@ -153,6 +153,11 @@ export const ProcessesStep = ({
     {
       criticalAssets: [],
       waterSystems: [],
+      processes: processes.map(p => ({
+        name: p.name,
+        probability: p.probability || 3,
+        impact: p.impact || 3
+      })),
       controls: controls.map(c => ({
         name: c.name,
         points: c.points,

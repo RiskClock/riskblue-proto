@@ -6,8 +6,8 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { cn } from "@/lib/utils";
 import { AnalysisItem } from "@/lib/analysisItemMapper";
 import { ClassRiskBadges } from "./RiskScoreSummary";
+import { getRiskLabel, getRiskLabelStyles } from "@/hooks/useRiskScoring";
 import { LocationDetailsModal } from "./LocationDetailsModal";
-import { ControlDetailsModal } from "./ControlDetailsModal";
 import type { DriveFileInfo } from "./ProjectFilesUpload";
 import { 
   calculateTieredControlCost, 
@@ -67,17 +67,8 @@ interface ExpandableListItemProps {
 // Helper to generate control ID
 export const getControlId = (instanceId: string, control: string) => `${instanceId}::${control}`;
 
-// Risk level color mapping (yellow to dark red) - no hover effects
-const getRiskLevelStyles = (riskLevel?: string): string => {
-  if (!riskLevel) return "bg-muted text-muted-foreground cursor-default";
-  const level = riskLevel.toLowerCase();
-  if (level.includes("extreme")) return "bg-red-700 text-white border-red-800 cursor-default hover:bg-red-700";
-  if (level.includes("very high")) return "bg-red-500 text-white border-red-600 cursor-default hover:bg-red-500";
-  if (level.includes("high")) return "bg-orange-500 text-white border-orange-600 cursor-default hover:bg-orange-500";
-  if (level.includes("moderate")) return "bg-yellow-500 text-black border-yellow-600 cursor-default hover:bg-yellow-500";
-  if (level.includes("low")) return "bg-green-500 text-white border-green-600 cursor-default hover:bg-green-500";
-  return "bg-muted text-muted-foreground cursor-default";
-};
+// Import ControlDetailsModal after getControlId is defined
+import { ControlDetailsModal } from "./ControlDetailsModal";
 
 // Floor level priority for sorting (lower levels first)
 const getFloorPriority = (floor?: string | null): number => {
@@ -357,13 +348,14 @@ export const ExpandableListItem = ({
           </div>
         ) : null}
 
-        {/* Content */}
+        {/* Content - Class Properties */}
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2">
             <h4 className="font-medium text-sm truncate">{name}</h4>
-            {riskLevel && (
-              <Badge className={cn("text-xs flex-shrink-0 border", getRiskLevelStyles(riskLevel))}>
-                {riskLevel}
+            {/* Risk label derived from P x I */}
+            {riskPoints !== undefined && riskPoints > 0 && (
+              <Badge className={cn("text-xs flex-shrink-0 border cursor-default", getRiskLabelStyles(getRiskLabel(riskPoints)))}>
+                {getRiskLabel(riskPoints)}
               </Badge>
             )}
           </div>
@@ -401,21 +393,15 @@ export const ExpandableListItem = ({
           )}
         </div>
 
-        {/* Risk badges + Cost + Count + Expand arrow */}
+        {/* Aggregated Totals with visual separator */}
         <div className="flex items-center gap-2 flex-shrink-0">
           <ClassRiskBadges 
             riskPoints={classRiskPoints} 
             deriskPoints={classDeriskPoints} 
+            cost={classCostToProtect}
+            locationCount={instanceCount}
             showRiskLabel={false}
           />
-          {classCostToProtect !== undefined && (
-            <Badge variant="outline" className="text-xs cursor-default bg-blue-50 text-blue-600 border-blue-200 dark:bg-blue-950 dark:text-blue-300 dark:border-blue-800">
-              {formatCost(classCostToProtect)}
-            </Badge>
-          )}
-          <Badge variant="secondary" className="text-xs cursor-default">
-            {instanceCount} {instanceCount === 1 ? 'Location' : 'Locations'}
-          </Badge>
           <ChevronDown 
             className={cn(
               "w-5 h-5 text-muted-foreground transition-transform",

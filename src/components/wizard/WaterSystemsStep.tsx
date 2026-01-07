@@ -24,7 +24,8 @@ interface WaterSystem {
   name: string;
   threat: string;
   risk_level: string;
-  risk_level_points?: number;
+  probability?: number;
+  impact?: number;
   duration: string;
   cost: string;
   image_url: string;
@@ -182,7 +183,8 @@ export const WaterSystemsStep = ({
     name: s.name,
     threat: 'Custom system',
     risk_level: s.risk_level,
-    risk_level_points: 10, // default for custom
+    probability: 3, // default for custom
+    impact: 3, // default for custom
     duration: s.duration,
     cost: s.cost,
     image_url: '',
@@ -242,7 +244,8 @@ export const WaterSystemsStep = ({
     selectedControlIds,
     {
       criticalAssets: [],
-      waterSystems: allSystems.map(s => ({ name: s.name, risk_level_points: s.risk_level_points || 0 })),
+      waterSystems: allSystems.map(s => ({ name: s.name, probability: s.probability || 3, impact: s.impact || 3 })),
+      processes: [],
       controls
     }
   );
@@ -597,7 +600,7 @@ export const WaterSystemsStep = ({
               imageUrl={system.image_url}
               icon={<Droplets className="h-6 w-6 text-muted-foreground/50" />}
               riskLevel={system.risk_level}
-              riskPoints={system.risk_level_points}
+              riskPoints={(system.probability || 3) * (system.impact || 3)}
               threat={system.threat}
               duration={calculateWaterSystemDuration(system.name, data)}
               durationDetails={durationDetails}
