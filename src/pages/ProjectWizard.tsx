@@ -45,7 +45,11 @@ import {
   mapToAssetName,
   mapToWaterSystemName,
   mapToProcessName,
-  groupByCategory
+  groupByCategory,
+  normalizeAnalysisItem,
+  countValidAssets,
+  countValidWaterSystems,
+  countValidProcesses
 } from "@/lib/analysisItemMapper";
 import { PricingTier, calculateTieredControlCost, getSizeCategory, parseDurationMonths } from "@/lib/costCalculator";
 import { calculateCriticalAssetDuration, calculateWaterSystemDuration } from "@/lib/durationCalculator";
@@ -155,19 +159,20 @@ const ProjectWizardContent = () => {
     return lower.replace(/[,&]/g, '').replace(/\s+/g, ' ').trim();
   };
 
-  // Issue 23: Compute INSTANCE counts for subheadings (not unique class counts)
+  // Issue 23: Compute INSTANCE counts for subheadings using VALID items only
+  // This ensures miscategorized items don't inflate the counts
   const assetInstanceCount = useMemo(() => 
-    analysisItems.filter(item => item.category === "Asset").length, 
+    countValidAssets(analysisItems), 
     [analysisItems]
   );
 
   const waterSystemInstanceCount = useMemo(() => 
-    analysisItems.filter(item => item.category === "Water System").length, 
+    countValidWaterSystems(analysisItems), 
     [analysisItems]
   );
 
   const processInstanceCount = useMemo(() => 
-    analysisItems.filter(item => item.category === "Process").length, 
+    countValidProcesses(analysisItems), 
     [analysisItems]
   );
 
@@ -502,7 +507,8 @@ const ProjectWizardContent = () => {
     }
   }, [projectData.riskTolerance]);
 
-  // Fetch analysis items when project loads
+  // Fetch analysis items when project loads - includes auto-repair for miscategorized items
+  const hasRepairedRef = useRef(false);
   useEffect(() => {
     const fetchAnalysisItems = async () => {
       if (!id || id === "new") return;
@@ -513,7 +519,7 @@ const ProjectWizardContent = () => {
           .eq('project_id', id);
         if (error) throw error;
         if (data) {
-          const items: AnalysisItem[] = data.map(d => ({
+          const rawItems: AnalysisItem[] = data.map(d => ({
             id: d.item_id,
             name: d.name,
             category: d.category as "Asset" | "Water System" | "Process",
@@ -529,7 +535,48 @@ const ProjectWizardContent = () => {
             coordinates: d.coordinates as any,
             additionalParameters: (d as any).additional_parameters || undefined,
           }));
-          setAnalysisItems(items);
+          
+          // Normalize all items to fix miscategorized entries
+          const normalizedItems = rawItems.map(normalizeAnalysisItem);
+          
+          // Check if any items changed (need repair)
+          const needsRepair = !hasRepairedRef.current && rawItems.some((raw, i) => 
+            raw.category !== normalizedItems[i].category || raw.name !== normalizedItems[i].name
+          );
+          
+          setAnalysisItems(normalizedItems);
+          
+          // Auto-repair: persist corrected items back to database
+          if (needsRepair) {
+            hasRepairedRef.current = true;
+            console.log("Auto-repairing miscategorized analysis items...");
+            
+            // Delete all existing items for this project and re-insert normalized ones
+            await supabase.from('project_analysis_items').delete().eq('project_id', id);
+            
+            if (normalizedItems.length > 0) {
+              const insertData = normalizedItems.map(item => ({
+                project_id: id,
+                item_id: item.id,
+                name: item.name,
+                category: item.category,
+                area_name: item.areaName || null,
+                floor: item.floor || null,
+                drawing_code: item.drawingCode || null,
+                file_name: item.fileName || null,
+                width: item.width,
+                length: item.length,
+                area_sqft: item.areaSqft,
+                size_category: item.sizeCategory,
+                controls: item.controls,
+                coordinates: item.coordinates,
+                additional_parameters: item.additionalParameters || null,
+              }));
+              
+              await supabase.from('project_analysis_items').insert(insertData);
+              console.log("Auto-repair complete:", normalizedItems.length, "items normalized");
+            }
+          }
         }
       } catch (error) {
         console.error("Error fetching analysis items:", error);

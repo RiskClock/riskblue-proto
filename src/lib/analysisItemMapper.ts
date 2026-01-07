@@ -251,3 +251,70 @@ export function countByCategory(items: AnalysisItem[]): {
     total: items.length,
   };
 }
+
+/**
+ * Normalizes an analysis item by inferring the correct category from its name
+ * and mapping to canonical names. This fixes miscategorized items.
+ * Priority: Water System > Process > Asset (since water systems are often mislabeled as assets)
+ */
+export function normalizeAnalysisItem(item: AnalysisItem): AnalysisItem {
+  // Try water system first (common mislabeling case)
+  const waterSystemName = mapToWaterSystemName(item.name);
+  if (waterSystemName) {
+    return {
+      ...item,
+      name: waterSystemName,
+      category: "Water System",
+    };
+  }
+  
+  // Try process
+  const processName = mapToProcessName(item.name);
+  if (processName) {
+    return {
+      ...item,
+      name: processName,
+      category: "Process",
+    };
+  }
+  
+  // Try asset
+  const assetName = mapToAssetName(item.name);
+  if (assetName) {
+    return {
+      ...item,
+      name: assetName,
+      category: "Asset",
+    };
+  }
+  
+  // Keep as-is if no mapping found
+  return item;
+}
+
+/**
+ * Count only VALID assets (items that map to a known critical asset)
+ */
+export function countValidAssets(items: AnalysisItem[]): number {
+  return items.filter(item => 
+    item.category === "Asset" && mapToAssetName(item.name) !== null
+  ).length;
+}
+
+/**
+ * Count only VALID water systems (items that map to a known water system)
+ */
+export function countValidWaterSystems(items: AnalysisItem[]): number {
+  return items.filter(item => 
+    item.category === "Water System" && mapToWaterSystemName(item.name) !== null
+  ).length;
+}
+
+/**
+ * Count only VALID processes (items that map to a known process)
+ */
+export function countValidProcesses(items: AnalysisItem[]): number {
+  return items.filter(item => 
+    item.category === "Process" && mapToProcessName(item.name) !== null
+  ).length;
+}
