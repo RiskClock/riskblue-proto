@@ -44,6 +44,7 @@ const Projects = () => {
   const { user, signOut } = useAuth();
   const [projects, setProjects] = useState<ProjectWithCreator[]>([]);
   const [loading, setLoading] = useState(true);
+  const [userProjectRoles, setUserProjectRoles] = useState<Map<string, string>>(new Map());
   const navigate = useNavigate();
   const { toast } = useToast();
   const [showProviderDialog, setShowProviderDialog] = useState(false);
@@ -67,16 +68,28 @@ const Projects = () => {
       // Get unique user IDs
       const userIds = [...new Set((projectsData || []).map(p => p.user_id))];
       
-      // Fetch profiles for those users
-      const { data: profilesData } = await supabase
-        .from("profiles")
-        .select("user_id, display_name")
-        .in("user_id", userIds);
+      // Fetch profiles for those users and user's project roles in parallel
+      const [profilesResult, rolesResult] = await Promise.all([
+        supabase
+          .from("profiles")
+          .select("user_id, display_name")
+          .in("user_id", userIds),
+        supabase
+          .from("project_user_roles")
+          .select("project_id, role")
+          .eq("user_id", user!.id)
+      ]);
 
       // Create a map of user_id to display_name
       const profilesMap = new Map(
-        (profilesData || []).map(p => [p.user_id, p.display_name])
+        (profilesResult.data || []).map(p => [p.user_id, p.display_name])
       );
+
+      // Create a map of project_id to role
+      const rolesMap = new Map<string, string>(
+        (rolesResult.data || []).map(r => [r.project_id, r.role])
+      );
+      setUserProjectRoles(rolesMap);
 
       // Merge projects with creator names
       const projectsWithCreators: ProjectWithCreator[] = (projectsData || []).map(project => ({
@@ -108,6 +121,23 @@ const Projects = () => {
     }
 
     try {
+      // Server-side role verification
+      const { data: roleData, error: roleError } = await supabase
+        .from("project_user_roles")
+        .select("role")
+        .eq("project_id", projectId)
+        .eq("user_id", user?.id)
+        .single();
+
+      if (roleError || roleData?.role !== "admin") {
+        toast({
+          variant: "destructive",
+          title: "Not authorized",
+          description: "You must be a project admin to delete this project.",
+        });
+        return;
+      }
+
       const { error } = await supabase
         .from("projects")
         .delete()
@@ -125,7 +155,7 @@ const Projects = () => {
       toast({
         variant: "destructive",
         title: "Error deleting project",
-        description: error.message,
+        description: getUserFriendlyError(error),
       });
     }
   };
@@ -240,13 +270,15 @@ const Projects = () => {
                         : "—"}
                     </td>
                     <td className="px-6 py-4">
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        onClick={(e) => handleDeleteProject(project.id, e)}
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
+                      {userProjectRoles.get(project.id) === "admin" && (
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={(e) => handleDeleteProject(project.id, e)}
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      )}
                     </td>
                   </tr>
                 ))}
