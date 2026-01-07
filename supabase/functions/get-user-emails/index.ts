@@ -40,14 +40,8 @@ const handler = async (req: Request): Promise<Response> => {
       );
     }
 
-    // Only internal users can access this endpoint
-    const isInternal = user.email?.toLowerCase().includes("@riskclock.com");
-    if (!isInternal) {
-      return new Response(
-        JSON.stringify({ success: false, error: "Access denied" }),
-        { status: 403, headers: { "Content-Type": "application/json", ...corsHeaders } }
-      );
-    }
+    // Any authenticated user can access this - they need to see creator emails
+    // for projects they have access to
 
     const url = new URL(req.url);
     const userIdsParam = url.searchParams.get("userIds");
