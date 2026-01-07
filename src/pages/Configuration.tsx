@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
@@ -6,7 +6,6 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
@@ -76,15 +75,38 @@ export default function Configuration() {
   }, [awpItems]);
 
   // Get current control IDs for an AWP (with pending changes applied)
+  // Sort alphabetically on load, append new controls at end
   const getCurrentControlIds = (awp: AWPItem): string[] => {
     const change = pendingChanges.get(awp.id);
-    return change ? change.current : awp.default_control_ids;
+    
+    if (!change) {
+      // No pending changes - sort original alphabetically (non-mutating)
+      return [...awp.default_control_ids].sort((a, b) => {
+        const nameA = getControlNameById(controls, a) || a;
+        const nameB = getControlNameById(controls, b) || b;
+        return nameA.localeCompare(nameB);
+      });
+    }
+    
+    // Has pending changes - keep original sorted, append new ones at end
+    const originalSorted = [...change.original].sort((a, b) => {
+      const nameA = getControlNameById(controls, a) || a;
+      const nameB = getControlNameById(controls, b) || b;
+      return nameA.localeCompare(nameB);
+    });
+    
+    // Newly added controls (not in original)
+    const newlyAdded = change.current.filter(id => !change.original.includes(id));
+    // Remaining original controls that haven't been removed
+    const remaining = originalSorted.filter(id => change.current.includes(id));
+    
+    return [...remaining, ...newlyAdded];
   };
 
-  // Check if there are unsaved changes
+  // Check if there are unsaved changes (use non-mutating sort)
   const hasUnsavedChanges = useMemo(() => {
     for (const [, change] of pendingChanges) {
-      if (JSON.stringify(change.original.sort()) !== JSON.stringify(change.current.sort())) {
+      if (JSON.stringify([...change.original].sort()) !== JSON.stringify([...change.current].sort())) {
         return true;
       }
     }
@@ -93,7 +115,7 @@ export default function Configuration() {
 
   // Add control to AWP
   const handleAddControl = (awp: AWPItem, controlId: string) => {
-    const current = getCurrentControlIds(awp);
+    const current = pendingChanges.get(awp.id)?.current ?? awp.default_control_ids;
     if (current.includes(controlId)) return;
 
     const original = pendingChanges.get(awp.id)?.original ?? awp.default_control_ids;
@@ -106,7 +128,7 @@ export default function Configuration() {
 
   // Remove control from AWP
   const handleRemoveControl = (awp: AWPItem, controlId: string) => {
-    const current = getCurrentControlIds(awp);
+    const current = pendingChanges.get(awp.id)?.current ?? awp.default_control_ids;
     const original = pendingChanges.get(awp.id)?.original ?? awp.default_control_ids;
     setPendingChanges(prev => {
       const next = new Map(prev);
@@ -143,7 +165,7 @@ export default function Configuration() {
     return summary;
   }, [pendingChanges, awpItems, controls]);
 
-  // Save changes to database
+  // Save changes to database (use non-mutating sort)
   const handleSave = async () => {
     setSaving(true);
     try {
@@ -151,7 +173,7 @@ export default function Configuration() {
         const awp = awpItems.find(a => a.id === awpId);
         if (!awp) continue;
 
-        if (JSON.stringify(change.original.sort()) === JSON.stringify(change.current.sort())) {
+        if (JSON.stringify([...change.original].sort()) === JSON.stringify([...change.current].sort())) {
           continue;
         }
 
@@ -197,6 +219,12 @@ export default function Configuration() {
 
   const loading = awpLoading || controlsLoading;
 
+  // Helper to check if AWP has changes
+  const hasAWPChanges = (awp: AWPItem): boolean => {
+    const change = pendingChanges.get(awp.id);
+    return change ? JSON.stringify([...change.original].sort()) !== JSON.stringify([...change.current].sort()) : false;
+  };
+
   return (
     <div className="min-h-screen bg-background">
       <header className="sticky top-0 z-20 border-b bg-card">
@@ -206,7 +234,7 @@ export default function Configuration() {
             <button onClick={() => navigate("/projects")} className="text-foreground hover:text-primary">
               Projects
             </button>
-            <button className="text-primary font-medium">Configuration</button>
+            <button onClick={() => {}} className="text-foreground hover:text-primary">Configuration</button>
             <button onClick={() => setShowProviderDialog(true)} className="text-foreground hover:text-primary">
               Solution Provider Portal
             </button>
@@ -248,38 +276,74 @@ export default function Configuration() {
         {loading ? (
           <div className="text-center py-12 text-muted-foreground">Loading...</div>
         ) : (
-          <Accordion type="multiple" defaultValue={["critical_assets", "water_systems", "processes"]} className="space-y-4">
-            <AWPSection
-              title="Critical Assets"
-              value="critical_assets"
-              items={groupedAWPs.critical_assets}
-              controls={controls}
-              getCurrentControlIds={getCurrentControlIds}
-              onAddControl={handleAddControl}
-              onRemoveControl={handleRemoveControl}
-              pendingChanges={pendingChanges}
-            />
-            <AWPSection
-              title="Water Systems"
-              value="water_systems"
-              items={groupedAWPs.water_systems}
-              controls={controls}
-              getCurrentControlIds={getCurrentControlIds}
-              onAddControl={handleAddControl}
-              onRemoveControl={handleRemoveControl}
-              pendingChanges={pendingChanges}
-            />
-            <AWPSection
-              title="Processes"
-              value="processes"
-              items={groupedAWPs.processes}
-              controls={controls}
-              getCurrentControlIds={getCurrentControlIds}
-              onAddControl={handleAddControl}
-              onRemoveControl={handleRemoveControl}
-              pendingChanges={pendingChanges}
-            />
-          </Accordion>
+          <div className="bg-card rounded-lg border">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead className="w-[200px]">AWP Class</TableHead>
+                  <TableHead>Default Mitigation Controls</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {/* Critical Assets */}
+                <TableRow className="bg-muted/50 hover:bg-muted/50">
+                  <TableCell colSpan={2} className="font-semibold text-sm py-2">
+                    Critical Assets
+                  </TableCell>
+                </TableRow>
+                {groupedAWPs.critical_assets.map((awp) => (
+                  <AWPRow
+                    key={awp.id}
+                    awp={awp}
+                    controls={controls}
+                    currentIds={getCurrentControlIds(awp)}
+                    hasChanges={hasAWPChanges(awp)}
+                    pendingChange={pendingChanges.get(awp.id)}
+                    onAddControl={handleAddControl}
+                    onRemoveControl={handleRemoveControl}
+                  />
+                ))}
+
+                {/* Water Systems */}
+                <TableRow className="bg-muted/50 hover:bg-muted/50">
+                  <TableCell colSpan={2} className="font-semibold text-sm py-2">
+                    Water Systems
+                  </TableCell>
+                </TableRow>
+                {groupedAWPs.water_systems.map((awp) => (
+                  <AWPRow
+                    key={awp.id}
+                    awp={awp}
+                    controls={controls}
+                    currentIds={getCurrentControlIds(awp)}
+                    hasChanges={hasAWPChanges(awp)}
+                    pendingChange={pendingChanges.get(awp.id)}
+                    onAddControl={handleAddControl}
+                    onRemoveControl={handleRemoveControl}
+                  />
+                ))}
+
+                {/* Processes */}
+                <TableRow className="bg-muted/50 hover:bg-muted/50">
+                  <TableCell colSpan={2} className="font-semibold text-sm py-2">
+                    Processes
+                  </TableCell>
+                </TableRow>
+                {groupedAWPs.processes.map((awp) => (
+                  <AWPRow
+                    key={awp.id}
+                    awp={awp}
+                    controls={controls}
+                    currentIds={getCurrentControlIds(awp)}
+                    hasChanges={hasAWPChanges(awp)}
+                    pendingChange={pendingChanges.get(awp.id)}
+                    onAddControl={handleAddControl}
+                    onRemoveControl={handleRemoveControl}
+                  />
+                ))}
+              </TableBody>
+            </Table>
+          </div>
         )}
       </main>
 
@@ -337,77 +401,51 @@ export default function Configuration() {
   );
 }
 
-// AWP Section Component
-interface AWPSectionProps {
-  title: string;
-  value: string;
-  items: AWPItem[];
+// AWP Row Component
+interface AWPRowProps {
+  awp: AWPItem;
   controls: { id: string; name: string; category: string }[];
-  getCurrentControlIds: (awp: AWPItem) => string[];
+  currentIds: string[];
+  hasChanges: boolean;
+  pendingChange?: PendingChange;
   onAddControl: (awp: AWPItem, controlId: string) => void;
   onRemoveControl: (awp: AWPItem, controlId: string) => void;
-  pendingChanges: Map<string, PendingChange>;
 }
 
-function AWPSection({ title, value, items, controls, getCurrentControlIds, onAddControl, onRemoveControl, pendingChanges }: AWPSectionProps) {
+function AWPRow({ awp, controls, currentIds, hasChanges, pendingChange, onAddControl, onRemoveControl }: AWPRowProps) {
   return (
-    <AccordionItem value={value} className="border rounded-lg bg-card">
-      <AccordionTrigger className="px-6 py-4 hover:no-underline">
-        <span className="text-lg font-semibold">{title} ({items.length})</span>
-      </AccordionTrigger>
-      <AccordionContent className="px-6 pb-4">
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead className="w-[250px]">AWP Class</TableHead>
-              <TableHead>Default Mitigation Controls</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {items.map((awp) => {
-              const currentIds = getCurrentControlIds(awp);
-              const change = pendingChanges.get(awp.id);
-              const hasChanges = change && JSON.stringify(change.original.sort()) !== JSON.stringify(change.current.sort());
-
-              return (
-                <TableRow key={awp.id} className={hasChanges ? "bg-yellow-50/50" : ""}>
-                  <TableCell className="font-medium">{awp.name}</TableCell>
-                  <TableCell>
-                    <div className="flex flex-wrap gap-2 items-center">
-                      {currentIds.map((controlId) => {
-                        const controlName = getControlNameById(controls, controlId);
-                        const isNew = change && !change.original.includes(controlId);
-                        return (
-                          <Badge
-                            key={controlId}
-                            variant="secondary"
-                            className={`flex items-center gap-1 ${isNew ? "border-green-500 bg-green-50" : ""}`}
-                          >
-                            {controlName || controlId}
-                            <button
-                              onClick={() => onRemoveControl(awp, controlId)}
-                              className="ml-1 hover:text-destructive"
-                            >
-                              <X className="h-3 w-3" />
-                            </button>
-                          </Badge>
-                        );
-                      })}
-                      <AddControlPopover
-                        awp={awp}
-                        controls={controls}
-                        currentIds={currentIds}
-                        onAdd={onAddControl}
-                      />
-                    </div>
-                  </TableCell>
-                </TableRow>
-              );
-            })}
-          </TableBody>
-        </Table>
-      </AccordionContent>
-    </AccordionItem>
+    <TableRow className={hasChanges ? "bg-yellow-50/50" : ""}>
+      <TableCell className="font-medium py-2">{awp.name}</TableCell>
+      <TableCell className="py-2">
+        <div className="flex flex-wrap gap-1.5 items-center">
+          {currentIds.map((controlId) => {
+            const controlName = getControlNameById(controls, controlId);
+            const isNew = pendingChange && !pendingChange.original.includes(controlId);
+            return (
+              <Badge
+                key={controlId}
+                variant="secondary"
+                className={`flex items-center gap-1 text-xs ${isNew ? "border-green-500 bg-green-50" : ""}`}
+              >
+                {controlName || controlId}
+                <button
+                  onClick={() => onRemoveControl(awp, controlId)}
+                  className="ml-0.5 hover:text-destructive"
+                >
+                  <X className="h-3 w-3" />
+                </button>
+              </Badge>
+            );
+          })}
+          <AddControlPopover
+            awp={awp}
+            controls={controls}
+            currentIds={currentIds}
+            onAdd={onAddControl}
+          />
+        </div>
+      </TableCell>
+    </TableRow>
   );
 }
 
@@ -426,7 +464,7 @@ function AddControlPopover({ awp, controls, currentIds, onAdd }: AddControlPopov
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
-        <Button variant="outline" size="sm" className="h-7 px-2">
+        <Button variant="outline" size="sm" className="h-6 px-1.5">
           <Plus className="h-3 w-3" />
         </Button>
       </PopoverTrigger>
@@ -445,8 +483,7 @@ function AddControlPopover({ awp, controls, currentIds, onAdd }: AddControlPopov
                     setOpen(false);
                   }}
                 >
-                  <span>{control.name}</span>
-                  <span className="ml-2 text-xs text-muted-foreground">({control.category})</span>
+                  {control.name}
                 </CommandItem>
               ))}
             </CommandGroup>
