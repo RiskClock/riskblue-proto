@@ -93,20 +93,18 @@ const Projects = () => {
       );
       setUserProjectRoles(rolesMap);
 
-      // Fetch creator emails via edge function for internal users
+      // Fetch creator emails via edge function
       let emailsMap = new Map<string, string>();
-      if (user?.email?.toLowerCase().includes("@riskclock.com")) {
-        try {
-          const { data: emailsResult } = await supabase.functions.invoke(
-            `get-user-emails?userIds=${userIds.join(",")}`,
-            { method: "GET" }
-          );
-          if (emailsResult?.emails) {
-            emailsMap = new Map(Object.entries(emailsResult.emails));
-          }
-        } catch (e) {
-          console.error("Failed to fetch creator emails:", e);
+      try {
+        const { data: emailsResult } = await supabase.functions.invoke(
+          `get-user-emails?userIds=${userIds.join(",")}`,
+          { method: "GET" }
+        );
+        if (emailsResult?.emails) {
+          emailsMap = new Map(Object.entries(emailsResult.emails));
         }
+      } catch (e) {
+        console.error("Failed to fetch creator emails:", e);
       }
 
       // Merge projects with creator names and emails
