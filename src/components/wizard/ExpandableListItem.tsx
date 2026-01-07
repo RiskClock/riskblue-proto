@@ -360,14 +360,14 @@ export const ExpandableListItem = ({
             <h4 className="font-medium text-sm truncate">{name}</h4>
             {/* Risk label derived from P x I with tooltip showing breakdown */}
             {riskPoints !== undefined && riskPoints > 0 && (
-              <TooltipProvider>
+              <TooltipProvider delayDuration={0}>
                 <Tooltip>
                   <TooltipTrigger asChild>
-                    <Badge className={cn("text-xs flex-shrink-0 border cursor-default", getRiskLabelStyles(getRiskLabel(riskPoints)))}>
+                    <Badge className={cn("text-xs flex-shrink-0 border cursor-help", getRiskLabelStyles(getRiskLabel(riskPoints)))}>
                       {getRiskLabel(riskPoints)} ({riskPoints})
                     </Badge>
                   </TooltipTrigger>
-                  <TooltipContent>
+                  <TooltipContent side="top">
                     <p>Probability × Impact = {probability ?? '?'} × {impact ?? '?'} = {riskPoints}</p>
                   </TooltipContent>
                 </Tooltip>
@@ -552,13 +552,13 @@ export const ExpandableListItem = ({
                   <div className="flex-1 min-w-0 flex items-center gap-2">
                     <span className="text-sm text-muted-foreground">{instance.id}:</span>
                     <span className="text-sm truncate">{instance.areaName || instance.name}</span>
+                    {instance.floor && (
+                      <Badge variant="outline" className="text-xs cursor-default hover:bg-transparent">{instance.floor}</Badge>
+                    )}
                   </div>
 
                   {/* Badges */}
                   <div className="flex items-center gap-1 flex-shrink-0 flex-wrap">
-                    {instance.floor && (
-                      <Badge variant="outline" className="text-xs cursor-default hover:bg-transparent">{instance.floor}</Badge>
-                    )}
                     {sizeDisplay && (
                       <Badge variant="secondary" className="text-xs cursor-default hover:bg-secondary">
                         {sizeDisplay}
@@ -569,16 +569,16 @@ export const ExpandableListItem = ({
                         Ø{pipeDiameter}
                       </Badge>
                     )}
+                    {hasControls && (
+                      <Badge variant="secondary" className="text-xs cursor-default">
+                        {instance.controls.length} {instance.controls.length === 1 ? 'Control' : 'Controls'}
+                      </Badge>
+                    )}
                     {/* Instance derisk points - sum of selected controls (weighted) */}
                     {instanceDeriskPoints > 0 && (
                       <Badge variant="outline" className="text-xs cursor-default hover:bg-transparent bg-emerald-50 text-emerald-600 border-emerald-200 dark:bg-emerald-950 dark:text-emerald-300 dark:border-emerald-800">
                         <Shield className="w-3 h-3 mr-1" />
                         -{Math.round(instanceDeriskPoints * 10) / 10} derisk
-                      </Badge>
-                    )}
-                    {hasControls && (
-                      <Badge variant="secondary" className="text-xs cursor-default">
-                        {instance.controls.length} {instance.controls.length === 1 ? 'Control' : 'Controls'}
                       </Badge>
                     )}
                     {/* Instance cost - sum of selected controls */}
