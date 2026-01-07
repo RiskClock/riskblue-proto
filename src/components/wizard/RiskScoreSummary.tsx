@@ -1,7 +1,7 @@
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import { ProjectRiskScore, getRiskLabel, getRiskLabelStyles } from "@/hooks/useRiskScoring";
-import { Shield, AlertTriangle, MapPin, DollarSign } from "lucide-react";
+import { Shield, AlertTriangle, MapPin } from "lucide-react";
 
 interface RiskScoreSummaryProps {
   riskScore: ProjectRiskScore;
@@ -59,7 +59,6 @@ export const ClassRiskBadges = ({
       )}
       {cost !== undefined && cost > 0 && (
         <Badge variant="outline" className="text-xs cursor-default bg-blue-50 text-blue-600 border-blue-200 dark:bg-blue-950 dark:text-blue-300 dark:border-blue-800">
-          <DollarSign className="h-3 w-3 mr-0.5" />
           {formatCost(cost)}
         </Badge>
       )}

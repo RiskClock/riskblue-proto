@@ -61,28 +61,26 @@ export interface ProjectRiskScore {
   getClassScore: (className: string) => ClassScore | undefined;
   getInstanceScore: (instanceId: string) => InstanceScore | undefined;
   getControlPoints: (controlName: string) => { points: number; popularity?: number; author?: string; responsible?: string; oneTimeCost?: number; monthlyMaintCost?: number; description?: string; action?: string; category?: string } | undefined;
+  getInstanceControlDerisk: (instanceId: string, controlName: string) => number;
 }
 
 // Risk label based on class risk points (P x I)
-// Low: 1-3, Moderate: 4-6, High: 7-14, Extreme: 15-25
+// Very High: 1-15, Extreme: 16-20, Severe: 21-25
 export const getRiskLabel = (riskPoints: number): string => {
-  if (riskPoints <= 3) return "Low";
-  if (riskPoints <= 6) return "Moderate";
-  if (riskPoints <= 14) return "High";
-  return "Extreme"; // 15-25
+  if (riskPoints <= 15) return "Very High";
+  if (riskPoints <= 20) return "Extreme";
+  return "Severe"; // 21-25
 };
 
 // Risk label styles
 export const getRiskLabelStyles = (label: string): string => {
   switch (label) {
-    case "Low":
-      return "bg-green-500 text-white border-green-600";
-    case "Moderate":
-      return "bg-yellow-500 text-black border-yellow-600";
-    case "High":
+    case "Very High":
       return "bg-orange-500 text-white border-orange-600";
     case "Extreme":
-      return "bg-red-700 text-white border-red-800";
+      return "bg-red-600 text-white border-red-700";
+    case "Severe":
+      return "bg-red-900 text-white border-red-950";
     default:
       return "bg-muted text-muted-foreground";
   }
@@ -312,7 +310,12 @@ export const useRiskScoring = (
       categoryScores,
       getClassScore: (className: string) => classScoreMap.get(normalizeAssetName(className)),
       getInstanceScore: (instanceId: string) => instanceScoreMap.get(instanceId),
-      getControlPoints: (controlName: string) => controlPointsMap.get(controlName.toLowerCase())
+      getControlPoints: (controlName: string) => controlPointsMap.get(controlName.toLowerCase()),
+      getInstanceControlDerisk: (instanceId: string, controlName: string) => {
+        const instanceScore = instanceScoreMap.get(instanceId);
+        if (!instanceScore) return 0;
+        return instanceScore.controlWeights.get(controlName) || 0;
+      }
     };
   }, [analysisItems, selectedInstanceIds, selectedControlIds, scoringData]);
 };

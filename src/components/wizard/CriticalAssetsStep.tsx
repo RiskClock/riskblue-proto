@@ -584,6 +584,8 @@ export const CriticalAssetsStep = ({
               icon={<Building2 className="h-6 w-6 text-muted-foreground/50" />}
               riskLevel={asset.risk_level}
               riskPoints={(asset.probability || 3) * (asset.impact || 3)}
+              probability={asset.probability || 3}
+              impact={asset.impact || 3}
               threat={asset.threat}
               duration={calculateCriticalAssetDuration(asset.name, data)}
               durationDetails={durationDetails}
@@ -600,6 +602,7 @@ export const CriticalAssetsStep = ({
               onToggleControl={handleToggleControl}
               onToggleAllControls={handleToggleAllControls}
               getControlPoints={riskScore.getControlPoints}
+              getInstanceControlDerisk={riskScore.getInstanceControlDerisk}
               classRiskPoints={classScore?.riskPoints}
               classDeriskPoints={classScore?.selectedDeriskPoints}
               classCostToProtect={classCost}

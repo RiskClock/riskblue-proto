@@ -446,11 +446,19 @@ export const ProcessesStep = ({
             });
           });
           
+          // Get probability and impact for the process class
+          const processData = processes.find(p => p.name.toLowerCase() === group.name.toLowerCase());
+          const probability = processData?.probability || 3;
+          const impact = processData?.impact || 3;
+          
           return (
             <ExpandableListItem
               key={group.name}
               name={group.name}
               icon={<Users className="h-6 w-6 text-muted-foreground/50" />}
+              riskPoints={probability * impact}
+              probability={probability}
+              impact={impact}
               duration={durationString}
               instanceCount={group.instances.length}
               instances={group.instances}
@@ -465,6 +473,7 @@ export const ProcessesStep = ({
               onToggleAllControls={handleToggleAllControls}
               pricingTiers={pricingTiers}
               getControlPoints={riskScore.getControlPoints}
+              getInstanceControlDerisk={riskScore.getInstanceControlDerisk}
               classRiskPoints={classScore?.riskPoints}
               classDeriskPoints={classScore?.selectedDeriskPoints}
               classCostToProtect={classCost}
