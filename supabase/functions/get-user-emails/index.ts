@@ -21,19 +21,25 @@ const handler = async (req: Request): Promise<Response> => {
 
     const supabaseAdmin = createClient(supabaseUrl, supabaseServiceRoleKey);
 
-    // Verify caller is an internal user
+    // Verify caller is authenticated
     const authHeader = req.headers.get("Authorization");
-    if (!authHeader) {
+    if (!authHeader?.startsWith("Bearer ")) {
       return new Response(
         JSON.stringify({ success: false, error: "Authorization required" }),
         { status: 401, headers: { "Content-Type": "application/json", ...corsHeaders } }
       );
     }
 
+    // Create a user client to validate the token
+    const supabaseAnonKey = Deno.env.get("SUPABASE_ANON_KEY");
+    const supabaseUser = createClient(supabaseUrl, supabaseAnonKey!, {
+      global: { headers: { Authorization: authHeader } }
+    });
+
     const token = authHeader.replace("Bearer ", "");
-    const { data: { user }, error: authError } = await supabaseAdmin.auth.getUser(token);
+    const { data: claimsData, error: claimsError } = await supabaseUser.auth.getClaims(token);
     
-    if (authError || !user) {
+    if (claimsError || !claimsData?.claims) {
       return new Response(
         JSON.stringify({ success: false, error: "Invalid authorization" }),
         { status: 401, headers: { "Content-Type": "application/json", ...corsHeaders } }
