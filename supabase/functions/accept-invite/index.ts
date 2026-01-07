@@ -60,6 +60,7 @@ const handler = async (req: Request): Promise<Response> => {
         JSON.stringify({
           success: false,
           error: "This invitation has already been accepted",
+          status: "already_accepted",
           projectId: invitation.project_id,
           projectName: invitation.projects?.name,
         }),
@@ -88,7 +89,7 @@ const handler = async (req: Request): Promise<Response> => {
     const existingUser = users?.find(u => u.email?.toLowerCase() === invitation.email.toLowerCase());
 
     if (existingUser) {
-      console.log(`User exists with email ${invitation.email}, adding to project`);
+      console.log(`User exists with email ${invitation.email}, checking project access`);
 
       // Check if user already has a role in this project
       const { data: existingRole } = await supabaseAdmin
@@ -99,7 +100,7 @@ const handler = async (req: Request): Promise<Response> => {
         .single();
 
       if (existingRole) {
-        // Update invitation as accepted and return success
+        // User already has access - mark invitation as accepted and redirect
         await supabaseAdmin
           .from("project_invitations")
           .update({ accepted_at: new Date().toISOString() })
@@ -117,7 +118,10 @@ const handler = async (req: Request): Promise<Response> => {
         );
       }
 
-      // Add user to project with the invited role
+      // This case shouldn't happen with the new flow (existing users get added immediately),
+      // but handle it for backwards compatibility or edge cases
+      console.log(`Adding existing user ${existingUser.id} to project ${invitation.project_id}`);
+
       const { error: roleError } = await supabaseAdmin
         .from("project_user_roles")
         .insert({
@@ -150,6 +154,7 @@ const handler = async (req: Request): Promise<Response> => {
         { status: 200, headers: { "Content-Type": "application/json", ...corsHeaders } }
       );
     } else {
+      // User doesn't exist - they need to sign up
       console.log(`No user exists with email ${invitation.email}, signup required`);
 
       return new Response(
