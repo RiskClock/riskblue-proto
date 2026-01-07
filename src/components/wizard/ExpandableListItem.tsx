@@ -35,6 +35,8 @@ interface ExpandableListItemProps {
   imageUrl?: string;
   riskLevel?: string;
   riskPoints?: number;
+  probability?: number;
+  impact?: number;
   threat?: string;
   duration?: string;
   durationDetails?: {
@@ -57,6 +59,7 @@ interface ExpandableListItemProps {
   onToggleAllControls: (controlIds: string[], selected: boolean) => void;
   // Risk scoring props
   getControlPoints?: (controlName: string) => ControlPoints | undefined;
+  getInstanceControlDerisk?: (instanceId: string, controlName: string) => number;
   classRiskPoints?: number;
   classDeriskPoints?: number;
   classCostToProtect?: number;
@@ -120,6 +123,8 @@ export const ExpandableListItem = ({
   imageUrl,
   riskLevel,
   riskPoints,
+  probability,
+  impact,
   threat,
   duration,
   durationDetails,
@@ -135,6 +140,7 @@ export const ExpandableListItem = ({
   onToggleControl,
   onToggleAllControls,
   getControlPoints,
+  getInstanceControlDerisk,
   classRiskPoints,
   classDeriskPoints,
   classCostToProtect,
@@ -352,11 +358,20 @@ export const ExpandableListItem = ({
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2">
             <h4 className="font-medium text-sm truncate">{name}</h4>
-            {/* Risk label derived from P x I */}
+            {/* Risk label derived from P x I with tooltip showing breakdown */}
             {riskPoints !== undefined && riskPoints > 0 && (
-              <Badge className={cn("text-xs flex-shrink-0 border cursor-default", getRiskLabelStyles(getRiskLabel(riskPoints)))}>
-                {getRiskLabel(riskPoints)}
-              </Badge>
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Badge className={cn("text-xs flex-shrink-0 border cursor-default", getRiskLabelStyles(getRiskLabel(riskPoints)))}>
+                      {getRiskLabel(riskPoints)} ({riskPoints})
+                    </Badge>
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    <p>Probability × Impact = {probability ?? '?'} × {impact ?? '?'} = {riskPoints}</p>
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
             )}
           </div>
           {(threat || duration) && (
@@ -461,12 +476,11 @@ export const ExpandableListItem = ({
               return sum;
             }, 0);
 
-            // Calculate instance derisk points based on selected controls
+            // Calculate instance derisk points based on selected controls (using weighted values)
             const instanceDeriskPoints = (instance.controls || []).reduce((sum, control) => {
               const controlId = getControlId(instance.id, control);
               if (selectedControlIds.has(controlId)) {
-                const controlData = getControlPoints?.(control);
-                return sum + (controlData?.points || 0);
+                return sum + (getInstanceControlDerisk?.(instance.id, control) || 0);
               }
               return sum;
             }, 0);
@@ -555,17 +569,11 @@ export const ExpandableListItem = ({
                         Ø{pipeDiameter}
                       </Badge>
                     )}
-                    {/* Instance risk points - each instance has same risk as the class */}
-                    {riskPoints !== undefined && riskPoints > 0 && (
-                      <Badge variant="outline" className="text-xs cursor-default hover:bg-transparent bg-red-50 text-red-600 border-red-200 dark:bg-red-950 dark:text-red-300 dark:border-red-800">
-                        {riskPoints} risk pts
-                      </Badge>
-                    )}
-                    {/* Instance derisk points - sum of selected controls */}
+                    {/* Instance derisk points - sum of selected controls (weighted) */}
                     {instanceDeriskPoints > 0 && (
                       <Badge variant="outline" className="text-xs cursor-default hover:bg-transparent bg-emerald-50 text-emerald-600 border-emerald-200 dark:bg-emerald-950 dark:text-emerald-300 dark:border-emerald-800">
                         <Shield className="w-3 h-3 mr-1" />
-                        -{instanceDeriskPoints} derisk
+                        -{Math.round(instanceDeriskPoints * 10) / 10} derisk
                       </Badge>
                     )}
                     {hasControls && (
@@ -641,14 +649,14 @@ export const ExpandableListItem = ({
                             )}
                           </div>
                           <div className="flex items-center gap-2 flex-shrink-0">
+                            {/* Derisk points first (weighted) */}
+                            <Badge variant="outline" className="text-xs bg-emerald-50 text-emerald-600 border-emerald-200 dark:bg-emerald-950 dark:text-emerald-300 dark:border-emerald-800">
+                              {getInstanceControlDerisk?.(instance.id, control) || 0} pts
+                            </Badge>
+                            {/* Cost second */}
                             <Badge variant="outline" className="text-xs bg-blue-50 text-blue-600 border-blue-200 dark:bg-blue-950 dark:text-blue-300 dark:border-blue-800">
                               {formatCost(controlCost)}
                             </Badge>
-                            {controlData && (
-                              <Badge variant="outline" className="text-xs bg-emerald-50 text-emerald-600 border-emerald-200 dark:bg-emerald-950 dark:text-emerald-300 dark:border-emerald-800">
-                                {controlData.points} pts
-                              </Badge>
-                            )}
                             <Button
                               variant="ghost"
                               size="sm"

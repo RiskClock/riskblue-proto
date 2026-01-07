@@ -601,6 +601,8 @@ export const WaterSystemsStep = ({
               icon={<Droplets className="h-6 w-6 text-muted-foreground/50" />}
               riskLevel={system.risk_level}
               riskPoints={(system.probability || 3) * (system.impact || 3)}
+              probability={system.probability || 3}
+              impact={system.impact || 3}
               threat={system.threat}
               duration={calculateWaterSystemDuration(system.name, data)}
               durationDetails={durationDetails}
@@ -617,6 +619,7 @@ export const WaterSystemsStep = ({
               onToggleControl={handleToggleControl}
               onToggleAllControls={handleToggleAllControls}
               getControlPoints={riskScore.getControlPoints}
+              getInstanceControlDerisk={riskScore.getInstanceControlDerisk}
               classRiskPoints={classScore?.riskPoints}
               classDeriskPoints={classScore?.selectedDeriskPoints}
               classCostToProtect={classCost}
