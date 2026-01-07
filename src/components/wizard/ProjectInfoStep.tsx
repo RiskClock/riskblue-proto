@@ -8,7 +8,7 @@ export const ProjectInfoStep = () => {
 
   return (
     <div>
-      <div className="space-y-4">
+      <div className="space-y-4 -mx-0.5 px-0.5">
         <div className="space-y-2">
           <Label htmlFor="name">Project name</Label>
           <Input
@@ -21,7 +21,7 @@ export const ProjectInfoStep = () => {
         </div>
 
         <div className="space-y-2">
-          <div className="space-y-3">
+          <div className="space-y-3 -mx-0.5 px-0.5">
             <Input
               id="address_1"
               value={projectData.address_1 || ""}
@@ -35,7 +35,7 @@ export const ProjectInfoStep = () => {
               placeholder="Address 2 (optional)"
               className="text-muted-foreground"
             />
-            <div className="grid grid-cols-3 gap-3">
+            <div className="grid grid-cols-3 gap-3 -mx-0.5 px-0.5">
               <Input
                 id="city"
                 value={projectData.city || ""}
