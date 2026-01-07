@@ -165,10 +165,12 @@ export default function Configuration() {
     return summary;
   }, [pendingChanges, awpItems, controls]);
 
-  // Save changes to database (use non-mutating sort)
+  // Save changes to database (use non-mutating sort, validate rows updated)
   const handleSave = async () => {
     setSaving(true);
     try {
+      let updatedCount = 0;
+      
       for (const [awpId, change] of pendingChanges) {
         const awp = awpItems.find(a => a.id === awpId);
         if (!awp) continue;
@@ -177,15 +179,28 @@ export default function Configuration() {
           continue;
         }
 
-        const { error } = await supabase
+        const { data, error } = await supabase
           .from(awp.category)
           .update({ default_control_ids: change.current })
-          .eq("id", awpId);
+          .eq("id", awpId)
+          .select("id");
 
         if (error) throw error;
+        
+        // Check if any rows were actually updated
+        if (!data || data.length === 0) {
+          throw new Error("Not authorized to update AWP configuration. Please contact an administrator.");
+        }
+        
+        updatedCount++;
       }
 
-      toast({ title: "Changes saved", description: "AWP configurations have been updated." });
+      if (updatedCount === 0) {
+        toast({ title: "No changes to save", description: "All configurations are already up to date." });
+      } else {
+        toast({ title: "Changes saved", description: "AWP configurations have been updated." });
+      }
+      
       setPendingChanges(new Map());
       setShowSaveDialog(false);
       refetchAWPs();
