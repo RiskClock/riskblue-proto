@@ -236,7 +236,7 @@ export const LocationDetailsModal = ({
   // Get additional parameters if available
   const additionalParams = (location as any).additionalParameters;
   const pipeInfo = additionalParams?.pipeDiameterMM 
-    ? `${additionalParams.pipeDiameterMM}mm` 
+    ? `${Math.round(additionalParams.pipeDiameterMM)}mm` 
     : additionalParams?.pipeDiameterInches 
       ? `${additionalParams.pipeDiameterInches}"` 
       : null;
