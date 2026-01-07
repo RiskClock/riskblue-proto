@@ -84,7 +84,8 @@ const analysisItemToNewRow = (item: AnalysisItem): NewRowItem => ({
   areaName: item.areaName || "",
   floor: item.floor || "",
   drawingCode: item.drawingCode || "",
-  areaSqft: item.areaSqft || null,
+  // Check both camelCase and snake_case for area (mock data uses snake_case)
+  areaSqft: item.areaSqft || item.area_sqft || null,
   pipeDiameterInches: (item.additionalParameters as any)?.pipeDiameterInches || null,
   pipeDiameterMM: (item.additionalParameters as any)?.pipeDiameterMM || null,
   drawingFile: null,
