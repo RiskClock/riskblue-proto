@@ -23,3 +23,6 @@ verify_jwt = false
 
 [functions.complete-invite-signup]
 verify_jwt = false
+
+[functions.add-collaborators]
+verify_jwt = true

@@ -297,7 +297,7 @@ export const CollaboratorsModal = ({
     setShowSaveConfirm(true);
   }, [calculateChanges, newRows, onClose, toast]);
 
-  // Confirm and save changes (Issue 1: Fixed email sending)
+  // Confirm and save changes - Simplified flow: existing users get immediate access
   const handleConfirmSave = useCallback(async () => {
     setSaving(true);
     try {
@@ -323,58 +323,69 @@ export const CollaboratorsModal = ({
         }
       }
 
-      // Process new invitations
+      // Process new collaborators using the add-collaborators edge function
       const validNewRows = newRows.filter(row => row.name && row.email);
       
       if (validNewRows.length > 0) {
-        // Insert invitations
-        const invitationsToInsert = validNewRows.map(row => ({
-          project_id: projectId,
-          email: row.email.toLowerCase().trim(),
-          name: row.name.trim(),
-          role: row.role,
-          invited_by: user?.id,
-        }));
+        console.log("Calling add-collaborators edge function...");
+        
+        const { data: addResult, error: addError } = await supabase.functions.invoke("add-collaborators", {
+          body: {
+            projectId,
+            projectName,
+            collaborators: validNewRows.map(row => ({
+              email: row.email.toLowerCase().trim(),
+              name: row.name.trim(),
+              role: row.role,
+            })),
+            invitedById: user?.id,
+          },
+        });
 
-        console.log("Inserting invitations:", invitationsToInsert);
-
-        const { data: insertedInvitations, error: insertError } = await supabase
-          .from("project_invitations")
-          .insert(invitationsToInsert)
-          .select("id, email, name, role, token");
-
-        if (insertError) {
-          console.error("Error inserting invitations:", insertError);
-          throw insertError;
+        if (addError) {
+          console.error("Error adding collaborators:", addError);
+          throw addError;
         }
 
-        console.log("Inserted invitations with tokens:", insertedInvitations);
+        console.log("Add collaborators result:", addResult);
 
-        // Send invitation emails via edge function
-        if (insertedInvitations && insertedInvitations.length > 0) {
+        // Separate added users (existing accounts) from those needing invitations (new users)
+        const addedUsers = addResult.results.filter((r: any) => r.status === "added");
+        const needsInvite = addResult.results.filter((r: any) => r.status === "needs_invite");
+
+        // Send appropriate emails
+        if (addedUsers.length > 0 || needsInvite.length > 0) {
           console.log("Calling send-collaborator-invite edge function...");
+          console.log(`Sending ${addedUsers.length} notifications and ${needsInvite.length} invitations`);
           
           const { data: emailData, error: emailError } = await supabase.functions.invoke("send-collaborator-invite", {
             body: {
               projectId,
               projectName,
-              invitations: insertedInvitations.map(inv => ({
-                email: inv.email,
-                name: inv.name,
-                role: inv.role,
-                token: inv.token,
-              })),
               invitedByName: inviterName,
+              // Notifications for existing users (already have access)
+              notifications: addedUsers.map((u: any) => ({
+                email: u.email,
+                name: u.name,
+                role: u.role,
+              })),
+              // Invitations for new users (need to sign up)
+              invitations: needsInvite.map((u: any) => ({
+                email: u.email,
+                name: u.name,
+                role: u.role,
+                token: u.token,
+              })),
             },
           });
 
-          console.log("Edge function response:", emailData, emailError);
+          console.log("Email function response:", emailData, emailError);
 
           if (emailError) {
-            console.error("Error sending invitation emails:", emailError);
+            console.error("Error sending emails:", emailError);
             toast({
               title: "Warning",
-              description: "Collaborators added but some invitation emails may not have been sent",
+              description: "Collaborators added but some emails may not have been sent",
               variant: "destructive",
             });
           } else if (emailData && !emailData.success) {
@@ -386,12 +397,29 @@ export const CollaboratorsModal = ({
             });
           }
         }
-      }
 
-      toast({
-        title: "Success",
-        description: "Collaborators updated successfully",
-      });
+        // Show success message with details
+        const addedCount = addedUsers.length;
+        const invitedCount = needsInvite.length;
+        let successMessage = "Collaborators updated successfully";
+        if (addedCount > 0 && invitedCount > 0) {
+          successMessage = `${addedCount} user(s) added, ${invitedCount} invitation(s) sent`;
+        } else if (addedCount > 0) {
+          successMessage = `${addedCount} user(s) added successfully`;
+        } else if (invitedCount > 0) {
+          successMessage = `${invitedCount} invitation(s) sent`;
+        }
+
+        toast({
+          title: "Success",
+          description: successMessage,
+        });
+      } else {
+        toast({
+          title: "Success",
+          description: "Collaborators updated successfully",
+        });
+      }
 
       setShowSaveConfirm(false);
       onClose();
