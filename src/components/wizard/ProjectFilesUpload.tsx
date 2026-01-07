@@ -63,8 +63,10 @@ interface ProjectFilesUploadProps {
   mode?: "schedule" | "drive";
   // Saved schedule file name from database
   savedScheduleFileName?: string;
+  // Saved schedule file upload date from database
+  savedScheduleFileUploadedAt?: string;
   // Callback when a file is successfully uploaded
-  onScheduleFileUploaded?: (fileName: string) => void;
+  onScheduleFileUploaded?: (fileName: string, uploadedAt: string) => void;
 }
 
 export const ProjectFilesUpload = ({ 
@@ -82,6 +84,7 @@ export const ProjectFilesUpload = ({
   onBeforeOAuthRedirect,
   mode,
   savedScheduleFileName,
+  savedScheduleFileUploadedAt,
   onScheduleFileUploaded
 }: ProjectFilesUploadProps) => {
   const { toast } = useToast();
@@ -281,7 +284,7 @@ export const ProjectFilesUpload = ({
           }
           // Save the file name AFTER data extraction completes
           if (onScheduleFileUploaded && uploadedFile) {
-            onScheduleFileUploaded(uploadedFile.name);
+            onScheduleFileUploaded(uploadedFile.name, new Date().toISOString());
           }
           // Clear local file state so UI displays the saved name from DB
           setUploadedFile(null);
@@ -293,7 +296,7 @@ export const ProjectFilesUpload = ({
           console.log("Response is not JSON, skipping auto-fill");
           // Still save the file name even if response isn't JSON
           if (onScheduleFileUploaded && uploadedFile) {
-            onScheduleFileUploaded(uploadedFile.name);
+            onScheduleFileUploaded(uploadedFile.name, new Date().toISOString());
           }
           // Clear local file state so UI displays the saved name from DB
           setUploadedFile(null);
@@ -669,8 +672,12 @@ export const ProjectFilesUpload = ({
                     {displayFileName ? (
                       <>
                         <p className="text-sm font-medium text-foreground truncate">{displayFileName}</p>
-                        {hasNewFileSelected && (
+                        {hasNewFileSelected ? (
                           <p className="text-xs text-muted-foreground">Click to change file</p>
+                        ) : savedScheduleFileUploadedAt && (
+                          <p className="text-xs text-muted-foreground">
+                            Analyzed on {new Date(savedScheduleFileUploadedAt).toLocaleDateString()}
+                          </p>
                         )}
                       </>
                     ) : (
