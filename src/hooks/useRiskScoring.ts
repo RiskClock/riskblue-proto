@@ -238,11 +238,12 @@ export const useRiskScoring = (
           
           (instance.controls || []).forEach(controlName => {
             const weight = controlWeights.get(controlName) || 0;
+            // Store UNROUNDED weighted derisk - sum unrounded values, round only for display
             const weightedDerisk = totalControlWeight > 0 
-              ? Math.round((weight / totalControlWeight) * instanceRiskPoints * 10) / 10
+              ? (weight / totalControlWeight) * instanceRiskPoints
               : 0;
             
-            // Update the control weight to the weighted derisk value
+            // Update the control weight to the weighted derisk value (unrounded)
             controlWeights.set(controlName, weightedDerisk);
             instanceTotalDerisk += weightedDerisk;
             

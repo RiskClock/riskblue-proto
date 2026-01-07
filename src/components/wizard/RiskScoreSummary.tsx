@@ -1,7 +1,7 @@
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import { ProjectRiskScore, getRiskLabel, getRiskLabelStyles } from "@/hooks/useRiskScoring";
-import { Shield, AlertTriangle, MapPin } from "lucide-react";
+import { Shield, AlertTriangle } from "lucide-react";
 
 interface RiskScoreSummaryProps {
   riskScore: ProjectRiskScore;
@@ -41,7 +41,6 @@ export const ClassRiskBadges = ({
       
       {locationCount !== undefined && locationCount > 0 && (
         <Badge variant="secondary" className="text-xs cursor-default">
-          <MapPin className="h-3 w-3 mr-1" />
           {locationCount} {locationCount === 1 ? 'location' : 'locations'}
         </Badge>
       )}
