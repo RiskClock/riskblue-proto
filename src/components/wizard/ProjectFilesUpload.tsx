@@ -46,7 +46,7 @@ type DriveFile = DriveFileInfo;
 interface ProjectFilesUploadProps {
   projectId: string;
   projectName?: string;
-  onScheduleDataExtracted?: (data: any) => void;
+  onScheduleDataExtracted?: (data: any) => void | Promise<void>;
   onDrawingDataExtracted?: (data: any) => void;
   isProcessingWebhook?: boolean;
   setIsProcessingWebhook?: (value: boolean) => void;
@@ -275,13 +275,16 @@ export const ProjectFilesUpload = ({
         
         try {
           const parsedData = JSON.parse(data);
+          // Await the data extraction to ensure it saves before we save the file name
           if (onScheduleDataExtracted) {
-            onScheduleDataExtracted(parsedData);
+            await onScheduleDataExtracted(parsedData);
           }
-          // Save the file name after successful upload
+          // Save the file name AFTER data extraction completes
           if (onScheduleFileUploaded && uploadedFile) {
             onScheduleFileUploaded(uploadedFile.name);
           }
+          // Clear local file state so UI displays the saved name from DB
+          setUploadedFile(null);
           toast({
             title: "Success",
             description: "File uploaded and analyzed. Information has been pre-filled.",
@@ -292,6 +295,8 @@ export const ProjectFilesUpload = ({
           if (onScheduleFileUploaded && uploadedFile) {
             onScheduleFileUploaded(uploadedFile.name);
           }
+          // Clear local file state so UI displays the saved name from DB
+          setUploadedFile(null);
           toast({
             title: "File uploaded",
             description: "Document processed successfully",
