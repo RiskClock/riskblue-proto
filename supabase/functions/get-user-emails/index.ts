@@ -30,21 +30,19 @@ const handler = async (req: Request): Promise<Response> => {
       );
     }
 
-    // Create a user client to validate the token
-    const supabaseAnonKey = Deno.env.get("SUPABASE_ANON_KEY");
-    const supabaseUser = createClient(supabaseUrl, supabaseAnonKey!, {
-      global: { headers: { Authorization: authHeader } }
-    });
-
+    // Use admin client to verify user from token
     const token = authHeader.replace("Bearer ", "");
-    const { data: claimsData, error: claimsError } = await supabaseUser.auth.getClaims(token);
+    const { data: { user }, error: userError } = await supabaseAdmin.auth.getUser(token);
     
-    if (claimsError || !claimsData?.claims) {
+    if (userError || !user) {
+      console.error("Auth error:", userError);
       return new Response(
         JSON.stringify({ success: false, error: "Invalid authorization" }),
         { status: 401, headers: { "Content-Type": "application/json", ...corsHeaders } }
       );
     }
+    
+    console.log("Authenticated user:", user.email);
 
     // Any authenticated user can access this - they need to see creator emails
     // for projects they have access to
