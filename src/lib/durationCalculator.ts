@@ -184,7 +184,8 @@ export const calculateCriticalAssetDuration = (
         break;
       }
 
-      // Kitchens & Washroom: Interior start to Construction end
+      // Kitchens & Washrooms: Interior start to Construction end
+      case "Kitchens & Washrooms":
       case "Kitchens & Washroom":
       case "Kitchens and Washrooms": {
         if (interior_start_date && construction_end_date) {
@@ -265,6 +266,12 @@ export const calculateSystemOrAssetDates = (
         startDate = parseISO(timeline.enclosure_start_date);
         endDate = parseISO(enclosure_end_date);
         calculatedFrom = "Enclosure start to Enclosure end";
+      }
+    } else if (name === "Kitchens & Washrooms" || name === "Kitchens & Washroom" || name === "Kitchens and Washrooms") {
+      if (interior_start_date) {
+        startDate = parseISO(interior_start_date);
+        endDate = parseISO(construction_end_date);
+        calculatedFrom = "Interior start to Construction end";
       }
     }
     // Water Systems

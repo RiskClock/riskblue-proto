@@ -125,7 +125,7 @@ const ProjectWizardContent = () => {
     if (normalized.includes('mechanical') && normalized.includes('riser')) return 'mechanical risers';
     if (normalized.includes('elevator') && normalized.includes('pit')) return 'elevator pits';
     if (normalized.includes('suite') || normalized.includes('guest')) return 'suites';
-    if (normalized.includes('kitchen') || normalized.includes('washroom')) return 'kitchens and washrooms';
+    if (normalized.includes('kitchen') || normalized.includes('washroom')) return 'kitchens & washrooms';
     if (normalized.includes('facade') || normalized.includes('envelope') || normalized.includes('exterior') || normalized.includes('roofing')) return 'facade envelope exterior and roofing';
     if (normalized.includes('mass timber') || normalized.includes('millwork')) return 'mass timber and millwork';
     

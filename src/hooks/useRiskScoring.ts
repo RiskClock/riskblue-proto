@@ -16,22 +16,29 @@ interface ControlData {
 }
 
 interface RiskScoringData {
-  criticalAssets: Array<{ name: string; risk_level_points: number }>;
-  waterSystems: Array<{ name: string; risk_level_points: number }>;
+  criticalAssets: Array<{ name: string; probability: number; impact: number }>;
+  waterSystems: Array<{ name: string; probability: number; impact: number }>;
+  processes: Array<{ name: string; probability: number; impact: number }>;
   controls: ControlData[];
 }
 
 interface InstanceScore {
   instanceId: string;
+  probability: number;
+  impact: number;
   riskPoints: number;
   deriskPoints: number;
   selectedDeriskPoints: number;
+  controlWeights: Map<string, number>;
 }
 
 interface ClassScore {
   className: string;
   category: string;
-  riskPoints: number;
+  probability: number;
+  impact: number;
+  classRiskPoints: number; // P x I for the class itself
+  riskPoints: number; // Total risk across all instances
   totalDeriskPoints: number;
   selectedDeriskPoints: number;
   instanceScores: InstanceScore[];
@@ -56,24 +63,29 @@ export interface ProjectRiskScore {
   getControlPoints: (controlName: string) => { points: number; popularity?: number; author?: string; responsible?: string; oneTimeCost?: number; monthlyMaintCost?: number; description?: string; action?: string; category?: string } | undefined;
 }
 
-// Default risk points if not found in database
-const DEFAULT_RISK_POINTS: Record<string, number> = {
-  'extreme': 25,
-  'very high': 20,
-  'high': 15,
-  'moderate': 10,
-  'low': 5
+// Risk label based on class risk points (P x I)
+// Low: 1-3, Moderate: 4-6, High: 7-14, Extreme: 15-25
+export const getRiskLabel = (riskPoints: number): string => {
+  if (riskPoints <= 3) return "Low";
+  if (riskPoints <= 6) return "Moderate";
+  if (riskPoints <= 14) return "High";
+  return "Extreme"; // 15-25
 };
 
-const getRiskPointsFromLevel = (riskLevel?: string): number => {
-  if (!riskLevel) return 10; // Default to moderate
-  const level = riskLevel.toLowerCase();
-  if (level.includes('extreme')) return 25;
-  if (level.includes('very high')) return 20;
-  if (level.includes('high')) return 15;
-  if (level.includes('moderate')) return 10;
-  if (level.includes('low')) return 5;
-  return 10;
+// Risk label styles
+export const getRiskLabelStyles = (label: string): string => {
+  switch (label) {
+    case "Low":
+      return "bg-green-500 text-white border-green-600";
+    case "Moderate":
+      return "bg-yellow-500 text-black border-yellow-600";
+    case "High":
+      return "bg-orange-500 text-white border-orange-600";
+    case "Extreme":
+      return "bg-red-700 text-white border-red-800";
+    default:
+      return "bg-muted text-muted-foreground";
+  }
 };
 
 const normalizeAssetName = (name: string): string => {
@@ -87,6 +99,9 @@ const normalizeAssetName = (name: string): string => {
   if (lower.includes('hydronic')) return 'hydronics';
   if (lower.includes('fire') && (lower.includes('suppression') || lower.includes('protection') || lower.includes('sprinkler'))) return 'fire suppression system';
   if (lower.includes('sump') || lower.includes('storm drain') || lower.includes('drainage')) return 'sump pits storm drains and drainages';
+  
+  // Normalize critical asset names - handle Kitchens & Washrooms variants
+  if (lower.includes('kitchen') || lower.includes('washroom')) return 'kitchens & washrooms';
   
   // Standard normalization
   return lower
@@ -108,17 +123,22 @@ export const useRiskScoring = (
 ): ProjectRiskScore => {
   
   return useMemo(() => {
-    const { criticalAssets, waterSystems, controls } = scoringData;
+    const { criticalAssets, waterSystems, processes, controls } = scoringData;
     
-    // Build lookup maps
-    const assetRiskMap = new Map<string, number>();
+    // Build lookup maps for P x I values
+    const assetPIMap = new Map<string, { probability: number; impact: number }>();
     criticalAssets.forEach(a => {
-      assetRiskMap.set(normalizeAssetName(a.name), a.risk_level_points || getRiskPointsFromLevel(a.name));
+      assetPIMap.set(normalizeAssetName(a.name), { probability: a.probability || 3, impact: a.impact || 3 });
     });
     
-    const systemRiskMap = new Map<string, number>();
+    const systemPIMap = new Map<string, { probability: number; impact: number }>();
     waterSystems.forEach(s => {
-      systemRiskMap.set(normalizeAssetName(s.name), s.risk_level_points || getRiskPointsFromLevel(s.name));
+      systemPIMap.set(normalizeAssetName(s.name), { probability: s.probability || 3, impact: s.impact || 3 });
+    });
+    
+    const processPIMap = new Map<string, { probability: number; impact: number }>();
+    processes.forEach(p => {
+      processPIMap.set(normalizeAssetName(p.name), { probability: p.probability || 3, impact: p.impact || 3 });
     });
     
     const controlPointsMap = new Map<string, { points: number; popularity?: number; author?: string; responsible?: string; oneTimeCost?: number; monthlyMaintCost?: number; description?: string; action?: string; category?: string }>();
@@ -160,61 +180,108 @@ export const useRiskScoring = (
       };
       
       classMap.forEach((instances, normalizedClassName) => {
+        // Get P and I for this class
+        let probability = 3;
+        let impact = 3;
+        
+        if (category === 'Asset') {
+          const pi = assetPIMap.get(normalizedClassName);
+          if (pi) {
+            probability = pi.probability;
+            impact = pi.impact;
+          }
+        } else if (category === 'Water System') {
+          const pi = systemPIMap.get(normalizedClassName);
+          if (pi) {
+            probability = pi.probability;
+            impact = pi.impact;
+          }
+        } else if (category === 'Process') {
+          const pi = processPIMap.get(normalizedClassName);
+          if (pi) {
+            probability = pi.probability;
+            impact = pi.impact;
+          }
+        }
+        
+        const classRiskPoints = probability * impact; // Class-level P x I
+        
         const classScore: ClassScore = {
           className: instances[0]?.name || normalizedClassName,
           category,
+          probability,
+          impact,
+          classRiskPoints,
           riskPoints: 0,
           totalDeriskPoints: 0,
           selectedDeriskPoints: 0,
           instanceScores: []
         };
         
-        // Get base risk points for this class
-        let baseRiskPoints = 0;
-        if (category === 'Asset') {
-          baseRiskPoints = assetRiskMap.get(normalizedClassName) || getRiskPointsFromLevel('moderate');
-        } else if (category === 'Water System') {
-          baseRiskPoints = systemRiskMap.get(normalizedClassName) || getRiskPointsFromLevel('moderate');
-        } else {
-          // Process category - default to moderate risk
-          baseRiskPoints = getRiskPointsFromLevel('moderate');
-        }
-        
         instances.forEach(instance => {
           const isInstanceSelected = selectedInstanceIds.includes(instance.id);
+          const instanceRiskPoints = classRiskPoints; // Each instance inherits class P x I
           
-          // Calculate derisk points for this instance
+          // Calculate total weight of all controls for this instance
+          const controlWeights = new Map<string, number>();
+          let totalControlWeight = 0;
+          
+          (instance.controls || []).forEach(controlName => {
+            const controlData = controlPointsMap.get(controlName.toLowerCase());
+            const weight = controlData?.points || 0;
+            controlWeights.set(controlName, weight);
+            totalControlWeight += weight;
+          });
+          
+          // Calculate weighted derisk points for each control
+          // weightedDerisk = (controlWeight / totalWeight) * instanceRisk
           let instanceTotalDerisk = 0;
           let instanceSelectedDerisk = 0;
           
           (instance.controls || []).forEach(controlName => {
-            const controlData = controlPointsMap.get(controlName.toLowerCase());
-            const points = controlData?.points || 0;
-            instanceTotalDerisk += points;
+            const weight = controlWeights.get(controlName) || 0;
+            const weightedDerisk = totalControlWeight > 0 
+              ? Math.round((weight / totalControlWeight) * instanceRiskPoints * 10) / 10
+              : 0;
+            
+            // Update the control weight to the weighted derisk value
+            controlWeights.set(controlName, weightedDerisk);
+            instanceTotalDerisk += weightedDerisk;
             
             const controlId = getControlId(instance.id, controlName);
             if (selectedControlIds.has(controlId) && isInstanceSelected) {
-              instanceSelectedDerisk += points;
+              instanceSelectedDerisk += weightedDerisk;
             }
           });
           
+          // Round instance totals to 1 decimal
+          instanceTotalDerisk = Math.round(instanceTotalDerisk * 10) / 10;
+          instanceSelectedDerisk = Math.round(instanceSelectedDerisk * 10) / 10;
+          
           const instanceScore: InstanceScore = {
             instanceId: instance.id,
-            riskPoints: baseRiskPoints, // Risk points are always counted, regardless of selection
+            probability,
+            impact,
+            riskPoints: instanceRiskPoints,
             deriskPoints: instanceTotalDerisk,
-            selectedDeriskPoints: isInstanceSelected ? instanceSelectedDerisk : 0
+            selectedDeriskPoints: isInstanceSelected ? instanceSelectedDerisk : 0,
+            controlWeights
           };
           
           instanceScoreMap.set(instance.id, instanceScore);
           classScore.instanceScores.push(instanceScore);
           
-          // Risk points are always counted; only derisk points depend on selection
-          classScore.riskPoints += baseRiskPoints;
+          // Aggregate to class level
+          classScore.riskPoints += instanceRiskPoints;
           classScore.totalDeriskPoints += instanceTotalDerisk;
           if (isInstanceSelected) {
             classScore.selectedDeriskPoints += instanceSelectedDerisk;
           }
         });
+        
+        // Round class totals
+        classScore.totalDeriskPoints = Math.round(classScore.totalDeriskPoints * 10) / 10;
+        classScore.selectedDeriskPoints = Math.round(classScore.selectedDeriskPoints * 10) / 10;
         
         classScoreMap.set(normalizedClassName, classScore);
         categoryScore.classScores.push(classScore);
@@ -223,17 +290,25 @@ export const useRiskScoring = (
         categoryScore.selectedDeriskPoints += classScore.selectedDeriskPoints;
       });
       
+      // Round category totals
+      categoryScore.totalDeriskPoints = Math.round(categoryScore.totalDeriskPoints * 10) / 10;
+      categoryScore.selectedDeriskPoints = Math.round(categoryScore.selectedDeriskPoints * 10) / 10;
+      
       categoryScores.push(categoryScore);
       totalRiskPoints += categoryScore.riskPoints;
       totalDeriskPoints += categoryScore.totalDeriskPoints;
       selectedDeriskPoints += categoryScore.selectedDeriskPoints;
     });
     
+    // Round project totals
+    totalDeriskPoints = Math.round(totalDeriskPoints * 10) / 10;
+    selectedDeriskPoints = Math.round(selectedDeriskPoints * 10) / 10;
+    
     return {
       totalRiskPoints,
       totalDeriskPoints,
       selectedDeriskPoints,
-      netRiskPoints: Math.max(0, totalRiskPoints - selectedDeriskPoints),
+      netRiskPoints: Math.round(Math.max(0, totalRiskPoints - selectedDeriskPoints) * 10) / 10,
       categoryScores,
       getClassScore: (className: string) => classScoreMap.get(normalizeAssetName(className)),
       getInstanceScore: (instanceId: string) => instanceScoreMap.get(instanceId),

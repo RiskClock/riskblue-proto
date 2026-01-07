@@ -46,8 +46,8 @@ const ASSET_NAME_MAP: Record<string, string> = {
   "Mass Timber and Millwork": "Mass Timber and Millwork",
   "Facade and Envelope": "Facade, Envelope, Exterior, and Roofing",
   "Facade, Envelope, Exterior, and Roofing": "Facade, Envelope, Exterior, and Roofing",
-  "Kitchens & Washroom": "Kitchens & Washroom",
-  "Kitchens & Washrooms": "Kitchens & Washroom",
+  "Kitchens & Washroom": "Kitchens & Washrooms",
+  "Kitchens & Washrooms": "Kitchens & Washrooms",
 };
 
 // Map TMU analysis names to database water system names
@@ -121,7 +121,7 @@ export function mapToAssetName(analysisName: string): string | null {
   if (lowerName.includes("mechanical riser")) return "Mechanical Riser";
   if (lowerName.includes("elevator pit")) return "Elevator Pit";
   if (lowerName.includes("suite") || lowerName.includes("guest room")) return "Suite";
-  if (lowerName.includes("kitchen") || lowerName.includes("washroom") || lowerName.includes("w/c")) return "Kitchens & Washroom";
+  if (lowerName.includes("kitchen") || lowerName.includes("washroom") || lowerName.includes("w/c")) return "Kitchens & Washrooms";
   if (lowerName.includes("facade") || lowerName.includes("envelope") || lowerName.includes("exterior") || lowerName.includes("roofing")) return "Facade, Envelope, Exterior, and Roofing";
   if (lowerName.includes("mass timber") || lowerName.includes("millwork")) return "Mass Timber and Millwork";
   

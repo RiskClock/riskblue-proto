@@ -1,40 +1,66 @@
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
-import { ProjectRiskScore } from "@/hooks/useRiskScoring";
-import { Shield, AlertTriangle } from "lucide-react";
+import { ProjectRiskScore, getRiskLabel, getRiskLabelStyles } from "@/hooks/useRiskScoring";
+import { Shield, AlertTriangle, MapPin, DollarSign } from "lucide-react";
 
 interface RiskScoreSummaryProps {
   riskScore: ProjectRiskScore;
   compact?: boolean;
 }
 
-// Inline version for class headers - just the badges
+// Inline version for class headers - just the badges with visual separator
 interface ClassRiskBadgesProps {
   riskPoints?: number;
   deriskPoints?: number;
+  cost?: number;
+  locationCount?: number;
   showRiskLabel?: boolean;
 }
 
-export const ClassRiskBadges = ({ riskPoints, deriskPoints, showRiskLabel = true }: ClassRiskBadgesProps) => {
-  const netRisk = (riskPoints || 0) - (deriskPoints || 0);
+// Format cost helper
+const formatCost = (cost: number) => {
+  if (cost >= 1000000) return `$${(cost / 1000000).toFixed(1)}M`;
+  if (cost >= 1000) return `$${(cost / 1000).toFixed(1)}K`;
+  return `$${cost}`;
+};
+
+export const ClassRiskBadges = ({ 
+  riskPoints, 
+  deriskPoints, 
+  cost,
+  locationCount,
+  showRiskLabel = true 
+}: ClassRiskBadgesProps) => {
+  // Round deriskPoints to 1 decimal for display
+  const displayDerisk = deriskPoints !== undefined ? Math.round(deriskPoints * 10) / 10 : undefined;
   
   return (
     <div className="flex items-center gap-1.5">
+      {/* Visual separator before totals */}
+      <div className="h-6 w-px bg-border mx-1" />
+      
+      {locationCount !== undefined && locationCount > 0 && (
+        <Badge variant="secondary" className="text-xs cursor-default">
+          <MapPin className="h-3 w-3 mr-1" />
+          {locationCount}
+        </Badge>
+      )}
       {riskPoints !== undefined && riskPoints > 0 && (
         <Badge variant="outline" className="text-xs bg-red-50 text-red-600 border-red-200 dark:bg-red-950 dark:text-red-300 dark:border-red-800">
           {showRiskLabel && <AlertTriangle className="h-3 w-3 mr-1" />}
           {riskPoints} risk
         </Badge>
       )}
-      {deriskPoints !== undefined && deriskPoints > 0 && (
+      {displayDerisk !== undefined && displayDerisk > 0 && (
         <Badge variant="outline" className="text-xs bg-emerald-50 text-emerald-600 border-emerald-200 dark:bg-emerald-950 dark:text-emerald-300 dark:border-emerald-800">
           {showRiskLabel && <Shield className="h-3 w-3 mr-1" />}
-          -{deriskPoints} derisk
+          -{displayDerisk} derisk
         </Badge>
       )}
-      {netRisk > 0 && riskPoints !== undefined && riskPoints > 0 && deriskPoints !== undefined && deriskPoints > 0 && (
-        <Badge className="text-xs bg-orange-500 text-white">
-          {netRisk} net
+      {cost !== undefined && cost > 0 && (
+        <Badge variant="outline" className="text-xs cursor-default bg-blue-50 text-blue-600 border-blue-200 dark:bg-blue-950 dark:text-blue-300 dark:border-blue-800">
+          <DollarSign className="h-3 w-3 mr-0.5" />
+          {formatCost(cost)}
         </Badge>
       )}
     </div>
