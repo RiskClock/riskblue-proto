@@ -12,6 +12,7 @@ import { Trash2, LogOut } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { ProviderSelectionDialog } from "@/components/ProviderSelectionDialog";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 
 interface Project {
   id: string;
@@ -28,6 +29,7 @@ interface Project {
 
 interface ProjectWithCreator extends Project {
   creator_name: string;
+  creator_email: string;
 }
 
 const capitalizeFirst = (str: string) => {
@@ -91,10 +93,27 @@ const Projects = () => {
       );
       setUserProjectRoles(rolesMap);
 
-      // Merge projects with creator names
+      // Fetch creator emails via edge function for internal users
+      let emailsMap = new Map<string, string>();
+      if (user?.email?.toLowerCase().includes("@riskclock.com")) {
+        try {
+          const { data: emailsResult } = await supabase.functions.invoke(
+            `get-user-emails?userIds=${userIds.join(",")}`,
+            { method: "GET" }
+          );
+          if (emailsResult?.emails) {
+            emailsMap = new Map(Object.entries(emailsResult.emails));
+          }
+        } catch (e) {
+          console.error("Failed to fetch creator emails:", e);
+        }
+      }
+
+      // Merge projects with creator names and emails
       const projectsWithCreators: ProjectWithCreator[] = (projectsData || []).map(project => ({
         ...project,
-        creator_name: profilesMap.get(project.user_id) || "Unknown"
+        creator_name: profilesMap.get(project.user_id) || "Unknown",
+        creator_email: emailsMap.get(project.user_id) || ""
       }));
 
       setProjects(projectsWithCreators);
@@ -263,7 +282,22 @@ const Projects = () => {
                         ? format(new Date(project.construction_start_date), "M/dd/yy")
                         : "—"}
                     </td>
-                    <td className="px-6 py-4 text-muted-foreground">{project.creator_name}</td>
+                    <td className="px-6 py-4 text-muted-foreground">
+                      {project.creator_email ? (
+                        <TooltipProvider>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <span className="cursor-default">{project.creator_name}</span>
+                            </TooltipTrigger>
+                            <TooltipContent>
+                              <p>{project.creator_email}</p>
+                            </TooltipContent>
+                          </Tooltip>
+                        </TooltipProvider>
+                      ) : (
+                        <span>{project.creator_name}</span>
+                      )}
+                    </td>
                     <td className="px-6 py-4 text-muted-foreground">
                       {project.created_at
                         ? format(new Date(project.created_at), "M/dd/yy")
