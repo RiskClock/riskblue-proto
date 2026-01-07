@@ -63,7 +63,15 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   };
 
   const signOut = async () => {
-    await supabase.auth.signOut();
+    try {
+      await supabase.auth.signOut();
+    } catch (error) {
+      // Session may already be invalidated - silently ignore
+      console.debug('Sign out completed (session may have been already invalidated)');
+    }
+    // Always clear local state and navigate
+    setSession(null);
+    setUser(null);
     navigate("/auth");
   };
 
