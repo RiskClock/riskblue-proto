@@ -106,6 +106,33 @@ const handler = async (req: Request): Promise<Response> => {
           throw roleError;
         }
 
+        // Update or create profile with the name (in case it's missing)
+        const { data: existingProfile } = await supabaseAdmin
+          .from("profiles")
+          .select("id, display_name")
+          .eq("user_id", existingUser.id)
+          .single();
+
+        if (existingProfile) {
+          // Only update if display_name is null/empty
+          if (!existingProfile.display_name) {
+            await supabaseAdmin
+              .from("profiles")
+              .update({ display_name: collaborator.name.trim() })
+              .eq("id", existingProfile.id);
+            console.log(`Updated profile display_name for ${emailLower}`);
+          }
+        } else {
+          // Create profile if it doesn't exist
+          await supabaseAdmin
+            .from("profiles")
+            .insert({
+              user_id: existingUser.id,
+              display_name: collaborator.name.trim(),
+            });
+          console.log(`Created profile for ${emailLower}`);
+        }
+
         results.push({
           email: emailLower,
           name: collaborator.name,

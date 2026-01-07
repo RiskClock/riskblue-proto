@@ -74,67 +74,27 @@ export const CollaboratorsModal = ({
   // Issue 6: Ref for focusing new row name input
   const lastRowNameRef = useRef<HTMLInputElement>(null);
 
-  // Fetch collaborators and pending invitations
+  // Fetch collaborators and pending invitations via edge function
   const fetchCollaborators = useCallback(async () => {
     if (!projectId) return;
     
     try {
-      // Fetch existing collaborators with their roles
-      const { data: roles, error: rolesError } = await supabase
-        .from("project_user_roles")
-        .select("id, user_id, role")
-        .eq("project_id", projectId);
-
-      if (rolesError) throw rolesError;
-
-      // Fetch profiles for these users
-      const userIds = roles?.map(r => r.user_id) || [];
-      const { data: profiles, error: profilesError } = await supabase
-        .from("profiles")
-        .select("user_id, display_name")
-        .in("user_id", userIds);
-
-      if (profilesError) throw profilesError;
-
-      // Get emails from auth - we need to use the user's email from the session for current user
-      const collaboratorsList: Collaborator[] = (roles || []).map(role => {
-        const profile = profiles?.find(p => p.user_id === role.user_id);
-        const isCurrentUser = role.user_id === user?.id;
-        
-        return {
-          id: role.id,
-          userId: role.user_id,
-          name: profile?.display_name || (isCurrentUser ? user?.email?.split("@")[0] : "Unknown"),
-          email: isCurrentUser ? (user?.email || "") : "",
-          role: role.role as "admin" | "contributor",
-          isPending: false,
-        };
+      const { data, error } = await supabase.functions.invoke("get-project-collaborators", {
+        body: null,
+        method: "GET",
+        headers: {},
       });
 
-      // Fetch pending invitations
-      const { data: invitations, error: invitesError } = await supabase
-        .from("project_invitations")
-        .select("id, email, name, role, accepted_at, expires_at")
-        .eq("project_id", projectId)
-        .is("accepted_at", null);
+      // Edge functions with GET need query params in URL, use POST with body instead
+      const { data: result, error: fetchError } = await supabase.functions.invoke(
+        `get-project-collaborators?projectId=${projectId}`,
+        { method: "GET" }
+      );
 
-      if (invitesError) throw invitesError;
+      if (fetchError) throw fetchError;
+      if (!result?.success) throw new Error(result?.error || "Failed to fetch collaborators");
 
-      // Filter out expired invitations and add pending ones
-      const now = new Date();
-      const pendingInvites: Collaborator[] = (invitations || [])
-        .filter(inv => new Date(inv.expires_at) > now)
-        .map(inv => ({
-          id: `pending-${inv.id}`,
-          userId: "",
-          name: inv.name,
-          email: inv.email,
-          role: inv.role as "admin" | "contributor",
-          isPending: true,
-          invitationId: inv.id,
-        }));
-
-      const allCollaborators = [...collaboratorsList, ...pendingInvites];
+      const allCollaborators: Collaborator[] = result.collaborators || [];
       setCollaborators(allCollaborators);
       setOriginalCollaborators(allCollaborators);
     } catch (error) {
@@ -147,7 +107,7 @@ export const CollaboratorsModal = ({
     } finally {
       setLoading(false);
     }
-  }, [projectId, user, toast]);
+  }, [projectId, toast]);
 
   // Fetch user profile for inviter name
   const fetchUserProfile = useCallback(async () => {
