@@ -91,9 +91,9 @@ const ProjectWizardContent = () => {
   const [driveAccessToken, setDriveAccessToken] = useState<string | null>(null);
   const [driveConnected, setDriveConnected] = useState(false);
   
-  // Risk tolerance state (shared across all AWP sections) - default to "high" (Essential package)
+  // Risk tolerance state (shared across all AWP sections) - default to "low" (Fortified package)
   const [riskTolerance, setRiskTolerance] = useState<RiskTolerance>(
-    (projectData.riskTolerance as RiskTolerance) || "high"
+    (projectData.riskTolerance as RiskTolerance) || "low"
   );
   
   // Track if user has manually overridden control selections
