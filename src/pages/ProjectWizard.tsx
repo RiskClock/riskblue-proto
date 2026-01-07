@@ -1145,6 +1145,8 @@ const ProjectWizardContent = () => {
                       setDriveConnected={() => {}}
                       onBeforeOAuthRedirect={handleBeforeOAuthRedirect}
                       mode="schedule"
+                      savedScheduleFileName={projectData.schedule_file_name}
+                      onScheduleFileUploaded={(fileName) => updateField('schedule_file_name', fileName)}
                     />
                   </div>
                   
