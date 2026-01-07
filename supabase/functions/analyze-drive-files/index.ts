@@ -30,7 +30,8 @@ interface AnalysisItem {
   };
 }
 
-// AWP Mock data with controls - Updated with correct naming (DCW/DHW) and area_sqft
+// AWP Mock data - synced with src/data/mockAWPData.json
+// To update: copy the contents of mockAWPData.json's assets_water_systems_processes array here
 const MOCK_ASSETS_WATER_SYSTEMS_PROCESSES: AnalysisItem[] = [
   {
     "id": "ERM001",
@@ -199,7 +200,7 @@ const MOCK_ASSETS_WATER_SYSTEMS_PROCESSES: AnalysisItem[] = [
   },
   {
     "id": "KW001",
-    "name": "Kitchens & Washrooms",
+    "name": "Kitchen & Washroom",
     "category": "Asset",
     "areaName": "STAFF KITCHEN",
     "floor": "4th Floor",
@@ -211,7 +212,7 @@ const MOCK_ASSETS_WATER_SYSTEMS_PROCESSES: AnalysisItem[] = [
   },
   {
     "id": "KW002",
-    "name": "Kitchens & Washrooms",
+    "name": "Kitchen & Washroom",
     "category": "Asset",
     "areaName": "BF W/C",
     "floor": "8th Floor",
@@ -223,7 +224,7 @@ const MOCK_ASSETS_WATER_SYSTEMS_PROCESSES: AnalysisItem[] = [
   },
   {
     "id": "KW003",
-    "name": "Kitchens & Washrooms",
+    "name": "Kitchen & Washroom",
     "category": "Asset",
     "areaName": "BF W/C",
     "floor": "7th Floor",
@@ -235,7 +236,7 @@ const MOCK_ASSETS_WATER_SYSTEMS_PROCESSES: AnalysisItem[] = [
   },
   {
     "id": "KW004",
-    "name": "Kitchens & Washrooms",
+    "name": "Kitchen & Washroom",
     "category": "Asset",
     "areaName": "BF W/C",
     "floor": "6th Floor",
@@ -247,7 +248,7 @@ const MOCK_ASSETS_WATER_SYSTEMS_PROCESSES: AnalysisItem[] = [
   },
   {
     "id": "KW005",
-    "name": "Kitchens & Washrooms",
+    "name": "Kitchen & Washroom",
     "category": "Asset",
     "areaName": "BF W/C",
     "floor": "5th Floor",
@@ -259,7 +260,7 @@ const MOCK_ASSETS_WATER_SYSTEMS_PROCESSES: AnalysisItem[] = [
   },
   {
     "id": "KW006",
-    "name": "Kitchens & Washrooms",
+    "name": "Kitchen & Washroom",
     "category": "Asset",
     "areaName": "BF W/C",
     "floor": "4th Floor",
@@ -271,7 +272,7 @@ const MOCK_ASSETS_WATER_SYSTEMS_PROCESSES: AnalysisItem[] = [
   },
   {
     "id": "KW007",
-    "name": "Kitchens & Washrooms",
+    "name": "Kitchen & Washroom",
     "category": "Asset",
     "areaName": "BF W/C",
     "floor": "3rd Floor",
@@ -283,7 +284,7 @@ const MOCK_ASSETS_WATER_SYSTEMS_PROCESSES: AnalysisItem[] = [
   },
   {
     "id": "KW008",
-    "name": "Kitchens & Washrooms",
+    "name": "Kitchen & Washroom",
     "category": "Asset",
     "areaName": "BF W/C",
     "floor": "2nd Floor",
@@ -295,7 +296,7 @@ const MOCK_ASSETS_WATER_SYSTEMS_PROCESSES: AnalysisItem[] = [
   },
   {
     "id": "KW009",
-    "name": "Kitchens & Washrooms",
+    "name": "Kitchen & Washroom",
     "category": "Asset",
     "areaName": "BF W/C",
     "floor": "2nd Floor",
@@ -307,7 +308,7 @@ const MOCK_ASSETS_WATER_SYSTEMS_PROCESSES: AnalysisItem[] = [
   },
   {
     "id": "KW010",
-    "name": "Kitchens & Washrooms",
+    "name": "Kitchen & Washroom",
     "category": "Asset",
     "areaName": "W/C",
     "floor": "1st Floor",
@@ -319,7 +320,7 @@ const MOCK_ASSETS_WATER_SYSTEMS_PROCESSES: AnalysisItem[] = [
   },
   {
     "id": "KW011",
-    "name": "Kitchens & Washrooms",
+    "name": "Kitchen & Washroom",
     "category": "Asset",
     "areaName": "W/C",
     "floor": "1st Floor",
@@ -331,7 +332,7 @@ const MOCK_ASSETS_WATER_SYSTEMS_PROCESSES: AnalysisItem[] = [
   },
   {
     "id": "KW012",
-    "name": "Kitchens & Washrooms",
+    "name": "Kitchen & Washroom",
     "category": "Asset",
     "areaName": "UNIVERSAL W/C",
     "floor": "1st Floor",
@@ -343,7 +344,7 @@ const MOCK_ASSETS_WATER_SYSTEMS_PROCESSES: AnalysisItem[] = [
   },
   {
     "id": "KW013",
-    "name": "Kitchens & Washrooms",
+    "name": "Kitchen & Washroom",
     "category": "Asset",
     "areaName": "UNIVERSAL W/C",
     "floor": "1st Floor",
@@ -355,7 +356,7 @@ const MOCK_ASSETS_WATER_SYSTEMS_PROCESSES: AnalysisItem[] = [
   },
   {
     "id": "KW014",
-    "name": "Kitchens & Washrooms",
+    "name": "Kitchen & Washroom",
     "category": "Asset",
     "areaName": "UNIVERSAL W/C",
     "floor": "3rd Floor",
@@ -403,7 +404,7 @@ const MOCK_ASSETS_WATER_SYSTEMS_PROCESSES: AnalysisItem[] = [
   },
   {
     "id": "DCW-MCE001",
-    "name": "Cold Domestic Water",
+    "name": "Domestic Cold Water",
     "category": "Water System",
     "areaName": "Main City Entry",
     "floor": null,
@@ -424,7 +425,7 @@ const MOCK_ASSETS_WATER_SYSTEMS_PROCESSES: AnalysisItem[] = [
   },
   {
     "id": "DCW-ME001",
-    "name": "Cold Domestic Water",
+    "name": "Domestic Cold Water",
     "category": "Water System",
     "areaName": "Main Entry",
     "floor": null,
@@ -445,7 +446,7 @@ const MOCK_ASSETS_WATER_SYSTEMS_PROCESSES: AnalysisItem[] = [
   },
   {
     "id": "DCW-ZE001",
-    "name": "Cold Domestic Water",
+    "name": "Domestic Cold Water",
     "category": "Water System",
     "areaName": "Zone Entry",
     "floor": null,
@@ -516,7 +517,7 @@ const MOCK_ASSETS_WATER_SYSTEMS_PROCESSES: AnalysisItem[] = [
   },
   {
     "id": "DHW-HWR001",
-    "name": "Hot Domestic Water",
+    "name": "Domestic Hot Water",
     "category": "Water System",
     "areaName": "Hot Water Return",
     "floor": "Lower Level",
@@ -537,7 +538,7 @@ const MOCK_ASSETS_WATER_SYSTEMS_PROCESSES: AnalysisItem[] = [
   },
   {
     "id": "DHW-ZE001",
-    "name": "Hot Domestic Water",
+    "name": "Domestic Hot Water",
     "category": "Water System",
     "areaName": "Zone Exit",
     "floor": "Lower Level",
@@ -615,7 +616,7 @@ const MOCK_ASSETS_WATER_SYSTEMS_PROCESSES: AnalysisItem[] = [
   },
   {
     "id": "WMV001",
-    "name": "Water Mitigation Vendor",
+    "name": "Water Mitigation Vendor Process",
     "category": "Process",
     "areaName": null,
     "floor": null,
@@ -643,7 +644,7 @@ const MOCK_ASSETS_WATER_SYSTEMS_PROCESSES: AnalysisItem[] = [
   },
   {
     "id": "MCE001",
-    "name": "Mechanical Contractor and Engineering",
+    "name": "Mechanical Contractor Process",
     "category": "Process",
     "areaName": null,
     "floor": null,

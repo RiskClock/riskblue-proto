@@ -660,7 +660,7 @@
             "id": "DHW-HWR001",
             "name": "Domestic Hot Water",
             "category": "Water System",
-            "areaName": Hot Water Return,
+            "areaName": "Hot Water Return",
             "floor": "Lower Level",
             "drawingCode": null,
             "fileName": "A2.01-LOWER-LEVEL-Rev.18.pdf",
