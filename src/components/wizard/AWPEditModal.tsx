@@ -567,13 +567,10 @@ export const AWPEditModal = ({
           return;
         }
         
-        // Convert to NewRowItem and add to the Add New Items pane
+        // Convert to NewRowItem and REPLACE the Add New Items pane (not accumulate)
         const newRowItems = assetsWaterSystemsProcesses.map(item => analysisItemToNewRow(item));
-        setNewRows(prev => {
-          // Remove empty default row if present, then add new items + fresh empty row
-          const nonEmpty = prev.filter(row => row.name.trim() !== "");
-          return [...nonEmpty, ...newRowItems, createEmptyRow()];
-        });
+        // Replace all staged items with new analysis results + fresh empty row
+        setNewRows([...newRowItems, createEmptyRow()]);
         
         const counts = countByCategory(assetsWaterSystemsProcesses);
         toast({

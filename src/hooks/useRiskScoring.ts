@@ -270,10 +270,10 @@ export const useRiskScoring = (
           instanceScoreMap.set(instance.id, instanceScore);
           classScore.instanceScores.push(instanceScore);
           
-          // Aggregate to class level
-          classScore.riskPoints += instanceRiskPoints;
-          classScore.totalDeriskPoints += instanceTotalDerisk;
+          // Aggregate to class level - only count selected instances
           if (isInstanceSelected) {
+            classScore.riskPoints += instanceRiskPoints;
+            classScore.totalDeriskPoints += instanceTotalDerisk;
             classScore.selectedDeriskPoints += instanceSelectedDerisk;
           }
         });
