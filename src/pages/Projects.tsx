@@ -178,7 +178,7 @@ const Projects = () => {
   };
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="h-screen flex flex-col bg-background overflow-hidden">
       <header className="border-b bg-card">
         <div className="container mx-auto px-6 py-4 flex items-center justify-between">
           <img src={riskBlueLogo} alt="RiskBlue" className="h-8" />
@@ -209,7 +209,7 @@ const Projects = () => {
         </div>
       </header>
 
-      <main className="container mx-auto px-6 py-8">
+      <main className="container mx-auto px-6 py-8 flex-1 overflow-auto">
         <div className="mb-8">
           <div className="flex items-center justify-between mb-4">
             <div>
