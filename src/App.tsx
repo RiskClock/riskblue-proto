@@ -12,6 +12,7 @@ import Configuration from "./pages/Configuration";
 import AcceptInvite from "./pages/AcceptInvite";
 import OAuthCallback from "./pages/OAuthCallback";
 import GoogleDriveConnect from "./pages/GoogleDriveConnect";
+import ResetPassword from "./pages/ResetPassword";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -44,6 +45,7 @@ const App = () => (
             <Route path="/accept-invite" element={<AcceptInvite />} />
             <Route path="/oauth/callback" element={<OAuthCallback />} />
             <Route path="/connect/google-drive" element={<GoogleDriveConnect />} />
+            <Route path="/reset-password" element={<ResetPassword />} />
             <Route path="/" element={<Navigate to="/projects" />} />
             <Route path="*" element={<NotFound />} />
           </Routes>
