@@ -22,6 +22,7 @@ const IMMEDIATE_SAVE_FIELDS = [
   'selectedProcessInstances',
   'selectedProcessControls',
   'schedule_file_name',
+  'schedule_file_uploaded_at',
 ];
 
 // Debounce delay for text fields (ms)

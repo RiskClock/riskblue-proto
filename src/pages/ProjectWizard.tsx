@@ -1146,7 +1146,11 @@ const ProjectWizardContent = () => {
                       onBeforeOAuthRedirect={handleBeforeOAuthRedirect}
                       mode="schedule"
                       savedScheduleFileName={projectData.schedule_file_name}
-                      onScheduleFileUploaded={(fileName) => updateField('schedule_file_name', fileName)}
+                      savedScheduleFileUploadedAt={projectData.schedule_file_uploaded_at}
+                      onScheduleFileUploaded={(fileName, uploadedAt) => updateFields({
+                        schedule_file_name: fileName,
+                        schedule_file_uploaded_at: uploadedAt
+                      })}
                     />
                   </div>
                   
