@@ -15,7 +15,9 @@
                 "Water-Sensitive and High-Value Equipment Protection",
                 "Temporary Enclosures Plan"
             ],
-            "coordinates": [1115.3, 1548.5, 1852.7, 2285.8]
+            "coordinates": [
+                1115.3,1548.5,1852.7,2285.8
+            ]
         },
         {
             "id": "ERM002",
@@ -32,7 +34,9 @@
                 "Water-Sensitive and High-Value Equipment Protection",
                 "Temporary Enclosures Plan"
             ],
-            "coordinates": [1236.6, 1308.7, 1988.1, 2046.0]
+            "coordinates": [
+                1236.6,1308.7,1988.1,2046.0
+            ]
         },
         {
             "id": "ERM003",
@@ -49,7 +53,9 @@
                 "Water-Sensitive and High-Value Equipment Protection",
                 "Temporary Enclosures Plan"
             ],
-            "coordinates": [715.7, 1213.7, 1674.3, 2150.8]
+            "coordinates": [
+                715.7,1213.7,1674.3,2150.8
+            ]
         },
         {
             "id": "ERM004",
@@ -66,7 +72,9 @@
                 "Water-Sensitive and High-Value Equipment Protection",
                 "Temporary Enclosures Plan"
             ],
-            "coordinates": [1677.5, 1668.4, 2418.6, 2384.0]
+            "coordinates": [
+                1677.5,1668.4,2418.6,2384.0
+            ]
         },
         {
             "id": "ERM005",
@@ -83,7 +91,9 @@
                 "Water-Sensitive and High-Value Equipment Protection",
                 "Temporary Enclosures Plan"
             ],
-            "coordinates": [1678.1, 1655.5, 2419.4, 2384.0]
+            "coordinates": [
+                1678.1,1655.5,2419.4,2384.0
+            ]
         },
         {
             "id": "ERM006",
@@ -100,7 +110,9 @@
                 "Water-Sensitive and High-Value Equipment Protection",
                 "Temporary Enclosures Plan"
             ],
-            "coordinates": [1657.6, 1346.9, 2436.8, 2084.2]
+            "coordinates": [
+                1657.6,1346.9,2436.8,2084.2
+            ]
         },
         {
             "id": "MRM001",
@@ -123,7 +135,12 @@
                 "Floor Penetrations Water Seals",
                 "Mechanical Room Sleeves"
             ],
-            "coordinates": [0.3363, 0.5887, 0.1182, 0.0702]
+            "coordinates": [
+                0.3363,
+                0.5887,
+                0.1182,
+                0.0702
+            ]
         },
         {
             "id": "ERS001",
@@ -139,7 +156,12 @@
                 "Floor Penetrations Water Seals",
                 "Temporary Enclosures Plan"
             ],
-            "coordinates": [0.5331, 0.0274, 0.0808, 0.2157]
+            "coordinates": [
+                0.5331,
+                0.0274,
+                0.0808,
+                0.2157
+            ]
         },
         {
             "id": "ELVP001",
@@ -150,8 +172,15 @@
             "drawingCode": null,
             "fileName": "A2.01-LOWER-LEVEL-Rev.18.pdf",
             "area_sqft": 50,
-            "controls": ["Presence of Water Monitoring"],
-            "coordinates": [0.6492, 0.0339, 0.151, 0.2247]
+            "controls": [
+                "Presence of Water Monitoring"
+            ],
+            "coordinates": [
+                0.6492,
+                0.0339,
+                0.151,
+                0.2247
+            ]
         },
         {
             "id": "ELVP002",
@@ -162,176 +191,281 @@
             "drawingCode": null,
             "fileName": "A2.01-LOWER-LEVEL-Rev.18.pdf",
             "area_sqft": 50,
-            "controls": ["Presence of Water Monitoring"],
-            "coordinates": [0.2113, 0.4045, 0.204, 0.0555]
+            "controls": [
+                "Presence of Water Monitoring"
+            ],
+            "coordinates": [
+                0.2113,
+                0.4045,
+                0.204,
+                0.0555
+            ]
         },
         {
             "id": "KW001",
-            "name": "Kitchens & Washrooms",
+            "name": "Kitchen & Washroom",
             "category": "Asset",
             "areaName": "STAFF KITCHEN",
             "floor": "4th Floor",
             "drawingCode": "SWC-408",
             "fileName": "A2.05-FOURTH-FLOOR-Rev.16.pdf",
             "area_sqft": 100,
-            "controls": ["Presence of Water Monitoring"],
-            "coordinates": [0.6155, 0.1094, 0.1531, 0.2747]
+            "controls": [
+                "Presence of Water Monitoring"
+            ],
+            "coordinates": [
+                0.6155,
+                0.1094,
+                0.1531,
+                0.2747
+            ]
         },
         {
             "id": "KW002",
-            "name": "Kitchens & Washrooms",
+            "name": "Kitchen & Washroom",
             "category": "Asset",
             "areaName": "BF W/C",
             "floor": "8th Floor",
             "drawingCode": "SWC-801",
             "fileName": "A2.09-EIGHTH-FLOOR-Rev.17.1.pdf",
             "area_sqft": 100,
-            "controls": ["Presence of Water Monitoring"],
-            "coordinates": [0.1874, 0.0833, 0.0856, 0.1966]
+            "controls": [
+                "Presence of Water Monitoring"
+            ],
+            "coordinates": [
+                0.1874,
+                0.0833,
+                0.0856,
+                0.1966
+            ]
         },
         {
             "id": "KW003",
-            "name": "Kitchens & Washrooms",
+            "name": "Kitchen & Washroom",
             "category": "Asset",
             "areaName": "BF W/C",
             "floor": "7th Floor",
             "drawingCode": "SWC-701",
             "fileName": "A2.08-SEVENTH-FLOOR-Rev.17.1.pdf",
             "area_sqft": 100,
-            "controls": ["Presence of Water Monitoring"],
-            "coordinates": [0.1074, 0.4066, 0.1961, 0.1761]
+            "controls": [
+                "Presence of Water Monitoring"
+            ],
+            "coordinates": [
+                0.1074,
+                0.4066,
+                0.1961,
+                0.1761
+            ]
         },
         {
             "id": "KW004",
-            "name": "Kitchens & Washrooms",
+            "name": "Kitchen & Washroom",
             "category": "Asset",
             "areaName": "BF W/C",
             "floor": "6th Floor",
             "drawingCode": "SWC-601",
             "fileName": "A2.07-SIXTH-FLOOR-Rev.18.1.pdf",
             "area_sqft": 100,
-            "controls": ["Presence of Water Monitoring"],
-            "coordinates": [0.4799, 0.6361, 0.1096, 0.1265]
+            "controls": [
+                "Presence of Water Monitoring"
+            ],
+            "coordinates": [
+                0.4799,
+                0.6361,
+                0.1096,
+                0.1265
+            ]
         },
         {
             "id": "KW005",
-            "name": "Kitchens & Washrooms",
+            "name": "Kitchen & Washroom",
             "category": "Asset",
             "areaName": "BF W/C",
             "floor": "5th Floor",
             "drawingCode": "SWC-501",
             "fileName": "A2.06-FIFTH-FLOOR-Rev.14.pdf",
             "area_sqft": 100,
-            "controls": ["Presence of Water Monitoring"],
-            "coordinates": [0.545, 0.0838, 0.2456, 0.0962]
+            "controls": [
+                "Presence of Water Monitoring"
+            ],
+            "coordinates": [
+                0.545,
+                0.0838,
+                0.2456,
+                0.0962
+            ]
         },
         {
             "id": "KW006",
-            "name": "Kitchens & Washrooms",
+            "name": "Kitchen & Washroom",
             "category": "Asset",
             "areaName": "BF W/C",
             "floor": "4th Floor",
             "drawingCode": "SWC-401",
             "fileName": "A2.05-FOURTH-FLOOR-Rev.16.pdf",
             "area_sqft": 100,
-            "controls": ["Presence of Water Monitoring"],
-            "coordinates": [0.1585, 0.2517, 0.196, 0.1849]
+            "controls": [
+                "Presence of Water Monitoring"
+            ],
+            "coordinates": [
+                0.1585,
+                0.2517,
+                0.196,
+                0.1849
+            ]
         },
         {
             "id": "KW007",
-            "name": "Kitchens & Washrooms",
+            "name": "Kitchen & Washroom",
             "category": "Asset",
             "areaName": "BF W/C",
             "floor": "3rd Floor",
             "drawingCode": "SWC-301",
             "fileName": "A2.04-THIRD-FLOOR-Rev.15.pdf",
             "area_sqft": 100,
-            "controls": ["Presence of Water Monitoring"],
-            "coordinates": [0.145, 0.3328, 0.1552, 0.0602]
+            "controls": [
+                "Presence of Water Monitoring"
+            ],
+            "coordinates": [
+                0.145,
+                0.3328,
+                0.1552,
+                0.0602
+            ]
         },
         {
             "id": "KW008",
-            "name": "Kitchens & Washrooms",
+            "name": "Kitchen & Washroom",
             "category": "Asset",
             "areaName": "BF W/C",
             "floor": "2nd Floor",
             "drawingCode": "SWC-219",
             "fileName": "A2.03-SECOND-FLOOR-Rev.20.pdf",
             "area_sqft": 100,
-            "controls": ["Presence of Water Monitoring"],
-            "coordinates": [0.0553, 0.7265, 0.2349, 0.0892]
+            "controls": [
+                "Presence of Water Monitoring"
+            ],
+            "coordinates": [
+                0.0553,
+                0.7265,
+                0.2349,
+                0.0892
+            ]
         },
         {
             "id": "KW009",
-            "name": "Kitchens & Washrooms",
+            "name": "Kitchen & Washroom",
             "category": "Asset",
             "areaName": "BF W/C",
             "floor": "2nd Floor",
             "drawingCode": "SWC-201",
             "fileName": "A2.03-SECOND-FLOOR-Rev.20.pdf",
             "area_sqft": 100,
-            "controls": ["Presence of Water Monitoring"],
-            "coordinates": [0.1312, 0.385, 0.2594, 0.0522]
+            "controls": [
+                "Presence of Water Monitoring"
+            ],
+            "coordinates": [
+                0.1312,
+                0.385,
+                0.2594,
+                0.0522
+            ]
         },
         {
             "id": "KW010",
-            "name": "Kitchens & Washrooms",
+            "name": "Kitchen & Washroom",
             "category": "Asset",
             "areaName": "W/C",
             "floor": "1st Floor",
             "drawingCode": "SWC-102",
             "fileName": "A2.02-GROUND-FLOOR-Rev.19.pdf",
             "area_sqft": 100,
-            "controls": ["Presence of Water Monitoring"],
-            "coordinates": [0.4909, 0.0697, 0.0677, 0.132]
+            "controls": [
+                "Presence of Water Monitoring"
+            ],
+            "coordinates": [
+                0.4909,
+                0.0697,
+                0.0677,
+                0.132
+            ]
         },
         {
             "id": "KW011",
-            "name": "Kitchens & Washrooms",
+            "name": "Kitchen & Washroom",
             "category": "Asset",
             "areaName": "W/C",
             "floor": "1st Floor",
             "drawingCode": "SWC-103",
             "fileName": "A2.02-GROUND-FLOOR-Rev.19.pdf",
             "area_sqft": 100,
-            "controls": ["Presence of Water Monitoring"],
-            "coordinates": [0.0084, 0.743, 0.1305, 0.0768]
+            "controls": [
+                "Presence of Water Monitoring"
+            ],
+            "coordinates": [
+                0.0084,
+                0.743,
+                0.1305,
+                0.0768
+            ]
         },
         {
             "id": "KW012",
-            "name": "Kitchens & Washrooms",
+            "name": "Kitchen & Washroom",
             "category": "Asset",
             "areaName": "UNIVERSAL W/C",
             "floor": "1st Floor",
             "drawingCode": "SWC-104",
             "fileName": "A2.02-GROUND-FLOOR-Rev.19.pdf",
             "area_sqft": 100,
-            "controls": ["Presence of Water Monitoring"],
-            "coordinates": [0.1415, 0.0786, 0.1232, 0.2582]
+            "controls": [
+                "Presence of Water Monitoring"
+            ],
+            "coordinates": [
+                0.1415,
+                0.0786,
+                0.1232,
+                0.2582
+            ]
         },
         {
             "id": "KW013",
-            "name": "Kitchens & Washrooms",
+            "name": "Kitchen & Washroom",
             "category": "Asset",
             "areaName": "UNIVERSAL W/C",
             "floor": "1st Floor",
             "drawingCode": "SWC-B08",
             "fileName": "A2.02-GROUND-FLOOR-Rev.19.pdf",
             "area_sqft": 100,
-            "controls": ["Presence of Water Monitoring"],
-            "coordinates": [0.3572, 0.3494, 0.2267, 0.1312]
+            "controls": [
+                "Presence of Water Monitoring"
+            ],
+            "coordinates": [
+                0.3572,
+                0.3494,
+                0.2267,
+                0.1312
+            ]
         },
         {
             "id": "KW014",
-            "name": "Kitchens & Washrooms",
+            "name": "Kitchen & Washroom",
             "category": "Asset",
             "areaName": "UNIVERSAL W/C",
             "floor": "3rd Floor",
             "drawingCode": "SWC-303",
             "fileName": "A2.04-THIRD-FLOOR-Rev.15.pdf",
             "area_sqft": 100,
-            "controls": ["Presence of Water Monitoring"],
-            "coordinates": [0.3572, 0.3494, 0.2267, 0.1312]
+            "controls": [
+                "Presence of Water Monitoring"
+            ],
+            "coordinates": [
+                0.3572,
+                0.3494,
+                0.2267,
+                0.1312
+            ]
         },
         {
             "id": "FEER",
@@ -351,7 +485,12 @@
                 "Permanent Drainage Systems Installation and Monitoring",
                 "Facade Designed as a Rainscreen"
             ],
-            "coordinates": [0.4465, 0.4053, 0.0782, 0.0639]
+            "coordinates": [
+                0.4465,
+                0.4053,
+                0.0782,
+                0.0639
+            ]
         },
         {
             "id": "MTM001",
@@ -367,11 +506,16 @@
                 "Lumber Moisture Content",
                 "Presence of Water Monitoring"
             ],
-            "coordinates": [0.3464, 0.2396, 0.1298, 0.2826]
+            "coordinates": [
+                0.3464,
+                0.2396,
+                0.1298,
+                0.2826
+            ]
         },
         {
             "id": "DCW-MCE001",
-            "name": "Cold Domestic Water",
+            "name": "Domestic Cold Water",
             "category": "Water System",
             "areaName": "Main City Entry",
             "floor": null,
@@ -383,16 +527,21 @@
                 "Ultrasonic Flow Sensors",
                 "In-line Flow Monitoring"
             ],
-            "coordinates": [0.4387, 0.0886, 0.2008, 0.2104],
-            "additionalParameters": {
+            "coordinates": [
+                0.4387,
+                0.0886,
+                0.2008,
+                0.2104
+            ],
+              "additionalParameters": {
                 "mainPipeDirection": "horizontal",
                 "pipeDiameterInches": 4,
                 "pipeDiameterMM": 100
-            }
+              }
         },
         {
             "id": "DCW-ME001",
-            "name": "Cold Domestic Water",
+            "name": "Domestic Cold Water",
             "category": "Water System",
             "areaName": "Main Entry",
             "floor": null,
@@ -404,16 +553,21 @@
                 "Ultrasonic Flow Sensors",
                 "In-line Flow Monitoring"
             ],
-            "coordinates": [0.515, 0.4133, 0.1028, 0.2108],
-            "additionalParameters": {
+            "coordinates": [
+                0.515,
+                0.4133,
+                0.1028,
+                0.2108
+            ],
+              "additionalParameters": {
                 "mainPipeDirection": "horizontal",
                 "pipeDiameterInches": 4,
                 "pipeDiameterMM": 100
-            }
+              }
         },
         {
             "id": "DCW-ZE001",
-            "name": "Cold Domestic Water",
+            "name": "Domestic Cold Water",
             "category": "Water System",
             "areaName": "Zone Entry",
             "floor": null,
@@ -425,7 +579,12 @@
                 "Ultrasonic Flow Sensors",
                 "In-line Flow Monitoring"
             ],
-            "coordinates": [0.5711, 0.2303, 0.2296, 0.0887],
+            "coordinates": [
+                0.5711,
+                0.2303,
+                0.2296,
+                0.0887
+            ],
             "additionalParameters": {
                 "mainPipeDirection": "vertical",
                 "pipeDiameterInches": null,
@@ -445,7 +604,12 @@
                 "Presence of Water Monitoring",
                 "Temporary and Permanent Sump Pumps Installation"
             ],
-            "coordinates": [0.7033, 0.3048, 0.2379, 0.0909]
+            "coordinates": [
+                0.7033,
+                0.3048,
+                0.2379,
+                0.0909
+            ]
         },
         {
             "id": "SPSDD002",
@@ -460,7 +624,12 @@
                 "Presence of Water Monitoring",
                 "Temporary and Permanent Sump Pumps Installation"
             ],
-            "coordinates": [0.7033, 0.3048, 0.2379, 0.0909]
+            "coordinates": [
+                0.7033,
+                0.3048,
+                0.2379,
+                0.0909
+            ]
         },
         {
             "id": "FS001",
@@ -475,7 +644,12 @@
                 "Ultrasonic Flow Sensors",
                 "In-line Flow Monitoring"
             ],
-            "coordinates": [0.5916, 0.2067, 0.1433, 0.2302],
+            "coordinates": [
+                0.5916,
+                0.2067,
+                0.1433,
+                0.2302
+            ],
             "additionalParameters": {
                 "mainPipeDirection": "horizontal",
                 "pipeDiameterInches": null,
@@ -484,9 +658,9 @@
         },
         {
             "id": "DHW-HWR001",
-            "name": "Hot Domestic Water",
+            "name": "Domestic Hot Water",
             "category": "Water System",
-            "areaName": "Hot Water Return",
+            "areaName": Hot Water Return,
             "floor": "Lower Level",
             "drawingCode": null,
             "fileName": "A2.01-LOWER-LEVEL-Rev.18.pdf",
@@ -496,7 +670,12 @@
                 "Ultrasonic Flow Sensors",
                 "Domestic Hot Water Run Flow Patterns"
             ],
-            "coordinates": [0.1233, 0.425, 0.0845, 0.1908],
+            "coordinates": [
+                0.1233,
+                0.425,
+                0.0845,
+                0.1908
+            ],
             "additionalParameters": {
                 "mainPipeDirection": "horizontal",
                 "pipeDiameterInches": null,
@@ -505,7 +684,7 @@
         },
         {
             "id": "DHW-ZE001",
-            "name": "Hot Domestic Water",
+            "name": "Domestic Hot Water",
             "category": "Water System",
             "areaName": "Zone Exit",
             "floor": "Lower Level",
@@ -517,7 +696,12 @@
                 "Ultrasonic Flow Sensors",
                 "Domestic Hot Water Run Flow Patterns"
             ],
-            "coordinates": [0.1233, 0.425, 0.0845, 0.1908],
+            "coordinates": [
+                0.1233,
+                0.425,
+                0.0845,
+                0.1908
+            ],
             "additionalParameters": {
                 "mainPipeDirection": "horizontal",
                 "pipeDiameterInches": null,
@@ -539,7 +723,12 @@
                 "Ultrasonic Flow Sensors",
                 "In-line Flow Monitoring"
             ],
-            "coordinates": [0.4864, 0.5104, 0.0908, 0.2761],
+            "coordinates": [
+                0.4864,
+                0.5104,
+                0.0908,
+                0.2761
+            ],
             "additionalParameters": {
                 "mainPipeDirection": "vertical",
                 "pipeDiameterInches": 1,
@@ -583,7 +772,7 @@
         },
         {
             "id": "WMV001",
-            "name": "Water Mitigation Vendor",
+            "name": "Water Mitigation Vendor Process",
             "category": "Process",
             "areaName": null,
             "floor": null,
@@ -611,7 +800,7 @@
         },
         {
             "id": "MCE001",
-            "name": "Mechanical Contractor and Engineering",
+            "name": "Mechanical Contractor Process",
             "category": "Process",
             "areaName": null,
             "floor": null,
