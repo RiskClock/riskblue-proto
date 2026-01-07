@@ -196,7 +196,7 @@ export default function SolutionProviderPortal() {
                 Configuration
               </button>
             )}
-            <button onClick={handleExitPortal} className="text-primary font-medium">
+            <button onClick={handleExitPortal} className="text-foreground hover:text-primary">
               Solution Provider Portal
             </button>
             <DropdownMenu>
