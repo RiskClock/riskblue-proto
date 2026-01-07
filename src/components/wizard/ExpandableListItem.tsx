@@ -117,6 +117,22 @@ const formatCost = (cost: number) => {
   return `$${cost}`;
 };
 
+// Pluralize class name helper
+const getPluralName = (name: string): string => {
+  // Special cases
+  if (name === "Elevator Pit") return "Elevator Pits";
+  if (name === "Electrical Room") return "Electrical Rooms";
+  if (name === "Mechanical Room") return "Mechanical Rooms";
+  if (name === "Electrical Riser") return "Electrical Risers";
+  if (name === "Mechanical Riser") return "Mechanical Risers";
+  if (name === "Suite") return "Suites";
+  if (name === "Kitchen & Washroom") return "Kitchens & Washrooms";
+  // Names already plural or compound (no change needed)
+  if (name.includes(" and ") || name.includes(", ")) return name;
+  // Default: add 's'
+  return name + "s";
+};
+
 export const ExpandableListItem = ({
   name,
   icon,
@@ -357,7 +373,7 @@ export const ExpandableListItem = ({
         {/* Content - Class Properties */}
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2">
-            <h4 className="font-medium text-sm truncate">{name}</h4>
+            <h4 className="font-medium text-sm truncate">{instanceCount > 1 ? getPluralName(name) : name} ({instanceCount})</h4>
             {/* Risk label derived from P x I with tooltip showing breakdown */}
             {riskPoints !== undefined && riskPoints > 0 && (
               <TooltipProvider delayDuration={0}>
