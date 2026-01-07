@@ -42,7 +42,7 @@ export const ClassRiskBadges = ({
       {locationCount !== undefined && locationCount > 0 && (
         <Badge variant="secondary" className="text-xs cursor-default">
           <MapPin className="h-3 w-3 mr-1" />
-          {locationCount}
+          {locationCount} {locationCount === 1 ? 'location' : 'locations'}
         </Badge>
       )}
       {riskPoints !== undefined && riskPoints > 0 && (
