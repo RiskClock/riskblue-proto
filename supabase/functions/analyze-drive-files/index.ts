@@ -34,7 +34,7 @@ interface AnalysisItem {
 const MOCK_ASSETS_WATER_SYSTEMS_PROCESSES: AnalysisItem[] = [
   {
     "id": "ERM001",
-    "name": "Electrical Rooms",
+    "name": "Electrical Room",
     "category": "Asset",
     "areaName": "IT ROOM",
     "floor": "Lower Level",
@@ -51,7 +51,7 @@ const MOCK_ASSETS_WATER_SYSTEMS_PROCESSES: AnalysisItem[] = [
   },
   {
     "id": "ERM002",
-    "name": "Electrical Rooms",
+    "name": "Electrical Room",
     "category": "Asset",
     "areaName": "ELECTRICAL",
     "floor": "Lower Level",
@@ -68,7 +68,7 @@ const MOCK_ASSETS_WATER_SYSTEMS_PROCESSES: AnalysisItem[] = [
   },
   {
     "id": "ERM003",
-    "name": "Electrical Rooms",
+    "name": "Electrical Room",
     "category": "Asset",
     "areaName": "HYDRO VAULT",
     "floor": "Lower Level",
@@ -85,7 +85,7 @@ const MOCK_ASSETS_WATER_SYSTEMS_PROCESSES: AnalysisItem[] = [
   },
   {
     "id": "ERM004",
-    "name": "Electrical Rooms",
+    "name": "Electrical Room",
     "category": "Asset",
     "areaName": "IT ROOM",
     "floor": "4th Floor",
@@ -102,7 +102,7 @@ const MOCK_ASSETS_WATER_SYSTEMS_PROCESSES: AnalysisItem[] = [
   },
   {
     "id": "ERM005",
-    "name": "Electrical Rooms",
+    "name": "Electrical Room",
     "category": "Asset",
     "areaName": "IT ROOM",
     "floor": "7th Floor",
@@ -119,7 +119,7 @@ const MOCK_ASSETS_WATER_SYSTEMS_PROCESSES: AnalysisItem[] = [
   },
   {
     "id": "ERM006",
-    "name": "Electrical Rooms",
+    "name": "Electrical Room",
     "category": "Asset",
     "areaName": "ELECTRICAL ROOM",
     "floor": "Roof",
@@ -136,7 +136,7 @@ const MOCK_ASSETS_WATER_SYSTEMS_PROCESSES: AnalysisItem[] = [
   },
   {
     "id": "MRM001",
-    "name": "Mechanical Rooms",
+    "name": "Mechanical Room",
     "category": "Asset",
     "areaName": "MECHANICAL",
     "floor": "Lower Level",
@@ -159,7 +159,7 @@ const MOCK_ASSETS_WATER_SYSTEMS_PROCESSES: AnalysisItem[] = [
   },
   {
     "id": "ERS001",
-    "name": "Electrical Risers",
+    "name": "Electrical Riser",
     "category": "Asset",
     "areaName": "ELECTRICAL RISER",
     "floor": "Lower Level - 8th Floor",
@@ -175,7 +175,7 @@ const MOCK_ASSETS_WATER_SYSTEMS_PROCESSES: AnalysisItem[] = [
   },
   {
     "id": "ELVP001",
-    "name": "Elevator Pits",
+    "name": "Elevator Pit",
     "category": "Asset",
     "areaName": "ELEVATOR 1",
     "floor": "Lower Level",
@@ -187,7 +187,7 @@ const MOCK_ASSETS_WATER_SYSTEMS_PROCESSES: AnalysisItem[] = [
   },
   {
     "id": "ELVP002",
-    "name": "Elevator Pits",
+    "name": "Elevator Pit",
     "category": "Asset",
     "areaName": "ELEVATOR 2",
     "floor": "Lower Level",
@@ -403,9 +403,9 @@ const MOCK_ASSETS_WATER_SYSTEMS_PROCESSES: AnalysisItem[] = [
   },
   {
     "id": "DCW-MCE001",
-    "name": "Domestic Cold Water: Main City Entry",
+    "name": "Cold Domestic Water",
     "category": "Water System",
-    "areaName": null,
+    "areaName": "Main City Entry",
     "floor": null,
     "drawingCode": null,
     "fileName": null,
@@ -424,9 +424,9 @@ const MOCK_ASSETS_WATER_SYSTEMS_PROCESSES: AnalysisItem[] = [
   },
   {
     "id": "DCW-ME001",
-    "name": "Domestic Cold Water: Main Entry",
+    "name": "Cold Domestic Water",
     "category": "Water System",
-    "areaName": null,
+    "areaName": "Main Entry",
     "floor": null,
     "drawingCode": null,
     "fileName": null,
@@ -445,9 +445,9 @@ const MOCK_ASSETS_WATER_SYSTEMS_PROCESSES: AnalysisItem[] = [
   },
   {
     "id": "DCW-ZE001",
-    "name": "Domestic Cold Water: Zone Entry",
+    "name": "Cold Domestic Water",
     "category": "Water System",
-    "areaName": null,
+    "areaName": "Zone Entry",
     "floor": null,
     "drawingCode": "Ø80 CW UP",
     "fileName": null,
@@ -516,9 +516,9 @@ const MOCK_ASSETS_WATER_SYSTEMS_PROCESSES: AnalysisItem[] = [
   },
   {
     "id": "DHW-HWR001",
-    "name": "Domestic Hot Water: Hot Water Return",
+    "name": "Hot Domestic Water",
     "category": "Water System",
-    "areaName": null,
+    "areaName": "Hot Water Return",
     "floor": "Lower Level",
     "drawingCode": null,
     "fileName": "A2.01-LOWER-LEVEL-Rev.18.pdf",
@@ -537,9 +537,9 @@ const MOCK_ASSETS_WATER_SYSTEMS_PROCESSES: AnalysisItem[] = [
   },
   {
     "id": "DHW-ZE001",
-    "name": "Domestic Hot Water: Zone Exit",
+    "name": "Hot Domestic Water",
     "category": "Water System",
-    "areaName": null,
+    "areaName": "Zone Exit",
     "floor": "Lower Level",
     "drawingCode": null,
     "fileName": "A2.01-LOWER-LEVEL-Rev.18.pdf",
