@@ -2,7 +2,7 @@ import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import { ProjectRiskScore, getRiskLabel, getRiskLabelStyles } from "@/hooks/useRiskScoring";
 import { Shield, AlertTriangle } from "lucide-react";
-import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { Tooltip, TooltipContent, TooltipTrigger, TooltipProvider } from "@/components/ui/tooltip";
 
 interface RiskScoreSummaryProps {
   riskScore: ProjectRiskScore;
@@ -59,16 +59,18 @@ export const ClassRiskBadges = ({
       )}
       {cost !== undefined && (
         showCostTooltip ? (
-          <Tooltip delayDuration={0}>
-            <TooltipTrigger asChild>
-              <Badge variant="outline" className="text-xs cursor-help bg-amber-50 text-amber-600 border-amber-200 dark:bg-amber-950 dark:text-amber-300 dark:border-amber-800">
-                $0
-              </Badge>
-            </TooltipTrigger>
-            <TooltipContent>
-              <p>Missing dates for {missingMilestones.join(' and ')} milestone{missingMilestones.length > 1 ? 's' : ''}</p>
-            </TooltipContent>
-          </Tooltip>
+          <TooltipProvider delayDuration={0}>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Badge variant="outline" className="text-xs cursor-help bg-amber-50 text-amber-600 border-amber-200 dark:bg-amber-950 dark:text-amber-300 dark:border-amber-800">
+                  $0
+                </Badge>
+              </TooltipTrigger>
+              <TooltipContent>
+                <p>Missing dates for {missingMilestones.join(' and ')} milestone{missingMilestones.length > 1 ? 's' : ''}</p>
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
         ) : cost > 0 ? (
           <Badge variant="outline" className="text-xs cursor-default bg-blue-50 text-blue-600 border-blue-200 dark:bg-blue-950 dark:text-blue-300 dark:border-blue-800">
             {formatCost(cost)}

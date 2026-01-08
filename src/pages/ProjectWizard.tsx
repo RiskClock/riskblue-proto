@@ -1311,12 +1311,51 @@ const ProjectWizardContent = () => {
             
             {/* Bottom Controls */}
             <div className="flex justify-between items-center pt-6">
-              <Button variant="outline" onClick={() => {
+              <Button variant="outline" onClick={async () => {
                 // Show preparing toast
                 toast({
                   title: "Preparing report...",
-                  description: "Please wait while the file is being prepared.",
+                  description: "Generating executive summary with AI...",
                 });
+                
+                // Calculate risk counts for the AI summary
+                const riskCounts = {
+                  assets: analysisItems.filter(i => i.category === "Asset" && (projectData.selectedAssetInstances || []).includes(i.id)).length,
+                  systems: analysisItems.filter(i => i.category === "Water System" && (projectData.selectedSystemInstances || []).includes(i.id)).length,
+                  processes: analysisItems.filter(i => i.category === "Process" && (projectData.selectedProcessInstances || []).includes(i.id)).length,
+                };
+                
+                // Count unique controls
+                const allControlIds = new Set([
+                  ...(projectData.selectedAssetControls || []),
+                  ...(projectData.selectedSystemControls || []),
+                  ...(projectData.selectedProcessControls || []),
+                ]);
+                const controlCount = allControlIds.size;
+                
+                // Call edge function to generate executive summary
+                let executiveSummaryText = "";
+                try {
+                  const { data: summaryData, error } = await supabase.functions.invoke('generate-executive-summary', {
+                    body: { 
+                      projectData, 
+                      riskCounts,
+                      controlCount
+                    }
+                  });
+                  
+                  if (!error && summaryData?.summary) {
+                    executiveSummaryText = summaryData.summary;
+                  } else if (error) {
+                    console.error("Error generating summary:", error);
+                    toast({
+                      title: "Note",
+                      description: "Could not generate AI summary. Proceeding with export.",
+                    });
+                  }
+                } catch (e) {
+                  console.error("Failed to generate executive summary:", e);
+                }
                 
                 const originalTitle = document.title;
                 document.title = generateReportFilename(projectData.name || "unnamed_project", "WaterRiskDiscovery");
@@ -1333,7 +1372,7 @@ const ProjectWizardContent = () => {
                 // Import and render
                 import('react-dom/client').then(({ createRoot }) => {
                   const reactRoot = createRoot(root);
-                  reactRoot.render(<WaterRiskReport data={projectData} analysisItems={analysisItems} controlDetails={controlDetails} />);
+                  reactRoot.render(<WaterRiskReport data={projectData} analysisItems={analysisItems} controlDetails={controlDetails} executiveSummaryText={executiveSummaryText} />);
                   
                   // Wait longer for images to load, then print
                   setTimeout(() => {

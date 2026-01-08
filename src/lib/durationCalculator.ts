@@ -222,7 +222,7 @@ export const getMissingMilestonesForClass = (
     if (!timeline.construction_end_date) missing.push('Construction');
   } else if (normalized.includes('electrical room') || normalized.includes('electrical riser')) {
     if (!timeline.mep_start_date) missing.push('MEP');
-    if (!timeline.enclosure_end_date) missing.push('Enclosure');
+    if (!timeline.enclosure_end_date) missing.push('Building Envelope');
   } else if (normalized.includes('elevator') || normalized.includes('sump')) {
     if (!timeline.elevators_start_date) missing.push('Elevators');
     if (!timeline.construction_end_date) missing.push('Construction');
@@ -243,10 +243,10 @@ export const getMissingMilestonesForClass = (
   } else if (normalized.includes('temporary water')) {
     if (!timeline.interior_start_date || !timeline.interior_end_date) missing.push('Interior Finishes');
   } else if (normalized.includes('facade') || normalized.includes('envelope') || normalized.includes('exterior') || normalized.includes('roofing')) {
-    if (!timeline.enclosure_start_date || !timeline.enclosure_end_date) missing.push('Enclosure');
+    if (!timeline.enclosure_start_date || !timeline.enclosure_end_date) missing.push('Building Envelope');
   } else if (normalized.includes('mass timber') || normalized.includes('millwork')) {
     if (!timeline.frame_start_date) missing.push('Structural Frame');
-    if (!timeline.enclosure_end_date) missing.push('Enclosure');
+    if (!timeline.enclosure_end_date) missing.push('Building Envelope');
   }
 
   return missing;
@@ -292,7 +292,7 @@ export const calculateSystemOrAssetDates = (
       if (mep_start_date && enclosure_end_date) {
         startDate = parseISO(mep_start_date);
         endDate = parseISO(enclosure_end_date);
-        calculatedFrom = "MEP start to Enclosure end";
+        calculatedFrom = "MEP start to Building Envelope end";
       }
     } else if (name === "Sump Pits" || name === "Sump Pit" || name === "Elevator Pits" || name === "Elevator Pit") {
       if (elevators_start_date) {
@@ -310,7 +310,7 @@ export const calculateSystemOrAssetDates = (
       if (timeline.enclosure_start_date && enclosure_end_date) {
         startDate = parseISO(timeline.enclosure_start_date);
         endDate = parseISO(enclosure_end_date);
-        calculatedFrom = "Enclosure start to Enclosure end";
+        calculatedFrom = "Building Envelope start to Building Envelope end";
       }
     } else if (name === "Kitchen & Washroom" || name === "Kitchens & Washrooms" || name === "Kitchens & Washroom" || name === "Kitchens and Washrooms") {
       if (interior_start_date) {

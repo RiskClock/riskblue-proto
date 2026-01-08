@@ -149,9 +149,10 @@ interface WaterRiskReportProps {
   data: any;
   analysisItems?: AnalysisItem[];
   controlDetails?: ControlDetail[];
+  executiveSummaryText?: string;
 }
 
-export const WaterRiskReport = ({ data, analysisItems = [], controlDetails = [] }: WaterRiskReportProps) => {
+export const WaterRiskReport = ({ data, analysisItems = [], controlDetails = [], executiveSummaryText }: WaterRiskReportProps) => {
   const timelinePhases = getTimelinePhases(data);
   
   // Build timeline data for duration calculation
@@ -635,6 +636,17 @@ export const WaterRiskReport = ({ data, analysisItems = [], controlDetails = [] 
       {/* Executive Summary - Split into Risks and Mitigation */}
       <section className="mb-4">
         <h2 className="text-base font-bold text-gray-900 mb-2 border-b border-gray-300 pb-1">Executive Summary</h2>
+        
+        {/* AI-Generated Summary Paragraphs */}
+        {executiveSummaryText && (
+          <div className="mb-3 text-[11px] text-gray-800 leading-relaxed">
+            {executiveSummaryText.split('\n\n').map((paragraph, index) => (
+              <p key={index} className={index > 0 ? "mt-2" : ""}>
+                {paragraph}
+              </p>
+            ))}
+          </div>
+        )}
         
         {/* Risks Section */}
         <div className="mb-3">
