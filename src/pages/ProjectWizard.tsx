@@ -873,6 +873,10 @@ const ProjectWizardContent = () => {
     // Update via context
     updateFields(mappedData);
     
+    // Wait for all saves to complete before returning
+    // This ensures ProjectFilesUpload's file metadata save doesn't race with this save
+    await flush();
+    
     toast({
       title: "Project Info Updated",
       description: "Project information has been automatically updated from the uploaded schedule.",
