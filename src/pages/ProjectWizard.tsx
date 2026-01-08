@@ -1346,28 +1346,36 @@ const ProjectWizardContent = () => {
                 // Show preparing toast
                 toast({
                   title: "Preparing report...",
-                  description: "Generating executive summary with AI...",
+                  description: "Preparing report for export...",
                 });
                 
-                // Get prepared by (current user) and created by (project owner)
-                const preparedByEmail = user?.email || "";
-                let createdByEmail = "";
+                // Get prepared by (current user) and created by (project owner) display names
+                let preparedByName = "";
+                let createdByName = "";
                 
-                // Fetch creator email if different from current user
-                if (projectData.user_id && projectData.user_id !== user?.id) {
+                // Fetch display names from profiles
+                const userIdsToFetch = [user?.id, projectData.user_id].filter(Boolean) as string[];
+                const uniqueUserIds = [...new Set(userIdsToFetch)];
+                
+                if (uniqueUserIds.length > 0) {
                   try {
-                    const { data: emailData } = await supabase.functions.invoke('get-user-emails', {
-                      body: { userIds: [projectData.user_id] }
-                    });
-                    if (emailData?.emails?.[projectData.user_id]) {
-                      createdByEmail = emailData.emails[projectData.user_id];
-                    }
+                    const { data: profilesData } = await supabase
+                      .from('profiles')
+                      .select('user_id, display_name')
+                      .in('user_id', uniqueUserIds);
+                    
+                    const profilesMap = new Map(
+                      (profilesData || []).map(p => [p.user_id, p.display_name])
+                    );
+                    
+                    preparedByName = profilesMap.get(user?.id || "") || user?.email || "";
+                    createdByName = profilesMap.get(projectData.user_id) || preparedByName;
                   } catch (e) {
-                    console.error("Failed to fetch creator email:", e);
+                    console.error("Failed to fetch profile names:", e);
+                    // Fallback to email
+                    preparedByName = user?.email || "";
+                    createdByName = preparedByName;
                   }
-                } else {
-                  // Current user is the creator
-                  createdByEmail = preparedByEmail;
                 }
                 
                 // Calculate risk counts for the AI summary
@@ -1424,7 +1432,7 @@ const ProjectWizardContent = () => {
                 // Import and render
                 import('react-dom/client').then(({ createRoot }) => {
                   const reactRoot = createRoot(root);
-                  reactRoot.render(<WaterRiskReport data={projectData} analysisItems={analysisItems} controlDetails={controlDetails} executiveSummaryText={executiveSummaryText} preparedBy={preparedByEmail} createdBy={createdByEmail} />);
+                  reactRoot.render(<WaterRiskReport data={projectData} analysisItems={analysisItems} controlDetails={controlDetails} executiveSummaryText={executiveSummaryText} preparedBy={preparedByName} createdBy={createdByName} />);
                   
                   // Wait longer for images to load, then print
                   setTimeout(() => {
