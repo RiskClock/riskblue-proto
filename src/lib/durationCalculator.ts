@@ -208,6 +208,50 @@ export const calculateCriticalAssetDuration = (
   }
 };
 
+// Get missing milestone names for a class (for tooltip when cost is $0)
+export const getMissingMilestonesForClass = (
+  className: string,
+  timeline: TimelineData
+): string[] => {
+  const missing: string[] = [];
+  const normalized = className.toLowerCase();
+
+  // Check which milestones this class depends on based on the duration calculation logic
+  if (normalized.includes('mechanical room') || normalized.includes('mechanical riser')) {
+    if (!timeline.mep_end_date) missing.push('MEP');
+    if (!timeline.construction_end_date) missing.push('Construction');
+  } else if (normalized.includes('electrical room') || normalized.includes('electrical riser')) {
+    if (!timeline.mep_start_date) missing.push('MEP');
+    if (!timeline.enclosure_end_date) missing.push('Enclosure');
+  } else if (normalized.includes('elevator') || normalized.includes('sump')) {
+    if (!timeline.elevators_start_date) missing.push('Elevators');
+    if (!timeline.construction_end_date) missing.push('Construction');
+  } else if (normalized.includes('suite')) {
+    if (!timeline.interior_start_date) missing.push('Interior Finishes');
+    if (!timeline.construction_end_date) missing.push('Construction');
+  } else if (normalized.includes('kitchen') || normalized.includes('washroom')) {
+    if (!timeline.interior_start_date) missing.push('Interior Finishes');
+    if (!timeline.construction_end_date) missing.push('Construction');
+  } else if (normalized.includes('fire suppression')) {
+    if (!timeline.fire_start_date || !timeline.fire_end_date) missing.push('Fire Suppression');
+  } else if (normalized.includes('domestic cold water')) {
+    if (!timeline.mep_start_date) missing.push('MEP');
+    if (!timeline.construction_end_date) missing.push('Construction');
+  } else if (normalized.includes('domestic hot water') || normalized.includes('hydronics') || normalized.includes('main city water')) {
+    if (!timeline.mep_end_date) missing.push('MEP');
+    if (!timeline.construction_end_date) missing.push('Construction');
+  } else if (normalized.includes('temporary water')) {
+    if (!timeline.interior_start_date || !timeline.interior_end_date) missing.push('Interior Finishes');
+  } else if (normalized.includes('facade') || normalized.includes('envelope') || normalized.includes('exterior') || normalized.includes('roofing')) {
+    if (!timeline.enclosure_start_date || !timeline.enclosure_end_date) missing.push('Enclosure');
+  } else if (normalized.includes('mass timber') || normalized.includes('millwork')) {
+    if (!timeline.frame_start_date) missing.push('Structural Frame');
+    if (!timeline.enclosure_end_date) missing.push('Enclosure');
+  }
+
+  return missing;
+};
+
 export const calculateSystemOrAssetDates = (
   name: string,
   timeline: TimelineData

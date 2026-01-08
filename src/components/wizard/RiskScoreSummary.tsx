@@ -2,6 +2,7 @@ import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import { ProjectRiskScore, getRiskLabel, getRiskLabelStyles } from "@/hooks/useRiskScoring";
 import { Shield, AlertTriangle } from "lucide-react";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 
 interface RiskScoreSummaryProps {
   riskScore: ProjectRiskScore;
@@ -15,6 +16,7 @@ interface ClassRiskBadgesProps {
   cost?: number;
   locationCount?: number;
   showRiskLabel?: boolean;
+  missingMilestones?: string[];
 }
 
 // Format cost helper
@@ -29,10 +31,14 @@ export const ClassRiskBadges = ({
   deriskPoints, 
   cost,
   locationCount,
-  showRiskLabel = true 
+  showRiskLabel = true,
+  missingMilestones = []
 }: ClassRiskBadgesProps) => {
   // Round deriskPoints to 1 decimal for display
   const displayDerisk = deriskPoints !== undefined ? Math.round(deriskPoints * 10) / 10 : undefined;
+  
+  // Show tooltip for $0 cost when there are missing milestones
+  const showCostTooltip = cost === 0 && missingMilestones.length > 0;
   
   return (
     <div className="flex items-center gap-1.5">
@@ -51,10 +57,23 @@ export const ClassRiskBadges = ({
           -{displayDerisk} derisk
         </Badge>
       )}
-      {cost !== undefined && cost > 0 && (
-        <Badge variant="outline" className="text-xs cursor-default bg-blue-50 text-blue-600 border-blue-200 dark:bg-blue-950 dark:text-blue-300 dark:border-blue-800">
-          {formatCost(cost)}
-        </Badge>
+      {cost !== undefined && (
+        showCostTooltip ? (
+          <Tooltip delayDuration={0}>
+            <TooltipTrigger asChild>
+              <Badge variant="outline" className="text-xs cursor-help bg-amber-50 text-amber-600 border-amber-200 dark:bg-amber-950 dark:text-amber-300 dark:border-amber-800">
+                $0
+              </Badge>
+            </TooltipTrigger>
+            <TooltipContent>
+              <p>Missing dates for {missingMilestones.join(' and ')} milestone{missingMilestones.length > 1 ? 's' : ''}</p>
+            </TooltipContent>
+          </Tooltip>
+        ) : cost > 0 ? (
+          <Badge variant="outline" className="text-xs cursor-default bg-blue-50 text-blue-600 border-blue-200 dark:bg-blue-950 dark:text-blue-300 dark:border-blue-800">
+            {formatCost(cost)}
+          </Badge>
+        ) : null
       )}
     </div>
   );

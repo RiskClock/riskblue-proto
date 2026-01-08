@@ -23,9 +23,10 @@ export const formatRiskLevel = (level: string | undefined): string => {
 };
 
 export const generateReportFilename = (projectName: string, reportType: string = "WaterMitigationGuideline"): string => {
-  const cleanName = (projectName || "unnamed_project").replace(/\s+/g, '_');
-  const timestamp = format(new Date(), "yyyyMMdd_HHmmss");
-  return `RiskBlue_${reportType}_${cleanName}_${timestamp}`;
+  const cleanName = projectName || "Unnamed Project";
+  const exportDate = format(new Date(), "yyyy-MM-dd");
+  const exportTime = format(new Date(), "HH-mm-ss");
+  return `RiskBlue ${reportType} ${cleanName} ${exportDate} ${exportTime}`;
 };
 
 export const calculateTotalCost = (selectedItems: any[], costField: string = 'cost'): number => {
