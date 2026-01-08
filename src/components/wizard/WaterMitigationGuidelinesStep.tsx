@@ -41,8 +41,40 @@ export const WaterMitigationGuidelinesStep = ({ data, analysisItems = [], onBack
     onNext(data);
   };
 
-  const handleExportPDF = () => {
+  const handleExportPDF = async () => {
     const filename = generateReportFilename(data.name || "unnamed_project", "WaterMitigationGuidelines");
+    
+    // Show preparing toast
+    toast({
+      title: "Preparing report...",
+      description: "Preparing report for export...",
+    });
+    
+    // Fetch current user and display names
+    let preparedByName = "";
+    let createdByName = "";
+    
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      const userIdsToFetch = [user?.id, data.user_id].filter(Boolean) as string[];
+      const uniqueUserIds = [...new Set(userIdsToFetch)];
+      
+      if (uniqueUserIds.length > 0) {
+        const { data: profilesData } = await supabase
+          .from('profiles')
+          .select('user_id, display_name')
+          .in('user_id', uniqueUserIds);
+        
+        const profilesMap = new Map(
+          (profilesData || []).map(p => [p.user_id, p.display_name])
+        );
+        
+        preparedByName = profilesMap.get(user?.id || "") || user?.email || "";
+        createdByName = profilesMap.get(data.user_id) || preparedByName;
+      }
+    } catch (e) {
+      console.error("Failed to fetch profile names:", e);
+    }
     
     // Create a temporary container for the report
     const reportContainer = document.createElement('div');
@@ -116,6 +148,8 @@ export const WaterMitigationGuidelinesStep = ({ data, analysisItems = [], onBack
           data={data} 
           analysisItems={analysisItems} 
           controlDetails={controlDetails}
+          preparedBy={preparedByName}
+          createdBy={createdByName}
         />
       );
       
