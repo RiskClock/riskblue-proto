@@ -86,6 +86,9 @@ export const ProjectProvider: React.FC<ProjectProviderProps> = ({
   const debounceTimer = useRef<NodeJS.Timeout | null>(null);
   const hasAppliedInitialData = useRef(false);
   const isNewProject = !projectId || projectId === 'new';
+  
+  // Save queue to serialize database writes and prevent concurrent overwrites
+  const saveQueue = useRef<Promise<boolean>>(Promise.resolve(true));
 
   // Update initial data only on first load (prevents overwriting user edits)
   useEffect(() => {
@@ -178,7 +181,15 @@ export const ProjectProvider: React.FC<ProjectProviderProps> = ({
     }
   }, [projectId, toast]);
 
-  // Flush all pending updates immediately
+  // Enqueue a save operation to serialize database writes
+  const enqueueSave = useCallback((fields: Record<string, any>): Promise<boolean> => {
+    const savePromise = saveQueue.current.then(() => executeUpdate(fields));
+    // Chain the queue but don't block on errors
+    saveQueue.current = savePromise.catch(() => true);
+    return savePromise;
+  }, [executeUpdate]);
+
+  // Flush all pending updates immediately and wait for all saves to complete
   const flush = useCallback(async (): Promise<void> => {
     if (debounceTimer.current) {
       clearTimeout(debounceTimer.current);
@@ -190,9 +201,12 @@ export const ProjectProvider: React.FC<ProjectProviderProps> = ({
     setHasPendingChanges(false);
     
     if (Object.keys(updates).length > 0) {
-      await executeUpdate(updates);
+      await enqueueSave(updates);
     }
-  }, [executeUpdate]);
+    
+    // Wait for the entire queue to drain
+    await saveQueue.current;
+  }, [enqueueSave]);
 
   // Update a single field
   const updateField = useCallback((field: string, value: any) => {
@@ -211,7 +225,7 @@ export const ProjectProvider: React.FC<ProjectProviderProps> = ({
       pendingUpdates.current = {};
       setHasPendingChanges(false);
       
-      executeUpdate(updates);
+      enqueueSave(updates);
     } else {
       // Debounce text input fields
       pendingUpdates.current[field] = value;
@@ -225,10 +239,10 @@ export const ProjectProvider: React.FC<ProjectProviderProps> = ({
         const updates = { ...pendingUpdates.current };
         pendingUpdates.current = {};
         setHasPendingChanges(false);
-        executeUpdate(updates);
+        enqueueSave(updates);
       }, DEBOUNCE_DELAY);
     }
-  }, [executeUpdate]);
+  }, [enqueueSave]);
 
   // Update multiple fields at once
   const updateFields = useCallback((fields: Record<string, any>) => {
@@ -249,7 +263,7 @@ export const ProjectProvider: React.FC<ProjectProviderProps> = ({
       pendingUpdates.current = {};
       setHasPendingChanges(false);
       
-      executeUpdate(updates);
+      enqueueSave(updates);
     } else {
       // Debounce
       Object.assign(pendingUpdates.current, fields);
@@ -263,10 +277,10 @@ export const ProjectProvider: React.FC<ProjectProviderProps> = ({
         const updates = { ...pendingUpdates.current };
         pendingUpdates.current = {};
         setHasPendingChanges(false);
-        executeUpdate(updates);
+        enqueueSave(updates);
       }, DEBOUNCE_DELAY);
     }
-  }, [executeUpdate]);
+  }, [enqueueSave]);
 
   // Flush on unmount
   useEffect(() => {

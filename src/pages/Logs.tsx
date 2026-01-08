@@ -8,6 +8,7 @@ import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { LogOut, ShieldAlert, ChevronLeft, ChevronRight } from "lucide-react";
 import { useHeapIdentify } from "@/hooks/useHeapIdentify";
 import riskBlueLogo from "@/assets/riskblue-logo.jpg";
@@ -222,35 +223,43 @@ export default function Logs() {
         ) : (
           <>
             <div className="bg-card rounded-lg border overflow-hidden">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead className="w-[180px]">Timestamp</TableHead>
-                    <TableHead className="w-[200px]">User</TableHead>
-                    <TableHead className="w-[180px]">Action</TableHead>
-                    <TableHead>Project</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {logs.map((log) => (
-                    <TableRow key={log.id}>
-                      <TableCell className="text-sm text-muted-foreground">
-                        {format(new Date(log.created_at), "MMM d, yyyy h:mm a")}
-                      </TableCell>
-                      <TableCell>
-                        <div>
-                          <div className="text-sm font-medium">{profileMap.get(log.user_id) || "Unknown"}</div>
-                          <div className="text-xs text-muted-foreground">{userEmails.get(log.user_id) || ""}</div>
-                        </div>
-                      </TableCell>
-                      <TableCell className="text-sm">{formatAction(log.action)}</TableCell>
-                      <TableCell className="text-sm text-muted-foreground">
-                        {log.project_id ? projectMap.get(log.project_id) || log.project_id : "—"}
-                      </TableCell>
+              <TooltipProvider>
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead className="w-[180px]">Timestamp</TableHead>
+                      <TableHead className="w-[200px]">User</TableHead>
+                      <TableHead className="w-[180px]">Action</TableHead>
+                      <TableHead>Project</TableHead>
                     </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
+                  </TableHeader>
+                  <TableBody>
+                    {logs.map((log) => (
+                      <TableRow key={log.id}>
+                        <TableCell className="text-sm text-muted-foreground">
+                          {format(new Date(log.created_at), "MMM d, yyyy h:mm a")}
+                        </TableCell>
+                        <TableCell>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <span className="text-sm font-medium cursor-default">
+                                {profileMap.get(log.user_id) || "Unknown"}
+                              </span>
+                            </TooltipTrigger>
+                            <TooltipContent>
+                              <p>{userEmails.get(log.user_id) || "No email available"}</p>
+                            </TooltipContent>
+                          </Tooltip>
+                        </TableCell>
+                        <TableCell className="text-sm">{formatAction(log.action)}</TableCell>
+                        <TableCell className="text-sm text-muted-foreground">
+                          {log.project_id ? projectMap.get(log.project_id) || log.project_id : "—"}
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </TooltipProvider>
             </div>
 
             {/* Pagination */}
