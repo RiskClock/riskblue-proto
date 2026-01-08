@@ -1318,6 +1318,27 @@ const ProjectWizardContent = () => {
                   description: "Generating executive summary with AI...",
                 });
                 
+                // Get prepared by (current user) and created by (project owner)
+                const preparedByEmail = user?.email || "";
+                let createdByEmail = "";
+                
+                // Fetch creator email if different from current user
+                if (projectData.user_id && projectData.user_id !== user?.id) {
+                  try {
+                    const { data: emailData } = await supabase.functions.invoke('get-user-emails', {
+                      body: { userIds: [projectData.user_id] }
+                    });
+                    if (emailData?.emails?.[projectData.user_id]) {
+                      createdByEmail = emailData.emails[projectData.user_id];
+                    }
+                  } catch (e) {
+                    console.error("Failed to fetch creator email:", e);
+                  }
+                } else {
+                  // Current user is the creator
+                  createdByEmail = preparedByEmail;
+                }
+                
                 // Calculate risk counts for the AI summary
                 const riskCounts = {
                   assets: analysisItems.filter(i => i.category === "Asset" && (projectData.selectedAssetInstances || []).includes(i.id)).length,
@@ -1372,7 +1393,7 @@ const ProjectWizardContent = () => {
                 // Import and render
                 import('react-dom/client').then(({ createRoot }) => {
                   const reactRoot = createRoot(root);
-                  reactRoot.render(<WaterRiskReport data={projectData} analysisItems={analysisItems} controlDetails={controlDetails} executiveSummaryText={executiveSummaryText} />);
+                  reactRoot.render(<WaterRiskReport data={projectData} analysisItems={analysisItems} controlDetails={controlDetails} executiveSummaryText={executiveSummaryText} preparedBy={preparedByEmail} createdBy={createdByEmail} />);
                   
                   // Wait longer for images to load, then print
                   setTimeout(() => {
