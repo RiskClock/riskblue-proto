@@ -216,6 +216,11 @@ const Projects = () => {
               </button>
             )}
             {user?.email?.toLowerCase().endsWith("@riskclock.com") && (
+              <button onClick={() => navigate("/logs")} className="text-foreground hover:text-primary">
+                Logs
+              </button>
+            )}
+            {user?.email?.toLowerCase().endsWith("@riskclock.com") && (
               <button onClick={() => setShowProviderDialog(true)} className="text-foreground hover:text-primary">
                 Solution Provider Portal
               </button>

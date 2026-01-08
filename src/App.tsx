@@ -9,6 +9,7 @@ import Projects from "./pages/Projects";
 import ProjectWizard from "./pages/ProjectWizard";
 import SolutionProviderPortal from "./pages/SolutionProviderPortal";
 import Configuration from "./pages/Configuration";
+import Logs from "./pages/Logs";
 import AcceptInvite from "./pages/AcceptInvite";
 import OAuthCallback from "./pages/OAuthCallback";
 import GoogleDriveConnect from "./pages/GoogleDriveConnect";
@@ -42,6 +43,7 @@ const App = () => (
             <Route path="/project/:id" element={<ProtectedRoute><ProjectWizard /></ProtectedRoute>} />
             <Route path="/solution-provider-portal" element={<ProtectedRoute><SolutionProviderPortal /></ProtectedRoute>} />
             <Route path="/configuration" element={<ProtectedRoute><Configuration /></ProtectedRoute>} />
+            <Route path="/logs" element={<ProtectedRoute><Logs /></ProtectedRoute>} />
             <Route path="/accept-invite" element={<AcceptInvite />} />
             <Route path="/oauth/callback" element={<OAuthCallback />} />
             <Route path="/connect/google-drive" element={<GoogleDriveConnect />} />

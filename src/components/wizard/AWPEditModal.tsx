@@ -6,7 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Plus, Trash2, Pencil, ChevronDown, FolderOpen, Paperclip, X, Loader2 } from "lucide-react";
+import { Plus, Trash2, Pencil, ChevronDown, FolderOpen, Paperclip, X, Loader2, RotateCcw } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { countByCategory } from "@/lib/analysisItemMapper";
 import { supabase } from "@/integrations/supabase/client";
@@ -181,17 +181,20 @@ export const AWPEditModal = ({
     }
   }, [isOpen, analysisItems, initialNewItems]);
 
-  // Visible existing items (excluding deleted)
-  const visibleExistingItems = useMemo(() => 
+  // Visible existing items (now includes deleted items with special styling)
+  const visibleExistingItems = useMemo(() => existingItems, [existingItems]);
+  
+  // Non-deleted items for calculations
+  const activeExistingItems = useMemo(() => 
     existingItems.filter(item => !deletedItemIds.has(item.id)), [existingItems, deletedItemIds]);
 
   // Check if any item needs Size or Pipe column
   const hasAssets = useMemo(() => 
-    visibleExistingItems.some(item => isAssetName(awpOptions, item.name)) || newRows.some(row => isAssetName(awpOptions, row.name)), 
-    [visibleExistingItems, newRows, awpOptions]);
+    activeExistingItems.some(item => isAssetName(awpOptions, item.name)) || newRows.some(row => isAssetName(awpOptions, row.name)), 
+    [activeExistingItems, newRows, awpOptions]);
   const hasWaterSystems = useMemo(() => 
-    visibleExistingItems.some(item => isWaterSystemName(awpOptions, item.name)) || newRows.some(row => isWaterSystemName(awpOptions, row.name)), 
-    [visibleExistingItems, newRows, awpOptions]);
+    activeExistingItems.some(item => isWaterSystemName(awpOptions, item.name)) || newRows.some(row => isWaterSystemName(awpOptions, row.name)), 
+    [activeExistingItems, newRows, awpOptions]);
 
   // All class options for combobox - from DB
   const allClassOptions = useMemo(() => 
@@ -249,6 +252,15 @@ export const AWPEditModal = ({
   // Handle delete (mark for deletion without confirmation)
   const handleDelete = useCallback((itemId: string) => {
     setDeletedItemIds(prev => new Set([...prev, itemId]));
+  }, []);
+
+  // Handle undo delete
+  const handleUndoDelete = useCallback((itemId: string) => {
+    setDeletedItemIds(prev => {
+      const next = new Set(prev);
+      next.delete(itemId);
+      return next;
+    });
   }, []);
 
   // Handle area change for new row
@@ -632,7 +644,10 @@ export const AWPEditModal = ({
             {/* Left Pane - Existing Items Table - Issue 25: table-fixed for stable widths */}
             <div className="w-3/5 flex flex-col border rounded-lg overflow-hidden">
               <div className="p-2 border-b bg-muted/50 text-sm font-medium">
-                Existing Items ({visibleExistingItems.length})
+                Existing Items ({activeExistingItems.length})
+                {deletedItemIds.size > 0 && (
+                  <span className="text-destructive ml-2">({deletedItemIds.size} pending removal)</span>
+                )}
               </div>
               <div className="flex-1 overflow-auto">
                 <Table className="table-fixed">
@@ -650,52 +665,70 @@ export const AWPEditModal = ({
                   </TableHeader>
                   <TableBody>
                     {/* Issue 25: Fixed column widths with min-w for stability */}
-                    {visibleExistingItems.map((item) => (
-                      <TableRow key={item.id} className="h-8">
-                        <TableCell className="py-1 px-2 w-[130px] min-w-[130px]">
-                          <span className="text-xs truncate block" title={item.areaName}>
-                            {item.areaName || "-"}
-                          </span>
-                        </TableCell>
-                        <TableCell className="py-1 px-2 w-[200px] min-w-[200px]">
-                          <span className="text-xs truncate block" title={item.name}>
-                            {item.name}
-                          </span>
-                        </TableCell>
-                        <TableCell className="py-1 px-2 font-mono text-xs w-[90px] min-w-[90px]">{item.id}</TableCell>
-                        <TableCell className="py-1 px-2 text-xs w-[60px] min-w-[60px]">{item.floor || "-"}</TableCell>
-                        {hasAssets && (
-                          <TableCell className="py-1 px-2 text-xs w-[80px] min-w-[80px]">
-                            {isAssetName(awpOptions, item.name) ? getItemSizeDisplay(item) : "-"}
+                    {visibleExistingItems.map((item) => {
+                      const isDeleted = deletedItemIds.has(item.id);
+                      return (
+                        <TableRow 
+                          key={item.id} 
+                          className={`h-8 ${isDeleted ? 'bg-destructive/5 opacity-60' : ''}`}
+                        >
+                          <TableCell className="py-1 px-2 w-[130px] min-w-[130px]">
+                            <span className={`text-xs truncate block ${isDeleted ? 'line-through text-muted-foreground' : ''}`} title={item.areaName}>
+                              {item.areaName || "-"}
+                            </span>
                           </TableCell>
-                        )}
-                        {hasWaterSystems && (
-                          <TableCell className="py-1 px-2 text-xs w-[70px] min-w-[70px]">
-                            {isWaterSystemName(awpOptions, item.name) ? getItemPipeDisplay(item) : "-"}
+                          <TableCell className="py-1 px-2 w-[200px] min-w-[200px]">
+                            <span className={`text-xs truncate block ${isDeleted ? 'line-through text-muted-foreground' : ''}`} title={item.name}>
+                              {item.name}
+                            </span>
                           </TableCell>
-                        )}
-                        <TableCell className="py-1 px-2 w-[80px]">
-                          <div className="flex gap-0.5">
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              className="h-6 w-6"
-                              onClick={() => setEditingItem(item)}
-                            >
-                              <Pencil className="h-3 w-3" />
-                            </Button>
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              className="h-6 w-6 text-destructive hover:text-destructive"
-                              onClick={() => handleDelete(item.id)}
-                            >
-                              <Trash2 className="h-3 w-3" />
-                            </Button>
-                          </div>
-                        </TableCell>
-                      </TableRow>
-                    ))}
+                          <TableCell className={`py-1 px-2 font-mono text-xs w-[90px] min-w-[90px] ${isDeleted ? 'line-through text-muted-foreground' : ''}`}>{item.id}</TableCell>
+                          <TableCell className={`py-1 px-2 text-xs w-[60px] min-w-[60px] ${isDeleted ? 'line-through text-muted-foreground' : ''}`}>{item.floor || "-"}</TableCell>
+                          {hasAssets && (
+                            <TableCell className={`py-1 px-2 text-xs w-[80px] min-w-[80px] ${isDeleted ? 'line-through text-muted-foreground' : ''}`}>
+                              {isAssetName(awpOptions, item.name) ? getItemSizeDisplay(item) : "-"}
+                            </TableCell>
+                          )}
+                          {hasWaterSystems && (
+                            <TableCell className={`py-1 px-2 text-xs w-[70px] min-w-[70px] ${isDeleted ? 'line-through text-muted-foreground' : ''}`}>
+                              {isWaterSystemName(awpOptions, item.name) ? getItemPipeDisplay(item) : "-"}
+                            </TableCell>
+                          )}
+                          <TableCell className="py-1 px-2 w-[80px]">
+                            {isDeleted ? (
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-6 w-6 text-amber-600 hover:text-amber-700"
+                                onClick={() => handleUndoDelete(item.id)}
+                                title="Undo delete"
+                              >
+                                <RotateCcw className="h-3 w-3" />
+                              </Button>
+                            ) : (
+                              <div className="flex gap-0.5">
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-6 w-6"
+                                  onClick={() => setEditingItem(item)}
+                                >
+                                  <Pencil className="h-3 w-3" />
+                                </Button>
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-6 w-6 text-destructive hover:text-destructive"
+                                  onClick={() => handleDelete(item.id)}
+                                >
+                                  <Trash2 className="h-3 w-3" />
+                                </Button>
+                              </div>
+                            )}
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })}
                     {visibleExistingItems.length === 0 && (
                       <TableRow>
                         <TableCell colSpan={getColSpan()} className="text-center py-8 text-muted-foreground text-xs">
@@ -948,11 +981,11 @@ export const AWPEditModal = ({
 
       {/* Issue 15: Discard Confirmation Dialog - Scrollable */}
       <AlertDialog open={showDiscardConfirm} onOpenChange={setShowDiscardConfirm}>
-        <AlertDialogContent className="max-h-[85vh] flex flex-col">
-          <AlertDialogHeader>
+        <AlertDialogContent className="max-h-[85vh] flex flex-col overflow-hidden">
+          <AlertDialogHeader className="flex-shrink-0">
             <AlertDialogTitle>Discard Changes?</AlertDialogTitle>
           </AlertDialogHeader>
-          <ScrollArea className="flex-1 max-h-[60vh] pr-4">
+          <ScrollArea className="flex-1 min-h-0 max-h-[50vh] pr-4">
             <AlertDialogDescription asChild>
               <div className="space-y-3 text-sm">
                 <p>You have unsaved changes. Are you sure you want to discard them?</p>
@@ -1001,11 +1034,11 @@ export const AWPEditModal = ({
 
       {/* Save Confirmation Dialog - Scrollable */}
       <AlertDialog open={showSaveConfirmation} onOpenChange={setShowSaveConfirmation}>
-        <AlertDialogContent className="max-h-[85vh] flex flex-col">
-          <AlertDialogHeader>
+        <AlertDialogContent className="max-h-[85vh] flex flex-col overflow-hidden">
+          <AlertDialogHeader className="flex-shrink-0">
             <AlertDialogTitle>Confirm Changes</AlertDialogTitle>
           </AlertDialogHeader>
-          <ScrollArea className="flex-1 max-h-[60vh] pr-4">
+          <ScrollArea className="flex-1 min-h-0 max-h-[50vh] pr-4">
             <AlertDialogDescription asChild>
               <div className="space-y-3 text-sm">
                 {changesSummary?.edited.length ? (
