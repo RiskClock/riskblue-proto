@@ -249,7 +249,12 @@ export default function Configuration() {
             <button onClick={() => navigate("/projects")} className="text-foreground hover:text-primary">
               Projects
             </button>
-            <button onClick={() => {}} className="text-foreground hover:text-primary">Configuration</button>
+            <button className="text-foreground hover:text-primary">Configuration</button>
+            {user?.email?.toLowerCase().endsWith("@riskclock.com") && (
+              <button onClick={() => navigate("/logs")} className="text-foreground hover:text-primary">
+                Logs
+              </button>
+            )}
             {user?.email?.toLowerCase().endsWith("@riskclock.com") && (
               <button onClick={() => setShowProviderDialog(true)} className="text-foreground hover:text-primary">
                 Solution Provider Portal

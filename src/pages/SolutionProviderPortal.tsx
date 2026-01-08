@@ -203,6 +203,11 @@ export default function SolutionProviderPortal() {
                 Configuration
               </button>
             )}
+            {user?.email?.toLowerCase().endsWith("@riskclock.com") && (
+              <button onClick={() => navigate("/logs")} className="text-foreground hover:text-primary">
+                Logs
+              </button>
+            )}
             <button onClick={handleExitPortal} className="text-foreground hover:text-primary">
               Solution Provider Portal
             </button>

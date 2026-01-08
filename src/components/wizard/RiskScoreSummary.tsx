@@ -62,9 +62,15 @@ export const ClassRiskBadges = ({
           <TooltipProvider delayDuration={0}>
             <Tooltip>
               <TooltipTrigger asChild>
-                <Badge variant="outline" className="text-xs cursor-help bg-amber-50 text-amber-600 border-amber-200 dark:bg-amber-950 dark:text-amber-300 dark:border-amber-800">
-                  $0
-                </Badge>
+                <span 
+                  onClick={(e) => e.stopPropagation()}
+                  onPointerDown={(e) => e.stopPropagation()}
+                  className="inline-flex"
+                >
+                  <Badge variant="outline" className="text-xs cursor-help bg-amber-50 text-amber-600 border-amber-200 dark:bg-amber-950 dark:text-amber-300 dark:border-amber-800">
+                    $0
+                  </Badge>
+                </span>
               </TooltipTrigger>
               <TooltipContent>
                 <p>Missing dates for {missingMilestones.join(' and ')} milestone{missingMilestones.length > 1 ? 's' : ''}</p>
