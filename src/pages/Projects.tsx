@@ -5,6 +5,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { useToast } from "@/hooks/use-toast";
+import { useActivityLogger } from "@/hooks/useActivityLogger";
 import { getUserFriendlyError } from "@/lib/errorHandling";
 import riskBlueLogo from "@/assets/riskblue-logo.jpg";
 import { format } from "date-fns";
@@ -44,6 +45,7 @@ const formatLocation = (city?: string, country?: string) => {
 
 const Projects = () => {
   const { user, signOut } = useAuth();
+  const { logActivity } = useActivityLogger();
   const [projects, setProjects] = useState<ProjectWithCreator[]>([]);
   const [loading, setLoading] = useState(true);
   const [userProjectRoles, setUserProjectRoles] = useState<Map<string, string>>(new Map());
@@ -147,6 +149,7 @@ const Projects = () => {
   };
 
   const handleNewProject = () => {
+    logActivity("add_new_clicked");
     navigate("/project/new");
   };
 
@@ -182,6 +185,9 @@ const Projects = () => {
 
       if (error) throw error;
 
+      // Log activity after successful deletion
+      logActivity("project_deleted", projectId);
+
       toast({
         title: "Project deleted",
         description: "The project has been successfully deleted.",
@@ -209,9 +215,11 @@ const Projects = () => {
                 Configuration
               </button>
             )}
-            <button onClick={() => setShowProviderDialog(true)} className="text-foreground hover:text-primary">
-              Solution Provider Portal
-            </button>
+            {user?.email?.toLowerCase().endsWith("@riskclock.com") && (
+              <button onClick={() => setShowProviderDialog(true)} className="text-foreground hover:text-primary">
+                Solution Provider Portal
+              </button>
+            )}
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Avatar className="cursor-pointer">

@@ -64,12 +64,14 @@ const WATER_SYSTEM_NAME_MAP: Record<string, string> = {
   "Fire Protection": "Fire Suppression System",
   "FSP": "Fire Suppression System",
   
-  // Sump Pits, Storm Drains and Drainages
-  "Sump Pits, Storm Drains and Drainages": "Sump Pits, Storm Drains and Drainages",
-  "Sump Pit, Storm Drain, and Drainage": "Sump Pits, Storm Drains and Drainages",
-  "Sump Pit": "Sump Pits, Storm Drains and Drainages",
-  "Storm Drain": "Sump Pits, Storm Drains and Drainages",
-  "Stormwater": "Sump Pits, Storm Drains and Drainages",
+  // Sump Pit, Storm Drain & Drainage (singular form)
+  "Sump Pit, Storm Drain & Drainage": "Sump Pit, Storm Drain & Drainage",
+  "Sump Pits, Storm Drains and Drainages": "Sump Pit, Storm Drain & Drainage",
+  "Sump Pits, Storm Drains & Drainages": "Sump Pit, Storm Drain & Drainage",
+  "Sump Pit, Storm Drain, and Drainage": "Sump Pit, Storm Drain & Drainage",
+  "Sump Pit": "Sump Pit, Storm Drain & Drainage",
+  "Storm Drain": "Sump Pit, Storm Drain & Drainage",
+  "Stormwater": "Sump Pit, Storm Drain & Drainage",
   
   // Domestic Hot Water
   "Domestic Hot Water": "Domestic Hot Water",
@@ -158,7 +160,7 @@ export function mapToWaterSystemName(analysisName: string): string | null {
     return "Fire Suppression System";
   }
   if (lowerName.includes("sump") || lowerName.includes("storm drain") || lowerName.includes("drainage")) {
-    return "Sump Pits, Storm Drains and Drainages";
+    return "Sump Pit, Storm Drain & Drainage";
   }
   
   return null;

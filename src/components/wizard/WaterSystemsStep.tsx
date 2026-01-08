@@ -200,7 +200,7 @@ export const WaterSystemsStep = ({
     if (lower.includes('main') && lower.includes('city') && lower.includes('water')) return 'main city water supply';
     if (lower.includes('hydronic')) return 'hydronics';
     if (lower.includes('fire') && (lower.includes('suppression') || lower.includes('protection') || lower.includes('sprinkler'))) return 'fire suppression system';
-    if (lower.includes('sump') || lower.includes('storm drain') || lower.includes('drainage')) return 'sump pits storm drains and drainages';
+    if (lower.includes('sump') || lower.includes('storm drain') || lower.includes('drainage')) return 'sump pit storm drain & drainage';
     return lower.replace(/[,&]/g, '').replace(/\s+/g, ' ').trim();
   };
 

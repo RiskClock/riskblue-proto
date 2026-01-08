@@ -467,7 +467,7 @@ const MOCK_ASSETS_WATER_SYSTEMS_PROCESSES: AnalysisItem[] = [
   },
   {
     "id": "SPSDD001",
-    "name": "Sump Pit, Storm Drain, and Drainage",
+    "name": "Sump Pit, Storm Drain & Drainage",
     "category": "Water System",
     "areaName": "ELEVATOR / SANITARY SUMP PIT",
     "floor": "Lower Level",
@@ -482,7 +482,7 @@ const MOCK_ASSETS_WATER_SYSTEMS_PROCESSES: AnalysisItem[] = [
   },
   {
     "id": "SPSDD002",
-    "name": "Sump Pit, Storm Drain, and Drainage",
+    "name": "Sump Pit, Storm Drain & Drainage",
     "category": "Water System",
     "areaName": "BACKWATER VALVE PIT",
     "floor": "Lower Level",

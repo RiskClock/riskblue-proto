@@ -129,6 +129,7 @@ const getPluralName = (name: string): string => {
   if (name === "Mechanical Riser") return "Mechanical Risers";
   if (name === "Suite") return "Suites";
   if (name === "Kitchen & Washroom") return "Kitchens & Washrooms";
+  if (name === "Sump Pit, Storm Drain & Drainage") return "Sump Pits, Storm Drains & Drainages";
   // Names already plural or compound (no change needed)
   if (name.includes(" and ") || name.includes(", ")) return name;
   // Default: add 's'
