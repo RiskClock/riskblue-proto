@@ -23,6 +23,22 @@ const IMMEDIATE_SAVE_FIELDS = [
   'selectedProcessControls',
   'schedule_file_name',
   'schedule_file_uploaded_at',
+  // Milestone dates from schedule analysis - must save immediately
+  'name',
+  'construction_start_date',
+  'construction_end_date',
+  'frame_start_date',
+  'frame_end_date',
+  'enclosure_start_date',
+  'enclosure_end_date',
+  'mep_start_date',
+  'mep_end_date',
+  'elevators_start_date',
+  'elevators_end_date',
+  'fire_start_date',
+  'fire_end_date',
+  'interior_start_date',
+  'interior_end_date',
 ];
 
 // Debounce delay for text fields (ms)
