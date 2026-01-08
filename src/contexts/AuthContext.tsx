@@ -26,6 +26,11 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         setSession(session);
         setUser(session?.user ?? null);
         setLoading(false);
+        
+        // Identify user in Heap Analytics
+        if (session?.user?.email && typeof window !== 'undefined' && (window as any).heap) {
+          (window as any).heap.identify(session.user.email);
+        }
       }
     );
 
