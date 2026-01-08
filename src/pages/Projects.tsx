@@ -331,15 +331,17 @@ const Projects = () => {
                         : "—"}
                     </td>
                     <td className="px-6 py-4">
-                      {userProjectRoles.get(project.id) === "admin" && (
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          onClick={(e) => handleDeleteProject(project.id, e)}
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
-                      )}
+                      <div className="h-9 flex items-center justify-center">
+                        {userProjectRoles.get(project.id) === "admin" && (
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={(e) => handleDeleteProject(project.id, e)}
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        )}
+                      </div>
                     </td>
                   </tr>
                 ))}

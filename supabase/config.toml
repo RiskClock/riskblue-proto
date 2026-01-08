@@ -26,3 +26,6 @@ verify_jwt = false
 
 [functions.add-collaborators]
 verify_jwt = true
+
+[functions.generate-executive-summary]
+verify_jwt = true
