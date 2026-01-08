@@ -1069,6 +1069,11 @@ const ProjectWizardContent = () => {
             <button onClick={() => navigate("/projects")} className="text-foreground hover:text-primary">
               Projects
             </button>
+            {user?.email?.endsWith("@riskclock.com") && (
+              <button onClick={() => navigate("/configuration")} className="text-foreground hover:text-primary">
+                Configuration
+              </button>
+            )}
             <button onClick={() => setShowProviderDialog(true)} className="text-foreground hover:text-primary">
               Solution Provider Portal
             </button>
@@ -1463,14 +1468,28 @@ const ProjectWizardContent = () => {
               console.error("Error saving analysis items:", error);
             }
           }
-          // Clear existing selections so they reinitialize with updated items
+          // Auto-select all new items and their controls so they appear in PDF export
+          const assetInstances = items.filter(i => i.category === "Asset").map(i => i.id);
+          const systemInstances = items.filter(i => i.category === "Water System").map(i => i.id);
+          const processInstances = items.filter(i => i.category === "Process").map(i => i.id);
+          
+          const assetControls = items
+            .filter(i => i.category === "Asset")
+            .flatMap(i => (i.controls || []).map(c => `${i.id}::${c}`));
+          const systemControls = items
+            .filter(i => i.category === "Water System")
+            .flatMap(i => (i.controls || []).map(c => `${i.id}::${c}`));
+          const processControls = items
+            .filter(i => i.category === "Process")
+            .flatMap(i => (i.controls || []).map(c => `${i.id}::${c}`));
+          
           updateFields({
-            selectedAssetInstances: [],
-            selectedAssetControls: [],
-            selectedWaterSystemInstances: [],
-            selectedWaterSystemControls: [],
-            selectedProcessInstances: [],
-            selectedProcessControls: [],
+            selectedAssetInstances: assetInstances,
+            selectedAssetControls: assetControls,
+            selectedWaterSystemInstances: systemInstances,
+            selectedWaterSystemControls: systemControls,
+            selectedProcessInstances: processInstances,
+            selectedProcessControls: processControls,
           });
         }}
         projectId={id || "new"}

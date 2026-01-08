@@ -9,6 +9,7 @@ import type { DriveFileInfo } from "./ProjectFilesUpload";
 import type { RiskTolerance } from "./RiskToleranceSelector";
 import { useProject } from "@/contexts/ProjectContext";
 import { calculateTieredControlCost, parseDurationMonths, PricingTier } from "@/lib/costCalculator";
+import { getMissingMilestonesForClass, TimelineData } from "@/lib/durationCalculator";
 import { useRiskScoring } from "@/hooks/useRiskScoring";
 import { RiskScoreSummary } from "./RiskScoreSummary";
 
@@ -451,6 +452,9 @@ export const ProcessesStep = ({
           const probability = processData?.probability || 3;
           const impact = processData?.impact || 3;
           
+          // Get missing milestones for Processes (uses construction start/end)
+          const missingMilestones = getMissingMilestonesForClass(group.name, data as TimelineData);
+          
           return (
             <ExpandableListItem
               key={group.name}
@@ -477,6 +481,7 @@ export const ProcessesStep = ({
               classRiskPoints={classScore?.riskPoints}
               classDeriskPoints={classScore?.selectedDeriskPoints}
               classCostToProtect={classCost}
+              missingMilestones={missingMilestones}
             />
           );
         })}

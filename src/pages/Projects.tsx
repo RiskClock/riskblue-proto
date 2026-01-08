@@ -8,7 +8,7 @@ import { useToast } from "@/hooks/use-toast";
 import { getUserFriendlyError } from "@/lib/errorHandling";
 import riskBlueLogo from "@/assets/riskblue-logo.jpg";
 import { format } from "date-fns";
-import { Trash2, LogOut } from "lucide-react";
+import { Trash2, LogOut, X } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { ProviderSelectionDialog } from "@/components/ProviderSelectionDialog";
@@ -51,6 +51,14 @@ const Projects = () => {
   const navigate = useNavigate();
   const { toast } = useToast();
   const [showProviderDialog, setShowProviderDialog] = useState(false);
+  const [showWelcome, setShowWelcome] = useState(() => 
+    sessionStorage.getItem('riskblue_welcome_dismissed') !== 'true'
+  );
+
+  const handleDismissWelcome = () => {
+    setShowWelcome(false);
+    sessionStorage.setItem('riskblue_welcome_dismissed', 'true');
+  };
 
   useEffect(() => {
     if (user) {
@@ -223,6 +231,24 @@ const Projects = () => {
 
       <main className="container mx-auto px-6 py-8 flex-1 overflow-auto">
         <div className="mb-8">
+          {showWelcome && (
+            <div className="bg-muted/50 p-6 rounded-lg mb-6 relative">
+              <button 
+                onClick={handleDismissWelcome}
+                className="absolute top-3 right-3 text-muted-foreground hover:text-foreground"
+                aria-label="Dismiss welcome message"
+              >
+                <X className="h-4 w-4" />
+              </button>
+              <p className="text-sm text-foreground mb-3 pr-6">
+                <strong>Welcome to RiskBlue!</strong>
+              </p>
+              <p className="text-sm text-muted-foreground">
+                RiskBlue helps builders identify project-specific water risks, determine the right mitigation strategies, and translate them into structured plans and coordinated execution. By unifying risk discovery, planning, and field operations, RiskBlue ensures consistent control, accountability, and rapid response across the entire water-mitigation lifecycle.
+              </p>
+            </div>
+          )}
+
           <div className="flex items-center justify-between mb-4">
             <div>
               <h1 className="text-3xl font-bold text-foreground">Projects</h1>
@@ -230,15 +256,6 @@ const Projects = () => {
             <div className="flex gap-3">
               <Button onClick={handleNewProject}>Add New Project</Button>
             </div>
-          </div>
-
-          <div className="bg-muted/50 p-6 rounded-lg mb-6">
-            <p className="text-sm text-foreground mb-3">
-              <strong>Welcome to RiskBlue!</strong>
-            </p>
-            <p className="text-sm text-muted-foreground mb-3">
-              RiskBlue helps builders identify project-specific water risks, determine the right mitigation strategies, and translate them into structured plans and coordinated execution. By unifying risk discovery, planning, and field operations, RiskBlue ensures consistent control, accountability, and rapid response across the entire water-mitigation lifecycle.
-            </p>
           </div>
         </div>
 

@@ -65,6 +65,8 @@ interface ExpandableListItemProps {
   classCostToProtect?: number;
   // Pricing tiers for tiered cost calculation
   pricingTiers?: PricingTier[];
+  // Missing milestones for $0 cost tooltip
+  missingMilestones?: string[];
 }
 
 // Helper to generate control ID
@@ -161,6 +163,7 @@ export const ExpandableListItem = ({
   classDeriskPoints,
   classCostToProtect,
   pricingTiers = [],
+  missingMilestones = [],
 }: ExpandableListItemProps) => {
   const [isExpanded, setIsExpanded] = useState(false);
   const [expandedInstanceIds, setExpandedInstanceIds] = useState<Set<string>>(new Set());
@@ -434,6 +437,7 @@ export const ExpandableListItem = ({
             cost={classCostToProtect}
             locationCount={instanceCount}
             showRiskLabel={false}
+            missingMilestones={missingMilestones}
           />
           <ChevronDown 
             className={cn(

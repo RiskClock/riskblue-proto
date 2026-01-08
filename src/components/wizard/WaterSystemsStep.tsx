@@ -6,7 +6,7 @@ import { Label } from "@/components/ui/label";
 import { Info, Droplets } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { calculateWaterSystemDuration, calculateSystemOrAssetDates } from "@/lib/durationCalculator";
+import { calculateWaterSystemDuration, calculateSystemOrAssetDates, getMissingMilestonesForClass } from "@/lib/durationCalculator";
 import { calculateTieredControlCost, parseDurationMonths, PricingTier } from "@/lib/costCalculator";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
@@ -592,6 +592,7 @@ export const WaterSystemsStep = ({
           });
           
           const durationDetails = calculateSystemOrAssetDates(system.name, data);
+          const missingMilestones = getMissingMilestonesForClass(system.name, data);
           
           return (
             <ExpandableListItem
@@ -624,6 +625,7 @@ export const WaterSystemsStep = ({
               classDeriskPoints={classScore?.selectedDeriskPoints}
               classCostToProtect={classCost}
               pricingTiers={pricingTiers}
+              missingMilestones={missingMilestones}
             />
           );
         })}
