@@ -39,6 +39,7 @@ import { WaterRiskReport } from "@/components/reports/WaterRiskReport";
 import { generateReportFilename } from "@/lib/reportGenerator";
 import { useProjectRole } from "@/hooks/useProjectRole";
 import { useActivityLogger } from "@/hooks/useActivityLogger";
+import { useHeapIdentify } from "@/hooks/useHeapIdentify";
 import { 
   AnalysisItem, 
   extractSelectedAssets, 
@@ -80,6 +81,7 @@ const ProjectWizardContent = () => {
   // Check user's role for this project
   const { isAdmin, loading: roleLoading } = useProjectRole(id);
   const { logActivity } = useActivityLogger();
+  useHeapIdentify(); // Identify user in Heap Analytics
   const [activeTab, setActiveTab] = useState("guideline");
   const [loading, setLoading] = useState(false);
   const [isProcessingWebhook, setIsProcessingWebhook] = useState(false);

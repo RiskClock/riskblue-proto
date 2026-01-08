@@ -9,6 +9,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { LogOut, ShieldAlert, ChevronLeft, ChevronRight } from "lucide-react";
+import { useHeapIdentify } from "@/hooks/useHeapIdentify";
 import riskBlueLogo from "@/assets/riskblue-logo.jpg";
 import { ProviderSelectionDialog } from "@/components/ProviderSelectionDialog";
 import { format } from "date-fns";
@@ -32,6 +33,7 @@ const PAGE_SIZE = 50;
 export default function Logs() {
   const { user, signOut } = useAuth();
   const navigate = useNavigate();
+  useHeapIdentify(); // Identify user in Heap Analytics
   const [showProviderDialog, setShowProviderDialog] = useState(false);
   const [selectedUserId, setSelectedUserId] = useState<string>("all");
   const [page, setPage] = useState(0);

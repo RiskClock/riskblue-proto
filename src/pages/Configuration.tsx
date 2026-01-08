@@ -14,6 +14,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { LogOut, Plus, X, Save, RotateCcw, ShieldAlert } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { useHeapIdentify } from "@/hooks/useHeapIdentify";
 import { useMitigationControls, getControlNameById } from "@/hooks/useMitigationControls";
 import riskBlueLogo from "@/assets/riskblue-logo.jpg";
 import { ProviderSelectionDialog } from "@/components/ProviderSelectionDialog";
@@ -35,6 +36,7 @@ export default function Configuration() {
   const navigate = useNavigate();
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  useHeapIdentify(); // Identify user in Heap Analytics
   const [showProviderDialog, setShowProviderDialog] = useState(false);
   const [showSaveDialog, setShowSaveDialog] = useState(false);
   const [showRevertDialog, setShowRevertDialog] = useState(false);

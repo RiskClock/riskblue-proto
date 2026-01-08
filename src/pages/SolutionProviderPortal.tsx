@@ -13,6 +13,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Label } from "@/components/ui/label";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { useAuth } from "@/contexts/AuthContext";
+import { useHeapIdentify } from "@/hooks/useHeapIdentify";
 
 interface Collaborator {
   id: string;
@@ -32,6 +33,7 @@ interface Project {
 export default function SolutionProviderPortal() {
   const navigate = useNavigate();
   const { user, signOut } = useAuth();
+  useHeapIdentify(); // Identify user in Heap Analytics
   const [searchParams, setSearchParams] = useSearchParams();
   const [collaborators, setCollaborators] = useState<Collaborator[]>([]);
   const [selectedCollaborator, setSelectedCollaborator] = useState<Collaborator | null>(null);
