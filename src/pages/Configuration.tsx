@@ -250,9 +250,11 @@ export default function Configuration() {
               Projects
             </button>
             <button onClick={() => {}} className="text-foreground hover:text-primary">Configuration</button>
-            <button onClick={() => setShowProviderDialog(true)} className="text-foreground hover:text-primary">
-              Solution Provider Portal
-            </button>
+            {user?.email?.toLowerCase().endsWith("@riskclock.com") && (
+              <button onClick={() => setShowProviderDialog(true)} className="text-foreground hover:text-primary">
+                Solution Provider Portal
+              </button>
+            )}
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Avatar className="cursor-pointer">

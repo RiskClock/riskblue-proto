@@ -38,6 +38,7 @@ import { Label } from "@/components/ui/label";
 import { WaterRiskReport } from "@/components/reports/WaterRiskReport";
 import { generateReportFilename } from "@/lib/reportGenerator";
 import { useProjectRole } from "@/hooks/useProjectRole";
+import { useActivityLogger } from "@/hooks/useActivityLogger";
 import { 
   AnalysisItem, 
   extractSelectedAssets, 
@@ -78,7 +79,7 @@ const ProjectWizardContent = () => {
   
   // Check user's role for this project
   const { isAdmin, loading: roleLoading } = useProjectRole(id);
-  
+  const { logActivity } = useActivityLogger();
   const [activeTab, setActiveTab] = useState("guideline");
   const [loading, setLoading] = useState(false);
   const [isProcessingWebhook, setIsProcessingWebhook] = useState(false);
@@ -145,7 +146,7 @@ const ProjectWizardContent = () => {
     if (lower.includes('main') && lower.includes('city') && lower.includes('water')) return 'main city water supply';
     if (lower.includes('hydronic')) return 'hydronics';
     if (lower.includes('fire') && (lower.includes('suppression') || lower.includes('protection') || lower.includes('sprinkler'))) return 'fire suppression system';
-    if (lower.includes('sump') || lower.includes('storm drain') || lower.includes('drainage')) return 'sump pits storm drains and drainages';
+    if (lower.includes('sump') || lower.includes('storm drain') || lower.includes('drainage')) return 'sump pit storm drain & drainage';
     return lower.replace(/[,&]/g, '').replace(/\s+/g, ' ').trim();
   };
 
@@ -509,9 +510,17 @@ const ProjectWizardContent = () => {
 
   // Fetch analysis items when project loads - includes auto-repair for miscategorized items
   const hasRepairedRef = useRef(false);
+  const hasLoggedOpenRef = useRef(false);
   useEffect(() => {
     const fetchAnalysisItems = async () => {
       if (!id || id === "new") return;
+      
+      // Log project opened (only once per session)
+      if (!hasLoggedOpenRef.current) {
+        hasLoggedOpenRef.current = true;
+        logActivity("project_opened", id);
+      }
+      
       try {
         const { data, error } = await supabase
           .from('project_analysis_items')
@@ -725,6 +734,9 @@ const ProjectWizardContent = () => {
           .single();
         
         if (error) throw error;
+        
+        // Log project created activity
+        logActivity("project_created", newProject.id);
         
         // Navigate with replace to avoid back button issues
         navigate(`/project/${newProject.id}`, { replace: true });
@@ -1074,9 +1086,11 @@ const ProjectWizardContent = () => {
                 Configuration
               </button>
             )}
-            <button onClick={() => setShowProviderDialog(true)} className="text-foreground hover:text-primary">
-              Solution Provider Portal
-            </button>
+            {user?.email?.toLowerCase().endsWith("@riskclock.com") && (
+              <button onClick={() => setShowProviderDialog(true)} className="text-foreground hover:text-primary">
+                Solution Provider Portal
+              </button>
+            )}
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Avatar className="cursor-pointer">
@@ -1105,7 +1119,10 @@ const ProjectWizardContent = () => {
                 <Button
                   variant="outline"
                   size="sm"
-                  onClick={() => setShowCollaboratorsModal(true)}
+                  onClick={() => {
+                    logActivity("manage_collaborators_clicked", id);
+                    setShowCollaboratorsModal(true);
+                  }}
                   className="flex items-center gap-2"
                 >
                   <Users className="h-4 w-4" />
@@ -1312,6 +1329,9 @@ const ProjectWizardContent = () => {
             {/* Bottom Controls */}
             <div className="flex justify-between items-center pt-6">
               <Button variant="outline" onClick={async () => {
+                // Log export activity
+                logActivity("export_clicked", id);
+                
                 // Show preparing toast
                 toast({
                   title: "Preparing report...",

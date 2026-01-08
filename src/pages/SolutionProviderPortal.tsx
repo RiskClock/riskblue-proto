@@ -40,6 +40,13 @@ export default function SolutionProviderPortal() {
   const [loading, setLoading] = useState(false);
   const [showProviderDialog, setShowProviderDialog] = useState(false);
 
+  // Redirect non-internal users to projects page
+  useEffect(() => {
+    if (user && !user.email?.toLowerCase().endsWith("@riskclock.com")) {
+      navigate("/projects");
+    }
+  }, [user, navigate]);
+
   // Auto-open dialog on mount if no params
   useEffect(() => {
     const collaboratorId = searchParams.get("collaborator");
