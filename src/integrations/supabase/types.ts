@@ -987,8 +987,11 @@ export type Database = {
         Row: {
           access_token: string
           created_at: string | null
+          encrypted_access_token: string | null
+          encrypted_refresh_token: string | null
           google_email: string | null
           id: string
+          is_encrypted: boolean | null
           refresh_token: string | null
           token_expiry: string | null
           updated_at: string | null
@@ -997,8 +1000,11 @@ export type Database = {
         Insert: {
           access_token: string
           created_at?: string | null
+          encrypted_access_token?: string | null
+          encrypted_refresh_token?: string | null
           google_email?: string | null
           id?: string
+          is_encrypted?: boolean | null
           refresh_token?: string | null
           token_expiry?: string | null
           updated_at?: string | null
@@ -1007,8 +1013,11 @@ export type Database = {
         Update: {
           access_token?: string
           created_at?: string | null
+          encrypted_access_token?: string | null
+          encrypted_refresh_token?: string | null
           google_email?: string | null
           id?: string
+          is_encrypted?: boolean | null
           refresh_token?: string | null
           token_expiry?: string | null
           updated_at?: string | null
