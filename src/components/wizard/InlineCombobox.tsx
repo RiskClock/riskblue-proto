@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { forwardRef, useEffect, useImperativeHandle, useMemo, useRef, useState } from "react";
 import * as PopoverPrimitive from "@radix-ui/react-popover";
 import { Check, ChevronsUpDown } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -23,15 +23,21 @@ interface InlineComboboxProps {
   onChange: (value: string) => void;
   placeholder?: string;
   className?: string;
+  onKeyDown?: (e: React.KeyboardEvent) => void;
 }
 
-export const InlineCombobox = ({
+export interface InlineComboboxRef {
+  focus: () => void;
+}
+
+export const InlineCombobox = forwardRef<InlineComboboxRef, InlineComboboxProps>(({
   value,
   options,
   onChange,
   placeholder = "Select...",
   className,
-}: InlineComboboxProps) => {
+  onKeyDown,
+}, ref) => {
   const [open, setOpen] = useState(false);
   const triggerRef = useRef<HTMLButtonElement | null>(null);
   const [portalContainer, setPortalContainer] = useState<HTMLElement | null>(null);
@@ -56,6 +62,18 @@ export const InlineCombobox = ({
     [options],
   );
 
+  // Expose focus method via ref
+  useImperativeHandle(ref, () => ({
+    focus: () => triggerRef.current?.focus(),
+  }), []);
+
+  // Handle keydown - forward Tab events when dropdown is closed
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (!open && onKeyDown) {
+      onKeyDown(e);
+    }
+  };
+
   return (
     <PopoverPrimitive.Root open={open} onOpenChange={setOpen}>
       <PopoverPrimitive.Trigger asChild>
@@ -65,6 +83,7 @@ export const InlineCombobox = ({
           role="combobox"
           aria-expanded={open}
           className={cn("h-6 w-full min-w-0 justify-between px-2 text-xs font-normal", className)}
+          onKeyDown={handleKeyDown}
         >
           <span className="min-w-0 flex-1 truncate text-left">{value || placeholder}</span>
           <ChevronsUpDown className="ml-1 h-3 w-3 shrink-0 opacity-50" />
@@ -118,5 +137,7 @@ export const InlineCombobox = ({
       </PopoverPrimitive.Portal>
     </PopoverPrimitive.Root>
   );
-};
+});
+
+InlineCombobox.displayName = "InlineCombobox";
 
