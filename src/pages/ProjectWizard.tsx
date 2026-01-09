@@ -545,6 +545,8 @@ const ProjectWizardContent = () => {
             controls: d.controls || [],
             coordinates: d.coordinates as any,
             additionalParameters: (d as any).additional_parameters || undefined,
+            drawingUrl: d.drawing_url || null,
+            source: 'analysis' as const,
           }));
           
           // Normalize all items to fix miscategorized entries
@@ -582,6 +584,7 @@ const ProjectWizardContent = () => {
                 controls: item.controls,
                 coordinates: item.coordinates,
                 additional_parameters: item.additionalParameters || null,
+                drawing_url: item.drawingUrl || null,
               }));
               
               await supabase.from('project_analysis_items').insert(insertData);
