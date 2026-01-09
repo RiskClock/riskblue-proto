@@ -46,10 +46,9 @@ export const LocationDetailsModal = ({
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
 
-  // Priority: 1. Custom uploaded drawing, 2. Static mapped drawing (only for analysis-created items)
+  // Priority: 1. Custom uploaded drawing, 2. Static mapped drawing (for any item with matching ID)
   const customDrawingUrl = (location as any)?.drawingUrl || (location as any)?.drawing_url;
-  const isFromAnalysis = (location as any)?.source === 'analysis';
-  const staticDrawingUrl = (location && isFromAnalysis) ? getDrawingImage(location.id) : null;
+  const staticDrawingUrl = location ? getDrawingImage(location.id) : null;
   const drawingUrl = customDrawingUrl || staticDrawingUrl;
   const showDrawingViewer = !!drawingUrl;
 
