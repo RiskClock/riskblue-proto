@@ -16,7 +16,7 @@ import { LogOut, Plus, X, Save, RotateCcw, ShieldAlert } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useHeapIdentify } from "@/hooks/useHeapIdentify";
 import { useMitigationControls, getControlNameById } from "@/hooks/useMitigationControls";
-import riskBlueLogo from "@/assets/riskblue-logo.jpg";
+import { LogoDropdown } from "@/components/LogoDropdown";
 import { ProviderSelectionDialog } from "@/components/ProviderSelectionDialog";
 
 interface AWPItem {
@@ -246,7 +246,7 @@ export default function Configuration() {
     <div className="min-h-screen bg-background">
       <header className="sticky top-0 z-20 border-b bg-card">
         <div className="container mx-auto px-6 py-4 flex items-center justify-between">
-          <img src={riskBlueLogo} alt="RiskBlue" className="h-8 cursor-pointer" onClick={() => navigate("/projects")} />
+          <LogoDropdown />
           <div className="flex items-center gap-6">
             <button onClick={() => navigate("/projects")} className="text-foreground hover:text-primary">
               Projects

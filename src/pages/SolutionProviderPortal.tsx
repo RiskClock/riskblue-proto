@@ -6,7 +6,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Building2, LogOut } from "lucide-react";
-import riskBlueLogo from "@/assets/riskblue-logo.jpg";
+import { LogoDropdown } from "@/components/LogoDropdown";
 import { SolutionProviderPortalContent } from "@/components/wizard/SolutionProviderPortalContent";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -195,7 +195,7 @@ export default function SolutionProviderPortal() {
     <div className="min-h-screen bg-background">
       <header className="sticky top-0 z-20 border-b bg-card">
         <div className="container mx-auto px-6 py-4 flex items-center justify-between">
-          <img src={riskBlueLogo} alt="RiskBlue" className="h-8 cursor-pointer" onClick={() => navigate("/projects")} />
+          <LogoDropdown />
           <div className="flex items-center gap-6">
             <button onClick={() => navigate("/projects")} className="text-foreground hover:text-primary">
               Projects

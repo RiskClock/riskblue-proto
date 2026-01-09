@@ -7,7 +7,8 @@ import { useQuery } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
 import { getUserFriendlyError } from "@/lib/errorHandling";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import riskBlueLogo from "@/assets/riskblue-logo.jpg";
+import { LogoDropdown } from "@/components/LogoDropdown";
+import riskBlueLogo from "@/assets/logo-riskblue.png";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import * as AccordionPrimitive from "@radix-ui/react-accordion";
@@ -1074,12 +1075,7 @@ const ProjectWizardContent = () => {
       
       <header className="sticky top-0 z-20 border-b bg-card no-print">
         <div className="container mx-auto px-6 py-4 flex items-center justify-between">
-          <img 
-            src={riskBlueLogo} 
-            alt="RiskBlue" 
-            className="h-8 cursor-pointer" 
-            onClick={() => navigate("/projects")}
-          />
+          <LogoDropdown />
           <div className="flex items-center gap-6">
             {/* Saving indicator */}
             {(isSaving || hasPendingChanges) && (

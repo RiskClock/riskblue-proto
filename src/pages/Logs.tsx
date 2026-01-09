@@ -11,7 +11,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { LogOut, ShieldAlert, ChevronLeft, ChevronRight } from "lucide-react";
 import { useHeapIdentify } from "@/hooks/useHeapIdentify";
-import riskBlueLogo from "@/assets/riskblue-logo.jpg";
+import { LogoDropdown } from "@/components/LogoDropdown";
 import { ProviderSelectionDialog } from "@/components/ProviderSelectionDialog";
 import { format } from "date-fns";
 
@@ -164,7 +164,7 @@ export default function Logs() {
     <div className="min-h-screen bg-background">
       <header className="sticky top-0 z-20 border-b bg-card">
         <div className="container mx-auto px-6 py-4 flex items-center justify-between">
-          <img src={riskBlueLogo} alt="RiskBlue" className="h-8 cursor-pointer" onClick={() => navigate("/projects")} />
+          <LogoDropdown />
           <div className="flex items-center gap-6">
             <button onClick={() => navigate("/projects")} className="text-foreground hover:text-primary">
               Projects
