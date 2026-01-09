@@ -39,6 +39,7 @@ export const LocationDetailsModal = ({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [zoom, setZoom] = useState(1);
+  const [baseDimensions, setBaseDimensions] = useState<{ width: number; height: number } | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [pageImages, setPageImages] = useState<HTMLImageElement[]>([]);
@@ -186,18 +187,13 @@ export const LocationDetailsModal = ({
     }
   };
 
-  // Draw canvas with bounding boxes
+  // Compute base dimensions once when image/page changes (not on zoom)
   useEffect(() => {
     if (loading || pageImages.length === 0) return;
     
-    const canvas = canvasRef.current;
     const container = containerRef.current;
     const img = pageImages[currentPage - 1];
-    
-    if (!canvas || !img || !container) return;
-
-    const ctx = canvas.getContext("2d");
-    if (!ctx) return;
+    if (!container || !img) return;
 
     const containerRect = container.getBoundingClientRect();
     const containerWidth = containerRect.width - 32;
@@ -205,13 +201,11 @@ export const LocationDetailsModal = ({
     
     if (containerWidth <= 0 || containerHeight <= 0) return;
 
-    // Use natural image dimensions for proper zoom behavior
     const imgWidth = img.naturalWidth || img.width;
     const imgHeight = img.naturalHeight || img.height;
     const imgAspect = imgWidth / imgHeight;
     const containerAspect = containerWidth / containerHeight;
 
-    // Calculate base dimensions to fit container at 100% zoom
     let baseWidth: number;
     let baseHeight: number;
 
@@ -223,18 +217,98 @@ export const LocationDetailsModal = ({
       baseWidth = containerHeight * imgAspect;
     }
 
-    // Apply zoom to the base dimensions
-    const displayWidth = Math.floor(baseWidth * zoom);
-    const displayHeight = Math.floor(baseHeight * zoom);
+    setBaseDimensions({ width: baseWidth, height: baseHeight });
+  }, [pageImages, currentPage, loading]); // Note: zoom NOT in dependencies
+
+  // Draw canvas at current zoom level
+  useEffect(() => {
+    if (!baseDimensions || loading) return;
+    
+    const canvas = canvasRef.current;
+    const img = pageImages[currentPage - 1];
+    if (!canvas || !img) return;
+
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+
+    const displayWidth = Math.floor(baseDimensions.width * zoom);
+    const displayHeight = Math.floor(baseDimensions.height * zoom);
 
     canvas.width = displayWidth;
     canvas.height = displayHeight;
 
-    // Draw at higher quality
     ctx.imageSmoothingEnabled = true;
     ctx.imageSmoothingQuality = 'high';
     ctx.drawImage(img, 0, 0, displayWidth, displayHeight);
-  }, [pageImages, currentPage, zoom, loading]);
+  }, [baseDimensions, zoom, pageImages, currentPage, loading]);
+
+  // Center-focused zoom handlers
+  const handleZoomIn = () => {
+    const container = containerRef.current;
+    if (!container) {
+      setZoom(z => Math.min(3, z + 0.25));
+      return;
+    }
+    
+    const scrollCenterX = container.scrollWidth > 0 
+      ? (container.scrollLeft + container.clientWidth / 2) / container.scrollWidth 
+      : 0.5;
+    const scrollCenterY = container.scrollHeight > 0 
+      ? (container.scrollTop + container.clientHeight / 2) / container.scrollHeight 
+      : 0.5;
+    
+    setZoom(prevZoom => {
+      const newZoom = Math.min(3, prevZoom + 0.25);
+      
+      requestAnimationFrame(() => {
+        const newScrollWidth = container.scrollWidth;
+        const newScrollHeight = container.scrollHeight;
+        container.scrollLeft = scrollCenterX * newScrollWidth - container.clientWidth / 2;
+        container.scrollTop = scrollCenterY * newScrollHeight - container.clientHeight / 2;
+      });
+      
+      return newZoom;
+    });
+  };
+
+  const handleZoomOut = () => {
+    const container = containerRef.current;
+    if (!container) {
+      setZoom(z => Math.max(0.5, z - 0.25));
+      return;
+    }
+    
+    const scrollCenterX = container.scrollWidth > 0 
+      ? (container.scrollLeft + container.clientWidth / 2) / container.scrollWidth 
+      : 0.5;
+    const scrollCenterY = container.scrollHeight > 0 
+      ? (container.scrollTop + container.clientHeight / 2) / container.scrollHeight 
+      : 0.5;
+    
+    setZoom(prevZoom => {
+      const newZoom = Math.max(0.5, prevZoom - 0.25);
+      
+      requestAnimationFrame(() => {
+        const newScrollWidth = container.scrollWidth;
+        const newScrollHeight = container.scrollHeight;
+        container.scrollLeft = scrollCenterX * newScrollWidth - container.clientWidth / 2;
+        container.scrollTop = scrollCenterY * newScrollHeight - container.clientHeight / 2;
+      });
+      
+      return newZoom;
+    });
+  };
+
+  const handleResetZoom = () => {
+    setZoom(1);
+    const container = containerRef.current;
+    if (container) {
+      requestAnimationFrame(() => {
+        container.scrollLeft = 0;
+        container.scrollTop = 0;
+      });
+    }
+  };
 
   if (!location) return null;
 
@@ -262,42 +336,9 @@ export const LocationDetailsModal = ({
     <Dialog open={isOpen} onOpenChange={onClose}>
       <DialogContent className={showDrawingViewer ? "sm:max-w-5xl h-[85vh] flex flex-col p-0" : "sm:max-w-md"}>
         <DialogHeader className="px-6 pt-6 pb-4 border-b flex-shrink-0">
-          <DialogTitle className="flex items-center justify-between gap-4">
-            <div className="flex items-center gap-2">
-              <span className="text-muted-foreground text-sm">{location.id}:</span>
-              {location.areaName || location.name}
-            </div>
-            {/* Zoom controls in header - always visible regardless of scroll */}
-            {showDrawingViewer && (
-              <div className="flex items-center gap-2 flex-shrink-0">
-                {totalPages > 1 && (
-                  <>
-                    <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => setCurrentPage(p => Math.max(1, p - 1))} disabled={currentPage === 1}>
-                      <ChevronLeft className="w-4 h-4" />
-                    </Button>
-                    <span className="text-sm min-w-[5rem] text-center">
-                      Page {currentPage} / {totalPages}
-                    </span>
-                    <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))} disabled={currentPage === totalPages}>
-                      <ChevronRight className="w-4 h-4" />
-                    </Button>
-                    <div className="w-px h-6 bg-border mx-1" />
-                  </>
-                )}
-                <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => setZoom(z => Math.max(0.5, z - 0.25))}>
-                  <ZoomOut className="w-4 h-4" />
-                </Button>
-                <span className="text-sm min-w-[3rem] text-center">
-                  {Math.round(zoom * 100)}%
-                </span>
-                <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => setZoom(z => Math.min(3, z + 0.25))}>
-                  <ZoomIn className="w-4 h-4" />
-                </Button>
-                <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => setZoom(1)}>
-                  <RotateCw className="w-4 h-4" />
-                </Button>
-              </div>
-            )}
+          <DialogTitle className="flex items-center gap-2">
+            <span className="text-muted-foreground text-sm">{location.id}:</span>
+            {location.areaName || location.name}
           </DialogTitle>
         </DialogHeader>
         
@@ -390,12 +431,48 @@ export const LocationDetailsModal = ({
               </div>
             </div>
             
-            {/* Right side - Drawing - min-w-0 prevents flex overflow */}
-            <div className="flex-1 min-w-0 overflow-hidden">
-              {/* Scrollable drawing viewer */}
+            {/* Right side - Drawing with fixed header */}
+            <div className="flex-1 min-w-0 flex flex-col overflow-hidden">
+              {/* Fixed header bar - completely isolated from scroll area */}
+              <div className="h-12 flex-shrink-0 flex items-center justify-between px-4 border-b bg-background">
+                <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                  <FileImage className="w-4 h-4" />
+                  <span>Drawing Preview</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  {totalPages > 1 && (
+                    <>
+                      <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => setCurrentPage(p => Math.max(1, p - 1))} disabled={currentPage === 1}>
+                        <ChevronLeft className="w-4 h-4" />
+                      </Button>
+                      <span className="text-sm min-w-[5rem] text-center">
+                        Page {currentPage} / {totalPages}
+                      </span>
+                      <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))} disabled={currentPage === totalPages}>
+                        <ChevronRight className="w-4 h-4" />
+                      </Button>
+                      <div className="w-px h-6 bg-border mx-1" />
+                    </>
+                  )}
+                  <Button variant="outline" size="icon" className="h-8 w-8" onClick={handleZoomOut}>
+                    <ZoomOut className="w-4 h-4" />
+                  </Button>
+                  <span className="text-sm min-w-[3rem] text-center">
+                    {Math.round(zoom * 100)}%
+                  </span>
+                  <Button variant="outline" size="icon" className="h-8 w-8" onClick={handleZoomIn}>
+                    <ZoomIn className="w-4 h-4" />
+                  </Button>
+                  <Button variant="outline" size="icon" className="h-8 w-8" onClick={handleResetZoom}>
+                    <RotateCw className="w-4 h-4" />
+                  </Button>
+                </div>
+              </div>
+              
+              {/* Scrollable drawing area - separate from header */}
               <div 
                 ref={containerRef}
-                className="h-full overflow-auto bg-muted/30 m-4 border rounded-lg p-4"
+                className="flex-1 min-h-0 overflow-auto bg-muted/30 m-4 border rounded-lg p-4"
               >
                 {loading ? (
                   <div className="flex items-center justify-center h-full">
@@ -433,6 +510,7 @@ export const LocationDetailsModal = ({
             </div>
           </div>
         ) : (
+        
           /* Non-drawing view with placeholder */
           <div className="space-y-4 p-6">
             {/* Grey placeholder for items without drawings */}
