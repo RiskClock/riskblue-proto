@@ -206,9 +206,13 @@ export const LocationDetailsModal = ({
     
     if (containerWidth <= 0 || containerHeight <= 0) return;
 
-    const imgAspect = img.width / img.height;
+    // Use natural image dimensions for proper zoom behavior
+    const imgWidth = img.naturalWidth || img.width;
+    const imgHeight = img.naturalHeight || img.height;
+    const imgAspect = imgWidth / imgHeight;
     const containerAspect = containerWidth / containerHeight;
 
+    // Calculate base dimensions to fit container at 100% zoom
     let baseWidth: number;
     let baseHeight: number;
 
@@ -220,13 +224,16 @@ export const LocationDetailsModal = ({
       baseWidth = containerHeight * imgAspect;
     }
 
+    // Apply zoom to the base dimensions
     const displayWidth = Math.floor(baseWidth * zoom);
     const displayHeight = Math.floor(baseHeight * zoom);
 
     canvas.width = displayWidth;
     canvas.height = displayHeight;
 
-    // Draw image only (no bounding box overlay)
+    // Draw at higher quality
+    ctx.imageSmoothingEnabled = true;
+    ctx.imageSmoothingQuality = 'high';
     ctx.drawImage(img, 0, 0, displayWidth, displayHeight);
   }, [pageImages, currentPage, zoom, loading]);
 
@@ -234,12 +241,12 @@ export const LocationDetailsModal = ({
 
   const capitalize = (str: string) => str.charAt(0).toUpperCase() + str.slice(1).toLowerCase();
   
-  // Get additional parameters if available
+  // Get additional parameters if available (display in inches)
   const additionalParams = (location as any).additionalParameters;
-  const pipeInfo = additionalParams?.pipeDiameterMM 
-    ? `${Math.round(additionalParams.pipeDiameterMM)}mm` 
-    : additionalParams?.pipeDiameterInches 
-      ? `${additionalParams.pipeDiameterInches}"` 
+  const pipeInfo = additionalParams?.pipeDiameterInches 
+    ? `${additionalParams.pipeDiameterInches}"` 
+    : additionalParams?.pipeDiameterMM 
+      ? `${Math.round(additionalParams.pipeDiameterMM / 25.4)}"` 
       : null;
   const directionInfo = additionalParams?.mainPipeDirection 
     ? capitalize(additionalParams.mainPipeDirection)
@@ -409,10 +416,11 @@ export const LocationDetailsModal = ({
                     </div>
                   </div>
                 ) : pageImages.length > 0 ? (
-                  <div className="flex items-start justify-start min-h-full">
+                  <div className="flex items-start justify-start min-h-full min-w-full">
                     <canvas
                       ref={canvasRef}
                       className="rounded shadow-sm"
+                      style={{ maxWidth: 'none', maxHeight: 'none' }}
                     />
                   </div>
                 ) : (

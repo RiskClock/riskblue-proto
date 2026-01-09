@@ -1018,6 +1018,7 @@ const ProjectWizardContent = () => {
           controls: item.controls || [],
           coordinates: item.coordinates || null,
           additional_parameters: item.additionalParameters || null,
+          drawing_url: item.drawingUrl || null,
         };
       });
 
@@ -1553,7 +1554,7 @@ const ProjectWizardContent = () => {
         isOpen={showAWPEditModal}
         onClose={() => setShowAWPEditModal(false)}
         analysisItems={analysisItems}
-        onUpdateItems={async (items) => {
+        onUpdateItems={async (items, changeCount) => {
           setAnalysisItems(items);
           // Issue 14: Save to database
           if (id && id !== "new") {
@@ -1561,7 +1562,7 @@ const ProjectWizardContent = () => {
               await saveAnalysisItems(id, items);
               toast({
                 title: "Saved",
-                description: `${items.length} item(s) saved successfully`,
+                description: `${changeCount || items.length} change(s) saved successfully`,
               });
             } catch (error) {
               console.error("Error saving analysis items:", error);

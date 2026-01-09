@@ -33,7 +33,7 @@ interface AWPEditModalProps {
   isOpen: boolean;
   onClose: () => void;
   analysisItems: AnalysisItem[];
-  onUpdateItems: (items: AnalysisItem[]) => void;
+  onUpdateItems: (items: AnalysisItem[], changeCount?: number) => void;
   projectId: string;
   projectName?: string;
   onBeforeOAuthRedirect?: () => Promise<void>;
@@ -471,10 +471,18 @@ export const AWPEditModal = ({
     }
 
     const allItems = [...remainingItems, ...newItems];
-    onUpdateItems(allItems);
+    
+    // Calculate edit count by comparing existing items to originals
+    const editCount = existingItems.filter(current => {
+      const original = originalItems.find(o => o.id === current.id);
+      return original && JSON.stringify(current) !== JSON.stringify(original);
+    }).length;
+    const changeCount = deletedItemIds.size + newItems.length + editCount;
+    
+    onUpdateItems(allItems, changeCount);
     setShowSaveConfirmation(false);
     onClose();
-  }, [existingItems, deletedItemIds, newRows, onUpdateItems, onClose, projectId, awpOptions]);
+  }, [existingItems, deletedItemIds, newRows, onUpdateItems, onClose, projectId, awpOptions, originalItems]);
 
   // Get size display for existing item
   const getItemSizeDisplay = (item: AnalysisItem) => {
