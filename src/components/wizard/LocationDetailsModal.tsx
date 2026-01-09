@@ -46,9 +46,10 @@ export const LocationDetailsModal = ({
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
 
-  // Priority: 1. Custom uploaded drawing, 2. Static mapped drawing
+  // Priority: 1. Custom uploaded drawing, 2. Static mapped drawing (only for analysis-created items)
   const customDrawingUrl = (location as any)?.drawingUrl || (location as any)?.drawing_url;
-  const staticDrawingUrl = location ? getDrawingImage(location.id) : null;
+  const isFromAnalysis = (location as any)?.source === 'analysis';
+  const staticDrawingUrl = (location && isFromAnalysis) ? getDrawingImage(location.id) : null;
   const drawingUrl = customDrawingUrl || staticDrawingUrl;
   const showDrawingViewer = !!drawingUrl;
 
@@ -132,7 +133,7 @@ export const LocationDetailsModal = ({
         
         for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
           const page = await pdf.getPage(pageNum);
-          const scale = 2;
+          const scale = 4; // Higher resolution for detailed drawings
           const viewport = page.getViewport({ scale });
 
           const offscreenCanvas = document.createElement('canvas');
@@ -408,10 +409,10 @@ export const LocationDetailsModal = ({
                     </div>
                   </div>
                 ) : pageImages.length > 0 ? (
-                  <div className="flex items-center justify-center min-h-full">
+                  <div className="flex items-start justify-start min-h-full">
                     <canvas
                       ref={canvasRef}
-                      className="max-w-full h-auto rounded shadow-sm"
+                      className="rounded shadow-sm"
                     />
                   </div>
                 ) : (
