@@ -359,41 +359,35 @@ export const LocationDetailsModal = ({
             </div>
             
             {/* Right side - Drawing */}
-            <div className="flex-1 flex flex-col min-h-0 p-4">
-              {/* Zoom controls */}
-              <div className="flex items-center justify-between mb-3 flex-shrink-0">
-                <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                  <FileImage className="w-4 h-4" />
-                  <span>Drawing Preview</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  {totalPages > 1 && (
-                    <>
-                      <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => setCurrentPage(p => Math.max(1, p - 1))} disabled={currentPage === 1}>
-                        <ChevronLeft className="w-4 h-4" />
-                      </Button>
-                      <span className="text-sm min-w-[5rem] text-center">
-                        Page {currentPage} / {totalPages}
-                      </span>
-                      <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))} disabled={currentPage === totalPages}>
-                        <ChevronRight className="w-4 h-4" />
-                      </Button>
-                      <div className="w-px h-6 bg-border mx-1" />
-                    </>
-                  )}
-                  <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => setZoom(z => Math.max(0.5, z - 0.25))}>
-                    <ZoomOut className="w-4 h-4" />
-                  </Button>
-                  <span className="text-sm min-w-[3rem] text-center">
-                    {Math.round(zoom * 100)}%
-                  </span>
-                  <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => setZoom(z => Math.min(3, z + 0.25))}>
-                    <ZoomIn className="w-4 h-4" />
-                  </Button>
-                  <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => setZoom(1)}>
-                    <RotateCw className="w-4 h-4" />
-                  </Button>
-                </div>
+            <div className="flex-1 flex flex-col min-h-0 p-4 relative">
+              {/* Floating zoom controls */}
+              <div className="absolute top-6 right-6 z-10 flex items-center gap-2 bg-background/95 backdrop-blur-sm border rounded-lg p-2 shadow-sm">
+                {totalPages > 1 && (
+                  <>
+                    <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => setCurrentPage(p => Math.max(1, p - 1))} disabled={currentPage === 1}>
+                      <ChevronLeft className="w-4 h-4" />
+                    </Button>
+                    <span className="text-sm min-w-[5rem] text-center">
+                      Page {currentPage} / {totalPages}
+                    </span>
+                    <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))} disabled={currentPage === totalPages}>
+                      <ChevronRight className="w-4 h-4" />
+                    </Button>
+                    <div className="w-px h-6 bg-border mx-1" />
+                  </>
+                )}
+                <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => setZoom(z => Math.max(0.5, z - 0.25))}>
+                  <ZoomOut className="w-4 h-4" />
+                </Button>
+                <span className="text-sm min-w-[3rem] text-center">
+                  {Math.round(zoom * 100)}%
+                </span>
+                <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => setZoom(z => Math.min(3, z + 0.25))}>
+                  <ZoomIn className="w-4 h-4" />
+                </Button>
+                <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => setZoom(1)}>
+                  <RotateCw className="w-4 h-4" />
+                </Button>
               </div>
               
               {/* Drawing viewer */}
