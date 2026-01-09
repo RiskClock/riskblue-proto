@@ -67,32 +67,32 @@ export function LogoDropdown() {
           />
         </div>
 
-        {/* Dropdown menu on hover */}
-        {isHovered && (
+        {/* Dropdown menu - always in DOM but visibility controlled by CSS for preloading */}
+        <div
+          className={`absolute top-full left-0 pt-1 ${isHovered ? "" : "pointer-events-none"}`}
+        >
           <div
-            className="absolute top-full left-0 mt-1 bg-card border border-border rounded-md shadow-lg z-50 min-w-[200px] animate-in fade-in-0 zoom-in-95 duration-150"
-            onMouseEnter={() => setIsHovered(true)}
-            onMouseLeave={() => setIsHovered(false)}
+            className={`bg-card border border-border rounded-md shadow-lg z-50 min-w-[200px] transition-all duration-150 ${
+              isHovered ? "opacity-100 translate-y-0" : "opacity-0 -translate-y-1"
+            }`}
           >
             <button
               onClick={handleRiskRedClick}
               className="w-full flex items-center gap-3 px-3 py-2.5 hover:bg-muted transition-colors rounded-md"
             >
-              <img src={riskRedLogo} alt="RiskRed" className="h-6" />
-              <span className="text-sm text-foreground">
-                RiskRed <span className="text-muted-foreground">(Preview)</span>
-              </span>
+              <img src={riskRedLogo} alt="RiskRed" className="h-8" />
+              <span className="text-sm text-muted-foreground">(Preview)</span>
             </button>
           </div>
-        )}
+        </div>
       </div>
 
       {/* Request Preview Modal */}
       <Dialog open={showModal} onOpenChange={setShowModal}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
-            <DialogTitle className="flex items-center gap-3">
-              <img src={riskRedLogo} alt="RiskRed" className="h-6" />
+          <DialogTitle className="flex items-center gap-3">
+              <img src={riskRedLogo} alt="RiskRed" className="h-10" />
               Request Preview
             </DialogTitle>
             <DialogDescription>

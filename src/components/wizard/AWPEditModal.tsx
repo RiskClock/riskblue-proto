@@ -111,6 +111,11 @@ export const AWPEditModal = ({
   
   // Hidden file input refs for drawing uploads
   const fileInputRefs = useRef<Map<string, HTMLInputElement>>(new Map());
+  
+  // Tab navigation refs for spreadsheet-like UX
+  const cellRefs = useRef<Map<string, HTMLInputElement | HTMLButtonElement>>(new Map());
+  const pendingFocusRowRef = useRef<string | null>(null);
+  
   // Original items for comparison
   const [originalItems, setOriginalItems] = useState<AnalysisItem[]>([]);
   
@@ -224,8 +229,85 @@ export const AWPEditModal = ({
   // Add new row
   const handleAddRow = useCallback(() => {
     const newRow = createEmptyRow();
+    pendingFocusRowRef.current = newRow.tempId;
     setNewRows(prev => [...prev, newRow]);
   }, []);
+
+  // Tab navigation helpers
+  const getCellKey = useCallback((rowId: string, colName: string) => `${rowId}-${colName}`, []);
+  
+  const getEditableColumns = useCallback((row: NewRowItem): string[] => {
+    const cols = ['name', 'type', 'floor']; // Always present (name = areaName, type = AWP class)
+    
+    const isAsset = row.name ? isAssetName(awpOptions, row.name) : false;
+    const isWaterSystem = row.name ? isWaterSystemName(awpOptions, row.name) : false;
+    
+    if (hasAssets && isAsset) cols.push('size');
+    if (hasWaterSystems && isWaterSystem) cols.push('pipe');
+    
+    return cols;
+  }, [awpOptions, hasAssets, hasWaterSystems]);
+
+  const handleCellKeyDown = useCallback((
+    e: React.KeyboardEvent,
+    rowTempId: string,
+    columnName: string
+  ) => {
+    if (e.key !== 'Tab') return;
+    
+    e.preventDefault(); // Take over Tab behavior
+    
+    const rowIndex = newRows.findIndex(r => r.tempId === rowTempId);
+    const row = newRows[rowIndex];
+    const columns = getEditableColumns(row);
+    const colIndex = columns.indexOf(columnName);
+    
+    const isShift = e.shiftKey;
+    let nextRowIndex = rowIndex;
+    let nextColIndex = colIndex + (isShift ? -1 : 1);
+    
+    // Handle wrapping to next/previous row
+    if (nextColIndex >= columns.length) {
+      nextColIndex = 0;
+      nextRowIndex++;
+      
+      // If past last row, add a new row
+      if (nextRowIndex >= newRows.length) {
+        handleAddRow();
+        // Focus will be set after state update via useEffect
+        return;
+      }
+    } else if (nextColIndex < 0) {
+      if (rowIndex === 0) return; // Already at first cell, do nothing
+      
+      nextRowIndex--;
+      const prevRow = newRows[nextRowIndex];
+      const prevColumns = getEditableColumns(prevRow);
+      nextColIndex = prevColumns.length - 1;
+    }
+    
+    // Focus the next cell
+    const nextRow = newRows[nextRowIndex];
+    const nextColumns = getEditableColumns(nextRow);
+    const nextColName = nextColumns[nextColIndex];
+    const nextCell = cellRefs.current.get(getCellKey(nextRow.tempId, nextColName));
+    
+    nextCell?.focus();
+  }, [newRows, getEditableColumns, getCellKey, handleAddRow]);
+
+  // Auto-focus first cell of newly added row
+  useEffect(() => {
+    if (pendingFocusRowRef.current) {
+      const tempId = pendingFocusRowRef.current;
+      pendingFocusRowRef.current = null;
+      
+      // Small timeout to ensure DOM is updated
+      requestAnimationFrame(() => {
+        const firstCell = cellRefs.current.get(getCellKey(tempId, 'name'));
+        firstCell?.focus();
+      });
+    }
+  }, [newRows, getCellKey]);
 
   // Update a new row field
   const updateNewRow = useCallback((tempId: string, field: keyof NewRowItem, value: any) => {
@@ -783,30 +865,36 @@ export const AWPEditModal = ({
                           {/* Issue 17: Name column first - Issue 25: fixed width with min-w */}
                           <TableCell className="py-1 px-1 w-[100px] min-w-[100px]">
                             <Input
+                              ref={(el) => { if (el) cellRefs.current.set(getCellKey(row.tempId, 'name'), el); }}
                               className="h-6 text-xs px-2"
                               placeholder="Name"
                               value={row.areaName}
                               onChange={(e) => updateNewRow(row.tempId, "areaName", e.target.value)}
+                              onKeyDown={(e) => handleCellKeyDown(e, row.tempId, 'name')}
                             />
                           </TableCell>
                           
                           {/* Type field using InlineCombobox with portal */}
                           <TableCell className="py-1 px-1 w-[150px] min-w-[150px]">
                             <InlineCombobox
+                              ref={(el) => { if (el) cellRefs.current.set(getCellKey(row.tempId, 'type'), el as any); }}
                               value={row.name}
                               options={allClassOptions}
                               onChange={(val) => updateNewRow(row.tempId, "name", val)}
                               placeholder="Type to search..."
+                              onKeyDown={(e) => handleCellKeyDown(e, row.tempId, 'type')}
                             />
                           </TableCell>
                           
                           {/* Floor */}
                           <TableCell className="py-1 px-1 w-[40px] min-w-[40px]">
                             <Input
+                              ref={(el) => { if (el) cellRefs.current.set(getCellKey(row.tempId, 'floor'), el); }}
                               className="h-6 text-xs px-1"
                               placeholder="Fl"
                               value={row.floor}
                               onChange={(e) => updateNewRow(row.tempId, "floor", e.target.value)}
+                              onKeyDown={(e) => handleCellKeyDown(e, row.tempId, 'floor')}
                             />
                           </TableCell>
                           
@@ -848,11 +936,13 @@ export const AWPEditModal = ({
                             <TableCell className="py-1 px-1 w-[70px] min-w-[70px]">
                               {isAsset ? (
                                 <Input
+                                  ref={(el) => { if (el) cellRefs.current.set(getCellKey(row.tempId, 'size'), el); }}
                                   type="number"
                                   className="h-6 text-xs px-2"
                                   placeholder="ft²"
                                   value={getNewRowAreaDisplay(row)}
                                   onChange={(e) => handleNewRowAreaChange(row.tempId, e.target.value)}
+                                  onKeyDown={(e) => handleCellKeyDown(e, row.tempId, 'size')}
                                 />
                               ) : (
                                 <span className="text-xs text-muted-foreground">-</span>
@@ -865,11 +955,13 @@ export const AWPEditModal = ({
                             <TableCell className="py-1 px-1 w-[60px] min-w-[60px]">
                               {isWaterSystem ? (
                                 <Input
+                                  ref={(el) => { if (el) cellRefs.current.set(getCellKey(row.tempId, 'pipe'), el); }}
                                   type="number"
                                   className="h-6 text-xs px-2"
                                   placeholder="in"
                                   value={getNewRowPipeDisplay(row)}
                                   onChange={(e) => handleNewRowPipeChange(row.tempId, e.target.value)}
+                                  onKeyDown={(e) => handleCellKeyDown(e, row.tempId, 'pipe')}
                                 />
                               ) : (
                                 <span className="text-xs text-muted-foreground">-</span>
