@@ -8,8 +8,8 @@ import { useToast } from "@/hooks/use-toast";
 import { useActivityLogger } from "@/hooks/useActivityLogger";
 import { useHeapIdentify } from "@/hooks/useHeapIdentify";
 import { getUserFriendlyError } from "@/lib/errorHandling";
-import riskBlueLogo from "@/assets/riskblue-logo.jpg";
 import { format } from "date-fns";
+import { LogoDropdown } from "@/components/LogoDropdown";
 import { Trash2, LogOut, X } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
@@ -209,7 +209,7 @@ const Projects = () => {
     <div className="h-screen flex flex-col bg-background overflow-hidden">
       <header className="border-b bg-card">
         <div className="container mx-auto px-6 py-4 flex items-center justify-between">
-          <img src={riskBlueLogo} alt="RiskBlue" className="h-8" />
+          <LogoDropdown />
           <div className="flex items-center gap-6">
             <button className="text-foreground hover:text-primary">Projects</button>
             {user?.email?.endsWith("@riskclock.com") && (
