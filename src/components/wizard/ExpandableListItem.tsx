@@ -321,11 +321,11 @@ export const ExpandableListItem = ({
     });
   }, []);
 
-  // Get pipe diameter display for an instance
+  // Get pipe diameter display for an instance (display in inches)
   const getPipeDiameter = (instance: AnalysisItem): string | null => {
     const additionalParams = (instance as any).additionalParameters;
-    if (additionalParams?.pipeDiameterMM) return `${Math.round(additionalParams.pipeDiameterMM)}mm`;
     if (additionalParams?.pipeDiameterInches) return `${additionalParams.pipeDiameterInches}"`;
+    if (additionalParams?.pipeDiameterMM) return `${Math.round(additionalParams.pipeDiameterMM / 25.4)}"`;
     return null;
   };
 
