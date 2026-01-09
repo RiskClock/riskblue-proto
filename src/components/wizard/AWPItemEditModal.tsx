@@ -1,12 +1,14 @@
-import { useState, useCallback, useMemo } from "react";
+import { useState, useCallback, useMemo, useRef, ChangeEvent } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
+import { Paperclip, X, Loader2 } from "lucide-react";
 import { AnalysisItem } from "@/lib/analysisItemMapper";
 import { useAWPOptions, groupAWPOptionsByCategory, isAssetName, isWaterSystemName, getCategoryForName } from "@/hooks/useAWPOptions";
+import { supabase } from "@/integrations/supabase/client";
 import {
   generateNextIdFromOptions,
   sqftToSqm,
@@ -21,6 +23,7 @@ interface AWPItemEditModalProps {
   item: AnalysisItem;
   allItems: AnalysisItem[];
   onSave: (updatedItem: AnalysisItem) => void;
+  projectId?: string;
 }
 
 type AreaUnit = "sqft" | "sqm";
@@ -32,6 +35,7 @@ export const AWPItemEditModal = ({
   item,
   allItems,
   onSave,
+  projectId,
 }: AWPItemEditModalProps) => {
   // Fetch AWP options from DB
   const { data: awpOptions = [] } = useAWPOptions();
@@ -40,11 +44,17 @@ export const AWPItemEditModal = ({
   const [localItem, setLocalItem] = useState<AnalysisItem>({ ...item });
   const [areaUnit, setAreaUnit] = useState<AreaUnit>("sqft");
   const [pipeUnit, setPipeUnit] = useState<PipeUnit>("in");
+  
+  // Drawing upload state
+  const [drawingFile, setDrawingFile] = useState<File | null>(null);
+  const [uploadingDrawing, setUploadingDrawing] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Reset local state when item changes
   useMemo(() => {
     if (isOpen) {
       setLocalItem({ ...item });
+      setDrawingFile(null);
     }
   }, [isOpen, item]);
 
@@ -99,10 +109,41 @@ export const AWPItemEditModal = ({
     }
   }, [localItem, updateField]);
 
-  const handleSave = useCallback(() => {
-    onSave(localItem);
+  const handleFileSelect = useCallback((e: ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      setDrawingFile(file);
+    }
+  }, []);
+
+  const clearDrawing = useCallback(() => {
+    setDrawingFile(null);
+    updateField({ drawingUrl: undefined });
+  }, [updateField]);
+
+  const handleSave = useCallback(async () => {
+    let finalDrawingUrl = localItem.drawingUrl || (localItem as any).drawing_url;
+    
+    // Upload new drawing if selected
+    if (drawingFile && projectId) {
+      setUploadingDrawing(true);
+      const fileName = `${projectId}/${Date.now()}-${drawingFile.name}`;
+      const { data, error } = await supabase.storage
+        .from('awp-drawings')
+        .upload(fileName, drawingFile);
+      
+      if (!error && data) {
+        const { data: urlData } = supabase.storage
+          .from('awp-drawings')
+          .getPublicUrl(data.path);
+        finalDrawingUrl = urlData.publicUrl;
+      }
+      setUploadingDrawing(false);
+    }
+    
+    onSave({ ...localItem, drawingUrl: finalDrawingUrl });
     onClose();
-  }, [localItem, onSave, onClose]);
+  }, [localItem, onSave, onClose, drawingFile, projectId]);
 
   const getDisplayedArea = useCallback(() => {
     const sqft = localItem?.areaSqft || (localItem as any)?.area_sqft || 0;
@@ -120,6 +161,8 @@ export const AWPItemEditModal = ({
 
   const isItemAsset = localItem?.name ? isAssetName(awpOptions, localItem.name) : false;
   const isItemWaterSystem = localItem?.name ? isWaterSystemName(awpOptions, localItem.name) : false;
+  
+  const hasExistingDrawing = !!(localItem.drawingUrl || (localItem as any).drawing_url);
 
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
@@ -211,6 +254,50 @@ export const AWPItemEditModal = ({
             />
           </div>
 
+          {/* Drawing Upload */}
+          <div>
+            <Label>Drawing</Label>
+            <div className="flex items-center gap-2 mt-1">
+              {(hasExistingDrawing || drawingFile) ? (
+                <>
+                  <span className="text-sm text-muted-foreground truncate flex-1">
+                    {drawingFile?.name || "Current drawing"}
+                  </span>
+                  <Button 
+                    variant="outline" 
+                    size="sm" 
+                    onClick={() => fileInputRef.current?.click()}
+                  >
+                    Replace
+                  </Button>
+                  <Button 
+                    variant="ghost" 
+                    size="icon" 
+                    className="h-8 w-8"
+                    onClick={clearDrawing}
+                  >
+                    <X className="w-4 h-4" />
+                  </Button>
+                </>
+              ) : (
+                <Button 
+                  variant="outline" 
+                  onClick={() => fileInputRef.current?.click()}
+                >
+                  <Paperclip className="w-4 h-4 mr-2" />
+                  Upload Drawing
+                </Button>
+              )}
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/*,.pdf"
+                className="hidden"
+                onChange={handleFileSelect}
+              />
+            </div>
+          </div>
+
           {/* Size (Assets only) */}
           {isItemAsset && (
             <div>
@@ -267,8 +354,15 @@ export const AWPItemEditModal = ({
           <Button variant="outline" onClick={onClose}>
             Cancel
           </Button>
-          <Button onClick={handleSave}>
-            Save
+          <Button onClick={handleSave} disabled={uploadingDrawing}>
+            {uploadingDrawing ? (
+              <>
+                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                Uploading...
+              </>
+            ) : (
+              'Save'
+            )}
           </Button>
         </div>
       </DialogContent>

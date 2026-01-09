@@ -55,6 +55,7 @@ interface NewRowItem {
   pipeDiameterMM: number | null;
   drawingFile: File | null; // Phase 3: Drawing upload
   drawingUrl: string | null; // Phase 3: Existing drawing URL
+  source?: 'manual' | 'analysis'; // Track creation origin
 }
 
 interface ChangesSummary {
@@ -75,6 +76,7 @@ const createEmptyRow = (): NewRowItem => ({
   pipeDiameterMM: null,
   drawingFile: null,
   drawingUrl: null,
+  source: 'manual', // Manually created items
 });
 
 // Convert AnalysisItem to NewRowItem for pre-population
@@ -90,6 +92,7 @@ const analysisItemToNewRow = (item: AnalysisItem): NewRowItem => ({
   pipeDiameterMM: (item.additionalParameters as any)?.pipeDiameterMM || null,
   drawingFile: null,
   drawingUrl: item.drawingUrl || null,
+  source: item.source || 'analysis', // Items from analysis flow
 });
 
 export const AWPEditModal = ({
@@ -455,6 +458,7 @@ export const AWPEditModal = ({
         coordinates: undefined,
         controls: defaultControls, // Auto-assigned default controls from DB
         drawingUrl, // Phase 3: Drawing URL
+        source: row.source || 'manual', // Preserve source, default to manual
         additionalParameters: row.pipeDiameterInches ? {
           pipeDiameterInches: row.pipeDiameterInches,
           pipeDiameterMM: row.pipeDiameterMM,
@@ -954,6 +958,7 @@ export const AWPEditModal = ({
           item={editingItem}
           allItems={existingItems}
           onSave={handleEditSave}
+          projectId={projectId}
         />
       )}
 

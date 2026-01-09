@@ -17,6 +17,8 @@ export interface AnalysisItem {
   coordinates: [number, number, number, number] | null;
   // Drawing file URL (uploaded by user)
   drawingUrl?: string | null;
+  // Track creation origin - 'analysis' items get static drawing fallback, 'manual' items don't
+  source?: 'manual' | 'analysis';
   // Additional parameters for water systems (pipe diameter, etc.)
   additionalParameters?: {
     mainPipeDirection?: string;
