@@ -262,9 +262,42 @@ export const LocationDetailsModal = ({
     <Dialog open={isOpen} onOpenChange={onClose}>
       <DialogContent className={showDrawingViewer ? "sm:max-w-5xl h-[85vh] flex flex-col p-0" : "sm:max-w-md"}>
         <DialogHeader className="px-6 pt-6 pb-4 border-b flex-shrink-0">
-          <DialogTitle className="flex items-center gap-2">
-            <span className="text-muted-foreground text-sm">{location.id}:</span>
-            {location.areaName || location.name}
+          <DialogTitle className="flex items-center justify-between gap-4">
+            <div className="flex items-center gap-2">
+              <span className="text-muted-foreground text-sm">{location.id}:</span>
+              {location.areaName || location.name}
+            </div>
+            {/* Zoom controls in header - always visible regardless of scroll */}
+            {showDrawingViewer && (
+              <div className="flex items-center gap-2 flex-shrink-0">
+                {totalPages > 1 && (
+                  <>
+                    <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => setCurrentPage(p => Math.max(1, p - 1))} disabled={currentPage === 1}>
+                      <ChevronLeft className="w-4 h-4" />
+                    </Button>
+                    <span className="text-sm min-w-[5rem] text-center">
+                      Page {currentPage} / {totalPages}
+                    </span>
+                    <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))} disabled={currentPage === totalPages}>
+                      <ChevronRight className="w-4 h-4" />
+                    </Button>
+                    <div className="w-px h-6 bg-border mx-1" />
+                  </>
+                )}
+                <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => setZoom(z => Math.max(0.5, z - 0.25))}>
+                  <ZoomOut className="w-4 h-4" />
+                </Button>
+                <span className="text-sm min-w-[3rem] text-center">
+                  {Math.round(zoom * 100)}%
+                </span>
+                <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => setZoom(z => Math.min(3, z + 0.25))}>
+                  <ZoomIn className="w-4 h-4" />
+                </Button>
+                <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => setZoom(1)}>
+                  <RotateCw className="w-4 h-4" />
+                </Button>
+              </div>
+            )}
           </DialogTitle>
         </DialogHeader>
         
@@ -357,48 +390,12 @@ export const LocationDetailsModal = ({
               </div>
             </div>
             
-            {/* Right side - Drawing */}
-            <div className="flex-1 flex flex-col min-h-0">
-              {/* Fixed header bar with zoom controls - NOT inside scrollable area */}
-              <div className="flex items-center justify-between px-4 py-3 flex-shrink-0 border-b bg-background">
-                <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                  <FileImage className="w-4 h-4" />
-                  <span>Drawing Preview</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  {totalPages > 1 && (
-                    <>
-                      <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => setCurrentPage(p => Math.max(1, p - 1))} disabled={currentPage === 1}>
-                        <ChevronLeft className="w-4 h-4" />
-                      </Button>
-                      <span className="text-sm min-w-[5rem] text-center">
-                        Page {currentPage} / {totalPages}
-                      </span>
-                      <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))} disabled={currentPage === totalPages}>
-                        <ChevronRight className="w-4 h-4" />
-                      </Button>
-                      <div className="w-px h-6 bg-border mx-1" />
-                    </>
-                  )}
-                  <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => setZoom(z => Math.max(0.5, z - 0.25))}>
-                    <ZoomOut className="w-4 h-4" />
-                  </Button>
-                  <span className="text-sm min-w-[3rem] text-center">
-                    {Math.round(zoom * 100)}%
-                  </span>
-                  <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => setZoom(z => Math.min(3, z + 0.25))}>
-                    <ZoomIn className="w-4 h-4" />
-                  </Button>
-                  <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => setZoom(1)}>
-                    <RotateCw className="w-4 h-4" />
-                  </Button>
-                </div>
-              </div>
-              
-              {/* Scrollable drawing viewer - separate from header */}
+            {/* Right side - Drawing - min-w-0 prevents flex overflow */}
+            <div className="flex-1 min-w-0 overflow-hidden">
+              {/* Scrollable drawing viewer */}
               <div 
                 ref={containerRef}
-                className="flex-1 overflow-auto bg-muted/30 m-4 border rounded-lg p-4 min-h-0"
+                className="h-full overflow-auto bg-muted/30 m-4 border rounded-lg p-4"
               >
                 {loading ? (
                   <div className="flex items-center justify-center h-full">
