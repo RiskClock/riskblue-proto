@@ -83,6 +83,10 @@ const ProjectWizardContent = () => {
   const { isAdmin, loading: roleLoading } = useProjectRole(id);
   const { logActivity } = useActivityLogger();
   useHeapIdentify(); // Identify user in Heap Analytics
+  
+  // Check if user is internal (has @riskclock.com email)
+  const isInternalUser = user?.email?.toLowerCase().endsWith('@riskclock.com') ?? false;
+  
   const [activeTab, setActiveTab] = useState("guideline");
   const [loading, setLoading] = useState(false);
   const [isProcessingWebhook, setIsProcessingWebhook] = useState(false);
@@ -1469,74 +1473,90 @@ const ProjectWizardContent = () => {
             </div>
           </TabsContent>
 
-          <TabsContent value="plan" className="max-w-5xl mx-auto">
-            {/* Water Mitigation Guideline Button */}
-            <div className="flex justify-center mb-6">
-              <Dialog open={showGuidelinesDialog} onOpenChange={setShowGuidelinesDialog}>
-                <DialogTrigger asChild>
-                  <Button 
-                    variant="outline" 
-                    size="lg"
-                    disabled={!projectData.waterRiskDiscoveryComplete}
-                  >
-                    <FileText className="h-4 w-4 mr-2" />
-                    Water Mitigation Guideline
-                  </Button>
-                </DialogTrigger>
-                <DialogContent className="max-w-5xl max-h-[80vh] overflow-y-auto">
-                  <DialogHeader>
-                    <DialogTitle>Water Risk Discovery</DialogTitle>
-                  </DialogHeader>
-                  <WaterMitigationGuidelinesStep 
-                    data={projectData}
-                    analysisItems={analysisItems}
-                    onBack={() => {}}
-                    onNext={() => {}}
-                  />
-                </DialogContent>
-              </Dialog>
-            </div>
-            
-            <CollaboratorManagementStep projectId={id || "new"} />
-            
-            <div className="mt-8">
-              <ProposalsStep 
-                data={{ ...projectData, projectId: id, userName: user?.email }}
-                onBack={() => {}}
-                onNext={(data) => handleStepUpdate(data)}
-              />
-            </div>
-            
-            {/* Bottom Controls */}
-            <div className="flex justify-between items-center pt-6">
-              <div />
+          <TabsContent value="plan" className="max-w-5xl mx-auto relative">
+            {/* Coming Soon overlay for non-internal users */}
+            {!isInternalUser && (
+              <div className="absolute inset-0 z-50 flex items-center justify-center bg-muted/70 backdrop-blur-[1px]">
+                <span className="text-2xl font-semibold text-muted-foreground">Coming soon</span>
+              </div>
+            )}
+            <div className={!isInternalUser ? "pointer-events-none select-none" : ""}>
+              {/* Water Mitigation Guideline Button */}
+              <div className="flex justify-center mb-6">
+                <Dialog open={showGuidelinesDialog} onOpenChange={setShowGuidelinesDialog}>
+                  <DialogTrigger asChild>
+                    <Button 
+                      variant="outline" 
+                      size="lg"
+                      disabled={!projectData.waterRiskDiscoveryComplete}
+                    >
+                      <FileText className="h-4 w-4 mr-2" />
+                      Water Mitigation Guideline
+                    </Button>
+                  </DialogTrigger>
+                  <DialogContent className="max-w-5xl max-h-[80vh] overflow-y-auto">
+                    <DialogHeader>
+                      <DialogTitle>Water Risk Discovery</DialogTitle>
+                    </DialogHeader>
+                    <WaterMitigationGuidelinesStep 
+                      data={projectData}
+                      analysisItems={analysisItems}
+                      onBack={() => {}}
+                      onNext={() => {}}
+                    />
+                  </DialogContent>
+                </Dialog>
+              </div>
               
-              <div className="flex items-center gap-4">
-                <div className="flex items-center gap-2">
-                  <input
-                    type="checkbox"
-                    id="mark-plan-complete"
-                    checked={projectData.waterMitigationPlanningComplete || false}
-                    onChange={(e) => handleStepUpdate({ waterMitigationPlanningComplete: e.target.checked })}
-                    className="h-4 w-4 rounded border-input"
-                  />
-                  <Label htmlFor="mark-plan-complete" className="cursor-pointer">Mark as Complete</Label>
+              <CollaboratorManagementStep projectId={id || "new"} />
+              
+              <div className="mt-8">
+                <ProposalsStep 
+                  data={{ ...projectData, projectId: id, userName: user?.email }}
+                  onBack={() => {}}
+                  onNext={(data) => handleStepUpdate(data)}
+                />
+              </div>
+              
+              {/* Bottom Controls */}
+              <div className="flex justify-between items-center pt-6">
+                <div />
+                
+                <div className="flex items-center gap-4">
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="checkbox"
+                      id="mark-plan-complete"
+                      checked={projectData.waterMitigationPlanningComplete || false}
+                      onChange={(e) => handleStepUpdate({ waterMitigationPlanningComplete: e.target.checked })}
+                      className="h-4 w-4 rounded border-input"
+                    />
+                    <Label htmlFor="mark-plan-complete" className="cursor-pointer">Mark as Complete</Label>
+                  </div>
+                  <Button onClick={() => setActiveTab("response")}>
+                    Continue
+                  </Button>
                 </div>
-                <Button onClick={() => setActiveTab("response")}>
-                  Continue
-                </Button>
               </div>
             </div>
           </TabsContent>
 
-          <TabsContent value="response">
-            <ImplementationScheduleStep data={projectData} analysisItems={analysisItems} />
-            
-            <div className="max-w-5xl mx-auto">
-              <ResponsePlanUploadChat 
-                projectId={id || "new"} 
-                onDataExtracted={handleScheduleDataExtracted}
-              />
+          <TabsContent value="response" className="relative">
+            {/* Coming Soon overlay for non-internal users */}
+            {!isInternalUser && (
+              <div className="absolute inset-0 z-50 flex items-center justify-center bg-muted/70 backdrop-blur-[1px]">
+                <span className="text-2xl font-semibold text-muted-foreground">Coming soon</span>
+              </div>
+            )}
+            <div className={!isInternalUser ? "pointer-events-none select-none" : ""}>
+              <ImplementationScheduleStep data={projectData} analysisItems={analysisItems} />
+              
+              <div className="max-w-5xl mx-auto">
+                <ResponsePlanUploadChat 
+                  projectId={id || "new"} 
+                  onDataExtracted={handleScheduleDataExtracted}
+                />
+              </div>
             </div>
           </TabsContent>
         </Tabs>
