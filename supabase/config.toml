@@ -35,3 +35,18 @@ verify_jwt = false
 
 [functions.verify-reset-token]
 verify_jwt = false
+
+[functions.notify-access-request]
+verify_jwt = false
+
+[functions.get-project-collaborators]
+verify_jwt = true
+
+[functions.get-user-emails]
+verify_jwt = true
+
+[functions.copy-drive-files]
+verify_jwt = true
+
+[functions.download-analysis-files-zip]
+verify_jwt = true

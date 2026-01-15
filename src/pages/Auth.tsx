@@ -144,6 +144,16 @@ const Auth = () => {
         });
       
       if (error) throw error;
+
+      // Send email notification (fire-and-forget, don't block UI)
+      supabase.functions.invoke('notify-access-request', {
+        body: {
+          fullName: requestForm.fullName,
+          workEmail: requestForm.workEmail,
+          companyName: requestForm.companyName
+        }
+      }).catch(err => console.error('Failed to send notification:', err));
+
       setRequestSubmitted(true);
     } catch (error: unknown) {
       toast({
