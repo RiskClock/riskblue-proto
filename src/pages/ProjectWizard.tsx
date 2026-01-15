@@ -32,7 +32,7 @@ import { ProposalsStep } from "@/components/wizard/ProposalsStep";
 import { ImplementationScheduleStep } from "@/components/wizard/ImplementationScheduleStep";
 import { ProjectFilesUpload, DriveFileInfo } from "@/components/wizard/ProjectFilesUpload";
 import { ResponsePlanUploadChat } from "@/components/ResponsePlanUploadChat";
-import { Download, LogOut, FileText, Loader2, Users, Settings, BarChart3 } from "lucide-react";
+import { Download, LogOut, FileText, Loader2, Users, Settings, BarChart3, FilePlus } from "lucide-react";
 import { DropdownMenuSeparator } from "@/components/ui/dropdown-menu";
 import { Button } from "@/components/ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
@@ -1238,7 +1238,7 @@ const ProjectWizardContent = () => {
                             className="ml-2 gap-1"
                             onClick={(e) => e.stopPropagation()}
                           >
-                            {analysisItems.length === 0 ? "Add New" : "Edit List"}
+                            Manage List
                             <ChevronDown className="h-3 w-3" />
                           </Button>
                         </DropdownMenuTrigger>
@@ -1250,7 +1250,8 @@ const ProjectWizardContent = () => {
                             }}
                             className="gap-2"
                           >
-                            Manually
+                            <FilePlus className="h-4 w-4" />
+                            {analysisItems.length === 0 ? "Create from Scratch" : "Edit Manually"}
                           </DropdownMenuItem>
                           <DropdownMenuItem
                             onClick={() => setShowDriveConnectionDialog(true)}
@@ -1281,16 +1282,18 @@ const ProjectWizardContent = () => {
                         No assets, water systems, or processes have been added yet.
                       </p>
                       <div className="flex flex-col items-center gap-2">
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => {
-                            setAwpModalKey(prev => prev + 1);
-                            setShowAWPEditModal(true);
-                          }}
-                        >
-                          Add Manually
-                        </Button>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => {
+                              setAwpModalKey(prev => prev + 1);
+                              setShowAWPEditModal(true);
+                            }}
+                            className="gap-2"
+                          >
+                            <FilePlus className="h-4 w-4" />
+                            Create from Scratch
+                          </Button>
                         <p className="text-xs text-muted-foreground text-center max-w-lg mt-4">
                           Or connect a cloud repository to analyze drawings and detect assets and systems at risk.
                         </p>
