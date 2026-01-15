@@ -245,7 +245,7 @@ const Auth = () => {
         <div className="w-full max-w-md space-y-8">
           <div className="text-center">
             <img src={riskBlueLogo} alt="RiskBlue" className="h-12 mx-auto mb-8" />
-            <h1 className="text-3xl font-bold font-serif text-foreground">Log in</h1>
+            <h1 className="text-3xl font-bold font-serif text-foreground">Log In</h1>
           </div>
 
           <form onSubmit={handleSubmit} className="space-y-6">
@@ -293,7 +293,7 @@ const Auth = () => {
               </button>
             </div>
 
-            <Button type="submit" className="w-full">Log in</Button>
+            <Button type="submit" className="w-full">Log In</Button>
           </form>
 
           <div className="mt-8 pt-6 border-t border-border text-center space-y-2">
@@ -306,7 +306,7 @@ const Auth = () => {
               onClick={() => setShowRequestModal(true)}
               className="text-sm text-primary hover:underline font-medium"
             >
-              Request access
+              Request Access
             </button>
           </div>
         </div>
@@ -368,7 +368,7 @@ const Auth = () => {
                 />
               </div>
               <Button type="submit" className="w-full" disabled={isSubmittingRequest}>
-                {isSubmittingRequest ? "Submitting..." : "Submit request"}
+                {isSubmittingRequest ? "Submitting..." : "Submit Request"}
               </Button>
             </form>
           ) : (
