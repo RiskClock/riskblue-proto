@@ -6,7 +6,7 @@ import { generateReportFilename } from "@/lib/reportGenerator";
 import { AnalysisItem } from "@/lib/analysisItemMapper";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import html2pdf from "html2pdf.js";
+import { generatePdfFromElement, getImageBase64, waitForImages } from "@/lib/pdfExporter";
 import riskBlueLogo from "@/assets/riskblue-logo.jpg";
 
 interface WaterMitigationGuidelinesStepProps {
@@ -88,58 +88,6 @@ export const WaterMitigationGuidelinesStep = ({ data, analysisItems = [], onBack
     const root = document.createElement('div');
     reportContainer.appendChild(root);
     
-    // Wait for all images to load
-    const waitForImages = (container: HTMLElement): Promise<void> => {
-      return new Promise((resolve) => {
-        const images = container.querySelectorAll('img');
-        if (images.length === 0) {
-          resolve();
-          return;
-        }
-        
-        let loadedCount = 0;
-        const checkComplete = () => {
-          loadedCount++;
-          if (loadedCount >= images.length) {
-            resolve();
-          }
-        };
-        
-        images.forEach((img) => {
-          if (img.complete && img.naturalHeight !== 0) {
-            checkComplete();
-          } else {
-            img.onload = checkComplete;
-            img.onerror = checkComplete;
-          }
-        });
-        
-        setTimeout(resolve, 5000);
-      });
-    };
-
-    // Convert image to base64 for jsPDF
-    const getImageBase64 = (imgSrc: string): Promise<string> => {
-      return new Promise((resolve) => {
-        const img = new Image();
-        img.onload = () => {
-          const canvas = document.createElement("canvas");
-          canvas.width = img.naturalWidth || img.width;
-          canvas.height = img.naturalHeight || img.height;
-          const ctx = canvas.getContext("2d");
-          ctx?.drawImage(img, 0, 0);
-          const base64 = canvas.toDataURL("image/jpeg", 0.92);
-          console.log("[PDF] image->base64 ok", { src: imgSrc, length: base64.length });
-          resolve(base64);
-        };
-        img.onerror = (e) => {
-          console.warn("[PDF] image->base64 failed", { src: imgSrc, error: e });
-          resolve("");
-        };
-        img.src = imgSrc;
-      });
-    };
-    
     // Import and render
     import('react-dom/client').then(async ({ createRoot }) => {
       const reactRoot = createRoot(root);
@@ -160,61 +108,36 @@ export const WaterMitigationGuidelinesStep = ({ data, analysisItems = [], onBack
       // Get the logo as base64 for footer
       const logoBase64 = await getImageBase64(riskBlueLogo);
       
-      // Generate PDF using html2pdf with jsPDF callback for footer
-      const opt = {
-        margin: [15, 15, 25, 15], // top, left, bottom, right in mm - increased bottom for footer
-        filename: `${filename}.pdf`,
-        image: { type: 'jpeg', quality: 0.98 },
-        html2canvas: { 
-          scale: 2, 
-          useCORS: true,
-          logging: false,
-          letterRendering: true
-        },
-        jsPDF: { 
-          unit: 'mm', 
-          format: 'a4', 
-          orientation: 'portrait' 
-        },
-        pagebreak: { mode: ['avoid-all', 'css', 'legacy'] }
-      };
-
-      html2pdf()
-        .set(opt)
-        .from(reportContainer)
-        .toPdf()
-        .get('pdf')
-        .then((pdf: any) => {
-          const totalPages = pdf.internal.getNumberOfPages();
-          const pageWidth = pdf.internal.pageSize.getWidth();
-          const pageHeight = pdf.internal.pageSize.getHeight();
-          
-          // Add logo to bottom-right corner of pages 2+ (page 1 has "Built in RiskBlue" header)
-          if (logoBase64) {
-            console.log("[PDF] Adding footer logo", { totalPages });
-            for (let i = 2; i <= totalPages; i++) {
-              pdf.setPage(i);
-              // Position: right-aligned with 15mm margin, 8mm from bottom
-              // Logo dimensions: 18mm wide x 6mm tall (maintains aspect ratio)
-              pdf.addImage(logoBase64, "JPEG", pageWidth - 33, pageHeight - 12, 18, 6);
-            }
-          } else {
-            console.warn("[PDF] Footer logo missing (empty base64); skipping.");
-          }
-          
-          return pdf;
-        })
-        .save()
-        .then(() => {
-          toast({
-            title: "PDF Exported",
-            description: "Your report has been saved as PDF.",
-          });
-          
-          // Cleanup
-          reactRoot.unmount();
-          document.body.removeChild(reportContainer);
+      try {
+        // Generate PDF using jsPDF + html2canvas directly
+        await generatePdfFromElement(reportContainer, {
+          filename,
+          margins: {
+            top: 15,
+            right: 15,
+            bottom: 25,
+            left: 15,
+          },
+          logoBase64,
+          skipLogoOnFirstPage: true,
         });
+
+        toast({
+          title: "PDF Exported",
+          description: "Your report has been saved as PDF.",
+        });
+      } catch (error) {
+        console.error("PDF generation failed:", error);
+        toast({
+          title: "Export Failed",
+          description: "Failed to generate PDF. Please try again.",
+          variant: "destructive",
+        });
+      } finally {
+        // Cleanup
+        reactRoot.unmount();
+        document.body.removeChild(reportContainer);
+      }
     });
   };
 
