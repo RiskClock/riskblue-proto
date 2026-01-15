@@ -42,7 +42,7 @@ const handler = async (req: Request): Promise<Response> => {
     console.log(`Sending ${notifications.length} notification(s) and ${invitations.length} invitation(s) for project ${projectId}`);
 
     // Get the app URL from environment or use a default
-    const appUrl = Deno.env.get("APP_URL") || "https://riskblue.lovable.app";
+    const appUrl = Deno.env.get("APP_URL") || "https://riskblue-proto.lovable.app";
 
     const emailResults = [];
 
@@ -91,7 +91,7 @@ const handler = async (req: Request): Promise<Response> => {
             "Content-Type": "application/json",
           },
           body: JSON.stringify({
-            from: "RiskBlue <onboarding@resend.dev>",
+            from: "RiskBlue <noreply@riskclock.com>",
             to: [notification.email],
             subject: `You've been added to "${projectName}"`,
             html: htmlBody,
@@ -174,7 +174,7 @@ const handler = async (req: Request): Promise<Response> => {
             "Content-Type": "application/json",
           },
           body: JSON.stringify({
-            from: "RiskBlue <onboarding@resend.dev>",
+            from: "RiskBlue <noreply@riskclock.com>",
             to: [invitation.email],
             subject: `You've been invited to collaborate on "${projectName}"`,
             html: htmlBody,
