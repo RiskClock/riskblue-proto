@@ -64,11 +64,12 @@ export type Database = {
       analysis_requests: {
         Row: {
           created_at: string
-          drive_folder_id: string
+          drive_folder_id: string | null
           error_message: string | null
           file_count: number | null
           id: string
           project_id: string
+          source_type: string
           status: string
           storage_path: string | null
           total_size_bytes: number | null
@@ -77,11 +78,12 @@ export type Database = {
         }
         Insert: {
           created_at?: string
-          drive_folder_id: string
+          drive_folder_id?: string | null
           error_message?: string | null
           file_count?: number | null
           id?: string
           project_id: string
+          source_type?: string
           status?: string
           storage_path?: string | null
           total_size_bytes?: number | null
@@ -90,11 +92,12 @@ export type Database = {
         }
         Update: {
           created_at?: string
-          drive_folder_id?: string
+          drive_folder_id?: string | null
           error_message?: string | null
           file_count?: number | null
           id?: string
           project_id?: string
+          source_type?: string
           status?: string
           storage_path?: string | null
           total_size_bytes?: number | null

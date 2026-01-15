@@ -32,7 +32,7 @@ import { ProposalsStep } from "@/components/wizard/ProposalsStep";
 import { ImplementationScheduleStep } from "@/components/wizard/ImplementationScheduleStep";
 import { ProjectFilesUpload, DriveFileInfo } from "@/components/wizard/ProjectFilesUpload";
 import { ResponsePlanUploadChat } from "@/components/ResponsePlanUploadChat";
-import { Download, LogOut, FileText, Loader2, Users, Settings, BarChart3, FilePlus } from "lucide-react";
+import { Download, LogOut, FileText, Loader2, Users, Settings, BarChart3, FilePlus, Upload } from "lucide-react";
 import { DropdownMenuSeparator } from "@/components/ui/dropdown-menu";
 import { Button } from "@/components/ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
@@ -121,6 +121,108 @@ const ProjectWizardContent = () => {
   
   // Standalone Google Drive connection dialog
   const [showDriveConnectionDialog, setShowDriveConnectionDialog] = useState(false);
+  
+  // Upload drawings state
+  const drawingsFileInputRef = useRef<HTMLInputElement>(null);
+  const [uploadingDrawings, setUploadingDrawings] = useState(false);
+
+  // Handle upload drawings button click
+  const handleUploadDrawingsClick = () => {
+    if (id === 'new' || !id) {
+      toast({
+        title: "Save Project First",
+        description: "Please save the project before uploading drawings.",
+        variant: "destructive",
+      });
+      return;
+    }
+    drawingsFileInputRef.current?.click();
+  };
+
+  // Handle files selected for upload
+  const handleDrawingsFilesSelected = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (!files?.length || !id || id === 'new' || !user) return;
+
+    setUploadingDrawings(true);
+
+    try {
+      // 1. Create analysis_request record with source_type = 'manual_upload'
+      const { data: analysisRequest, error: insertError } = await supabase
+        .from("analysis_requests")
+        .insert({
+          project_id: id,
+          user_id: user.id,
+          drive_folder_id: null,
+          source_type: "manual_upload",
+          status: "pending",
+          file_count: files.length,
+        })
+        .select()
+        .single();
+
+      if (insertError) throw insertError;
+
+      // 2. Upload each file to 'uploaded-drawings' bucket
+      let totalBytes = 0;
+      for (const file of Array.from(files)) {
+        const filePath = `${id}/${analysisRequest.id}/${file.name}`;
+        
+        const { error: uploadError } = await supabase.storage
+          .from("uploaded-drawings")
+          .upload(filePath, file);
+
+        if (uploadError) throw uploadError;
+        totalBytes += file.size;
+
+        // 3. Create analysis_request_files record for each file
+        await supabase.from("analysis_request_files").insert({
+          analysis_request_id: analysisRequest.id,
+          drive_file_id: `manual_${Date.now()}_${file.name}`,
+          name: file.name,
+          mime_type: file.type || "application/octet-stream",
+          size_bytes: file.size,
+          relative_path: file.name,
+          storage_path: filePath,
+          copy_status: "copied",
+        });
+      }
+
+      // 4. Update analysis_request with total size and status
+      await supabase
+        .from("analysis_requests")
+        .update({
+          status: "copied",
+          total_size_bytes: totalBytes,
+        })
+        .eq("id", analysisRequest.id);
+
+      // 5. Log activity
+      logActivity("manual_drawings_upload", id, { 
+        file_count: files.length,
+        analysis_request_id: analysisRequest.id 
+      });
+
+      toast({
+        title: "Upload Complete",
+        description: `${files.length} file(s) uploaded successfully. The internal team will analyze them shortly.`,
+      });
+
+    } catch (error) {
+      console.error("Upload error:", error);
+      toast({
+        title: "Upload Failed",
+        description: error instanceof Error ? error.message : "Failed to upload files",
+        variant: "destructive",
+      });
+    } finally {
+      setUploadingDrawings(false);
+      // Reset file input
+      if (drawingsFileInputRef.current) {
+        drawingsFileInputRef.current.value = "";
+      }
+    }
+  };
 
   // Normalize asset name for counting (must match CriticalAssetsStep logic)
   const normalizeAssetName = (name: string): string => {
@@ -1254,6 +1356,18 @@ const ProjectWizardContent = () => {
                             {analysisItems.length === 0 ? "Create from Scratch" : "Edit Manually"}
                           </DropdownMenuItem>
                           <DropdownMenuItem
+                            onClick={handleUploadDrawingsClick}
+                            disabled={uploadingDrawings}
+                            className="gap-2"
+                          >
+                            {uploadingDrawings ? (
+                              <Loader2 className="h-4 w-4 animate-spin" />
+                            ) : (
+                              <Upload className="h-4 w-4" />
+                            )}
+                            Upload Drawings
+                          </DropdownMenuItem>
+                          <DropdownMenuItem
                             onClick={() => setShowDriveConnectionDialog(true)}
                             className="gap-2"
                           >
@@ -1298,6 +1412,20 @@ const ProjectWizardContent = () => {
                           Or connect a cloud repository to analyze drawings and detect assets and systems at risk.
                         </p>
                         <div className="flex gap-3 mt-3">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={handleUploadDrawingsClick}
+                            disabled={uploadingDrawings}
+                            className="gap-2"
+                          >
+                            {uploadingDrawings ? (
+                              <Loader2 className="h-4 w-4 animate-spin" />
+                            ) : (
+                              <Upload className="h-4 w-4" />
+                            )}
+                            Upload Drawings
+                          </Button>
                           <Button
                             variant="outline"
                             size="sm"
@@ -1702,6 +1830,16 @@ const ProjectWizardContent = () => {
             description: "Your files are being copied for analysis. This may take up to 48 hours.",
           });
         }}
+      />
+      
+      {/* Hidden file input for drawings upload */}
+      <input
+        type="file"
+        ref={drawingsFileInputRef}
+        className="hidden"
+        multiple
+        accept=".pdf,.png,.jpg,.jpeg,.dwg,.dxf"
+        onChange={handleDrawingsFilesSelected}
       />
     </div>
   );

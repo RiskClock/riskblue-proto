@@ -430,7 +430,7 @@ export default function InternalAnalysisQueue() {
         <div className="flex items-center justify-between mb-6">
           <div>
             <h1 className="text-3xl font-bold text-foreground">Analysis Queue</h1>
-            <p className="text-muted-foreground">Manage Google Drive analysis requests</p>
+            <p className="text-muted-foreground">Manage drawing analysis requests</p>
           </div>
           <Button variant="outline" size="sm" onClick={() => refetch()}>
             <RefreshCw className="w-4 h-4 mr-2" />
