@@ -29,7 +29,8 @@ import {
   LogOut,
   ShieldAlert,
   Settings,
-  BarChart3
+  BarChart3,
+  RotateCcw
 } from "lucide-react";
 import { format } from "date-fns";
 
@@ -173,6 +174,7 @@ export default function InternalAnalysisQueue() {
   const [selectedRequest, setSelectedRequest] = useState<AnalysisRequest | null>(null);
   const [showFilesModal, setShowFilesModal] = useState(false);
   const [downloadingZip, setDownloadingZip] = useState<string | null>(null);
+  const [retrying, setRetrying] = useState<string | null>(null);
   const [showProviderDialog, setShowProviderDialog] = useState(false);
 
   // Check if user is internal
@@ -312,6 +314,60 @@ export default function InternalAnalysisQueue() {
     }
   };
 
+  const handleRetry = async (request: AnalysisRequest) => {
+    setRetrying(request.id);
+    try {
+      // Reset status to pending
+      const { error: updateError } = await supabase
+        .from("analysis_requests")
+        .update({ status: "pending", error_message: null })
+        .eq("id", request.id);
+
+      if (updateError) throw updateError;
+
+      // Reset file statuses
+      await supabase
+        .from("analysis_request_files")
+        .update({ copy_status: "pending", storage_path: null })
+        .eq("analysis_request_id", request.id);
+
+      // Trigger the copy function again
+      const { data: sessionData } = await supabase.auth.getSession();
+      const token = sessionData.session?.access_token;
+
+      const response = await fetch(
+        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/copy-drive-files`,
+        {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${token}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ analysisRequestId: request.id }),
+        }
+      );
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || "Retry failed");
+      }
+
+      toast({
+        title: "Retry Started",
+        description: "File copying has been restarted.",
+      });
+    } catch (error) {
+      console.error("Retry error:", error);
+      toast({
+        title: "Retry Failed",
+        description: error instanceof Error ? error.message : "Failed to retry copying",
+        variant: "destructive",
+      });
+    } finally {
+      setRetrying(null);
+    }
+  };
+
   const fileTree = files ? buildFileTree(files) : [];
 
   // Access control
@@ -434,6 +490,20 @@ export default function InternalAnalysisQueue() {
                           <Eye className="w-4 h-4 mr-1" />
                           View
                         </Button>
+                        {(request.status === "failed" || request.status === "pending") && (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => handleRetry(request)}
+                            disabled={retrying === request.id}
+                          >
+                            {retrying === request.id ? (
+                              <Loader2 className="w-4 h-4 animate-spin" />
+                            ) : (
+                              <RotateCcw className="w-4 h-4" />
+                            )}
+                          </Button>
+                        )}
                         <Button
                           variant="outline"
                           size="sm"
