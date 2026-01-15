@@ -1117,6 +1117,7 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      has_project_access: { Args: { project_uuid: string }; Returns: boolean }
       has_project_role: {
         Args: {
           _project_id: string
