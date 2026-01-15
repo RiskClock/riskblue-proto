@@ -6,6 +6,7 @@ import { Loader2, Check, Link2, ExternalLink } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { useDriveToken } from "@/hooks/useDriveToken";
+import { useAuth } from "@/contexts/AuthContext";
 import googleDriveIcon from "@/assets/icon_googledrive.png";
 
 interface DriveFileInfo {
@@ -22,8 +23,9 @@ interface RepositoryConnectionDialogProps {
   onClose: () => void;
   projectId: string;
   projectName?: string;
-  onFilesLoaded: (files: DriveFileInfo[], accessToken: string) => void;
+  onFilesLoaded?: (files: DriveFileInfo[], accessToken: string) => void;
   onBeforeOAuthRedirect?: () => Promise<void>;
+  onAnalysisStarted?: () => void; // New callback when analysis is triggered
 }
 
 export const RepositoryConnectionDialog = ({
@@ -33,8 +35,10 @@ export const RepositoryConnectionDialog = ({
   projectName,
   onFilesLoaded,
   onBeforeOAuthRedirect,
+  onAnalysisStarted,
 }: RepositoryConnectionDialogProps) => {
   const { toast } = useToast();
+  const { user } = useAuth();
   const [folderId, setFolderId] = useState("");
   const [loadingFiles, setLoadingFiles] = useState(false);
   const [connectingDrive, setConnectingDrive] = useState(false);
@@ -68,7 +72,7 @@ export const RepositoryConnectionDialog = ({
     }
   };
 
-  const handleLoadFiles = async () => {
+  const handleAnalyze = async () => {
     if (!folderId.trim() || !driveToken?.accessToken) {
       toast({
         title: "Missing Information",
@@ -78,59 +82,95 @@ export const RepositoryConnectionDialog = ({
       return;
     }
 
+    if (!user) {
+      toast({
+        title: "Not Authenticated",
+        description: "Please sign in to continue.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (!projectId || projectId === "new") {
+      toast({
+        title: "Save Project First",
+        description: "Please save the project before starting analysis.",
+        variant: "destructive",
+      });
+      return;
+    }
+
     setLoadingFiles(true);
 
     try {
-      let allFiles: DriveFileInfo[] = [];
-      let nextPageToken: string | null = null;
+      // 1. Count files in folder (quick check)
+      const response = await supabase.functions.invoke("list-drive-files", {
+        body: {
+          folderId: folderId.trim(),
+          accessToken: driveToken.accessToken,
+        },
+      });
 
-      do {
-        const response = await supabase.functions.invoke("list-drive-files", {
-          body: {
-            folderId: folderId.trim(),
-            accessToken: driveToken.accessToken,
-            pageToken: nextPageToken,
-          },
-        });
-
-        if (response.error) {
-          throw new Error(response.error.message);
-        }
-
-        const data = response.data;
-        if (data.error) {
-          throw new Error(data.error);
-        }
-
-        allFiles = [...allFiles, ...(data.files || [])];
-        nextPageToken = data.nextPageToken || null;
-      } while (nextPageToken);
-
-      // Save folder ID to project
-      if (projectId && projectId !== "new") {
-        await supabase
-          .from("projects")
-          .update({ drive_folder_id: folderId.trim() })
-          .eq("id", projectId);
+      if (response.error) {
+        throw new Error(response.error.message);
       }
 
-      if (allFiles.length === 0) {
-        toast({
-          title: "No Files Found",
-          description: "The folder appears to be empty or inaccessible.",
-        });
-      } else {
-        toast({
-          title: "Files Loaded",
-          description: `Found ${allFiles.length} file(s) in the folder.`,
-        });
-        onFilesLoaded(allFiles, driveToken.accessToken);
+      const filesCount = response.data?.files?.length || 0;
+
+      // 2. Save folder ID to project
+      await supabase
+        .from("projects")
+        .update({ drive_folder_id: folderId.trim() })
+        .eq("id", projectId);
+
+      // 3. Create analysis request record
+      const { data: analysisRequest, error: insertError } = await supabase
+        .from("analysis_requests")
+        .insert({
+          project_id: projectId,
+          user_id: user.id,
+          drive_folder_id: folderId.trim(),
+          status: "pending",
+          file_count: filesCount,
+        })
+        .select()
+        .single();
+
+      if (insertError) {
+        throw new Error(`Failed to create analysis request: ${insertError.message}`);
       }
+
+      // 4. Log the activity
+      await supabase.from("user_activity_logs").insert({
+        user_id: user.id,
+        action: "google_drive_analysis_request",
+        project_id: projectId,
+        metadata: {
+          folder_id: folderId.trim(),
+          file_count: filesCount,
+          analysis_request_id: analysisRequest.id,
+        },
+      });
+
+      // 5. Trigger background file copy (fire and forget)
+      supabase.functions.invoke("copy-drive-files", {
+        body: { analysisRequestId: analysisRequest.id },
+      }).catch(err => console.error("Background copy trigger failed:", err));
+
+      // 6. Show success message
+      toast({
+        title: "Analysis Started",
+        description: "It may take up to 48 hours to complete the analysis. You'll be notified when results are ready.",
+      });
+
+      // 7. Call callback and close
+      onAnalysisStarted?.();
+      onClose();
     } catch (error) {
-      console.error("Error loading Drive files:", error);
+      console.error("Error starting analysis:", error);
       toast({
         title: "Error",
-        description: error instanceof Error ? error.message : "Failed to load files",
+        description: error instanceof Error ? error.message : "Failed to start analysis",
         variant: "destructive",
       });
     } finally {
@@ -228,7 +268,7 @@ export const RepositoryConnectionDialog = ({
               </div>
 
               <Button
-                onClick={handleLoadFiles}
+                onClick={handleAnalyze}
                 disabled={loadingFiles || !folderId.trim()}
                 className="w-full"
               >

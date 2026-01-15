@@ -1,4 +1,4 @@
-import { useState, useMemo, useCallback, useEffect, useLayoutEffect, useRef } from "react";
+import { useState, useMemo, useCallback, useEffect, useRef } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
@@ -6,13 +6,12 @@ import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Plus, Trash2, Pencil, ChevronDown, FolderOpen, Paperclip, X, Loader2, RotateCcw } from "lucide-react";
+import { Plus, Trash2, Pencil, Paperclip, X, RotateCcw } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { countByCategory } from "@/lib/analysisItemMapper";
 import { supabase } from "@/integrations/supabase/client";
 import { AnalysisItem } from "@/lib/analysisItemMapper";
 import { AWPItemEditModal } from "./AWPItemEditModal";
-import { RepositoryConnectionDialog } from "./RepositoryConnectionDialog";
 import { FileAnalysisModal } from "./FileAnalysisModal";
 import { InlineCombobox } from "./InlineCombobox";
 import { useAWPOptions, isAssetName, isWaterSystemName, getCategoryForName, getDefaultControlIdsForName } from "@/hooks/useAWPOptions";
@@ -25,10 +24,6 @@ import {
 } from "@/lib/awpIdGenerator";
 import { resolveControlIdsToNames } from "@/lib/controlAutoAssignment";
 
-// Bug 6: Use public folder paths for preloading
-const googleDriveIcon = "/icons/icon_googledrive.png";
-const procoreIcon = "/icons/icon_procore.png";
-
 interface AWPEditModalProps {
   isOpen: boolean;
   onClose: () => void;
@@ -36,9 +31,7 @@ interface AWPEditModalProps {
   onUpdateItems: (items: AnalysisItem[], changeCount?: number) => void;
   projectId: string;
   projectName?: string;
-  onBeforeOAuthRedirect?: () => Promise<void>;
-  onFilesLoaded?: (files: any[], accessToken: string) => void;
-  initialNewItems?: AnalysisItem[]; // Phase 5: Pre-populate from analysis results
+  initialNewItems?: AnalysisItem[]; // Pre-populate from analysis results
 }
 
 type AreaUnit = "sqft" | "sqm";
@@ -102,8 +95,6 @@ export const AWPEditModal = ({
   onUpdateItems,
   projectId,
   projectName,
-  onBeforeOAuthRedirect,
-  onFilesLoaded,
   initialNewItems,
 }: AWPEditModalProps) => {
   // Fetch AWP options from DB
@@ -142,26 +133,11 @@ export const AWPEditModal = ({
   const [areaUnit, setAreaUnit] = useState<AreaUnit>("sqft");
   const [pipeUnit, setPipeUnit] = useState<PipeUnit>("in");
   
-  // Repository connection dialog
-  const [showRepositoryDialog, setShowRepositoryDialog] = useState(false);
-  const [repositoryType, setRepositoryType] = useState<"google-drive" | "procore" | null>(null);
-  
-  // Phase 5: Analysis state
-  const [analyzingFiles, setAnalyzingFiles] = useState(false);
-  
   // File analysis animation modal
   const [showAnalysisModal, setShowAnalysisModal] = useState(false);
   const [analysisFiles, setAnalysisFiles] = useState<{ name: string; id: string }[]>([]);
   const [pendingAnalysisCallback, setPendingAnalysisCallback] = useState<(() => void) | null>(null);
   const { toast } = useToast();
-
-  // Preload icons from public folder
-  useLayoutEffect(() => {
-    const img1 = new Image();
-    img1.src = "/icons/icon_googledrive.png";
-    const img2 = new Image();
-    img2.src = "/icons/icon_procore.png";
-  }, []);
 
   // Initialize/reset ALL state when modal opens
   useEffect(() => {
@@ -581,125 +557,7 @@ export const AWPEditModal = ({
     return "-";
   };
 
-  // Phase 5: Handle repository files loaded - trigger analysis with animation modal
-  const handleRepositoryFilesLoaded = useCallback(async (files: any[], accessToken: string) => {
-    setShowRepositoryDialog(false);
-    setRepositoryType(null);
-    
-    // Pass files to parent for state sync
-    if (onFilesLoaded) {
-      onFilesLoaded(files, accessToken);
-    }
-    
-    // Validate project is saved before analysis
-    if (!projectId || projectId === "new") {
-      toast({
-        title: "Save Project First",
-        description: "Please save the project before running analysis. Enter a project name and save.",
-        variant: "destructive",
-      });
-      return;
-    }
-    
-    if (files.length === 0) {
-      toast({
-        title: "No Files",
-        description: "No files found in the folder.",
-      });
-      return;
-    }
-    
-    // Show analysis animation modal with file list
-    setAnalysisFiles(files.map((f: any) => ({ name: f.name, id: f.id })));
-    setShowAnalysisModal(true);
-    
-    // Start analysis in background
-    setAnalyzingFiles(true);
-    
-    // Since we're using mock data, simulate for 30 seconds
-    // The actual analysis will complete but we wait for the animation
-    const runAnalysis = async () => {
-      try {
-        // Get or create file search store ID
-        const { data: projectData } = await supabase
-          .from("projects")
-          .select("filesearch_store_id")
-          .eq("id", projectId)
-          .single();
-        
-        let fileSearchStoreId = projectData?.filesearch_store_id;
-        
-        if (!fileSearchStoreId) {
-          const storeResponse = await supabase.functions.invoke("create-filesearch-store", {
-            body: { projectId },
-          });
-          if (storeResponse.data?.storeId) {
-            fileSearchStoreId = storeResponse.data.storeId;
-            await supabase
-              .from("projects")
-              .update({ filesearch_store_id: fileSearchStoreId })
-              .eq("id", projectId);
-          }
-        }
-        
-        // Invoke analysis edge function
-        const response = await supabase.functions.invoke("analyze-drive-files", {
-          body: {
-            files,
-            accessToken,
-            filesearch_store_id: fileSearchStoreId,
-          },
-        });
-        
-        if (response.error) {
-          throw new Error(response.error.message);
-        }
-        
-        const data = response.data;
-        if (data.error) {
-          throw new Error(data.error);
-        }
-        
-        // Parse results - handle both response formats
-        const assetsWaterSystemsProcesses: AnalysisItem[] = Array.isArray(data.analysis)
-          ? data.analysis
-          : (data.assets_water_systems_processes || []);
-        
-        if (assetsWaterSystemsProcesses.length === 0) {
-          toast({
-            title: "No Items Found",
-            description: "The analysis did not detect any assets, water systems, or processes in the files.",
-          });
-          return;
-        }
-        
-        // Convert to NewRowItem and REPLACE the Add New Items pane (not accumulate)
-        const newRowItems = assetsWaterSystemsProcesses.map(item => analysisItemToNewRow(item));
-        // Replace all staged items with new analysis results + fresh empty row
-        setNewRows([...newRowItems, createEmptyRow()]);
-        
-        const counts = countByCategory(assetsWaterSystemsProcesses);
-        toast({
-          title: "Analysis Complete",
-          description: `Found ${counts.assets} assets, ${counts.waterSystems} water systems, ${counts.processes} processes. Review and save to confirm.`,
-        });
-      } catch (error) {
-        console.error("Analysis error:", error);
-        toast({
-          title: "Analysis Error",
-          description: error instanceof Error ? error.message : "Failed to analyze files",
-          variant: "destructive",
-        });
-      } finally {
-        setAnalyzingFiles(false);
-      }
-    };
-    
-    // Store the callback to run after modal animation completes
-    setPendingAnalysisCallback(() => runAnalysis);
-  }, [onFilesLoaded, projectId, toast]);
-  
-  // Handle analysis modal completion
+  // Handle analysis modal completion (kept for initialNewItems flow)
   const handleAnalysisModalComplete = useCallback(() => {
     setShowAnalysisModal(false);
     if (pendingAnalysisCallback) {
@@ -993,48 +851,6 @@ export const AWPEditModal = ({
                   </Button>
                 </div>
               </div>
-              
-              {/* Docked Analyze Drawing Files section */}
-              <div className="p-3 border-t bg-muted/30">
-                <div className="flex items-center justify-between">
-                  <span className="text-xs font-medium text-muted-foreground">
-                    {analyzingFiles ? "Analyzing files..." : "Analyze Drawing Files"}
-                  </span>
-                  <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                      <Button variant="outline" size="sm" className="gap-1" disabled={analyzingFiles}>
-                        {analyzingFiles ? (
-                          <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                        ) : (
-                          <FolderOpen className="w-3.5 h-3.5" />
-                        )}
-                        {analyzingFiles ? "Analyzing..." : "Connect Repository"}
-                        <ChevronDown className="w-3 h-3 ml-1" />
-                      </Button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end" className="w-48">
-                      <DropdownMenuItem 
-                        onClick={() => {
-                          setRepositoryType("google-drive");
-                          setShowRepositoryDialog(true);
-                        }}
-                        className="gap-2"
-                      >
-                        <img src={googleDriveIcon} alt="" className="w-4 h-4" />
-                        Google Drive
-                      </DropdownMenuItem>
-                      <DropdownMenuItem 
-                        disabled
-                        className="gap-2 opacity-50"
-                      >
-                        <img src={procoreIcon} alt="" className="w-4 h-4" />
-                        <span>Procore</span>
-                        <span className="ml-auto text-[10px] text-muted-foreground">Coming Soon</span>
-                      </DropdownMenuItem>
-                    </DropdownMenuContent>
-                  </DropdownMenu>
-                </div>
-              </div>
             </div>
           </div>
 
@@ -1059,21 +875,6 @@ export const AWPEditModal = ({
           allItems={existingItems}
           onSave={handleEditSave}
           projectId={projectId}
-        />
-      )}
-
-      {/* Repository Connection Dialog */}
-      {repositoryType === "google-drive" && (
-        <RepositoryConnectionDialog
-          isOpen={showRepositoryDialog}
-          onClose={() => {
-            setShowRepositoryDialog(false);
-            setRepositoryType(null);
-          }}
-          projectId={projectId}
-          projectName={projectName}
-          onFilesLoaded={handleRepositoryFilesLoaded}
-          onBeforeOAuthRedirect={onBeforeOAuthRedirect}
         />
       )}
 
