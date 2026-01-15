@@ -28,6 +28,8 @@ const Auth = () => {
     }
   }, [user, loading, navigate]);
 
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
   const handleForgotPassword = async (e: React.FormEvent) => {
     e.preventDefault();
     
@@ -40,11 +42,14 @@ const Auth = () => {
       return;
     }
 
+    setIsSubmitting(true);
     try {
-      const { error } = await supabase.auth.resetPasswordForEmail(email, {
-        redirectTo: `${window.location.origin}/reset-password`,
+      const { data, error } = await supabase.functions.invoke('send-password-reset', {
+        body: { email }
       });
+
       if (error) throw error;
+      if (data && !data.success) throw new Error(data.error || 'Failed to send reset email');
       
       setResetEmailSent(true);
       toast({
@@ -57,6 +62,8 @@ const Auth = () => {
         description: getUserFriendlyError(error),
         variant: "destructive",
       });
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -117,8 +124,8 @@ const Auth = () => {
                   />
                 </div>
 
-                <Button type="submit" className="w-full">
-                  Send Reset Link
+                <Button type="submit" className="w-full" disabled={isSubmitting}>
+                  {isSubmitting ? "Sending..." : "Send Reset Link"}
                 </Button>
 
                 <div className="text-center">
