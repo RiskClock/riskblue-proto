@@ -256,7 +256,7 @@ const Projects = () => {
                 <X className="h-4 w-4" />
               </button>
               <p className="text-sm text-foreground mb-3 pr-6">
-                <strong>Welcome to RiskBlue!</strong>
+                <strong>👋 Welcome to RiskBlue!</strong>
               </p>
               <p className="text-sm text-muted-foreground">
                 RiskBlue helps builders identify project-specific water risks, determine the right mitigation strategies, and translate them into structured plans and coordinated execution. By unifying risk discovery, planning, and field operations, RiskBlue ensures consistent control, accountability, and rapid response across the entire water-mitigation lifecycle.
@@ -266,7 +266,9 @@ const Projects = () => {
 
           <div className="flex items-center justify-between mb-4">
             <div>
-              <h1 className="text-3xl font-bold text-foreground">Projects</h1>
+              <h1 className="text-3xl font-bold text-foreground">
+                Projects{projects.length > 3 && ` (${projects.length})`}
+              </h1>
             </div>
             <div className="flex gap-3">
               <Button onClick={handleNewProject}>Add New Project</Button>
@@ -289,7 +291,7 @@ const Projects = () => {
               <thead className="bg-muted/50">
                 <tr className="text-left">
                   <th className="px-6 py-3 text-sm font-medium text-foreground">
-                    Project Name ({projects.length})
+                    Project Name
                   </th>
                   <th className="px-6 py-3 text-sm font-medium text-foreground">Project Type</th>
                   <th className="px-6 py-3 text-sm font-medium text-foreground">Location</th>
