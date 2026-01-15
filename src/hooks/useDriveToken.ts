@@ -87,6 +87,12 @@ export function useDriveToken() {
       if (!response.ok) {
         const errorData = await response.json();
         console.error("Token refresh error:", errorData);
+        
+        // If refresh token is invalid, clear the stored token so user can reconnect
+        if (errorData?.error === "Token refresh failed" || errorData?.details?.error === "invalid_grant") {
+          console.log("Refresh token invalid, clearing stored token");
+          await disconnectDriveInternal();
+        }
         return false;
       }
 
@@ -99,7 +105,7 @@ export function useDriveToken() {
     }
   };
 
-  const disconnectDrive = async () => {
+  const disconnectDriveInternal = async () => {
     try {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
@@ -108,11 +114,14 @@ export function useDriveToken() {
         .from("user_drive_tokens")
         .delete()
         .eq("user_id", user.id);
-
-      setDriveToken(null);
     } catch (err) {
       console.error("Error disconnecting drive:", err);
     }
+  };
+
+  const disconnectDrive = async () => {
+    await disconnectDriveInternal();
+    setDriveToken(null);
   };
 
   const connectDrive = useCallback(async (projectPath: string): Promise<void> => {
