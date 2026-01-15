@@ -5,11 +5,12 @@ import { supabase } from "@/integrations/supabase/client";
 import { useQuery } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator } from "@/components/ui/dropdown-menu";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import { LogOut, ShieldAlert, ChevronLeft, ChevronRight } from "lucide-react";
+import { Checkbox } from "@/components/ui/checkbox";
+import { LogOut, ShieldAlert, ChevronLeft, ChevronRight, Settings, FileText, BarChart3 } from "lucide-react";
 import { useHeapIdentify } from "@/hooks/useHeapIdentify";
 import { useUserDisplayName } from "@/hooks/useUserDisplayName";
 import { LogoDropdown } from "@/components/LogoDropdown";
@@ -40,6 +41,7 @@ export default function Logs() {
   const [showProviderDialog, setShowProviderDialog] = useState(false);
   const [selectedUserId, setSelectedUserId] = useState<string>("all");
   const [page, setPage] = useState(0);
+  const [hideInternalUsers, setHideInternalUsers] = useState(false);
 
   const isInternalUser = user?.email?.toLowerCase().endsWith("@riskclock.com");
 
@@ -127,14 +129,24 @@ export default function Logs() {
   const uniqueUsers = useMemo(() => {
     const users = new Map<string, { id: string; name: string; email: string }>();
     profiles.forEach(p => {
+      const email = userEmails.get(p.user_id) || "";
       users.set(p.user_id, {
         id: p.user_id,
         name: p.display_name || "Unknown",
-        email: userEmails.get(p.user_id) || ""
+        email
       });
     });
     return Array.from(users.values()).sort((a, b) => a.name.localeCompare(b.name));
   }, [profiles, userEmails]);
+
+  // Filter logs to hide internal users if checkbox is checked
+  const filteredLogs = useMemo(() => {
+    if (!hideInternalUsers) return logsData?.logs || [];
+    return (logsData?.logs || []).filter(log => {
+      const email = userEmails.get(log.user_id) || "";
+      return !email.toLowerCase().endsWith("@riskclock.com");
+    });
+  }, [logsData?.logs, hideInternalUsers, userEmails]);
 
   const logs = logsData?.logs || [];
   const totalCount = logsData?.totalCount || 0;
@@ -171,13 +183,6 @@ export default function Logs() {
             <button onClick={() => navigate("/projects")} className="text-foreground hover:text-primary">
               Projects
             </button>
-            <button onClick={() => navigate("/configuration")} className="text-foreground hover:text-primary">
-              Configuration
-            </button>
-            <button onClick={() => navigate("/internal/analysis-queue")} className="text-foreground hover:text-primary">
-              Analysis Queue
-            </button>
-            <button className="text-foreground hover:text-primary">Logs</button>
             <button onClick={() => setShowProviderDialog(true)} className="text-foreground hover:text-primary">
               Solution Provider Portal
             </button>
@@ -188,6 +193,19 @@ export default function Logs() {
                 </Avatar>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="w-48">
+                <DropdownMenuItem onClick={() => navigate("/configuration")} className="cursor-pointer">
+                  <Settings className="h-4 w-4 mr-2" />
+                  Configuration
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => navigate("/internal/analysis-queue")} className="cursor-pointer">
+                  <FileText className="h-4 w-4 mr-2" />
+                  Analysis Queue
+                </DropdownMenuItem>
+                <DropdownMenuItem className="cursor-pointer">
+                  <BarChart3 className="h-4 w-4 mr-2" />
+                  Logs
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
                 <DropdownMenuItem onClick={signOut} className="cursor-pointer">
                   <LogOut className="h-4 w-4 mr-2" />
                   Logout
@@ -205,6 +223,22 @@ export default function Logs() {
             <p className="text-muted-foreground">View user activity across all projects</p>
           </div>
           <div className="flex items-center gap-4">
+            <div className="flex items-center space-x-2">
+              <Checkbox
+                id="hide-internal"
+                checked={hideInternalUsers}
+                onCheckedChange={(checked) => {
+                  setHideInternalUsers(checked === true);
+                  setPage(0);
+                }}
+              />
+              <label
+                htmlFor="hide-internal"
+                className="text-sm text-muted-foreground cursor-pointer"
+              >
+                Remove internal users
+              </label>
+            </div>
             <Select value={selectedUserId} onValueChange={(value) => { setSelectedUserId(value); setPage(0); }}>
               <SelectTrigger className="w-[250px]">
                 <SelectValue placeholder="Filter by user" />
@@ -223,7 +257,7 @@ export default function Logs() {
 
         {logsLoading ? (
           <div className="text-center py-12 text-muted-foreground">Loading logs...</div>
-        ) : logs.length === 0 ? (
+        ) : filteredLogs.length === 0 ? (
           <div className="text-center py-12 text-muted-foreground">No activity logs found</div>
         ) : (
           <>
@@ -239,7 +273,7 @@ export default function Logs() {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {logs.map((log) => (
+                    {filteredLogs.map((log) => (
                       <TableRow key={log.id}>
                         <TableCell className="text-sm text-muted-foreground">
                           {format(new Date(log.created_at), "MMM d, yyyy h:mm a")}

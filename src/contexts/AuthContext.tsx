@@ -32,20 +32,17 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
           (window as any).heap.identify(session.user.email);
         }
 
-        // Log session start events (deferred to avoid Supabase deadlock)
-        if (session?.user) {
-          const sessionType = event === "SIGNED_IN" ? "fresh_login" : "continue_session";
-          if (event === "SIGNED_IN" || event === "INITIAL_SESSION") {
-            setTimeout(async () => {
-              try {
-                await supabase.from("user_activity_logs").insert({
-                  user_id: session.user.id,
-                  action: "session_start",
-                  metadata: { type: sessionType }
-                });
-              } catch {}
-            }, 0);
-          }
+        // Log login events (deferred to avoid Supabase deadlock)
+        if (session?.user && event === "SIGNED_IN") {
+          setTimeout(async () => {
+            try {
+              await supabase.from("user_activity_logs").insert({
+                user_id: session.user.id,
+                action: "login",
+                metadata: {}
+              });
+            } catch {}
+          }, 0);
         }
       }
     );

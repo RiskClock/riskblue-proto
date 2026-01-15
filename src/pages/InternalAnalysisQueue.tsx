@@ -15,6 +15,7 @@ import { LogoDropdown } from "@/components/LogoDropdown";
 import { ProviderSelectionDialog } from "@/components/ProviderSelectionDialog";
 import { useHeapIdentify } from "@/hooks/useHeapIdentify";
 import { useUserDisplayName } from "@/hooks/useUserDisplayName";
+import { DropdownMenuSeparator } from "@/components/ui/dropdown-menu";
 import { 
   Download, 
   Eye, 
@@ -26,7 +27,9 @@ import {
   ChevronDown,
   ExternalLink,
   LogOut,
-  ShieldAlert
+  ShieldAlert,
+  Settings,
+  BarChart3
 } from "lucide-react";
 import { format } from "date-fns";
 
@@ -308,13 +311,6 @@ export default function InternalAnalysisQueue() {
             <button onClick={() => navigate("/projects")} className="text-foreground hover:text-primary">
               Projects
             </button>
-            <button onClick={() => navigate("/configuration")} className="text-foreground hover:text-primary">
-              Configuration
-            </button>
-            <button className="text-foreground hover:text-primary">Analysis Queue</button>
-            <button onClick={() => navigate("/logs")} className="text-foreground hover:text-primary">
-              Logs
-            </button>
             <button onClick={() => setShowProviderDialog(true)} className="text-foreground hover:text-primary">
               Solution Provider Portal
             </button>
@@ -325,6 +321,19 @@ export default function InternalAnalysisQueue() {
                 </Avatar>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="w-48">
+                <DropdownMenuItem onClick={() => navigate("/configuration")} className="cursor-pointer">
+                  <Settings className="h-4 w-4 mr-2" />
+                  Configuration
+                </DropdownMenuItem>
+                <DropdownMenuItem className="cursor-pointer">
+                  <FileText className="h-4 w-4 mr-2" />
+                  Analysis Queue
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => navigate("/logs")} className="cursor-pointer">
+                  <BarChart3 className="h-4 w-4 mr-2" />
+                  Logs
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
                 <DropdownMenuItem onClick={signOut} className="cursor-pointer">
                   <LogOut className="h-4 w-4 mr-2" />
                   Logout
