@@ -68,20 +68,62 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     return { error };
   };
 
-  const signOut = async () => {
+  const clearAuthStorage = () => {
+    if (typeof window === "undefined") return;
+
+    const storages: Storage[] = [];
     try {
-      // Use scope: 'local' to ensure local storage is cleared
-      // even if the server session is already invalidated
-      await supabase.auth.signOut({ scope: 'local' });
-    } catch (error) {
-      // If signOut still fails, manually clear localStorage
-      console.debug('Sign out error, clearing local storage manually');
-      localStorage.removeItem('sb-qbzuchzqeefbzeldftvg-auth-token');
+      storages.push(window.localStorage);
+    } catch {
+      // ignore
     }
-    // Always clear local state and navigate
-    setSession(null);
-    setUser(null);
-    navigate("/auth");
+    try {
+      storages.push(window.sessionStorage);
+    } catch {
+      // ignore
+    }
+
+    for (const storage of storages) {
+      for (const key of Object.keys(storage)) {
+        // Supabase stores auth/session artifacts under "sb-..." keys
+        if (key.startsWith("sb-")) {
+          storage.removeItem(key);
+        }
+      }
+    }
+  };
+
+  const signOut = async () => {
+    const debug = import.meta.env.DEV;
+
+    const logSupabaseStorageKeys = (label: string) => {
+      if (!debug || typeof window === "undefined") return;
+      try {
+        const keys = Object.keys(window.localStorage).filter((k) => k.startsWith("sb-"));
+        console.debug(`[auth] ${label}:`, keys);
+      } catch {
+        // ignore
+      }
+    };
+
+    try {
+      logSupabaseStorageKeys("before logout storage keys");
+
+      // Prefer a global sign-out; fallback to local-only if the server session is already invalid.
+      try {
+        await supabase.auth.signOut();
+      } catch {
+        await supabase.auth.signOut({ scope: "local" });
+      }
+    } finally {
+      // Always clear persisted tokens to prevent session rehydration on refresh.
+      clearAuthStorage();
+      logSupabaseStorageKeys("after logout storage keys");
+
+      setSession(null);
+      setUser(null);
+      navigate("/auth", { replace: true });
+    }
   };
 
   return (
