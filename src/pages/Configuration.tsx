@@ -15,6 +15,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { LogOut, Plus, X, Save, RotateCcw, ShieldAlert } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useHeapIdentify } from "@/hooks/useHeapIdentify";
+import { useUserDisplayName } from "@/hooks/useUserDisplayName";
 import { useMitigationControls, getControlNameById } from "@/hooks/useMitigationControls";
 import { LogoDropdown } from "@/components/LogoDropdown";
 import { ProviderSelectionDialog } from "@/components/ProviderSelectionDialog";
@@ -37,6 +38,7 @@ export default function Configuration() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   useHeapIdentify(); // Identify user in Heap Analytics
+  const { getInitial } = useUserDisplayName();
   const [showProviderDialog, setShowProviderDialog] = useState(false);
   const [showSaveDialog, setShowSaveDialog] = useState(false);
   const [showRevertDialog, setShowRevertDialog] = useState(false);
@@ -265,7 +267,7 @@ export default function Configuration() {
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Avatar className="cursor-pointer">
-                  <AvatarFallback>{user?.email?.[0].toUpperCase()}</AvatarFallback>
+                  <AvatarFallback>{getInitial()}</AvatarFallback>
                 </Avatar>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="w-48">

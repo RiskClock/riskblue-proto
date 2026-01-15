@@ -14,6 +14,7 @@ import { Label } from "@/components/ui/label";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { useAuth } from "@/contexts/AuthContext";
 import { useHeapIdentify } from "@/hooks/useHeapIdentify";
+import { useUserDisplayName } from "@/hooks/useUserDisplayName";
 
 interface Collaborator {
   id: string;
@@ -34,6 +35,7 @@ export default function SolutionProviderPortal() {
   const navigate = useNavigate();
   const { user, signOut } = useAuth();
   useHeapIdentify(); // Identify user in Heap Analytics
+  const { getInitial } = useUserDisplayName();
   const [searchParams, setSearchParams] = useSearchParams();
   const [collaborators, setCollaborators] = useState<Collaborator[]>([]);
   const [selectedCollaborator, setSelectedCollaborator] = useState<Collaborator | null>(null);
@@ -216,7 +218,7 @@ export default function SolutionProviderPortal() {
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Avatar className="cursor-pointer">
-                  <AvatarFallback>{user?.email?.[0].toUpperCase()}</AvatarFallback>
+                  <AvatarFallback>{getInitial()}</AvatarFallback>
                 </Avatar>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="w-48">
