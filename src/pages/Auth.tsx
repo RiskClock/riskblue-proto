@@ -164,7 +164,7 @@ const Auth = () => {
           <div className="w-full max-w-md space-y-8">
             <div className="text-center">
               <img src={riskBlueLogo} alt="RiskBlue" className="h-12 mx-auto mb-8" />
-              <h1 className="text-3xl font-bold font-serif text-foreground">Reset Password</h1>
+              <h1 className="text-4xl font-bold font-serif text-foreground">Reset Password</h1>
               <p className="text-muted-foreground mt-2">
                 {resetEmailSent 
                   ? "Check your email for a reset link" 
@@ -226,7 +226,7 @@ const Auth = () => {
         <div className="hidden lg:flex flex-1 bg-[url('https://images.unsplash.com/photo-1486406146926-c627a92ad1ab?auto=format&fit=crop&q=80')] bg-cover bg-center relative items-center justify-center">
           <div className="absolute inset-0 bg-gradient-to-br from-primary/80 to-primary/60" />
           <div className="relative z-10 max-w-md text-white px-12">
-            <h2 className="text-3xl font-bold font-serif mb-4">
+            <h2 className="text-4xl font-bold font-serif mb-4">
               Enterprise-grade water risk management for construction and insurance
             </h2>
             <p className="text-lg text-white/90">
@@ -245,7 +245,7 @@ const Auth = () => {
         <div className="w-full max-w-md space-y-8">
           <div className="text-center">
             <img src={riskBlueLogo} alt="RiskBlue" className="h-12 mx-auto mb-8" />
-            <h1 className="text-3xl font-bold font-serif text-foreground">Log In</h1>
+            <h1 className="text-4xl font-bold font-serif text-foreground">Log In</h1>
           </div>
 
           <form onSubmit={handleSubmit} className="space-y-6">
@@ -315,7 +315,7 @@ const Auth = () => {
       <div className="hidden lg:flex flex-1 bg-[url('https://images.unsplash.com/photo-1486406146926-c627a92ad1ab?auto=format&fit=crop&q=80')] bg-cover bg-center relative items-center justify-center">
         <div className="absolute inset-0 bg-gradient-to-br from-primary/80 to-primary/60" />
         <div className="relative z-10 max-w-md text-white px-12">
-          <h2 className="text-3xl font-bold font-serif mb-4">
+          <h2 className="text-4xl font-bold font-serif mb-4">
             Enterprise-grade water risk management for construction and insurance
           </h2>
           <p className="text-lg text-white/90">
@@ -334,7 +334,7 @@ const Auth = () => {
       }}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
-            <DialogTitle className="font-serif">Request Access</DialogTitle>
+            <DialogTitle>Request Access</DialogTitle>
           </DialogHeader>
           
           {!requestSubmitted ? (
