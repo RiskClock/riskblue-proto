@@ -7,19 +7,17 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { useToast } from "@/hooks/use-toast";
-import { signUpSchema, signInSchema } from "@/lib/validation";
+import { signInSchema } from "@/lib/validation";
 import { getUserFriendlyError } from "@/lib/errorHandling";
 import riskBlueLogo from "@/assets/riskblue-logo.jpg";
 
 const Auth = () => {
-  const [isLogin, setIsLogin] = useState(true);
   const [isForgotPassword, setIsForgotPassword] = useState(false);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [displayName, setDisplayName] = useState("");
   const [rememberMe, setRememberMe] = useState(false);
   const [resetEmailSent, setResetEmailSent] = useState(false);
-  const { signIn, signUp, user, loading } = useAuth();
+  const { signIn, user, loading } = useAuth();
   const navigate = useNavigate();
   const { toast } = useToast();
 
@@ -66,41 +64,20 @@ const Auth = () => {
     e.preventDefault();
     
     try {
-      if (isLogin) {
-        // Validate login input
-        const validation = signInSchema.safeParse({ email, password });
-        if (!validation.success) {
-          toast({
-            title: "Validation Error",
-            description: validation.error.errors[0].message,
-            variant: "destructive",
-          });
-          return;
-        }
-
-        const { error } = await signIn(email, password);
-        if (error) throw error;
-        navigate("/projects");
-      } else {
-        // Validate signup input
-        const validation = signUpSchema.safeParse({ email, password, displayName });
-        if (!validation.success) {
-          toast({
-            title: "Validation Error",
-            description: validation.error.errors[0].message,
-            variant: "destructive",
-          });
-          return;
-        }
-
-        const { error } = await signUp(email, password, displayName);
-        if (error) throw error;
+      // Validate login input
+      const validation = signInSchema.safeParse({ email, password });
+      if (!validation.success) {
         toast({
-          title: "Success",
-          description: "Account created successfully! Please sign in.",
+          title: "Validation Error",
+          description: validation.error.errors[0].message,
+          variant: "destructive",
         });
-        setIsLogin(true);
+        return;
       }
+
+      const { error } = await signIn(email, password);
+      if (error) throw error;
+      navigate("/projects");
     } catch (error: any) {
       toast({
         title: "Error",
@@ -198,26 +175,10 @@ const Auth = () => {
         <div className="w-full max-w-md space-y-8">
           <div className="text-center">
             <img src={riskBlueLogo} alt="RiskBlue" className="h-12 mx-auto mb-8" />
-            <h1 className="text-3xl font-bold text-foreground">
-              {isLogin ? "Log in" : "Sign up"}
-            </h1>
+            <h1 className="text-3xl font-bold text-foreground">Log in</h1>
           </div>
 
           <form onSubmit={handleSubmit} className="space-y-6">
-            {!isLogin && (
-              <div className="space-y-2">
-                <Label htmlFor="displayName">Full Name</Label>
-                <Input
-                  id="displayName"
-                  type="text"
-                  value={displayName}
-                  onChange={(e) => setDisplayName(e.target.value)}
-                  placeholder="John Doe"
-                  required={!isLogin}
-                />
-              </div>
-            )}
-            
             <div className="space-y-2">
               <Label htmlFor="email">Email</Label>
               <Input
@@ -242,42 +203,27 @@ const Auth = () => {
               />
             </div>
 
-            {isLogin && (
-              <div className="flex items-center justify-between">
-                <div className="flex items-center space-x-2">
-                  <Checkbox
-                    id="remember"
-                    checked={rememberMe}
-                    onCheckedChange={(checked) => setRememberMe(checked as boolean)}
-                  />
-                  <Label htmlFor="remember" className="text-sm text-muted-foreground">
-                    Remember me
-                  </Label>
-                </div>
-                <button 
-                  type="button" 
-                  onClick={() => setIsForgotPassword(true)}
-                  className="text-sm text-primary hover:underline"
-                >
-                  Forgot password?
-                </button>
+            <div className="flex items-center justify-between">
+              <div className="flex items-center space-x-2">
+                <Checkbox
+                  id="remember"
+                  checked={rememberMe}
+                  onCheckedChange={(checked) => setRememberMe(checked as boolean)}
+                />
+                <Label htmlFor="remember" className="text-sm text-muted-foreground">
+                  Remember me
+                </Label>
               </div>
-            )}
-
-            <Button type="submit" className="w-full">
-              {isLogin ? "Log in" : "Sign up"}
-            </Button>
-
-            <div className="text-center text-sm text-muted-foreground">
-              {isLogin ? "Don't have an account? " : "Already have an account? "}
-              <button
-                type="button"
-                onClick={() => setIsLogin(!isLogin)}
-                className="text-primary hover:underline"
+              <button 
+                type="button" 
+                onClick={() => setIsForgotPassword(true)}
+                className="text-sm text-primary hover:underline"
               >
-                {isLogin ? "Sign up" : "Log in"}
+                Forgot password?
               </button>
             </div>
+
+            <Button type="submit" className="w-full">Log in</Button>
           </form>
         </div>
       </div>
