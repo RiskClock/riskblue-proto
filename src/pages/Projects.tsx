@@ -10,7 +10,8 @@ import { useHeapIdentify } from "@/hooks/useHeapIdentify";
 import { getUserFriendlyError } from "@/lib/errorHandling";
 import { format } from "date-fns";
 import { LogoDropdown } from "@/components/LogoDropdown";
-import { Trash2, LogOut, X } from "lucide-react";
+import { Trash2, LogOut, X, Settings, FileText, BarChart3 } from "lucide-react";
+import { DropdownMenuSeparator } from "@/components/ui/dropdown-menu";
 import { Badge } from "@/components/ui/badge";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { ProviderSelectionDialog } from "@/components/ProviderSelectionDialog";
@@ -214,21 +215,6 @@ const Projects = () => {
           <div className="flex items-center gap-6">
             <button className="text-foreground hover:text-primary">Projects</button>
             {user?.email?.toLowerCase().endsWith("@riskclock.com") && (
-              <button onClick={() => navigate("/configuration")} className="text-foreground hover:text-primary">
-                Configuration
-              </button>
-            )}
-            {user?.email?.toLowerCase().endsWith("@riskclock.com") && (
-              <button onClick={() => navigate("/internal/analysis-queue")} className="text-foreground hover:text-primary">
-                Analysis Queue
-              </button>
-            )}
-            {user?.email?.toLowerCase().endsWith("@riskclock.com") && (
-              <button onClick={() => navigate("/logs")} className="text-foreground hover:text-primary">
-                Logs
-              </button>
-            )}
-            {user?.email?.toLowerCase().endsWith("@riskclock.com") && (
               <button onClick={() => setShowProviderDialog(true)} className="text-foreground hover:text-primary">
                 Solution Provider Portal
               </button>
@@ -240,6 +226,23 @@ const Projects = () => {
                 </Avatar>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="w-48">
+                {user?.email?.toLowerCase().endsWith("@riskclock.com") && (
+                  <>
+                    <DropdownMenuItem onClick={() => navigate("/configuration")} className="cursor-pointer">
+                      <Settings className="h-4 w-4 mr-2" />
+                      Configuration
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => navigate("/internal/analysis-queue")} className="cursor-pointer">
+                      <FileText className="h-4 w-4 mr-2" />
+                      Analysis Queue
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => navigate("/logs")} className="cursor-pointer">
+                      <BarChart3 className="h-4 w-4 mr-2" />
+                      Logs
+                    </DropdownMenuItem>
+                    <DropdownMenuSeparator />
+                  </>
+                )}
                 <DropdownMenuItem onClick={signOut} className="cursor-pointer">
                   <LogOut className="h-4 w-4 mr-2" />
                   Logout
