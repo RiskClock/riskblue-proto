@@ -14,6 +14,33 @@ export type Database = {
   }
   public: {
     Tables: {
+      access_requests: {
+        Row: {
+          company_name: string
+          created_at: string | null
+          full_name: string
+          id: string
+          status: string | null
+          work_email: string
+        }
+        Insert: {
+          company_name: string
+          created_at?: string | null
+          full_name: string
+          id?: string
+          status?: string | null
+          work_email: string
+        }
+        Update: {
+          company_name?: string
+          created_at?: string | null
+          full_name?: string
+          id?: string
+          status?: string | null
+          work_email?: string
+        }
+        Relationships: []
+      }
       analysis_request_files: {
         Row: {
           analysis_request_id: string
