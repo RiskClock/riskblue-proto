@@ -41,6 +41,7 @@ import { generateReportFilename } from "@/lib/reportGenerator";
 import { useProjectRole } from "@/hooks/useProjectRole";
 import { useActivityLogger } from "@/hooks/useActivityLogger";
 import { useHeapIdentify } from "@/hooks/useHeapIdentify";
+import { useUserDisplayName } from "@/hooks/useUserDisplayName";
 import { 
   AnalysisItem, 
   extractSelectedAssets, 
@@ -95,6 +96,7 @@ const ProjectWizardContent = () => {
   const justRestoredFromCache = useRef(false);
   const [showProviderDialog, setShowProviderDialog] = useState(false);
   const [showGuidelinesDialog, setShowGuidelinesDialog] = useState(false);
+  const { getInitial } = useUserDisplayName();
   const [showCollaboratorsModal, setShowCollaboratorsModal] = useState(false);
   const [analysisItems, setAnalysisItems] = useState<AnalysisItem[]>([]);
   
@@ -1109,7 +1111,7 @@ const ProjectWizardContent = () => {
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Avatar className="cursor-pointer">
-                  <AvatarFallback>{user?.email?.[0].toUpperCase()}</AvatarFallback>
+                  <AvatarFallback>{getInitial()}</AvatarFallback>
                 </Avatar>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="w-48">

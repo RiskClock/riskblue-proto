@@ -11,6 +11,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { LogOut, ShieldAlert, ChevronLeft, ChevronRight } from "lucide-react";
 import { useHeapIdentify } from "@/hooks/useHeapIdentify";
+import { useUserDisplayName } from "@/hooks/useUserDisplayName";
 import { LogoDropdown } from "@/components/LogoDropdown";
 import { ProviderSelectionDialog } from "@/components/ProviderSelectionDialog";
 import { format } from "date-fns";
@@ -35,6 +36,7 @@ export default function Logs() {
   const { user, signOut } = useAuth();
   const navigate = useNavigate();
   useHeapIdentify(); // Identify user in Heap Analytics
+  const { getInitial } = useUserDisplayName();
   const [showProviderDialog, setShowProviderDialog] = useState(false);
   const [selectedUserId, setSelectedUserId] = useState<string>("all");
   const [page, setPage] = useState(0);
@@ -179,7 +181,7 @@ export default function Logs() {
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Avatar className="cursor-pointer">
-                  <AvatarFallback>{user?.email?.[0].toUpperCase()}</AvatarFallback>
+                  <AvatarFallback>{getInitial()}</AvatarFallback>
                 </Avatar>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="w-48">
