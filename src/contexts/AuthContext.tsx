@@ -70,10 +70,13 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
   const signOut = async () => {
     try {
-      await supabase.auth.signOut();
+      // Use scope: 'local' to ensure local storage is cleared
+      // even if the server session is already invalidated
+      await supabase.auth.signOut({ scope: 'local' });
     } catch (error) {
-      // Session may already be invalidated - silently ignore
-      console.debug('Sign out completed (session may have been already invalidated)');
+      // If signOut still fails, manually clear localStorage
+      console.debug('Sign out error, clearing local storage manually');
+      localStorage.removeItem('sb-qbzuchzqeefbzeldftvg-auth-token');
     }
     // Always clear local state and navigate
     setSession(null);
