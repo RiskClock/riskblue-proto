@@ -162,15 +162,7 @@ const Auth = () => {
         </div>
 
         <div className="hidden lg:block flex-1 bg-[url('https://images.unsplash.com/photo-1486406146926-c627a92ad1ab?auto=format&fit=crop&q=80')] bg-cover bg-center relative">
-          <div className="absolute inset-0 bg-gradient-to-br from-primary/80 to-primary/60 flex items-center justify-center p-12">
-            <div className="max-w-xl text-white">
-              <h2 className="text-4xl font-bold mb-4">Version 1.0 Beta</h2>
-              <p className="text-lg">
-                Streamline your water mitigation planning with comprehensive risk assessment
-                and management tools for high-rise construction projects.
-              </p>
-            </div>
-          </div>
+          <div className="absolute inset-0 bg-gradient-to-br from-primary/80 to-primary/60" />
         </div>
       </div>
     );
@@ -236,15 +228,7 @@ const Auth = () => {
       </div>
 
       <div className="hidden lg:block flex-1 bg-[url('https://images.unsplash.com/photo-1486406146926-c627a92ad1ab?auto=format&fit=crop&q=80')] bg-cover bg-center relative">
-        <div className="absolute inset-0 bg-gradient-to-br from-primary/80 to-primary/60 flex items-center justify-center p-12">
-          <div className="max-w-xl text-white">
-            <h2 className="text-4xl font-bold mb-4">Version 1.0 Beta</h2>
-            <p className="text-lg">
-              Streamline your water mitigation planning with comprehensive risk assessment
-              and management tools for high-rise construction projects.
-            </p>
-          </div>
-        </div>
+        <div className="absolute inset-0 bg-gradient-to-br from-primary/80 to-primary/60" />
       </div>
     </div>
   );
