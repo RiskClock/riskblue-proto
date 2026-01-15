@@ -14,6 +14,103 @@ export type Database = {
   }
   public: {
     Tables: {
+      analysis_request_files: {
+        Row: {
+          analysis_request_id: string
+          copy_status: string
+          created_at: string
+          drive_file_id: string
+          id: string
+          mime_type: string
+          name: string
+          relative_path: string
+          size_bytes: number | null
+          storage_path: string | null
+        }
+        Insert: {
+          analysis_request_id: string
+          copy_status?: string
+          created_at?: string
+          drive_file_id: string
+          id?: string
+          mime_type: string
+          name: string
+          relative_path: string
+          size_bytes?: number | null
+          storage_path?: string | null
+        }
+        Update: {
+          analysis_request_id?: string
+          copy_status?: string
+          created_at?: string
+          drive_file_id?: string
+          id?: string
+          mime_type?: string
+          name?: string
+          relative_path?: string
+          size_bytes?: number | null
+          storage_path?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "analysis_request_files_analysis_request_id_fkey"
+            columns: ["analysis_request_id"]
+            isOneToOne: false
+            referencedRelation: "analysis_requests"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      analysis_requests: {
+        Row: {
+          created_at: string
+          drive_folder_id: string
+          error_message: string | null
+          file_count: number | null
+          id: string
+          project_id: string
+          status: string
+          storage_path: string | null
+          total_size_bytes: number | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          drive_folder_id: string
+          error_message?: string | null
+          file_count?: number | null
+          id?: string
+          project_id: string
+          status?: string
+          storage_path?: string | null
+          total_size_bytes?: number | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          drive_folder_id?: string
+          error_message?: string | null
+          file_count?: number | null
+          id?: string
+          project_id?: string
+          status?: string
+          storage_path?: string | null
+          total_size_bytes?: number | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "analysis_requests_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       awp_class_control_mappings: {
         Row: {
           awp_class_id: string | null

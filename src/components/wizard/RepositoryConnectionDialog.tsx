@@ -235,12 +235,12 @@ export const RepositoryConnectionDialog = ({
                 {loadingFiles ? (
                   <>
                     <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                    Loading Files...
+                    Starting Analysis...
                   </>
                 ) : (
                   <>
                     <Link2 className="w-4 h-4 mr-2" />
-                    Load Files
+                    Analyze
                   </>
                 )}
               </Button>
