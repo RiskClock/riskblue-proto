@@ -1274,11 +1274,8 @@ const ProjectWizardContent = () => {
                   {/* Empty state when no items */}
                   {analysisItems.length === 0 && (
                     <div className="text-center py-8 border rounded-lg bg-muted/30">
-                      <p className="text-sm text-muted-foreground mb-2">
+                      <p className="text-sm text-muted-foreground mb-4">
                         No assets, water systems, or processes have been added yet.
-                      </p>
-                      <p className="text-xs text-muted-foreground mb-4">
-                        Add items manually or connect a repository to analyze drawing files.
                       </p>
                       <div className="flex flex-col items-center gap-2">
                         <Button
@@ -1289,10 +1286,10 @@ const ProjectWizardContent = () => {
                             setShowAWPEditModal(true);
                           }}
                         >
-                          Add New
+                          Add Manually
                         </Button>
-                        <p className="text-xs text-muted-foreground text-center max-w-md mt-4">
-                          Connect your project files to automatically analyze drawings and identify water mitigation requirements.
+                        <p className="text-xs text-muted-foreground text-center max-w-lg mt-4">
+                          Or connect your project files to automatically analyze drawings and identify water mitigation requirements.
                         </p>
                         <div className="flex gap-3 mt-3">
                           <Button
