@@ -10,7 +10,8 @@ type ActivityAction =
   | "export_clicked"
   | "manage_collaborators_clicked"
   | "session_start"
-  | "google_drive_analysis_request";
+  | "google_drive_analysis_request"
+  | "manual_drawings_upload";
 
 export const useActivityLogger = () => {
   const { user } = useAuth();
