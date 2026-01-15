@@ -1,6 +1,7 @@
 import jsPDF from 'jspdf';
 import html2canvas from 'html2canvas';
 
+
 interface PdfExportOptions {
   filename: string;
   margins: {
