@@ -29,3 +29,9 @@ verify_jwt = true
 
 [functions.generate-executive-summary]
 verify_jwt = true
+
+[functions.send-password-reset]
+verify_jwt = false
+
+[functions.verify-reset-token]
+verify_jwt = false

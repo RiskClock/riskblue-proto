@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -21,25 +21,22 @@ const ResetPassword = () => {
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [loading, setLoading] = useState(false);
-  const [isValidSession, setIsValidSession] = useState(false);
+  const [searchParams] = useSearchParams();
+  const token = searchParams.get("token");
   const navigate = useNavigate();
   const { toast } = useToast();
 
   useEffect(() => {
-    // Check if we have a valid session from the reset link
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      if (session) {
-        setIsValidSession(true);
-      } else {
-        toast({
-          title: "Invalid or expired link",
-          description: "Please request a new password reset link.",
-          variant: "destructive",
-        });
-        navigate("/auth");
-      }
-    });
-  }, [navigate, toast]);
+    // Check if we have a token in the URL
+    if (!token) {
+      toast({
+        title: "Invalid reset link",
+        description: "Please request a new password reset link.",
+        variant: "destructive",
+      });
+      navigate("/auth");
+    }
+  }, [token, navigate, toast]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -54,17 +51,29 @@ const ResetPassword = () => {
       return;
     }
 
+    if (!token) {
+      toast({
+        title: "Invalid reset link",
+        description: "Please request a new password reset link.",
+        variant: "destructive",
+      });
+      return;
+    }
+
     setLoading(true);
     try {
-      const { error } = await supabase.auth.updateUser({ password });
+      const { data, error } = await supabase.functions.invoke('verify-reset-token', {
+        body: { token, newPassword: password }
+      });
+
       if (error) throw error;
+      if (data && !data.success) throw new Error(data.error || 'Failed to reset password');
 
       toast({
         title: "Password updated",
         description: "Your password has been successfully reset. Please sign in.",
       });
       
-      await supabase.auth.signOut();
       navigate("/auth");
     } catch (error: any) {
       toast({
@@ -77,7 +86,7 @@ const ResetPassword = () => {
     }
   };
 
-  if (!isValidSession) {
+  if (!token) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background">
         <p className="text-muted-foreground">Verifying reset link...</p>

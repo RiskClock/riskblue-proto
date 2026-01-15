@@ -505,6 +505,33 @@ export type Database = {
         }
         Relationships: []
       }
+      password_reset_tokens: {
+        Row: {
+          created_at: string | null
+          email: string
+          expires_at: string
+          id: string
+          token: string
+          used: boolean | null
+        }
+        Insert: {
+          created_at?: string | null
+          email: string
+          expires_at: string
+          id?: string
+          token: string
+          used?: boolean | null
+        }
+        Update: {
+          created_at?: string | null
+          email?: string
+          expires_at?: string
+          id?: string
+          token?: string
+          used?: boolean | null
+        }
+        Relationships: []
+      }
       processes: {
         Row: {
           cost: string
@@ -1117,6 +1144,7 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      cleanup_expired_reset_tokens: { Args: never; Returns: undefined }
       has_project_access: { Args: { project_uuid: string }; Returns: boolean }
       has_project_role: {
         Args: {
