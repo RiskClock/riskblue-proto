@@ -32,18 +32,6 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
           (window as any).heap.identify(session.user.email);
         }
 
-        // Log login events (deferred to avoid Supabase deadlock)
-        if (session?.user && event === "SIGNED_IN") {
-          setTimeout(async () => {
-            try {
-              await supabase.from("user_activity_logs").insert({
-                user_id: session.user.id,
-                action: "login",
-                metadata: {}
-              });
-            } catch {}
-          }, 0);
-        }
       }
     );
 
