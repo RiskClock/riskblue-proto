@@ -588,9 +588,12 @@ export const AWPEditModal = ({
       <Dialog open={isOpen} onOpenChange={(open) => !open && handleClose()}>
         {/* Issue 13: Increased modal width to 95vw */}
         <DialogContent className="max-w-[95vw] w-full h-[90vh] flex flex-col">
-          <DialogHeader>
-            <DialogTitle>Assets, Water Systems, and Processes List</DialogTitle>
-          </DialogHeader>
+        <DialogHeader>
+          <DialogTitle>Assets, Water Systems, and Processes List</DialogTitle>
+          <p className="text-sm text-muted-foreground">
+            Make changes directly. Existing items won't be removed unless you delete them.
+          </p>
+        </DialogHeader>
           
           <div className="flex-1 flex gap-4 overflow-hidden">
             {/* Left Pane - Existing Items Table - Issue 25: table-fixed for stable widths */}
