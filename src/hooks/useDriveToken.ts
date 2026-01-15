@@ -19,35 +19,38 @@ export function useDriveToken() {
       setLoading(true);
       setError(null);
 
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) {
         setDriveToken(null);
         return;
       }
 
-      // Fetch token from database
-      const { data, error: fetchError } = await supabase
-        .from("user_drive_tokens")
-        .select("access_token, google_email, token_expiry")
-        .eq("user_id", user.id)
-        .maybeSingle();
+      // Call edge function to get decrypted token
+      const functionUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/google-drive-oauth?action=get-token`;
+      const response = await fetch(functionUrl, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${session.access_token}`,
+          "Content-Type": "application/json",
+        },
+      });
 
-      if (fetchError) {
-        console.error("Error fetching drive token:", fetchError);
-        setError(fetchError.message);
+      if (!response.ok) {
+        if (response.status === 404) {
+          // No token found - user hasn't connected Google Drive
+          setDriveToken(null);
+          return;
+        }
+        const errorData = await response.json();
+        console.error("Error fetching drive token:", errorData);
+        setError(errorData.error || "Failed to fetch token");
         return;
       }
 
-      if (!data) {
-        setDriveToken(null);
-        return;
-      }
+      const data = await response.json();
 
       // Check if token is expired
-      const expiresAt = data.token_expiry ? new Date(data.token_expiry) : null;
-      const isExpired = expiresAt && expiresAt < new Date();
-
-      if (isExpired) {
+      if (data.isExpired) {
         // Try to refresh the token
         const refreshed = await refreshTokenInternal();
         if (!refreshed) {
@@ -57,9 +60,9 @@ export function useDriveToken() {
       }
 
       setDriveToken({
-        accessToken: data.access_token,
-        googleEmail: data.google_email,
-        expiresAt,
+        accessToken: data.accessToken,
+        googleEmail: data.googleEmail,
+        expiresAt: data.expiresAt ? new Date(data.expiresAt) : null,
       });
     } catch (err) {
       console.error("Error in fetchToken:", err);
