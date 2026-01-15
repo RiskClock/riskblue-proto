@@ -94,8 +94,8 @@ const Projects = () => {
       // Get unique user IDs
       const userIds = [...new Set((projectsData || []).map(p => p.user_id))];
       
-      // Fetch profiles for those users and user's project roles in parallel
-      const [profilesResult, rolesResult] = await Promise.all([
+      // Fetch profiles, roles, and emails in parallel for performance
+      const [profilesResult, rolesResult, emailsResult] = await Promise.all([
         supabase
           .from("profiles")
           .select("user_id, display_name")
@@ -103,7 +103,11 @@ const Projects = () => {
         supabase
           .from("project_user_roles")
           .select("project_id, role")
-          .eq("user_id", user!.id)
+          .eq("user_id", user!.id),
+        supabase.functions.invoke(
+          `get-user-emails?userIds=${userIds.join(",")}`,
+          { method: "GET" }
+        ).catch(() => ({ data: null }))
       ]);
 
       // Create a map of user_id to display_name
@@ -117,26 +121,23 @@ const Projects = () => {
       );
       setUserProjectRoles(rolesMap);
 
-      // Fetch creator emails via edge function
-      let emailsMap = new Map<string, string>();
-      try {
-        const { data: emailsResult } = await supabase.functions.invoke(
-          `get-user-emails?userIds=${userIds.join(",")}`,
-          { method: "GET" }
-        );
-        if (emailsResult?.emails) {
-          emailsMap = new Map(Object.entries(emailsResult.emails));
-        }
-      } catch (e) {
-        console.error("Failed to fetch creator emails:", e);
-      }
+      // Create emails map
+      const emailsMap = new Map<string, string>(
+        emailsResult.data?.emails ? Object.entries(emailsResult.data.emails) : []
+      );
 
       // Merge projects with creator names and emails
-      const projectsWithCreators: ProjectWithCreator[] = (projectsData || []).map(project => ({
-        ...project,
-        creator_name: profilesMap.get(project.user_id) || "Unknown",
-        creator_email: emailsMap.get(project.user_id) || ""
-      }));
+      // Use email prefix as fallback when display_name is null
+      const projectsWithCreators: ProjectWithCreator[] = (projectsData || []).map(project => {
+        const displayName = profilesMap.get(project.user_id);
+        const email = emailsMap.get(project.user_id) || "";
+        const fallbackName = email ? email.split('@')[0] : "Unknown";
+        return {
+          ...project,
+          creator_name: displayName || fallbackName,
+          creator_email: email
+        };
+      });
 
       setProjects(projectsWithCreators);
     } catch (error: any) {
