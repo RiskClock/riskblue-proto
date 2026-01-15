@@ -481,7 +481,7 @@ export const CollaboratorsModal = ({
               <div className="p-2 border-b bg-muted/50 text-sm font-medium shrink-0">
                 Add New Collaborators
               </div>
-              <div className="flex-1 overflow-auto">
+              <div className="flex-1 overflow-auto min-h-0">
                 <Table className="table-fixed">
                   <TableHeader className="sticky top-0 bg-background z-10">
                     <TableRow>
@@ -565,18 +565,19 @@ export const CollaboratorsModal = ({
                   </TableBody>
                 </Table>
                 
-                {/* Bug 4: Button inside scroll container, directly after table */}
-                <div className="p-2">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={handleAddRow}
-                    className="w-full"
-                  >
-                    <Plus className="h-4 w-4 mr-1" />
-                    Add Row
-                  </Button>
-                </div>
+              </div>
+              
+              {/* Add Row button docked outside scroll */}
+              <div className="p-2 border-t shrink-0">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleAddRow}
+                  className="w-full"
+                >
+                  <Plus className="h-4 w-4 mr-1" />
+                  Add Row
+                </Button>
               </div>
             </div>
           </div>
