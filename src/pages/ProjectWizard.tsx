@@ -1292,7 +1292,7 @@ const ProjectWizardContent = () => {
                           Add Manually
                         </Button>
                         <p className="text-xs text-muted-foreground text-center max-w-lg mt-4">
-                          Or connect your project files to automatically analyze drawings and identify water mitigation requirements.
+                          Or connect a cloud repository to analyze drawings and detect assets and systems at risk.
                         </p>
                         <div className="flex gap-3 mt-3">
                           <Button
