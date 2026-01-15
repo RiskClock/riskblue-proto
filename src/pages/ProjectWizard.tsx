@@ -22,6 +22,7 @@ import { WaterSystemsStep } from "@/components/wizard/WaterSystemsStep";
 
 import { ProcessesStep } from "@/components/wizard/ProcessesStep";
 import { AWPEditModal } from "@/components/wizard/AWPEditModal";
+import { RepositoryConnectionDialog } from "@/components/wizard/RepositoryConnectionDialog";
 import { MitigationResponsePlanStep } from "@/components/wizard/MitigationResponsePlanStep";
 import { WaterMitigationGuidelinesStep } from "@/components/wizard/WaterMitigationGuidelinesStep";
 import { CollaboratorManagementStep } from "@/components/wizard/CollaboratorManagementStep";
@@ -116,6 +117,9 @@ const ProjectWizardContent = () => {
   // AWP Edit Modal state - Bug 2: key forces remount for proper reset
   const [showAWPEditModal, setShowAWPEditModal] = useState(false);
   const [awpModalKey, setAwpModalKey] = useState(0);
+  
+  // Standalone Google Drive connection dialog
+  const [showDriveConnectionDialog, setShowDriveConnectionDialog] = useState(false);
 
   // Normalize asset name for counting (must match CriticalAssetsStep logic)
   const normalizeAssetName = (name: string): string => {
@@ -1218,18 +1222,45 @@ const ProjectWizardContent = () => {
                           ({analysisItems.length})
                         </span>
                       )}
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        className="ml-2"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setAwpModalKey(prev => prev + 1);
-                          setShowAWPEditModal(true);
-                        }}
-                      >
-                        {analysisItems.length === 0 ? "Add New" : "Edit List"}
-                      </Button>
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="ml-2 gap-1"
+                            onClick={(e) => e.stopPropagation()}
+                          >
+                            {analysisItems.length === 0 ? "Add New" : "Edit List"}
+                            <ChevronDown className="h-3 w-3" />
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="start" className="w-48 bg-background z-50" onClick={(e) => e.stopPropagation()}>
+                          <DropdownMenuItem
+                            onClick={() => {
+                              setAwpModalKey(prev => prev + 1);
+                              setShowAWPEditModal(true);
+                            }}
+                            className="gap-2"
+                          >
+                            Manually
+                          </DropdownMenuItem>
+                          <DropdownMenuItem
+                            onClick={() => setShowDriveConnectionDialog(true)}
+                            className="gap-2"
+                          >
+                            <img src="/icons/icon_googledrive.png" alt="" className="w-4 h-4" />
+                            Google Drive
+                          </DropdownMenuItem>
+                          <DropdownMenuItem
+                            disabled
+                            className="gap-2 opacity-50"
+                          >
+                            <img src="/icons/icon_procore.png" alt="" className="w-4 h-4" />
+                            <span>Procore</span>
+                            <span className="ml-auto text-[10px] text-muted-foreground">Coming Soon</span>
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
                     </div>
                     <ChevronDown className="h-4 w-4 shrink-0 transition-transform duration-200 group-data-[state=open]:rotate-180" />
                   </AccordionPrimitive.Trigger>
@@ -1242,18 +1273,41 @@ const ProjectWizardContent = () => {
                         No assets, water systems, or processes have been added yet.
                       </p>
                       <p className="text-xs text-muted-foreground mb-4">
-                        Click "Add New" to manually add items or connect a repository to analyze drawing files.
+                        Add items manually or connect a repository to analyze drawing files.
                       </p>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => {
-                          setAwpModalKey(prev => prev + 1);
-                          setShowAWPEditModal(true);
-                        }}
-                      >
-                        Add New
-                      </Button>
+                      <div className="flex flex-col items-center gap-2">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => {
+                            setAwpModalKey(prev => prev + 1);
+                            setShowAWPEditModal(true);
+                          }}
+                        >
+                          Add New
+                        </Button>
+                        <div className="flex gap-2 mt-2">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => setShowDriveConnectionDialog(true)}
+                            className="gap-2"
+                          >
+                            <img src="/icons/icon_googledrive.png" alt="" className="w-4 h-4" />
+                            Google Drive
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            disabled
+                            className="gap-2 opacity-50"
+                          >
+                            <img src="/icons/icon_procore.png" alt="" className="w-4 h-4" />
+                            <span>Procore</span>
+                            <span className="text-[10px] text-muted-foreground">(Coming Soon)</span>
+                          </Button>
+                        </div>
+                      </div>
                     </div>
                   )}
 
@@ -1615,12 +1669,6 @@ const ProjectWizardContent = () => {
         }}
         projectId={id || "new"}
         projectName={projectData.name}
-        onBeforeOAuthRedirect={handleBeforeOAuthRedirect}
-        onFilesLoaded={(files, accessToken) => {
-          setDriveFiles(files);
-          setDriveAccessToken(accessToken);
-          setDriveConnected(true);
-        }}
       />
       
       {/* Collaborators Modal */}
@@ -1629,6 +1677,20 @@ const ProjectWizardContent = () => {
         onClose={() => setShowCollaboratorsModal(false)}
         projectId={id || ""}
         projectName={projectData.name || "Untitled Project"}
+      />
+      
+      {/* Standalone Google Drive Connection Dialog */}
+      <RepositoryConnectionDialog
+        isOpen={showDriveConnectionDialog}
+        onClose={() => setShowDriveConnectionDialog(false)}
+        projectId={id || "new"}
+        projectName={projectData.name}
+        onAnalysisStarted={() => {
+          toast({
+            title: "Analysis Queued",
+            description: "Your files are being copied for analysis. This may take up to 48 hours.",
+          });
+        }}
       />
     </div>
   );
