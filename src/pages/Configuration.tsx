@@ -254,16 +254,15 @@ export default function Configuration() {
               Projects
             </button>
             <button className="text-foreground hover:text-primary">Configuration</button>
-            {user?.email?.toLowerCase().endsWith("@riskclock.com") && (
-              <button onClick={() => navigate("/logs")} className="text-foreground hover:text-primary">
-                Logs
-              </button>
-            )}
-            {user?.email?.toLowerCase().endsWith("@riskclock.com") && (
-              <button onClick={() => setShowProviderDialog(true)} className="text-foreground hover:text-primary">
-                Solution Provider Portal
-              </button>
-            )}
+            <button onClick={() => navigate("/internal/analysis-queue")} className="text-foreground hover:text-primary">
+              Analysis Queue
+            </button>
+            <button onClick={() => navigate("/logs")} className="text-foreground hover:text-primary">
+              Logs
+            </button>
+            <button onClick={() => setShowProviderDialog(true)} className="text-foreground hover:text-primary">
+              Solution Provider Portal
+            </button>
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Avatar className="cursor-pointer">

@@ -6,12 +6,15 @@ import { useQuery } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { LogoDropdown } from "@/components/LogoDropdown";
-import riskBlueLogo from "@/assets/logo-riskblue.png";
+import { ProviderSelectionDialog } from "@/components/ProviderSelectionDialog";
+import { useHeapIdentify } from "@/hooks/useHeapIdentify";
+import { useUserDisplayName } from "@/hooks/useUserDisplayName";
 import { 
   Download, 
   Eye, 
@@ -22,7 +25,8 @@ import {
   ChevronRight,
   ChevronDown,
   ExternalLink,
-  ArrowLeft
+  LogOut,
+  ShieldAlert
 } from "lucide-react";
 import { format } from "date-fns";
 
@@ -158,21 +162,18 @@ const FileTreeItem = ({ node, depth = 0 }: { node: FileTreeNode; depth?: number 
 };
 
 export default function InternalAnalysisQueue() {
-  const { user, loading: authLoading } = useAuth();
+  const { user, signOut } = useAuth();
   const navigate = useNavigate();
   const { toast } = useToast();
+  useHeapIdentify();
+  const { getInitial } = useUserDisplayName();
   const [selectedRequest, setSelectedRequest] = useState<AnalysisRequest | null>(null);
   const [showFilesModal, setShowFilesModal] = useState(false);
   const [downloadingZip, setDownloadingZip] = useState<string | null>(null);
+  const [showProviderDialog, setShowProviderDialog] = useState(false);
 
   // Check if user is internal
   const isInternal = user?.email?.toLowerCase().endsWith("@riskclock.com") ?? false;
-
-  useEffect(() => {
-    if (!authLoading && (!user || !isInternal)) {
-      navigate("/projects");
-    }
-  }, [user, authLoading, isInternal, navigate]);
 
   // Fetch analysis requests
   const { data: requests, isLoading, refetch } = useQuery({
@@ -284,118 +285,140 @@ export default function InternalAnalysisQueue() {
 
   const fileTree = files ? buildFileTree(files) : [];
 
-  if (authLoading || !isInternal) {
+  // Access control
+  if (!isInternal) {
     return (
-      <div className="flex items-center justify-center min-h-screen">
-        <Loader2 className="w-8 h-8 animate-spin" />
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <div className="text-center space-y-4">
+          <ShieldAlert className="h-16 w-16 text-destructive mx-auto" />
+          <h1 className="text-2xl font-bold text-foreground">403 - Access Denied</h1>
+          <p className="text-muted-foreground">You don't have permission to access this page.</p>
+          <Button onClick={() => navigate("/projects")}>Go to Projects</Button>
+        </div>
       </div>
     );
   }
 
   return (
     <div className="min-h-screen bg-background">
-      {/* Header */}
-      <header className="border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
-        <div className="container flex h-14 items-center justify-between">
-          <div className="flex items-center gap-4">
-            <LogoDropdown />
-            <span className="text-lg font-semibold">Analysis Queue</span>
-            <Badge variant="outline" className="text-xs">Internal</Badge>
+      <header className="sticky top-0 z-20 border-b bg-card">
+        <div className="container mx-auto px-6 py-4 flex items-center justify-between">
+          <LogoDropdown />
+          <div className="flex items-center gap-6">
+            <button onClick={() => navigate("/projects")} className="text-foreground hover:text-primary">
+              Projects
+            </button>
+            <button onClick={() => navigate("/configuration")} className="text-foreground hover:text-primary">
+              Configuration
+            </button>
+            <button className="text-foreground hover:text-primary">Analysis Queue</button>
+            <button onClick={() => navigate("/logs")} className="text-foreground hover:text-primary">
+              Logs
+            </button>
+            <button onClick={() => setShowProviderDialog(true)} className="text-foreground hover:text-primary">
+              Solution Provider Portal
+            </button>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Avatar className="cursor-pointer">
+                  <AvatarFallback>{getInitial()}</AvatarFallback>
+                </Avatar>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-48">
+                <DropdownMenuItem onClick={signOut} className="cursor-pointer">
+                  <LogOut className="h-4 w-4 mr-2" />
+                  Logout
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
           </div>
-          <Button variant="ghost" size="sm" onClick={() => navigate("/projects")}>
-            <ArrowLeft className="w-4 h-4 mr-2" />
-            Back to Projects
-          </Button>
         </div>
       </header>
 
-      {/* Main Content */}
-      <main className="container py-6">
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between">
-            <CardTitle>Google Drive Analysis Requests</CardTitle>
-            <Button variant="outline" size="sm" onClick={() => refetch()}>
-              <RefreshCw className="w-4 h-4 mr-2" />
-              Refresh
-            </Button>
-          </CardHeader>
-          <CardContent>
-            {isLoading ? (
-              <div className="flex items-center justify-center py-8">
-                <Loader2 className="w-6 h-6 animate-spin" />
-              </div>
-            ) : !requests?.length ? (
-              <div className="text-center py-8 text-muted-foreground">
-                No analysis requests found.
-              </div>
-            ) : (
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Project</TableHead>
-                    <TableHead>Requested By</TableHead>
-                    <TableHead>Submitted</TableHead>
-                    <TableHead>Status</TableHead>
-                    <TableHead>Files</TableHead>
-                    <TableHead>Size</TableHead>
-                    <TableHead className="text-right">Actions</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {requests.map((request) => (
-                    <TableRow key={request.id}>
-                      <TableCell>
+      <main className="container mx-auto px-6 py-8">
+        <div className="flex items-center justify-between mb-6">
+          <div>
+            <h1 className="text-3xl font-bold text-foreground">Analysis Queue</h1>
+            <p className="text-muted-foreground">Manage Google Drive analysis requests</p>
+          </div>
+          <Button variant="outline" size="sm" onClick={() => refetch()}>
+            <RefreshCw className="w-4 h-4 mr-2" />
+            Refresh
+          </Button>
+        </div>
+
+        {isLoading ? (
+          <div className="text-center py-12 text-muted-foreground">Loading...</div>
+        ) : !requests?.length ? (
+          <div className="text-center py-12 text-muted-foreground">No analysis requests found.</div>
+        ) : (
+          <div className="bg-card rounded-lg border overflow-hidden">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Project</TableHead>
+                  <TableHead>Requested By</TableHead>
+                  <TableHead>Submitted</TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead>Files</TableHead>
+                  <TableHead>Size</TableHead>
+                  <TableHead className="text-right">Actions</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {requests.map((request) => (
+                  <TableRow key={request.id}>
+                    <TableCell>
+                      <Button
+                        variant="link"
+                        className="p-0 h-auto font-medium"
+                        onClick={() => navigate(`/project/${request.project_id}`)}
+                      >
+                        {request.project?.name || "Unknown Project"}
+                        <ExternalLink className="w-3 h-3 ml-1" />
+                      </Button>
+                    </TableCell>
+                    <TableCell className="text-sm">{request.user_email}</TableCell>
+                    <TableCell className="text-sm text-muted-foreground">
+                      {format(new Date(request.created_at), "MMM d, yyyy HH:mm")}
+                    </TableCell>
+                    <TableCell>
+                      <Badge variant="outline" className={statusColors[request.status] || ""}>
+                        {request.status}
+                      </Badge>
+                    </TableCell>
+                    <TableCell>{request.file_count || 0}</TableCell>
+                    <TableCell>{formatBytes(request.total_size_bytes)}</TableCell>
+                    <TableCell className="text-right">
+                      <div className="flex items-center justify-end gap-2">
                         <Button
-                          variant="link"
-                          className="p-0 h-auto font-medium"
-                          onClick={() => navigate(`/projects/${request.project_id}`)}
+                          variant="outline"
+                          size="sm"
+                          onClick={() => handleViewFiles(request)}
                         >
-                          {request.project?.name || "Unknown Project"}
-                          <ExternalLink className="w-3 h-3 ml-1" />
+                          <Eye className="w-4 h-4 mr-1" />
+                          View
                         </Button>
-                      </TableCell>
-                      <TableCell className="text-sm">{request.user_email}</TableCell>
-                      <TableCell className="text-sm text-muted-foreground">
-                        {format(new Date(request.created_at), "MMM d, yyyy HH:mm")}
-                      </TableCell>
-                      <TableCell>
-                        <Badge variant="outline" className={statusColors[request.status] || ""}>
-                          {request.status}
-                        </Badge>
-                      </TableCell>
-                      <TableCell>{request.file_count || 0}</TableCell>
-                      <TableCell>{formatBytes(request.total_size_bytes)}</TableCell>
-                      <TableCell className="text-right">
-                        <div className="flex items-center justify-end gap-2">
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => handleViewFiles(request)}
-                          >
-                            <Eye className="w-4 h-4 mr-1" />
-                            View
-                          </Button>
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => handleDownloadZip(request)}
-                            disabled={downloadingZip === request.id || request.status !== "copied"}
-                          >
-                            {downloadingZip === request.id ? (
-                              <Loader2 className="w-4 h-4 animate-spin" />
-                            ) : (
-                              <Download className="w-4 h-4" />
-                            )}
-                          </Button>
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            )}
-          </CardContent>
-        </Card>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => handleDownloadZip(request)}
+                          disabled={downloadingZip === request.id || request.status !== "copied"}
+                        >
+                          {downloadingZip === request.id ? (
+                            <Loader2 className="w-4 h-4 animate-spin" />
+                          ) : (
+                            <Download className="w-4 h-4" />
+                          )}
+                        </Button>
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </div>
+        )}
       </main>
 
       {/* Files Modal */}
@@ -436,6 +459,8 @@ export default function InternalAnalysisQueue() {
           </div>
         </DialogContent>
       </Dialog>
+
+      <ProviderSelectionDialog open={showProviderDialog} onOpenChange={setShowProviderDialog} />
     </div>
   );
 }

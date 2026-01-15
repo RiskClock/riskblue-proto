@@ -160,7 +160,7 @@ export const RepositoryConnectionDialog = ({
       // 6. Show success message
       toast({
         title: "Analysis Started",
-        description: "It may take up to 48 hours to complete the analysis. You'll be notified when results are ready.",
+        description: "Your files are being analyzed and may take up to 48 hours.",
       });
 
       // 7. Call callback and close

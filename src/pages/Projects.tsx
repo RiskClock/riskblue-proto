@@ -213,9 +213,14 @@ const Projects = () => {
           <LogoDropdown />
           <div className="flex items-center gap-6">
             <button className="text-foreground hover:text-primary">Projects</button>
-            {user?.email?.endsWith("@riskclock.com") && (
+            {user?.email?.toLowerCase().endsWith("@riskclock.com") && (
               <button onClick={() => navigate("/configuration")} className="text-foreground hover:text-primary">
                 Configuration
+              </button>
+            )}
+            {user?.email?.toLowerCase().endsWith("@riskclock.com") && (
+              <button onClick={() => navigate("/internal/analysis-queue")} className="text-foreground hover:text-primary">
+                Analysis Queue
               </button>
             )}
             {user?.email?.toLowerCase().endsWith("@riskclock.com") && (
