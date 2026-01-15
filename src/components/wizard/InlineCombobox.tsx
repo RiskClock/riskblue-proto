@@ -40,6 +40,7 @@ export const InlineCombobox = forwardRef<InlineComboboxRef, InlineComboboxProps>
 }, ref) => {
   const [open, setOpen] = useState(false);
   const triggerRef = useRef<HTMLButtonElement | null>(null);
+  const commandInputRef = useRef<HTMLInputElement>(null);
   const [portalContainer, setPortalContainer] = useState<HTMLElement | null>(null);
 
   // When inside a modal, portal to the dialog content so wheel scrolling works reliably.
@@ -50,6 +51,16 @@ export const InlineCombobox = forwardRef<InlineComboboxRef, InlineComboboxProps>
 
     const dialogEl = el.closest('[role="dialog"]') as HTMLElement | null;
     setPortalContainer(dialogEl);
+  }, [open]);
+
+  // Auto-focus the search input when popover opens
+  useEffect(() => {
+    if (open) {
+      // Small delay to ensure DOM is ready
+      requestAnimationFrame(() => {
+        commandInputRef.current?.focus();
+      });
+    }
   }, [open]);
 
   const groupedOptions = useMemo(
@@ -99,7 +110,7 @@ export const InlineCombobox = forwardRef<InlineComboboxRef, InlineComboboxProps>
           )}
         >
           <Command>
-            <CommandInput placeholder="Search AWP..." className="h-9" />
+            <CommandInput ref={commandInputRef} placeholder="Search AWP..." className="h-9" />
             <CommandList
               className="overscroll-contain"
               onWheel={(e) => {

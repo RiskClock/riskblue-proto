@@ -695,11 +695,11 @@ export const AWPEditModal = ({
 
             {/* Right Pane - Add New Items - Issue 25: table-fixed for stable widths */}
             <div className="w-2/5 flex flex-col border rounded-lg overflow-hidden">
-              <div className="p-2 border-b bg-muted/50 text-sm font-medium">
+              <div className="p-2 border-b bg-muted/50 text-sm font-medium shrink-0">
                 Add New Items
               </div>
               
-              <div className="flex-1 overflow-auto">
+              <div className="flex-1 overflow-auto min-h-0">
                 <Table className="table-fixed">
                   {/* Issue 17: Reordered columns - Issue 25: Fixed widths with min-w */}
                   <TableHeader className="sticky top-0 bg-background z-10">
@@ -844,12 +844,13 @@ export const AWPEditModal = ({
                   </TableBody>
                 </Table>
                 
-                {/* Issue 12: Removed border-t from Add Row button */}
-                <div className="p-2">
-                  <Button onClick={handleAddRow} size="sm" variant="outline" className="w-full">
-                    <Plus className="w-3 h-3 mr-1" /> Add Row
-                  </Button>
-                </div>
+              </div>
+              
+              {/* Issue 12: Add Row button docked outside scroll */}
+              <div className="p-2 border-t shrink-0">
+                <Button onClick={handleAddRow} size="sm" variant="outline" className="w-full">
+                  <Plus className="w-3 h-3 mr-1" /> Add Row
+                </Button>
               </div>
             </div>
           </div>
