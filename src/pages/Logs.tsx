@@ -236,7 +236,7 @@ export default function Logs() {
                 htmlFor="hide-internal"
                 className="text-sm text-muted-foreground cursor-pointer"
               >
-                Remove internal users
+                Hide internal users
               </label>
             </div>
             <Select value={selectedUserId} onValueChange={(value) => { setSelectedUserId(value); setPage(0); }}>
@@ -266,10 +266,10 @@ export default function Logs() {
                 <Table>
                   <TableHeader>
                     <TableRow>
-                      <TableHead className="w-[180px]">Timestamp</TableHead>
-                      <TableHead className="w-[200px]">User</TableHead>
-                      <TableHead>Project</TableHead>
-                      <TableHead className="w-[180px]">Action</TableHead>
+                      <TableHead className="w-[140px]">Timestamp</TableHead>
+                      <TableHead className="w-[140px]">User</TableHead>
+                      <TableHead className="w-[140px]">Project</TableHead>
+                      <TableHead className="w-1/2">Action</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
