@@ -218,6 +218,32 @@ export default function InternalAnalysisQueue() {
     enabled: isInternal,
   });
 
+  // Subscribe to realtime updates for analysis_requests
+  useEffect(() => {
+    if (!isInternal) return;
+
+    const channel = supabase
+      .channel('analysis-requests-realtime')
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'analysis_requests'
+        },
+        (payload) => {
+          console.log('Analysis request updated:', payload);
+          // Refetch to get updated data with joins
+          refetch();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [isInternal, refetch]);
+
   // Fetch files for selected request
   const { data: files, isLoading: filesLoading } = useQuery({
     queryKey: ["analysis-files", selectedRequest?.id],
