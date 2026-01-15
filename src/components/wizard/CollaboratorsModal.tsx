@@ -79,13 +79,6 @@ export const CollaboratorsModal = ({
     if (!projectId) return;
     
     try {
-      const { data, error } = await supabase.functions.invoke("get-project-collaborators", {
-        body: null,
-        method: "GET",
-        headers: {},
-      });
-
-      // Edge functions with GET need query params in URL, use POST with body instead
       const { data: result, error: fetchError } = await supabase.functions.invoke(
         `get-project-collaborators?projectId=${projectId}`,
         { method: "GET" }
