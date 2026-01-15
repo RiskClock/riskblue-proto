@@ -225,7 +225,7 @@ const Auth = () => {
 
         <div className="hidden lg:flex flex-1 bg-[url('https://images.unsplash.com/photo-1486406146926-c627a92ad1ab?auto=format&fit=crop&q=80')] bg-cover bg-center relative items-center justify-center">
           <div className="absolute inset-0 bg-gradient-to-br from-primary/80 to-primary/60" />
-          <div className="relative z-10 max-w-md text-white px-12">
+          <div className="relative z-10 max-w-xl text-white px-8">
             <h2 className="text-4xl font-bold font-serif mb-4">
               Enterprise-grade water risk management for construction and insurance
             </h2>
@@ -314,7 +314,7 @@ const Auth = () => {
 
       <div className="hidden lg:flex flex-1 bg-[url('https://images.unsplash.com/photo-1486406146926-c627a92ad1ab?auto=format&fit=crop&q=80')] bg-cover bg-center relative items-center justify-center">
         <div className="absolute inset-0 bg-gradient-to-br from-primary/80 to-primary/60" />
-        <div className="relative z-10 max-w-md text-white px-12">
+        <div className="relative z-10 max-w-xl text-white px-8">
           <h2 className="text-4xl font-bold font-serif mb-4">
             Enterprise-grade water risk management for construction and insurance
           </h2>
