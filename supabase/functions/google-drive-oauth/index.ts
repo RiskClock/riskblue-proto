@@ -10,6 +10,63 @@ const GOOGLE_CLIENT_ID = Deno.env.get("GOOGLE_CLIENT_ID")!;
 const GOOGLE_CLIENT_SECRET = Deno.env.get("GOOGLE_CLIENT_SECRET")!;
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+const DRIVE_TOKEN_ENCRYPTION_KEY = Deno.env.get("DRIVE_TOKEN_ENCRYPTION_KEY");
+
+// ============= Encryption Utilities =============
+
+function hexToBytes(hex: string): ArrayBuffer {
+  const bytes = new Uint8Array(hex.length / 2);
+  for (let i = 0; i < hex.length; i += 2) {
+    bytes[i / 2] = parseInt(hex.substr(i, 2), 16);
+  }
+  return bytes.buffer as ArrayBuffer;
+}
+
+async function encryptToken(plaintext: string, key: string): Promise<string> {
+  const keyBuffer = hexToBytes(key);
+  const cryptoKey = await crypto.subtle.importKey(
+    "raw",
+    keyBuffer,
+    { name: "AES-GCM" },
+    false,
+    ["encrypt"]
+  );
+  const iv = crypto.getRandomValues(new Uint8Array(12));
+  const encoded = new TextEncoder().encode(plaintext);
+  const ciphertext = await crypto.subtle.encrypt(
+    { name: "AES-GCM", iv },
+    cryptoKey,
+    encoded
+  );
+  // Return IV + ciphertext as base64
+  const ciphertextArray = new Uint8Array(ciphertext);
+  const combined = new Uint8Array(iv.length + ciphertextArray.length);
+  combined.set(iv, 0);
+  combined.set(ciphertextArray, iv.length);
+  return btoa(String.fromCharCode(...combined));
+}
+
+async function decryptToken(encrypted: string, key: string): Promise<string> {
+  const keyBuffer = hexToBytes(key);
+  const cryptoKey = await crypto.subtle.importKey(
+    "raw",
+    keyBuffer,
+    { name: "AES-GCM" },
+    false,
+    ["decrypt"]
+  );
+  const combined = Uint8Array.from(atob(encrypted), (c) => c.charCodeAt(0));
+  const iv = combined.slice(0, 12);
+  const ciphertext = combined.slice(12);
+  const decrypted = await crypto.subtle.decrypt(
+    { name: "AES-GCM", iv: iv.buffer as ArrayBuffer },
+    cryptoKey,
+    ciphertext.buffer as ArrayBuffer
+  );
+  return new TextDecoder().decode(decrypted);
+}
+
+// ============= Main Handler =============
 
 serve(async (req) => {
   // Handle CORS preflight requests
@@ -21,7 +78,7 @@ serve(async (req) => {
   // Support action from query params (GET) or body (POST)
   let action = url.searchParams.get("action");
   let bodyData: any = {};
-  
+
   if (req.method === "POST") {
     try {
       bodyData = await req.json();
@@ -34,7 +91,91 @@ serve(async (req) => {
   }
 
   try {
-    // NEW: Get auth URL action - called from same-origin popup page with Authorization header
+    // ============= Get Token Action (returns decrypted access token) =============
+    if (action === "get-token") {
+      const authHeader = req.headers.get("Authorization");
+      if (!authHeader) {
+        return new Response(
+          JSON.stringify({ error: "Authorization required" }),
+          { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+
+      // Verify the user's JWT
+      const jwt = authHeader.replace("Bearer ", "");
+      const supabaseClient = createClient(
+        SUPABASE_URL,
+        Deno.env.get("SUPABASE_ANON_KEY")!,
+        { global: { headers: { Authorization: `Bearer ${jwt}` } } }
+      );
+
+      const { data: { user }, error: authError } = await supabaseClient.auth.getUser();
+
+      if (authError || !user) {
+        return new Response(
+          JSON.stringify({ error: "Invalid token" }),
+          { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+
+      const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
+
+      // Fetch token data
+      const { data: tokenData, error: fetchError } = await supabase
+        .from("user_drive_tokens")
+        .select("access_token, encrypted_access_token, is_encrypted, token_expiry, google_email")
+        .eq("user_id", user.id)
+        .maybeSingle();
+
+      if (fetchError) {
+        console.error("Error fetching token:", fetchError);
+        return new Response(
+          JSON.stringify({ error: "Failed to fetch token" }),
+          { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+
+      if (!tokenData) {
+        return new Response(
+          JSON.stringify({ error: "No token found" }),
+          { status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+
+      let accessToken: string;
+
+      // Decrypt if encrypted
+      if (tokenData.is_encrypted && tokenData.encrypted_access_token && DRIVE_TOKEN_ENCRYPTION_KEY) {
+        try {
+          accessToken = await decryptToken(tokenData.encrypted_access_token, DRIVE_TOKEN_ENCRYPTION_KEY);
+        } catch (err) {
+          console.error("Failed to decrypt access token:", err);
+          return new Response(
+            JSON.stringify({ error: "Failed to decrypt token" }),
+            { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          );
+        }
+      } else {
+        // Legacy unencrypted token
+        accessToken = tokenData.access_token;
+      }
+
+      // Check if token is expired
+      const expiresAt = tokenData.token_expiry ? new Date(tokenData.token_expiry) : null;
+      const isExpired = expiresAt && expiresAt < new Date();
+
+      return new Response(
+        JSON.stringify({
+          accessToken,
+          googleEmail: tokenData.google_email,
+          expiresAt: tokenData.token_expiry,
+          isExpired,
+        }),
+        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    // ============= Get Auth URL Action =============
     if (action === "get-auth-url") {
       const authHeader = req.headers.get("Authorization");
       if (!authHeader) {
@@ -51,7 +192,7 @@ serve(async (req) => {
         Deno.env.get("SUPABASE_ANON_KEY")!,
         { global: { headers: { Authorization: `Bearer ${jwt}` } } }
       );
-      
+
       const { data: { user }, error: authError } = await supabaseClient.auth.getUser();
 
       if (authError || !user) {
@@ -63,17 +204,19 @@ serve(async (req) => {
 
       const redirectPath = bodyData.redirectPath || "/projects";
       const appOrigin = bodyData.appOrigin || "";
-      
+
       // Build callback URI
       const callbackUri = `${SUPABASE_URL}/functions/v1/google-drive-oauth?action=callback`;
-      
+
       // Store state with user info
-      const state = btoa(JSON.stringify({ 
-        userId: user.id, 
-        projectPath: redirectPath, 
-        appOrigin, 
-        popupMode: true 
-      }));
+      const state = btoa(
+        JSON.stringify({
+          userId: user.id,
+          projectPath: redirectPath,
+          appOrigin,
+          popupMode: true,
+        })
+      );
 
       const googleAuthUrl = new URL("https://accounts.google.com/o/oauth2/v2/auth");
       googleAuthUrl.searchParams.set("client_id", GOOGLE_CLIENT_ID);
@@ -92,7 +235,7 @@ serve(async (req) => {
       );
     }
 
-    // Step 1: Generate OAuth URL and redirect user (legacy - for direct calls)
+    // ============= Legacy Authorize Action =============
     if (action === "authorize") {
       const redirectUri = url.searchParams.get("redirect_uri");
       const userId = url.searchParams.get("user_id");
@@ -107,7 +250,7 @@ serve(async (req) => {
         );
       }
 
-      // Store state in the state parameter (user_id + project_path + app_origin + popup_mode)
+      // Store state in the state parameter
       const state = btoa(JSON.stringify({ userId, projectPath, appOrigin, popupMode }));
 
       const googleAuthUrl = new URL("https://accounts.google.com/o/oauth2/v2/auth");
@@ -124,7 +267,7 @@ serve(async (req) => {
       return Response.redirect(googleAuthUrl.toString(), 302);
     }
 
-    // Step 2: Handle OAuth callback
+    // ============= OAuth Callback Action =============
     if (action === "callback") {
       const code = url.searchParams.get("code");
       const state = url.searchParams.get("state");
@@ -147,7 +290,7 @@ serve(async (req) => {
         return new Response("Invalid state", { status: 400 });
       }
 
-      // Build the callback URL for token exchange using the known public URL
+      // Build the callback URL for token exchange
       const callbackUri = `${SUPABASE_URL}/functions/v1/google-drive-oauth?action=callback`;
       console.log("Token exchange callback URI:", callbackUri);
 
@@ -169,7 +312,10 @@ serve(async (req) => {
 
       if (!tokenResponse.ok) {
         console.error("Token exchange error:", tokenData);
-        return new Response(`Token exchange failed: ${tokenData.error_description || tokenData.error}`, { status: 400 });
+        return new Response(
+          `Token exchange failed: ${tokenData.error_description || tokenData.error}`,
+          { status: 400 }
+        );
       }
 
       const { access_token, refresh_token, expires_in } = tokenData;
@@ -186,18 +332,45 @@ serve(async (req) => {
 
       const tokenExpiry = new Date(Date.now() + expires_in * 1000).toISOString();
 
-      const { error: upsertError } = await supabase
-        .from("user_drive_tokens")
-        .upsert({
-          user_id: stateData.userId,
-          access_token,
-          refresh_token,
-          token_expiry: tokenExpiry,
-          google_email: userInfo.email,
-          updated_at: new Date().toISOString(),
-        }, {
-          onConflict: "user_id",
-        });
+      // Encrypt tokens if encryption key is available
+      let upsertData: any = {
+        user_id: stateData.userId,
+        token_expiry: tokenExpiry,
+        google_email: userInfo.email,
+        updated_at: new Date().toISOString(),
+      };
+
+      if (DRIVE_TOKEN_ENCRYPTION_KEY) {
+        try {
+          const encryptedAccessToken = await encryptToken(access_token, DRIVE_TOKEN_ENCRYPTION_KEY);
+          const encryptedRefreshToken = refresh_token
+            ? await encryptToken(refresh_token, DRIVE_TOKEN_ENCRYPTION_KEY)
+            : null;
+
+          upsertData.encrypted_access_token = encryptedAccessToken;
+          upsertData.encrypted_refresh_token = encryptedRefreshToken;
+          upsertData.is_encrypted = true;
+          // Store placeholder in plaintext columns for backward compatibility
+          upsertData.access_token = "ENCRYPTED";
+          upsertData.refresh_token = null;
+
+          console.log("Tokens encrypted successfully");
+        } catch (err) {
+          console.error("Failed to encrypt tokens, storing in plaintext:", err);
+          upsertData.access_token = access_token;
+          upsertData.refresh_token = refresh_token;
+          upsertData.is_encrypted = false;
+        }
+      } else {
+        console.warn("DRIVE_TOKEN_ENCRYPTION_KEY not set, storing tokens in plaintext");
+        upsertData.access_token = access_token;
+        upsertData.refresh_token = refresh_token;
+        upsertData.is_encrypted = false;
+      }
+
+      const { error: upsertError } = await supabase.from("user_drive_tokens").upsert(upsertData, {
+        onConflict: "user_id",
+      });
 
       if (upsertError) {
         console.error("Error storing tokens:", upsertError);
@@ -217,7 +390,7 @@ serve(async (req) => {
       return Response.redirect(redirectUrl, 302);
     }
 
-    // Step 3: Refresh token
+    // ============= Refresh Token Action =============
     if (action === "refresh") {
       const authHeader = req.headers.get("Authorization");
       if (!authHeader) {
@@ -231,11 +404,12 @@ serve(async (req) => {
 
       // Verify the user's JWT
       const jwt = authHeader.replace("Bearer ", "");
-      const { data: { user }, error: authError } = await createClient(
-        SUPABASE_URL,
-        Deno.env.get("SUPABASE_ANON_KEY")!,
-        { global: { headers: { Authorization: `Bearer ${jwt}` } } }
-      ).auth.getUser();
+      const {
+        data: { user },
+        error: authError,
+      } = await createClient(SUPABASE_URL, Deno.env.get("SUPABASE_ANON_KEY")!, {
+        global: { headers: { Authorization: `Bearer ${jwt}` } },
+      }).auth.getUser();
 
       if (authError || !user) {
         return new Response(
@@ -244,28 +418,50 @@ serve(async (req) => {
         );
       }
 
-      // Get stored refresh token
+      // Get stored refresh token (may be encrypted)
       const { data: tokenData, error: fetchError } = await supabase
         .from("user_drive_tokens")
-        .select("refresh_token")
+        .select("refresh_token, encrypted_refresh_token, is_encrypted")
         .eq("user_id", user.id)
         .single();
 
-      if (fetchError || !tokenData?.refresh_token) {
+      if (fetchError || !tokenData) {
         return new Response(
           JSON.stringify({ error: "No refresh token found" }),
           { status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" } }
         );
       }
 
-      // Refresh the token
+      let refreshToken: string;
+
+      // Decrypt if encrypted
+      if (tokenData.is_encrypted && tokenData.encrypted_refresh_token && DRIVE_TOKEN_ENCRYPTION_KEY) {
+        try {
+          refreshToken = await decryptToken(tokenData.encrypted_refresh_token, DRIVE_TOKEN_ENCRYPTION_KEY);
+        } catch (err) {
+          console.error("Failed to decrypt refresh token:", err);
+          return new Response(
+            JSON.stringify({ error: "Failed to decrypt token" }),
+            { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          );
+        }
+      } else if (tokenData.refresh_token) {
+        refreshToken = tokenData.refresh_token;
+      } else {
+        return new Response(
+          JSON.stringify({ error: "No refresh token available" }),
+          { status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+
+      // Refresh the token with Google
       const refreshResponse = await fetch("https://oauth2.googleapis.com/token", {
         method: "POST",
         headers: { "Content-Type": "application/x-www-form-urlencoded" },
         body: new URLSearchParams({
           client_id: GOOGLE_CLIENT_ID,
           client_secret: GOOGLE_CLIENT_SECRET,
-          refresh_token: tokenData.refresh_token,
+          refresh_token: refreshToken,
           grant_type: "refresh_token",
         }),
       });
@@ -275,24 +471,42 @@ serve(async (req) => {
       if (!refreshResponse.ok) {
         console.error("Token refresh error:", refreshData);
         return new Response(
-          JSON.stringify({ error: "Token refresh failed" }),
+          JSON.stringify({ error: "Token refresh failed", details: refreshData }),
           { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
         );
       }
 
       // Update stored tokens
       const newExpiry = new Date(Date.now() + refreshData.expires_in * 1000).toISOString();
-      await supabase
-        .from("user_drive_tokens")
-        .update({
-          access_token: refreshData.access_token,
-          token_expiry: newExpiry,
-          updated_at: new Date().toISOString(),
-        })
-        .eq("user_id", user.id);
+
+      let updateData: any = {
+        token_expiry: newExpiry,
+        updated_at: new Date().toISOString(),
+      };
+
+      // Encrypt new access token if encryption is enabled
+      if (DRIVE_TOKEN_ENCRYPTION_KEY) {
+        try {
+          const encryptedAccessToken = await encryptToken(
+            refreshData.access_token,
+            DRIVE_TOKEN_ENCRYPTION_KEY
+          );
+          updateData.encrypted_access_token = encryptedAccessToken;
+          updateData.is_encrypted = true;
+          updateData.access_token = "ENCRYPTED";
+        } catch (err) {
+          console.error("Failed to encrypt new access token:", err);
+          updateData.access_token = refreshData.access_token;
+          updateData.is_encrypted = false;
+        }
+      } else {
+        updateData.access_token = refreshData.access_token;
+      }
+
+      await supabase.from("user_drive_tokens").update(updateData).eq("user_id", user.id);
 
       return new Response(
-        JSON.stringify({ 
+        JSON.stringify({
           access_token: refreshData.access_token,
           expires_at: newExpiry,
         }),
@@ -304,7 +518,6 @@ serve(async (req) => {
       JSON.stringify({ error: "Invalid action" }),
       { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
-
   } catch (error) {
     console.error("Error:", error);
     return new Response(
