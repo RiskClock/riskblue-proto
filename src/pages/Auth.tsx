@@ -229,7 +229,7 @@ const Auth = () => {
             <h2 className="text-3xl font-bold font-serif mb-4">
               Enterprise-grade water risk management for construction and insurance
             </h2>
-            <p className="text-lg font-serif text-white/90">
+            <p className="text-lg text-white/90">
               Connect risk assessment, control measures, and trusted solution providers 
               in one platform built for builders, insurers, and risk teams.
             </p>
@@ -318,7 +318,7 @@ const Auth = () => {
           <h2 className="text-3xl font-bold font-serif mb-4">
             Enterprise-grade water risk management for construction and insurance
           </h2>
-          <p className="text-lg font-serif text-white/90">
+          <p className="text-lg text-white/90">
             Connect risk assessment, control measures, and trusted solution providers 
             in one platform built for builders, insurers, and risk teams.
           </p>
