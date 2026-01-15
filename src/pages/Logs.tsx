@@ -174,6 +174,9 @@ export default function Logs() {
             <button onClick={() => navigate("/configuration")} className="text-foreground hover:text-primary">
               Configuration
             </button>
+            <button onClick={() => navigate("/internal/analysis-queue")} className="text-foreground hover:text-primary">
+              Analysis Queue
+            </button>
             <button className="text-foreground hover:text-primary">Logs</button>
             <button onClick={() => setShowProviderDialog(true)} className="text-foreground hover:text-primary">
               Solution Provider Portal

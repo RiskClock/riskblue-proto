@@ -202,16 +202,15 @@ export default function SolutionProviderPortal() {
             <button onClick={() => navigate("/projects")} className="text-foreground hover:text-primary">
               Projects
             </button>
-            {user?.email?.endsWith("@riskclock.com") && (
-              <button onClick={() => navigate("/configuration")} className="text-foreground hover:text-primary">
-                Configuration
-              </button>
-            )}
-            {user?.email?.toLowerCase().endsWith("@riskclock.com") && (
-              <button onClick={() => navigate("/logs")} className="text-foreground hover:text-primary">
-                Logs
-              </button>
-            )}
+            <button onClick={() => navigate("/configuration")} className="text-foreground hover:text-primary">
+              Configuration
+            </button>
+            <button onClick={() => navigate("/internal/analysis-queue")} className="text-foreground hover:text-primary">
+              Analysis Queue
+            </button>
+            <button onClick={() => navigate("/logs")} className="text-foreground hover:text-primary">
+              Logs
+            </button>
             <button onClick={handleExitPortal} className="text-foreground hover:text-primary">
               Solution Provider Portal
             </button>

@@ -9,36 +9,34 @@ const corsHeaders = {
 // Declare EdgeRuntime for background tasks
 declare const EdgeRuntime: { waitUntil: (promise: Promise<unknown>) => void };
 
-// Helper to decrypt tokens
+// Helper to decrypt tokens - matches google-drive-oauth base64 format
 async function decryptToken(encrypted: string, key: string): Promise<string> {
-  const [ivHex, ciphertextHex] = encrypted.split(":");
-  const iv = hexToBytes(ivHex);
-  const ciphertext = hexToBytes(ciphertextHex);
-  const keyBytes = hexToBytes(key);
-  
+  const keyBuffer = hexToBytes(key);
   const cryptoKey = await crypto.subtle.importKey(
     "raw",
-    keyBytes.buffer as ArrayBuffer,
+    keyBuffer,
     { name: "AES-GCM" },
     false,
     ["decrypt"]
   );
-  
+  // Decode base64 to get combined IV + ciphertext
+  const combined = Uint8Array.from(atob(encrypted), (c) => c.charCodeAt(0));
+  const iv = combined.slice(0, 12);
+  const ciphertext = combined.slice(12);
   const decrypted = await crypto.subtle.decrypt(
     { name: "AES-GCM", iv: iv.buffer as ArrayBuffer },
     cryptoKey,
     ciphertext.buffer as ArrayBuffer
   );
-  
   return new TextDecoder().decode(decrypted);
 }
 
-function hexToBytes(hex: string): Uint8Array {
+function hexToBytes(hex: string): ArrayBuffer {
   const bytes = new Uint8Array(hex.length / 2);
   for (let i = 0; i < hex.length; i += 2) {
     bytes[i / 2] = parseInt(hex.substr(i, 2), 16);
   }
-  return bytes;
+  return bytes.buffer as ArrayBuffer;
 }
 
 interface DriveFile {

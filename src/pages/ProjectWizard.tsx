@@ -1097,9 +1097,14 @@ const ProjectWizardContent = () => {
             <button onClick={() => navigate("/projects")} className="text-foreground hover:text-primary">
               Projects
             </button>
-            {user?.email?.endsWith("@riskclock.com") && (
+            {user?.email?.toLowerCase().endsWith("@riskclock.com") && (
               <button onClick={() => navigate("/configuration")} className="text-foreground hover:text-primary">
                 Configuration
+              </button>
+            )}
+            {user?.email?.toLowerCase().endsWith("@riskclock.com") && (
+              <button onClick={() => navigate("/internal/analysis-queue")} className="text-foreground hover:text-primary">
+                Analysis Queue
               </button>
             )}
             {user?.email?.toLowerCase().endsWith("@riskclock.com") && (
@@ -1286,9 +1291,12 @@ const ProjectWizardContent = () => {
                         >
                           Add New
                         </Button>
-                        <div className="flex gap-2 mt-2">
+                        <p className="text-xs text-muted-foreground text-center max-w-md mt-4">
+                          Connect your project files to automatically analyze drawings and identify water mitigation requirements.
+                        </p>
+                        <div className="flex gap-3 mt-3">
                           <Button
-                            variant="ghost"
+                            variant="outline"
                             size="sm"
                             onClick={() => setShowDriveConnectionDialog(true)}
                             className="gap-2"
@@ -1297,13 +1305,13 @@ const ProjectWizardContent = () => {
                             Google Drive
                           </Button>
                           <Button
-                            variant="ghost"
+                            variant="outline"
                             size="sm"
                             disabled
                             className="gap-2 opacity-50"
                           >
                             <img src="/icons/icon_procore.png" alt="" className="w-4 h-4" />
-                            <span>Procore</span>
+                            Procore
                             <span className="text-[10px] text-muted-foreground">(Coming Soon)</span>
                           </Button>
                         </div>
