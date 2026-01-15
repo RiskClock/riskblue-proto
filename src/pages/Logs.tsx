@@ -231,8 +231,8 @@ export default function Logs() {
                     <TableRow>
                       <TableHead className="w-[180px]">Timestamp</TableHead>
                       <TableHead className="w-[200px]">User</TableHead>
-                      <TableHead className="w-[180px]">Action</TableHead>
                       <TableHead>Project</TableHead>
+                      <TableHead className="w-[180px]">Action</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -253,10 +253,10 @@ export default function Logs() {
                             </TooltipContent>
                           </Tooltip>
                         </TableCell>
-                        <TableCell className="text-sm">{formatAction(log.action)}</TableCell>
                         <TableCell className="text-sm text-muted-foreground">
                           {log.project_id ? projectMap.get(log.project_id) || log.project_id : "—"}
                         </TableCell>
+                        <TableCell className="text-sm">{formatAction(log.action)}</TableCell>
                       </TableRow>
                     ))}
                   </TableBody>

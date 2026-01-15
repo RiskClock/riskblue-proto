@@ -8,7 +8,8 @@ type ActivityAction =
   | "project_created"
   | "add_new_clicked"
   | "export_clicked"
-  | "manage_collaborators_clicked";
+  | "manage_collaborators_clicked"
+  | "session_start";
 
 export const useActivityLogger = () => {
   const { user } = useAuth();
