@@ -441,8 +441,6 @@ export default function Configuration() {
             </div>
           </div>
         )}
-          </div>
-        )}
       </main>
 
       {/* Save Confirmation Dialog */}
