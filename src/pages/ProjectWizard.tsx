@@ -9,6 +9,7 @@ import { getUserFriendlyError } from "@/lib/errorHandling";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { LogoDropdown } from "@/components/LogoDropdown";
 import riskBlueLogo from "@/assets/logo-riskblue.png";
+import riskRedLogo from "@/assets/logo-riskred.png";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import * as AccordionPrimitive from "@radix-ui/react-accordion";
@@ -32,6 +33,10 @@ import { ProposalsStep } from "@/components/wizard/ProposalsStep";
 import { ImplementationScheduleStep } from "@/components/wizard/ImplementationScheduleStep";
 import { ProjectFilesUpload, DriveFileInfo } from "@/components/wizard/ProjectFilesUpload";
 import { ResponsePlanUploadChat } from "@/components/ResponsePlanUploadChat";
+import { ProductTabSwitcher, ProductType } from "@/components/wizard/ProductTabSwitcher";
+import { useRiskRedAnalysisItems, useAddRiskRedAnalysisItems, useDeleteRiskRedAnalysisItems, generateRiskRedItemId } from "@/hooks/useRiskRedAnalysisItems";
+import { useRiskRedASPOptions, getRiskRedDefaultControlIdsForName, getRiskRedIdPrefixForName } from "@/hooks/useRiskRedASPOptions";
+import { useRiskRedControls, getRiskRedControlNamesFromIds } from "@/hooks/useRiskRedControls";
 import { Download, LogOut, FileText, Loader2, Users, Settings, BarChart3, FilePlus, Upload } from "lucide-react";
 import { DropdownMenuSeparator } from "@/components/ui/dropdown-menu";
 import { Button } from "@/components/ui/button";
@@ -118,6 +123,40 @@ const ProjectWizardContent = () => {
   // AWP Edit Modal state - Bug 2: key forces remount for proper reset
   const [showAWPEditModal, setShowAWPEditModal] = useState(false);
   const [awpModalKey, setAwpModalKey] = useState(0);
+  
+  // RiskRed product state (internal users only)
+  const [activeProduct, setActiveProduct] = useState<ProductType>("riskblue");
+  
+  // RiskRed analysis items hooks
+  const { data: riskRedItems = [], refetch: refetchRiskRedItems } = useRiskRedAnalysisItems(id);
+  const addRiskRedItemsMutation = useAddRiskRedAnalysisItems();
+  const deleteRiskRedItemsMutation = useDeleteRiskRedAnalysisItems(id);
+  const { data: riskRedASPOptions = [] } = useRiskRedASPOptions();
+  const { data: riskRedControls = [] } = useRiskRedControls();
+  
+  // Display items based on active product
+  const displayItems = useMemo((): AnalysisItem[] => {
+    if (activeProduct === "riskblue") {
+      return analysisItems;
+    }
+    // Transform RiskRed items to AnalysisItem format for display
+    return riskRedItems.map(item => ({
+      id: item.itemId,
+      name: item.name,
+      areaName: item.areaName || null,
+      floor: item.floor || null,
+      category: item.category as "Asset" | "Water System" | "Process",
+      controls: item.controls,
+      drawingCode: null,
+      fileName: null,
+      width: null,
+      length: null,
+      areaSqft: null,
+      sizeCategory: null,
+      coordinates: null,
+      source: 'manual' as const,
+    }));
+  }, [activeProduct, analysisItems, riskRedItems]);
   
   // Standalone Google Drive connection dialog
   const [showDriveConnectionDialog, setShowDriveConnectionDialog] = useState(false);
@@ -1326,11 +1365,23 @@ const ProjectWizardContent = () => {
                 <AccordionPrimitive.Header className="flex items-center py-4">
                   <AccordionPrimitive.Trigger className="flex flex-1 items-center justify-between text-lg font-semibold hover:no-underline group">
                     <div className="flex items-center gap-2">
-                      <span>Assets, Water Systems & Processes</span>
-                      {analysisItems.length > 0 && (
+                      <span>
+                        {activeProduct === "riskblue" 
+                          ? "Assets, Water Systems & Processes" 
+                          : "Assets, Systems & Processes"}
+                      </span>
+                      {displayItems.length > 0 && (
                         <span className="text-sm font-normal text-muted-foreground">
-                          ({analysisItems.length})
+                          ({displayItems.length})
                         </span>
+                      )}
+                      {/* Product Tab Switcher - Internal Users Only */}
+                      {isInternalUser && (
+                        <ProductTabSwitcher
+                          activeProduct={activeProduct}
+                          onProductChange={setActiveProduct}
+                          className="ml-2"
+                        />
                       )}
                       <DropdownMenu>
                         <DropdownMenuTrigger asChild>
@@ -1353,7 +1404,7 @@ const ProjectWizardContent = () => {
                             className="gap-2"
                           >
                             <FilePlus className="h-4 w-4" />
-                            {analysisItems.length === 0 ? "Create from Scratch" : "Edit Manually"}
+                            {displayItems.length === 0 ? "Create from Scratch" : "Edit Manually"}
                           </DropdownMenuItem>
                           <DropdownMenuItem
                             onClick={handleUploadDrawingsClick}
@@ -1390,10 +1441,12 @@ const ProjectWizardContent = () => {
                 </AccordionPrimitive.Header>
                 <AccordionContent className="space-y-8 pt-4">
                   {/* Empty state when no items */}
-                  {analysisItems.length === 0 && (
+                  {displayItems.length === 0 && (
                     <div className="text-center py-8 border rounded-lg bg-muted/30">
                       <p className="text-sm text-muted-foreground mb-4">
-                        No assets, water systems, or processes have been added yet.
+                        {activeProduct === "riskblue" 
+                          ? "No assets, water systems, or processes have been added yet."
+                          : "No assets, systems, or processes have been added yet."}
                       </p>
                       <div className="flex flex-col items-center gap-2">
                           <Button
@@ -1471,7 +1524,7 @@ const ProjectWizardContent = () => {
                   </div>
                   <div className="space-y-6 pt-6 border-t">
                     <h3 className="text-md font-medium">
-                      Water Systems
+                      {activeProduct === "riskblue" ? "Water Systems" : "Systems"}
                       {waterSystemInstanceCount > 0 && (
                         <span className="ml-2 text-muted-foreground font-normal">({waterSystemInstanceCount})</span>
                       )}
@@ -1767,47 +1820,102 @@ const ProjectWizardContent = () => {
         key={awpModalKey}
         isOpen={showAWPEditModal}
         onClose={() => setShowAWPEditModal(false)}
-        analysisItems={analysisItems}
+        analysisItems={displayItems}
         onUpdateItems={async (items, changeCount) => {
-          setAnalysisItems(items);
-          // Issue 14: Save to database
-          if (id && id !== "new") {
-            try {
-              await saveAnalysisItems(id, items);
-              toast({
-                title: "Saved",
-                description: `${changeCount || items.length} change(s) saved successfully`,
-              });
-            } catch (error) {
-              console.error("Error saving analysis items:", error);
+          if (activeProduct === "riskblue") {
+            // RiskBlue: Save to project_analysis_items
+            setAnalysisItems(items);
+            if (id && id !== "new") {
+              try {
+                await saveAnalysisItems(id, items);
+                toast({
+                  title: "Saved",
+                  description: `${changeCount || items.length} change(s) saved successfully`,
+                });
+              } catch (error) {
+                console.error("Error saving analysis items:", error);
+              }
+            }
+            // Auto-select all new items and their controls so they appear in PDF export
+            const assetInstances = items.filter(i => i.category === "Asset").map(i => i.id);
+            const systemInstances = items.filter(i => i.category === "Water System").map(i => i.id);
+            const processInstances = items.filter(i => i.category === "Process").map(i => i.id);
+            
+            const assetControls = items
+              .filter(i => i.category === "Asset")
+              .flatMap(i => (i.controls || []).map(c => `${i.id}::${c}`));
+            const systemControls = items
+              .filter(i => i.category === "Water System")
+              .flatMap(i => (i.controls || []).map(c => `${i.id}::${c}`));
+            const processControls = items
+              .filter(i => i.category === "Process")
+              .flatMap(i => (i.controls || []).map(c => `${i.id}::${c}`));
+            
+            updateFields({
+              selectedAssetInstances: assetInstances,
+              selectedAssetControls: assetControls,
+              selectedWaterSystemInstances: systemInstances,
+              selectedWaterSystemControls: systemControls,
+              selectedProcessInstances: processInstances,
+              selectedProcessControls: processControls,
+            });
+          } else {
+            // RiskRed: Save to riskred_analysis_items
+            if (id && id !== "new") {
+              try {
+                // Get existing RiskRed item IDs
+                const existingIds = new Set(riskRedItems.map(i => i.itemId));
+                const newItemIds = new Set(items.map(i => i.id));
+                
+                // Find items to delete (in existing but not in new)
+                const itemsToDelete = riskRedItems.filter(i => !newItemIds.has(i.itemId));
+                if (itemsToDelete.length > 0) {
+                  await deleteRiskRedItemsMutation.mutateAsync(itemsToDelete.map(i => i.id));
+                }
+                
+                // Find items to add (in new but not in existing)
+                const itemsToAdd = items.filter(i => !existingIds.has(i.id));
+                if (itemsToAdd.length > 0) {
+                  // Get default controls for each item
+                  const itemsWithControls = itemsToAdd.map(item => {
+                    const aspOption = riskRedASPOptions.find(opt => opt.name === item.name);
+                    const controlIds = aspOption?.defaultControlIds || [];
+                    const controlNames = getRiskRedControlNamesFromIds(riskRedControls, controlIds);
+                    
+                    return {
+                      project_id: id,
+                      item_id: item.id,
+                      name: item.name,
+                      instance_name: item.areaName || null,
+                      category: item.category,
+                      subcategory: aspOption?.subcategory || null,
+                      floor: item.floor || null,
+                      area_name: item.areaName || null,
+                      controls: controlNames.length > 0 ? controlNames : item.controls,
+                    };
+                  });
+                  await addRiskRedItemsMutation.mutateAsync(itemsWithControls);
+                }
+                
+                await refetchRiskRedItems();
+                toast({
+                  title: "Saved",
+                  description: `${changeCount || items.length} change(s) saved successfully`,
+                });
+              } catch (error) {
+                console.error("Error saving RiskRed analysis items:", error);
+                toast({
+                  title: "Error",
+                  description: "Failed to save RiskRed items",
+                  variant: "destructive",
+                });
+              }
             }
           }
-          // Auto-select all new items and their controls so they appear in PDF export
-          const assetInstances = items.filter(i => i.category === "Asset").map(i => i.id);
-          const systemInstances = items.filter(i => i.category === "Water System").map(i => i.id);
-          const processInstances = items.filter(i => i.category === "Process").map(i => i.id);
-          
-          const assetControls = items
-            .filter(i => i.category === "Asset")
-            .flatMap(i => (i.controls || []).map(c => `${i.id}::${c}`));
-          const systemControls = items
-            .filter(i => i.category === "Water System")
-            .flatMap(i => (i.controls || []).map(c => `${i.id}::${c}`));
-          const processControls = items
-            .filter(i => i.category === "Process")
-            .flatMap(i => (i.controls || []).map(c => `${i.id}::${c}`));
-          
-          updateFields({
-            selectedAssetInstances: assetInstances,
-            selectedAssetControls: assetControls,
-            selectedWaterSystemInstances: systemInstances,
-            selectedWaterSystemControls: systemControls,
-            selectedProcessInstances: processInstances,
-            selectedProcessControls: processControls,
-          });
         }}
         projectId={id || "new"}
         projectName={projectData.name}
+        product={activeProduct}
       />
       
       {/* Collaborators Modal */}
