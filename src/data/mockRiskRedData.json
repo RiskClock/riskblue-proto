@@ -1,0 +1,371 @@
+[
+  {
+    "instanceId": "TS001",
+    "instanceName": "Main Site Office",
+    "aspClass": "Temporary Site Offices & Welfare Units",
+    "type": "Asset",
+    "subcategory": "Temporary Structures",
+    "floor": "Ground",
+    "areaName": "North Compound"
+  },
+  {
+    "instanceId": "TS002",
+    "instanceName": "Worker Welfare Block A",
+    "aspClass": "Temporary Site Offices & Welfare Units",
+    "type": "Asset",
+    "subcategory": "Temporary Structures",
+    "floor": "Ground",
+    "areaName": "East Compound"
+  },
+  {
+    "instanceId": "MS001",
+    "instanceName": "Timber Storage",
+    "aspClass": "Material Storage Areas",
+    "type": "Asset",
+    "subcategory": "Temporary Structures",
+    "floor": "Ground",
+    "areaName": "South Yard"
+  },
+  {
+    "instanceId": "MS002",
+    "instanceName": "Paint & Coating Storage",
+    "aspClass": "Material Storage Areas",
+    "type": "Asset",
+    "subcategory": "Temporary Structures",
+    "floor": "Ground",
+    "areaName": "West Compound"
+  },
+  {
+    "instanceId": "SA001",
+    "instanceName": "Tower 1 External Scaffold",
+    "aspClass": "Scaffolding & Temporary Access",
+    "type": "Asset",
+    "subcategory": "Temporary Structures",
+    "floor": "Multiple",
+    "areaName": "Tower 1 Perimeter"
+  },
+  {
+    "instanceId": "BU001",
+    "instanceName": "Basement Level B1",
+    "aspClass": "Basement & Underground Levels",
+    "type": "Asset",
+    "subcategory": "Building Areas",
+    "floor": "B1",
+    "areaName": "Full Floor"
+  },
+  {
+    "instanceId": "BU002",
+    "instanceName": "Basement Level B2",
+    "aspClass": "Basement & Underground Levels",
+    "type": "Asset",
+    "subcategory": "Building Areas",
+    "floor": "B2",
+    "areaName": "Full Floor"
+  },
+  {
+    "instanceId": "VS001",
+    "instanceName": "Main Elevator Shaft",
+    "aspClass": "Vertical Shafts & Risers",
+    "type": "Asset",
+    "subcategory": "Building Areas",
+    "floor": "All",
+    "areaName": "Core A"
+  },
+  {
+    "instanceId": "VS002",
+    "instanceName": "Service Riser Shaft",
+    "aspClass": "Vertical Shafts & Risers",
+    "type": "Asset",
+    "subcategory": "Building Areas",
+    "floor": "All",
+    "areaName": "Core B"
+  },
+  {
+    "instanceId": "ME001",
+    "instanceName": "Main Electrical Room",
+    "aspClass": "Mechanical & Electrical Rooms",
+    "type": "Asset",
+    "subcategory": "Building Areas",
+    "floor": "B1",
+    "areaName": "East Wing"
+  },
+  {
+    "instanceId": "ME002",
+    "instanceName": "Rooftop Mechanical Room",
+    "aspClass": "Mechanical & Electrical Rooms",
+    "type": "Asset",
+    "subcategory": "Building Areas",
+    "floor": "Roof",
+    "areaName": "Penthouse"
+  },
+  {
+    "instanceId": "RA001",
+    "instanceName": "Main Roof Area",
+    "aspClass": "Roof Areas",
+    "type": "Asset",
+    "subcategory": "Building Areas",
+    "floor": "Roof",
+    "areaName": "Tower 1"
+  },
+  {
+    "instanceId": "PS001",
+    "instanceName": "Underground Parking P1",
+    "aspClass": "Parking Structures",
+    "type": "Asset",
+    "subcategory": "Building Areas",
+    "floor": "P1",
+    "areaName": "Full Level"
+  },
+  {
+    "instanceId": "GP001",
+    "instanceName": "Main Generator Set",
+    "aspClass": "Generators & Temporary Power",
+    "type": "Asset",
+    "subcategory": "Construction Equipment",
+    "floor": "Ground",
+    "areaName": "Power Compound"
+  },
+  {
+    "instanceId": "GP002",
+    "instanceName": "Backup Generator",
+    "aspClass": "Generators & Temporary Power",
+    "type": "Asset",
+    "subcategory": "Construction Equipment",
+    "floor": "Ground",
+    "areaName": "Power Compound"
+  },
+  {
+    "instanceId": "FS001",
+    "instanceName": "Diesel Storage Tank",
+    "aspClass": "Fuel Storage Areas",
+    "type": "Asset",
+    "subcategory": "Construction Equipment",
+    "floor": "Ground",
+    "areaName": "Fuel Compound"
+  },
+  {
+    "instanceId": "TFD001",
+    "instanceName": "Basement Fire Detection",
+    "aspClass": "Temporary Fire Detection",
+    "type": "System",
+    "subcategory": "Fire Safety Systems",
+    "floor": "B1-B2",
+    "areaName": "All Areas"
+  },
+  {
+    "instanceId": "TFD002",
+    "instanceName": "Site Office Detection",
+    "aspClass": "Temporary Fire Detection",
+    "type": "System",
+    "subcategory": "Fire Safety Systems",
+    "floor": "Ground",
+    "areaName": "Office Complex"
+  },
+  {
+    "instanceId": "SPS001",
+    "instanceName": "Tower 1 Standpipe",
+    "aspClass": "Standpipe Systems",
+    "type": "System",
+    "subcategory": "Fire Safety Systems",
+    "floor": "All",
+    "areaName": "Stairwell A"
+  },
+  {
+    "instanceId": "SPR001",
+    "instanceName": "Basement Sprinkler Zone",
+    "aspClass": "Sprinkler Systems (Partial)",
+    "type": "System",
+    "subcategory": "Fire Safety Systems",
+    "floor": "B1-B2",
+    "areaName": "All Areas"
+  },
+  {
+    "instanceId": "FES001",
+    "instanceName": "Floor 1-5 Extinguishers",
+    "aspClass": "Fire Extinguisher Stations",
+    "type": "System",
+    "subcategory": "Fire Safety Systems",
+    "floor": "1-5",
+    "areaName": "All Floors"
+  },
+  {
+    "instanceId": "TED001",
+    "instanceName": "Main Distribution Board",
+    "aspClass": "Temporary Electrical Distribution",
+    "type": "System",
+    "subcategory": "Utility Systems",
+    "floor": "Ground",
+    "areaName": "Power Compound"
+  },
+  {
+    "instanceId": "TED002",
+    "instanceName": "Floor Distribution Boards",
+    "aspClass": "Temporary Electrical Distribution",
+    "type": "System",
+    "subcategory": "Utility Systems",
+    "floor": "1-20",
+    "areaName": "Core Areas"
+  },
+  {
+    "instanceId": "THS001",
+    "instanceName": "Basement Heating Units",
+    "aspClass": "Temporary Heating Systems",
+    "type": "System",
+    "subcategory": "Utility Systems",
+    "floor": "B1-B2",
+    "areaName": "Work Areas"
+  },
+  {
+    "instanceId": "WO001",
+    "instanceName": "Steel Erection Welding",
+    "aspClass": "Welding Operations",
+    "type": "Process",
+    "subcategory": "Hot Work Activities",
+    "floor": "15-20",
+    "areaName": "Structure Zone"
+  },
+  {
+    "instanceId": "WO002",
+    "instanceName": "MEP Pipe Welding",
+    "aspClass": "Welding Operations",
+    "type": "Process",
+    "subcategory": "Hot Work Activities",
+    "floor": "5-10",
+    "areaName": "Mechanical Areas"
+  },
+  {
+    "instanceId": "CG001",
+    "instanceName": "Concrete Cutting Operations",
+    "aspClass": "Cutting & Grinding",
+    "type": "Process",
+    "subcategory": "Hot Work Activities",
+    "floor": "1-5",
+    "areaName": "All Areas"
+  },
+  {
+    "instanceId": "CG002",
+    "instanceName": "Metal Grinding Operations",
+    "aspClass": "Cutting & Grinding",
+    "type": "Process",
+    "subcategory": "Hot Work Activities",
+    "floor": "10-15",
+    "areaName": "Facade Zone"
+  },
+  {
+    "instanceId": "TAR001",
+    "instanceName": "Roof Waterproofing",
+    "aspClass": "Torch Applied Roofing",
+    "type": "Process",
+    "subcategory": "Hot Work Activities",
+    "floor": "Roof",
+    "areaName": "Main Roof"
+  },
+  {
+    "instanceId": "SB001",
+    "instanceName": "HVAC Brazing",
+    "aspClass": "Soldering & Brazing",
+    "type": "Process",
+    "subcategory": "Hot Work Activities",
+    "floor": "Mechanical",
+    "areaName": "Plant Rooms"
+  },
+  {
+    "instanceId": "SPC001",
+    "instanceName": "Interior Painting",
+    "aspClass": "Spray Painting & Coating",
+    "type": "Process",
+    "subcategory": "High-Risk Activities",
+    "floor": "1-10",
+    "areaName": "Finished Units"
+  },
+  {
+    "instanceId": "SPC002",
+    "instanceName": "Exterior Coating",
+    "aspClass": "Spray Painting & Coating",
+    "type": "Process",
+    "subcategory": "High-Risk Activities",
+    "floor": "All",
+    "areaName": "Facade"
+  },
+  {
+    "instanceId": "FI001",
+    "instanceName": "Spray Foam Insulation",
+    "aspClass": "Foam Insulation Installation",
+    "type": "Process",
+    "subcategory": "High-Risk Activities",
+    "floor": "1-20",
+    "areaName": "Exterior Walls"
+  },
+  {
+    "instanceId": "FI002",
+    "instanceName": "Roof Insulation",
+    "aspClass": "Foam Insulation Installation",
+    "type": "Process",
+    "subcategory": "High-Risk Activities",
+    "floor": "Roof",
+    "areaName": "Main Roof"
+  },
+  {
+    "instanceId": "AA001",
+    "instanceName": "Flooring Adhesive Application",
+    "aspClass": "Adhesive Application",
+    "type": "Process",
+    "subcategory": "High-Risk Activities",
+    "floor": "1-10",
+    "areaName": "Common Areas"
+  },
+  {
+    "instanceId": "TC001",
+    "instanceName": "Main Tower Crane",
+    "aspClass": "Tower Cranes",
+    "type": "Asset",
+    "subcategory": "Construction Equipment",
+    "floor": "Ground",
+    "areaName": "Central Site"
+  },
+  {
+    "instanceId": "MH001",
+    "instanceName": "Personnel/Material Hoist",
+    "aspClass": "Material Hoists",
+    "type": "Asset",
+    "subcategory": "Construction Equipment",
+    "floor": "All",
+    "areaName": "East Elevation"
+  },
+  {
+    "instanceId": "TE001",
+    "instanceName": "Weather Enclosure Level 18-20",
+    "aspClass": "Temporary Enclosures & Weather Protection",
+    "type": "Asset",
+    "subcategory": "Temporary Structures",
+    "floor": "18-20",
+    "areaName": "Full Floors"
+  },
+  {
+    "instanceId": "CA001",
+    "instanceName": "Main Lobby",
+    "aspClass": "Common Areas & Corridors",
+    "type": "Asset",
+    "subcategory": "Building Areas",
+    "floor": "Ground",
+    "areaName": "Entrance"
+  },
+  {
+    "instanceId": "EL001",
+    "instanceName": "Emergency Exit Lighting",
+    "aspClass": "Emergency Lighting",
+    "type": "System",
+    "subcategory": "Fire Safety Systems",
+    "floor": "All",
+    "areaName": "Stairwells"
+  },
+  {
+    "instanceId": "GD001",
+    "instanceName": "Temporary Gas Supply",
+    "aspClass": "Gas Distribution (if applicable)",
+    "type": "System",
+    "subcategory": "Utility Systems",
+    "floor": "B1",
+    "areaName": "Boiler Room"
+  }
+]

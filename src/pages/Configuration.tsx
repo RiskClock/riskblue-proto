@@ -12,7 +12,7 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { LogOut, Plus, X, Save, RotateCcw, ShieldAlert, Settings, FileText, BarChart3 } from "lucide-react";
+import { LogOut, Plus, X, Save, RotateCcw, ShieldAlert, Settings, FileText, BarChart3, Info } from "lucide-react";
 import { DropdownMenuSeparator } from "@/components/ui/dropdown-menu";
 import { useToast } from "@/hooks/use-toast";
 import { useHeapIdentify } from "@/hooks/useHeapIdentify";
@@ -20,6 +20,9 @@ import { useUserDisplayName } from "@/hooks/useUserDisplayName";
 import { useMitigationControls, getControlNameById } from "@/hooks/useMitigationControls";
 import { LogoDropdown } from "@/components/LogoDropdown";
 import { ProviderSelectionDialog } from "@/components/ProviderSelectionDialog";
+import { ProductTabSwitcher, ProductType } from "@/components/wizard/ProductTabSwitcher";
+import { useRiskRedASPOptions, groupRiskRedASPByType } from "@/hooks/useRiskRedASPOptions";
+import { useRiskRedControls, getRiskRedControlNamesFromIds } from "@/hooks/useRiskRedControls";
 
 interface AWPItem {
   id: string;
@@ -44,6 +47,12 @@ export default function Configuration() {
   const [showSaveDialog, setShowSaveDialog] = useState(false);
   const [showRevertDialog, setShowRevertDialog] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [activeProduct, setActiveProduct] = useState<ProductType>("riskblue");
+
+  // RiskRed data hooks
+  const { data: riskRedASP = [] } = useRiskRedASPOptions();
+  const { data: riskRedControls = [] } = useRiskRedControls();
+  const groupedRiskRedASP = useMemo(() => groupRiskRedASPByType(riskRedASP), [riskRedASP]);
 
   // Track changes: AWP id -> { original, current }
   const [pendingChanges, setPendingChanges] = useState<Map<string, PendingChange>>(new Map());
@@ -290,29 +299,38 @@ export default function Configuration() {
       <main className="container mx-auto px-6 py-8">
         <div className="flex items-center justify-between mb-6">
           <div>
-            <h1 className="text-3xl font-bold text-foreground">AWP Configuration</h1>
-            <p className="text-muted-foreground">Manage default mitigation controls for each AWP class</p>
+            <h1 className="text-3xl font-bold text-foreground">ASP Configuration</h1>
+            <p className="text-muted-foreground">Manage default mitigation controls for each ASP class</p>
           </div>
           <div className="flex gap-3">
-            <Button variant="outline" onClick={() => setShowRevertDialog(true)} disabled={!hasUnsavedChanges}>
-              <RotateCcw className="h-4 w-4 mr-2" />
-              Revert Changes
-            </Button>
-            <Button onClick={() => setShowSaveDialog(true)} disabled={!hasUnsavedChanges}>
-              <Save className="h-4 w-4 mr-2" />
-              Save Changes
-            </Button>
+            {activeProduct === "riskblue" && (
+              <>
+                <Button variant="outline" onClick={() => setShowRevertDialog(true)} disabled={!hasUnsavedChanges}>
+                  <RotateCcw className="h-4 w-4 mr-2" />
+                  Revert Changes
+                </Button>
+                <Button onClick={() => setShowSaveDialog(true)} disabled={!hasUnsavedChanges}>
+                  <Save className="h-4 w-4 mr-2" />
+                  Save Changes
+                </Button>
+              </>
+            )}
           </div>
+        </div>
+
+        {/* Product Tab Switcher */}
+        <div className="mb-6">
+          <ProductTabSwitcher activeProduct={activeProduct} onProductChange={setActiveProduct} />
         </div>
 
         {loading ? (
           <div className="text-center py-12 text-muted-foreground">Loading...</div>
-        ) : (
+        ) : activeProduct === "riskblue" ? (
           <div className="bg-card rounded-lg border">
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead className="w-[200px]">AWP Class</TableHead>
+                  <TableHead className="w-[200px]">ASP Class</TableHead>
                   <TableHead>Default Mitigation Controls</TableHead>
                 </TableRow>
               </TableHeader>
@@ -375,6 +393,54 @@ export default function Configuration() {
                 ))}
               </TableBody>
             </Table>
+          </div>
+        ) : (
+          /* RiskRed ASP - Read-only view */
+          <div className="space-y-4">
+            <div className="flex items-center gap-2 p-4 bg-muted/50 rounded-lg border">
+              <Info className="h-5 w-5 text-muted-foreground" />
+              <p className="text-sm text-muted-foreground">RiskRed ASP configuration is read-only during the prototype phase.</p>
+            </div>
+            <div className="bg-card rounded-lg border">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead className="w-[250px]">ASP Class</TableHead>
+                    <TableHead>Default Controls</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {(["Asset", "System", "Process"] as const).map((type) => (
+                    <>
+                      <TableRow key={type} className="bg-muted/50 hover:bg-muted/50">
+                        <TableCell colSpan={2} className="font-semibold text-sm py-2">
+                          {type === "Asset" ? "Assets" : type === "System" ? "Systems" : "Processes"}
+                        </TableCell>
+                      </TableRow>
+                      {(groupedRiskRedASP[type] || []).map((asp) => (
+                        <TableRow key={asp.id}>
+                          <TableCell className="font-medium py-2">{asp.name}</TableCell>
+                          <TableCell className="py-2">
+                            <div className="flex flex-wrap gap-1.5">
+                              {getRiskRedControlNamesFromIds(riskRedControls, asp.defaultControlIds).map((name) => (
+                                <Badge key={name} variant="secondary" className="text-xs">
+                                  {name}
+                                </Badge>
+                              ))}
+                              {asp.defaultControlIds.length === 0 && (
+                                <span className="text-sm text-muted-foreground italic">No default controls</span>
+                              )}
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+          </div>
+        )}
           </div>
         )}
       </main>
