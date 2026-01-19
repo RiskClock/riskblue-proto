@@ -21,6 +21,7 @@ interface ProcessesStepProps {
   driveAccessToken?: string | null;
   riskTolerance?: RiskTolerance;
   onManualControlToggle?: () => void;
+  product?: "riskblue" | "riskred";
 }
 
 // Group processes by name for expandable list view
@@ -36,7 +37,8 @@ export const ProcessesStep = ({
   driveFiles = [],
   driveAccessToken = null,
   riskTolerance: parentRiskTolerance = "low",
-  onManualControlToggle
+  onManualControlToggle,
+  product = "riskblue"
 }: ProcessesStepProps) => {
   // Get project context
   const { projectData, updateFields } = useProject();

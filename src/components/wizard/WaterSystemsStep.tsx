@@ -41,6 +41,7 @@ interface WaterSystemsStepProps {
   driveAccessToken?: string | null;
   riskTolerance?: RiskTolerance;
   onManualControlToggle?: () => void;
+  product?: "riskblue" | "riskred";
 }
 
 export const WaterSystemsStep = ({
@@ -51,7 +52,8 @@ export const WaterSystemsStep = ({
   driveFiles = [],
   driveAccessToken = null,
   riskTolerance: parentRiskTolerance = "low",
-  onManualControlToggle
+  onManualControlToggle,
+  product = "riskblue"
 }: WaterSystemsStepProps) => {
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -225,11 +227,31 @@ export const WaterSystemsStep = ({
   // Filter systems to only show those detected in analysis
   const filteredSystems = useMemo(() => {
     if (analysisItems.length === 0) return [];
+    
+    // For RiskRed, create pseudo-systems from unique ASP class names (bypasses RiskBlue DB matching)
+    if (product === "riskred") {
+      const systemItems = analysisItems.filter(i => i.category === "Water System");
+      const uniqueNames = [...new Set(systemItems.map(item => item.name))];
+      return uniqueNames.map((name, index) => ({
+        id: `riskred-${name}`,
+        name: name,
+        threat: "",
+        risk_level: "high",
+        probability: 3,
+        impact: 4,
+        duration: "12 months",
+        cost: "",
+        image_url: "",
+        display_order: index
+      }));
+    }
+    
+    // For RiskBlue, filter against the database systems
     return allSystems.filter(system => {
       const normalized = normalizeSystemName(system.name);
       return detectedSystemTypes.has(normalized);
     });
-  }, [allSystems, detectedSystemTypes, analysisItems.length]);
+  }, [allSystems, detectedSystemTypes, analysisItems, product]);
 
   // Filter only water system items for risk scoring
   const systemItems = useMemo(() => 
@@ -252,11 +274,18 @@ export const WaterSystemsStep = ({
 
   // Get analysis items for a specific water system type
   const getSystemAnalysisItems = useCallback((systemName: string): AnalysisItem[] => {
+    // For RiskRed, match by exact name (no normalization)
+    if (product === "riskred") {
+      return analysisItems.filter(item => 
+        item.category === "Water System" && item.name === systemName
+      );
+    }
+    // For RiskBlue, use normalization
     return analysisItems.filter(item => 
       item.category === "Water System" && 
       normalizeSystemName(item.name) === normalizeSystemName(systemName)
     );
-  }, [analysisItems]);
+  }, [analysisItems, product]);
 
   // Initialize selection with all instances and controls when data loads (once)
   useEffect(() => {
