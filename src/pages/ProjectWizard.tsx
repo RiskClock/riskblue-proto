@@ -319,18 +319,18 @@ const ProjectWizardContent = () => {
   // Issue 23: Compute INSTANCE counts for subheadings using VALID items only
   // This ensures miscategorized items don't inflate the counts
   const assetInstanceCount = useMemo(() => 
-    countValidAssets(analysisItems), 
-    [analysisItems]
+    countValidAssets(displayItems), 
+    [displayItems]
   );
 
   const waterSystemInstanceCount = useMemo(() => 
-    countValidWaterSystems(analysisItems), 
-    [analysisItems]
+    countValidWaterSystems(displayItems), 
+    [displayItems]
   );
 
   const processInstanceCount = useMemo(() => 
-    countValidProcesses(analysisItems), 
-    [analysisItems]
+    countValidProcesses(displayItems), 
+    [displayItems]
   );
 
   // Fetch control costs from database (including monthly costs for full calculation)
@@ -1503,7 +1503,7 @@ const ProjectWizardContent = () => {
                         onNext={handleStepUpdate} 
                         onBack={() => {}} 
                         isProcessingWebhook={isProcessingWebhook}
-                        analysisItems={analysisItems}
+                        analysisItems={displayItems}
                         driveFiles={driveFiles}
                         driveAccessToken={driveAccessToken}
                         riskTolerance={riskTolerance}
@@ -1521,7 +1521,7 @@ const ProjectWizardContent = () => {
                         onNext={handleStepUpdate} 
                         onBack={() => {}} 
                         isProcessingWebhook={isProcessingWebhook}
-                        analysisItems={analysisItems}
+                        analysisItems={displayItems}
                         driveFiles={driveFiles}
                         driveAccessToken={driveAccessToken}
                         riskTolerance={riskTolerance}
@@ -1536,7 +1536,7 @@ const ProjectWizardContent = () => {
                         )}
                       </h3>
                       <ProcessesStep 
-                        analysisItems={analysisItems}
+                        analysisItems={displayItems}
                         onNext={handleStepUpdate}
                         isProcessingWebhook={isProcessingWebhook}
                         driveFiles={driveFiles}
