@@ -13,7 +13,7 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
 
-import riskBlueLogo from "@/assets/logo-riskblue.png";
+import riskClockLogo from "@/assets/logo-riskclock.png";
 import riskRedLogo from "@/assets/logo-riskred.png";
 
 export function LogoDropdown() {
@@ -59,7 +59,7 @@ export function LogoDropdown() {
           className="flex items-center gap-1 cursor-pointer"
           onClick={handleLogoClick}
         >
-          <img src={riskBlueLogo} alt="RiskBlue" className="h-8" />
+          <img src={riskClockLogo} alt="RiskClock" className="h-8" />
           <ChevronDown
             className={`h-4 w-4 text-muted-foreground transition-opacity duration-200 ${
               isHovered ? "opacity-100" : "opacity-0"
