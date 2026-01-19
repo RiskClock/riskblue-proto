@@ -38,6 +38,7 @@ import { ProductSectionContainer } from "@/components/wizard/ProductSectionConta
 import { useRiskRedAnalysisItems, useAddRiskRedAnalysisItems, useDeleteRiskRedAnalysisItems, generateRiskRedItemId } from "@/hooks/useRiskRedAnalysisItems";
 import { useRiskRedASPOptions, getRiskRedDefaultControlIdsForName, getRiskRedIdPrefixForName } from "@/hooks/useRiskRedASPOptions";
 import { useRiskRedControls, getRiskRedControlNamesFromIds } from "@/hooks/useRiskRedControls";
+import mockRiskRedData from "@/data/mockRiskRedData.json";
 import { Download, LogOut, FileText, Loader2, Users, Settings, BarChart3, FilePlus, Upload } from "lucide-react";
 import { DropdownMenuSeparator } from "@/components/ui/dropdown-menu";
 import { Button } from "@/components/ui/button";
@@ -140,6 +141,27 @@ const ProjectWizardContent = () => {
     if (activeProduct === "riskblue") {
       return analysisItems;
     }
+    
+    // Use mock data if no RiskRed items exist in database
+    if (riskRedItems.length === 0) {
+      return mockRiskRedData.map(item => ({
+        id: item.instanceId,
+        name: item.aspClass,
+        areaName: item.areaName || null,
+        floor: item.floor || null,
+        category: (item.type === "System" ? "Water System" : item.type) as "Asset" | "Water System" | "Process",
+        controls: [],
+        drawingCode: null,
+        fileName: null,
+        width: null,
+        length: null,
+        areaSqft: null,
+        sizeCategory: null,
+        coordinates: null,
+        source: 'manual' as const,
+      }));
+    }
+    
     // Transform RiskRed items to AnalysisItem format for display
     return riskRedItems.map(item => ({
       id: item.itemId,
