@@ -1530,6 +1530,7 @@ const ProjectWizardContent = () => {
                         driveAccessToken={driveAccessToken}
                         riskTolerance={riskTolerance}
                         onManualControlToggle={handleManualControlToggle}
+                        product={activeProduct}
                       />
                     </div>
                     <div className="space-y-6 pt-6 border-t">
@@ -1548,6 +1549,7 @@ const ProjectWizardContent = () => {
                         driveAccessToken={driveAccessToken}
                         riskTolerance={riskTolerance}
                         onManualControlToggle={handleManualControlToggle}
+                        product={activeProduct}
                       />
                     </div>
                     <div className="space-y-6 pt-6 border-t">
@@ -1565,6 +1567,7 @@ const ProjectWizardContent = () => {
                         driveAccessToken={driveAccessToken}
                         riskTolerance={riskTolerance}
                         onManualControlToggle={handleManualControlToggle}
+                        product={activeProduct}
                       />
                     </div>
                     
@@ -1733,6 +1736,7 @@ const ProjectWizardContent = () => {
                         driveAccessToken={driveAccessToken}
                         riskTolerance={riskTolerance}
                         onManualControlToggle={handleManualControlToggle}
+                        product="riskblue"
                       />
                     </div>
                     <div className="space-y-6 pt-6 border-t">
@@ -1751,6 +1755,7 @@ const ProjectWizardContent = () => {
                         driveAccessToken={driveAccessToken}
                         riskTolerance={riskTolerance}
                         onManualControlToggle={handleManualControlToggle}
+                        product="riskblue"
                       />
                     </div>
                     <div className="space-y-6 pt-6 border-t">
@@ -1768,6 +1773,7 @@ const ProjectWizardContent = () => {
                         driveAccessToken={driveAccessToken}
                         riskTolerance={riskTolerance}
                         onManualControlToggle={handleManualControlToggle}
+                        product="riskblue"
                       />
                     </div>
                     

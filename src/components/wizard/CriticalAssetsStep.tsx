@@ -41,6 +41,7 @@ interface CriticalAssetsStepProps {
   driveAccessToken?: string | null;
   riskTolerance?: RiskTolerance;
   onManualControlToggle?: () => void;
+  product?: "riskblue" | "riskred";
 }
 
 export const CriticalAssetsStep = ({
@@ -51,7 +52,8 @@ export const CriticalAssetsStep = ({
   driveFiles = [],
   driveAccessToken = null,
   riskTolerance: parentRiskTolerance = "low",
-  onManualControlToggle
+  onManualControlToggle,
+  product = "riskblue"
 }: CriticalAssetsStepProps) => {
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -261,19 +263,46 @@ export const CriticalAssetsStep = ({
   // Filter assets to only show those detected in analysis
   const filteredAssets = useMemo(() => {
     if (analysisItems.length === 0) return [];
+    
+    // For RiskRed, create pseudo-assets from unique ASP class names (bypasses RiskBlue DB matching)
+    if (product === "riskred") {
+      const assetItems = analysisItems.filter(i => i.category === "Asset");
+      const uniqueNames = [...new Set(assetItems.map(item => item.name))];
+      return uniqueNames.map((name, index) => ({
+        id: `riskred-${name}`,
+        name: name,
+        threat: "",
+        risk_level: "high",
+        probability: 3,
+        impact: 4,
+        duration: "12 months",
+        cost: "",
+        image_url: "",
+        display_order: index
+      }));
+    }
+    
+    // For RiskBlue, filter against the database assets
     return allAssets.filter(asset => {
       const normalized = normalizeAssetName(asset.name);
       return detectedAssetTypes.has(normalized);
     });
-  }, [allAssets, detectedAssetTypes, analysisItems.length]);
+  }, [allAssets, detectedAssetTypes, analysisItems, product]);
 
   // Get analysis items for a specific asset type
   const getAssetAnalysisItems = useCallback((assetName: string): AnalysisItem[] => {
+    // For RiskRed, match by exact name (no normalization)
+    if (product === "riskred") {
+      return analysisItems.filter(item => 
+        item.category === "Asset" && item.name === assetName
+      );
+    }
+    // For RiskBlue, use normalization
     return analysisItems.filter(item => 
       item.category === "Asset" && 
       normalizeAssetName(item.name) === normalizeAssetName(assetName)
     );
-  }, [analysisItems]);
+  }, [analysisItems, product]);
 
   // Initialize selection with all instances and controls when data loads (once)
   useEffect(() => {
