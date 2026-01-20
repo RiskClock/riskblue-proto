@@ -18,6 +18,8 @@ import { useRiskScoring } from "@/hooks/useRiskScoring";
 import { RiskScoreSummary } from "./RiskScoreSummary";
 import { RiskTolerance } from "./RiskToleranceSelector";
 import { useProject } from "@/contexts/ProjectContext";
+import { useRiskRedControls } from "@/hooks/useRiskRedControls";
+import { useRiskRedASPOptions } from "@/hooks/useRiskRedASPOptions";
 
 interface WaterSystem {
   id: string;
@@ -97,6 +99,10 @@ export const WaterSystemsStep = ({
   const [viewerItem, setViewerItem] = useState<AnalysisItem | null>(null);
   const [viewerFileId, setViewerFileId] = useState<string>("");
   const [viewerMimeType, setViewerMimeType] = useState<string>("application/pdf");
+  // Fetch RiskRed controls and ASP options for fire risk scoring
+  const { data: riskRedControls = [] } = useRiskRedControls();
+  const { data: riskRedASPOptions = [] } = useRiskRedASPOptions();
+
   // Fetch water systems from database
   const { data: waterSystems = [], isLoading } = useQuery({
     queryKey: ['water-systems'],
@@ -259,17 +265,34 @@ export const WaterSystemsStep = ({
     [analysisItems]
   );
 
-  // Risk scoring hook
-  const riskScore = useRiskScoring(
-    systemItems,
-    selectedInstanceIds,
-    selectedControlIds,
-    {
+  // Risk scoring hook - use RiskRed ASP options for probability/impact when product is riskred
+  const riskScoreData = useMemo(() => {
+    if (product === "riskred") {
+      // Use RiskRed ASP options for P×I values (Systems in RiskRed)
+      const riskRedSystems = riskRedASPOptions
+        .filter(asp => asp.type === "System")
+        .map(asp => ({ name: asp.name, probability: asp.probability, impact: asp.impact }));
+      return {
+        criticalAssets: [],
+        waterSystems: riskRedSystems,
+        processes: [],
+        controls: [] // RiskRed controls passed separately
+      };
+    }
+    return {
       criticalAssets: [],
       waterSystems: allSystems.map(s => ({ name: s.name, probability: s.probability || 3, impact: s.impact || 3 })),
       processes: [],
       controls
-    }
+    };
+  }, [product, riskRedASPOptions, allSystems, controls]);
+
+  const riskScore = useRiskScoring(
+    systemItems,
+    selectedInstanceIds,
+    selectedControlIds,
+    riskScoreData,
+    product === "riskred" ? riskRedControls : undefined
   );
 
   // Get analysis items for a specific water system type

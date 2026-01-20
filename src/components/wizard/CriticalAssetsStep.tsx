@@ -18,6 +18,8 @@ import { useRiskScoring } from "@/hooks/useRiskScoring";
 import { RiskScoreSummary } from "./RiskScoreSummary";
 import type { RiskTolerance } from "./RiskToleranceSelector";
 import { useProject } from "@/contexts/ProjectContext";
+import { useRiskRedControls } from "@/hooks/useRiskRedControls";
+import { useRiskRedASPOptions } from "@/hooks/useRiskRedASPOptions";
 
 interface Asset {
   id: string;
@@ -97,6 +99,10 @@ export const CriticalAssetsStep = ({
   const [viewerItem, setViewerItem] = useState<AnalysisItem | null>(null);
   const [viewerFileId, setViewerFileId] = useState<string>("");
   const [viewerMimeType, setViewerMimeType] = useState<string>("application/pdf");
+
+  // Fetch RiskRed controls and ASP options for fire risk scoring
+  const { data: riskRedControls = [] } = useRiskRedControls();
+  const { data: riskRedASPOptions = [] } = useRiskRedASPOptions();
 
   // Fetch assets from database
   const { data: assets = [], isLoading } = useQuery({
@@ -200,17 +206,34 @@ export const CriticalAssetsStep = ({
     [analysisItems]
   );
 
-  // Risk scoring hook
-  const riskScore = useRiskScoring(
-    assetItems,
-    selectedInstanceIds,
-    selectedControlIds,
-    {
+  // Risk scoring hook - use RiskRed ASP options for probability/impact when product is riskred
+  const riskScoreData = useMemo(() => {
+    if (product === "riskred") {
+      // Use RiskRed ASP options for P×I values
+      const riskRedAssets = riskRedASPOptions
+        .filter(asp => asp.type === "Asset")
+        .map(asp => ({ name: asp.name, probability: asp.probability, impact: asp.impact }));
+      return {
+        criticalAssets: riskRedAssets,
+        waterSystems: [],
+        processes: [],
+        controls: [] // RiskRed controls passed separately
+      };
+    }
+    return {
       criticalAssets: allAssets.map(a => ({ name: a.name, probability: a.probability || 3, impact: a.impact || 3 })),
       waterSystems: [],
       processes: [],
       controls
-    }
+    };
+  }, [product, riskRedASPOptions, allAssets, controls]);
+
+  const riskScore = useRiskScoring(
+    assetItems,
+    selectedInstanceIds,
+    selectedControlIds,
+    riskScoreData,
+    product === "riskred" ? riskRedControls : undefined
   );
 
   // Normalize asset name for comparison
