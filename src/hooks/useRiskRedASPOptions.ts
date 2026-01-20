@@ -5,9 +5,13 @@ export interface RiskRedASPOption {
   id: string;
   name: string;
   type: "Asset" | "System" | "Process";
-  subcategory: string;
+  subcategory: string | null;
   probability: number;
   impact: number;
+  riskTolerance: number;
+  riskLevelPoints: number;
+  startDateFormula: string | null;
+  endDateFormula: string | null;
   idPrefix: string | null;
   defaultControlIds: string[];
 }
@@ -21,7 +25,7 @@ export function useRiskRedASPOptions() {
     queryFn: async (): Promise<RiskRedASPOption[]> => {
       const { data, error } = await supabase
         .from("riskred_asp")
-        .select("id, name, type, subcategory, probability, impact, id_prefix, default_control_ids")
+        .select("id, name, type, subcategory, probability, impact, risk_tolerance, risk_level_points, start_date_formula, end_date_formula, id_prefix, default_control_ids")
         .eq("is_active", true)
         .order("display_order");
 
@@ -37,6 +41,10 @@ export function useRiskRedASPOptions() {
         subcategory: item.subcategory,
         probability: item.probability,
         impact: item.impact,
+        riskTolerance: item.risk_tolerance,
+        riskLevelPoints: item.risk_level_points,
+        startDateFormula: item.start_date_formula,
+        endDateFormula: item.end_date_formula,
         idPrefix: item.id_prefix || null,
         defaultControlIds: (item.default_control_ids as string[]) || [],
       }));
@@ -66,10 +74,11 @@ export function groupRiskRedASPBySubcategory(options: RiskRedASPOption[]): Recor
     if (!acc[opt.type]) {
       acc[opt.type] = {};
     }
-    if (!acc[opt.type][opt.subcategory]) {
-      acc[opt.type][opt.subcategory] = [];
+    const subcat = opt.subcategory || opt.name;
+    if (!acc[opt.type][subcat]) {
+      acc[opt.type][subcat] = [];
     }
-    acc[opt.type][opt.subcategory].push(opt);
+    acc[opt.type][subcat].push(opt);
     return acc;
   }, {} as Record<string, Record<string, RiskRedASPOption[]>>);
 }
