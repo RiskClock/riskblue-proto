@@ -2,7 +2,6 @@
 export interface AnalysisItem {
   id: string;
   name: string;
-  instanceName?: string; // Specific instance name (e.g., "Timber Formwork Storage")
   category: "Asset" | "Water System" | "Process";
   areaName: string | null;
   floor: string | null;

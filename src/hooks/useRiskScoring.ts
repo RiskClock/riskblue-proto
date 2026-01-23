@@ -1,7 +1,6 @@
 import { useMemo } from "react";
 import { AnalysisItem } from "@/lib/analysisItemMapper";
 import { getControlId } from "@/components/wizard/ExpandableListItem";
-import type { RiskRedControl } from "./useRiskRedControls";
 
 interface ControlData {
   name: string;
@@ -118,8 +117,7 @@ export const useRiskScoring = (
   analysisItems: AnalysisItem[],
   selectedInstanceIds: string[],
   selectedControlIds: Set<string>,
-  scoringData: RiskScoringData,
-  riskRedControls?: RiskRedControl[] // Optional RiskRed controls for fire risk scoring
+  scoringData: RiskScoringData
 ): ProjectRiskScore => {
   
   return useMemo(() => {
@@ -145,21 +143,6 @@ export const useRiskScoring = (
     controls.forEach(c => {
       controlPointsMap.set(c.name.toLowerCase(), { points: c.points, popularity: c.popularity, author: c.author, responsible: c.responsible, oneTimeCost: c.oneTimeCost, monthlyMaintCost: c.monthlyMaintCost, description: c.description, action: c.action, category: c.category });
     });
-    
-    // Add RiskRed controls if provided (for fire risk scoring)
-    if (riskRedControls && riskRedControls.length > 0) {
-      riskRedControls.forEach(c => {
-        controlPointsMap.set(c.name.toLowerCase(), {
-          points: c.deriskPoints || 0,
-          author: c.author || undefined,
-          responsible: c.responsible || undefined,
-          oneTimeCost: c.oneTimeCost || 0,
-          monthlyMaintCost: c.monthlyMaintCost || 0,
-          description: c.description || undefined,
-          action: c.actions || undefined,
-        });
-      });
-    }
     
     // Group items by category and class (name)
     const categoryGroups = new Map<string, Map<string, AnalysisItem[]>>();
@@ -335,5 +318,5 @@ export const useRiskScoring = (
         return instanceScore.controlWeights.get(controlName) || 0;
       }
     };
-  }, [analysisItems, selectedInstanceIds, selectedControlIds, scoringData, riskRedControls]);
+  }, [analysisItems, selectedInstanceIds, selectedControlIds, scoringData]);
 };

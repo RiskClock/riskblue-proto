@@ -144,37 +144,28 @@ const ProjectWizardContent = () => {
     
     // Use mock data if no RiskRed items exist in database
     if (riskRedItems.length === 0) {
-      return mockRiskRedData.map(item => {
-        // Get default control IDs from ASP options based on ASP class name
-        const defaultControlIds = getRiskRedDefaultControlIdsForName(riskRedASPOptions, item.aspClass);
-        // Convert control IDs to control names using RiskRed controls
-        const controlNames = getRiskRedControlNamesFromIds(riskRedControls, defaultControlIds);
-        
-        return {
-          id: item.instanceId,
-          name: item.aspClass,
-          instanceName: item.instanceName, // Map instance name (e.g., "Timber Formwork Storage")
-          areaName: item.areaName || null,
-          floor: item.floor || null,
-          category: (item.type === "System" ? "Water System" : item.type) as "Asset" | "Water System" | "Process",
-          controls: controlNames, // Assign default controls from ASP options
-          drawingCode: null,
-          fileName: null,
-          width: null,
-          length: null,
-          areaSqft: null,
-          sizeCategory: null,
-          coordinates: null,
-          source: 'manual' as const,
-        };
-      });
+      return mockRiskRedData.map(item => ({
+        id: item.instanceId,
+        name: item.aspClass,
+        areaName: item.areaName || null,
+        floor: item.floor || null,
+        category: (item.type === "System" ? "Water System" : item.type) as "Asset" | "Water System" | "Process",
+        controls: [],
+        drawingCode: null,
+        fileName: null,
+        width: null,
+        length: null,
+        areaSqft: null,
+        sizeCategory: null,
+        coordinates: null,
+        source: 'manual' as const,
+      }));
     }
     
     // Transform RiskRed items to AnalysisItem format for display
     return riskRedItems.map(item => ({
       id: item.itemId,
       name: item.name,
-      instanceName: item.instanceName || undefined,
       areaName: item.areaName || null,
       floor: item.floor || null,
       category: item.category as "Asset" | "Water System" | "Process",
@@ -188,7 +179,7 @@ const ProjectWizardContent = () => {
       coordinates: null,
       source: 'manual' as const,
     }));
-  }, [activeProduct, analysisItems, riskRedItems, riskRedASPOptions, riskRedControls]);
+  }, [activeProduct, analysisItems, riskRedItems]);
   
   // Standalone Google Drive connection dialog
   const [showDriveConnectionDialog, setShowDriveConnectionDialog] = useState(false);
@@ -1539,7 +1530,6 @@ const ProjectWizardContent = () => {
                         driveAccessToken={driveAccessToken}
                         riskTolerance={riskTolerance}
                         onManualControlToggle={handleManualControlToggle}
-                        product={activeProduct}
                       />
                     </div>
                     <div className="space-y-6 pt-6 border-t">
@@ -1558,7 +1548,6 @@ const ProjectWizardContent = () => {
                         driveAccessToken={driveAccessToken}
                         riskTolerance={riskTolerance}
                         onManualControlToggle={handleManualControlToggle}
-                        product={activeProduct}
                       />
                     </div>
                     <div className="space-y-6 pt-6 border-t">
@@ -1576,7 +1565,6 @@ const ProjectWizardContent = () => {
                         driveAccessToken={driveAccessToken}
                         riskTolerance={riskTolerance}
                         onManualControlToggle={handleManualControlToggle}
-                        product={activeProduct}
                       />
                     </div>
                     
@@ -1745,7 +1733,6 @@ const ProjectWizardContent = () => {
                         driveAccessToken={driveAccessToken}
                         riskTolerance={riskTolerance}
                         onManualControlToggle={handleManualControlToggle}
-                        product="riskblue"
                       />
                     </div>
                     <div className="space-y-6 pt-6 border-t">
@@ -1764,7 +1751,6 @@ const ProjectWizardContent = () => {
                         driveAccessToken={driveAccessToken}
                         riskTolerance={riskTolerance}
                         onManualControlToggle={handleManualControlToggle}
-                        product="riskblue"
                       />
                     </div>
                     <div className="space-y-6 pt-6 border-t">
@@ -1782,7 +1768,6 @@ const ProjectWizardContent = () => {
                         driveAccessToken={driveAccessToken}
                         riskTolerance={riskTolerance}
                         onManualControlToggle={handleManualControlToggle}
-                        product="riskblue"
                       />
                     </div>
                     

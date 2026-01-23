@@ -5,17 +5,8 @@ export interface RiskRedControl {
   id: string;
   code: string;
   name: string;
+  category: string;
   description: string | null;
-  author: string | null;
-  responsible: string | null;
-  deriskPoints: number | null;
-  actions: string | null;
-  riskTolerance: number | null;
-  oneTimeCost: number | null;
-  conceptHours: number | null;
-  hourlyRate: number | null;
-  monthlyMaintHours: number | null;
-  monthlyMaintCost: number | null;
 }
 
 /**
@@ -27,7 +18,7 @@ export function useRiskRedControls() {
     queryFn: async (): Promise<RiskRedControl[]> => {
       const { data, error } = await supabase
         .from("riskred_controls")
-        .select("id, code, name, description, author, responsible, derisk_points, actions, risk_tolerance, one_time_cost, concept_hours, hourly_rate, monthly_maint_hours, monthly_maint_cost")
+        .select("id, code, name, category, description")
         .eq("is_active", true)
         .order("display_order");
 
@@ -40,21 +31,25 @@ export function useRiskRedControls() {
         id: item.id,
         code: item.code,
         name: item.name,
+        category: item.category,
         description: item.description,
-        author: item.author,
-        responsible: item.responsible,
-        deriskPoints: item.derisk_points,
-        actions: item.actions,
-        riskTolerance: item.risk_tolerance,
-        oneTimeCost: item.one_time_cost,
-        conceptHours: item.concept_hours,
-        hourlyRate: item.hourly_rate,
-        monthlyMaintHours: item.monthly_maint_hours,
-        monthlyMaintCost: item.monthly_maint_cost,
       }));
     },
     staleTime: 1000 * 60 * 30, // Cache for 30 minutes
   });
+}
+
+/**
+ * Group RiskRed controls by category
+ */
+export function groupRiskRedControlsByCategory(controls: RiskRedControl[]): Record<string, RiskRedControl[]> {
+  return controls.reduce((acc, ctrl) => {
+    if (!acc[ctrl.category]) {
+      acc[ctrl.category] = [];
+    }
+    acc[ctrl.category].push(ctrl);
+    return acc;
+  }, {} as Record<string, RiskRedControl[]>);
 }
 
 /**
