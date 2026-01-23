@@ -15,9 +15,6 @@ import { AWPItemEditModal } from "./AWPItemEditModal";
 import { FileAnalysisModal } from "./FileAnalysisModal";
 import { InlineCombobox } from "./InlineCombobox";
 import { useAWPOptions, isAssetName, isWaterSystemName, getCategoryForName, getDefaultControlIdsForName } from "@/hooks/useAWPOptions";
-import { useRiskRedASPOptions, getRiskRedDefaultControlIdsForName, getRiskRedIdPrefixForName } from "@/hooks/useRiskRedASPOptions";
-import { useRiskRedControls, getRiskRedControlNamesFromIds } from "@/hooks/useRiskRedControls";
-import { ProductType } from "./ProductTabSwitcher";
 import {
   generateNextIdFromOptions,
   sqftToSqm,
@@ -25,7 +22,6 @@ import {
   inchesToMm,
   mmToInches,
 } from "@/lib/awpIdGenerator";
-import { generateRiskRedItemId } from "@/hooks/useRiskRedAnalysisItems";
 import { resolveControlIdsToNames } from "@/lib/controlAutoAssignment";
 
 interface AWPEditModalProps {
@@ -36,7 +32,6 @@ interface AWPEditModalProps {
   projectId: string;
   projectName?: string;
   initialNewItems?: AnalysisItem[]; // Pre-populate from analysis results
-  product?: ProductType; // "riskblue" (default) or "riskred"
 }
 
 type AreaUnit = "sqft" | "sqm";
@@ -101,53 +96,9 @@ export const AWPEditModal = ({
   projectId,
   projectName,
   initialNewItems,
-  product = "riskblue",
 }: AWPEditModalProps) => {
-  // Fetch AWP options from DB (RiskBlue)
+  // Fetch AWP options from DB
   const { data: awpOptions = [] } = useAWPOptions();
-  
-  // Fetch RiskRed options from DB
-  const { data: riskRedASPOptions = [] } = useRiskRedASPOptions();
-  const { data: riskRedControls = [] } = useRiskRedControls();
-  
-  // Use appropriate options based on product
-  const classOptions = useMemo(() => {
-    if (product === "riskblue") {
-      return awpOptions.map(opt => ({ value: opt.name, category: opt.category }));
-    }
-    // RiskRed uses type instead of category
-    return riskRedASPOptions.map(opt => ({ value: opt.name, category: opt.type }));
-  }, [product, awpOptions, riskRedASPOptions]);
-  
-  // Helper to check if name is an asset in current product
-  const isAssetInProduct = useCallback((name: string) => {
-    if (product === "riskblue") {
-      return isAssetName(awpOptions, name);
-    }
-    const opt = riskRedASPOptions.find(o => o.name === name);
-    return opt?.type === "Asset";
-  }, [product, awpOptions, riskRedASPOptions]);
-  
-  // Helper to check if name is a water system/system in current product
-  const isSystemInProduct = useCallback((name: string) => {
-    if (product === "riskblue") {
-      return isWaterSystemName(awpOptions, name);
-    }
-    const opt = riskRedASPOptions.find(o => o.name === name);
-    return opt?.type === "System";
-  }, [product, awpOptions, riskRedASPOptions]);
-  
-  // Get category for name in current product
-  const getCategoryForProduct = useCallback((name: string): "Asset" | "Water System" | "Process" | null => {
-    if (product === "riskblue") {
-      return getCategoryForName(awpOptions, name);
-    }
-    const opt = riskRedASPOptions.find(o => o.name === name);
-    if (!opt) return null;
-    // Map RiskRed type to category
-    if (opt.type === "System") return "Water System"; // Use Water System for compatibility
-    return opt.type as "Asset" | "Process";
-  }, [product, awpOptions, riskRedASPOptions]);
   
   // Hidden file input refs for drawing uploads
   const fileInputRefs = useRef<Map<string, HTMLInputElement>>(new Map());
@@ -221,19 +172,18 @@ export const AWPEditModal = ({
   const activeExistingItems = useMemo(() => 
     existingItems.filter(item => !deletedItemIds.has(item.id)), [existingItems, deletedItemIds]);
 
-  // Check if any item needs Size or Pipe column (RiskBlue only shows these)
-  const hasAssets = useMemo(() => {
-    if (product === "riskred") return false; // RiskRed doesn't show size column
-    return activeExistingItems.some(item => isAssetInProduct(item.name)) || newRows.some(row => isAssetInProduct(row.name));
-  }, [product, activeExistingItems, newRows, isAssetInProduct]);
-  
-  const hasWaterSystems = useMemo(() => {
-    if (product === "riskred") return false; // RiskRed doesn't show pipe column
-    return activeExistingItems.some(item => isSystemInProduct(item.name)) || newRows.some(row => isSystemInProduct(row.name));
-  }, [product, activeExistingItems, newRows, isSystemInProduct]);
+  // Check if any item needs Size or Pipe column
+  const hasAssets = useMemo(() => 
+    activeExistingItems.some(item => isAssetName(awpOptions, item.name)) || newRows.some(row => isAssetName(awpOptions, row.name)), 
+    [activeExistingItems, newRows, awpOptions]);
+  const hasWaterSystems = useMemo(() => 
+    activeExistingItems.some(item => isWaterSystemName(awpOptions, item.name)) || newRows.some(row => isWaterSystemName(awpOptions, row.name)), 
+    [activeExistingItems, newRows, awpOptions]);
 
-  // All class options for combobox - now uses product-aware classOptions
-  const allClassOptions = classOptions;
+  // All class options for combobox - from DB
+  const allClassOptions = useMemo(() => 
+    awpOptions.map(opt => ({ value: opt.name, category: opt.category })),
+    [awpOptions]);
 
   // Issue 24: Fix hasUnsavedChanges to not trigger on empty default row
   const hasUnsavedChanges = useMemo(() => {
@@ -265,14 +215,14 @@ export const AWPEditModal = ({
   const getEditableColumns = useCallback((row: NewRowItem): string[] => {
     const cols = ['name', 'type', 'floor']; // Always present (name = areaName, type = AWP class)
     
-    const isAsset = row.name ? isAssetInProduct(row.name) : false;
-    const isSystem = row.name ? isSystemInProduct(row.name) : false;
+    const isAsset = row.name ? isAssetName(awpOptions, row.name) : false;
+    const isWaterSystem = row.name ? isWaterSystemName(awpOptions, row.name) : false;
     
     if (hasAssets && isAsset) cols.push('size');
-    if (hasWaterSystems && isSystem) cols.push('pipe');
+    if (hasWaterSystems && isWaterSystem) cols.push('pipe');
     
     return cols;
-  }, [isAssetInProduct, isSystemInProduct, hasAssets, hasWaterSystems]);
+  }, [awpOptions, hasAssets, hasWaterSystems]);
 
   const handleCellKeyDown = useCallback((
     e: React.KeyboardEvent,
@@ -537,34 +487,16 @@ export const AWPEditModal = ({
     const drawingUrlMap = new Map(uploadResults.map(r => [r.tempId, r.url]));
     
     for (const row of newRows.filter(row => row.name)) {
-      const category = getCategoryForProduct(row.name);
+      const category = getCategoryForName(awpOptions, row.name);
+      // Issue 22: Pass accumulated items so each new item gets incrementing ID
+      // Now uses AWP options from DB for ID prefix
+      const id = generateNextIdFromOptions(row.name, awpOptions, allCurrentItems);
       
-      // Generate ID based on product
-      let id: string;
-      let defaultControls: string[] = [];
-      
-      if (product === "riskblue") {
-        id = generateNextIdFromOptions(row.name, awpOptions, allCurrentItems);
-        const defaultControlIds = getDefaultControlIdsForName(awpOptions, row.name);
-        defaultControls = defaultControlIds
-          .map(cid => idToNameMap.get(cid))
-          .filter((name): name is string => !!name);
-      } else {
-        // RiskRed: Use RiskRed ID generation - adapt AnalysisItem to RiskRedAnalysisItem format
-        const prefix = getRiskRedIdPrefixForName(riskRedASPOptions, row.name) || "RR";
-        const adaptedItems = allCurrentItems.map(item => ({ itemId: item.id }));
-        // Simple ID generation: find max number with prefix and increment
-        const prefixItems = adaptedItems.filter(i => i.itemId.startsWith(prefix));
-        let maxNum = 0;
-        prefixItems.forEach(item => {
-          const numPart = item.itemId.replace(prefix, "");
-          const num = parseInt(numPart, 10);
-          if (!isNaN(num) && num > maxNum) maxNum = num;
-        });
-        id = `${prefix}${String(maxNum + 1).padStart(3, "0")}`;
-        const defaultControlIds = getRiskRedDefaultControlIdsForName(riskRedASPOptions, row.name);
-        defaultControls = getRiskRedControlNamesFromIds(riskRedControls, defaultControlIds);
-      }
+      // Phase 5: Get default controls for this class from DB array
+      const defaultControlIds = getDefaultControlIdsForName(awpOptions, row.name);
+      const defaultControls = defaultControlIds
+        .map(id => idToNameMap.get(id))
+        .filter((name): name is string => !!name);
       
       // Phase 3: Get drawing URL (uploaded or existing)
       const drawingUrl = drawingUrlMap.get(row.tempId) || row.drawingUrl || undefined;
