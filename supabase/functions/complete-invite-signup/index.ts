@@ -38,6 +38,16 @@ const handler = async (req: Request): Promise<Response> => {
 
     console.log(`Completing signup for user ${userId} with token ${token.substring(0, 8)}...`);
 
+    // Get user from Supabase Auth to validate email
+    const { data: { user }, error: userError } = await supabaseAdmin.auth.admin.getUserById(userId);
+    if (userError || !user) {
+      console.error("User not found:", userError);
+      return new Response(
+        JSON.stringify({ success: false, error: "Invalid user" }),
+        { status: 400, headers: { "Content-Type": "application/json", ...corsHeaders } }
+      );
+    }
+
     // Fetch the invitation
     const { data: invitation, error: inviteError } = await supabaseAdmin
       .from("project_invitations")
@@ -50,6 +60,15 @@ const handler = async (req: Request): Promise<Response> => {
       return new Response(
         JSON.stringify({ success: false, error: "Invalid invitation" }),
         { status: 404, headers: { "Content-Type": "application/json", ...corsHeaders } }
+      );
+    }
+
+    // SECURITY: Verify user email matches invitation email
+    if (user.email?.toLowerCase() !== invitation.email.toLowerCase()) {
+      console.error(`Email mismatch: user=${user.email}, invitation=${invitation.email}`);
+      return new Response(
+        JSON.stringify({ success: false, error: "Email does not match invitation" }),
+        { status: 403, headers: { "Content-Type": "application/json", ...corsHeaders } }
       );
     }
 

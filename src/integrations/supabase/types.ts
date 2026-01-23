@@ -1102,6 +1102,173 @@ export type Database = {
           },
         ]
       }
+      riskred_analysis_items: {
+        Row: {
+          area_name: string | null
+          category: string
+          controls: string[] | null
+          created_at: string
+          floor: string | null
+          id: string
+          instance_name: string | null
+          item_id: string
+          name: string
+          project_id: string
+          subcategory: string | null
+          updated_at: string
+        }
+        Insert: {
+          area_name?: string | null
+          category: string
+          controls?: string[] | null
+          created_at?: string
+          floor?: string | null
+          id?: string
+          instance_name?: string | null
+          item_id: string
+          name: string
+          project_id: string
+          subcategory?: string | null
+          updated_at?: string
+        }
+        Update: {
+          area_name?: string | null
+          category?: string
+          controls?: string[] | null
+          created_at?: string
+          floor?: string | null
+          id?: string
+          instance_name?: string | null
+          item_id?: string
+          name?: string
+          project_id?: string
+          subcategory?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "riskred_analysis_items_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      riskred_asp: {
+        Row: {
+          created_at: string
+          default_control_ids: string[]
+          display_order: number
+          end_date_formula: string | null
+          id: string
+          id_prefix: string | null
+          impact: number
+          is_active: boolean
+          name: string
+          probability: number
+          risk_level_points: number | null
+          risk_tolerance: number | null
+          start_date_formula: string | null
+          subcategory: string | null
+          type: string
+        }
+        Insert: {
+          created_at?: string
+          default_control_ids?: string[]
+          display_order?: number
+          end_date_formula?: string | null
+          id?: string
+          id_prefix?: string | null
+          impact?: number
+          is_active?: boolean
+          name: string
+          probability?: number
+          risk_level_points?: number | null
+          risk_tolerance?: number | null
+          start_date_formula?: string | null
+          subcategory?: string | null
+          type: string
+        }
+        Update: {
+          created_at?: string
+          default_control_ids?: string[]
+          display_order?: number
+          end_date_formula?: string | null
+          id?: string
+          id_prefix?: string | null
+          impact?: number
+          is_active?: boolean
+          name?: string
+          probability?: number
+          risk_level_points?: number | null
+          risk_tolerance?: number | null
+          start_date_formula?: string | null
+          subcategory?: string | null
+          type?: string
+        }
+        Relationships: []
+      }
+      riskred_controls: {
+        Row: {
+          actions: string | null
+          author: string | null
+          code: string
+          concept_hours: number | null
+          created_at: string
+          derisk_points: number | null
+          description: string | null
+          display_order: number
+          hourly_rate: number | null
+          id: string
+          is_active: boolean
+          monthly_maint_cost: number | null
+          monthly_maint_hours: number | null
+          name: string
+          one_time_cost: number | null
+          responsible: string | null
+          risk_tolerance: number | null
+        }
+        Insert: {
+          actions?: string | null
+          author?: string | null
+          code: string
+          concept_hours?: number | null
+          created_at?: string
+          derisk_points?: number | null
+          description?: string | null
+          display_order?: number
+          hourly_rate?: number | null
+          id?: string
+          is_active?: boolean
+          monthly_maint_cost?: number | null
+          monthly_maint_hours?: number | null
+          name: string
+          one_time_cost?: number | null
+          responsible?: string | null
+          risk_tolerance?: number | null
+        }
+        Update: {
+          actions?: string | null
+          author?: string | null
+          code?: string
+          concept_hours?: number | null
+          created_at?: string
+          derisk_points?: number | null
+          description?: string | null
+          display_order?: number
+          hourly_rate?: number | null
+          id?: string
+          is_active?: boolean
+          monthly_maint_cost?: number | null
+          monthly_maint_hours?: number | null
+          name?: string
+          one_time_cost?: number | null
+          responsible?: string | null
+          risk_tolerance?: number | null
+        }
+        Relationships: []
+      }
       user_activity_logs: {
         Row: {
           action: string
