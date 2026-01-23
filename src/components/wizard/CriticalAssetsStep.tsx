@@ -18,6 +18,8 @@ import { useRiskScoring } from "@/hooks/useRiskScoring";
 import { RiskScoreSummary } from "./RiskScoreSummary";
 import type { RiskTolerance } from "./RiskToleranceSelector";
 import { useProject } from "@/contexts/ProjectContext";
+import { useRiskRedControls } from "@/hooks/useRiskRedControls";
+import { useRiskRedASPOptions } from "@/hooks/useRiskRedASPOptions";
 
 interface Asset {
   id: string;
@@ -41,6 +43,7 @@ interface CriticalAssetsStepProps {
   driveAccessToken?: string | null;
   riskTolerance?: RiskTolerance;
   onManualControlToggle?: () => void;
+  product?: "riskblue" | "riskred";
 }
 
 export const CriticalAssetsStep = ({
@@ -51,7 +54,8 @@ export const CriticalAssetsStep = ({
   driveFiles = [],
   driveAccessToken = null,
   riskTolerance: parentRiskTolerance = "low",
-  onManualControlToggle
+  onManualControlToggle,
+  product = "riskblue"
 }: CriticalAssetsStepProps) => {
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -95,6 +99,10 @@ export const CriticalAssetsStep = ({
   const [viewerItem, setViewerItem] = useState<AnalysisItem | null>(null);
   const [viewerFileId, setViewerFileId] = useState<string>("");
   const [viewerMimeType, setViewerMimeType] = useState<string>("application/pdf");
+
+  // Fetch RiskRed controls and ASP options for fire risk scoring
+  const { data: riskRedControls = [] } = useRiskRedControls();
+  const { data: riskRedASPOptions = [] } = useRiskRedASPOptions();
 
   // Fetch assets from database
   const { data: assets = [], isLoading } = useQuery({
@@ -198,17 +206,34 @@ export const CriticalAssetsStep = ({
     [analysisItems]
   );
 
-  // Risk scoring hook
-  const riskScore = useRiskScoring(
-    assetItems,
-    selectedInstanceIds,
-    selectedControlIds,
-    {
+  // Risk scoring hook - use RiskRed ASP options for probability/impact when product is riskred
+  const riskScoreData = useMemo(() => {
+    if (product === "riskred") {
+      // Use RiskRed ASP options for P×I values
+      const riskRedAssets = riskRedASPOptions
+        .filter(asp => asp.type === "Asset")
+        .map(asp => ({ name: asp.name, probability: asp.probability, impact: asp.impact }));
+      return {
+        criticalAssets: riskRedAssets,
+        waterSystems: [],
+        processes: [],
+        controls: [] // RiskRed controls passed separately
+      };
+    }
+    return {
       criticalAssets: allAssets.map(a => ({ name: a.name, probability: a.probability || 3, impact: a.impact || 3 })),
       waterSystems: [],
       processes: [],
       controls
-    }
+    };
+  }, [product, riskRedASPOptions, allAssets, controls]);
+
+  const riskScore = useRiskScoring(
+    assetItems,
+    selectedInstanceIds,
+    selectedControlIds,
+    riskScoreData,
+    product === "riskred" ? riskRedControls : undefined
   );
 
   // Normalize asset name for comparison
@@ -261,19 +286,46 @@ export const CriticalAssetsStep = ({
   // Filter assets to only show those detected in analysis
   const filteredAssets = useMemo(() => {
     if (analysisItems.length === 0) return [];
+    
+    // For RiskRed, create pseudo-assets from unique ASP class names (bypasses RiskBlue DB matching)
+    if (product === "riskred") {
+      const assetItems = analysisItems.filter(i => i.category === "Asset");
+      const uniqueNames = [...new Set(assetItems.map(item => item.name))];
+      return uniqueNames.map((name, index) => ({
+        id: `riskred-${name}`,
+        name: name,
+        threat: "",
+        risk_level: "high",
+        probability: 3,
+        impact: 4,
+        duration: "12 months",
+        cost: "",
+        image_url: "",
+        display_order: index
+      }));
+    }
+    
+    // For RiskBlue, filter against the database assets
     return allAssets.filter(asset => {
       const normalized = normalizeAssetName(asset.name);
       return detectedAssetTypes.has(normalized);
     });
-  }, [allAssets, detectedAssetTypes, analysisItems.length]);
+  }, [allAssets, detectedAssetTypes, analysisItems, product]);
 
   // Get analysis items for a specific asset type
   const getAssetAnalysisItems = useCallback((assetName: string): AnalysisItem[] => {
+    // For RiskRed, match by exact name (no normalization)
+    if (product === "riskred") {
+      return analysisItems.filter(item => 
+        item.category === "Asset" && item.name === assetName
+      );
+    }
+    // For RiskBlue, use normalization
     return analysisItems.filter(item => 
       item.category === "Asset" && 
       normalizeAssetName(item.name) === normalizeAssetName(assetName)
     );
-  }, [analysisItems]);
+  }, [analysisItems, product]);
 
   // Initialize selection with all instances and controls when data loads (once)
   useEffect(() => {

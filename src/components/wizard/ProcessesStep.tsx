@@ -12,6 +12,8 @@ import { calculateTieredControlCost, parseDurationMonths, PricingTier } from "@/
 import { getMissingMilestonesForClass, TimelineData } from "@/lib/durationCalculator";
 import { useRiskScoring } from "@/hooks/useRiskScoring";
 import { RiskScoreSummary } from "./RiskScoreSummary";
+import { useRiskRedControls } from "@/hooks/useRiskRedControls";
+import { useRiskRedASPOptions } from "@/hooks/useRiskRedASPOptions";
 
 interface ProcessesStepProps {
   onNext?: (data: any) => void;
@@ -21,6 +23,7 @@ interface ProcessesStepProps {
   driveAccessToken?: string | null;
   riskTolerance?: RiskTolerance;
   onManualControlToggle?: () => void;
+  product?: "riskblue" | "riskred";
 }
 
 // Group processes by name for expandable list view
@@ -36,7 +39,8 @@ export const ProcessesStep = ({
   driveFiles = [],
   driveAccessToken = null,
   riskTolerance: parentRiskTolerance = "low",
-  onManualControlToggle
+  onManualControlToggle,
+  product = "riskblue"
 }: ProcessesStepProps) => {
   // Get project context
   const { projectData, updateFields } = useProject();
@@ -56,6 +60,10 @@ export const ProcessesStep = ({
   
   // Track previous risk tolerance
   const prevRiskToleranceRef = useRef<RiskTolerance | null>(null);
+
+  // Fetch RiskRed controls and ASP options for fire risk scoring
+  const { data: riskRedControls = [] } = useRiskRedControls();
+  const { data: riskRedASPOptions = [] } = useRiskRedASPOptions();
 
   // Fetch processes from database for risk tolerance and probability/impact values
   const { data: processes = [] } = useQuery({
@@ -146,12 +154,21 @@ export const ProcessesStep = ({
   const [viewerFileId, setViewerFileId] = useState<string>("");
   const [viewerMimeType, setViewerMimeType] = useState<string>("application/pdf");
 
-  // Risk scoring hook - uses processes for probability/impact
-  const riskScore = useRiskScoring(
-    processItems,
-    selectedInstanceIds,
-    selectedControlIds,
-    {
+  // Risk scoring hook - use RiskRed ASP options for probability/impact when product is riskred
+  const riskScoreData = useMemo(() => {
+    if (product === "riskred") {
+      // Use RiskRed ASP options for P×I values
+      const riskRedProcesses = riskRedASPOptions
+        .filter(asp => asp.type === "Process")
+        .map(asp => ({ name: asp.name, probability: asp.probability, impact: asp.impact }));
+      return {
+        criticalAssets: [],
+        waterSystems: [],
+        processes: riskRedProcesses,
+        controls: [] // RiskRed controls passed separately
+      };
+    }
+    return {
       criticalAssets: [],
       waterSystems: [],
       processes: processes.map(p => ({
@@ -170,7 +187,15 @@ export const ProcessesStep = ({
         action: c.action,
         category: c.category
       }))
-    }
+    };
+  }, [product, riskRedASPOptions, processes, controls]);
+
+  const riskScore = useRiskScoring(
+    processItems,
+    selectedInstanceIds,
+    selectedControlIds,
+    riskScoreData,
+    product === "riskred" ? riskRedControls : undefined
   );
 
   // Default duration for processes (project duration)

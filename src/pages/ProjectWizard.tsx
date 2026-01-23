@@ -33,10 +33,12 @@ import { ProposalsStep } from "@/components/wizard/ProposalsStep";
 import { ImplementationScheduleStep } from "@/components/wizard/ImplementationScheduleStep";
 import { ProjectFilesUpload, DriveFileInfo } from "@/components/wizard/ProjectFilesUpload";
 import { ResponsePlanUploadChat } from "@/components/ResponsePlanUploadChat";
-import { ProductTabSwitcher, ProductType } from "@/components/wizard/ProductTabSwitcher";
+import { ProductType } from "@/components/wizard/ProductTabSwitcher";
+import { ProductSectionContainer } from "@/components/wizard/ProductSectionContainer";
 import { useRiskRedAnalysisItems, useAddRiskRedAnalysisItems, useDeleteRiskRedAnalysisItems, generateRiskRedItemId } from "@/hooks/useRiskRedAnalysisItems";
 import { useRiskRedASPOptions, getRiskRedDefaultControlIdsForName, getRiskRedIdPrefixForName } from "@/hooks/useRiskRedASPOptions";
 import { useRiskRedControls, getRiskRedControlNamesFromIds } from "@/hooks/useRiskRedControls";
+import mockRiskRedData from "@/data/mockRiskRedData.json";
 import { Download, LogOut, FileText, Loader2, Users, Settings, BarChart3, FilePlus, Upload } from "lucide-react";
 import { DropdownMenuSeparator } from "@/components/ui/dropdown-menu";
 import { Button } from "@/components/ui/button";
@@ -139,10 +141,40 @@ const ProjectWizardContent = () => {
     if (activeProduct === "riskblue") {
       return analysisItems;
     }
+    
+    // Use mock data if no RiskRed items exist in database
+    if (riskRedItems.length === 0) {
+      return mockRiskRedData.map(item => {
+        // Get default control IDs from ASP options based on ASP class name
+        const defaultControlIds = getRiskRedDefaultControlIdsForName(riskRedASPOptions, item.aspClass);
+        // Convert control IDs to control names using RiskRed controls
+        const controlNames = getRiskRedControlNamesFromIds(riskRedControls, defaultControlIds);
+        
+        return {
+          id: item.instanceId,
+          name: item.aspClass,
+          instanceName: item.instanceName, // Map instance name (e.g., "Timber Formwork Storage")
+          areaName: item.areaName || null,
+          floor: item.floor || null,
+          category: (item.type === "System" ? "Water System" : item.type) as "Asset" | "Water System" | "Process",
+          controls: controlNames, // Assign default controls from ASP options
+          drawingCode: null,
+          fileName: null,
+          width: null,
+          length: null,
+          areaSqft: null,
+          sizeCategory: null,
+          coordinates: null,
+          source: 'manual' as const,
+        };
+      });
+    }
+    
     // Transform RiskRed items to AnalysisItem format for display
     return riskRedItems.map(item => ({
       id: item.itemId,
       name: item.name,
+      instanceName: item.instanceName || undefined,
       areaName: item.areaName || null,
       floor: item.floor || null,
       category: item.category as "Asset" | "Water System" | "Process",
@@ -156,7 +188,7 @@ const ProjectWizardContent = () => {
       coordinates: null,
       source: 'manual' as const,
     }));
-  }, [activeProduct, analysisItems, riskRedItems]);
+  }, [activeProduct, analysisItems, riskRedItems, riskRedASPOptions, riskRedControls]);
   
   // Standalone Google Drive connection dialog
   const [showDriveConnectionDialog, setShowDriveConnectionDialog] = useState(false);
@@ -318,18 +350,18 @@ const ProjectWizardContent = () => {
   // Issue 23: Compute INSTANCE counts for subheadings using VALID items only
   // This ensures miscategorized items don't inflate the counts
   const assetInstanceCount = useMemo(() => 
-    countValidAssets(analysisItems), 
-    [analysisItems]
+    countValidAssets(displayItems), 
+    [displayItems]
   );
 
   const waterSystemInstanceCount = useMemo(() => 
-    countValidWaterSystems(analysisItems), 
-    [analysisItems]
+    countValidWaterSystems(displayItems), 
+    [displayItems]
   );
 
   const processInstanceCount = useMemo(() => 
-    countValidProcesses(analysisItems), 
-    [analysisItems]
+    countValidProcesses(displayItems), 
+    [displayItems]
   );
 
   // Fetch control costs from database (including monthly costs for full calculation)
@@ -1360,12 +1392,16 @@ const ProjectWizardContent = () => {
                 </AccordionContent>
               </AccordionItem>
 
-              {/* Issue 12: Button after title, chevron inside trigger for animation */}
-              <AccordionItem value="assets-systems" className="border rounded-lg px-6">
-                <AccordionPrimitive.Header className="flex items-center py-4">
-                  <AccordionPrimitive.Trigger className="flex flex-1 items-center justify-between text-lg font-semibold hover:no-underline group">
+              {/* Assets, Systems & Processes Section - Non-collapsible for internal users with product tabs */}
+              {isInternalUser ? (
+                <ProductSectionContainer
+                  activeProduct={activeProduct}
+                  onProductChange={setActiveProduct}
+                >
+                  {/* Section Header */}
+                  <div className="flex items-center justify-between pb-4 border-b mb-6">
                     <div className="flex items-center gap-2">
-                      <span>
+                      <span className="text-lg font-semibold">
                         {activeProduct === "riskblue" 
                           ? "Assets, Water Systems & Processes" 
                           : "Assets, Systems & Processes"}
@@ -1375,71 +1411,53 @@ const ProjectWizardContent = () => {
                           ({displayItems.length})
                         </span>
                       )}
-                      {/* Product Tab Switcher - Internal Users Only */}
-                      {isInternalUser && (
-                        <ProductTabSwitcher
-                          activeProduct={activeProduct}
-                          onProductChange={setActiveProduct}
-                          className="ml-2"
-                        />
-                      )}
-                      <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            className="ml-2 gap-1"
-                            onClick={(e) => e.stopPropagation()}
-                          >
-                            Manage List
-                            <ChevronDown className="h-3 w-3" />
-                          </Button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="start" className="w-48 bg-background z-50" onClick={(e) => e.stopPropagation()}>
-                          <DropdownMenuItem
-                            onClick={() => {
-                              setAwpModalKey(prev => prev + 1);
-                              setShowAWPEditModal(true);
-                            }}
-                            className="gap-2"
-                          >
-                            <FilePlus className="h-4 w-4" />
-                            {displayItems.length === 0 ? "Create from Scratch" : "Edit Manually"}
-                          </DropdownMenuItem>
-                          <DropdownMenuItem
-                            onClick={handleUploadDrawingsClick}
-                            disabled={uploadingDrawings}
-                            className="gap-2"
-                          >
-                            {uploadingDrawings ? (
-                              <Loader2 className="h-4 w-4 animate-spin" />
-                            ) : (
-                              <Upload className="h-4 w-4" />
-                            )}
-                            Upload Drawings
-                          </DropdownMenuItem>
-                          <DropdownMenuItem
-                            onClick={() => setShowDriveConnectionDialog(true)}
-                            className="gap-2"
-                          >
-                            <img src="/icons/icon_googledrive.png" alt="" className="w-4 h-4" />
-                            Google Drive
-                          </DropdownMenuItem>
-                          <DropdownMenuItem
-                            disabled
-                            className="gap-2 opacity-50"
-                          >
-                            <img src="/icons/icon_procore.png" alt="" className="w-4 h-4" />
-                            <span>Procore</span>
-                            <span className="ml-auto text-[10px] text-muted-foreground">Coming Soon</span>
-                          </DropdownMenuItem>
-                        </DropdownMenuContent>
-                      </DropdownMenu>
                     </div>
-                    <ChevronDown className="h-4 w-4 shrink-0 transition-transform duration-200 group-data-[state=open]:rotate-180" />
-                  </AccordionPrimitive.Trigger>
-                </AccordionPrimitive.Header>
-                <AccordionContent className="space-y-8 pt-4">
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button variant="outline" size="sm" className="gap-1">
+                          Manage List
+                          <ChevronDown className="h-3 w-3" />
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end" className="w-48 bg-background z-50">
+                        <DropdownMenuItem
+                          onClick={() => {
+                            setAwpModalKey(prev => prev + 1);
+                            setShowAWPEditModal(true);
+                          }}
+                          className="gap-2"
+                        >
+                          <FilePlus className="h-4 w-4" />
+                          {displayItems.length === 0 ? "Create from Scratch" : "Edit Manually"}
+                        </DropdownMenuItem>
+                        <DropdownMenuItem
+                          onClick={handleUploadDrawingsClick}
+                          disabled={uploadingDrawings}
+                          className="gap-2"
+                        >
+                          {uploadingDrawings ? (
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                          ) : (
+                            <Upload className="h-4 w-4" />
+                          )}
+                          Upload Drawings
+                        </DropdownMenuItem>
+                        <DropdownMenuItem
+                          onClick={() => setShowDriveConnectionDialog(true)}
+                          className="gap-2"
+                        >
+                          <img src="/icons/icon_googledrive.png" alt="" className="w-4 h-4" />
+                          Google Drive
+                        </DropdownMenuItem>
+                        <DropdownMenuItem disabled className="gap-2 opacity-50">
+                          <img src="/icons/icon_procore.png" alt="" className="w-4 h-4" />
+                          <span>Procore</span>
+                          <span className="ml-auto text-[10px] text-muted-foreground">Coming Soon</span>
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  </div>
+
                   {/* Empty state when no items */}
                   {displayItems.length === 0 && (
                     <div className="text-center py-8 border rounded-lg bg-muted/30">
@@ -1449,18 +1467,18 @@ const ProjectWizardContent = () => {
                           : "No assets, systems, or processes have been added yet."}
                       </p>
                       <div className="flex flex-col items-center gap-2">
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => {
-                              setAwpModalKey(prev => prev + 1);
-                              setShowAWPEditModal(true);
-                            }}
-                            className="gap-2"
-                          >
-                            <FilePlus className="h-4 w-4" />
-                            Create from Scratch
-                          </Button>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => {
+                            setAwpModalKey(prev => prev + 1);
+                            setShowAWPEditModal(true);
+                          }}
+                          className="gap-2"
+                        >
+                          <FilePlus className="h-4 w-4" />
+                          Create from Scratch
+                        </Button>
                         <p className="text-xs text-muted-foreground text-center max-w-lg mt-4">
                           Or connect a cloud repository to analyze drawings and detect assets and systems at risk.
                         </p>
@@ -1503,89 +1521,299 @@ const ProjectWizardContent = () => {
                     </div>
                   )}
 
-                  {/* Risk Tolerance Selector - applies to all AWP sections */}
-                  <div className="space-y-6">
-                    <h3 className="text-md font-medium">
-                      Critical Assets
-                      {assetInstanceCount > 0 && (
-                        <span className="ml-2 text-muted-foreground font-normal">({assetInstanceCount})</span>
-                      )}
-                    </h3>
-                    <CriticalAssetsStep 
-                      onNext={handleStepUpdate} 
-                      onBack={() => {}} 
-                      isProcessingWebhook={isProcessingWebhook}
-                      analysisItems={analysisItems}
-                      driveFiles={driveFiles}
-                      driveAccessToken={driveAccessToken}
-                      riskTolerance={riskTolerance}
-                      onManualControlToggle={handleManualControlToggle}
-                    />
-                  </div>
-                  <div className="space-y-6 pt-6 border-t">
-                    <h3 className="text-md font-medium">
-                      {activeProduct === "riskblue" ? "Water Systems" : "Systems"}
-                      {waterSystemInstanceCount > 0 && (
-                        <span className="ml-2 text-muted-foreground font-normal">({waterSystemInstanceCount})</span>
-                      )}
-                    </h3>
-                    <WaterSystemsStep 
-                      onNext={handleStepUpdate} 
-                      onBack={() => {}} 
-                      isProcessingWebhook={isProcessingWebhook}
-                      analysisItems={analysisItems}
-                      driveFiles={driveFiles}
-                      driveAccessToken={driveAccessToken}
-                      riskTolerance={riskTolerance}
-                      onManualControlToggle={handleManualControlToggle}
-                    />
-                  </div>
-                  <div className="space-y-6 pt-6 border-t">
-                    <h3 className="text-md font-medium">
-                      Processes
-                      {processInstanceCount > 0 && (
-                        <span className="ml-2 text-muted-foreground font-normal">({processInstanceCount})</span>
-                      )}
-                    </h3>
-                    <ProcessesStep 
-                      analysisItems={analysisItems}
-                      onNext={handleStepUpdate}
-                      isProcessingWebhook={isProcessingWebhook}
-                      driveFiles={driveFiles}
-                      driveAccessToken={driveAccessToken}
-                      riskTolerance={riskTolerance}
-                      onManualControlToggle={handleManualControlToggle}
-                    />
-                  </div>
-                  
-                  {/* Implementation Level Selector - moved below Processes */}
-                  <div className="pt-6 border-t">
-                    <RiskToleranceSelector
-                      value={riskTolerance}
-                      onChange={handleRiskToleranceChange}
-                      lowCost={totalCostEstimates.lowCost}
-                      mediumCost={totalCostEstimates.mediumCost}
-                      highCost={totalCostEstimates.highCost}
-                      lowCoverage={coverageByLevel.low}
-                      mediumCoverage={coverageByLevel.medium}
-                      highCoverage={coverageByLevel.high}
-                      controlCounts={controlCountsByLevel}
-                      hasCustomSelection={hasManualOverride}
-                    />
+                  {/* Content Subsections */}
+                  <div className="space-y-8">
+                    <div className="space-y-6">
+                      <h3 className="text-md font-medium">
+                        Critical Assets
+                        {assetInstanceCount > 0 && (
+                          <span className="ml-2 text-muted-foreground font-normal">({assetInstanceCount})</span>
+                        )}
+                      </h3>
+                      <CriticalAssetsStep 
+                        onNext={handleStepUpdate} 
+                        onBack={() => {}} 
+                        isProcessingWebhook={isProcessingWebhook}
+                        analysisItems={displayItems}
+                        driveFiles={driveFiles}
+                        driveAccessToken={driveAccessToken}
+                        riskTolerance={riskTolerance}
+                        onManualControlToggle={handleManualControlToggle}
+                        product={activeProduct}
+                      />
+                    </div>
+                    <div className="space-y-6 pt-6 border-t">
+                      <h3 className="text-md font-medium">
+                        {activeProduct === "riskblue" ? "Water Systems" : "Systems"}
+                        {waterSystemInstanceCount > 0 && (
+                          <span className="ml-2 text-muted-foreground font-normal">({waterSystemInstanceCount})</span>
+                        )}
+                      </h3>
+                      <WaterSystemsStep 
+                        onNext={handleStepUpdate} 
+                        onBack={() => {}} 
+                        isProcessingWebhook={isProcessingWebhook}
+                        analysisItems={displayItems}
+                        driveFiles={driveFiles}
+                        driveAccessToken={driveAccessToken}
+                        riskTolerance={riskTolerance}
+                        onManualControlToggle={handleManualControlToggle}
+                        product={activeProduct}
+                      />
+                    </div>
+                    <div className="space-y-6 pt-6 border-t">
+                      <h3 className="text-md font-medium">
+                        Processes
+                        {processInstanceCount > 0 && (
+                          <span className="ml-2 text-muted-foreground font-normal">({processInstanceCount})</span>
+                        )}
+                      </h3>
+                      <ProcessesStep 
+                        analysisItems={displayItems}
+                        onNext={handleStepUpdate}
+                        isProcessingWebhook={isProcessingWebhook}
+                        driveFiles={driveFiles}
+                        driveAccessToken={driveAccessToken}
+                        riskTolerance={riskTolerance}
+                        onManualControlToggle={handleManualControlToggle}
+                        product={activeProduct}
+                      />
+                    </div>
                     
-                    {/* Cost Estimate - show package cost when not manually overridden */}
-                    <div className="flex flex-col items-center justify-center py-6 px-4 bg-muted/30 rounded-lg border border-border mt-4">
-                      <p className="text-sm text-muted-foreground mb-1">Estimated Implementation Cost</p>
-                      <p className="text-3xl font-bold text-primary">
-                        ${(hasManualOverride 
-                          ? actualSelectedCost 
-                          : totalCostEstimates[riskTolerance === 'low' ? 'lowCost' : riskTolerance === 'medium' ? 'mediumCost' : 'highCost']
-                        ).toLocaleString()}
-                      </p>
+                    {/* Implementation Level Selector */}
+                    <div className="pt-6 border-t">
+                      <RiskToleranceSelector
+                        value={riskTolerance}
+                        onChange={handleRiskToleranceChange}
+                        lowCost={totalCostEstimates.lowCost}
+                        mediumCost={totalCostEstimates.mediumCost}
+                        highCost={totalCostEstimates.highCost}
+                        lowCoverage={coverageByLevel.low}
+                        mediumCoverage={coverageByLevel.medium}
+                        highCoverage={coverageByLevel.high}
+                        controlCounts={controlCountsByLevel}
+                        hasCustomSelection={hasManualOverride}
+                      />
+                      
+                      <div className="flex flex-col items-center justify-center py-6 px-4 bg-muted/30 rounded-lg border border-border mt-4">
+                        <p className="text-sm text-muted-foreground mb-1">Estimated Implementation Cost</p>
+                        <p className="text-3xl font-bold text-primary">
+                          ${(hasManualOverride 
+                            ? actualSelectedCost 
+                            : totalCostEstimates[riskTolerance === 'low' ? 'lowCost' : riskTolerance === 'medium' ? 'mediumCost' : 'highCost']
+                          ).toLocaleString()}
+                        </p>
+                      </div>
                     </div>
                   </div>
-                </AccordionContent>
-              </AccordionItem>
+                </ProductSectionContainer>
+              ) : (
+                /* External users - simple border container without product tabs */
+                <div className="border rounded-lg px-6 py-4">
+                  {/* Section Header */}
+                  <div className="flex items-center justify-between pb-4 border-b mb-6">
+                    <div className="flex items-center gap-2">
+                      <span className="text-lg font-semibold">Assets, Water Systems & Processes</span>
+                      {displayItems.length > 0 && (
+                        <span className="text-sm font-normal text-muted-foreground">
+                          ({displayItems.length})
+                        </span>
+                      )}
+                    </div>
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button variant="outline" size="sm" className="gap-1">
+                          Manage List
+                          <ChevronDown className="h-3 w-3" />
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end" className="w-48 bg-background z-50">
+                        <DropdownMenuItem
+                          onClick={() => {
+                            setAwpModalKey(prev => prev + 1);
+                            setShowAWPEditModal(true);
+                          }}
+                          className="gap-2"
+                        >
+                          <FilePlus className="h-4 w-4" />
+                          {displayItems.length === 0 ? "Create from Scratch" : "Edit Manually"}
+                        </DropdownMenuItem>
+                        <DropdownMenuItem
+                          onClick={handleUploadDrawingsClick}
+                          disabled={uploadingDrawings}
+                          className="gap-2"
+                        >
+                          {uploadingDrawings ? (
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                          ) : (
+                            <Upload className="h-4 w-4" />
+                          )}
+                          Upload Drawings
+                        </DropdownMenuItem>
+                        <DropdownMenuItem
+                          onClick={() => setShowDriveConnectionDialog(true)}
+                          className="gap-2"
+                        >
+                          <img src="/icons/icon_googledrive.png" alt="" className="w-4 h-4" />
+                          Google Drive
+                        </DropdownMenuItem>
+                        <DropdownMenuItem disabled className="gap-2 opacity-50">
+                          <img src="/icons/icon_procore.png" alt="" className="w-4 h-4" />
+                          <span>Procore</span>
+                          <span className="ml-auto text-[10px] text-muted-foreground">Coming Soon</span>
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  </div>
+
+                  {/* Empty state when no items */}
+                  {displayItems.length === 0 && (
+                    <div className="text-center py-8 border rounded-lg bg-muted/30">
+                      <p className="text-sm text-muted-foreground mb-4">
+                        No assets, water systems, or processes have been added yet.
+                      </p>
+                      <div className="flex flex-col items-center gap-2">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => {
+                            setAwpModalKey(prev => prev + 1);
+                            setShowAWPEditModal(true);
+                          }}
+                          className="gap-2"
+                        >
+                          <FilePlus className="h-4 w-4" />
+                          Create from Scratch
+                        </Button>
+                        <p className="text-xs text-muted-foreground text-center max-w-lg mt-4">
+                          Or connect a cloud repository to analyze drawings and detect assets and systems at risk.
+                        </p>
+                        <div className="flex gap-3 mt-3">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={handleUploadDrawingsClick}
+                            disabled={uploadingDrawings}
+                            className="gap-2"
+                          >
+                            {uploadingDrawings ? (
+                              <Loader2 className="h-4 w-4 animate-spin" />
+                            ) : (
+                              <Upload className="h-4 w-4" />
+                            )}
+                            Upload Drawings
+                          </Button>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => setShowDriveConnectionDialog(true)}
+                            className="gap-2"
+                          >
+                            <img src="/icons/icon_googledrive.png" alt="" className="w-4 h-4" />
+                            Google Drive
+                          </Button>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            disabled
+                            className="gap-2 opacity-50"
+                          >
+                            <img src="/icons/icon_procore.png" alt="" className="w-4 h-4" />
+                            Procore
+                            <span className="text-[10px] text-muted-foreground">(Coming Soon)</span>
+                          </Button>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Content Subsections */}
+                  <div className="space-y-8">
+                    <div className="space-y-6">
+                      <h3 className="text-md font-medium">
+                        Critical Assets
+                        {assetInstanceCount > 0 && (
+                          <span className="ml-2 text-muted-foreground font-normal">({assetInstanceCount})</span>
+                        )}
+                      </h3>
+                      <CriticalAssetsStep 
+                        onNext={handleStepUpdate} 
+                        onBack={() => {}} 
+                        isProcessingWebhook={isProcessingWebhook}
+                        analysisItems={analysisItems}
+                        driveFiles={driveFiles}
+                        driveAccessToken={driveAccessToken}
+                        riskTolerance={riskTolerance}
+                        onManualControlToggle={handleManualControlToggle}
+                        product="riskblue"
+                      />
+                    </div>
+                    <div className="space-y-6 pt-6 border-t">
+                      <h3 className="text-md font-medium">
+                        Water Systems
+                        {waterSystemInstanceCount > 0 && (
+                          <span className="ml-2 text-muted-foreground font-normal">({waterSystemInstanceCount})</span>
+                        )}
+                      </h3>
+                      <WaterSystemsStep 
+                        onNext={handleStepUpdate} 
+                        onBack={() => {}} 
+                        isProcessingWebhook={isProcessingWebhook}
+                        analysisItems={analysisItems}
+                        driveFiles={driveFiles}
+                        driveAccessToken={driveAccessToken}
+                        riskTolerance={riskTolerance}
+                        onManualControlToggle={handleManualControlToggle}
+                        product="riskblue"
+                      />
+                    </div>
+                    <div className="space-y-6 pt-6 border-t">
+                      <h3 className="text-md font-medium">
+                        Processes
+                        {processInstanceCount > 0 && (
+                          <span className="ml-2 text-muted-foreground font-normal">({processInstanceCount})</span>
+                        )}
+                      </h3>
+                      <ProcessesStep 
+                        analysisItems={analysisItems}
+                        onNext={handleStepUpdate}
+                        isProcessingWebhook={isProcessingWebhook}
+                        driveFiles={driveFiles}
+                        driveAccessToken={driveAccessToken}
+                        riskTolerance={riskTolerance}
+                        onManualControlToggle={handleManualControlToggle}
+                        product="riskblue"
+                      />
+                    </div>
+                    
+                    {/* Implementation Level Selector */}
+                    <div className="pt-6 border-t">
+                      <RiskToleranceSelector
+                        value={riskTolerance}
+                        onChange={handleRiskToleranceChange}
+                        lowCost={totalCostEstimates.lowCost}
+                        mediumCost={totalCostEstimates.mediumCost}
+                        highCost={totalCostEstimates.highCost}
+                        lowCoverage={coverageByLevel.low}
+                        mediumCoverage={coverageByLevel.medium}
+                        highCoverage={coverageByLevel.high}
+                        controlCounts={controlCountsByLevel}
+                        hasCustomSelection={hasManualOverride}
+                      />
+                      
+                      <div className="flex flex-col items-center justify-center py-6 px-4 bg-muted/30 rounded-lg border border-border mt-4">
+                        <p className="text-sm text-muted-foreground mb-1">Estimated Implementation Cost</p>
+                        <p className="text-3xl font-bold text-primary">
+                          ${(hasManualOverride 
+                            ? actualSelectedCost 
+                            : totalCostEstimates[riskTolerance === 'low' ? 'lowCost' : riskTolerance === 'medium' ? 'mediumCost' : 'highCost']
+                          ).toLocaleString()}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
 
             </Accordion>
             
