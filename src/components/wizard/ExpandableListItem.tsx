@@ -574,13 +574,9 @@ export const ExpandableListItem = ({
                   {/* Instance info */}
                   <div className="flex-1 min-w-0 flex items-center gap-2">
                     <span className="text-sm text-muted-foreground">{instance.id}:</span>
-                    <span className="text-sm truncate">{instance.instanceName || instance.areaName || instance.name}</span>
+                    <span className="text-sm truncate">{instance.areaName || instance.name}</span>
                     {instance.floor && (
                       <Badge variant="outline" className="text-xs cursor-default hover:bg-transparent">{instance.floor}</Badge>
-                    )}
-                    {/* Show areaName as size badge if it looks like a size (e.g., "120 ft²") and instanceName is shown */}
-                    {instance.instanceName && instance.areaName && instance.areaName.includes('ft') && (
-                      <Badge variant="outline" className="text-xs cursor-default hover:bg-transparent">{instance.areaName}</Badge>
                     )}
                   </div>
 
