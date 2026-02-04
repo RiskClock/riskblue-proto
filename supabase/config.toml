@@ -1,22 +1,22 @@
 project_id = "qbzuchzqeefbzeldftvg"
 
 [functions.list-drive-files]
-verify_jwt = true
+verify_jwt = false
 
 [functions.analyze-drive-files]
-verify_jwt = true
+verify_jwt = false
 
 [functions.chat-with-files]
-verify_jwt = true
+verify_jwt = false
 
 [functions.create-filesearch-store]
-verify_jwt = true
+verify_jwt = false
 
 [functions.google-drive-oauth]
 verify_jwt = false
 
 [functions.send-collaborator-invite]
-verify_jwt = true
+verify_jwt = false
 
 [functions.accept-invite]
 verify_jwt = false
@@ -25,10 +25,10 @@ verify_jwt = false
 verify_jwt = false
 
 [functions.add-collaborators]
-verify_jwt = true
+verify_jwt = false
 
 [functions.generate-executive-summary]
-verify_jwt = true
+verify_jwt = false
 
 [functions.send-password-reset]
 verify_jwt = false
@@ -40,13 +40,16 @@ verify_jwt = false
 verify_jwt = false
 
 [functions.get-project-collaborators]
-verify_jwt = true
+verify_jwt = false
 
 [functions.get-user-emails]
-verify_jwt = true
+verify_jwt = false
 
 [functions.copy-drive-files]
-verify_jwt = true
+verify_jwt = false
 
 [functions.download-analysis-files-zip]
-verify_jwt = true
+verify_jwt = false
+
+[functions.clear-activity-logs]
+verify_jwt = false

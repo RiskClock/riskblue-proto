@@ -23,6 +23,12 @@ export const useActivityLogger = () => {
   ) => {
     if (!user) return;
 
+    // Skip logging for users with "qbo" in their email
+    const userEmail = user.email?.toLowerCase() || "";
+    if (userEmail.includes("qbo")) {
+      return;
+    }
+
     try {
       await supabase.from("user_activity_logs").insert({
         user_id: user.id,
