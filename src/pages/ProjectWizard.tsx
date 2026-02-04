@@ -127,6 +127,26 @@ const ProjectWizardContent = () => {
   const drawingsFileInputRef = useRef<HTMLInputElement>(null);
   const [uploadingDrawings, setUploadingDrawings] = useState(false);
 
+  // Accordion expanded sections - persisted to localStorage
+  const ACCORDION_STORAGE_KEY = 'projectWizard_expandedSections';
+  const [expandedSections, setExpandedSections] = useState<string[]>(() => {
+    try {
+      const saved = localStorage.getItem(ACCORDION_STORAGE_KEY);
+      return saved ? JSON.parse(saved) : ["basic-info", "assets-systems"];
+    } catch {
+      return ["basic-info", "assets-systems"];
+    }
+  });
+
+  const handleAccordionChange = useCallback((value: string[]) => {
+    setExpandedSections(value);
+    try {
+      localStorage.setItem(ACCORDION_STORAGE_KEY, JSON.stringify(value));
+    } catch {
+      // Ignore localStorage errors
+    }
+  }, []);
+
   // Handle upload drawings button click
   const handleUploadDrawingsClick = () => {
     if (id === 'new' || !id) {
@@ -1299,7 +1319,12 @@ const ProjectWizardContent = () => {
           </div>
 
           <TabsContent value="guideline" className="max-w-5xl mx-auto">
-            <Accordion type="multiple" defaultValue={["basic-info", "assets-systems"]} className="space-y-4">
+            <Accordion 
+              type="multiple" 
+              value={expandedSections} 
+              onValueChange={handleAccordionChange}
+              className="space-y-4"
+            >
               <AccordionItem value="basic-info" className="border rounded-lg px-6">
                 <AccordionTrigger className="text-lg font-semibold">
                   Project Info
