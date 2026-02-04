@@ -17,6 +17,8 @@ import {
   Line as RechartsLine,
   BarChart,
   Bar,
+  AreaChart,
+  Area,
   XAxis,
   YAxis,
   CartesianGrid,
@@ -28,7 +30,7 @@ import {
 interface ChartSettings {
   dimension: '3d' | '2d';
   mode: 'total' | 'brokenDown';
-  chartType: 'line' | 'bars';
+  chartType: 'line' | 'bars' | 'stackedLine' | 'stackedBars';
   startDate: string;
   endDate: string;
   showToday: boolean;
@@ -298,7 +300,7 @@ interface ChartSceneProps {
   data: RiskTimelineData;
   visibleTypes: Set<string>;
   onHover: (data: TooltipData | null) => void;
-  chartType: 'line' | 'bars';
+  chartType: 'line' | 'bars' | 'stackedLine' | 'stackedBars';
   showToday: boolean;
   showDerisk: boolean;
   mode: 'total' | 'brokenDown';
@@ -578,7 +580,7 @@ const Legend: React.FC<{
 interface Chart2DProps {
   data: RiskTimelineData;
   visibleTypes: Set<string>;
-  chartType: 'line' | 'bars';
+  chartType: 'line' | 'bars' | 'stackedLine' | 'stackedBars';
   showToday: boolean;
   showDerisk: boolean;
   mode: 'total' | 'brokenDown';
@@ -651,6 +653,28 @@ const Chart2D: React.FC<Chart2DProps> = ({
     </>
   );
 
+  // Stacked Bar Chart
+  if (chartType === 'stackedBars') {
+    return (
+      <ResponsiveContainer width="100%" height="100%">
+        <BarChart {...commonChartProps}>
+          {renderContent()}
+          {mode === 'total' ? (
+            <>
+              <Bar dataKey="totalRisk" stackId="risk" fill="#ef4444" name="Total Risk" fillOpacity={0.8} />
+              {showDerisk && <Bar dataKey="totalDerisk" stackId="derisk" fill="#22c55e" name="Total Derisk" fillOpacity={0.6} />}
+            </>
+          ) : (
+            visibleAspTypes.map(type => (
+              <Bar key={type.name} dataKey={type.name} stackId="risk" fill={type.color} name={type.name} fillOpacity={0.8} />
+            ))
+          )}
+        </BarChart>
+      </ResponsiveContainer>
+    );
+  }
+
+  // Regular Bar Chart
   if (chartType === 'bars') {
     return (
       <ResponsiveContainer width="100%" height="100%">
@@ -676,6 +700,30 @@ const Chart2D: React.FC<Chart2DProps> = ({
     );
   }
 
+  // Stacked Area Chart (stackedLine)
+  if (chartType === 'stackedLine') {
+    return (
+      <ResponsiveContainer width="100%" height="100%">
+        <AreaChart {...commonChartProps}>
+          {renderContent()}
+          {mode === 'total' ? (
+            <>
+              <Area type="stepAfter" dataKey="totalRisk" stackId="risk" stroke="#ef4444" fill="#ef4444" name="Total Risk" fillOpacity={0.6} />
+              {showDerisk && (
+                <Area type="stepAfter" dataKey="totalDerisk" stackId="derisk" stroke="#22c55e" fill="#22c55e" name="Total Derisk" fillOpacity={0.4} />
+              )}
+            </>
+          ) : (
+            visibleAspTypes.map(type => (
+              <Area key={type.name} type="stepAfter" dataKey={type.name} stackId="risk" stroke={type.color} fill={type.color} name={type.name} fillOpacity={0.6} />
+            ))
+          )}
+        </AreaChart>
+      </ResponsiveContainer>
+    );
+  }
+
+  // Default: Line Chart
   return (
     <ResponsiveContainer width="100%" height="100%">
       <LineChart {...commonChartProps}>
@@ -756,11 +804,13 @@ const ControlPanel: React.FC<ControlPanelProps> = ({
         <ToggleGroup 
           type="single" 
           value={settings.chartType} 
-          onValueChange={(v) => v && onSettingsChange({ ...settings, chartType: v as 'line' | 'bars' })}
+          onValueChange={(v) => v && onSettingsChange({ ...settings, chartType: v as 'line' | 'bars' | 'stackedLine' | 'stackedBars' })}
           size="sm"
         >
           <ToggleGroupItem value="line" className="text-xs px-2">Line</ToggleGroupItem>
           <ToggleGroupItem value="bars" className="text-xs px-2">Bars</ToggleGroupItem>
+          <ToggleGroupItem value="stackedLine" className="text-xs px-2">Stacked Line</ToggleGroupItem>
+          <ToggleGroupItem value="stackedBars" className="text-xs px-2">Stacked Bars</ToggleGroupItem>
         </ToggleGroup>
       </div>
       
