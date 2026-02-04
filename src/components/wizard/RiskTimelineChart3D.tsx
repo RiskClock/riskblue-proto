@@ -1,6 +1,6 @@
-import React, { useState, useMemo, useCallback, Suspense } from "react";
-import { Canvas } from "@react-three/fiber";
-import { OrbitControls, Html, Text } from "@react-three/drei";
+import React, { useState, useMemo, useCallback, Suspense, useRef } from "react";
+import { Canvas, useThree } from "@react-three/fiber";
+import { OrbitControls, Text } from "@react-three/drei";
 import { useRiskTimelineData, RiskTimelineData } from "@/hooks/useRiskTimelineData";
 import { AnalysisItem } from "@/lib/analysisItemMapper";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -33,72 +33,160 @@ interface TooltipData {
   month: string;
   aspType: string;
   riskPoints: number;
-  monthTotal: number;
-  position: [number, number, number];
+  category: string;
+  color: string;
 }
 
-interface BarMeshProps {
-  position: [number, number, number];
-  height: number;
+const UNIT_X = 1.0; // Width per month
+const GAP_Z = 0.8; // Gap between each ASP type lane
+const AREA_DEPTH = 0.15; // Thin extrusion for each area
+const SCALE_Y = 0.12; // Scale risk values to reasonable heights
+
+interface StepAreaMeshProps {
+  monthValues: number[];
   color: string;
+  zPosition: number;
   aspType: string;
-  month: string;
-  riskPoints: number;
-  monthTotal: number;
+  months: string[];
+  category: string;
   onHover: (data: TooltipData | null) => void;
 }
 
-const BAR_WIDTH = 0.8;
-const BAR_DEPTH = 0.6;
-const GAP_X = 0.3;
-const GAP_Z = 0.2;
-const SCALE_Y = 0.15; // Scale down risk values to reasonable bar heights
-
-const BarMesh: React.FC<BarMeshProps> = ({
-  position,
-  height,
+const StepAreaMesh: React.FC<StepAreaMeshProps> = ({
+  monthValues,
   color,
+  zPosition,
   aspType,
-  month,
-  riskPoints,
-  monthTotal,
+  months,
+  category,
   onHover
 }) => {
   const [hovered, setHovered] = useState(false);
-  
-  const handlePointerOver = useCallback(() => {
-    setHovered(true);
-    onHover({
-      month,
-      aspType,
-      riskPoints,
-      monthTotal,
-      position
+  const meshRef = useRef<THREE.Mesh>(null);
+
+  // Create step-area shape geometry
+  const geometry = useMemo(() => {
+    const shape = new THREE.Shape();
+    
+    // Start at origin
+    shape.moveTo(0, 0);
+    
+    // Build step pattern
+    monthValues.forEach((value, i) => {
+      const x = i * UNIT_X;
+      const nextX = (i + 1) * UNIT_X;
+      const y = value * SCALE_Y;
+      
+      // Step up to current value
+      shape.lineTo(x, y);
+      // Horizontal to next month
+      shape.lineTo(nextX, y);
     });
-  }, [month, aspType, riskPoints, monthTotal, position, onHover]);
+    
+    // Close shape back to baseline
+    shape.lineTo(monthValues.length * UNIT_X, 0);
+    shape.lineTo(0, 0);
+
+    const extrudeSettings = {
+      steps: 1,
+      depth: AREA_DEPTH,
+      bevelEnabled: false
+    };
+
+    return new THREE.ExtrudeGeometry(shape, extrudeSettings);
+  }, [monthValues]);
+
+  const handlePointerOver = useCallback((e: any) => {
+    e.stopPropagation?.();
+    setHovered(true);
+    
+    // Find which month segment was hovered based on x position
+    const point = e.point;
+    const monthIdx = Math.floor(point.x / UNIT_X);
+    const clampedIdx = Math.max(0, Math.min(monthIdx, months.length - 1));
+    
+    onHover({
+      month: months[clampedIdx],
+      aspType,
+      riskPoints: monthValues[clampedIdx] || 0,
+      category,
+      color
+    });
+  }, [months, aspType, monthValues, category, color, onHover]);
 
   const handlePointerOut = useCallback(() => {
     setHovered(false);
     onHover(null);
   }, [onHover]);
 
-  if (height <= 0) return null;
+  const handlePointerMove = useCallback((e: any) => {
+    e.stopPropagation?.();
+    const point = e.point;
+    const monthIdx = Math.floor(point.x / UNIT_X);
+    const clampedIdx = Math.max(0, Math.min(monthIdx, months.length - 1));
+    
+    onHover({
+      month: months[clampedIdx],
+      aspType,
+      riskPoints: monthValues[clampedIdx] || 0,
+      category,
+      color
+    });
+  }, [months, aspType, monthValues, category, color, onHover]);
+
+  // Check if there's any non-zero data
+  const hasData = monthValues.some(v => v > 0);
+  if (!hasData) return null;
 
   return (
     <mesh
-      position={position}
+      ref={meshRef}
+      geometry={geometry}
+      position={[0, 0, zPosition]}
       onPointerOver={handlePointerOver}
       onPointerOut={handlePointerOut}
+      onPointerMove={handlePointerMove}
     >
-      <boxGeometry args={[BAR_WIDTH, height, BAR_DEPTH]} />
-      <meshStandardMaterial 
-        color={color} 
+      <meshStandardMaterial
+        color={color}
         emissive={hovered ? color : "#000000"}
-        emissiveIntensity={hovered ? 0.3 : 0}
+        emissiveIntensity={hovered ? 0.4 : 0}
         transparent
-        opacity={hovered ? 1 : 0.9}
+        opacity={hovered ? 1 : 0.85}
+        side={THREE.DoubleSide}
       />
     </mesh>
+  );
+};
+
+interface TodayMarkerProps {
+  monthIndex: number;
+  maxHeight: number;
+  totalDepth: number;
+}
+
+const TodayMarker: React.FC<TodayMarkerProps> = ({ monthIndex, maxHeight, totalDepth }) => {
+  const xPosition = (monthIndex + 0.5) * UNIT_X;
+  
+  return (
+    <group position={[xPosition, 0, totalDepth / 2]}>
+      {/* Vertical plane marker */}
+      <mesh>
+        <planeGeometry args={[0.08, maxHeight * 1.2]} />
+        <meshStandardMaterial color="#ef4444" transparent opacity={0.8} side={THREE.DoubleSide} />
+      </mesh>
+      {/* Today label */}
+      <Text
+        position={[0, maxHeight * 0.7, 0.1]}
+        fontSize={0.25}
+        color="#ef4444"
+        anchorX="center"
+        anchorY="bottom"
+        fontWeight="bold"
+      >
+        Today
+      </Text>
+    </group>
   );
 };
 
@@ -109,90 +197,64 @@ interface ChartSceneProps {
 }
 
 const ChartScene: React.FC<ChartSceneProps> = ({ data, visibleTypes, onHover }) => {
-  const { months, aspTypes, matrix, totalPerMonth } = data;
-  
-  // Calculate positions with stacking
-  const bars = useMemo(() => {
-    const result: Array<{
-      key: string;
-      position: [number, number, number];
-      height: number;
-      color: string;
-      aspType: string;
-      month: string;
-      riskPoints: number;
-      monthTotal: number;
-    }> = [];
+  const { months, aspTypes, matrix, totalPerMonth, todayMonthIndex } = data;
 
-    months.forEach((month, monthIdx) => {
-      let yOffset = 0;
-      
-      aspTypes.forEach((aspType, typeIdx) => {
-        if (!visibleTypes.has(aspType.name)) return;
-        
-        const riskValue = matrix[typeIdx][monthIdx];
-        if (riskValue <= 0) return;
-        
-        const height = riskValue * SCALE_Y;
-        const x = monthIdx * (BAR_WIDTH + GAP_X);
-        const y = yOffset + height / 2;
-        const z = 0; // All bars stacked vertically, not in depth
-        
-        result.push({
-          key: `${monthIdx}-${typeIdx}`,
-          position: [x, y, z],
-          height,
-          color: aspType.color,
-          aspType: aspType.name,
-          month,
-          riskPoints: riskValue,
-          monthTotal: totalPerMonth[monthIdx]
-        });
-        
-        yOffset += height;
-      });
-    });
+  // Calculate max height for scaling
+  const maxRisk = Math.max(...matrix.flat(), 1);
+  const maxHeight = maxRisk * SCALE_Y;
 
-    return result;
-  }, [months, aspTypes, matrix, totalPerMonth, visibleTypes]);
+  // Filter visible types and get their indices
+  const visibleTypeData = useMemo(() => {
+    return aspTypes
+      .map((type, originalIndex) => ({ type, originalIndex }))
+      .filter(({ type }) => visibleTypes.has(type.name));
+  }, [aspTypes, visibleTypes]);
+
+  // Total depth of the chart
+  const totalDepth = visibleTypeData.length * GAP_Z;
 
   // Center the chart
-  const centerX = ((months.length - 1) * (BAR_WIDTH + GAP_X)) / 2;
-  
-  // Max height for camera positioning
-  const maxTotal = Math.max(...totalPerMonth);
-  const maxHeight = maxTotal * SCALE_Y;
+  const centerX = (months.length * UNIT_X) / 2;
+  const centerZ = totalDepth / 2;
 
   return (
-    <group position={[-centerX, 0, 0]}>
-      {/* Bars */}
-      {bars.map(bar => (
-        <BarMesh
-          key={bar.key}
-          position={bar.position}
-          height={bar.height}
-          color={bar.color}
-          aspType={bar.aspType}
-          month={bar.month}
-          riskPoints={bar.riskPoints}
-          monthTotal={bar.monthTotal}
+    <group position={[-centerX, 0, -centerZ]}>
+      {/* Step area meshes for each visible ASP type */}
+      {visibleTypeData.map(({ type, originalIndex }, visibleIdx) => (
+        <StepAreaMesh
+          key={type.name}
+          monthValues={matrix[originalIndex]}
+          color={type.color}
+          zPosition={visibleIdx * GAP_Z}
+          aspType={type.name}
+          months={months}
+          category={type.category}
           onHover={onHover}
         />
       ))}
-      
+
+      {/* Today marker */}
+      {todayMonthIndex !== null && (
+        <TodayMarker
+          monthIndex={todayMonthIndex}
+          maxHeight={maxHeight}
+          totalDepth={totalDepth}
+        />
+      )}
+
       {/* X-axis labels (months) */}
       {months.map((month, idx) => {
         // Show every 3rd month label to avoid crowding
         if (idx % 3 !== 0 && months.length > 12) return null;
-        
-        const x = idx * (BAR_WIDTH + GAP_X);
+
+        const x = (idx + 0.5) * UNIT_X;
         const label = format(parseISO(month + "-01"), "MMM yy");
-        
+
         return (
           <Text
             key={`label-${month}`}
-            position={[x, -0.5, 1]}
-            fontSize={0.3}
+            position={[x, -0.3, totalDepth + 0.5]}
+            fontSize={0.22}
             color="#666666"
             anchorX="center"
             anchorY="top"
@@ -202,38 +264,46 @@ const ChartScene: React.FC<ChartSceneProps> = ({ data, visibleTypes, onHover }) 
           </Text>
         );
       })}
-      
+
       {/* Base plane */}
-      <mesh position={[centerX, -0.02, 0]} rotation={[-Math.PI / 2, 0, 0]}>
-        <planeGeometry args={[(months.length + 1) * (BAR_WIDTH + GAP_X), 4]} />
-        <meshStandardMaterial color="#f5f5f5" transparent opacity={0.5} />
+      <mesh position={[centerX, -0.02, centerZ]} rotation={[-Math.PI / 2, 0, 0]}>
+        <planeGeometry args={[months.length * UNIT_X + 1, totalDepth + 2]} />
+        <meshStandardMaterial color="#f8fafc" transparent opacity={0.4} />
       </mesh>
     </group>
   );
 };
 
-const TooltipOverlay: React.FC<{ data: TooltipData }> = ({ data }) => {
+interface ScreenTooltipProps {
+  data: TooltipData;
+  mousePosition: { x: number; y: number };
+}
+
+const ScreenTooltip: React.FC<ScreenTooltipProps> = ({ data, mousePosition }) => {
   const monthLabel = format(parseISO(data.month + "-01"), "MMMM yyyy");
-  
+
   return (
-    <Html
-      position={[data.position[0], data.position[1] + 1, data.position[2]]}
-      center
-      distanceFactor={10}
-      style={{ pointerEvents: 'none' }}
+    <div
+      className="absolute pointer-events-none z-50 bg-popover text-popover-foreground border rounded-lg shadow-lg p-3 text-sm whitespace-nowrap"
+      style={{
+        left: mousePosition.x + 15,
+        top: mousePosition.y - 10,
+        transform: 'translateY(-100%)'
+      }}
     >
-      <div className="bg-popover text-popover-foreground border rounded-lg shadow-lg p-3 text-sm whitespace-nowrap">
-        <div className="font-medium mb-1">{monthLabel}</div>
-        <div className="text-muted-foreground">{data.aspType}</div>
-        <div className="mt-1 flex items-center gap-2">
-          <span className="font-medium">{data.riskPoints.toFixed(1)}</span>
-          <span className="text-muted-foreground">risk points</span>
-        </div>
-        <div className="text-xs text-muted-foreground mt-1">
-          Month total: {data.monthTotal.toFixed(1)}
-        </div>
+      <div className="font-medium mb-1">{monthLabel}</div>
+      <div className="flex items-center gap-2 text-muted-foreground">
+        <div
+          className="w-3 h-3 rounded-sm"
+          style={{ backgroundColor: data.color }}
+        />
+        <span>{data.aspType}</span>
       </div>
-    </Html>
+      <div className="mt-1 flex items-center gap-2">
+        <span className="font-medium">{data.riskPoints.toFixed(1)}</span>
+        <span className="text-muted-foreground">risk points</span>
+      </div>
+    </div>
   );
 };
 
@@ -306,7 +376,9 @@ export const RiskTimelineChart3D: React.FC<RiskTimelineChart3DProps> = ({
   });
 
   const [tooltipData, setTooltipData] = useState<TooltipData | null>(null);
-  const [visibleTypes, setVisibleTypes] = useState<Set<string>>(() => 
+  const [mousePosition, setMousePosition] = useState({ x: 0, y: 0 });
+  const containerRef = useRef<HTMLDivElement>(null);
+  const [visibleTypes, setVisibleTypes] = useState<Set<string>>(() =>
     new Set(data.aspTypes.map(t => t.name))
   );
 
@@ -325,6 +397,16 @@ export const RiskTimelineChart3D: React.FC<RiskTimelineChart3DProps> = ({
       }
       return next;
     });
+  }, []);
+
+  const handleMouseMove = useCallback((e: React.MouseEvent) => {
+    if (containerRef.current) {
+      const rect = containerRef.current.getBoundingClientRect();
+      setMousePosition({
+        x: e.clientX - rect.left,
+        y: e.clientY - rect.top
+      });
+    }
   }, []);
 
   if (!data.hasMilestones) {
@@ -349,7 +431,11 @@ export const RiskTimelineChart3D: React.FC<RiskTimelineChart3DProps> = ({
 
   return (
     <div className="space-y-4">
-      <div className="h-[400px] bg-gradient-to-b from-background to-muted/20 rounded-lg border border-border overflow-hidden">
+      <div
+        ref={containerRef}
+        className="relative h-[400px] bg-gradient-to-b from-background to-muted/20 rounded-lg border border-border overflow-hidden"
+        onMouseMove={handleMouseMove}
+      >
         <Suspense fallback={
           <div className="h-full flex items-center justify-center text-muted-foreground">
             Loading 3D visualization...
@@ -357,37 +443,41 @@ export const RiskTimelineChart3D: React.FC<RiskTimelineChart3DProps> = ({
         }>
           <Canvas
             camera={{
-              position: [8, 6, 12],
-              fov: 50,
+              position: [12, 8, 16],
+              fov: 45,
               near: 0.1,
               far: 1000
             }}
             gl={{ antialias: true }}
           >
-            <ambientLight intensity={0.6} />
-            <pointLight position={[10, 10, 10]} intensity={0.8} />
-            <pointLight position={[-10, 10, -10]} intensity={0.4} />
-            
+            <ambientLight intensity={0.7} />
+            <pointLight position={[15, 15, 15]} intensity={0.6} />
+            <pointLight position={[-10, 10, -10]} intensity={0.3} />
+
             <ChartScene
               data={data}
               visibleTypes={visibleTypes}
               onHover={setTooltipData}
             />
-            
-            {tooltipData && <TooltipOverlay data={tooltipData} />}
-            
+
             <OrbitControls
               enableDamping
               dampingFactor={0.05}
               minPolarAngle={Math.PI / 6}
               maxPolarAngle={Math.PI / 2.2}
               minDistance={5}
-              maxDistance={30}
+              maxDistance={40}
+              zoomSpeed={0.3}
             />
           </Canvas>
         </Suspense>
+
+        {/* Screen-space tooltip */}
+        {tooltipData && (
+          <ScreenTooltip data={tooltipData} mousePosition={mousePosition} />
+        )}
       </div>
-      
+
       <Legend
         aspTypes={data.aspTypes}
         visibleTypes={visibleTypes}
