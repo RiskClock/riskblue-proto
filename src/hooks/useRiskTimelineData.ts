@@ -1,7 +1,7 @@
 import { useMemo } from "react";
 import { AnalysisItem, mapToAssetName, mapToWaterSystemName, mapToProcessName } from "@/lib/analysisItemMapper";
 import { calculateSystemOrAssetDates, TimelineData } from "@/lib/durationCalculator";
-import { format, differenceInMonths, parseISO, startOfMonth, addMonths } from "date-fns";
+import { format, differenceInMonths, parseISO, startOfMonth, addMonths, isWithinInterval, isBefore, isAfter } from "date-fns";
 
 interface ASPTypeInfo {
   name: string;
@@ -30,45 +30,38 @@ interface RiskTimelineDataInput {
     interior_end_date?: string;
   };
   aspPIValues: Array<{ name: string; category: string; probability: number; impact: number }>;
+  // New optional params for filtering and derisk calculation
+  startDateFilter?: string;
+  endDateFilter?: string;
+  selectedInstanceIds?: string[];
+  selectedControlIds?: string[];
+  controlsData?: Array<{ name: string; points: number }>;
 }
 
 export interface RiskTimelineData {
   months: string[];
   aspTypes: ASPTypeInfo[];
-  matrix: number[][]; // matrix[typeIndex][monthIndex]
+  matrix: number[][];
+  deriskMatrix: number[][] | null;
   totalPerMonth: number[];
+  totalDeriskPerMonth: number[] | null;
   minDate: Date | null;
   maxDate: Date | null;
   hasData: boolean;
   hasMilestones: boolean;
-  todayMonthIndex: number | null; // null if today is outside construction range
+  todayMonthIndex: number | null;
 }
 
-// Color palette by category
 const ASSET_COLORS = [
-  "#3B82F6", // blue-500
-  "#2563EB", // blue-600
-  "#1D4ED8", // blue-700
-  "#1E40AF", // blue-800
-  "#60A5FA", // blue-400
-  "#93C5FD", // blue-300
+  "#3B82F6", "#2563EB", "#1D4ED8", "#1E40AF", "#60A5FA", "#93C5FD",
 ];
 
 const WATER_SYSTEM_COLORS = [
-  "#14B8A6", // teal-500
-  "#0D9488", // teal-600
-  "#0F766E", // teal-700
-  "#115E59", // teal-800
-  "#2DD4BF", // teal-400
-  "#5EEAD4", // teal-300
+  "#14B8A6", "#0D9488", "#0F766E", "#115E59", "#2DD4BF", "#5EEAD4",
 ];
 
 const PROCESS_COLORS = [
-  "#8B5CF6", // violet-500
-  "#7C3AED", // violet-600
-  "#6D28D9", // violet-700
-  "#5B21B6", // violet-800
-  "#A78BFA", // violet-400
+  "#8B5CF6", "#7C3AED", "#6D28D9", "#5B21B6", "#A78BFA",
 ];
 
 const normalizeClassName = (name: string): string => {
@@ -86,10 +79,14 @@ const normalizeClassName = (name: string): string => {
 export const useRiskTimelineData = ({
   analysisItems,
   projectData,
-  aspPIValues
+  aspPIValues,
+  startDateFilter,
+  endDateFilter,
+  selectedInstanceIds = [],
+  selectedControlIds = [],
+  controlsData = []
 }: RiskTimelineDataInput): RiskTimelineData => {
   return useMemo(() => {
-    // Check if we have milestones
     const hasMilestones = !!(
       projectData.construction_start_date && 
       projectData.construction_end_date
@@ -100,7 +97,9 @@ export const useRiskTimelineData = ({
         months: [],
         aspTypes: [],
         matrix: [],
+        deriskMatrix: null,
         totalPerMonth: [],
+        totalDeriskPerMonth: null,
         minDate: null,
         maxDate: null,
         hasData: false,
@@ -115,7 +114,12 @@ export const useRiskTimelineData = ({
       piLookup.set(normalizeClassName(v.name), { probability: v.probability, impact: v.impact });
     });
 
-    // Map class name for timeline calculation
+    // Build control points lookup
+    const controlPointsLookup = new Map<string, number>();
+    controlsData.forEach(c => {
+      controlPointsLookup.set(c.name, c.points);
+    });
+
     const getClassName = (item: AnalysisItem): string | null => {
       if (item.category === 'Asset') return mapToAssetName(item.name);
       if (item.category === 'Water System') return mapToWaterSystemName(item.name);
@@ -123,7 +127,6 @@ export const useRiskTimelineData = ({
       return null;
     };
 
-    // Build timeline data from project data
     const timeline: TimelineData = {
       construction_start_date: projectData.construction_start_date,
       construction_end_date: projectData.construction_end_date,
@@ -141,16 +144,17 @@ export const useRiskTimelineData = ({
       interior_end_date: projectData.interior_end_date,
     };
 
-    // Group items by class and calculate dates
     interface ClassData {
       className: string;
       category: "Asset" | "Water System" | "Process";
       instanceCount: number;
+      selectedInstanceCount: number;
       probability: number;
       impact: number;
       riskPoints: number;
       startDate: Date | null;
       endDate: Date | null;
+      instanceIds: string[];
     }
 
     const classDataMap = new Map<string, ClassData>();
@@ -162,28 +166,32 @@ export const useRiskTimelineData = ({
       const normalizedName = normalizeClassName(className);
       
       if (!classDataMap.has(normalizedName)) {
-        // Get dates for this class
         const { startDate, endDate } = calculateSystemOrAssetDates(className, timeline);
-        
-        // Get P x I values
         const pi = piLookup.get(normalizedName) || { probability: 3, impact: 3 };
         
         classDataMap.set(normalizedName, {
           className,
           category: item.category as "Asset" | "Water System" | "Process",
           instanceCount: 0,
+          selectedInstanceCount: 0,
           probability: pi.probability,
           impact: pi.impact,
           riskPoints: pi.probability * pi.impact,
           startDate,
-          endDate
+          endDate,
+          instanceIds: []
         });
       }
       
-      classDataMap.get(normalizedName)!.instanceCount++;
+      const classEntry = classDataMap.get(normalizedName)!;
+      classEntry.instanceCount++;
+      classEntry.instanceIds.push(item.id);
+      
+      if (selectedInstanceIds.includes(item.id)) {
+        classEntry.selectedInstanceCount++;
+      }
     });
 
-    // Filter out classes without valid dates
     const validClasses = Array.from(classDataMap.values()).filter(
       c => c.startDate && c.endDate && c.startDate < c.endDate
     );
@@ -193,7 +201,9 @@ export const useRiskTimelineData = ({
         months: [],
         aspTypes: [],
         matrix: [],
+        deriskMatrix: null,
         totalPerMonth: [],
+        totalDeriskPerMonth: null,
         minDate: null,
         maxDate: null,
         hasData: false,
@@ -202,9 +212,22 @@ export const useRiskTimelineData = ({
       };
     }
 
-    // Use full construction date range (not just ASP item dates)
-    const minDate = parseISO(projectData.construction_start_date!);
-    const maxDate = parseISO(projectData.construction_end_date!);
+    // Determine date range (with optional filters)
+    let minDate = parseISO(projectData.construction_start_date!);
+    let maxDate = parseISO(projectData.construction_end_date!);
+
+    if (startDateFilter) {
+      const filterStart = parseISO(startDateFilter);
+      if (isAfter(filterStart, minDate)) {
+        minDate = filterStart;
+      }
+    }
+    if (endDateFilter) {
+      const filterEnd = parseISO(endDateFilter);
+      if (isBefore(filterEnd, maxDate)) {
+        maxDate = filterEnd;
+      }
+    }
 
     // Generate month labels
     const months: string[] = [];
@@ -223,7 +246,6 @@ export const useRiskTimelineData = ({
     let waterIdx = 0;
     let processIdx = 0;
 
-    // Sort classes by category for consistent coloring
     const sortedClasses = validClasses.sort((a, b) => {
       if (a.category !== b.category) {
         const order = { 'Asset': 0, 'Water System': 1, 'Process': 2 };
@@ -262,8 +284,7 @@ export const useRiskTimelineData = ({
       };
     });
 
-    // Build the matrix: risk per month per ASP type
-    // Total risk = P x I x instanceCount, distributed evenly across months
+    // Build the risk matrix
     const matrix: number[][] = sortedClasses.map(classData => {
       const row: number[] = new Array(months.length).fill(0);
       
@@ -275,23 +296,83 @@ export const useRiskTimelineData = ({
       const startIdx = months.indexOf(startMonth);
       const endIdx = months.indexOf(endMonth);
       
-      if (startIdx === -1 || endIdx === -1) return row;
+      // Handle cases where dates fall outside filtered range
+      const effectiveStartIdx = startIdx === -1 ? 0 : startIdx;
+      const effectiveEndIdx = endIdx === -1 ? months.length - 1 : endIdx;
       
-      const durationMonths = endIdx - startIdx + 1;
+      if (effectiveStartIdx > effectiveEndIdx) return row;
+      
+      const durationMonths = effectiveEndIdx - effectiveStartIdx + 1;
       const totalRisk = classData.riskPoints * classData.instanceCount;
       const riskPerMonth = totalRisk / durationMonths;
       
-      for (let i = startIdx; i <= endIdx; i++) {
+      for (let i = effectiveStartIdx; i <= effectiveEndIdx; i++) {
         row[i] = Math.round(riskPerMonth * 100) / 100;
       }
       
       return row;
     });
 
+    // Build derisk matrix (based on selected instances and controls)
+    let deriskMatrix: number[][] | null = null;
+    
+    if (selectedInstanceIds.length > 0 && selectedControlIds.length > 0) {
+      // Calculate total derisk points from selected controls
+      const totalDeriskPoints = selectedControlIds.reduce((sum, controlId) => {
+        // controlId might be the control name directly
+        const points = controlPointsLookup.get(controlId) || 0;
+        return sum + points;
+      }, 0);
+
+      deriskMatrix = sortedClasses.map((classData, classIdx) => {
+        const row: number[] = new Array(months.length).fill(0);
+        
+        if (!classData.startDate || !classData.endDate) return row;
+        if (classData.selectedInstanceCount === 0) return row;
+        
+        const startMonth = format(startOfMonth(classData.startDate), "yyyy-MM");
+        const endMonth = format(startOfMonth(classData.endDate), "yyyy-MM");
+        
+        const startIdx = months.indexOf(startMonth);
+        const endIdx = months.indexOf(endMonth);
+        
+        const effectiveStartIdx = startIdx === -1 ? 0 : startIdx;
+        const effectiveEndIdx = endIdx === -1 ? months.length - 1 : endIdx;
+        
+        if (effectiveStartIdx > effectiveEndIdx) return row;
+        
+        const durationMonths = effectiveEndIdx - effectiveStartIdx + 1;
+        
+        // Derisk is proportional to selected instances / total instances
+        // and scaled by the class's risk points
+        const selectionRatio = classData.selectedInstanceCount / classData.instanceCount;
+        const classRiskRatio = classData.riskPoints / 25; // Normalize by max possible risk (5*5)
+        
+        // Calculate derisk for this class
+        // Distribute derisk proportionally based on class risk and selection
+        const classDerisk = totalDeriskPoints * selectionRatio * classRiskRatio * 0.1;
+        const deriskPerMonth = classDerisk / durationMonths;
+        
+        for (let i = effectiveStartIdx; i <= effectiveEndIdx; i++) {
+          row[i] = Math.round(deriskPerMonth * 100) / 100;
+        }
+        
+        return row;
+      });
+    }
+
     // Calculate totals per month
     const totalPerMonth = months.map((_, monthIdx) => {
       return matrix.reduce((sum, row) => sum + row[monthIdx], 0);
     });
+
+    // Calculate total derisk per month
+    let totalDeriskPerMonth: number[] | null = null;
+    if (deriskMatrix) {
+      totalDeriskPerMonth = months.map((_, monthIdx) => {
+        return deriskMatrix!.reduce((sum, row) => sum + row[monthIdx], 0);
+      });
+    }
 
     // Calculate today's month index
     const today = new Date();
@@ -303,12 +384,14 @@ export const useRiskTimelineData = ({
       months,
       aspTypes,
       matrix,
+      deriskMatrix,
       totalPerMonth,
+      totalDeriskPerMonth,
       minDate,
       maxDate,
       hasData: true,
       hasMilestones,
       todayMonthIndex
     };
-  }, [analysisItems, projectData, aspPIValues]);
+  }, [analysisItems, projectData, aspPIValues, startDateFilter, endDateFilter, selectedInstanceIds, selectedControlIds, controlsData]);
 };

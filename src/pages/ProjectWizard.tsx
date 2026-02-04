@@ -385,6 +385,22 @@ const ProjectWizardContent = () => {
     }
   });
 
+  // Fetch control derisk points for risk timeline chart
+  const { data: controlPointsData = [] } = useQuery({
+    queryKey: ['control-points-for-timeline'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('mitigation_controls')
+        .select('name, points')
+        .eq('is_active', true);
+      if (error) throw error;
+      return (data || []).map(c => ({
+        name: c.name,
+        points: Number(c.points) || 0
+      }));
+    }
+  });
+
   const projectDurationMonths = useMemo(() => {
     const startDate = projectData.construction_start_date;
     const endDate = projectData.construction_end_date;
@@ -1556,16 +1572,6 @@ const ProjectWizardContent = () => {
                     />
                   </div>
                   
-                  {/* Risk Timeline 3D Chart */}
-                  <div className="space-y-4 pt-6 border-t">
-                    <h3 className="text-md font-medium">Risk Timeline</h3>
-                    <RiskTimelineChart3D 
-                      analysisItems={analysisItems}
-                      projectData={projectData}
-                      aspPIValues={aspPIValues}
-                    />
-                  </div>
-                  
                   {/* Implementation Level Selector - moved below Processes */}
                   <div className="pt-6 border-t">
                     <RiskToleranceSelector
@@ -1591,6 +1597,17 @@ const ProjectWizardContent = () => {
                         ).toLocaleString()}
                       </p>
                     </div>
+                  </div>
+                  
+                  {/* Risk Timeline Chart - now below Implementation Level Selector */}
+                  <div className="space-y-4 pt-6 border-t">
+                    <h3 className="text-md font-medium">Risk Timeline</h3>
+                    <RiskTimelineChart3D 
+                      analysisItems={analysisItems}
+                      projectData={projectData}
+                      aspPIValues={aspPIValues}
+                      controlsData={controlPointsData}
+                    />
                   </div>
                 </AccordionContent>
               </AccordionItem>
