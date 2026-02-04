@@ -41,6 +41,7 @@ export interface RiskTimelineData {
   maxDate: Date | null;
   hasData: boolean;
   hasMilestones: boolean;
+  todayMonthIndex: number | null; // null if today is outside construction range
 }
 
 // Color palette by category
@@ -103,7 +104,8 @@ export const useRiskTimelineData = ({
         minDate: null,
         maxDate: null,
         hasData: false,
-        hasMilestones
+        hasMilestones,
+        todayMonthIndex: null
       };
     }
 
@@ -195,17 +197,14 @@ export const useRiskTimelineData = ({
         minDate: null,
         maxDate: null,
         hasData: false,
-        hasMilestones
+        hasMilestones,
+        todayMonthIndex: null
       };
     }
 
-    // Find overall date range
-    let minDate = validClasses[0].startDate!;
-    let maxDate = validClasses[0].endDate!;
-    validClasses.forEach(c => {
-      if (c.startDate! < minDate) minDate = c.startDate!;
-      if (c.endDate! > maxDate) maxDate = c.endDate!;
-    });
+    // Use full construction date range (not just ASP item dates)
+    const minDate = parseISO(projectData.construction_start_date!);
+    const maxDate = parseISO(projectData.construction_end_date!);
 
     // Generate month labels
     const months: string[] = [];
@@ -294,6 +293,12 @@ export const useRiskTimelineData = ({
       return matrix.reduce((sum, row) => sum + row[monthIdx], 0);
     });
 
+    // Calculate today's month index
+    const today = new Date();
+    const todayMonth = format(startOfMonth(today), "yyyy-MM");
+    const todayIdx = months.indexOf(todayMonth);
+    const todayMonthIndex = todayIdx >= 0 ? todayIdx : null;
+
     return {
       months,
       aspTypes,
@@ -302,7 +307,8 @@ export const useRiskTimelineData = ({
       minDate,
       maxDate,
       hasData: true,
-      hasMilestones
+      hasMilestones,
+      todayMonthIndex
     };
   }, [analysisItems, projectData, aspPIValues]);
 };
