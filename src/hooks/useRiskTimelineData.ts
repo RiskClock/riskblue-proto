@@ -302,12 +302,11 @@ export const useRiskTimelineData = ({
       
       if (effectiveStartIdx > effectiveEndIdx) return row;
       
-      const durationMonths = effectiveEndIdx - effectiveStartIdx + 1;
+      // Full risk points for each month - risk represents concurrent exposure, not amortized cost
       const totalRisk = classData.riskPoints * classData.instanceCount;
-      const riskPerMonth = totalRisk / durationMonths;
       
       for (let i = effectiveStartIdx; i <= effectiveEndIdx; i++) {
-        row[i] = Math.round(riskPerMonth * 100) / 100;
+        row[i] = totalRisk;
       }
       
       return row;
@@ -341,20 +340,16 @@ export const useRiskTimelineData = ({
         
         if (effectiveStartIdx > effectiveEndIdx) return row;
         
-        const durationMonths = effectiveEndIdx - effectiveStartIdx + 1;
-        
         // Derisk is proportional to selected instances / total instances
         // and scaled by the class's risk points
         const selectionRatio = classData.selectedInstanceCount / classData.instanceCount;
         const classRiskRatio = classData.riskPoints / 25; // Normalize by max possible risk (5*5)
         
-        // Calculate derisk for this class
-        // Distribute derisk proportionally based on class risk and selection
+        // Full derisk points for each month - same logic as risk (concurrent exposure)
         const classDerisk = totalDeriskPoints * selectionRatio * classRiskRatio * 0.1;
-        const deriskPerMonth = classDerisk / durationMonths;
         
         for (let i = effectiveStartIdx; i <= effectiveEndIdx; i++) {
-          row[i] = Math.round(deriskPerMonth * 100) / 100;
+          row[i] = Math.round(classDerisk * 100) / 100;
         }
         
         return row;
