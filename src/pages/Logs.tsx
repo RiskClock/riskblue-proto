@@ -1,21 +1,22 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator } from "@/components/ui/dropdown-menu";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { Checkbox } from "@/components/ui/checkbox";
-import { LogOut, ShieldAlert, ChevronLeft, ChevronRight, Settings, FileText, BarChart3 } from "lucide-react";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
+import { LogOut, ShieldAlert, ChevronLeft, ChevronRight, Settings, FileText, BarChart3, Trash2 } from "lucide-react";
 import { useHeapIdentify } from "@/hooks/useHeapIdentify";
 import { useUserDisplayName } from "@/hooks/useUserDisplayName";
 import { LogoDropdown } from "@/components/LogoDropdown";
 import { ProviderSelectionDialog } from "@/components/ProviderSelectionDialog";
 import { format } from "date-fns";
+import { toast } from "sonner";
 
 interface ActivityLog {
   id: string;
@@ -32,18 +33,78 @@ interface UserProfile {
 }
 
 const PAGE_SIZE = 50;
+const COLUMN_WIDTHS_KEY = "logs-column-widths";
+
+interface ColumnWidths {
+  timestamp: number;
+  user: number;
+  project: number;
+  action: number;
+}
+
+const DEFAULT_WIDTHS: ColumnWidths = {
+  timestamp: 160,
+  user: 280,
+  project: 200,
+  action: 400,
+};
 
 export default function Logs() {
   const { user, signOut } = useAuth();
   const navigate = useNavigate();
-  useHeapIdentify(); // Identify user in Heap Analytics
+  const queryClient = useQueryClient();
+  useHeapIdentify();
   const { getInitial } = useUserDisplayName();
   const [showProviderDialog, setShowProviderDialog] = useState(false);
   const [selectedUserId, setSelectedUserId] = useState<string>("all");
   const [page, setPage] = useState(0);
   const [hideInternalUsers, setHideInternalUsers] = useState(false);
+  const [isClearing, setIsClearing] = useState(false);
+  
+  // Column widths state
+  const [columnWidths, setColumnWidths] = useState<ColumnWidths>(() => {
+    const saved = localStorage.getItem(COLUMN_WIDTHS_KEY);
+    return saved ? JSON.parse(saved) : DEFAULT_WIDTHS;
+  });
+  const [resizing, setResizing] = useState<{ column: keyof ColumnWidths; startX: number; startWidth: number } | null>(null);
 
   const isInternalUser = user?.email?.toLowerCase().endsWith("@riskclock.com");
+
+  // Save column widths to localStorage
+  const saveColumnWidths = useCallback((widths: ColumnWidths) => {
+    localStorage.setItem(COLUMN_WIDTHS_KEY, JSON.stringify(widths));
+  }, []);
+
+  // Handle mouse move for resizing
+  useEffect(() => {
+    if (!resizing) return;
+
+    const handleMouseMove = (e: MouseEvent) => {
+      const diff = e.clientX - resizing.startX;
+      const newWidth = Math.max(80, resizing.startWidth + diff);
+      setColumnWidths(prev => {
+        const updated = { ...prev, [resizing.column]: newWidth };
+        return updated;
+      });
+    };
+
+    const handleMouseUp = () => {
+      if (resizing) {
+        setColumnWidths(prev => {
+          saveColumnWidths(prev);
+          return prev;
+        });
+      }
+      setResizing(null);
+    };
+
+    document.addEventListener("mousemove", handleMouseMove);
+    document.addEventListener("mouseup", handleMouseUp);
+    return () => {
+      document.removeEventListener("mousemove", handleMouseMove);
+      document.removeEventListener("mouseup", handleMouseUp);
+    };
+  }, [resizing, saveColumnWidths]);
 
   // Fetch all activity logs
   const { data: logsData, isLoading: logsLoading } = useQuery({
@@ -148,7 +209,6 @@ export default function Logs() {
     });
   }, [logsData?.logs, hideInternalUsers, userEmails]);
 
-  const logs = logsData?.logs || [];
   const totalCount = logsData?.totalCount || 0;
   const totalPages = Math.ceil(totalCount / PAGE_SIZE);
 
@@ -158,6 +218,45 @@ export default function Logs() {
       .split("_")
       .map(word => word.charAt(0).toUpperCase() + word.slice(1))
       .join(" ");
+  };
+
+  // Clear all logs
+  const handleClearLogs = async () => {
+    setIsClearing(true);
+    try {
+      const { error } = await supabase.functions.invoke("clear-activity-logs", {
+        method: "POST",
+      });
+      if (error) throw error;
+      toast.success("All activity logs cleared");
+      queryClient.invalidateQueries({ queryKey: ["activity-logs"] });
+    } catch (error) {
+      console.error("Failed to clear logs:", error);
+      toast.error("Failed to clear logs");
+    } finally {
+      setIsClearing(false);
+    }
+  };
+
+  // Resize handle component
+  const ResizeHandle = ({ column }: { column: keyof ColumnWidths }) => (
+    <div
+      className="absolute right-0 top-0 h-full w-1 cursor-col-resize hover:bg-primary/50 active:bg-primary"
+      onMouseDown={(e) => {
+        e.preventDefault();
+        setResizing({ column, startX: e.clientX, startWidth: columnWidths[column] });
+      }}
+    />
+  );
+
+  // Get user display with email
+  const getUserDisplay = (userId: string) => {
+    const name = profileMap.get(userId) || "Unknown";
+    const email = userEmails.get(userId);
+    if (email) {
+      return `${name} (${email})`;
+    }
+    return name;
   };
 
   // Access control
@@ -223,6 +322,28 @@ export default function Logs() {
             <p className="text-muted-foreground">View user activity across all projects</p>
           </div>
           <div className="flex items-center gap-4">
+            <AlertDialog>
+              <AlertDialogTrigger asChild>
+                <Button variant="destructive" size="sm" disabled={isClearing}>
+                  <Trash2 className="h-4 w-4 mr-2" />
+                  Clear Logs
+                </Button>
+              </AlertDialogTrigger>
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>Clear all activity logs?</AlertDialogTitle>
+                  <AlertDialogDescription>
+                    This action cannot be undone. All activity logs will be permanently deleted.
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel>Cancel</AlertDialogCancel>
+                  <AlertDialogAction onClick={handleClearLogs} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+                    Clear All Logs
+                  </AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
             <div className="flex items-center space-x-2">
               <Checkbox
                 id="hide-internal"
@@ -262,43 +383,48 @@ export default function Logs() {
         ) : (
           <>
             <div className="bg-card rounded-lg border overflow-hidden">
-              <TooltipProvider>
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead className="w-[140px]">Timestamp</TableHead>
-                      <TableHead className="w-[140px]">User</TableHead>
-                      <TableHead className="w-[140px]">Project</TableHead>
-                      <TableHead className="w-1/2">Action</TableHead>
+              <Table style={{ tableLayout: "fixed" }}>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead className="relative" style={{ width: columnWidths.timestamp }}>
+                      Timestamp
+                      <ResizeHandle column="timestamp" />
+                    </TableHead>
+                    <TableHead className="relative" style={{ width: columnWidths.user }}>
+                      User
+                      <ResizeHandle column="user" />
+                    </TableHead>
+                    <TableHead className="relative" style={{ width: columnWidths.project }}>
+                      Project
+                      <ResizeHandle column="project" />
+                    </TableHead>
+                    <TableHead className="relative" style={{ width: columnWidths.action }}>
+                      Action
+                      <ResizeHandle column="action" />
+                    </TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {filteredLogs.map((log) => (
+                    <TableRow key={log.id}>
+                      <TableCell className="text-sm text-muted-foreground truncate" style={{ width: columnWidths.timestamp }}>
+                        {format(new Date(log.created_at), "MMM d, yyyy h:mm a")}
+                      </TableCell>
+                      <TableCell className="truncate" style={{ width: columnWidths.user }} title={getUserDisplay(log.user_id)}>
+                        <span className="text-sm font-medium">
+                          {getUserDisplay(log.user_id)}
+                        </span>
+                      </TableCell>
+                      <TableCell className="text-sm text-muted-foreground truncate" style={{ width: columnWidths.project }}>
+                        {log.project_id ? projectMap.get(log.project_id) || log.project_id : "—"}
+                      </TableCell>
+                      <TableCell className="text-sm truncate" style={{ width: columnWidths.action }}>
+                        {formatAction(log.action)}
+                      </TableCell>
                     </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {filteredLogs.map((log) => (
-                      <TableRow key={log.id}>
-                        <TableCell className="text-sm text-muted-foreground">
-                          {format(new Date(log.created_at), "MMM d, yyyy h:mm a")}
-                        </TableCell>
-                        <TableCell>
-                          <Tooltip>
-                            <TooltipTrigger asChild>
-                              <span className="text-sm font-medium cursor-default">
-                                {profileMap.get(log.user_id) || "Unknown"}
-                              </span>
-                            </TooltipTrigger>
-                            <TooltipContent>
-                              <p>{userEmails.get(log.user_id) || "No email available"}</p>
-                            </TooltipContent>
-                          </Tooltip>
-                        </TableCell>
-                        <TableCell className="text-sm text-muted-foreground">
-                          {log.project_id ? projectMap.get(log.project_id) || log.project_id : "—"}
-                        </TableCell>
-                        <TableCell className="text-sm">{formatAction(log.action)}</TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </TooltipProvider>
+                  ))}
+                </TableBody>
+              </Table>
             </div>
 
             {/* Pagination */}
