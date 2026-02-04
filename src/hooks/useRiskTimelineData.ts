@@ -52,16 +52,33 @@ export interface RiskTimelineData {
   todayMonthIndex: number | null;
 }
 
+// Distinct color palettes for each category - widely varied hues for easy differentiation
 const ASSET_COLORS = [
-  "#3B82F6", "#2563EB", "#1D4ED8", "#1E40AF", "#60A5FA", "#93C5FD",
+  "#EF4444", // Red
+  "#F97316", // Orange
+  "#FBBF24", // Amber
+  "#84CC16", // Lime
+  "#06B6D4", // Cyan
+  "#8B5CF6", // Violet
+  "#EC4899", // Pink
+  "#F43F5E", // Rose
 ];
 
 const WATER_SYSTEM_COLORS = [
-  "#14B8A6", "#0D9488", "#0F766E", "#115E59", "#2DD4BF", "#5EEAD4",
+  "#3B82F6", // Blue
+  "#0EA5E9", // Sky
+  "#14B8A6", // Teal
+  "#10B981", // Emerald
+  "#22C55E", // Green
+  "#6366F1", // Indigo
 ];
 
 const PROCESS_COLORS = [
-  "#8B5CF6", "#7C3AED", "#6D28D9", "#5B21B6", "#A78BFA",
+  "#A855F7", // Purple
+  "#D946EF", // Fuchsia
+  "#F472B6", // Pink-300
+  "#FB923C", // Orange-400
+  "#A3E635", // Lime-400
 ];
 
 const normalizeClassName = (name: string): string => {
