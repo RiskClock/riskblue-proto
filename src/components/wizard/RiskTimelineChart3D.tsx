@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useCallback, Suspense, useRef } from "react";
-import { Canvas, useThree } from "@react-three/fiber";
-import { OrbitControls, Text } from "@react-three/drei";
+import { Canvas } from "@react-three/fiber";
+import { OrbitControls, Text, Line } from "@react-three/drei";
 import { useRiskTimelineData, RiskTimelineData } from "@/hooks/useRiskTimelineData";
 import { AnalysisItem } from "@/lib/analysisItemMapper";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -39,10 +39,10 @@ interface TooltipData {
 
 const UNIT_X = 1.0; // Width per month
 const GAP_Z = 0.8; // Gap between each ASP type lane
-const AREA_DEPTH = 0.15; // Thin extrusion for each area
 const SCALE_Y = 0.12; // Scale risk values to reasonable heights
+const LINE_WIDTH = 3; // Line thickness
 
-interface StepAreaMeshProps {
+interface StepLineMeshProps {
   monthValues: number[];
   color: string;
   zPosition: number;
@@ -50,57 +50,78 @@ interface StepAreaMeshProps {
   months: string[];
   category: string;
   onHover: (data: TooltipData | null) => void;
+  isHovered: boolean;
 }
 
-const StepAreaMesh: React.FC<StepAreaMeshProps> = ({
+const StepLineMesh: React.FC<StepLineMeshProps> = ({
   monthValues,
   color,
   zPosition,
   aspType,
   months,
   category,
-  onHover
+  onHover,
+  isHovered
 }) => {
-  const [hovered, setHovered] = useState(false);
-  const meshRef = useRef<THREE.Mesh>(null);
-
-  // Create step-area shape geometry
-  const geometry = useMemo(() => {
-    const shape = new THREE.Shape();
+  // Build step line points (broken line graph)
+  const linePoints = useMemo(() => {
+    const points: [number, number, number][] = [];
     
-    // Start at origin
-    shape.moveTo(0, 0);
-    
-    // Build step pattern
     monthValues.forEach((value, i) => {
       const x = i * UNIT_X;
       const nextX = (i + 1) * UNIT_X;
       const y = value * SCALE_Y;
       
       // Step up to current value
-      shape.lineTo(x, y);
+      points.push([x, y, zPosition]);
       // Horizontal to next month
-      shape.lineTo(nextX, y);
+      points.push([nextX, y, zPosition]);
     });
     
-    // Close shape back to baseline
-    shape.lineTo(monthValues.length * UNIT_X, 0);
-    shape.lineTo(0, 0);
+    return points;
+  }, [monthValues, zPosition]);
 
-    const extrudeSettings = {
-      steps: 1,
-      depth: AREA_DEPTH,
-      bevelEnabled: false
-    };
+  // Check if there's any non-zero data
+  const hasData = monthValues.some(v => v > 0);
+  if (!hasData) return null;
 
-    return new THREE.ExtrudeGeometry(shape, extrudeSettings);
-  }, [monthValues]);
+  return (
+    <Line
+      points={linePoints}
+      color={color}
+      lineWidth={isHovered ? LINE_WIDTH * 1.5 : LINE_WIDTH}
+      transparent
+      opacity={isHovered ? 1 : 0.85}
+    />
+  );
+};
 
+// Invisible hit area for mouse detection
+interface HitAreaProps {
+  monthValues: number[];
+  zPosition: number;
+  aspType: string;
+  months: string[];
+  category: string;
+  color: string;
+  onHover: (data: TooltipData | null) => void;
+  setHoveredType: (type: string | null) => void;
+}
+
+const HitArea: React.FC<HitAreaProps> = ({
+  monthValues,
+  zPosition,
+  aspType,
+  months,
+  category,
+  color,
+  onHover,
+  setHoveredType
+}) => {
   const handlePointerOver = useCallback((e: any) => {
     e.stopPropagation?.();
-    setHovered(true);
+    setHoveredType(aspType);
     
-    // Find which month segment was hovered based on x position
     const point = e.point;
     const monthIdx = Math.floor(point.x / UNIT_X);
     const clampedIdx = Math.max(0, Math.min(monthIdx, months.length - 1));
@@ -112,12 +133,12 @@ const StepAreaMesh: React.FC<StepAreaMeshProps> = ({
       category,
       color
     });
-  }, [months, aspType, monthValues, category, color, onHover]);
+  }, [months, aspType, monthValues, category, color, onHover, setHoveredType]);
 
   const handlePointerOut = useCallback(() => {
-    setHovered(false);
+    setHoveredType(null);
     onHover(null);
-  }, [onHover]);
+  }, [onHover, setHoveredType]);
 
   const handlePointerMove = useCallback((e: any) => {
     e.stopPropagation?.();
@@ -134,27 +155,22 @@ const StepAreaMesh: React.FC<StepAreaMeshProps> = ({
     });
   }, [months, aspType, monthValues, category, color, onHover]);
 
-  // Check if there's any non-zero data
   const hasData = monthValues.some(v => v > 0);
   if (!hasData) return null;
 
+  // Create a thin invisible plane for hit detection
+  const width = months.length * UNIT_X;
+  const maxY = Math.max(...monthValues) * SCALE_Y;
+  
   return (
     <mesh
-      ref={meshRef}
-      geometry={geometry}
-      position={[0, 0, zPosition]}
+      position={[width / 2, maxY / 2, zPosition]}
       onPointerOver={handlePointerOver}
       onPointerOut={handlePointerOut}
       onPointerMove={handlePointerMove}
     >
-      <meshStandardMaterial
-        color={color}
-        emissive={hovered ? color : "#000000"}
-        emissiveIntensity={hovered ? 0.4 : 0}
-        transparent
-        opacity={hovered ? 1 : 0.85}
-        side={THREE.DoubleSide}
-      />
+      <planeGeometry args={[width, Math.max(maxY, 0.5)]} />
+      <meshBasicMaterial transparent opacity={0} />
     </mesh>
   );
 };
@@ -197,7 +213,8 @@ interface ChartSceneProps {
 }
 
 const ChartScene: React.FC<ChartSceneProps> = ({ data, visibleTypes, onHover }) => {
-  const { months, aspTypes, matrix, totalPerMonth, todayMonthIndex } = data;
+  const { months, aspTypes, matrix, todayMonthIndex } = data;
+  const [hoveredType, setHoveredType] = useState<string | null>(null);
 
   // Calculate max height for scaling
   const maxRisk = Math.max(...matrix.flat(), 1);
@@ -219,18 +236,30 @@ const ChartScene: React.FC<ChartSceneProps> = ({ data, visibleTypes, onHover }) 
 
   return (
     <group position={[-centerX, 0, -centerZ]}>
-      {/* Step area meshes for each visible ASP type */}
+      {/* Step line meshes for each visible ASP type */}
       {visibleTypeData.map(({ type, originalIndex }, visibleIdx) => (
-        <StepAreaMesh
-          key={type.name}
-          monthValues={matrix[originalIndex]}
-          color={type.color}
-          zPosition={visibleIdx * GAP_Z}
-          aspType={type.name}
-          months={months}
-          category={type.category}
-          onHover={onHover}
-        />
+        <React.Fragment key={type.name}>
+          <StepLineMesh
+            monthValues={matrix[originalIndex]}
+            color={type.color}
+            zPosition={visibleIdx * GAP_Z}
+            aspType={type.name}
+            months={months}
+            category={type.category}
+            onHover={onHover}
+            isHovered={hoveredType === type.name}
+          />
+          <HitArea
+            monthValues={matrix[originalIndex]}
+            zPosition={visibleIdx * GAP_Z}
+            aspType={type.name}
+            months={months}
+            category={type.category}
+            color={type.color}
+            onHover={onHover}
+            setHoveredType={setHoveredType}
+          />
+        </React.Fragment>
       ))}
 
       {/* Today marker */}
