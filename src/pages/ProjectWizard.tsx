@@ -21,6 +21,7 @@ import { CriticalAssetsStep } from "@/components/wizard/CriticalAssetsStep";
 import { WaterSystemsStep } from "@/components/wizard/WaterSystemsStep";
 
 import { ProcessesStep } from "@/components/wizard/ProcessesStep";
+import { RiskTimelineChart3D } from "@/components/wizard/RiskTimelineChart3D";
 import { AWPEditModal } from "@/components/wizard/AWPEditModal";
 import { RepositoryConnectionDialog } from "@/components/wizard/RepositoryConnectionDialog";
 import { MitigationResponsePlanStep } from "@/components/wizard/MitigationResponsePlanStep";
@@ -338,7 +339,32 @@ const ProjectWizardContent = () => {
     }
   });
 
-  // Get project duration in months for cost calculation
+  // Fetch ASP P x I values for risk timeline chart
+  const { data: aspPIValues = [] } = useQuery({
+    queryKey: ['asp-pi-values'],
+    queryFn: async () => {
+      const [assetsRes, systemsRes, processesRes] = await Promise.all([
+        supabase.from('critical_assets').select('name, probability, impact').eq('is_active', true),
+        supabase.from('water_systems').select('name, probability, impact').eq('is_active', true),
+        supabase.from('processes').select('name, probability, impact').eq('is_active', true)
+      ]);
+      
+      const result: Array<{ name: string; category: string; probability: number; impact: number }> = [];
+      
+      (assetsRes.data || []).forEach(a => {
+        result.push({ name: a.name, category: 'asset', probability: a.probability, impact: a.impact });
+      });
+      (systemsRes.data || []).forEach(s => {
+        result.push({ name: s.name, category: 'water_system', probability: s.probability, impact: s.impact });
+      });
+      (processesRes.data || []).forEach(p => {
+        result.push({ name: p.name, category: 'process', probability: p.probability, impact: p.impact });
+      });
+      
+      return result;
+    }
+  });
+
   const projectDurationMonths = useMemo(() => {
     const startDate = projectData.construction_start_date;
     const endDate = projectData.construction_end_date;
@@ -1502,6 +1528,16 @@ const ProjectWizardContent = () => {
                       driveAccessToken={driveAccessToken}
                       riskTolerance={riskTolerance}
                       onManualControlToggle={handleManualControlToggle}
+                    />
+                  </div>
+                  
+                  {/* Risk Timeline 3D Chart */}
+                  <div className="space-y-4 pt-6 border-t">
+                    <h3 className="text-md font-medium">Risk Timeline</h3>
+                    <RiskTimelineChart3D 
+                      analysisItems={analysisItems}
+                      projectData={projectData}
+                      aspPIValues={aspPIValues}
                     />
                   </div>
                   
