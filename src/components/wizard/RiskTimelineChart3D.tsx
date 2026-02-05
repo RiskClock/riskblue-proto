@@ -12,7 +12,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Separator } from "@/components/ui/separator";
 import { format, parseISO } from "date-fns";
 import * as THREE from "three";
-import { Maximize2 } from "lucide-react";
+import { Maximize2, DollarSign } from "lucide-react";
+import { Slider } from "@/components/ui/slider";
 import {
   LineChart,
   Line as RechartsLine,
@@ -37,6 +38,7 @@ interface ChartSettings {
   endDate: string;
   dataType: 'risk' | 'cost';
   costMode: 'monthly' | 'cumulative';
+  dollarPerRiskPoint: number;
 }
 
 interface RiskTimelineChart3DProps {
@@ -1105,24 +1107,42 @@ const ControlPanel: React.FC<ControlPanelProps> = ({
         </ToggleGroup>
       </div>
 
-      {/* Cost Mode Toggle (only visible when cost is selected) */}
-      {settings.dataType === 'cost' && (
-        <>
-          <Separator orientation="vertical" className="h-6" />
-          <div className="flex items-center gap-1.5">
-            <Label className="text-xs text-muted-foreground">Cost View:</Label>
-            <ToggleGroup 
-              type="single" 
-              value={settings.costMode} 
-              onValueChange={(v) => v && onSettingsChange({ ...settings, costMode: v as 'monthly' | 'cumulative' })}
-              size="sm"
-            >
-              <ToggleGroupItem value="monthly" className="text-xs px-2">Monthly</ToggleGroupItem>
-              <ToggleGroupItem value="cumulative" className="text-xs px-2">Cumulative</ToggleGroupItem>
-            </ToggleGroup>
-          </div>
-        </>
-      )}
+      {/* View Mode Toggle (Monthly/Cumulative) - always visible */}
+      <Separator orientation="vertical" className="h-6" />
+      <div className="flex items-center gap-1.5">
+        <Label className="text-xs text-muted-foreground">View:</Label>
+        <ToggleGroup 
+          type="single" 
+          value={settings.costMode} 
+          onValueChange={(v) => v && onSettingsChange({ ...settings, costMode: v as 'monthly' | 'cumulative' })}
+          size="sm"
+        >
+          <ToggleGroupItem value="monthly" className="text-xs px-2">Monthly</ToggleGroupItem>
+          <ToggleGroupItem value="cumulative" className="text-xs px-2">Cumulative</ToggleGroupItem>
+        </ToggleGroup>
+      </div>
+
+      {/* Dollar Per Risk Point Slider */}
+      <Separator orientation="vertical" className="h-6" />
+      <div className="flex items-center gap-2">
+        <Label className="text-xs text-muted-foreground whitespace-nowrap flex items-center gap-1">
+          <DollarSign className="h-3 w-3" />
+          /Risk Point:
+        </Label>
+        <div className="flex items-center gap-2 w-40">
+          <Slider
+            value={[settings.dollarPerRiskPoint]}
+            onValueChange={(v) => onSettingsChange({ ...settings, dollarPerRiskPoint: v[0] })}
+            min={1000}
+            max={10000}
+            step={500}
+            className="flex-1"
+          />
+          <span className="text-xs font-medium w-12 text-right">
+            ${(settings.dollarPerRiskPoint / 1000).toFixed(1)}k
+          </span>
+        </div>
+      </div>
 
       <Separator orientation="vertical" className="h-6" />
       
@@ -1175,6 +1195,7 @@ export const RiskTimelineChart3D: React.FC<RiskTimelineChart3DProps> = ({
     endDate: projectData.construction_end_date || '',
     dataType: 'risk',
     costMode: 'monthly',
+    dollarPerRiskPoint: 5000,
   }));
 
   // Update date range when project data changes
@@ -1261,10 +1282,61 @@ export const RiskTimelineChart3D: React.FC<RiskTimelineChart3DProps> = ({
   // Determine if derisk should be shown
   const showDerisk = settings.mode === 'total' || settings.dimension === '3d';
 
-  // Y-axis label based on data type
-  const yAxisLabel = settings.dataType === 'cost' 
-    ? (settings.costMode === 'cumulative' ? 'Cumulative Cost ($)' : 'Monthly Cost ($)')
-    : 'Risk Points';
+  // Y-axis label based on data type and cost mode
+  const yAxisLabel = useMemo(() => {
+    if (settings.dataType === 'cost') {
+      return settings.costMode === 'cumulative' ? 'Cumulative Cost ($)' : 'Monthly Cost ($)';
+    }
+    return settings.costMode === 'cumulative' ? 'Cumulative Risk Points' : 'Risk Points';
+  }, [settings.dataType, settings.costMode]);
+
+  // Calculate exposure estimate for display
+  const exposureInfo = useMemo(() => {
+    const currentMonthIndex = data.todayMonthIndex ?? 0;
+    const totalRiskThisMonth = data.totalPerMonth[currentMonthIndex] || 0;
+    const totalDeriskThisMonth = data.totalDeriskPerMonth?.[currentMonthIndex] || 0;
+    const netRisk = Math.max(0, totalRiskThisMonth - totalDeriskThisMonth);
+    const exposureEstimate = netRisk * settings.dollarPerRiskPoint;
+    
+    return {
+      totalRisk: totalRiskThisMonth,
+      totalDerisk: totalDeriskThisMonth,
+      netRisk,
+      exposureEstimate
+    };
+  }, [data.totalPerMonth, data.totalDeriskPerMonth, data.todayMonthIndex, settings.dollarPerRiskPoint]);
+
+  // Exposure info bar component
+  const ExposureInfoBar = () => (
+    <div className="flex flex-wrap items-center gap-4 text-sm px-3 py-2 bg-muted/50 rounded-md border">
+      <div className="flex items-center gap-1.5">
+        <span className="text-muted-foreground">$/Risk Point:</span>
+        <span className="font-semibold">${settings.dollarPerRiskPoint.toLocaleString()}</span>
+      </div>
+      <Separator orientation="vertical" className="h-4" />
+      <div className="flex items-center gap-1.5">
+        <span className="text-muted-foreground">Current Risk:</span>
+        <span className="font-semibold">{exposureInfo.totalRisk.toFixed(0)} pts</span>
+      </div>
+      <Separator orientation="vertical" className="h-4" />
+      <div className="flex items-center gap-1.5">
+        <span className="text-muted-foreground">Mitigated:</span>
+        <span className="font-semibold text-green-600">{exposureInfo.totalDerisk.toFixed(0)} pts</span>
+      </div>
+      <Separator orientation="vertical" className="h-4" />
+      <div className="flex items-center gap-1.5">
+        <span className="text-muted-foreground">Net Risk:</span>
+        <span className="font-semibold">{exposureInfo.netRisk.toFixed(0)} pts</span>
+      </div>
+      <Separator orientation="vertical" className="h-4" />
+      <div className="flex items-center gap-1.5">
+        <span className="text-muted-foreground">Exposure Estimate:</span>
+        <span className={`font-bold ${exposureInfo.netRisk > 0 ? 'text-destructive' : 'text-green-600'}`}>
+          ${exposureInfo.exposureEstimate.toLocaleString()}
+        </span>
+      </div>
+    </div>
+  );
 
   // Render chart content - shared between main and modal
   const renderChartContent = (heightClass: string) => (
@@ -1361,6 +1433,8 @@ export const RiskTimelineChart3D: React.FC<RiskTimelineChart3DProps> = ({
           onFullscreen={toggleFullscreen}
         />
 
+        <ExposureInfoBar />
+
         {renderChartContent('h-[400px]')}
 
         <Legend
@@ -1386,6 +1460,8 @@ export const RiskTimelineChart3D: React.FC<RiskTimelineChart3DProps> = ({
               constructionEndDate={projectData.construction_end_date}
               onFullscreen={() => setIsModalOpen(false)}
             />
+            
+            <ExposureInfoBar />
             
             <div className="flex-1">
               {renderChartContent('h-full')}
