@@ -318,21 +318,29 @@ export const useRiskTimelineData = ({
     });
 
     // Calculate cost data for selected controls
-    // One-time costs are applied to the first month of each class's duration
-    // Monthly costs are applied to each month within the class's duration
+    // One-time costs are applied at the start of each instance's schedule
+    // Monthly costs are applied to each month within the instance's duration
     const calculateCostMatrix = (): { matrix: number[][]; deriskMatrix: number[][] | null } => {
-      // Get total monthly cost and one-time cost from selected controls
-      let totalOneTimeCost = 0;
-      let totalMonthlyCost = 0;
-      
+      // Build control-to-instance lookup: instanceId -> { oneTimeCost, monthlyCost }
+      const controlsByInstance = new Map<string, { oneTimeCost: number; monthlyCost: number }>();
+
       selectedControlIds.forEach(controlId => {
-        const controlName = controlId.includes('::') ? controlId.split('::')[1] : controlId;
+        const parts = controlId.split('::');
+        if (parts.length !== 2) return;
+        
+        const [instanceId, controlName] = parts;
         const normalizedName = controlName.toLowerCase().trim();
         const costs = controlCostLookup.get(normalizedName);
-        if (costs) {
-          totalOneTimeCost += costs.oneTimeCost;
-          totalMonthlyCost += costs.monthlyCost;
+        
+        if (!costs) return;
+        
+        if (!controlsByInstance.has(instanceId)) {
+          controlsByInstance.set(instanceId, { oneTimeCost: 0, monthlyCost: 0 });
         }
+        
+        const instanceCosts = controlsByInstance.get(instanceId)!;
+        instanceCosts.oneTimeCost += costs.oneTimeCost;
+        instanceCosts.monthlyCost += costs.monthlyCost;
       });
 
       const costMatrix: number[][] = sortedClasses.map(classData => {
@@ -341,26 +349,38 @@ export const useRiskTimelineData = ({
         if (!classData.startDate || !classData.endDate) return row;
         if (classData.selectedInstanceCount === 0) return row;
         
-        const startMonth = format(startOfMonth(classData.startDate), "yyyy-MM");
-        const endMonth = format(startOfMonth(classData.endDate), "yyyy-MM");
+        const classStartMonth = format(startOfMonth(classData.startDate), "yyyy-MM");
+        const classEndMonth = format(startOfMonth(classData.endDate), "yyyy-MM");
         
-        const startIdx = months.indexOf(startMonth);
-        const endIdx = months.indexOf(endMonth);
+        const classStartIdx = months.indexOf(classStartMonth);
+        const classEndIdx = months.indexOf(classEndMonth);
         
-        const effectiveStartIdx = startIdx === -1 ? 0 : startIdx;
-        const effectiveEndIdx = endIdx === -1 ? months.length - 1 : endIdx;
+        const effectiveClassStartIdx = classStartIdx === -1 ? 0 : classStartIdx;
+        const effectiveClassEndIdx = classEndIdx === -1 ? months.length - 1 : classEndIdx;
         
-        if (effectiveStartIdx > effectiveEndIdx) return row;
+        if (effectiveClassStartIdx > effectiveClassEndIdx) return row;
         
-        // Proportional cost based on selection ratio
-        const selectionRatio = classData.selectedInstanceCount / classData.instanceCount;
-        const instanceOneTimeCost = totalOneTimeCost * selectionRatio / validClasses.length;
-        const instanceMonthlyCost = totalMonthlyCost * selectionRatio / validClasses.length;
+        // For each instance in this class, apply its costs at the appropriate months
+        classData.instanceIds.forEach(instanceId => {
+          const instanceCosts = controlsByInstance.get(instanceId);
+          if (!instanceCosts) return;
+          
+          // Use class dates for the instance (instance-specific dates could be added later)
+          const instanceStartIdx = effectiveClassStartIdx;
+          const instanceEndIdx = effectiveClassEndIdx;
+          
+          // Add one-time cost only to the instance's start month
+          row[instanceStartIdx] += instanceCosts.oneTimeCost;
+          
+          // Add monthly cost to all months in the instance's range
+          for (let i = instanceStartIdx; i <= instanceEndIdx; i++) {
+            row[i] += instanceCosts.monthlyCost;
+          }
+        });
         
-        for (let i = effectiveStartIdx; i <= effectiveEndIdx; i++) {
-          // Add one-time cost only to first month
-          const oneTime = i === effectiveStartIdx ? instanceOneTimeCost : 0;
-          row[i] = Number((oneTime + instanceMonthlyCost).toFixed(2));
+        // Round values for cleaner display
+        for (let i = 0; i < row.length; i++) {
+          row[i] = Number(row[i].toFixed(2));
         }
         
         return row;
