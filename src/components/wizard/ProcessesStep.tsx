@@ -248,9 +248,23 @@ export const ProcessesStep = ({
   useEffect(() => {
     if (!processItems.length || !controls.length) return;
     
-    // Run on initial load (when prevRef is null) OR when tolerance actually changes
+    // Skip if tolerance hasn't changed
     if (prevRiskToleranceRef.current === parentRiskTolerance) return;
+    
+    const isInitialMount = prevRiskToleranceRef.current === null;
     prevRiskToleranceRef.current = parentRiskTolerance;
+    
+    // On initial mount, PRESERVE existing saved selections instead of re-filtering
+    // Only apply package filtering when user actively changes the tolerance
+    if (isInitialMount) {
+      const existingInstances = data.selectedProcessInstances || [];
+      const existingControls = data.selectedProcessControls || [];
+      
+      // If user has saved selections, preserve them and don't re-filter
+      if (existingInstances.length > 0 || existingControls.length > 0) {
+        return;
+      }
+    }
     
     // Mark that this update is from risk tolerance filter
     isRiskToleranceUpdateRef.current = true;
@@ -293,7 +307,7 @@ export const ProcessesStep = ({
     setTimeout(() => {
       isRiskToleranceUpdateRef.current = false;
     }, 100);
-  }, [parentRiskTolerance, processItems, processRiskToleranceMap, controlRiskToleranceMap, controls.length, updateFields]);
+  }, [parentRiskTolerance, processItems, processRiskToleranceMap, controlRiskToleranceMap, controls.length, updateFields, data.selectedProcessInstances, data.selectedProcessControls]);
 
   // Auto-save with debounce - only when values actually changed
   useEffect(() => {

@@ -353,9 +353,23 @@ export const CriticalAssetsStep = ({
   useEffect(() => {
     if (!assetItems.length || !controls.length) return;
     
-    // Run on initial load (when prevRef is null) OR when tolerance actually changes
+    // Skip if tolerance hasn't changed
     if (prevRiskToleranceRef.current === parentRiskTolerance) return;
+    
+    const isInitialMount = prevRiskToleranceRef.current === null;
     prevRiskToleranceRef.current = parentRiskTolerance;
+    
+    // On initial mount, PRESERVE existing saved selections instead of re-filtering
+    // Only apply package filtering when user actively changes the tolerance
+    if (isInitialMount) {
+      const existingInstances = data.selectedAssetInstances || [];
+      const existingControls = data.selectedAssetControls || [];
+      
+      // If user has saved selections, preserve them and don't re-filter
+      if (existingInstances.length > 0 || existingControls.length > 0) {
+        return;
+      }
+    }
     
     // Mark that this update is from risk tolerance filter
     isRiskToleranceUpdateRef.current = true;
@@ -398,7 +412,7 @@ export const CriticalAssetsStep = ({
     setTimeout(() => {
       isRiskToleranceUpdateRef.current = false;
     }, 100);
-  }, [parentRiskTolerance, assetItems, assetRiskToleranceMap, controlRiskToleranceMap, controls.length, updateFields]);
+  }, [parentRiskTolerance, assetItems, assetRiskToleranceMap, controlRiskToleranceMap, controls.length, updateFields, data.selectedAssetInstances, data.selectedAssetControls]);
 
   const handleToggleInstance = useCallback((instanceId: string) => {
     setSelectedInstanceIds(prev => 
