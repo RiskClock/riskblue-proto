@@ -1,116 +1,271 @@
 
 
-## Plan: Fix 7 Issues + Add Cost View Toggle in Risk Timeline Chart
+## Plan: Fix Derisk Calculation + Add Dollar Per Risk Point Slider + UI Improvements
 
-### Summary of Issues Found
+### Issue Summary
 
-| # | Issue | Root Cause | Priority |
-|---|-------|------------|----------|
-| 1 | 3D Y-axis scale doesn't change between Total/By Type | Camera position is fixed; no dynamic scaling or auto-fit | High |
-| 2 | ASP visibility checkbox still doesn't work | Checkbox `onToggle` calls `handleToggleType` but the toggle may be affected by state sync issues | Medium |
-| 3 | Processes don't appear in chart | `mapToProcessName` returns `null` for items that don't match the lookup - the `processes` table has items but `durationCalculator.ts::calculateSystemOrAssetDates` doesn't handle Process category | High |
-| 4 | Derisk always 0 in Total view | `selectedControlIds` contains control names but lookup uses IDs, OR the control points lookup isn't matching due to format differences | High |
-| 5 | Switch between Risk Points vs Cost Estimates | New feature requested | Medium |
-| 6 | Y-axis doesn't show in 3D | No Y-axis visual component rendered in Three.js scene | Medium |
-| 7 | Label Y-axis | Need to add text labels for Y-axis | Low |
+| # | Issue | Root Cause |
+|---|-------|------------|
+| 1 | Derisk points ~7345 vs Risk points ~475 | The derisk calculation sums control points for EVERY selected control instance (e.g., "Spill Kit" selected on 50 instances = 50 x 5 points = 250). Then it distributes this inflated total across ALL classes for EVERY month. This causes massive over-counting. |
+| 2 | Need slider for dollar per risk point ($1k-$10k) | New feature |
+| 3 | Show dollar per risk point + cost estimate in chart | New feature - need to multiply risk points by dollar value |
+| 4 | Monthly vs Cumulative toggle always visible | Currently hidden when dataType is "risk" |
 
 ---
 
-### Detailed Root Cause Analysis
+### Root Cause Analysis: Derisk Calculation Bug
 
-#### Issue 1: 3D Y-axis Scale Doesn't Change
-
-In `ChartScene`, the `SCALE_Y = 0.12` constant is applied uniformly. When switching from "By Type" (values ~15-90 per class) to "Total" (values ~400+), the bars become extremely tall because the same scale is used.
-
-**Solution**: Calculate `SCALE_Y` dynamically based on the maximum value in the current view mode.
-
----
-
-#### Issue 2: ASP Checkbox Not Working
-
-The checkbox calls `handleToggleType(name)` which updates `visibleTypes` state correctly. However, I found that the `useEffect` at lines 1008-1024 adds new types but never removes types. The issue may be that when clicking checkbox, the filtered data in `Chart2D` and `ChartScene` correctly excludes hidden types, but visually something may be resetting.
-
-After review, the toggle logic itself is correct. The issue is likely that the `visibleAspTypes` filter in `Chart2D` works, but if the user is in 3D mode, the `visibleTypes` filter in `ChartScene` also needs to be applied.
-
-Looking at `ChartScene`:
-- Line 367-371: `visibleTypeData` correctly filters by `visibleTypes.has(type.name)`
-- This should work
-
-Need to verify the checkbox `onCheckedChange` handler is correctly wired. The Legend component at line 634 has:
-```tsx
-<Checkbox
-  checked={visibleTypes.has(t.name)}
-  onCheckedChange={() => onToggle(t.name)}
-```
-
-This looks correct. The issue may be a React re-render glitch where the Set comparison causes stale state.
-
-**Solution**: Convert `visibleTypes` from `Set` to array for more predictable React state updates.
-
----
-
-#### Issue 3: Processes Not Appearing
-
-In `useRiskTimelineData.ts`, the `getClassName` function at line 141-146:
+**Current flawed logic (lines 417-422 of useRiskTimelineData.ts):**
 ```typescript
-if (item.category === 'Process') return mapToProcessName(item.name);
+const totalDeriskPoints = selectedControlIds.reduce((sum, controlId) => {
+  const controlName = controlId.includes('::') ? controlId.split('::')[1] : controlId;
+  const normalizedControlName = controlName.toLowerCase().trim();
+  const points = controlPointsLookup.get(normalizedControlName) || 0;
+  return sum + points;
+}, 0);
 ```
 
-`mapToProcessName` (line 174-189 in analysisItemMapper.ts) handles:
-- "Contractor Team"
-- "Water Mitigation Vendor Process"
-- "Mechanical Contractor Process"
-- "Engineering Process"
+Problem: This sums control points for EVERY control-instance pair selected. If "Spill Kit" (5 points) is selected on 30 instances, it adds 150 points.
 
-But in `calculateSystemOrAssetDates` (durationCalculator.ts line 255-346), there's **no handling for Process category**. Processes fall through and return `{ startDate: null, endDate: null }`.
+**Correct logic**: Derisk should equal risk when all controls are selected.
 
-Since processes span the whole project (per user confirmation), we need to add Process handling.
+The proper approach:
+1. For each class, calculate how many instances are selected
+2. For each selected instance, calculate what fraction of its risk is mitigated based on selected controls
+3. Sum this per month within the class's active date range
 
-**Solution**: Add Process handling in `calculateSystemOrAssetDates` to use construction_start_date to construction_end_date.
+The derisk for an instance should equal its risk points when ALL of its controls are selected. Since risk = P x I per instance per month, derisk = P x I when all controls selected.
+
+**Fix approach:**
+- For each class: derisk = (selected_instances / total_instances) x class_risk_points x control_coverage_ratio
+- Where control_coverage_ratio = (selected controls for this class) / (total controls for this class)
+
+Or more simply: each instance's risk is P x I. When all controls on that instance are selected, derisk = P x I for that instance. So:
+- deriskPerMonth[class] = sum of (P x I) for each selected instance in class, multiplied by fraction of controls selected
 
 ---
 
-#### Issue 4: Derisk Always 0
+### Detailed Implementation
 
-In `useRiskTimelineData.ts`, the derisk calculation at lines 336-376:
+#### Fix 1: Correct Derisk Calculation
 
-1. Line 337-343: Calculates `totalDeriskPoints` by iterating over `selectedControlIds`
-2. Line 340: `controlPointsLookup.get(normalizedControlId)` - the lookup is keyed by normalized control name
+**File:** `src/hooks/useRiskTimelineData.ts`
 
-The issue is that `selectedControlIds` passed from `RiskTimelineChart3D` at line 993-996:
+Change the derisk logic to calculate per-class:
+
 ```typescript
-selectedControlIds: [
-  ...(projectData.selectedAssetControls || []),
-  ...(projectData.selectedSystemControls || []),
-  ...(projectData.selectedProcessControls || [])
-]
+// Build derisk matrix (based on selected instances and controls)
+if (selectedInstanceIds.length > 0 && selectedControlIds.length > 0) {
+  deriskMatrix = sortedClasses.map((classData, classIdx) => {
+    const row: number[] = new Array(months.length).fill(0);
+    
+    if (!classData.startDate || !classData.endDate) return row;
+    if (classData.selectedInstanceCount === 0) return row;
+    
+    const startMonth = format(startOfMonth(classData.startDate), "yyyy-MM");
+    const endMonth = format(startOfMonth(classData.endDate), "yyyy-MM");
+    
+    const startIdx = months.indexOf(startMonth);
+    const endIdx = months.indexOf(endMonth);
+    
+    const effectiveStartIdx = startIdx === -1 ? 0 : startIdx;
+    const effectiveEndIdx = endIdx === -1 ? months.length - 1 : endIdx;
+    
+    if (effectiveStartIdx > effectiveEndIdx) return row;
+    
+    // Find instances that belong to this class
+    const classInstanceIds = classData.instanceIds;
+    
+    // For each selected instance in this class, calculate derisk based on selected controls
+    let classSelectedDerisk = 0;
+    
+    classInstanceIds.forEach(instanceId => {
+      if (!selectedInstanceIds.includes(instanceId)) return;
+      
+      // Find the instance to get its controls
+      const instance = analysisItems.find(item => item.id === instanceId);
+      if (!instance) return;
+      
+      const instanceControls = instance.controls || [];
+      if (instanceControls.length === 0) return;
+      
+      // Count how many of this instance's controls are selected
+      const selectedControlCount = instanceControls.filter(controlName => {
+        const controlId = `${instanceId}::${controlName}`;
+        return selectedControlIds.includes(controlId);
+      }).length;
+      
+      // Control coverage ratio for this instance
+      const controlRatio = selectedControlCount / instanceControls.length;
+      
+      // Instance derisk = P x I x controlRatio
+      classSelectedDerisk += classData.riskPoints * controlRatio;
+    });
+    
+    // Apply to each month in the class's range
+    for (let i = effectiveStartIdx; i <= effectiveEndIdx; i++) {
+      row[i] = Math.round(classSelectedDerisk * 100) / 100;
+    }
+    
+    return row;
+  });
+}
 ```
 
-These are control IDs in format `instanceId::controlName` (from `getControlId`), NOT control names!
-
-**Root Cause**: The control ID format is `"{instanceId}::{controlName}"` but the lookup expects just the control name.
-
-**Solution**: Parse the control name from the composite ID before lookup.
+This ensures:
+- When all instances are selected with all their controls: derisk = risk
+- Partial selections scale proportionally
 
 ---
 
-#### Issue 5: Risk Points vs Cost Estimates Toggle
+#### Fix 2: Add Dollar Per Risk Point Slider
 
-Add a new toggle in the control panel to switch Y-axis between:
-- **Risk Points**: Current behavior (P x I values per month)
-- **Monthly Cost**: Monthly maintenance cost for selected controls
-- **Cumulative Cost**: Running total of costs
+**File:** `src/components/wizard/RiskTimelineChart3D.tsx`
 
-For cost calculation, we'll use the `calculateTieredControlCost` logic from `costCalculator.ts`.
+Add to ChartSettings interface:
+```typescript
+interface ChartSettings {
+  // ... existing
+  dollarPerRiskPoint: number;  // New: $1000 to $10000
+}
+```
+
+Add state initialization:
+```typescript
+const [settings, setSettings] = useState<ChartSettings>(() => ({
+  // ... existing
+  dollarPerRiskPoint: 5000,  // Default $5000
+}));
+```
+
+Add slider to ControlPanel:
+```typescript
+import { Slider } from "@/components/ui/slider";
+
+// Inside ControlPanel, after Date Range:
+<Separator orientation="vertical" className="h-6" />
+
+<div className="flex items-center gap-2">
+  <Label className="text-xs text-muted-foreground whitespace-nowrap">$/Risk Point:</Label>
+  <div className="flex items-center gap-2 w-48">
+    <Slider
+      value={[settings.dollarPerRiskPoint]}
+      onValueChange={(v) => onSettingsChange({ ...settings, dollarPerRiskPoint: v[0] })}
+      min={1000}
+      max={10000}
+      step={500}
+      className="flex-1"
+    />
+    <span className="text-xs font-medium w-14 text-right">
+      ${(settings.dollarPerRiskPoint / 1000).toFixed(1)}k
+    </span>
+  </div>
+</div>
+```
 
 ---
 
-#### Issue 6 & 7: Y-Axis Not Visible & Labeling
+#### Fix 3: Display Dollar Amount and Cost Estimate in Chart
 
-Currently, the 3D scene has no Y-axis geometry. Need to add:
-- A vertical line (Y-axis)
-- Tick marks at intervals
-- Labels showing values
+**File:** `src/components/wizard/RiskTimelineChart3D.tsx`
+
+When dataType is "risk", we can also show the dollar equivalent based on the slider.
+
+Add a display box above the chart:
+```typescript
+// Calculate cost estimate
+const totalRiskThisMonth = data.totalPerMonth[data.todayMonthIndex ?? 0] || 0;
+const totalDeriskThisMonth = data.totalDeriskPerMonth?.[data.todayMonthIndex ?? 0] || 0;
+const netRisk = Math.max(0, totalRiskThisMonth - totalDeriskThisMonth);
+const costEstimate = netRisk * settings.dollarPerRiskPoint;
+
+// In render, add info box:
+<div className="flex items-center gap-4 text-sm mb-2">
+  <div className="flex items-center gap-2">
+    <span className="text-muted-foreground">$/Risk Point:</span>
+    <span className="font-semibold">${settings.dollarPerRiskPoint.toLocaleString()}</span>
+  </div>
+  {settings.dataType === 'risk' && (
+    <>
+      <Separator orientation="vertical" className="h-4" />
+      <div className="flex items-center gap-2">
+        <span className="text-muted-foreground">Net Risk:</span>
+        <span className="font-semibold">{netRisk.toFixed(0)} pts</span>
+      </div>
+      <Separator orientation="vertical" className="h-4" />
+      <div className="flex items-center gap-2">
+        <span className="text-muted-foreground">Exposure Estimate:</span>
+        <span className="font-semibold text-destructive">${costEstimate.toLocaleString()}</span>
+      </div>
+    </>
+  )}
+</div>
+```
+
+---
+
+#### Fix 4: Monthly vs Cumulative Toggle Always Visible
+
+**File:** `src/components/wizard/RiskTimelineChart3D.tsx`
+
+Currently at line 1109, the cost mode toggle is wrapped in:
+```typescript
+{settings.dataType === 'cost' && (
+```
+
+Change to always show it (for both risk and cost modes):
+```typescript
+{/* Points/Cost Mode Toggle - always visible */}
+<Separator orientation="vertical" className="h-6" />
+<div className="flex items-center gap-1.5">
+  <Label className="text-xs text-muted-foreground">View:</Label>
+  <ToggleGroup 
+    type="single" 
+    value={settings.costMode} 
+    onValueChange={(v) => v && onSettingsChange({ ...settings, costMode: v as 'monthly' | 'cumulative' })}
+    size="sm"
+  >
+    <ToggleGroupItem value="monthly" className="text-xs px-2">Monthly</ToggleGroupItem>
+    <ToggleGroupItem value="cumulative" className="text-xs px-2">Cumulative</ToggleGroupItem>
+  </ToggleGroup>
+</div>
+```
+
+**File:** `src/hooks/useRiskTimelineData.ts`
+
+Update the risk matrix calculation to support cumulative mode:
+```typescript
+// After building the risk matrix, apply cumulative if needed
+if (dataType === 'risk' && costMode === 'cumulative') {
+  matrix = matrix.map(row => {
+    let runningTotal = 0;
+    return row.map(v => {
+      runningTotal += v;
+      return runningTotal;
+    });
+  });
+  if (deriskMatrix) {
+    deriskMatrix = deriskMatrix.map(row => {
+      let runningTotal = 0;
+      return row.map(v => {
+        runningTotal += v;
+        return runningTotal;
+      });
+    });
+  }
+}
+```
+
+Also update the Y-axis label logic:
+```typescript
+// In RiskTimelineChart3D.tsx
+const yAxisLabel = useMemo(() => {
+  if (settings.dataType === 'cost') {
+    return settings.costMode === 'cumulative' ? 'Cumulative Cost ($)' : 'Monthly Cost ($)';
+  }
+  return settings.costMode === 'cumulative' ? 'Cumulative Risk Points' : 'Risk Points';
+}, [settings.dataType, settings.costMode]);
+```
 
 ---
 
@@ -118,201 +273,29 @@ Currently, the 3D scene has no Y-axis geometry. Need to add:
 
 | File | Changes |
 |------|---------|
-| `src/components/wizard/RiskTimelineChart3D.tsx` | Issues 1, 2, 5, 6, 7 |
-| `src/hooks/useRiskTimelineData.ts` | Issues 3, 4, 5 |
-| `src/lib/durationCalculator.ts` | Issue 3 |
-
----
-
-### Technical Implementation
-
-#### Issue 1: Dynamic Y-Axis Scaling
-
-```typescript
-// In ChartScene, calculate dynamic scale based on max value in current mode
-const maxValue = useMemo(() => {
-  if (mode === 'total') {
-    return Math.max(...totalPerMonth, 1);
-  }
-  // By Type mode: find max across visible types
-  let max = 1;
-  visibleTypeData.forEach(({ originalIndex }) => {
-    const rowMax = Math.max(...matrix[originalIndex]);
-    if (rowMax > max) max = rowMax;
-  });
-  return max;
-}, [mode, totalPerMonth, visibleTypeData, matrix]);
-
-// Dynamic scale to keep chart in reasonable viewport (target max height ~6 units)
-const dynamicScaleY = 6 / maxValue;
-```
-
-Also, use Three.js `OrbitControls` auto-fit or adjust camera target based on content bounds.
-
----
-
-#### Issue 2: Convert visibleTypes to Array
-
-Replace `Set<string>` with `string[]` for more predictable React state:
-
-```typescript
-// Before:
-const [visibleTypes, setVisibleTypes] = useState<Set<string>>(...)
-
-// After:
-const [visibleTypes, setVisibleTypes] = useState<string[]>([]);
-
-// Toggle becomes:
-const handleToggleType = useCallback((name: string) => {
-  setVisibleTypes(prev => 
-    prev.includes(name) 
-      ? prev.filter(n => n !== name) 
-      : [...prev, name]
-  );
-}, []);
-
-// Check becomes:
-visibleTypes.includes(t.name) instead of visibleTypes.has(t.name)
-```
-
----
-
-#### Issue 3: Add Process Duration Handling
-
-In `src/lib/durationCalculator.ts`, add to `calculateSystemOrAssetDates`:
-
-```typescript
-// Processes - span entire construction period
-else if (name === "Contractor Team" || name === "Water Mitigation Vendor Process" || 
-         name === "Mechanical Contractor Process" || name === "Engineering Process") {
-  if (timeline.construction_start_date && timeline.construction_end_date) {
-    startDate = parseISO(timeline.construction_start_date);
-    endDate = parseISO(timeline.construction_end_date);
-    calculatedFrom = "Construction start to Construction end";
-  }
-}
-```
-
----
-
-#### Issue 4: Fix Control ID Parsing
-
-In `useRiskTimelineData.ts`, parse control name from composite ID:
-
-```typescript
-// Before:
-const normalizedControlId = controlId.toLowerCase().trim();
-const points = controlPointsLookup.get(normalizedControlId) || 0;
-
-// After:
-// Extract control name from composite ID (format: "instanceId::controlName")
-const controlName = controlId.includes('::') 
-  ? controlId.split('::')[1] 
-  : controlId;
-const normalizedControlName = controlName.toLowerCase().trim();
-const points = controlPointsLookup.get(normalizedControlName) || 0;
-```
-
----
-
-#### Issue 5: Cost View Toggle
-
-1. Add new interface for cost data:
-```typescript
-interface CostTimelineDataInput extends RiskTimelineDataInput {
-  controlCosts?: Array<{ name: string; oneTimeCost: number; monthlyCost: number }>;
-  pricingTiers?: PricingTier[];
-}
-
-interface RiskTimelineData {
-  // ... existing fields
-  costMatrix?: number[][];  // Monthly costs per ASP class
-  totalCostPerMonth?: number[];
-}
-```
-
-2. Add toggle in ControlPanel:
-```typescript
-<div className="flex items-center gap-1.5">
-  <Label className="text-xs text-muted-foreground">Data:</Label>
-  <ToggleGroup type="single" value={settings.dataType} onValueChange={...}>
-    <ToggleGroupItem value="risk">Risk Points</ToggleGroupItem>
-    <ToggleGroupItem value="cost">Cost ($)</ToggleGroupItem>
-  </ToggleGroup>
-</div>
-```
-
-3. Calculate monthly costs per ASP class based on selected controls, using `calculateTieredControlCost`.
-
-4. When `dataType === 'cost'`, use `costMatrix` instead of `matrix`.
-
----
-
-#### Issue 6 & 7: 3D Y-Axis with Labels
-
-Add a new component `YAxisMesh`:
-
-```typescript
-const YAxisMesh: React.FC<{ maxValue: number; scaleY: number }> = ({ maxValue, scaleY }) => {
-  // Calculate nice tick values (e.g., 0, 100, 200, 300, 400)
-  const tickInterval = Math.ceil(maxValue / 5 / 50) * 50; // Round to nearest 50
-  const ticks = [];
-  for (let v = 0; v <= maxValue; v += tickInterval) {
-    ticks.push(v);
-  }
-  
-  return (
-    <group position={[-0.5, 0, 0]}>
-      {/* Y-axis line */}
-      <Line points={[[0, 0, 0], [0, maxValue * scaleY, 0]]} color="#666" lineWidth={2} />
-      
-      {/* Tick marks and labels */}
-      {ticks.map(v => (
-        <group key={v} position={[0, v * scaleY, 0]}>
-          <Line points={[[-0.1, 0, 0], [0.1, 0, 0]]} color="#666" lineWidth={1} />
-          <Text position={[-0.3, 0, 0]} fontSize={0.15} color="#666" anchorX="right">
-            {v}
-          </Text>
-        </group>
-      ))}
-      
-      {/* Y-axis label */}
-      <Text 
-        position={[-0.8, maxValue * scaleY / 2, 0]} 
-        rotation={[0, 0, Math.PI / 2]}
-        fontSize={0.2} 
-        color="#444"
-      >
-        Risk Points
-      </Text>
-    </group>
-  );
-};
-```
+| `src/hooks/useRiskTimelineData.ts` | Fix derisk calculation, add cumulative mode for risk points |
+| `src/components/wizard/RiskTimelineChart3D.tsx` | Add slider, cost estimate display, always-visible view toggle |
 
 ---
 
 ### Implementation Order
 
-1. **Issue 4**: Fix control ID parsing (critical for derisk to work)
-2. **Issue 3**: Add Process duration handling
-3. **Issue 1**: Dynamic Y-axis scaling for 3D
-4. **Issue 2**: Convert visibleTypes to array
-5. **Issues 6 & 7**: Add Y-axis visualization with labels
-6. **Issue 5**: Add cost view toggle
+1. Fix derisk calculation in `useRiskTimelineData.ts`
+2. Add `dollarPerRiskPoint` to settings and slider UI
+3. Add cost estimate display
+4. Make Monthly/Cumulative toggle always visible
+5. Support cumulative mode for risk points
 
 ---
 
-### UI Mockup
+### Expected Behavior After Fix
 
-After implementation, the control panel will look like:
+When testing with all controls selected:
+- **Before**: Derisk = 7345.8, Risk = 475 (wrong)
+- **After**: Derisk = 475, Risk = 475 (correct - they should match)
 
-```
-View: [3D|2D] | Mode: [Total|By Type] | Style: [Line|Bars|...] | Data: [Risk|Cost] | From: [____] To: [____] | [⛶]
-```
-
-The 3D chart will have:
-- Visible Y-axis on the left with tick marks
-- Label "Risk Points" or "Cost ($)" based on selected data type
-- Dynamic scaling so Total mode doesn't overflow
+New UI elements:
+- Slider bar: "$1k - $10k per risk point" with current value displayed
+- Info bar showing: "$/Risk Point: $5,000 | Net Risk: 0 pts | Exposure Estimate: $0"
+- Monthly/Cumulative toggle visible for both Risk and Cost modes
 
