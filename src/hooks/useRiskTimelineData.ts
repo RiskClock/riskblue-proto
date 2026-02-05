@@ -48,6 +48,7 @@ export interface RiskTimelineData {
   deriskMatrix: number[][] | null;
   totalPerMonth: number[];
   totalDeriskPerMonth: number[] | null;
+  totalControlsCostPerMonth: number[] | null;
   minDate: Date | null;
   maxDate: Date | null;
   hasData: boolean;
@@ -122,6 +123,7 @@ export const useRiskTimelineData = ({
         deriskMatrix: null,
         totalPerMonth: [],
         totalDeriskPerMonth: null,
+        totalControlsCostPerMonth: null,
         minDate: null,
         maxDate: null,
         hasData: false,
@@ -234,6 +236,7 @@ export const useRiskTimelineData = ({
         deriskMatrix: null,
         totalPerMonth: [],
         totalDeriskPerMonth: null,
+        totalControlsCostPerMonth: null,
         minDate: null,
         maxDate: null,
         hasData: false,
@@ -521,6 +524,84 @@ export const useRiskTimelineData = ({
       });
     }
 
+    // Calculate controls cost per month (one-time in first month + monthly ongoing)
+    let totalControlsCostPerMonth: number[] | null = null;
+    if (selectedControlIds.length > 0 && controlsData.length > 0) {
+      // Initialize with zeros
+      const costPerMonth = months.map(() => 0);
+      
+      // Track which controls we've already added one-time costs for (by control name)
+      const oneTimeCostAdded = new Set<string>();
+      
+      // For each selected control, add costs to appropriate months
+      selectedControlIds.forEach(controlId => {
+        // controlId format: "instanceId::controlName"
+        const parts = controlId.split('::');
+        if (parts.length !== 2) return;
+        
+        const [instanceId, controlName] = parts;
+        const normalizedControlName = controlName.toLowerCase().trim();
+        
+        // Find the control's cost data
+        const controlCost = controlsData.find(c => c.name.toLowerCase().trim() === normalizedControlName);
+        if (!controlCost) return;
+        
+        // Find the instance to get its class duration
+        const instance = analysisItems.find(item => item.id === instanceId);
+        if (!instance) return;
+        
+        // Get the class for this instance
+        const className = instance.category === 'Asset' 
+          ? mapToAssetName(instance.name)
+          : instance.category === 'Water System' 
+            ? mapToWaterSystemName(instance.name)
+            : mapToProcessName(instance.name);
+        
+        if (!className) return;
+        
+        // Find class data to get date range
+        const normalizedClassName = normalizeClassName(className);
+        const classData = classDataMap.get(normalizedClassName);
+        if (!classData || !classData.startDate || !classData.endDate) return;
+        
+        const startMonth = format(startOfMonth(classData.startDate), "yyyy-MM");
+        const endMonth = format(startOfMonth(classData.endDate), "yyyy-MM");
+        
+        const startIdx = months.indexOf(startMonth);
+        const endIdx = months.indexOf(endMonth);
+        
+        const effectiveStartIdx = startIdx === -1 ? 0 : startIdx;
+        const effectiveEndIdx = endIdx === -1 ? months.length - 1 : endIdx;
+        
+        if (effectiveStartIdx > effectiveEndIdx) return;
+        
+        // Add monthly cost to all months in range
+        const monthlyCost = controlCost.monthlyCost || 0;
+        for (let i = effectiveStartIdx; i <= effectiveEndIdx; i++) {
+          costPerMonth[i] += monthlyCost;
+        }
+        
+        // Add one-time cost only once per unique control name (not per instance)
+        const oneTimeCost = controlCost.oneTimeCost || 0;
+        if (oneTimeCost > 0 && !oneTimeCostAdded.has(normalizedControlName)) {
+          // Add to first month of first instance using this control
+          costPerMonth[effectiveStartIdx] += oneTimeCost;
+          oneTimeCostAdded.add(normalizedControlName);
+        }
+      });
+      
+      // Apply cumulative mode if needed
+      if (costMode === 'cumulative') {
+        let running = 0;
+        totalControlsCostPerMonth = costPerMonth.map(v => {
+          running += v;
+          return running;
+        });
+      } else {
+        totalControlsCostPerMonth = costPerMonth;
+      }
+    }
+
     // Calculate today's month index
     const today = new Date();
     const todayMonth = format(startOfMonth(today), "yyyy-MM");
@@ -534,6 +615,7 @@ export const useRiskTimelineData = ({
       deriskMatrix,
       totalPerMonth,
       totalDeriskPerMonth,
+      totalControlsCostPerMonth,
       minDate,
       maxDate,
       hasData: true,
