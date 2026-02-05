@@ -479,9 +479,23 @@ export const WaterSystemsStep = ({
   useEffect(() => {
     if (!systemItems.length || !controls.length) return;
     
-    // Run on initial load (when prevRef is null) OR when tolerance actually changes
+    // Skip if tolerance hasn't changed
     if (prevRiskToleranceRef.current === parentRiskTolerance) return;
+    
+    const isInitialMount = prevRiskToleranceRef.current === null;
     prevRiskToleranceRef.current = parentRiskTolerance;
+    
+    // On initial mount, PRESERVE existing saved selections instead of re-filtering
+    // Only apply package filtering when user actively changes the tolerance
+    if (isInitialMount) {
+      const existingInstances = data.selectedSystemInstances || [];
+      const existingControls = data.selectedSystemControls || [];
+      
+      // If user has saved selections, preserve them and don't re-filter
+      if (existingInstances.length > 0 || existingControls.length > 0) {
+        return;
+      }
+    }
     
     // Mark that this update is from risk tolerance filter
     isRiskToleranceUpdateRef.current = true;
@@ -524,7 +538,7 @@ export const WaterSystemsStep = ({
     setTimeout(() => {
       isRiskToleranceUpdateRef.current = false;
     }, 100);
-  }, [parentRiskTolerance, systemItems, systemRiskToleranceMap, controlRiskToleranceMap, controls.length, updateFields]);
+  }, [parentRiskTolerance, systemItems, systemRiskToleranceMap, controlRiskToleranceMap, controls.length, updateFields, data.selectedSystemInstances, data.selectedSystemControls]);
 
   if (isLoading || isLoadingCustom) {
     return (
