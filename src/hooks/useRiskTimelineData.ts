@@ -130,10 +130,12 @@ export const useRiskTimelineData = ({
       };
     }
 
-    // Build P x I lookup
+    // Build P x I lookup - coerce nulls to defaults to prevent NaN
     const piLookup = new Map<string, { probability: number; impact: number }>();
     aspPIValues.forEach(v => {
-      piLookup.set(normalizeClassName(v.name), { probability: v.probability, impact: v.impact });
+      const probability = Number(v.probability) || 3;
+      const impact = Number(v.impact) || 3;
+      piLookup.set(normalizeClassName(v.name), { probability, impact });
     });
 
     // Build control points lookup with normalized keys
