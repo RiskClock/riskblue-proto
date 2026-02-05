@@ -355,7 +355,7 @@ export const useRiskTimelineData = ({
         for (let i = effectiveStartIdx; i <= effectiveEndIdx; i++) {
           // Add one-time cost only to first month
           const oneTime = i === effectiveStartIdx ? instanceOneTimeCost : 0;
-          row[i] = Math.round((oneTime + instanceMonthlyCost) * 100) / 100;
+          row[i] = Number((oneTime + instanceMonthlyCost).toFixed(2));
         }
         
         return row;
@@ -448,22 +448,37 @@ export const useRiskTimelineData = ({
               return;
             }
             
-            // Count how many of this instance's controls are selected
-            const selectedControlCount = instanceControls.filter(controlName => {
+            // Calculate total weight of ALL controls on this instance using control points
+            let totalControlWeight = 0;
+            instanceControls.forEach(controlName => {
+              const normalizedName = controlName.toLowerCase().trim();
+              const points = controlPointsLookup.get(normalizedName) || 1;
+              totalControlWeight += points;
+            });
+            
+            // Calculate weight of SELECTED controls for this instance
+            let selectedControlWeight = 0;
+            instanceControls.forEach(controlName => {
               const controlId = `${instanceId}::${controlName}`;
-              return selectedControlIds.includes(controlId);
-            }).length;
+              if (selectedControlIds.includes(controlId)) {
+                const normalizedName = controlName.toLowerCase().trim();
+                const points = controlPointsLookup.get(normalizedName) || 1;
+                selectedControlWeight += points;
+              }
+            });
             
-            // Control coverage ratio for this instance
-            const controlRatio = selectedControlCount / instanceControls.length;
+            // Weighted control ratio for this instance (matches useRiskScoring logic)
+            const controlRatio = totalControlWeight > 0 
+              ? selectedControlWeight / totalControlWeight 
+              : 0;
             
-            // Instance derisk = P × I × controlRatio
+            // Instance derisk = P × I × weighted_control_ratio
             classTotalDerisk += classData.riskPoints * controlRatio;
           });
           
           // Apply to each month in the class's range
           for (let i = effectiveStartIdx; i <= effectiveEndIdx; i++) {
-            row[i] = Math.round(classTotalDerisk * 100) / 100;
+            row[i] = Number(classTotalDerisk.toFixed(2));
           }
           
           return row;
