@@ -1,138 +1,23 @@
 
+## Fix: Date Display Discrepancy Across Project List, Milestones, and PDF Reports
 
-## Fix: Activity Logging for "qbo" Users Bypassing Exclusion Rule
+### Problem Summary
 
-### Root Cause Identified
+Dates entered in the milestone form (e.g., `2023-05-30`) are displaying as one day earlier (`May 29, 2023`) in the Project List and exported PDF reports. This is a timezone bug.
 
-The issue is a **stale closure bug** in the activity logging flow:
+### Root Cause
 
-**What's happening:**
+When JavaScript parses a date string like `"2023-05-30"` using `new Date("2023-05-30")`, it interprets this as midnight UTC. For users in timezones west of UTC (such as Eastern, Central, or Pacific time in North America), this UTC midnight translates to the previous evening in their local time, causing the formatted date to show the day before.
 
-1. `useActivityLogger` creates a `logActivity` callback via `useCallback` with `[user]` as a dependency
-2. The `useEffect` in `ProjectWizard.tsx` (line 697) that calls `logActivity` has `[id]` as its dependency - **NOT** including `logActivity`
-3. When the page loads, the effect runs immediately with a potentially stale `logActivity` function
-4. During session rehydration, `user.email` may initially be `undefined`
-5. The check `userEmail.includes("qbo")` fails because `""` (empty string) doesn't include "qbo"
-6. The log gets inserted even though it should be excluded
-
-**Code flow:**
-```
-Page loads → useEffect fires → logActivity called with stale user (email=undefined)
-                                    ↓
-                             userEmail = "" (not "qbo@...")
-                                    ↓
-                             Exclusion check fails → log inserted
-```
-
----
+**Example:**
+- User enters: May 30, 2023
+- Stored as: `"2023-05-30"`
+- `new Date("2023-05-30")` creates: May 30, 2023 00:00:00 UTC
+- In EST (UTC-5): This displays as May 29, 2023 7:00 PM - **wrong day**
 
 ### Solution
 
-**Two-pronged fix for robustness:**
-
-#### 1. Fix the stale closure in `useActivityLogger.ts`
-
-Instead of relying on the `user` from context closure, fetch the current user directly from `supabase.auth.getUser()` at insert time:
-
-**File: `src/hooks/useActivityLogger.ts`**
-
-```typescript
-import { useCallback } from "react";
-import { supabase } from "@/integrations/supabase/client";
-
-type ActivityAction = 
-  | "project_opened"
-  | "project_deleted"
-  | "project_created"
-  | "add_new_clicked"
-  | "export_clicked"
-  | "manage_collaborators_clicked"
-  | "session_start"
-  | "google_drive_analysis_request"
-  | "manual_drawings_upload";
-
-export const useActivityLogger = () => {
-  const logActivity = useCallback(async (
-    action: ActivityAction,
-    projectId?: string,
-    metadata?: Record<string, any>
-  ) => {
-    try {
-      // Fetch fresh user data to avoid stale closure issues
-      const { data: { user } } = await supabase.auth.getUser();
-      
-      if (!user) return;
-
-      // Skip logging for users with "qbo" in their email
-      const userEmail = user.email?.toLowerCase() || "";
-      if (userEmail.includes("qbo")) {
-        return;
-      }
-
-      await supabase.from("user_activity_logs").insert({
-        user_id: user.id,
-        action,
-        project_id: projectId || null,
-        metadata: metadata || {}
-      });
-    } catch (error) {
-      // Silently fail - don't block user actions for logging failures
-      console.error("Failed to log activity:", error);
-    }
-  }, []); // No dependencies - fetches fresh user data each call
-
-  return { logActivity };
-};
-```
-
-**Key changes:**
-- Remove `useAuth()` import and context dependency
-- Call `supabase.auth.getUser()` directly to get fresh user data
-- Remove `[user]` from useCallback dependencies (now empty `[]`)
-- This ensures the email check always uses the current authenticated user
-
-#### 2. (Optional but recommended) Add database-level protection
-
-As a defense-in-depth measure, add a database trigger to prevent "qbo" user logs from being inserted even if client-side check fails:
-
-```sql
--- Create a trigger function to block qbo user activity logs
-CREATE OR REPLACE FUNCTION prevent_qbo_activity_logs()
-RETURNS TRIGGER AS $$
-DECLARE
-  user_email TEXT;
-BEGIN
-  -- Get the email for this user from auth.users
-  SELECT email INTO user_email 
-  FROM auth.users 
-  WHERE id = NEW.user_id;
-  
-  -- Skip insert if email contains 'qbo'
-  IF user_email ILIKE '%qbo%' THEN
-    RETURN NULL; -- Silently reject the insert
-  END IF;
-  
-  RETURN NEW;
-END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
-
--- Attach trigger to user_activity_logs table
-CREATE TRIGGER check_qbo_activity_logs
-  BEFORE INSERT ON user_activity_logs
-  FOR EACH ROW
-  EXECUTE FUNCTION prevent_qbo_activity_logs();
-```
-
----
-
-### Why This Fix Works
-
-| Issue | Fix |
-|-------|-----|
-| Stale closure captures old user state | Fetch fresh user via `supabase.auth.getUser()` at call time |
-| `user.email` undefined during rehydration | Fresh fetch returns complete user object |
-| Dependency array issues in calling effects | No longer dependent on `user` prop - stable callback |
-| Client-side bypass risk | Optional DB trigger as safety net |
+Create a timezone-safe date formatting utility that parses date strings as local dates instead of UTC dates. This ensures the displayed date matches what the user entered.
 
 ---
 
@@ -140,12 +25,149 @@ CREATE TRIGGER check_qbo_activity_logs
 
 | File | Change |
 |------|--------|
-| `src/hooks/useActivityLogger.ts` | Replace context-based user access with direct `supabase.auth.getUser()` call |
-| (Optional) Database migration | Add trigger to block qbo user logs at DB level |
+| `src/lib/reportGenerator.ts` | Update `formatDate` function to use timezone-safe parsing |
+| `src/pages/Projects.tsx` | Use the updated `formatDate` function |
+| `src/components/wizard/SolutionProviderPortalContent.tsx` | Use the updated `formatDate` function |
+| `src/components/reports/WaterRiskReport.tsx` | Update `calculateMilestoneDuration` to use safe parsing |
+
+---
+
+### Technical Implementation
+
+#### 1. Update `src/lib/reportGenerator.ts`
+
+Replace the current `formatDate` function with a timezone-safe version:
+
+```typescript
+import { format, parse, isValid } from "date-fns";
+
+export const formatDate = (date: string | Date | null | undefined): string => {
+  if (!date) return "—";
+  try {
+    let dateObj: Date;
+    
+    if (typeof date === 'string') {
+      // Parse YYYY-MM-DD strings as local dates to avoid timezone shift
+      // This prevents "2023-05-30" from becoming May 29 in western timezones
+      if (/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+        const [year, month, day] = date.split('-').map(Number);
+        dateObj = new Date(year, month - 1, day); // month is 0-indexed
+      } else {
+        // For other formats or ISO strings with time, use Date constructor
+        dateObj = new Date(date);
+      }
+    } else {
+      dateObj = date;
+    }
+    
+    if (!isValid(dateObj)) return "—";
+    return format(dateObj, "MMM dd, yyyy");
+  } catch {
+    return "—";
+  }
+};
+```
+
+**Key change:** Parse `YYYY-MM-DD` strings by extracting year/month/day components and creating a local Date object, avoiding UTC interpretation.
+
+#### 2. Add a helper for short date format
+
+Add a second function for the Project list format:
+
+```typescript
+export const formatDateShort = (date: string | Date | null | undefined): string => {
+  if (!date) return "—";
+  try {
+    let dateObj: Date;
+    
+    if (typeof date === 'string') {
+      if (/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+        const [year, month, day] = date.split('-').map(Number);
+        dateObj = new Date(year, month - 1, day);
+      } else {
+        dateObj = new Date(date);
+      }
+    } else {
+      dateObj = date;
+    }
+    
+    if (!isValid(dateObj)) return "—";
+    return format(dateObj, "M/dd/yy");
+  } catch {
+    return "—";
+  }
+};
+```
+
+#### 3. Update `src/pages/Projects.tsx`
+
+Replace inline date formatting with the new helper:
+
+```typescript
+// Before (line 335):
+format(new Date(project.construction_start_date), "M/dd/yy")
+
+// After:
+formatDateShort(project.construction_start_date)
+```
+
+Import the new function:
+```typescript
+import { formatDateShort } from "@/lib/reportGenerator";
+```
+
+#### 4. Update `src/components/reports/WaterRiskReport.tsx`
+
+Fix the `calculateMilestoneDuration` function (around line 407-411):
+
+```typescript
+const calculateMilestoneDuration = (startDate: string | Date | undefined, endDate: string | Date | undefined): string => {
+  if (!startDate || !endDate) return '';
+  try {
+    const parseDate = (d: string | Date): Date => {
+      if (typeof d === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(d)) {
+        const [year, month, day] = d.split('-').map(Number);
+        return new Date(year, month - 1, day);
+      }
+      return typeof d === 'string' ? new Date(d) : d;
+    };
+    
+    const start = parseDate(startDate);
+    const end = parseDate(endDate);
+    
+    if (isNaN(start.getTime()) || isNaN(end.getTime())) return '';
+    // ... rest of function unchanged
+  }
+};
+```
+
+#### 5. Update `src/components/wizard/SolutionProviderPortalContent.tsx`
+
+Replace all instances of `format(new Date(dateString), ...)` with the shared helper:
+
+```typescript
+import { formatDate } from "@/lib/reportGenerator";
+
+// Before:
+format(new Date(projectData.construction_start_date), "MMM dd, yyyy")
+
+// After:
+formatDate(projectData.construction_start_date)
+```
+
+---
+
+### Why This Works
+
+| Issue | Fix |
+|-------|-----|
+| `new Date("2023-05-30")` interprets as UTC midnight | Parse string components to create local Date object |
+| Timezone shift causes day-before display | Local Date constructor uses local timezone |
+| Consistent across all views | Single shared utility function |
 
 ### Expected Result After Fix
 
-- Activity logs for `qbo@riskclock.com` and any other email containing "qbo" will be blocked
-- The fix works regardless of timing/race conditions during page load
-- Existing logs in the database will remain (you may want to clean them up manually)
-
+- **Input form**: `2023-05-30` - unchanged
+- **Project list**: `5/30/23` - now correct
+- **PDF Report**: `May 30, 2023` - now correct
+- All dates match what the user entered regardless of their timezone
