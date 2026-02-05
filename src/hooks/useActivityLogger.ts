@@ -1,5 +1,4 @@
 import { useCallback } from "react";
-import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
 
 type ActivityAction = 
@@ -14,22 +13,23 @@ type ActivityAction =
   | "manual_drawings_upload";
 
 export const useActivityLogger = () => {
-  const { user } = useAuth();
-
   const logActivity = useCallback(async (
     action: ActivityAction,
     projectId?: string,
     metadata?: Record<string, any>
   ) => {
-    if (!user) return;
-
-    // Skip logging for users with "qbo" in their email
-    const userEmail = user.email?.toLowerCase() || "";
-    if (userEmail.includes("qbo")) {
-      return;
-    }
-
     try {
+      // Fetch fresh user data to avoid stale closure issues
+      const { data: { user } } = await supabase.auth.getUser();
+      
+      if (!user) return;
+
+      // Skip logging for users with "qbo" in their email
+      const userEmail = user.email?.toLowerCase() || "";
+      if (userEmail.includes("qbo")) {
+        return;
+      }
+
       await supabase.from("user_activity_logs").insert({
         user_id: user.id,
         action,
@@ -40,7 +40,7 @@ export const useActivityLogger = () => {
       // Silently fail - don't block user actions for logging failures
       console.error("Failed to log activity:", error);
     }
-  }, [user]);
+  }, []); // No dependencies - fetches fresh user data each call
 
   return { logActivity };
 };
