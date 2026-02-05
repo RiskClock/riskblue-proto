@@ -1,291 +1,179 @@
 
+## Plan: Fix Controls Cost Showing $0 in Risk Timeline
 
-## Plan: Fix Slider Scale, Cost Calculation, Info Bar Removal, and Dual Cost Series
+### Root Cause Analysis
 
-### Issues to Address
+I conducted a deep investigation and found **two issues**:
 
 | # | Issue | Root Cause |
 |---|-------|------------|
-| 1 | Slider scale $1k-$10k, needs $1-$100 | Hardcoded min=1000, max=10000 in Slider component |
-| 2 | Cost view shows $0 | The data IS 400 pts in Risk mode, but Cost mode calculation appears broken - possibly due to not applying multiplier correctly in the exposure bar, or the totalPerMonth array being empty when dataType='cost' settings are used incorrectly |
-| 3 | Remove ExposureInfoBar between controls and graph | ExposureInfoBar is rendered between ControlPanel and chart |
-| 4 | Cost mode should show Risk Cost + Controls Cost | Current implementation only multiplies risk points by $/pt; needs a second series for actual control implementation costs |
+| 1 | **Query not returning cost fields** | Network request shows `select=name,points` but code has `select=name,points,one_time_cost,monthly_maint_cost`. This suggests the previous code change hasn't fully deployed or there's a caching issue. |
+| 2 | **Potential loop early-exit conditions** | The controls cost calculation in `useRiskTimelineData.ts` has multiple `if (!...) return;` statements that silently skip processing without logging, making debugging difficult. |
 
----
+### Evidence
 
-### Technical Analysis
+From the network request captured:
+```
+GET /mitigation_controls?select=name%2Cpoints&is_active=eq.true
+```
+Response: `[{"name":"Automatic Shut Off Valve","points":10}, ...]`
 
-#### Issue 2 Deep Dive: Why Cost Shows $0
+The response shows **only `name` and `points`** - no `oneTimeCost` or `monthlyCost` fields.
 
-Looking at the code flow:
-
-1. **Hook always returns risk data** (line 1245: `dataType: 'risk'`)
-2. **Chart2D applies multiplier correctly** (line 863): `const multiplier = dataType === 'cost' ? dollarPerRiskPoint : 1`
-3. **ExposureInfoBar reads from data.totalPerMonth** which contains risk points
-
-The problem: In the ExposureInfoBar calculation (lines 1323-1345):
+However, the code at `src/pages/ProjectWizard.tsx` line 394 now correctly specifies:
 ```typescript
-const totalRiskThisMonth = data.totalPerMonth[currentMonthIndex] || 0;
+.select('name, points, one_time_cost, monthly_maint_cost')
 ```
 
-If `data.totalPerMonth` contains values like 400 and the multiplier is 5000, then `displayRisk = 400 * 5000 = 2,000,000`. But screenshot shows $0.
+This mismatch indicates:
+1. Build/deploy timing issue from previous changes
+2. Browser caching the old JavaScript bundle
+3. React Query caching stale data
 
-Possible causes:
-- `data.todayMonthIndex` is null or outside the valid range
-- `data.totalPerMonth` is empty
-- The multiplier logic has a bug
+### Solution
 
-The screenshot shows the graph WITH data (400 pts line visible), but ExposureInfoBar shows "0 pts". This means `data.todayMonthIndex` is likely null or returning wrong index.
+#### Part 1: Force Query Refresh + Verify Data Loading
 
-Checking: Today is Feb 2026, but construction_start_date might be later, causing todayMonthIndex to be null.
+**File: `src/pages/ProjectWizard.tsx`**
 
-**Fix**: Fallback to index 0 or the last valid index when todayMonthIndex is null or 0.
-
----
-
-### Implementation
-
-#### Change 1: Update Slider Scale to $1-$100
-
-**File:** `src/components/wizard/RiskTimelineChart3D.tsx`
-
+Change the query key to force a cache invalidation:
 ```typescript
-// Line 1144-1153: Change slider min/max and display
-<Slider
-  value={[settings.dollarPerRiskPoint]}
-  onValueChange={(v) => onSettingsChange({ ...settings, dollarPerRiskPoint: v[0] })}
-  min={1}
-  max={100}
-  step={1}
-  className="flex-1"
-/>
-<span className="text-xs font-medium w-12 text-right">
-  ${settings.dollarPerRiskPoint}
-</span>
-
-// Line 1209: Update default value
-dollarPerRiskPoint: 50,  // Default $50 per risk point
+const { data: controlPointsData = [] } = useQuery({
+  queryKey: ['control-points-with-costs-v2'],  // Changed key to force refetch
+  queryFn: async () => {
+    const { data, error } = await supabase
+      .from('mitigation_controls')
+      .select('name, points, one_time_cost, monthly_maint_cost')
+      .eq('is_active', true);
+    if (error) throw error;
+    return (data || []).map(c => ({
+      name: c.name,
+      points: Number(c.points) || 0,
+      oneTimeCost: Number(c.one_time_cost) || 0,
+      monthlyCost: Number(c.monthly_maint_cost) || 0
+    }));
+  },
+  staleTime: 0,  // Always refetch
+});
 ```
 
-Update label format throughout (exposure bar, tooltip, etc.) to just show `$50` instead of `$50k`.
+#### Part 2: Add Debugging + Robustness to Cost Calculation
 
----
+**File: `src/hooks/useRiskTimelineData.ts`**
 
-#### Change 2: Fix Cost Calculation - Use Best Available Month Index
-
-**File:** `src/components/wizard/RiskTimelineChart3D.tsx`
-
-Update exposureInfo calculation to handle null todayMonthIndex:
-
+Add console logging and ensure early exits are tracked:
 ```typescript
-const exposureInfo = useMemo(() => {
-  // Use today's month if available, otherwise use the last month with data
-  let currentMonthIndex = data.todayMonthIndex;
-  if (currentMonthIndex === null || currentMonthIndex < 0) {
-    // Find the last month with non-zero data
-    currentMonthIndex = data.totalPerMonth.findIndex(v => v > 0);
-    if (currentMonthIndex === -1) currentMonthIndex = 0;
-  }
-  
-  const totalRiskThisMonth = data.totalPerMonth[currentMonthIndex] || 0;
-  const totalDeriskThisMonth = data.totalDeriskPerMonth?.[currentMonthIndex] || 0;
-  const netRisk = Math.max(0, totalRiskThisMonth - totalDeriskThisMonth);
-  const exposureEstimate = netRisk * settings.dollarPerRiskPoint;
-  
-  const isCostMode = settings.dataType === 'cost';
-  const multiplier = isCostMode ? settings.dollarPerRiskPoint : 1;
-  
-  return {
-    totalRisk: totalRiskThisMonth,
-    totalDerisk: totalDeriskThisMonth,
-    netRisk,
-    exposureEstimate,
-    displayRisk: isCostMode ? totalRiskThisMonth * multiplier : totalRiskThisMonth,
-    displayDerisk: isCostMode ? totalDeriskThisMonth * multiplier : totalDeriskThisMonth,
-    displayNet: isCostMode ? netRisk * multiplier : netRisk,
-    isCostMode
-  };
-}, [data.totalPerMonth, data.totalDeriskPerMonth, data.todayMonthIndex, settings.dollarPerRiskPoint, settings.dataType]);
-```
-
----
-
-#### Change 3: Remove ExposureInfoBar from Main UI
-
-**File:** `src/components/wizard/RiskTimelineChart3D.tsx`
-
-Remove the ExposureInfoBar between ControlPanel and chart (line 1484):
-
-```typescript
-// Lines 1473-1495: Remove <ExposureInfoBar /> calls (both main and modal)
-return (
-  <>
-    <div ref={containerRef} className="space-y-4">
-      <ControlPanel ... />
-      
-      {/* REMOVED: <ExposureInfoBar /> */}
-
-      {renderChartContent('h-[400px]')}
-
-      <Legend ... />
-    </div>
-    ...
-  </>
-);
-```
-
-Also remove from modal (line 1512).
-
----
-
-#### Change 4: Cost Mode Shows Risk Cost + Controls Cost
-
-**Approach**: When `dataType === 'cost'`, show two series:
-1. **Risk Cost** (red) = risk points × $/risk point (potential exposure)
-2. **Controls Cost** (blue/teal) = cumulative implementation cost of selected controls
-
-This requires:
-1. Calculating per-month controls cost in the timeline hook
-2. Adding a new series to Chart2D
-3. Updating legends and tooltips
-
-**File:** `src/hooks/useRiskTimelineData.ts`
-
-Add controls cost matrix to the returned data:
-
-```typescript
-interface RiskTimelineData {
-  // ... existing
-  controlsCostMatrix: number[][] | null;  // NEW: Per-class controls cost per month
-  totalControlsCostPerMonth: number[] | null;  // NEW: Total controls cost per month
-}
-```
-
-Calculate controls cost using the existing cost calculation logic (one-time in first month + monthly ongoing):
-
-```typescript
-// After building risk matrix, if we have cost data, calculate controls cost matrix
-let controlsCostMatrix: number[][] | null = null;
+// In the controls cost calculation section (lines 527-603)
 let totalControlsCostPerMonth: number[] | null = null;
 
+console.log('[RiskTimeline] Cost calculation inputs:', {
+  selectedControlIds: selectedControlIds.length,
+  controlsData: controlsData.length,
+  sampleControl: controlsData[0]
+});
+
 if (selectedControlIds.length > 0 && controlsData.length > 0) {
-  // Build cost lookup
-  const costLookup = new Map<string, { oneTime: number; monthly: number }>();
-  controlsData.forEach(c => {
-    costLookup.set(c.name.toLowerCase().trim(), {
-      oneTime: c.oneTimeCost || 0,
-      monthly: c.monthlyCost || 0
-    });
+  const costPerMonth = months.map(() => 0);
+  let processedCount = 0;
+  let skippedNoControl = 0;
+  let skippedNoInstance = 0;
+  let skippedNoClass = 0;
+  let skippedNoClassData = 0;
+  
+  const oneTimeCostAdded = new Set<string>();
+  
+  selectedControlIds.forEach(controlId => {
+    const parts = controlId.split('::');
+    if (parts.length !== 2) return;
+    
+    const [instanceId, controlName] = parts;
+    const normalizedControlName = controlName.toLowerCase().trim();
+    
+    const controlCost = controlsData.find(c => c.name.toLowerCase().trim() === normalizedControlName);
+    if (!controlCost) {
+      skippedNoControl++;
+      return;
+    }
+    
+    const instance = analysisItems.find(item => item.id === instanceId);
+    if (!instance) {
+      skippedNoInstance++;
+      return;
+    }
+    
+    const className = instance.category === 'Asset' 
+      ? mapToAssetName(instance.name)
+      : instance.category === 'Water System' 
+        ? mapToWaterSystemName(instance.name)
+        : mapToProcessName(instance.name);
+    
+    if (!className) {
+      skippedNoClass++;
+      return;
+    }
+    
+    const normalizedClassName = normalizeClassName(className);
+    const classData = classDataMap.get(normalizedClassName);
+    if (!classData || !classData.startDate || !classData.endDate) {
+      skippedNoClassData++;
+      return;
+    }
+    
+    // ... rest of cost calculation
+    processedCount++;
   });
   
-  controlsCostMatrix = sortedClasses.map((classData) => {
-    const row: number[] = new Array(months.length).fill(0);
-    if (!classData.startDate || !classData.endDate) return row;
-    if (classData.selectedInstanceCount === 0) return row;
-    
-    const startMonth = format(startOfMonth(classData.startDate), "yyyy-MM");
-    const startIdx = months.indexOf(startMonth);
-    const endMonth = format(startOfMonth(classData.endDate), "yyyy-MM");
-    const endIdx = months.indexOf(endMonth);
-    
-    const effectiveStartIdx = startIdx === -1 ? 0 : startIdx;
-    const effectiveEndIdx = endIdx === -1 ? months.length - 1 : endIdx;
-    
-    // For each selected instance in this class
-    classData.instanceIds.forEach(instanceId => {
-      if (!selectedInstanceIds.includes(instanceId)) return;
-      
-      const instance = analysisItems.find(item => item.id === instanceId);
-      if (!instance) return;
-      
-      (instance.controls || []).forEach(controlName => {
-        const controlId = `${instanceId}::${controlName}`;
-        if (!selectedControlIds.includes(controlId)) return;
-        
-        const costs = costLookup.get(controlName.toLowerCase().trim());
-        if (!costs) return;
-        
-        // Add one-time cost to first month, monthly cost to all months
-        for (let i = effectiveStartIdx; i <= effectiveEndIdx; i++) {
-          if (i === effectiveStartIdx) {
-            row[i] += costs.oneTime;
-          }
-          row[i] += costs.monthly;
-        }
-      });
-    });
-    
-    return row;
+  console.log('[RiskTimeline] Cost calculation results:', {
+    processedCount,
+    skippedNoControl,
+    skippedNoInstance,
+    skippedNoClass,
+    skippedNoClassData,
+    totalCost: costPerMonth.reduce((a, b) => a + b, 0)
   });
   
-  // Calculate totals
-  totalControlsCostPerMonth = months.map((_, monthIdx) => {
-    return controlsCostMatrix!.reduce((sum, row) => sum + row[monthIdx], 0);
-  });
-  
-  // Apply cumulative if needed
-  if (costMode === 'cumulative' && totalControlsCostPerMonth) {
-    let running = 0;
-    totalControlsCostPerMonth = totalControlsCostPerMonth.map(v => {
-      running += v;
-      return running;
-    });
-  }
+  totalControlsCostPerMonth = costPerMonth;
 }
 ```
 
-**File:** `src/components/wizard/RiskTimelineChart3D.tsx`
+#### Part 3: Handle Missing Cost Data Gracefully
 
-Update Chart2D to render controls cost series:
+If `controlsData` has empty cost fields, we should log a warning:
 
 ```typescript
-// In chartData calculation, add controls cost
-if (dataType === 'cost') {
-  if (mode === 'total') {
-    entry.riskCost = Number((totalPerMonth[idx] * dollarPerRiskPoint).toFixed(2));
-    entry.controlsCost = totalControlsCostPerMonth ? totalControlsCostPerMonth[idx] : 0;
-    if (showDerisk && totalDeriskPerMonth) {
-      entry.mitigatedCost = Number((totalDeriskPerMonth[idx] * dollarPerRiskPoint).toFixed(2));
-    }
+// At the start of useRiskTimelineData
+if (controlsData.length > 0) {
+  const hasAnyCosts = controlsData.some(c => (c.oneTimeCost || 0) > 0 || (c.monthlyCost || 0) > 0);
+  if (!hasAnyCosts) {
+    console.warn('[RiskTimeline] Warning: controlsData has no cost information');
   }
 }
-
-// Add to chart rendering (when dataType === 'cost'):
-<RechartsLine type="stepAfter" dataKey="riskCost" stroke="#ef4444" name="Risk Cost" dot={false} strokeWidth={2} />
-<RechartsLine type="stepAfter" dataKey="controlsCost" stroke="#0ea5e9" name="Controls Cost" dot={false} strokeWidth={2} />
 ```
-
----
 
 ### Files to Modify
 
 | File | Changes |
 |------|---------|
-| `src/components/wizard/RiskTimelineChart3D.tsx` | Update slider scale, fix cost calculation, remove ExposureInfoBar, add controls cost series |
-| `src/hooks/useRiskTimelineData.ts` | Add controls cost matrix calculation |
-| `src/pages/ProjectWizard.tsx` | Pass control cost data to RiskTimelineChart3D (already has `controlCosts` from query) |
+| `src/pages/ProjectWizard.tsx` | Update query key to force cache refresh, add `staleTime: 0` |
+| `src/hooks/useRiskTimelineData.ts` | Add debugging logs for cost calculation, warn if no costs in data |
 
----
+### Expected Behavior After Fix
 
-### Implementation Order
+1. The query will be refetched with the correct fields (`one_time_cost`, `monthly_maint_cost`)
+2. Console logs will show:
+   - How many controls were processed
+   - Why controls were skipped (missing control, instance, class, or dates)
+   - Total cost calculated
+3. Controls Cost line will show non-zero values when controls with costs are selected
 
-1. Update slider scale from $1k-$10k to $1-$100
-2. Fix exposure calculation fallback when todayMonthIndex is null
-3. Remove ExposureInfoBar from between controls and graph
-4. Add controls cost data to controlsData prop (include oneTimeCost and monthlyCost)
-5. Calculate controls cost matrix in useRiskTimelineData
-6. Update Chart2D to show both Risk Cost and Controls Cost series in cost mode
-7. Update legend and tooltips for cost mode
+### Alternative Investigation Path
 
----
+If the fix doesn't work after deployment, the console logs will reveal which condition is failing:
 
-### Expected Behavior
+- **`skippedNoControl > 0`**: Control name mismatch between selected controls and database
+- **`skippedNoInstance > 0`**: Instance ID not found in analysisItems
+- **`skippedNoClass > 0`**: Class name mapping failed
+- **`skippedNoClassData > 0`**: Class has no valid date range
+- **`processedCount > 0` but `totalCost = 0`**: All matched controls have `$0` cost
 
-After implementation:
-- **Slider**: Shows $1 to $100 range with $50 default
-- **Cost mode**: Displays two lines/bars:
-  - Red: Risk Cost (risk points × $/pt) showing potential exposure
-  - Teal/Blue: Controls Cost (implementation spend on selected controls)
-- **No info bar**: Clean layout with controls directly above chart
-- **Proper values**: Even when today's month is outside construction range, shows meaningful data from the first active month
-
+This will quickly pinpoint the exact issue if it's not the caching problem.
