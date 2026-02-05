@@ -403,12 +403,21 @@ export const WaterRiskReport = ({ data, analysisItems = [], controlDetails = [],
     return null;
   };
 
+  // Helper to parse date strings as local dates to avoid timezone shift
+  const parseLocalDate = (d: string | Date): Date => {
+    if (typeof d === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(d)) {
+      const [year, month, day] = d.split('-').map(Number);
+      return new Date(year, month - 1, day);
+    }
+    return typeof d === 'string' ? new Date(d) : d;
+  };
+
   // Calculate milestone duration as decimal months (e.g., "10.1 months") or days if <1 month
   const calculateMilestoneDuration = (startDate: string | Date | undefined, endDate: string | Date | undefined): string => {
     if (!startDate || !endDate) return '';
     try {
-      const start = typeof startDate === 'string' ? new Date(startDate) : startDate;
-      const end = typeof endDate === 'string' ? new Date(endDate) : endDate;
+      const start = parseLocalDate(startDate);
+      const end = parseLocalDate(endDate);
       
       if (isNaN(start.getTime()) || isNaN(end.getTime())) return '';
       

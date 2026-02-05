@@ -8,7 +8,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useActivityLogger } from "@/hooks/useActivityLogger";
 import { useHeapIdentify } from "@/hooks/useHeapIdentify";
 import { getUserFriendlyError } from "@/lib/errorHandling";
-import { format } from "date-fns";
+import { formatDateShort } from "@/lib/reportGenerator";
 import { LogoDropdown } from "@/components/LogoDropdown";
 import { Trash2, LogOut, X, Settings, FileText, BarChart3 } from "lucide-react";
 import { DropdownMenuSeparator } from "@/components/ui/dropdown-menu";
@@ -331,9 +331,7 @@ const Projects = () => {
                     <td className="px-6 py-4 text-muted-foreground">{capitalizeFirst(project.project_type) || "—"}</td>
                     <td className="px-6 py-4 text-muted-foreground">{formatLocation(project.city, project.country)}</td>
                     <td className="px-6 py-4 text-muted-foreground">
-                      {project.construction_start_date
-                        ? format(new Date(project.construction_start_date), "M/dd/yy")
-                        : "—"}
+                      {formatDateShort(project.construction_start_date)}
                     </td>
                     <td className="px-6 py-4 text-muted-foreground">
                       {project.creator_email ? (
@@ -352,9 +350,7 @@ const Projects = () => {
                       )}
                     </td>
                     <td className="px-6 py-4 text-muted-foreground">
-                      {project.created_at
-                        ? format(new Date(project.created_at), "M/dd/yy")
-                        : "—"}
+                      {formatDateShort(project.created_at)}
                     </td>
                     <td className="px-6 py-4">
                       <div className="h-9 flex items-center justify-center">

@@ -8,7 +8,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
-import { format } from "date-fns";
+import { formatDate } from "@/lib/reportGenerator";
 import { Send } from "lucide-react";
 import { ControlConversationDialog } from "./ControlConversationDialog";
 import electricalRoomImg from "@/assets/control_Electrical_Room_Presence_of_Water_Monitoring.avif";
@@ -594,7 +594,7 @@ export const SolutionProviderPortalContent = ({
                   <Label className="text-muted-foreground">Construction Start</Label>
                   <p className="text-sm font-medium mt-1">
                     {projectData.construction_start_date 
-                      ? format(new Date(projectData.construction_start_date), "MMM dd, yyyy")
+                      ? formatDate(projectData.construction_start_date)
                       : "N/A"}
                   </p>
                 </div>
@@ -602,7 +602,7 @@ export const SolutionProviderPortalContent = ({
                   <Label className="text-muted-foreground">Construction End</Label>
                   <p className="text-sm font-medium mt-1">
                     {projectData.construction_end_date 
-                      ? format(new Date(projectData.construction_end_date), "MMM dd, yyyy")
+                      ? formatDate(projectData.construction_end_date)
                       : "N/A"}
                   </p>
                 </div>
@@ -709,9 +709,9 @@ export const SolutionProviderPortalContent = ({
                       </div>
                       <p className="font-medium text-sm mb-2">Structural Framing</p>
                       <p className="text-xs text-muted-foreground">
-                        {format(new Date(projectData.project_data.frame_start_date), "MMM dd, yyyy")}
+                        {formatDate(projectData.project_data.frame_start_date)}
                         {projectData.project_data.frame_end_date && 
-                          ` - ${format(new Date(projectData.project_data.frame_end_date), "MMM dd, yyyy")}`}
+                          ` - ${formatDate(projectData.project_data.frame_end_date)}`}
                       </p>
                     </div>
                   )}
@@ -722,9 +722,9 @@ export const SolutionProviderPortalContent = ({
                       </div>
                       <p className="font-medium text-sm mb-2">Envelope</p>
                       <p className="text-xs text-muted-foreground">
-                        {format(new Date(projectData.project_data.enclosure_start_date), "MMM dd, yyyy")}
+                        {formatDate(projectData.project_data.enclosure_start_date)}
                         {projectData.project_data.enclosure_end_date && 
-                          ` - ${format(new Date(projectData.project_data.enclosure_end_date), "MMM dd, yyyy")}`}
+                          ` - ${formatDate(projectData.project_data.enclosure_end_date)}`}
                       </p>
                     </div>
                   )}
@@ -735,9 +735,9 @@ export const SolutionProviderPortalContent = ({
                       </div>
                       <p className="font-medium text-sm mb-2">MEP</p>
                       <p className="text-xs text-muted-foreground">
-                        {format(new Date(projectData.project_data.mep_start_date), "MMM dd, yyyy")}
+                        {formatDate(projectData.project_data.mep_start_date)}
                         {projectData.project_data.mep_end_date && 
-                          ` - ${format(new Date(projectData.project_data.mep_end_date), "MMM dd, yyyy")}`}
+                          ` - ${formatDate(projectData.project_data.mep_end_date)}`}
                       </p>
                     </div>
                   )}
@@ -748,9 +748,9 @@ export const SolutionProviderPortalContent = ({
                       </div>
                       <p className="font-medium text-sm mb-2">Elevators</p>
                       <p className="text-xs text-muted-foreground">
-                        {format(new Date(projectData.project_data.elevators_start_date), "MMM dd, yyyy")}
+                        {formatDate(projectData.project_data.elevators_start_date)}
                         {projectData.project_data.elevators_end_date && 
-                          ` - ${format(new Date(projectData.project_data.elevators_end_date), "MMM dd, yyyy")}`}
+                          ` - ${formatDate(projectData.project_data.elevators_end_date)}`}
                       </p>
                     </div>
                   )}
@@ -761,9 +761,9 @@ export const SolutionProviderPortalContent = ({
                       </div>
                       <p className="font-medium text-sm mb-2">Fire Suppression</p>
                       <p className="text-xs text-muted-foreground">
-                        {format(new Date(projectData.project_data.fire_start_date), "MMM dd, yyyy")}
+                        {formatDate(projectData.project_data.fire_start_date)}
                         {projectData.project_data.fire_end_date && 
-                          ` - ${format(new Date(projectData.project_data.fire_end_date), "MMM dd, yyyy")}`}
+                          ` - ${formatDate(projectData.project_data.fire_end_date)}`}
                       </p>
                     </div>
                   )}
@@ -774,9 +774,9 @@ export const SolutionProviderPortalContent = ({
                       </div>
                       <p className="font-medium text-sm mb-2">Interior Finishes</p>
                       <p className="text-xs text-muted-foreground">
-                        {format(new Date(projectData.project_data.interior_start_date), "MMM dd, yyyy")}
+                        {formatDate(projectData.project_data.interior_start_date)}
                         {projectData.project_data.interior_end_date && 
-                          ` - ${format(new Date(projectData.project_data.interior_end_date), "MMM dd, yyyy")}`}
+                          ` - ${formatDate(projectData.project_data.interior_end_date)}`}
                       </p>
                     </div>
                   )}
