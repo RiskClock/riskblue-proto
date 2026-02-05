@@ -857,10 +857,11 @@ const Chart2D: React.FC<Chart2DProps> = ({
   dataType,
   dollarPerRiskPoint
 }) => {
-  const { months, aspTypes, matrix, deriskMatrix, totalPerMonth, totalDeriskPerMonth, todayMonthIndex } = data;
+  const { months, aspTypes, matrix, deriskMatrix, totalPerMonth, totalDeriskPerMonth, totalControlsCostPerMonth, todayMonthIndex } = data;
 
   // Cost view multiplies risk/derisk points by dollarPerRiskPoint
   const multiplier = dataType === 'cost' ? dollarPerRiskPoint : 1;
+  const isCostMode = dataType === 'cost';
 
   const chartData = useMemo(() => {
     return months.map((month, idx) => {
@@ -870,11 +871,19 @@ const Chart2D: React.FC<Chart2DProps> = ({
       };
 
       if (mode === 'total') {
-        entry.totalRisk = Number((totalPerMonth[idx] * multiplier).toFixed(2));
-        if (showDerisk && totalDeriskPerMonth) {
-          entry.totalDerisk = Number((totalDeriskPerMonth[idx] * multiplier).toFixed(2));
+        if (isCostMode) {
+          // Cost mode: show Risk Cost (risk × $/pt) and Controls Cost (actual spend)
+          entry.riskCost = Number((totalPerMonth[idx] * dollarPerRiskPoint).toFixed(2));
+          entry.controlsCost = totalControlsCostPerMonth ? totalControlsCostPerMonth[idx] : 0;
+        } else {
+          // Risk mode: show risk points and derisk points
+          entry.totalRisk = Number((totalPerMonth[idx]).toFixed(2));
+          if (showDerisk && totalDeriskPerMonth) {
+            entry.totalDerisk = Number((totalDeriskPerMonth[idx]).toFixed(2));
+          }
         }
       } else {
+        // By Type mode
         aspTypes.forEach((type, typeIdx) => {
           if (visibleTypes.includes(type.name)) {
             entry[type.name] = Number((matrix[typeIdx][idx] * multiplier).toFixed(2));
@@ -887,7 +896,7 @@ const Chart2D: React.FC<Chart2DProps> = ({
 
       return entry;
     });
-  }, [months, mode, totalPerMonth, totalDeriskPerMonth, aspTypes, visibleTypes, matrix, deriskMatrix, showDerisk, multiplier]);
+  }, [months, mode, totalPerMonth, totalDeriskPerMonth, totalControlsCostPerMonth, aspTypes, visibleTypes, matrix, deriskMatrix, showDerisk, multiplier, isCostMode, dollarPerRiskPoint]);
 
   const visibleAspTypes = aspTypes.filter(t => visibleTypes.includes(t.name));
   const todayMonth = todayMonthIndex !== null ? chartData[todayMonthIndex]?.month : null;
@@ -946,10 +955,17 @@ const Chart2D: React.FC<Chart2DProps> = ({
         <BarChart {...commonChartProps}>
           {renderContent()}
           {mode === 'total' ? (
-            <>
-              <Bar dataKey="totalRisk" stackId="risk" fill="#ef4444" name="Total Risk" fillOpacity={0.8} />
-              {showDerisk && <Bar dataKey="totalDerisk" stackId="derisk" fill="#22c55e" name="Total Derisk" fillOpacity={0.6} />}
-            </>
+            isCostMode ? (
+              <>
+                <Bar dataKey="riskCost" stackId="cost" fill="#ef4444" name="Risk Cost" fillOpacity={0.8} />
+                <Bar dataKey="controlsCost" stackId="controls" fill="#0ea5e9" name="Controls Cost" fillOpacity={0.7} />
+              </>
+            ) : (
+              <>
+                <Bar dataKey="totalRisk" stackId="risk" fill="#ef4444" name="Total Risk" fillOpacity={0.8} />
+                {showDerisk && <Bar dataKey="totalDerisk" stackId="derisk" fill="#22c55e" name="Total Derisk" fillOpacity={0.6} />}
+              </>
+            )
           ) : (
             visibleAspTypes.map(type => (
               <Bar key={type.name} dataKey={type.name} stackId="risk" fill={type.color} name={type.name} fillOpacity={0.8} />
@@ -967,10 +983,17 @@ const Chart2D: React.FC<Chart2DProps> = ({
         <BarChart {...commonChartProps}>
           {renderContent()}
           {mode === 'total' ? (
-            <>
-              <Bar dataKey="totalRisk" fill="#ef4444" name="Total Risk" fillOpacity={0.8} />
-              {showDerisk && <Bar dataKey="totalDerisk" fill="#22c55e" name="Total Derisk" fillOpacity={0.6} />}
-            </>
+            isCostMode ? (
+              <>
+                <Bar dataKey="riskCost" fill="#ef4444" name="Risk Cost" fillOpacity={0.8} />
+                <Bar dataKey="controlsCost" fill="#0ea5e9" name="Controls Cost" fillOpacity={0.7} />
+              </>
+            ) : (
+              <>
+                <Bar dataKey="totalRisk" fill="#ef4444" name="Total Risk" fillOpacity={0.8} />
+                {showDerisk && <Bar dataKey="totalDerisk" fill="#22c55e" name="Total Derisk" fillOpacity={0.6} />}
+              </>
+            )
           ) : (
             visibleAspTypes.map(type => (
               <React.Fragment key={type.name}>
@@ -993,12 +1016,19 @@ const Chart2D: React.FC<Chart2DProps> = ({
         <AreaChart {...commonChartProps}>
           {renderContent()}
           {mode === 'total' ? (
-            <>
-              <Area type="stepAfter" dataKey="totalRisk" stackId="risk" stroke="#ef4444" fill="#ef4444" name="Total Risk" fillOpacity={0.6} />
-              {showDerisk && (
-                <Area type="stepAfter" dataKey="totalDerisk" stackId="derisk" stroke="#22c55e" fill="#22c55e" name="Total Derisk" fillOpacity={0.4} />
-              )}
-            </>
+            isCostMode ? (
+              <>
+                <Area type="stepAfter" dataKey="riskCost" stackId="cost" stroke="#ef4444" fill="#ef4444" name="Risk Cost" fillOpacity={0.6} />
+                <Area type="stepAfter" dataKey="controlsCost" stackId="controls" stroke="#0ea5e9" fill="#0ea5e9" name="Controls Cost" fillOpacity={0.5} />
+              </>
+            ) : (
+              <>
+                <Area type="stepAfter" dataKey="totalRisk" stackId="risk" stroke="#ef4444" fill="#ef4444" name="Total Risk" fillOpacity={0.6} />
+                {showDerisk && (
+                  <Area type="stepAfter" dataKey="totalDerisk" stackId="derisk" stroke="#22c55e" fill="#22c55e" name="Total Derisk" fillOpacity={0.4} />
+                )}
+              </>
+            )
           ) : (
             visibleAspTypes.map(type => (
               <Area key={type.name} type="stepAfter" dataKey={type.name} stackId="risk" stroke={type.color} fill={type.color} name={type.name} fillOpacity={0.6} />
@@ -1015,12 +1045,19 @@ const Chart2D: React.FC<Chart2DProps> = ({
       <LineChart {...commonChartProps}>
         {renderContent()}
         {mode === 'total' ? (
-          <>
-            <RechartsLine type="stepAfter" dataKey="totalRisk" stroke="#ef4444" name="Total Risk" dot={false} strokeWidth={2} />
-            {showDerisk && (
-              <RechartsLine type="stepAfter" dataKey="totalDerisk" stroke="#22c55e" name="Total Derisk" dot={false} strokeWidth={2} strokeDasharray="5 5" />
-            )}
-          </>
+          isCostMode ? (
+            <>
+              <RechartsLine type="stepAfter" dataKey="riskCost" stroke="#ef4444" name="Risk Cost" dot={false} strokeWidth={2} />
+              <RechartsLine type="stepAfter" dataKey="controlsCost" stroke="#0ea5e9" name="Controls Cost" dot={false} strokeWidth={2} />
+            </>
+          ) : (
+            <>
+              <RechartsLine type="stepAfter" dataKey="totalRisk" stroke="#ef4444" name="Total Risk" dot={false} strokeWidth={2} />
+              {showDerisk && (
+                <RechartsLine type="stepAfter" dataKey="totalDerisk" stroke="#22c55e" name="Total Derisk" dot={false} strokeWidth={2} strokeDasharray="5 5" />
+              )}
+            </>
+          )
         ) : (
           visibleAspTypes.map(type => (
             <React.Fragment key={type.name}>
@@ -1144,13 +1181,13 @@ const ControlPanel: React.FC<ControlPanelProps> = ({
           <Slider
             value={[settings.dollarPerRiskPoint]}
             onValueChange={(v) => onSettingsChange({ ...settings, dollarPerRiskPoint: v[0] })}
-            min={1000}
-            max={10000}
-            step={500}
+            min={1}
+            max={100}
+            step={1}
             className="flex-1"
           />
-          <span className="text-xs font-medium w-12 text-right">
-            ${(settings.dollarPerRiskPoint / 1000).toFixed(1)}k
+          <span className="text-xs font-medium w-10 text-right">
+            ${settings.dollarPerRiskPoint}
           </span>
         </div>
       </div>
@@ -1206,7 +1243,7 @@ export const RiskTimelineChart3D: React.FC<RiskTimelineChart3DProps> = ({
     endDate: projectData.construction_end_date || '',
     dataType: 'risk',
     costMode: 'monthly',
-    dollarPerRiskPoint: 5000,
+    dollarPerRiskPoint: 50,
   }));
 
   // Update date range when project data changes
@@ -1481,8 +1518,6 @@ export const RiskTimelineChart3D: React.FC<RiskTimelineChart3DProps> = ({
           onFullscreen={toggleFullscreen}
         />
 
-        <ExposureInfoBar />
-
         {renderChartContent('h-[400px]')}
 
         <Legend
@@ -1508,8 +1543,6 @@ export const RiskTimelineChart3D: React.FC<RiskTimelineChart3DProps> = ({
               constructionEndDate={projectData.construction_end_date}
               onFullscreen={() => setIsModalOpen(false)}
             />
-            
-            <ExposureInfoBar />
             
             <div className="flex-1">
               {renderChartContent('h-full')}
