@@ -411,17 +411,10 @@ export const useRiskTimelineData = ({
       });
 
       // Build derisk matrix (based on selected instances and controls)
+      // Correct logic: derisk = risk when ALL controls are selected for an instance
+      // For each instance: derisk = (P × I) × (selected_controls / total_controls)
       if (selectedInstanceIds.length > 0 && selectedControlIds.length > 0) {
-        // Calculate total derisk points from selected controls (with normalized lookup)
-        // Control IDs may be in format "instanceId::controlName" - extract just the control name
-        const totalDeriskPoints = selectedControlIds.reduce((sum, controlId) => {
-          const controlName = controlId.includes('::') ? controlId.split('::')[1] : controlId;
-          const normalizedControlName = controlName.toLowerCase().trim();
-          const points = controlPointsLookup.get(normalizedControlName) || 0;
-          return sum + points;
-        }, 0);
-
-        deriskMatrix = sortedClasses.map((classData, classIdx) => {
+        deriskMatrix = sortedClasses.map((classData) => {
           const row: number[] = new Array(months.length).fill(0);
           
           if (!classData.startDate || !classData.endDate) return row;
@@ -438,20 +431,63 @@ export const useRiskTimelineData = ({
           
           if (effectiveStartIdx > effectiveEndIdx) return row;
           
-          // Derisk is proportional to selected instances / total instances
-          // and scaled by the class's risk points
-          const selectionRatio = classData.selectedInstanceCount / classData.instanceCount;
-          const classRiskRatio = classData.riskPoints / 25; // Normalize by max possible risk (5*5)
+          // For each selected instance in this class, calculate derisk based on control coverage
+          let classTotalDerisk = 0;
           
-          // Derisk points should be proportional to the risk being mitigated
-          const classDerisk = totalDeriskPoints * selectionRatio * classRiskRatio;
+          classData.instanceIds.forEach(instanceId => {
+            if (!selectedInstanceIds.includes(instanceId)) return;
+            
+            // Find the instance to get its controls
+            const instance = analysisItems.find(item => item.id === instanceId);
+            if (!instance) return;
+            
+            const instanceControls = instance.controls || [];
+            if (instanceControls.length === 0) {
+              // If no controls on instance, selecting it means full derisk
+              classTotalDerisk += classData.riskPoints;
+              return;
+            }
+            
+            // Count how many of this instance's controls are selected
+            const selectedControlCount = instanceControls.filter(controlName => {
+              const controlId = `${instanceId}::${controlName}`;
+              return selectedControlIds.includes(controlId);
+            }).length;
+            
+            // Control coverage ratio for this instance
+            const controlRatio = selectedControlCount / instanceControls.length;
+            
+            // Instance derisk = P × I × controlRatio
+            classTotalDerisk += classData.riskPoints * controlRatio;
+          });
           
+          // Apply to each month in the class's range
           for (let i = effectiveStartIdx; i <= effectiveEndIdx; i++) {
-            row[i] = Math.round(classDerisk * 100) / 100;
+            row[i] = Math.round(classTotalDerisk * 100) / 100;
           }
           
           return row;
         });
+      }
+
+      // Apply cumulative mode for risk points if selected
+      if (costMode === 'cumulative') {
+        matrix = matrix.map(row => {
+          let runningTotal = 0;
+          return row.map(v => {
+            runningTotal += v;
+            return runningTotal;
+          });
+        });
+        if (deriskMatrix) {
+          deriskMatrix = deriskMatrix.map(row => {
+            let runningTotal = 0;
+            return row.map(v => {
+              runningTotal += v;
+              return runningTotal;
+            });
+          });
+        }
       }
     }
 
