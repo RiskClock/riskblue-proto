@@ -285,12 +285,12 @@ const TodayMarker: React.FC<TodayMarkerProps> = ({ monthIndex, maxHeight, totalD
     <group position={[xPosition, 0, totalDepth / 2]}>
       <mesh>
         <planeGeometry args={[0.08, maxHeight * 1.2]} />
-        <meshStandardMaterial color="#ef4444" transparent opacity={0.8} side={THREE.DoubleSide} />
+        <meshStandardMaterial color="#000000" transparent opacity={0.8} side={THREE.DoubleSide} />
       </mesh>
       <Text
         position={[0, maxHeight * 0.7, 0.1]}
         fontSize={0.25}
-        color="#ef4444"
+        color="#000000"
         anchorX="center"
         anchorY="bottom"
         fontWeight="bold"
@@ -910,9 +910,9 @@ const Chart2D: React.FC<Chart2DProps> = ({
     todayMonth && (
       <ReferenceLine 
         x={todayMonth} 
-        stroke="#ef4444" 
+        stroke="#000000" 
         strokeWidth={2}
-        label={{ value: "Today", position: "top", fill: "#ef4444", fontSize: 12 }}
+        label={{ value: "Today", position: "top", fill: "#000000", fontSize: 12 }}
       />
     )
   );
@@ -931,6 +931,12 @@ const Chart2D: React.FC<Chart2DProps> = ({
       <YAxis 
         className="text-xs" 
         label={{ value: yAxisLabel, angle: -90, position: 'insideLeft', style: { textAnchor: 'middle' } }}
+        tickFormatter={(value: number) => {
+          if (dataType === 'cost') {
+            return value >= 1000 ? `$${(value / 1000).toFixed(0)}k` : `$${value}`;
+          }
+          return String(value);
+        }}
       />
       <RechartsTooltip 
         contentStyle={{ 
@@ -939,7 +945,9 @@ const Chart2D: React.FC<Chart2DProps> = ({
           borderRadius: '0.5rem'
         }}
         formatter={(value: number) => [
-          dataType === 'cost' ? `$${Number(value).toLocaleString()}` : Number(value).toFixed(1),
+          dataType === 'cost' 
+            ? (value >= 1000 ? `$${(value / 1000).toFixed(1)}k` : `$${value}`)
+            : Number(value).toFixed(1),
           undefined
         ]}
       />
