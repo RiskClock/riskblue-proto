@@ -1,157 +1,291 @@
 
-## What I found (root causes)
 
-### A) “Cost ($)” view shows $0
-There are two independent reasons this can happen:
+## Plan: Fix Slider Scale, Cost Calculation, Info Bar Removal, and Dual Cost Series
 
-1) **The timeline hook is switching into a “mitigation-controls cost matrix” mode** when `settings.dataType === 'cost'` (`useRiskTimelineData.ts` has an `if (dataType === 'cost') ... calculateCostMatrix()` branch).  
-   - That matrix relies on per-control `oneTimeCost/monthlyCost`, but in `ProjectWizard.tsx` the `controlsData` passed to the timeline is fetched from `mitigation_controls` as only **`name, points`** (no costs).  
-   - So `controlCostLookup` becomes all zeros → `calculateCostMatrix()` totals are **0** → chart totals become **0**.
+### Issues to Address
 
-2) **PI values can silently become `undefined/null` → `NaN` riskPoints → totals collapse to 0**
-   - In `ProjectWizard.tsx`, `aspPIValues` are fetched without defaulting nulls.
-   - In `useRiskTimelineData.ts`, `piLookup` stores the values as-is. If `probability/impact` is `null/undefined`, then `riskPoints = pi.probability * pi.impact` becomes `0` or `NaN`.
-   - Later in `RiskTimelineChart3D.tsx`, the exposure bar uses `data.totalPerMonth[idx] || 0`. If total is `NaN`, `|| 0` yields **0**, masking the bug.
-
-### B) “Cannot unselect ASP in graph”
-This is caused by re-computation loops and a “re-add hidden types” effect:
-
-1) `RiskTimelineChart3D.tsx` calls `useRiskTimelineData({... selectedInstanceIds: [ ... ], selectedControlIds: [ ... ] })`  
-   Those arrays are created inline on each render, so **their references change every render**.
-
-2) `useRiskTimelineData` is a `useMemo` whose dependency list includes `selectedInstanceIds` and `selectedControlIds`. Because their references change, the hook recomputes every render.
-
-3) When the hook recomputes, `data.aspTypes` becomes a new array reference, which triggers this effect:
-   ```ts
-   // Add any new types that appear
-   setVisibleTypes(prev => {
-     const newTypes = data.aspTypes.filter(t => !prev.includes(t.name)).map(t => t.name);
-     ...
-     return [...prev, ...newTypes];
-   });
-   ```
-   If you uncheck a type, it is removed from `visibleTypes`. On the next recompute, that type looks “new” (not in `prev`) and gets re-added.  
-   This can happen even just by hovering (tooltip state updates → re-render → new arrays → recompute → effect re-adds).
-
-### C) Additional hidden issue I discovered: water system selection naming mismatch
-In `ProjectWizard.tsx`, some code writes to `selectedWaterSystemInstances/selectedWaterSystemControls`, but other parts of the app (and the timeline) read `selectedSystemInstances/selectedSystemControls`.  
-This can cause selections to appear empty depending on which field is populated, which then breaks derisk and any selection-based cost logic.
+| # | Issue | Root Cause |
+|---|-------|------------|
+| 1 | Slider scale $1k-$10k, needs $1-$100 | Hardcoded min=1000, max=10000 in Slider component |
+| 2 | Cost view shows $0 | The data IS 400 pts in Risk mode, but Cost mode calculation appears broken - possibly due to not applying multiplier correctly in the exposure bar, or the totalPerMonth array being empty when dataType='cost' settings are used incorrectly |
+| 3 | Remove ExposureInfoBar between controls and graph | ExposureInfoBar is rendered between ControlPanel and chart |
+| 4 | Cost mode should show Risk Cost + Controls Cost | Current implementation only multiplies risk points by $/pt; needs a second series for actual control implementation costs |
 
 ---
 
-## Implementation approach (what I will change)
+### Technical Analysis
 
-### 1) Fix “Cost ($)” being $0 by making Cost view derive from risk points (as requested)
-Goal: **Cost view = Risk Points × ($/Risk Point slider)** and show both:
-- Risk Cost (red) = RiskPoints × $/pt
-- Mitigated Cost (green) = DeriskPoints × $/pt
+#### Issue 2 Deep Dive: Why Cost Shows $0
 
-Changes:
-- In `RiskTimelineChart3D.tsx`, keep `settings.dataType` for display/labeling/multipliers.
-- In the call to `useRiskTimelineData`, **always request risk data**, not mitigation-cost matrix:
-  - Pass `dataType: 'risk'` (or remove cost-mode in hook entirely).
-  - Keep `costMode` for monthly vs cumulative behavior.
+Looking at the code flow:
 
-- Update the exposure bar:
-  - If `settings.dataType === 'cost'`, convert values shown:
-    - `currentRiskCost = totalRiskPoints * dollarPerRiskPoint`
-    - `mitigatedCost = totalDeriskPoints * dollarPerRiskPoint`
-    - `netCost = netRiskPoints * dollarPerRiskPoint`
-  - Fix the labels so it doesn’t say “pts” while in Cost mode.
+1. **Hook always returns risk data** (line 1245: `dataType: 'risk'`)
+2. **Chart2D applies multiplier correctly** (line 863): `const multiplier = dataType === 'cost' ? dollarPerRiskPoint : 1`
+3. **ExposureInfoBar reads from data.totalPerMonth** which contains risk points
 
-- Update 3D rendering (`ChartScene`) to also apply the multiplier when `dataType === 'cost'`:
-  - Right now only `Chart2D` multiplies; `ChartScene` does not.
-  - Add props to `ChartScene`:
-    - `dataType: 'risk' | 'cost'`
-    - `dollarPerRiskPoint: number`
-  - Compute `multiplier` inside `ChartScene` and use it for:
-    - `totalPerMonth`, `totalDeriskPerMonth`
-    - `matrix`, `deriskMatrix`
-    - tooltip values (HitArea should use multiplied values so the screen tooltip shows dollars)
+The problem: In the ExposureInfoBar calculation (lines 1323-1345):
+```typescript
+const totalRiskThisMonth = data.totalPerMonth[currentMonthIndex] || 0;
+```
 
-### 2) Fix PI defaulting to prevent NaN/0 risk points
-In `useRiskTimelineData.ts`:
-- When building `piLookup` and/or when reading from it, coerce to numbers and default:
-  - `probability = Number(v.probability) || 3`
-  - `impact = Number(v.impact) || 3`
-- Clamp to the expected 1–5 range if needed (optional but recommended).
+If `data.totalPerMonth` contains values like 400 and the multiplier is 5000, then `displayRisk = 400 * 5000 = 2,000,000`. But screenshot shows $0.
 
-This guarantees risk points never become NaN and prevents the “everything is 0” failure mode.
+Possible causes:
+- `data.todayMonthIndex` is null or outside the valid range
+- `data.totalPerMonth` is empty
+- The multiplier logic has a bug
 
-### 3) Make ASP legend unselect work reliably
-In `RiskTimelineChart3D.tsx`:
+The screenshot shows the graph WITH data (400 pts line visible), but ExposureInfoBar shows "0 pts". This means `data.todayMonthIndex` is likely null or returning wrong index.
 
-A) **Stabilize inputs so `useRiskTimelineData` does not recompute on hover**
-- Create memoized arrays:
-  - `const selectedInstanceIds = useMemo(() => [...], [projectData.selectedAssetInstances, projectData.selectedSystemInstances, projectData.selectedProcessInstances, projectData.selectedWaterSystemInstances])`
-  - `const selectedControlIds = useMemo(() => [...], [...])`
-- Then pass those memoized arrays into the hook.
+Checking: Today is Feb 2026, but construction_start_date might be later, causing todayMonthIndex to be null.
 
-B) **Stop re-adding hidden types**
-- Replace the “add any new types that appear” effect with logic that:
-  - Initializes once
-  - Only auto-adds truly new ASP types that did not previously exist (e.g., when analysis items change), without re-adding user-hidden types
-- Add a `hiddenTypesRef` (or state) to remember user-hidden items:
-  - When user unchecks: add to hidden set
-  - When user checks again: remove from hidden set
-  - When data changes: only add types that are new and not hidden
-
-C) (Optional hardening) Wire checkbox handler to the Radix value
-- Use `onCheckedChange={(checked) => onToggle(t.name, checked)}` to avoid any ambiguity with indeterminate states.
-- Ensure `checked` is always boolean for our usage.
-
-### 4) Fix the selection field name mismatch (prevents empty selections / derisk mismatch)
-In `ProjectWizard.tsx` (and any other writer):
-- Replace `selectedWaterSystemInstances/selectedWaterSystemControls` with the canonical fields:
-  - `selectedSystemInstances`
-  - `selectedSystemControls`
-
-Add a backward-compatible migration step:
-- On project load, if `selectedSystemInstances` is empty but `selectedWaterSystemInstances` exists:
-  - Copy values over (in local state + persist via `updateFields`)
-  - Optionally clear the old keys from `project_data` to avoid future confusion
-
-This will make selections consistent across steps, reports, and the timeline.
+**Fix**: Fallback to index 0 or the last valid index when todayMonthIndex is null or 0.
 
 ---
 
-## Files I will modify
-1) `src/components/wizard/RiskTimelineChart3D.tsx`
-   - Force timeline data source to risk points (not mitigation-cost matrix)
-   - Apply cost multiplier in 3D (ChartScene)
-   - Fix exposure info bar for cost mode
-   - Memoize selected IDs arrays
-   - Fix visibleTypes initialization/update so ASP can be unchecked
+### Implementation
 
-2) `src/hooks/useRiskTimelineData.ts`
-   - Default/coerce `probability` and `impact` to prevent NaN/0 collapse
-   - (Optionally) remove/ignore the `dataType === 'cost'` costMatrix branch if no longer needed
+#### Change 1: Update Slider Scale to $1-$100
 
-3) `src/pages/ProjectWizard.tsx`
-   - Standardize water system selection field names
-   - Add one-time migration from legacy `selectedWaterSystem*` fields to `selectedSystem*`
+**File:** `src/components/wizard/RiskTimelineChart3D.tsx`
 
----
+```typescript
+// Line 1144-1153: Change slider min/max and display
+<Slider
+  value={[settings.dollarPerRiskPoint]}
+  onValueChange={(v) => onSettingsChange({ ...settings, dollarPerRiskPoint: v[0] })}
+  min={1}
+  max={100}
+  step={1}
+  className="flex-1"
+/>
+<span className="text-xs font-medium w-12 text-right">
+  ${settings.dollarPerRiskPoint}
+</span>
 
-## Verification checklist (what you should see after)
-1) Switch Data → **Cost ($)**:
-   - Chart shows non-zero series (Risk Cost and Mitigated Cost) when risk points exist.
-   - Exposure bar shows non-zero dollars where appropriate.
-   - Slider changes immediately update chart + exposure values.
+// Line 1209: Update default value
+dollarPerRiskPoint: 50,  // Default $50 per risk point
+```
 
-2) ASP legend:
-   - Unchecking an ASP hides it immediately and it stays hidden while you hover/move mouse.
-   - It does not reappear unless you re-check it.
-
-3) Risk points never silently drop to 0 due to missing PI values:
-   - Even if PI tables have blanks, timeline defaults to 3×3 per class.
-
-4) Water system selections:
-   - Previously saved projects that used `selectedWaterSystemInstances` continue to behave correctly after migration.
-   - Derisk changes reflect system selections consistently.
+Update label format throughout (exposure bar, tooltip, etc.) to just show `$50` instead of `$50k`.
 
 ---
 
-## Quick clarification (so I implement the right intent)
-- In Cost ($) mode, do you want the green series to represent **Mitigated Cost** (= derisk points × $/pt) or **Net Cost** (= (risk-derisk) × $/pt)?  
-  My default will be: red = Risk Cost, green = Mitigated Cost, and the exposure bar shows Net Cost separately.
+#### Change 2: Fix Cost Calculation - Use Best Available Month Index
+
+**File:** `src/components/wizard/RiskTimelineChart3D.tsx`
+
+Update exposureInfo calculation to handle null todayMonthIndex:
+
+```typescript
+const exposureInfo = useMemo(() => {
+  // Use today's month if available, otherwise use the last month with data
+  let currentMonthIndex = data.todayMonthIndex;
+  if (currentMonthIndex === null || currentMonthIndex < 0) {
+    // Find the last month with non-zero data
+    currentMonthIndex = data.totalPerMonth.findIndex(v => v > 0);
+    if (currentMonthIndex === -1) currentMonthIndex = 0;
+  }
+  
+  const totalRiskThisMonth = data.totalPerMonth[currentMonthIndex] || 0;
+  const totalDeriskThisMonth = data.totalDeriskPerMonth?.[currentMonthIndex] || 0;
+  const netRisk = Math.max(0, totalRiskThisMonth - totalDeriskThisMonth);
+  const exposureEstimate = netRisk * settings.dollarPerRiskPoint;
+  
+  const isCostMode = settings.dataType === 'cost';
+  const multiplier = isCostMode ? settings.dollarPerRiskPoint : 1;
+  
+  return {
+    totalRisk: totalRiskThisMonth,
+    totalDerisk: totalDeriskThisMonth,
+    netRisk,
+    exposureEstimate,
+    displayRisk: isCostMode ? totalRiskThisMonth * multiplier : totalRiskThisMonth,
+    displayDerisk: isCostMode ? totalDeriskThisMonth * multiplier : totalDeriskThisMonth,
+    displayNet: isCostMode ? netRisk * multiplier : netRisk,
+    isCostMode
+  };
+}, [data.totalPerMonth, data.totalDeriskPerMonth, data.todayMonthIndex, settings.dollarPerRiskPoint, settings.dataType]);
+```
+
+---
+
+#### Change 3: Remove ExposureInfoBar from Main UI
+
+**File:** `src/components/wizard/RiskTimelineChart3D.tsx`
+
+Remove the ExposureInfoBar between ControlPanel and chart (line 1484):
+
+```typescript
+// Lines 1473-1495: Remove <ExposureInfoBar /> calls (both main and modal)
+return (
+  <>
+    <div ref={containerRef} className="space-y-4">
+      <ControlPanel ... />
+      
+      {/* REMOVED: <ExposureInfoBar /> */}
+
+      {renderChartContent('h-[400px]')}
+
+      <Legend ... />
+    </div>
+    ...
+  </>
+);
+```
+
+Also remove from modal (line 1512).
+
+---
+
+#### Change 4: Cost Mode Shows Risk Cost + Controls Cost
+
+**Approach**: When `dataType === 'cost'`, show two series:
+1. **Risk Cost** (red) = risk points × $/risk point (potential exposure)
+2. **Controls Cost** (blue/teal) = cumulative implementation cost of selected controls
+
+This requires:
+1. Calculating per-month controls cost in the timeline hook
+2. Adding a new series to Chart2D
+3. Updating legends and tooltips
+
+**File:** `src/hooks/useRiskTimelineData.ts`
+
+Add controls cost matrix to the returned data:
+
+```typescript
+interface RiskTimelineData {
+  // ... existing
+  controlsCostMatrix: number[][] | null;  // NEW: Per-class controls cost per month
+  totalControlsCostPerMonth: number[] | null;  // NEW: Total controls cost per month
+}
+```
+
+Calculate controls cost using the existing cost calculation logic (one-time in first month + monthly ongoing):
+
+```typescript
+// After building risk matrix, if we have cost data, calculate controls cost matrix
+let controlsCostMatrix: number[][] | null = null;
+let totalControlsCostPerMonth: number[] | null = null;
+
+if (selectedControlIds.length > 0 && controlsData.length > 0) {
+  // Build cost lookup
+  const costLookup = new Map<string, { oneTime: number; monthly: number }>();
+  controlsData.forEach(c => {
+    costLookup.set(c.name.toLowerCase().trim(), {
+      oneTime: c.oneTimeCost || 0,
+      monthly: c.monthlyCost || 0
+    });
+  });
+  
+  controlsCostMatrix = sortedClasses.map((classData) => {
+    const row: number[] = new Array(months.length).fill(0);
+    if (!classData.startDate || !classData.endDate) return row;
+    if (classData.selectedInstanceCount === 0) return row;
+    
+    const startMonth = format(startOfMonth(classData.startDate), "yyyy-MM");
+    const startIdx = months.indexOf(startMonth);
+    const endMonth = format(startOfMonth(classData.endDate), "yyyy-MM");
+    const endIdx = months.indexOf(endMonth);
+    
+    const effectiveStartIdx = startIdx === -1 ? 0 : startIdx;
+    const effectiveEndIdx = endIdx === -1 ? months.length - 1 : endIdx;
+    
+    // For each selected instance in this class
+    classData.instanceIds.forEach(instanceId => {
+      if (!selectedInstanceIds.includes(instanceId)) return;
+      
+      const instance = analysisItems.find(item => item.id === instanceId);
+      if (!instance) return;
+      
+      (instance.controls || []).forEach(controlName => {
+        const controlId = `${instanceId}::${controlName}`;
+        if (!selectedControlIds.includes(controlId)) return;
+        
+        const costs = costLookup.get(controlName.toLowerCase().trim());
+        if (!costs) return;
+        
+        // Add one-time cost to first month, monthly cost to all months
+        for (let i = effectiveStartIdx; i <= effectiveEndIdx; i++) {
+          if (i === effectiveStartIdx) {
+            row[i] += costs.oneTime;
+          }
+          row[i] += costs.monthly;
+        }
+      });
+    });
+    
+    return row;
+  });
+  
+  // Calculate totals
+  totalControlsCostPerMonth = months.map((_, monthIdx) => {
+    return controlsCostMatrix!.reduce((sum, row) => sum + row[monthIdx], 0);
+  });
+  
+  // Apply cumulative if needed
+  if (costMode === 'cumulative' && totalControlsCostPerMonth) {
+    let running = 0;
+    totalControlsCostPerMonth = totalControlsCostPerMonth.map(v => {
+      running += v;
+      return running;
+    });
+  }
+}
+```
+
+**File:** `src/components/wizard/RiskTimelineChart3D.tsx`
+
+Update Chart2D to render controls cost series:
+
+```typescript
+// In chartData calculation, add controls cost
+if (dataType === 'cost') {
+  if (mode === 'total') {
+    entry.riskCost = Number((totalPerMonth[idx] * dollarPerRiskPoint).toFixed(2));
+    entry.controlsCost = totalControlsCostPerMonth ? totalControlsCostPerMonth[idx] : 0;
+    if (showDerisk && totalDeriskPerMonth) {
+      entry.mitigatedCost = Number((totalDeriskPerMonth[idx] * dollarPerRiskPoint).toFixed(2));
+    }
+  }
+}
+
+// Add to chart rendering (when dataType === 'cost'):
+<RechartsLine type="stepAfter" dataKey="riskCost" stroke="#ef4444" name="Risk Cost" dot={false} strokeWidth={2} />
+<RechartsLine type="stepAfter" dataKey="controlsCost" stroke="#0ea5e9" name="Controls Cost" dot={false} strokeWidth={2} />
+```
+
+---
+
+### Files to Modify
+
+| File | Changes |
+|------|---------|
+| `src/components/wizard/RiskTimelineChart3D.tsx` | Update slider scale, fix cost calculation, remove ExposureInfoBar, add controls cost series |
+| `src/hooks/useRiskTimelineData.ts` | Add controls cost matrix calculation |
+| `src/pages/ProjectWizard.tsx` | Pass control cost data to RiskTimelineChart3D (already has `controlCosts` from query) |
+
+---
+
+### Implementation Order
+
+1. Update slider scale from $1k-$10k to $1-$100
+2. Fix exposure calculation fallback when todayMonthIndex is null
+3. Remove ExposureInfoBar from between controls and graph
+4. Add controls cost data to controlsData prop (include oneTimeCost and monthlyCost)
+5. Calculate controls cost matrix in useRiskTimelineData
+6. Update Chart2D to show both Risk Cost and Controls Cost series in cost mode
+7. Update legend and tooltips for cost mode
+
+---
+
+### Expected Behavior
+
+After implementation:
+- **Slider**: Shows $1 to $100 range with $50 default
+- **Cost mode**: Displays two lines/bars:
+  - Red: Risk Cost (risk points × $/pt) showing potential exposure
+  - Teal/Blue: Controls Cost (implementation spend on selected controls)
+- **No info bar**: Clean layout with controls directly above chart
+- **Proper values**: Even when today's month is outside construction range, shows meaningful data from the first active month
+
