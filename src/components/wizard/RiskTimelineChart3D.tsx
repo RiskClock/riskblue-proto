@@ -1219,57 +1219,75 @@ export const RiskTimelineChart3D: React.FC<RiskTimelineChart3DProps> = ({
     }
   }, [projectData.construction_start_date, projectData.construction_end_date]);
 
+  // Memoize selection arrays to prevent re-render loops
+  const selectedInstanceIds = useMemo(() => [
+    ...(projectData.selectedAssetInstances || []),
+    ...(projectData.selectedSystemInstances || []),
+    ...(projectData.selectedProcessInstances || [])
+  ], [projectData.selectedAssetInstances, projectData.selectedSystemInstances, projectData.selectedProcessInstances]);
+
+  const selectedControlIds = useMemo(() => [
+    ...(projectData.selectedAssetControls || []),
+    ...(projectData.selectedSystemControls || []),
+    ...(projectData.selectedProcessControls || [])
+  ], [projectData.selectedAssetControls, projectData.selectedSystemControls, projectData.selectedProcessControls]);
+
+  // Always request risk data from hook - apply dollar multiplier in UI layer for cost view
   const data = useRiskTimelineData({
     analysisItems,
     projectData,
     aspPIValues,
     startDateFilter: settings.startDate,
     endDateFilter: settings.endDate,
-    selectedInstanceIds: [
-      ...(projectData.selectedAssetInstances || []),
-      ...(projectData.selectedSystemInstances || []),
-      ...(projectData.selectedProcessInstances || [])
-    ],
-    selectedControlIds: [
-      ...(projectData.selectedAssetControls || []),
-      ...(projectData.selectedSystemControls || []),
-      ...(projectData.selectedProcessControls || [])
-    ],
+    selectedInstanceIds,
+    selectedControlIds,
     controlsData,
-    dataType: settings.dataType,
+    dataType: 'risk', // Always use risk mode - cost is derived in UI
     costMode: settings.costMode,
   });
 
   const [tooltipData, setTooltipData] = useState<TooltipData | null>(null);
   const [mousePosition, setMousePosition] = useState({ x: 0, y: 0 });
   
+  // Track user-hidden types to prevent re-adding them
+  const hiddenTypesRef = useRef<Set<string>>(new Set());
+  
   // Use array instead of Set for more predictable React state updates
-  const [visibleTypes, setVisibleTypes] = useState<string[]>(() =>
-    data.aspTypes.map(t => t.name)
-  );
+  const [visibleTypes, setVisibleTypes] = useState<string[]>([]);
 
-  // Only initialize visibleTypes once, then only add new types
+  // Stable list of ASP type names for comparison
+  const aspTypeNames = useMemo(() => data.aspTypes.map(t => t.name), [data.aspTypes]);
+
+  // Initialize visibleTypes and handle new types without re-adding hidden ones
   useEffect(() => {
-    if (!initializedRef.current && data.aspTypes.length > 0) {
-      setVisibleTypes(data.aspTypes.map(t => t.name));
+    if (!initializedRef.current && aspTypeNames.length > 0) {
+      // First initialization: show all types
+      setVisibleTypes(aspTypeNames);
       initializedRef.current = true;
-    } else if (initializedRef.current) {
-      // Add any new types that appear
+    } else if (initializedRef.current && aspTypeNames.length > 0) {
+      // Only add types that are truly new AND not user-hidden
       setVisibleTypes(prev => {
-        const newTypes = data.aspTypes.filter(t => !prev.includes(t.name)).map(t => t.name);
+        const currentSet = new Set(prev);
+        const newTypes = aspTypeNames.filter(name => 
+          !currentSet.has(name) && !hiddenTypesRef.current.has(name)
+        );
         if (newTypes.length > 0) {
           return [...prev, ...newTypes];
         }
         return prev;
       });
     }
-  }, [data.aspTypes]);
+  }, [aspTypeNames]);
 
   const handleToggleType = useCallback((name: string) => {
     setVisibleTypes(prev => {
       if (prev.includes(name)) {
+        // User is hiding this type - remember it
+        hiddenTypesRef.current.add(name);
         return prev.filter(n => n !== name);
       } else {
+        // User is showing this type - remove from hidden set
+        hiddenTypesRef.current.delete(name);
         return [...prev, name];
       }
     });
@@ -1301,7 +1319,7 @@ export const RiskTimelineChart3D: React.FC<RiskTimelineChart3DProps> = ({
     return settings.costMode === 'cumulative' ? 'Cumulative Risk Points' : 'Risk Points';
   }, [settings.dataType, settings.costMode]);
 
-  // Calculate exposure estimate for display
+  // Calculate exposure estimate for display - always uses risk points base, applies multiplier for cost display
   const exposureInfo = useMemo(() => {
     const currentMonthIndex = data.todayMonthIndex ?? 0;
     const totalRiskThisMonth = data.totalPerMonth[currentMonthIndex] || 0;
@@ -1309,13 +1327,30 @@ export const RiskTimelineChart3D: React.FC<RiskTimelineChart3DProps> = ({
     const netRisk = Math.max(0, totalRiskThisMonth - totalDeriskThisMonth);
     const exposureEstimate = netRisk * settings.dollarPerRiskPoint;
     
+    // In cost mode, convert points to dollars for display
+    const isCostMode = settings.dataType === 'cost';
+    const multiplier = isCostMode ? settings.dollarPerRiskPoint : 1;
+    
     return {
       totalRisk: totalRiskThisMonth,
       totalDerisk: totalDeriskThisMonth,
       netRisk,
-      exposureEstimate
+      exposureEstimate,
+      // Display values (apply multiplier in cost mode)
+      displayRisk: isCostMode ? totalRiskThisMonth * multiplier : totalRiskThisMonth,
+      displayDerisk: isCostMode ? totalDeriskThisMonth * multiplier : totalDeriskThisMonth,
+      displayNet: isCostMode ? netRisk * multiplier : netRisk,
+      isCostMode
     };
-  }, [data.totalPerMonth, data.totalDeriskPerMonth, data.todayMonthIndex, settings.dollarPerRiskPoint]);
+  }, [data.totalPerMonth, data.totalDeriskPerMonth, data.todayMonthIndex, settings.dollarPerRiskPoint, settings.dataType]);
+
+  // Format value for exposure bar
+  const formatExposureValue = (value: number, isCost: boolean) => {
+    if (isCost) {
+      return `$${Math.round(value).toLocaleString()}`;
+    }
+    return `${value.toFixed(0)} pts`;
+  };
 
   // Exposure info bar component
   const ExposureInfoBar = () => (
@@ -1326,18 +1361,18 @@ export const RiskTimelineChart3D: React.FC<RiskTimelineChart3DProps> = ({
       </div>
       <Separator orientation="vertical" className="h-4" />
       <div className="flex items-center gap-1.5">
-        <span className="text-muted-foreground">Current Risk:</span>
-        <span className="font-semibold">{exposureInfo.totalRisk.toFixed(0)} pts</span>
+        <span className="text-muted-foreground">{exposureInfo.isCostMode ? 'Risk Cost:' : 'Current Risk:'}</span>
+        <span className="font-semibold">{formatExposureValue(exposureInfo.displayRisk, exposureInfo.isCostMode)}</span>
       </div>
       <Separator orientation="vertical" className="h-4" />
       <div className="flex items-center gap-1.5">
-        <span className="text-muted-foreground">Mitigated:</span>
-        <span className="font-semibold text-green-600">{exposureInfo.totalDerisk.toFixed(0)} pts</span>
+        <span className="text-muted-foreground">{exposureInfo.isCostMode ? 'Mitigated Cost:' : 'Mitigated:'}</span>
+        <span className="font-semibold text-green-600">{formatExposureValue(exposureInfo.displayDerisk, exposureInfo.isCostMode)}</span>
       </div>
       <Separator orientation="vertical" className="h-4" />
       <div className="flex items-center gap-1.5">
-        <span className="text-muted-foreground">Net Risk:</span>
-        <span className="font-semibold">{exposureInfo.netRisk.toFixed(0)} pts</span>
+        <span className="text-muted-foreground">{exposureInfo.isCostMode ? 'Net Cost:' : 'Net Risk:'}</span>
+        <span className="font-semibold">{formatExposureValue(exposureInfo.displayNet, exposureInfo.isCostMode)}</span>
       </div>
       <Separator orientation="vertical" className="h-4" />
       <div className="flex items-center gap-1.5">
