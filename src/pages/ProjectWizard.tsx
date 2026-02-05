@@ -1577,23 +1577,9 @@ const ProjectWizardContent = () => {
                     />
                   </div>
                   
-                  {/* Implementation Level Selector - moved below Processes */}
+                  {/* Cost Estimate - show package cost when not manually overridden */}
                   <div className="pt-6 border-t">
-                    <RiskToleranceSelector
-                      value={riskTolerance}
-                      onChange={handleRiskToleranceChange}
-                      lowCost={totalCostEstimates.lowCost}
-                      mediumCost={totalCostEstimates.mediumCost}
-                      highCost={totalCostEstimates.highCost}
-                      lowCoverage={coverageByLevel.low}
-                      mediumCoverage={coverageByLevel.medium}
-                      highCoverage={coverageByLevel.high}
-                      controlCounts={controlCountsByLevel}
-                      hasCustomSelection={hasManualOverride}
-                    />
-                    
-                    {/* Cost Estimate - show package cost when not manually overridden */}
-                    <div className="flex flex-col items-center justify-center py-6 px-4 bg-muted/30 rounded-lg border border-border mt-4">
+                    <div className="flex flex-col items-center justify-center py-6 px-4 bg-muted/30 rounded-lg border border-border">
                       <p className="text-sm text-muted-foreground mb-1">Estimated Implementation Cost</p>
                       <p className="text-3xl font-bold text-primary">
                         ${(hasManualOverride 
@@ -1604,16 +1590,18 @@ const ProjectWizardContent = () => {
                     </div>
                   </div>
                   
-                  {/* Risk Timeline Chart - now below Implementation Level Selector */}
-                  <div className="space-y-4 pt-6 border-t">
-                    <h3 className="text-md font-medium">Risk Timeline</h3>
-                    <RiskTimelineChart3D 
-                      analysisItems={analysisItems}
-                      projectData={projectData}
-                      aspPIValues={aspPIValues}
-                      controlsData={controlPointsData}
-                    />
-                  </div>
+                  {/* Risk Timeline Chart - only visible to internal users */}
+                  {isInternalUser && (
+                    <div className="space-y-4 pt-6 border-t">
+                      <h3 className="text-md font-medium">Risk Timeline</h3>
+                      <RiskTimelineChart3D 
+                        analysisItems={analysisItems}
+                        projectData={projectData}
+                        aspPIValues={aspPIValues}
+                        controlsData={controlPointsData}
+                      />
+                    </div>
+                  )}
                 </AccordionContent>
               </AccordionItem>
 
