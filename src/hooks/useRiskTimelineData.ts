@@ -35,7 +35,10 @@ interface RiskTimelineDataInput {
   endDateFilter?: string;
   selectedInstanceIds?: string[];
   selectedControlIds?: string[];
-  controlsData?: Array<{ name: string; points: number }>;
+  controlsData?: Array<{ name: string; points: number; oneTimeCost?: number; monthlyCost?: number }>;
+  // Data type selection
+  dataType?: 'risk' | 'cost';
+  costMode?: 'monthly' | 'cumulative';
 }
 
 export interface RiskTimelineData {
@@ -101,7 +104,9 @@ export const useRiskTimelineData = ({
   endDateFilter,
   selectedInstanceIds = [],
   selectedControlIds = [],
-  controlsData = []
+  controlsData = [],
+  dataType = 'risk',
+  costMode = 'monthly'
 }: RiskTimelineDataInput): RiskTimelineData => {
   return useMemo(() => {
     const hasMilestones = !!(
@@ -133,9 +138,14 @@ export const useRiskTimelineData = ({
 
     // Build control points lookup with normalized keys
     const controlPointsLookup = new Map<string, number>();
+    const controlCostLookup = new Map<string, { oneTimeCost: number; monthlyCost: number }>();
     controlsData.forEach(c => {
       const normalizedKey = c.name.toLowerCase().trim();
       controlPointsLookup.set(normalizedKey, c.points);
+      controlCostLookup.set(normalizedKey, {
+        oneTimeCost: c.oneTimeCost || 0,
+        monthlyCost: c.monthlyCost || 0
+      });
     });
 
     const getClassName = (item: AnalysisItem): string | null => {
@@ -302,47 +312,25 @@ export const useRiskTimelineData = ({
       };
     });
 
-    // Build the risk matrix
-    const matrix: number[][] = sortedClasses.map(classData => {
-      const row: number[] = new Array(months.length).fill(0);
+    // Calculate cost data for selected controls
+    // One-time costs are applied to the first month of each class's duration
+    // Monthly costs are applied to each month within the class's duration
+    const calculateCostMatrix = (): { matrix: number[][]; deriskMatrix: number[][] | null } => {
+      // Get total monthly cost and one-time cost from selected controls
+      let totalOneTimeCost = 0;
+      let totalMonthlyCost = 0;
       
-      if (!classData.startDate || !classData.endDate) return row;
-      
-      const startMonth = format(startOfMonth(classData.startDate), "yyyy-MM");
-      const endMonth = format(startOfMonth(classData.endDate), "yyyy-MM");
-      
-      const startIdx = months.indexOf(startMonth);
-      const endIdx = months.indexOf(endMonth);
-      
-      // Handle cases where dates fall outside filtered range
-      const effectiveStartIdx = startIdx === -1 ? 0 : startIdx;
-      const effectiveEndIdx = endIdx === -1 ? months.length - 1 : endIdx;
-      
-      if (effectiveStartIdx > effectiveEndIdx) return row;
-      
-      // Full risk points for each month - risk represents concurrent exposure, not amortized cost
-      const totalRisk = classData.riskPoints * classData.instanceCount;
-      
-      for (let i = effectiveStartIdx; i <= effectiveEndIdx; i++) {
-        row[i] = totalRisk;
-      }
-      
-      return row;
-    });
+      selectedControlIds.forEach(controlId => {
+        const controlName = controlId.includes('::') ? controlId.split('::')[1] : controlId;
+        const normalizedName = controlName.toLowerCase().trim();
+        const costs = controlCostLookup.get(normalizedName);
+        if (costs) {
+          totalOneTimeCost += costs.oneTimeCost;
+          totalMonthlyCost += costs.monthlyCost;
+        }
+      });
 
-    // Build derisk matrix (based on selected instances and controls)
-    let deriskMatrix: number[][] | null = null;
-    
-    if (selectedInstanceIds.length > 0 && selectedControlIds.length > 0) {
-      // Calculate total derisk points from selected controls (with normalized lookup)
-      const totalDeriskPoints = selectedControlIds.reduce((sum, controlId) => {
-        // Normalize the control ID for lookup
-        const normalizedControlId = controlId.toLowerCase().trim();
-        const points = controlPointsLookup.get(normalizedControlId) || 0;
-        return sum + points;
-      }, 0);
-
-      deriskMatrix = sortedClasses.map((classData, classIdx) => {
+      const costMatrix: number[][] = sortedClasses.map(classData => {
         const row: number[] = new Array(months.length).fill(0);
         
         if (!classData.startDate || !classData.endDate) return row;
@@ -359,20 +347,112 @@ export const useRiskTimelineData = ({
         
         if (effectiveStartIdx > effectiveEndIdx) return row;
         
-        // Derisk is proportional to selected instances / total instances
-        // and scaled by the class's risk points
+        // Proportional cost based on selection ratio
         const selectionRatio = classData.selectedInstanceCount / classData.instanceCount;
-        const classRiskRatio = classData.riskPoints / 25; // Normalize by max possible risk (5*5)
-        
-        // Full derisk points for each month - same logic as risk (concurrent exposure)
-        const classDerisk = totalDeriskPoints * selectionRatio * classRiskRatio * 0.1;
+        const instanceOneTimeCost = totalOneTimeCost * selectionRatio / validClasses.length;
+        const instanceMonthlyCost = totalMonthlyCost * selectionRatio / validClasses.length;
         
         for (let i = effectiveStartIdx; i <= effectiveEndIdx; i++) {
-          row[i] = Math.round(classDerisk * 100) / 100;
+          // Add one-time cost only to first month
+          const oneTime = i === effectiveStartIdx ? instanceOneTimeCost : 0;
+          row[i] = Math.round((oneTime + instanceMonthlyCost) * 100) / 100;
         }
         
         return row;
       });
+
+      return { matrix: costMatrix, deriskMatrix: null };
+    };
+
+    // Build the risk/cost matrix based on dataType
+    let matrix: number[][];
+    let deriskMatrix: number[][] | null = null;
+
+    if (dataType === 'cost') {
+      const costData = calculateCostMatrix();
+      matrix = costData.matrix;
+      
+      // For cumulative mode, convert to running totals
+      if (costMode === 'cumulative') {
+        matrix = matrix.map(row => {
+          let runningTotal = 0;
+          return row.map(v => {
+            runningTotal += v;
+            return runningTotal;
+          });
+        });
+      }
+    } else {
+      // Risk points mode
+      matrix = sortedClasses.map(classData => {
+        const row: number[] = new Array(months.length).fill(0);
+        
+        if (!classData.startDate || !classData.endDate) return row;
+        
+        const startMonth = format(startOfMonth(classData.startDate), "yyyy-MM");
+        const endMonth = format(startOfMonth(classData.endDate), "yyyy-MM");
+        
+        const startIdx = months.indexOf(startMonth);
+        const endIdx = months.indexOf(endMonth);
+        
+        const effectiveStartIdx = startIdx === -1 ? 0 : startIdx;
+        const effectiveEndIdx = endIdx === -1 ? months.length - 1 : endIdx;
+        
+        if (effectiveStartIdx > effectiveEndIdx) return row;
+        
+        // Full risk points for each month - risk represents concurrent exposure, not amortized cost
+        const totalRisk = classData.riskPoints * classData.instanceCount;
+        
+        for (let i = effectiveStartIdx; i <= effectiveEndIdx; i++) {
+          row[i] = totalRisk;
+        }
+        
+        return row;
+      });
+
+      // Build derisk matrix (based on selected instances and controls)
+      if (selectedInstanceIds.length > 0 && selectedControlIds.length > 0) {
+        // Calculate total derisk points from selected controls (with normalized lookup)
+        // Control IDs may be in format "instanceId::controlName" - extract just the control name
+        const totalDeriskPoints = selectedControlIds.reduce((sum, controlId) => {
+          const controlName = controlId.includes('::') ? controlId.split('::')[1] : controlId;
+          const normalizedControlName = controlName.toLowerCase().trim();
+          const points = controlPointsLookup.get(normalizedControlName) || 0;
+          return sum + points;
+        }, 0);
+
+        deriskMatrix = sortedClasses.map((classData, classIdx) => {
+          const row: number[] = new Array(months.length).fill(0);
+          
+          if (!classData.startDate || !classData.endDate) return row;
+          if (classData.selectedInstanceCount === 0) return row;
+          
+          const startMonth = format(startOfMonth(classData.startDate), "yyyy-MM");
+          const endMonth = format(startOfMonth(classData.endDate), "yyyy-MM");
+          
+          const startIdx = months.indexOf(startMonth);
+          const endIdx = months.indexOf(endMonth);
+          
+          const effectiveStartIdx = startIdx === -1 ? 0 : startIdx;
+          const effectiveEndIdx = endIdx === -1 ? months.length - 1 : endIdx;
+          
+          if (effectiveStartIdx > effectiveEndIdx) return row;
+          
+          // Derisk is proportional to selected instances / total instances
+          // and scaled by the class's risk points
+          const selectionRatio = classData.selectedInstanceCount / classData.instanceCount;
+          const classRiskRatio = classData.riskPoints / 25; // Normalize by max possible risk (5*5)
+          
+          // Derisk points should be proportional to the risk being mitigated
+          const classDerisk = totalDeriskPoints * selectionRatio * classRiskRatio;
+          
+          for (let i = effectiveStartIdx; i <= effectiveEndIdx; i++) {
+            row[i] = Math.round(classDerisk * 100) / 100;
+          }
+          
+          return row;
+        });
+      }
     }
 
     // Calculate totals per month
@@ -407,5 +487,5 @@ export const useRiskTimelineData = ({
       hasMilestones,
       todayMonthIndex
     };
-  }, [analysisItems, projectData, aspPIValues, startDateFilter, endDateFilter, selectedInstanceIds, selectedControlIds, controlsData]);
+  }, [analysisItems, projectData, aspPIValues, startDateFilter, endDateFilter, selectedInstanceIds, selectedControlIds, controlsData, dataType, costMode]);
 };

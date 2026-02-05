@@ -35,6 +35,8 @@ interface ChartSettings {
   chartType: 'line' | 'bars' | 'stackedLine' | 'stackedBars';
   startDate: string;
   endDate: string;
+  dataType: 'risk' | 'cost';
+  costMode: 'monthly' | 'cumulative';
 }
 
 interface RiskTimelineChart3DProps {
@@ -63,7 +65,7 @@ interface RiskTimelineChart3DProps {
     selectedProcessControls?: string[];
   };
   aspPIValues: Array<{ name: string; category: string; probability: number; impact: number }>;
-  controlsData?: Array<{ name: string; points: number }>;
+  controlsData?: Array<{ name: string; points: number; oneTimeCost?: number; monthlyCost?: number }>;
 }
 
 interface TooltipData {
@@ -77,8 +79,8 @@ interface TooltipData {
 
 const UNIT_X = 1.0;
 const GAP_Z = 0.8;
-const SCALE_Y = 0.12;
 const LINE_WIDTH = 3;
+const TARGET_MAX_HEIGHT = 6; // Target maximum height in 3D units
 
 interface StepLineMeshProps {
   monthValues: number[];
@@ -90,18 +92,16 @@ interface StepLineMeshProps {
   onHover: (data: TooltipData | null) => void;
   isHovered: boolean;
   isDerisk?: boolean;
+  scaleY: number;
 }
 
 const StepLineMesh: React.FC<StepLineMeshProps> = ({
   monthValues,
   color,
   zPosition,
-  aspType,
-  months,
-  category,
-  onHover,
   isHovered,
-  isDerisk = false
+  isDerisk = false,
+  scaleY
 }) => {
   const linePoints = useMemo(() => {
     const points: [number, number, number][] = [];
@@ -109,14 +109,14 @@ const StepLineMesh: React.FC<StepLineMeshProps> = ({
     monthValues.forEach((value, i) => {
       const x = i * UNIT_X;
       const nextX = (i + 1) * UNIT_X;
-      const y = value * SCALE_Y;
+      const y = value * scaleY;
       
       points.push([x, y, zPosition]);
       points.push([nextX, y, zPosition]);
     });
     
     return points;
-  }, [monthValues, zPosition]);
+  }, [monthValues, zPosition, scaleY]);
 
   const hasData = monthValues.some(v => v > 0);
   if (!hasData) return null;
@@ -146,6 +146,7 @@ interface BarMeshProps {
   onHover: (data: TooltipData | null) => void;
   isHovered: boolean;
   isDerisk?: boolean;
+  scaleY: number;
 }
 
 const BarMesh: React.FC<BarMeshProps> = ({
@@ -153,7 +154,8 @@ const BarMesh: React.FC<BarMeshProps> = ({
   color,
   zPosition,
   isHovered,
-  isDerisk = false
+  isDerisk = false,
+  scaleY
 }) => {
   const hasData = monthValues.some(v => v > 0);
   if (!hasData) return null;
@@ -165,7 +167,7 @@ const BarMesh: React.FC<BarMeshProps> = ({
     <group>
       {monthValues.map((value, i) => {
         if (value <= 0) return null;
-        const height = value * SCALE_Y;
+        const height = value * scaleY;
         const x = (i + 0.5) * UNIT_X + offset;
         
         return (
@@ -193,6 +195,7 @@ interface HitAreaProps {
   onHover: (data: TooltipData | null) => void;
   setHoveredType: (type: string | null) => void;
   deriskValues?: number[];
+  scaleY: number;
 }
 
 const HitArea: React.FC<HitAreaProps> = ({
@@ -204,17 +207,17 @@ const HitArea: React.FC<HitAreaProps> = ({
   color,
   onHover,
   setHoveredType,
-  deriskValues
+  deriskValues,
+  scaleY
 }) => {
   const width = months.length * UNIT_X;
-  const maxY = Math.max(...monthValues, 1) * SCALE_Y;
+  const maxY = Math.max(...monthValues, 1) * scaleY;
 
   const handlePointerOver = useCallback((e: any) => {
     e.stopPropagation?.();
     setHoveredType(aspType);
     
     const point = e.point;
-    // Fix: point.x is in LOCAL coords, mesh center is at width/2
     const actualX = point.x + (width / 2);
     const monthIdx = Math.floor(actualX / UNIT_X);
     const clampedIdx = Math.max(0, Math.min(monthIdx, months.length - 1));
@@ -237,7 +240,6 @@ const HitArea: React.FC<HitAreaProps> = ({
   const handlePointerMove = useCallback((e: any) => {
     e.stopPropagation?.();
     const point = e.point;
-    // Fix: point.x is in LOCAL coords, mesh center is at width/2
     const actualX = point.x + (width / 2);
     const monthIdx = Math.floor(actualX / UNIT_X);
     const clampedIdx = Math.max(0, Math.min(monthIdx, months.length - 1));
@@ -304,6 +306,7 @@ interface StackedBarMeshProps {
   color: string;
   zPosition: number;
   isHovered: boolean;
+  scaleY: number;
 }
 
 const StackedBarMesh: React.FC<StackedBarMeshProps> = ({
@@ -312,6 +315,7 @@ const StackedBarMesh: React.FC<StackedBarMeshProps> = ({
   color,
   zPosition,
   isHovered,
+  scaleY,
 }) => {
   const hasData = monthValues.some(v => v > 0);
   if (!hasData) return null;
@@ -322,7 +326,7 @@ const StackedBarMesh: React.FC<StackedBarMeshProps> = ({
     <group>
       {monthValues.map((value, i) => {
         if (value <= 0) return null;
-        const height = value * SCALE_Y;
+        const height = value * scaleY;
         const yOffset = yOffsets[i];
         const x = (i + 0.5) * UNIT_X;
         
@@ -341,13 +345,87 @@ const StackedBarMesh: React.FC<StackedBarMeshProps> = ({
   );
 };
 
+// Y-Axis component for 3D chart
+interface YAxisMeshProps {
+  maxValue: number;
+  scaleY: number;
+  label: string;
+}
+
+const YAxisMesh: React.FC<YAxisMeshProps> = ({ maxValue, scaleY, label }) => {
+  // Calculate nice tick values
+  const tickInterval = useMemo(() => {
+    if (maxValue <= 10) return 2;
+    if (maxValue <= 50) return 10;
+    if (maxValue <= 100) return 20;
+    if (maxValue <= 500) return 100;
+    if (maxValue <= 1000) return 200;
+    if (maxValue <= 5000) return 1000;
+    return Math.ceil(maxValue / 5 / 1000) * 1000;
+  }, [maxValue]);
+
+  const ticks = useMemo(() => {
+    const result: number[] = [0];
+    for (let v = tickInterval; v <= maxValue; v += tickInterval) {
+      result.push(v);
+    }
+    return result;
+  }, [maxValue, tickInterval]);
+
+  const axisHeight = maxValue * scaleY;
+
+  return (
+    <group position={[-0.3, 0, 0]}>
+      {/* Y-axis line */}
+      <Line 
+        points={[[0, 0, 0], [0, axisHeight, 0]]} 
+        color="#666666" 
+        lineWidth={2} 
+      />
+      
+      {/* Tick marks and labels */}
+      {ticks.map(v => (
+        <group key={v} position={[0, v * scaleY, 0]}>
+          <Line 
+            points={[[-0.1, 0, 0], [0.05, 0, 0]]} 
+            color="#666666" 
+            lineWidth={1} 
+          />
+          <Text 
+            position={[-0.2, 0, 0]} 
+            fontSize={0.18} 
+            color="#666666" 
+            anchorX="right"
+            anchorY="middle"
+          >
+            {v >= 1000 ? `${(v / 1000).toFixed(0)}k` : v.toString()}
+          </Text>
+        </group>
+      ))}
+      
+      {/* Y-axis label */}
+      <Text 
+        position={[-0.8, axisHeight / 2, 0]} 
+        rotation={[0, 0, Math.PI / 2]}
+        fontSize={0.22} 
+        color="#444444"
+        anchorX="center"
+        anchorY="middle"
+      >
+        {label}
+      </Text>
+    </group>
+  );
+};
+
 interface ChartSceneProps {
   data: RiskTimelineData;
-  visibleTypes: Set<string>;
+  visibleTypes: string[];
   onHover: (data: TooltipData | null) => void;
   chartType: 'line' | 'bars' | 'stackedLine' | 'stackedBars';
   showDerisk: boolean;
   mode: 'total' | 'brokenDown';
+  yAxisLabel: string;
 }
 
 const ChartScene: React.FC<ChartSceneProps> = ({ 
@@ -356,20 +434,42 @@ const ChartScene: React.FC<ChartSceneProps> = ({
   onHover, 
   chartType, 
   showDerisk,
-  mode 
+  mode,
+  yAxisLabel
 }) => {
   const { months, aspTypes, matrix, deriskMatrix, totalPerMonth, totalDeriskPerMonth, todayMonthIndex } = data;
   const [hoveredType, setHoveredType] = useState<string | null>(null);
 
-  const maxRisk = Math.max(...matrix.flat(), ...(showDerisk ? (deriskMatrix || []).flat() : []), 1);
-  const maxHeight = maxRisk * SCALE_Y;
-
   const visibleTypeData = useMemo(() => {
     return aspTypes
       .map((type, originalIndex) => ({ type, originalIndex }))
-      .filter(({ type }) => visibleTypes.has(type.name));
+      .filter(({ type }) => visibleTypes.includes(type.name));
   }, [aspTypes, visibleTypes]);
 
+  // Calculate dynamic scale based on max value in current view mode
+  const { maxValue, scaleY } = useMemo(() => {
+    let max = 1;
+    
+    if (mode === 'total') {
+      max = Math.max(...totalPerMonth, ...(showDerisk && totalDeriskPerMonth ? totalDeriskPerMonth : []), 1);
+    } else {
+      // By Type mode: find max across visible types
+      visibleTypeData.forEach(({ originalIndex }) => {
+        const rowMax = Math.max(...matrix[originalIndex]);
+        if (rowMax > max) max = rowMax;
+        if (showDerisk && deriskMatrix && deriskMatrix[originalIndex]) {
+          const deriskMax = Math.max(...deriskMatrix[originalIndex]);
+          if (deriskMax > max) max = deriskMax;
+        }
+      });
+    }
+    
+    // Calculate scale to keep chart in reasonable viewport
+    const scale = TARGET_MAX_HEIGHT / max;
+    return { maxValue: max, scaleY: scale };
+  }, [mode, totalPerMonth, totalDeriskPerMonth, visibleTypeData, matrix, deriskMatrix, showDerisk]);
+
+  const maxHeight = maxValue * scaleY;
   const totalDepth = mode === 'total' ? GAP_Z : (chartType === 'stackedBars' || chartType === 'stackedLine' ? GAP_Z : visibleTypeData.length * GAP_Z);
   const centerX = (months.length * UNIT_X) / 2;
   const centerZ = totalDepth / 2;
@@ -384,18 +484,20 @@ const ChartScene: React.FC<ChartSceneProps> = ({
     visibleTypeData.forEach(({ originalIndex }) => {
       offsets.push([...running]);
       matrix[originalIndex].forEach((v, i) => {
-        running[i] += v * SCALE_Y;
+        running[i] += v * scaleY;
       });
     });
     
     return offsets;
-  }, [chartType, mode, visibleTypeData, matrix, months]);
+  }, [chartType, mode, visibleTypeData, matrix, months, scaleY]);
 
-  const RenderComponent = chartType === 'bars' ? BarMesh : StepLineMesh;
   const isStackedMode = chartType === 'stackedBars' || chartType === 'stackedLine';
 
   return (
     <group position={[-centerX, 0, -centerZ]}>
+      {/* Y-Axis */}
+      <YAxisMesh maxValue={maxValue} scaleY={scaleY} label={yAxisLabel} />
+
       {mode === 'total' ? (
         // Total mode: single aggregated line/bar
         <>
@@ -406,9 +508,10 @@ const ChartScene: React.FC<ChartSceneProps> = ({
               color="#ef4444"
               zPosition={0}
               isHovered={hoveredType === "Total Risk"}
+              scaleY={scaleY}
             />
-          ) : (
-            <RenderComponent
+          ) : chartType === 'bars' ? (
+            <BarMesh
               monthValues={totalPerMonth}
               color="#ef4444"
               zPosition={0}
@@ -417,28 +520,56 @@ const ChartScene: React.FC<ChartSceneProps> = ({
               category="Total"
               onHover={onHover}
               isHovered={hoveredType === "Total Risk"}
+              scaleY={scaleY}
+            />
+          ) : (
+            <StepLineMesh
+              monthValues={totalPerMonth}
+              color="#ef4444"
+              zPosition={0}
+              aspType="Total Risk"
+              months={months}
+              category="Total"
+              onHover={onHover}
+              isHovered={hoveredType === "Total Risk"}
+              scaleY={scaleY}
             />
           )}
           {showDerisk && totalDeriskPerMonth && (
             chartType === 'stackedBars' ? (
               <StackedBarMesh
                 monthValues={totalDeriskPerMonth}
-                yOffsets={totalPerMonth.map(v => v * SCALE_Y)}
+                yOffsets={totalPerMonth.map(v => v * scaleY)}
                 color="#22c55e"
                 zPosition={0}
                 isHovered={hoveredType === "Total Derisk"}
+                scaleY={scaleY}
               />
-            ) : (
-              <RenderComponent
+            ) : chartType === 'bars' ? (
+              <BarMesh
                 monthValues={totalDeriskPerMonth}
                 color="#22c55e"
-                zPosition={chartType === 'bars' ? 0 : 0.05}
+                zPosition={0}
                 aspType="Total Derisk"
                 months={months}
                 category="Total"
                 onHover={onHover}
                 isHovered={hoveredType === "Total Derisk"}
                 isDerisk
+                scaleY={scaleY}
+              />
+            ) : (
+              <StepLineMesh
+                monthValues={totalDeriskPerMonth}
+                color="#22c55e"
+                zPosition={0.05}
+                aspType="Total Derisk"
+                months={months}
+                category="Total"
+                onHover={onHover}
+                isHovered={hoveredType === "Total Derisk"}
+                isDerisk
+                scaleY={scaleY}
               />
             )
           )}
@@ -452,6 +583,7 @@ const ChartScene: React.FC<ChartSceneProps> = ({
             onHover={onHover}
             setHoveredType={setHoveredType}
             deriskValues={totalDeriskPerMonth}
+            scaleY={scaleY}
           />
         </>
       ) : (
@@ -465,9 +597,10 @@ const ChartScene: React.FC<ChartSceneProps> = ({
                 color={type.color}
                 zPosition={0}
                 isHovered={hoveredType === type.name}
+                scaleY={scaleY}
               />
-            ) : (
-              <RenderComponent
+            ) : chartType === 'bars' ? (
+              <BarMesh
                 monthValues={matrix[originalIndex]}
                 color={type.color}
                 zPosition={isStackedMode ? 0 : visibleIdx * GAP_Z}
@@ -476,20 +609,49 @@ const ChartScene: React.FC<ChartSceneProps> = ({
                 category={type.category}
                 onHover={onHover}
                 isHovered={hoveredType === type.name}
+                scaleY={scaleY}
               />
-            )}
-            {showDerisk && deriskMatrix && deriskMatrix[originalIndex] && !isStackedMode && (
-              <RenderComponent
-                monthValues={deriskMatrix[originalIndex]}
-                color="#22c55e"
-                zPosition={chartType === 'bars' ? visibleIdx * GAP_Z : visibleIdx * GAP_Z + 0.05}
-                aspType={`${type.name} (Derisk)`}
+            ) : (
+              <StepLineMesh
+                monthValues={matrix[originalIndex]}
+                color={type.color}
+                zPosition={isStackedMode ? 0 : visibleIdx * GAP_Z}
+                aspType={type.name}
                 months={months}
                 category={type.category}
                 onHover={onHover}
-                isHovered={hoveredType === `${type.name} (Derisk)`}
-                isDerisk
+                isHovered={hoveredType === type.name}
+                scaleY={scaleY}
               />
+            )}
+            {showDerisk && deriskMatrix && deriskMatrix[originalIndex] && !isStackedMode && (
+              chartType === 'bars' ? (
+                <BarMesh
+                  monthValues={deriskMatrix[originalIndex]}
+                  color="#22c55e"
+                  zPosition={visibleIdx * GAP_Z}
+                  aspType={`${type.name} (Derisk)`}
+                  months={months}
+                  category={type.category}
+                  onHover={onHover}
+                  isHovered={hoveredType === `${type.name} (Derisk)`}
+                  isDerisk
+                  scaleY={scaleY}
+                />
+              ) : (
+                <StepLineMesh
+                  monthValues={deriskMatrix[originalIndex]}
+                  color="#22c55e"
+                  zPosition={visibleIdx * GAP_Z + 0.05}
+                  aspType={`${type.name} (Derisk)`}
+                  months={months}
+                  category={type.category}
+                  onHover={onHover}
+                  isHovered={hoveredType === `${type.name} (Derisk)`}
+                  isDerisk
+                  scaleY={scaleY}
+                />
+              )
             )}
             <HitArea
               monthValues={matrix[originalIndex]}
@@ -501,6 +663,7 @@ const ChartScene: React.FC<ChartSceneProps> = ({
               onHover={onHover}
               setHoveredType={setHoveredType}
               deriskValues={deriskMatrix?.[originalIndex]}
+              scaleY={scaleY}
             />
           </React.Fragment>
         ))
@@ -545,10 +708,13 @@ const ChartScene: React.FC<ChartSceneProps> = ({
 interface ScreenTooltipProps {
   data: TooltipData;
   mousePosition: { x: number; y: number };
+  dataType: 'risk' | 'cost';
 }
 
-const ScreenTooltip: React.FC<ScreenTooltipProps> = ({ data, mousePosition }) => {
+const ScreenTooltip: React.FC<ScreenTooltipProps> = ({ data, mousePosition, dataType }) => {
   const monthLabel = format(parseISO(data.month + "-01"), "MMMM yyyy");
+  const valueLabel = dataType === 'cost' ? 'cost' : 'risk points';
+  const formatValue = (v: number) => dataType === 'cost' ? `$${v.toLocaleString()}` : v.toFixed(1);
 
   return (
     <div
@@ -568,13 +734,13 @@ const ScreenTooltip: React.FC<ScreenTooltipProps> = ({ data, mousePosition }) =>
         <span>{data.aspType}</span>
       </div>
       <div className="mt-1 flex items-center gap-2">
-        <span className="font-medium">{data.riskPoints.toFixed(1)}</span>
-        <span className="text-muted-foreground">risk points</span>
+        <span className="font-medium">{formatValue(data.riskPoints)}</span>
+        <span className="text-muted-foreground">{valueLabel}</span>
       </div>
       {data.deriskPoints !== undefined && data.deriskPoints > 0 && (
         <div className="mt-1 flex items-center gap-2">
-          <span className="font-medium text-emerald-600">{data.deriskPoints.toFixed(1)}</span>
-          <span className="text-muted-foreground">derisk points</span>
+          <span className="font-medium text-emerald-600">{formatValue(data.deriskPoints)}</span>
+          <span className="text-muted-foreground">derisk {valueLabel}</span>
         </div>
       )}
     </div>
@@ -583,7 +749,7 @@ const ScreenTooltip: React.FC<ScreenTooltipProps> = ({ data, mousePosition }) =>
 
 const Legend: React.FC<{
   aspTypes: RiskTimelineData["aspTypes"];
-  visibleTypes: Set<string>;
+  visibleTypes: string[];
   onToggle: (name: string) => void;
   mode: 'total' | 'brokenDown';
   showDerisk: boolean;
@@ -632,16 +798,16 @@ const Legend: React.FC<{
               {types.map(t => (
                 <div key={t.name} className="flex items-center gap-2">
                   <Checkbox
-                    checked={visibleTypes.has(t.name)}
+                    id={`legend-${t.name.replace(/\s+/g, '-')}`}
+                    checked={visibleTypes.includes(t.name)}
                     onCheckedChange={() => onToggle(t.name)}
-                    id={`legend-${t.name}`}
                   />
                   <div
                     className="w-3 h-3 rounded-sm"
                     style={{ backgroundColor: t.color }}
                   />
                   <Label
-                    htmlFor={`legend-${t.name}`}
+                    htmlFor={`legend-${t.name.replace(/\s+/g, '-')}`}
                     className="text-xs cursor-pointer"
                   >
                     {t.name}
@@ -670,10 +836,11 @@ const Legend: React.FC<{
 // 2D Chart Component using Recharts
 interface Chart2DProps {
   data: RiskTimelineData;
-  visibleTypes: Set<string>;
+  visibleTypes: string[];
   chartType: 'line' | 'bars' | 'stackedLine' | 'stackedBars';
   showDerisk: boolean;
   mode: 'total' | 'brokenDown';
+  yAxisLabel: string;
 }
 
 const Chart2D: React.FC<Chart2DProps> = ({ 
@@ -681,7 +848,8 @@ const Chart2D: React.FC<Chart2DProps> = ({
   visibleTypes, 
   chartType, 
   showDerisk,
-  mode 
+  mode,
+  yAxisLabel
 }) => {
   const { months, aspTypes, matrix, deriskMatrix, totalPerMonth, totalDeriskPerMonth, todayMonthIndex } = data;
 
@@ -699,7 +867,7 @@ const Chart2D: React.FC<Chart2DProps> = ({
         }
       } else {
         aspTypes.forEach((type, typeIdx) => {
-          if (visibleTypes.has(type.name)) {
+          if (visibleTypes.includes(type.name)) {
             entry[type.name] = matrix[typeIdx][idx];
             if (showDerisk && deriskMatrix && deriskMatrix[typeIdx]) {
               entry[`${type.name}_derisk`] = deriskMatrix[typeIdx][idx];
@@ -712,7 +880,7 @@ const Chart2D: React.FC<Chart2DProps> = ({
     });
   }, [months, mode, totalPerMonth, totalDeriskPerMonth, aspTypes, visibleTypes, matrix, deriskMatrix, showDerisk]);
 
-  const visibleAspTypes = aspTypes.filter(t => visibleTypes.has(t.name));
+  const visibleAspTypes = aspTypes.filter(t => visibleTypes.includes(t.name));
   const todayMonth = todayMonthIndex !== null ? chartData[todayMonthIndex]?.month : null;
 
   const commonChartProps = {
@@ -742,7 +910,10 @@ const Chart2D: React.FC<Chart2DProps> = ({
         interval={months.length > 12 ? 2 : 0}
         className="text-xs"
       />
-      <YAxis className="text-xs" />
+      <YAxis 
+        className="text-xs" 
+        label={{ value: yAxisLabel, angle: -90, position: 'insideLeft', style: { textAnchor: 'middle' } }}
+      />
       <RechartsTooltip 
         contentStyle={{ 
           backgroundColor: 'hsl(var(--popover))', 
@@ -919,6 +1090,41 @@ const ControlPanel: React.FC<ControlPanelProps> = ({
       </div>
 
       <Separator orientation="vertical" className="h-6" />
+
+      {/* Data Type Toggle */}
+      <div className="flex items-center gap-1.5">
+        <Label className="text-xs text-muted-foreground">Data:</Label>
+        <ToggleGroup 
+          type="single" 
+          value={settings.dataType} 
+          onValueChange={(v) => v && onSettingsChange({ ...settings, dataType: v as 'risk' | 'cost' })}
+          size="sm"
+        >
+          <ToggleGroupItem value="risk" className="text-xs px-2">Risk Points</ToggleGroupItem>
+          <ToggleGroupItem value="cost" className="text-xs px-2">Cost ($)</ToggleGroupItem>
+        </ToggleGroup>
+      </div>
+
+      {/* Cost Mode Toggle (only visible when cost is selected) */}
+      {settings.dataType === 'cost' && (
+        <>
+          <Separator orientation="vertical" className="h-6" />
+          <div className="flex items-center gap-1.5">
+            <Label className="text-xs text-muted-foreground">Cost View:</Label>
+            <ToggleGroup 
+              type="single" 
+              value={settings.costMode} 
+              onValueChange={(v) => v && onSettingsChange({ ...settings, costMode: v as 'monthly' | 'cumulative' })}
+              size="sm"
+            >
+              <ToggleGroupItem value="monthly" className="text-xs px-2">Monthly</ToggleGroupItem>
+              <ToggleGroupItem value="cumulative" className="text-xs px-2">Cumulative</ToggleGroupItem>
+            </ToggleGroup>
+          </div>
+        </>
+      )}
+
+      <Separator orientation="vertical" className="h-6" />
       
       {/* Date Range - inline */}
       <div className="flex items-center gap-1.5">
@@ -967,6 +1173,8 @@ export const RiskTimelineChart3D: React.FC<RiskTimelineChart3DProps> = ({
     chartType: 'line',
     startDate: projectData.construction_start_date || '',
     endDate: projectData.construction_end_date || '',
+    dataType: 'risk',
+    costMode: 'monthly',
   }));
 
   // Update date range when project data changes
@@ -995,43 +1203,43 @@ export const RiskTimelineChart3D: React.FC<RiskTimelineChart3DProps> = ({
       ...(projectData.selectedSystemControls || []),
       ...(projectData.selectedProcessControls || [])
     ],
-    controlsData
+    controlsData,
+    dataType: settings.dataType,
+    costMode: settings.costMode,
   });
 
   const [tooltipData, setTooltipData] = useState<TooltipData | null>(null);
   const [mousePosition, setMousePosition] = useState({ x: 0, y: 0 });
-  const [visibleTypes, setVisibleTypes] = useState<Set<string>>(() =>
-    new Set(data.aspTypes.map(t => t.name))
+  
+  // Use array instead of Set for more predictable React state updates
+  const [visibleTypes, setVisibleTypes] = useState<string[]>(() =>
+    data.aspTypes.map(t => t.name)
   );
 
   // Only initialize visibleTypes once, then only add new types
   useEffect(() => {
     if (!initializedRef.current && data.aspTypes.length > 0) {
-      setVisibleTypes(new Set(data.aspTypes.map(t => t.name)));
+      setVisibleTypes(data.aspTypes.map(t => t.name));
       initializedRef.current = true;
     } else if (initializedRef.current) {
       // Add any new types that appear
       setVisibleTypes(prev => {
-        const next = new Set(prev);
-        data.aspTypes.forEach(t => {
-          if (!next.has(t.name)) {
-            next.add(t.name);
-          }
-        });
-        return next;
+        const newTypes = data.aspTypes.filter(t => !prev.includes(t.name)).map(t => t.name);
+        if (newTypes.length > 0) {
+          return [...prev, ...newTypes];
+        }
+        return prev;
       });
     }
   }, [data.aspTypes]);
 
   const handleToggleType = useCallback((name: string) => {
     setVisibleTypes(prev => {
-      const next = new Set(prev);
-      if (next.has(name)) {
-        next.delete(name);
+      if (prev.includes(name)) {
+        return prev.filter(n => n !== name);
       } else {
-        next.add(name);
+        return [...prev, name];
       }
-      return next;
     });
   }, []);
 
@@ -1052,6 +1260,11 @@ export const RiskTimelineChart3D: React.FC<RiskTimelineChart3DProps> = ({
 
   // Determine if derisk should be shown
   const showDerisk = settings.mode === 'total' || settings.dimension === '3d';
+
+  // Y-axis label based on data type
+  const yAxisLabel = settings.dataType === 'cost' 
+    ? (settings.costMode === 'cumulative' ? 'Cumulative Cost ($)' : 'Monthly Cost ($)')
+    : 'Risk Points';
 
   // Render chart content - shared between main and modal
   const renderChartContent = (heightClass: string) => (
@@ -1085,6 +1298,7 @@ export const RiskTimelineChart3D: React.FC<RiskTimelineChart3DProps> = ({
               chartType={settings.chartType}
               showDerisk={showDerisk}
               mode={settings.mode}
+              yAxisLabel={yAxisLabel}
             />
 
             <OrbitControls
@@ -1105,12 +1319,13 @@ export const RiskTimelineChart3D: React.FC<RiskTimelineChart3DProps> = ({
           chartType={settings.chartType}
           showDerisk={showDerisk}
           mode={settings.mode}
+          yAxisLabel={yAxisLabel}
         />
       )}
 
       {/* Screen-space tooltip (3D mode only) */}
       {settings.dimension === '3d' && tooltipData && (
-        <ScreenTooltip data={tooltipData} mousePosition={mousePosition} />
+        <ScreenTooltip data={tooltipData} mousePosition={mousePosition} dataType={settings.dataType} />
       )}
     </div>
   );

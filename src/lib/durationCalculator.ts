@@ -339,6 +339,16 @@ export const calculateSystemOrAssetDates = (
         calculatedFrom = "Interior start to Interior end";
       }
     }
+    // Processes - span entire construction period
+    else if (name === "Contractor Team" || name === "Water Mitigation Vendor Process" || 
+             name === "Mechanical Contractor Process" || name === "Engineering Process" ||
+             name.includes("Process") || name.includes("Team")) {
+      if (timeline.construction_start_date && construction_end_date) {
+        startDate = parseISO(timeline.construction_start_date);
+        endDate = parseISO(construction_end_date);
+        calculatedFrom = "Construction start to Construction end";
+      }
+    }
 
     return { startDate, endDate, calculatedFrom };
   } catch (error) {
