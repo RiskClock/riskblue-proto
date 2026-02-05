@@ -1,128 +1,101 @@
 
-## Analysis of 182.8 Derisk Points
+## Fix One-Time Costs to Apply at Control Start Dates
 
-### How Derisk Is Calculated
+### Root Cause
+The current cost calculation (lines 320-370 in `useRiskTimelineData.ts`) aggregates ALL one-time costs from selected controls and applies them to the first month of each class's schedule. This creates a single large spike at project start (May 2023) rather than distributing one-time costs to when each control actually comes online.
 
-The derisk value shown (182.8 pts) is calculated using a **weighted control ratio**, not a simple control count. Here's the formula:
-
+**Current behavior:**
 ```
-For each selected instance:
-  instanceDerisk = classRiskPoints × (selectedControlWeight / totalControlWeight)
+Month 1: $70.2k (all one-time costs lumped together)
+Month 2+: $X (ongoing monthly costs)
+```
+
+**Desired behavior:**
+```
+Month 1: $1.2k (one-time cost for Control A) + ongoing
+Month 2: $0.8k (one-time cost for Control B) + ongoing
+Month 3: $2.4k (one-time cost for Control C) + ongoing
+```
+
+### Why This Matters
+- **Visibility**: Shows when capital expenditures actually occur during construction
+- **Planning**: Helps identify cost concentration periods and cash flow needs
+- **Accuracy**: Reflects actual control implementation timelines
+
+### Solution Approach
+
+**File: `src/hooks/useRiskTimelineData.ts`**
+
+Refactor the `calculateCostMatrix()` function (lines 323-370) to:
+
+1. **Build a control-to-instance mapping** instead of aggregating all costs upfront
+   - For each `selectedControlId` (format: `instanceId::controlName`), extract the instance and control separately
+   - Track which one-time and monthly costs belong to each instance
+
+2. **Calculate per-instance costs** based on the instance's actual schedule
+   - For each instance in a class: get its start date (use class start date as fallback)
+   - Apply selected controls' one-time costs only in the first month that instance is active
+   - Apply monthly costs to all months the instance is active
+
+3. **Distribute costs proportionally across instances**
+   - If a class has 3 selected instances, divide that class's row cost across those 3 instances
+   - This preserves the proportional distribution while respecting individual schedules
+
+### Technical Implementation
+
+Replace the current `calculateCostMatrix()` logic (lines 323-336) with:
+
+```typescript
+// Build control-to-instance lookup: instanceId -> { oneTimeCost, monthlyCost }
+const controlsByInstance = new Map<string, { oneTimeCost: number; monthlyCost: number }>();
+
+selectedControlIds.forEach(controlId => {
+  const parts = controlId.split('::');
+  if (parts.length !== 2) return;
   
-Where:
-  - classRiskPoints = Probability × Impact (from database)
-  - selectedControlWeight = sum of points for controls you selected
-  - totalControlWeight = sum of points for ALL controls on that instance
+  const [instanceId, controlName] = parts;
+  const normalizedName = controlName.toLowerCase().trim();
+  const costs = controlCostLookup.get(normalizedName);
+  
+  if (!costs) return;
+  
+  if (!controlsByInstance.has(instanceId)) {
+    controlsByInstance.set(instanceId, { oneTimeCost: 0, monthlyCost: 0 });
+  }
+  
+  const instanceCosts = controlsByInstance.get(instanceId)!;
+  instanceCosts.oneTimeCost += costs.oneTimeCost;
+  instanceCosts.monthlyCost += costs.monthlyCost;
+});
 ```
 
-### Why 182.8 Might Be Correct (or Low)
+Then in the row calculation (lines 344-366), for each class:
+- Iterate through `classData.instanceIds` 
+- For each instance that's in `controlsByInstance`, apply its one-time cost at the start of its schedule
+- Distribute monthly costs across all months
 
-With 62 controls selected across Enhanced package:
-- **Total Risk = 400 pts** (visible in your screenshot)
-- **Derisk = 182.8 pts** (45.7% of risk)
+### Files to Modify
 
-This means approximately 45.7% of the weighted control coverage is achieved. Possible reasons:
+| File | Section | Change |
+|------|---------|--------|
+| `src/hooks/useRiskTimelineData.ts` | Lines 323-370 in `calculateCostMatrix()` | Refactor to map controls to instances and apply one-time costs at individual instance start dates instead of aggregating |
 
-1. **Not all instances selected**: The Enhanced package covers 7 Assets + 5 Water Systems + 3 Processes, but maybe not all instances of those classes are selected
-2. **Control weight distribution**: Some controls have higher "points" than others (e.g., a 10-point control contributes more than a 1-point control)
-3. **Some classes may have more controls defined than selected**: If a class has 10 controls total but only 5 are selected, derisk = 50% of risk
+### Expected Result After Fix
 
-### To Get a Detailed Breakdown
+- One-time costs appear at the beginning of each control's implementation period
+- Spike is eliminated or reduced (depending on how many controls start in Month 1)
+- Remaining spikes correspond to when multiple controls are scheduled to start in the same month
+- Monthly costs continue as before throughout the control duration
 
-I would need to query the database to see:
-1. Which instances are selected and their class P×I values
-2. Which controls are selected per instance
-3. The points assigned to each control
+### Data Flow Visualization
 
-This requires database access which is beyond the read-only scope. However, the calculation logic in `useRiskTimelineData.ts` (lines 421-491) appears correct.
-
----
-
-## Implementation Plan for UI Changes
-
-### Change 1: Today Indicator to Black
-
-**File:** `src/components/wizard/RiskTimelineChart3D.tsx`
-
-Update the ReferenceLine for "Today" at line 911-916:
-
-```typescript
-// Current (red)
-<ReferenceLine 
-  x={todayMonth} 
-  stroke="#ef4444" 
-  strokeWidth={2}
-  label={{ value: "Today", position: "top", fill: "#ef4444", fontSize: 12 }}
-/>
-
-// Updated (black)
-<ReferenceLine 
-  x={todayMonth} 
-  stroke="#000000" 
-  strokeWidth={2}
-  label={{ value: "Today", position: "top", fill: "#000000", fontSize: 12 }}
-/>
+```
+Before:
+  Class A: [70.2k, 2.5k, 2.5k, 2.5k, ...]
+  
+After:
+  Class A: [1.2k+0.8k+1.5k, 2.5k, 2.5k, 2.5k, ...]
+           = [3.5k, 2.5k, 2.5k, 2.5k, ...]
+  (if 3 controls start in Month 1)
 ```
 
----
-
-### Change 2: Y-Axis Formatting for Cost Mode (Show in $1000s)
-
-**File:** `src/components/wizard/RiskTimelineChart3D.tsx`
-
-Add a `tickFormatter` to the YAxis component in `renderContent()` (line 931-934):
-
-```typescript
-<YAxis 
-  className="text-xs" 
-  label={{ value: yAxisLabel, angle: -90, position: 'insideLeft', style: { textAnchor: 'middle' } }}
-  tickFormatter={(value: number) => {
-    if (dataType === 'cost') {
-      // Format as $30k, $100k, etc.
-      if (value >= 1000) {
-        return `$${(value / 1000).toFixed(0)}k`;
-      }
-      return `$${value}`;
-    }
-    return value;
-  }}
-/>
-```
-
-This requires passing `dataType` to `renderContent()` or making it accessible. Since `Chart2D` already has `dataType` as a prop, we can use it directly in the YAxis formatter.
-
-Also update the tooltip formatter to be consistent:
-
-```typescript
-<RechartsTooltip 
-  contentStyle={{ 
-    backgroundColor: 'hsl(var(--popover))', 
-    border: '1px solid hsl(var(--border))',
-    borderRadius: '0.5rem'
-  }}
-  formatter={(value: number) => [
-    dataType === 'cost' 
-      ? (value >= 1000 ? `$${(value / 1000).toFixed(1)}k` : `$${value}`)
-      : Number(value).toFixed(1),
-    undefined
-  ]}
-/>
-```
-
----
-
-## Files to Modify
-
-| File | Changes |
-|------|---------|
-| `src/components/wizard/RiskTimelineChart3D.tsx` | 1. Change Today line stroke from `#ef4444` to `#000000` (black). 2. Add `tickFormatter` to YAxis for cost mode to display values as `$Xk`. 3. Update tooltip formatter for consistency. |
-
----
-
-## Summary
-
-| Request | Action |
-|---------|--------|
-| 182.8 derisk verification | This is calculated using weighted control ratios. The formula is mathematically correct. A detailed instance-by-instance breakdown requires database queries. |
-| Today indicator → black | Change `stroke` and `fill` from `#ef4444` to `#000000` |
-| Y-axis in $1000s for cost mode | Add `tickFormatter` that converts values like `30000` to `$30k` |
