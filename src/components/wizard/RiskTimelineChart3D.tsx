@@ -7,11 +7,12 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Switch } from "@/components/ui/switch";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Separator } from "@/components/ui/separator";
 import { format, parseISO } from "date-fns";
 import * as THREE from "three";
-import { Maximize2, Minimize2 } from "lucide-react";
+import { Maximize2 } from "lucide-react";
 import {
   LineChart,
   Line as RechartsLine,
@@ -25,6 +26,7 @@ import {
   Tooltip as RechartsTooltip,
   Legend as RechartsLegend,
   ResponsiveContainer,
+  ReferenceLine,
 } from "recharts";
 
 interface ChartSettings {
@@ -33,7 +35,6 @@ interface ChartSettings {
   chartType: 'line' | 'bars' | 'stackedLine' | 'stackedBars';
   startDate: string;
   endDate: string;
-  showToday: boolean;
 }
 
 interface RiskTimelineChart3DProps {
@@ -296,12 +297,55 @@ const TodayMarker: React.FC<TodayMarkerProps> = ({ monthIndex, maxHeight, totalD
   );
 };
 
+// 3D Stacked Bar mesh for stacked bar chart mode
+interface StackedBarMeshProps {
+  monthValues: number[];
+  yOffsets: number[];
+  color: string;
+  zPosition: number;
+  isHovered: boolean;
+}
+
+const StackedBarMesh: React.FC<StackedBarMeshProps> = ({
+  monthValues,
+  yOffsets,
+  color,
+  zPosition,
+  isHovered,
+}) => {
+  const hasData = monthValues.some(v => v > 0);
+  if (!hasData) return null;
+
+  const barWidth = UNIT_X * 0.7;
+
+  return (
+    <group>
+      {monthValues.map((value, i) => {
+        if (value <= 0) return null;
+        const height = value * SCALE_Y;
+        const yOffset = yOffsets[i];
+        const x = (i + 0.5) * UNIT_X;
+        
+        return (
+          <mesh key={i} position={[x, yOffset + height / 2, zPosition]}>
+            <boxGeometry args={[barWidth, height, 0.3]} />
+            <meshStandardMaterial 
+              color={color} 
+              transparent 
+              opacity={isHovered ? 1 : 0.85}
+            />
+          </mesh>
+        );
+      })}
+    </group>
+  );
+};
+
 interface ChartSceneProps {
   data: RiskTimelineData;
   visibleTypes: Set<string>;
   onHover: (data: TooltipData | null) => void;
   chartType: 'line' | 'bars' | 'stackedLine' | 'stackedBars';
-  showToday: boolean;
   showDerisk: boolean;
   mode: 'total' | 'brokenDown';
 }
@@ -311,7 +355,6 @@ const ChartScene: React.FC<ChartSceneProps> = ({
   visibleTypes, 
   onHover, 
   chartType, 
-  showToday,
   showDerisk,
   mode 
 }) => {
@@ -327,39 +370,77 @@ const ChartScene: React.FC<ChartSceneProps> = ({
       .filter(({ type }) => visibleTypes.has(type.name));
   }, [aspTypes, visibleTypes]);
 
-  const totalDepth = mode === 'total' ? GAP_Z : visibleTypeData.length * GAP_Z;
+  const totalDepth = mode === 'total' ? GAP_Z : (chartType === 'stackedBars' || chartType === 'stackedLine' ? GAP_Z : visibleTypeData.length * GAP_Z);
   const centerX = (months.length * UNIT_X) / 2;
   const centerZ = totalDepth / 2;
 
+  // Calculate cumulative heights for stacked bar chart
+  const cumulativeOffsets = useMemo(() => {
+    if (chartType !== 'stackedBars' || mode === 'total') return null;
+    
+    const offsets: number[][] = [];
+    const running = months.map(() => 0);
+    
+    visibleTypeData.forEach(({ originalIndex }) => {
+      offsets.push([...running]);
+      matrix[originalIndex].forEach((v, i) => {
+        running[i] += v * SCALE_Y;
+      });
+    });
+    
+    return offsets;
+  }, [chartType, mode, visibleTypeData, matrix, months]);
+
   const RenderComponent = chartType === 'bars' ? BarMesh : StepLineMesh;
+  const isStackedMode = chartType === 'stackedBars' || chartType === 'stackedLine';
 
   return (
     <group position={[-centerX, 0, -centerZ]}>
       {mode === 'total' ? (
         // Total mode: single aggregated line/bar
         <>
-          <RenderComponent
-            monthValues={totalPerMonth}
-            color="#ef4444"
-            zPosition={0}
-            aspType="Total Risk"
-            months={months}
-            category="Total"
-            onHover={onHover}
-            isHovered={hoveredType === "Total Risk"}
-          />
-          {showDerisk && totalDeriskPerMonth && (
+          {chartType === 'stackedBars' ? (
+            <StackedBarMesh
+              monthValues={totalPerMonth}
+              yOffsets={months.map(() => 0)}
+              color="#ef4444"
+              zPosition={0}
+              isHovered={hoveredType === "Total Risk"}
+            />
+          ) : (
             <RenderComponent
-              monthValues={totalDeriskPerMonth}
-              color="#22c55e"
-              zPosition={chartType === 'bars' ? 0 : 0.05}
-              aspType="Total Derisk"
+              monthValues={totalPerMonth}
+              color="#ef4444"
+              zPosition={0}
+              aspType="Total Risk"
               months={months}
               category="Total"
               onHover={onHover}
-              isHovered={hoveredType === "Total Derisk"}
-              isDerisk
+              isHovered={hoveredType === "Total Risk"}
             />
+          )}
+          {showDerisk && totalDeriskPerMonth && (
+            chartType === 'stackedBars' ? (
+              <StackedBarMesh
+                monthValues={totalDeriskPerMonth}
+                yOffsets={totalPerMonth.map(v => v * SCALE_Y)}
+                color="#22c55e"
+                zPosition={0}
+                isHovered={hoveredType === "Total Derisk"}
+              />
+            ) : (
+              <RenderComponent
+                monthValues={totalDeriskPerMonth}
+                color="#22c55e"
+                zPosition={chartType === 'bars' ? 0 : 0.05}
+                aspType="Total Derisk"
+                months={months}
+                category="Total"
+                onHover={onHover}
+                isHovered={hoveredType === "Total Derisk"}
+                isDerisk
+              />
+            )
           )}
           <HitArea
             monthValues={totalPerMonth}
@@ -377,17 +458,27 @@ const ChartScene: React.FC<ChartSceneProps> = ({
         // Broken down mode: separate lines/bars per ASP type
         visibleTypeData.map(({ type, originalIndex }, visibleIdx) => (
           <React.Fragment key={type.name}>
-            <RenderComponent
-              monthValues={matrix[originalIndex]}
-              color={type.color}
-              zPosition={visibleIdx * GAP_Z}
-              aspType={type.name}
-              months={months}
-              category={type.category}
-              onHover={onHover}
-              isHovered={hoveredType === type.name}
-            />
-            {showDerisk && deriskMatrix && deriskMatrix[originalIndex] && (
+            {chartType === 'stackedBars' && cumulativeOffsets ? (
+              <StackedBarMesh
+                monthValues={matrix[originalIndex]}
+                yOffsets={cumulativeOffsets[visibleIdx]}
+                color={type.color}
+                zPosition={0}
+                isHovered={hoveredType === type.name}
+              />
+            ) : (
+              <RenderComponent
+                monthValues={matrix[originalIndex]}
+                color={type.color}
+                zPosition={isStackedMode ? 0 : visibleIdx * GAP_Z}
+                aspType={type.name}
+                months={months}
+                category={type.category}
+                onHover={onHover}
+                isHovered={hoveredType === type.name}
+              />
+            )}
+            {showDerisk && deriskMatrix && deriskMatrix[originalIndex] && !isStackedMode && (
               <RenderComponent
                 monthValues={deriskMatrix[originalIndex]}
                 color="#22c55e"
@@ -402,7 +493,7 @@ const ChartScene: React.FC<ChartSceneProps> = ({
             )}
             <HitArea
               monthValues={matrix[originalIndex]}
-              zPosition={visibleIdx * GAP_Z}
+              zPosition={isStackedMode ? 0 : visibleIdx * GAP_Z}
               aspType={type.name}
               months={months}
               category={type.category}
@@ -415,7 +506,7 @@ const ChartScene: React.FC<ChartSceneProps> = ({
         ))
       )}
 
-      {showToday && todayMonthIndex !== null && (
+      {todayMonthIndex !== null && (
         <TodayMarker
           monthIndex={todayMonthIndex}
           maxHeight={maxHeight}
@@ -426,7 +517,7 @@ const ChartScene: React.FC<ChartSceneProps> = ({
       {months.map((month, idx) => {
         if (idx % 3 !== 0 && months.length > 12) return null;
         const x = (idx + 0.5) * UNIT_X;
-        const label = format(parseISO(month + "-01"), "MMM yy");
+        const label = format(parseISO(month + "-01"), "MMM yyyy");
 
         return (
           <Text
@@ -581,7 +672,6 @@ interface Chart2DProps {
   data: RiskTimelineData;
   visibleTypes: Set<string>;
   chartType: 'line' | 'bars' | 'stackedLine' | 'stackedBars';
-  showToday: boolean;
   showDerisk: boolean;
   mode: 'total' | 'brokenDown';
 }
@@ -590,7 +680,6 @@ const Chart2D: React.FC<Chart2DProps> = ({
   data, 
   visibleTypes, 
   chartType, 
-  showToday,
   showDerisk,
   mode 
 }) => {
@@ -599,7 +688,7 @@ const Chart2D: React.FC<Chart2DProps> = ({
   const chartData = useMemo(() => {
     return months.map((month, idx) => {
       const entry: Record<string, any> = {
-        month: format(parseISO(month + "-01"), "MMM yy"),
+        month: format(parseISO(month + "-01"), "MMM yyyy"),
         fullMonth: month,
       };
 
@@ -624,11 +713,23 @@ const Chart2D: React.FC<Chart2DProps> = ({
   }, [months, mode, totalPerMonth, totalDeriskPerMonth, aspTypes, visibleTypes, matrix, deriskMatrix, showDerisk]);
 
   const visibleAspTypes = aspTypes.filter(t => visibleTypes.has(t.name));
+  const todayMonth = todayMonthIndex !== null ? chartData[todayMonthIndex]?.month : null;
 
   const commonChartProps = {
     data: chartData,
     margin: { top: 20, right: 30, left: 20, bottom: 60 }
   };
+
+  const renderTodayLine = () => (
+    todayMonth && (
+      <ReferenceLine 
+        x={todayMonth} 
+        stroke="#ef4444" 
+        strokeWidth={2}
+        label={{ value: "Today", position: "top", fill: "#ef4444", fontSize: 12 }}
+      />
+    )
+  );
 
   const renderContent = () => (
     <>
@@ -650,6 +751,7 @@ const Chart2D: React.FC<Chart2DProps> = ({
         }}
       />
       <RechartsLegend />
+      {renderTodayLine()}
     </>
   );
 
@@ -757,7 +859,6 @@ interface ControlPanelProps {
   constructionStartDate?: string;
   constructionEndDate?: string;
   onFullscreen: () => void;
-  isFullscreen: boolean;
 }
 
 const ControlPanel: React.FC<ControlPanelProps> = ({
@@ -766,12 +867,11 @@ const ControlPanel: React.FC<ControlPanelProps> = ({
   constructionStartDate,
   constructionEndDate,
   onFullscreen,
-  isFullscreen
 }) => {
   return (
-    <div className="flex flex-wrap items-center gap-4 mb-4 p-3 bg-muted/30 rounded-lg border">
+    <div className="flex flex-wrap items-center gap-2 mb-4 p-3 bg-muted/30 rounded-lg border">
       {/* Dimension Toggle */}
-      <div className="flex items-center gap-2">
+      <div className="flex items-center gap-1.5">
         <Label className="text-xs text-muted-foreground">View:</Label>
         <ToggleGroup 
           type="single" 
@@ -783,9 +883,11 @@ const ControlPanel: React.FC<ControlPanelProps> = ({
           <ToggleGroupItem value="2d" className="text-xs px-2">2D</ToggleGroupItem>
         </ToggleGroup>
       </div>
+
+      <Separator orientation="vertical" className="h-6" />
       
       {/* Mode Toggle */}
-      <div className="flex items-center gap-2">
+      <div className="flex items-center gap-1.5">
         <Label className="text-xs text-muted-foreground">Mode:</Label>
         <ToggleGroup 
           type="single" 
@@ -797,9 +899,11 @@ const ControlPanel: React.FC<ControlPanelProps> = ({
           <ToggleGroupItem value="brokenDown" className="text-xs px-2">By Type</ToggleGroupItem>
         </ToggleGroup>
       </div>
+
+      <Separator orientation="vertical" className="h-6" />
       
       {/* Chart Type Toggle */}
-      <div className="flex items-center gap-2">
+      <div className="flex items-center gap-1.5">
         <Label className="text-xs text-muted-foreground">Style:</Label>
         <ToggleGroup 
           type="single" 
@@ -813,9 +917,11 @@ const ControlPanel: React.FC<ControlPanelProps> = ({
           <ToggleGroupItem value="stackedBars" className="text-xs px-2">Stacked Bars</ToggleGroupItem>
         </ToggleGroup>
       </div>
+
+      <Separator orientation="vertical" className="h-6" />
       
-      {/* Date Range */}
-      <div className="flex items-center gap-2">
+      {/* Date Range - inline */}
+      <div className="flex items-center gap-1.5">
         <Label className="text-xs text-muted-foreground">From:</Label>
         <Input 
           type="date" 
@@ -825,8 +931,6 @@ const ControlPanel: React.FC<ControlPanelProps> = ({
           min={constructionStartDate}
           max={settings.endDate || constructionEndDate}
         />
-      </div>
-      <div className="flex items-center gap-2">
         <Label className="text-xs text-muted-foreground">To:</Label>
         <Input 
           type="date" 
@@ -838,18 +942,9 @@ const ControlPanel: React.FC<ControlPanelProps> = ({
         />
       </div>
       
-      {/* Today Toggle */}
-      <div className="flex items-center gap-2">
-        <Label className="text-xs text-muted-foreground">Today</Label>
-        <Switch 
-          checked={settings.showToday} 
-          onCheckedChange={(v) => onSettingsChange({ ...settings, showToday: v })}
-        />
-      </div>
-      
-      {/* Fullscreen */}
+      {/* Fullscreen (Modal) */}
       <Button variant="outline" size="icon" onClick={onFullscreen} className="ml-auto h-8 w-8">
-        {isFullscreen ? <Minimize2 className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}
+        <Maximize2 className="h-4 w-4" />
       </Button>
     </div>
   );
@@ -862,7 +957,8 @@ export const RiskTimelineChart3D: React.FC<RiskTimelineChart3DProps> = ({
   controlsData = []
 }) => {
   const containerRef = useRef<HTMLDivElement>(null);
-  const [isFullscreen, setIsFullscreen] = useState(false);
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const initializedRef = useRef(false);
   
   // Chart settings state
   const [settings, setSettings] = useState<ChartSettings>(() => ({
@@ -871,7 +967,6 @@ export const RiskTimelineChart3D: React.FC<RiskTimelineChart3DProps> = ({
     chartType: 'line',
     startDate: projectData.construction_start_date || '',
     endDate: projectData.construction_end_date || '',
-    showToday: true
   }));
 
   // Update date range when project data changes
@@ -909,8 +1004,23 @@ export const RiskTimelineChart3D: React.FC<RiskTimelineChart3DProps> = ({
     new Set(data.aspTypes.map(t => t.name))
   );
 
+  // Only initialize visibleTypes once, then only add new types
   useEffect(() => {
-    setVisibleTypes(new Set(data.aspTypes.map(t => t.name)));
+    if (!initializedRef.current && data.aspTypes.length > 0) {
+      setVisibleTypes(new Set(data.aspTypes.map(t => t.name)));
+      initializedRef.current = true;
+    } else if (initializedRef.current) {
+      // Add any new types that appear
+      setVisibleTypes(prev => {
+        const next = new Set(prev);
+        data.aspTypes.forEach(t => {
+          if (!next.has(t.name)) {
+            next.add(t.name);
+          }
+        });
+        return next;
+      });
+    }
   }, [data.aspTypes]);
 
   const handleToggleType = useCallback((name: string) => {
@@ -935,27 +1045,75 @@ export const RiskTimelineChart3D: React.FC<RiskTimelineChart3DProps> = ({
     }
   }, []);
 
-  // Fullscreen handling
+  // Open modal instead of browser fullscreen
   const toggleFullscreen = useCallback(() => {
-    if (!containerRef.current) return;
-    
-    if (!document.fullscreenElement) {
-      containerRef.current.requestFullscreen();
-    } else {
-      document.exitFullscreen();
-    }
-  }, []);
-
-  useEffect(() => {
-    const handleFullscreenChange = () => {
-      setIsFullscreen(!!document.fullscreenElement);
-    };
-    document.addEventListener('fullscreenchange', handleFullscreenChange);
-    return () => document.removeEventListener('fullscreenchange', handleFullscreenChange);
+    setIsModalOpen(true);
   }, []);
 
   // Determine if derisk should be shown
   const showDerisk = settings.mode === 'total' || settings.dimension === '3d';
+
+  // Render chart content - shared between main and modal
+  const renderChartContent = (heightClass: string) => (
+    <div
+      className={`relative bg-gradient-to-b from-background to-muted/20 rounded-lg border border-border overflow-hidden ${heightClass}`}
+      onMouseMove={handleMouseMove}
+    >
+      {settings.dimension === '3d' ? (
+        <Suspense fallback={
+          <div className="h-full flex items-center justify-center text-muted-foreground">
+            Loading 3D visualization...
+          </div>
+        }>
+          <Canvas
+            camera={{
+              position: [12, 8, 16],
+              fov: 45,
+              near: 0.1,
+              far: 1000
+            }}
+            gl={{ antialias: true }}
+          >
+            <ambientLight intensity={0.7} />
+            <pointLight position={[15, 15, 15]} intensity={0.6} />
+            <pointLight position={[-10, 10, -10]} intensity={0.3} />
+
+            <ChartScene
+              data={data}
+              visibleTypes={visibleTypes}
+              onHover={setTooltipData}
+              chartType={settings.chartType}
+              showDerisk={showDerisk}
+              mode={settings.mode}
+            />
+
+            <OrbitControls
+              enableDamping
+              dampingFactor={0.05}
+              minPolarAngle={Math.PI / 6}
+              maxPolarAngle={Math.PI / 2.2}
+              minDistance={5}
+              maxDistance={40}
+              zoomSpeed={0.3}
+            />
+          </Canvas>
+        </Suspense>
+      ) : (
+        <Chart2D
+          data={data}
+          visibleTypes={visibleTypes}
+          chartType={settings.chartType}
+          showDerisk={showDerisk}
+          mode={settings.mode}
+        />
+      )}
+
+      {/* Screen-space tooltip (3D mode only) */}
+      {settings.dimension === '3d' && tooltipData && (
+        <ScreenTooltip data={tooltipData} mousePosition={mousePosition} />
+      )}
+    </div>
+  );
 
   if (!data.hasMilestones) {
     return (
@@ -978,89 +1136,56 @@ export const RiskTimelineChart3D: React.FC<RiskTimelineChart3DProps> = ({
   }
 
   return (
-    <div 
-      ref={containerRef}
-      className={`space-y-4 ${isFullscreen ? 'fixed inset-0 z-50 bg-background p-4' : ''}`}
-    >
-      <ControlPanel
-        settings={settings}
-        onSettingsChange={setSettings}
-        constructionStartDate={projectData.construction_start_date}
-        constructionEndDate={projectData.construction_end_date}
-        onFullscreen={toggleFullscreen}
-        isFullscreen={isFullscreen}
-      />
+    <>
+      <div ref={containerRef} className="space-y-4">
+        <ControlPanel
+          settings={settings}
+          onSettingsChange={setSettings}
+          constructionStartDate={projectData.construction_start_date}
+          constructionEndDate={projectData.construction_end_date}
+          onFullscreen={toggleFullscreen}
+        />
 
-      <div
-        className={`relative bg-gradient-to-b from-background to-muted/20 rounded-lg border border-border overflow-hidden ${
-          isFullscreen ? 'h-[calc(100vh-200px)]' : 'h-[400px]'
-        }`}
-        onMouseMove={handleMouseMove}
-      >
-        {settings.dimension === '3d' ? (
-          <Suspense fallback={
-            <div className="h-full flex items-center justify-center text-muted-foreground">
-              Loading 3D visualization...
-            </div>
-          }>
-            <Canvas
-              camera={{
-                position: [12, 8, 16],
-                fov: 45,
-                near: 0.1,
-                far: 1000
-              }}
-              gl={{ antialias: true }}
-            >
-              <ambientLight intensity={0.7} />
-              <pointLight position={[15, 15, 15]} intensity={0.6} />
-              <pointLight position={[-10, 10, -10]} intensity={0.3} />
+        {renderChartContent('h-[400px]')}
 
-              <ChartScene
-                data={data}
-                visibleTypes={visibleTypes}
-                onHover={setTooltipData}
-                chartType={settings.chartType}
-                showToday={settings.showToday}
-                showDerisk={showDerisk}
-                mode={settings.mode}
-              />
-
-              <OrbitControls
-                enableDamping
-                dampingFactor={0.05}
-                minPolarAngle={Math.PI / 6}
-                maxPolarAngle={Math.PI / 2.2}
-                minDistance={5}
-                maxDistance={40}
-                zoomSpeed={0.3}
-              />
-            </Canvas>
-          </Suspense>
-        ) : (
-          <Chart2D
-            data={data}
-            visibleTypes={visibleTypes}
-            chartType={settings.chartType}
-            showToday={settings.showToday}
-            showDerisk={showDerisk}
-            mode={settings.mode}
-          />
-        )}
-
-        {/* Screen-space tooltip (3D mode only) */}
-        {settings.dimension === '3d' && tooltipData && (
-          <ScreenTooltip data={tooltipData} mousePosition={mousePosition} />
-        )}
+        <Legend
+          aspTypes={data.aspTypes}
+          visibleTypes={visibleTypes}
+          onToggle={handleToggleType}
+          mode={settings.mode}
+          showDerisk={showDerisk}
+        />
       </div>
 
-      <Legend
-        aspTypes={data.aspTypes}
-        visibleTypes={visibleTypes}
-        onToggle={handleToggleType}
-        mode={settings.mode}
-        showDerisk={showDerisk}
-      />
-    </div>
+      {/* Fullscreen Modal */}
+      <Dialog open={isModalOpen} onOpenChange={setIsModalOpen}>
+        <DialogContent className="max-w-[95vw] max-h-[95vh] w-[95vw] h-[90vh] flex flex-col">
+          <DialogHeader>
+            <DialogTitle>Risk Timeline</DialogTitle>
+          </DialogHeader>
+          <div className="flex-1 flex flex-col gap-4 overflow-hidden">
+            <ControlPanel
+              settings={settings}
+              onSettingsChange={setSettings}
+              constructionStartDate={projectData.construction_start_date}
+              constructionEndDate={projectData.construction_end_date}
+              onFullscreen={() => setIsModalOpen(false)}
+            />
+            
+            <div className="flex-1">
+              {renderChartContent('h-full')}
+            </div>
+
+            <Legend
+              aspTypes={data.aspTypes}
+              visibleTypes={visibleTypes}
+              onToggle={handleToggleType}
+              mode={settings.mode}
+              showDerisk={showDerisk}
+            />
+          </div>
+        </DialogContent>
+      </Dialog>
+    </>
   );
 };

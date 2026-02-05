@@ -131,10 +131,11 @@ export const useRiskTimelineData = ({
       piLookup.set(normalizeClassName(v.name), { probability: v.probability, impact: v.impact });
     });
 
-    // Build control points lookup
+    // Build control points lookup with normalized keys
     const controlPointsLookup = new Map<string, number>();
     controlsData.forEach(c => {
-      controlPointsLookup.set(c.name, c.points);
+      const normalizedKey = c.name.toLowerCase().trim();
+      controlPointsLookup.set(normalizedKey, c.points);
     });
 
     const getClassName = (item: AnalysisItem): string | null => {
@@ -333,10 +334,11 @@ export const useRiskTimelineData = ({
     let deriskMatrix: number[][] | null = null;
     
     if (selectedInstanceIds.length > 0 && selectedControlIds.length > 0) {
-      // Calculate total derisk points from selected controls
+      // Calculate total derisk points from selected controls (with normalized lookup)
       const totalDeriskPoints = selectedControlIds.reduce((sum, controlId) => {
-        // controlId might be the control name directly
-        const points = controlPointsLookup.get(controlId) || 0;
+        // Normalize the control ID for lookup
+        const normalizedControlId = controlId.toLowerCase().trim();
+        const points = controlPointsLookup.get(normalizedControlId) || 0;
         return sum + points;
       }, 0);
 
