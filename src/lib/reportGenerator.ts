@@ -1,4 +1,4 @@
-import { format } from "date-fns";
+import { format, isValid } from "date-fns";
 
 export const formatCurrency = (amount: number): string => {
   return new Intl.NumberFormat('en-US', {
@@ -7,11 +7,38 @@ export const formatCurrency = (amount: number): string => {
   }).format(amount);
 };
 
+// Helper to parse date strings as local dates to avoid timezone shift
+// This prevents "2023-05-30" from becoming May 29 in western timezones
+const parseLocalDate = (date: string | Date): Date => {
+  if (typeof date === 'string') {
+    // Parse YYYY-MM-DD strings as local dates
+    if (/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+      const [year, month, day] = date.split('-').map(Number);
+      return new Date(year, month - 1, day); // month is 0-indexed
+    }
+    // For other formats or ISO strings with time, use Date constructor
+    return new Date(date);
+  }
+  return date;
+};
+
 export const formatDate = (date: string | Date | null | undefined): string => {
   if (!date) return "—";
   try {
-    const dateObj = typeof date === 'string' ? new Date(date) : date;
+    const dateObj = parseLocalDate(date);
+    if (!isValid(dateObj)) return "—";
     return format(dateObj, "MMM dd, yyyy");
+  } catch {
+    return "—";
+  }
+};
+
+export const formatDateShort = (date: string | Date | null | undefined): string => {
+  if (!date) return "—";
+  try {
+    const dateObj = parseLocalDate(date);
+    if (!isValid(dateObj)) return "—";
+    return format(dateObj, "M/dd/yy");
   } catch {
     return "—";
   }
