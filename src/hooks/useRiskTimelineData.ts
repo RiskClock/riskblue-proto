@@ -526,12 +526,34 @@ export const useRiskTimelineData = ({
 
     // Calculate controls cost per month (one-time in first month + monthly ongoing)
     let totalControlsCostPerMonth: number[] | null = null;
+    
+    // Debug: Log incoming cost data
+    if (controlsData.length > 0) {
+      const hasAnyCosts = controlsData.some(c => (c.oneTimeCost || 0) > 0 || (c.monthlyCost || 0) > 0);
+      if (!hasAnyCosts) {
+        console.warn('[RiskTimeline] Warning: controlsData has no cost information', controlsData[0]);
+      }
+    }
+    
+    console.log('[RiskTimeline] Cost calculation inputs:', {
+      selectedControlIds: selectedControlIds.length,
+      controlsData: controlsData.length,
+      sampleControl: controlsData[0]
+    });
+    
     if (selectedControlIds.length > 0 && controlsData.length > 0) {
       // Initialize with zeros
       const costPerMonth = months.map(() => 0);
       
       // Track which controls we've already added one-time costs for (by control name)
       const oneTimeCostAdded = new Set<string>();
+      
+      // Debug counters
+      let processedCount = 0;
+      let skippedNoControl = 0;
+      let skippedNoInstance = 0;
+      let skippedNoClass = 0;
+      let skippedNoClassData = 0;
       
       // For each selected control, add costs to appropriate months
       selectedControlIds.forEach(controlId => {
@@ -544,11 +566,17 @@ export const useRiskTimelineData = ({
         
         // Find the control's cost data
         const controlCost = controlsData.find(c => c.name.toLowerCase().trim() === normalizedControlName);
-        if (!controlCost) return;
+        if (!controlCost) {
+          skippedNoControl++;
+          return;
+        }
         
         // Find the instance to get its class duration
         const instance = analysisItems.find(item => item.id === instanceId);
-        if (!instance) return;
+        if (!instance) {
+          skippedNoInstance++;
+          return;
+        }
         
         // Get the class for this instance
         const className = instance.category === 'Asset' 
@@ -557,12 +585,18 @@ export const useRiskTimelineData = ({
             ? mapToWaterSystemName(instance.name)
             : mapToProcessName(instance.name);
         
-        if (!className) return;
+        if (!className) {
+          skippedNoClass++;
+          return;
+        }
         
         // Find class data to get date range
         const normalizedClassName = normalizeClassName(className);
         const classData = classDataMap.get(normalizedClassName);
-        if (!classData || !classData.startDate || !classData.endDate) return;
+        if (!classData || !classData.startDate || !classData.endDate) {
+          skippedNoClassData++;
+          return;
+        }
         
         const startMonth = format(startOfMonth(classData.startDate), "yyyy-MM");
         const endMonth = format(startOfMonth(classData.endDate), "yyyy-MM");
@@ -588,6 +622,17 @@ export const useRiskTimelineData = ({
           costPerMonth[effectiveStartIdx] += oneTimeCost;
           oneTimeCostAdded.add(normalizedControlName);
         }
+        
+        processedCount++;
+      });
+      
+      console.log('[RiskTimeline] Cost calculation results:', {
+        processedCount,
+        skippedNoControl,
+        skippedNoInstance,
+        skippedNoClass,
+        skippedNoClassData,
+        totalCost: costPerMonth.reduce((a, b) => a + b, 0)
       });
       
       // Apply cumulative mode if needed
