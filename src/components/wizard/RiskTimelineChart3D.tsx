@@ -843,6 +843,8 @@ interface Chart2DProps {
   showDerisk: boolean;
   mode: 'total' | 'brokenDown';
   yAxisLabel: string;
+  dataType: 'risk' | 'cost';
+  dollarPerRiskPoint: number;
 }
 
 const Chart2D: React.FC<Chart2DProps> = ({ 
@@ -851,9 +853,14 @@ const Chart2D: React.FC<Chart2DProps> = ({
   chartType, 
   showDerisk,
   mode,
-  yAxisLabel
+  yAxisLabel,
+  dataType,
+  dollarPerRiskPoint
 }) => {
   const { months, aspTypes, matrix, deriskMatrix, totalPerMonth, totalDeriskPerMonth, todayMonthIndex } = data;
+
+  // Cost view multiplies risk/derisk points by dollarPerRiskPoint
+  const multiplier = dataType === 'cost' ? dollarPerRiskPoint : 1;
 
   const chartData = useMemo(() => {
     return months.map((month, idx) => {
@@ -863,16 +870,16 @@ const Chart2D: React.FC<Chart2DProps> = ({
       };
 
       if (mode === 'total') {
-        entry.totalRisk = totalPerMonth[idx];
+        entry.totalRisk = Number((totalPerMonth[idx] * multiplier).toFixed(2));
         if (showDerisk && totalDeriskPerMonth) {
-          entry.totalDerisk = totalDeriskPerMonth[idx];
+          entry.totalDerisk = Number((totalDeriskPerMonth[idx] * multiplier).toFixed(2));
         }
       } else {
         aspTypes.forEach((type, typeIdx) => {
           if (visibleTypes.includes(type.name)) {
-            entry[type.name] = matrix[typeIdx][idx];
+            entry[type.name] = Number((matrix[typeIdx][idx] * multiplier).toFixed(2));
             if (showDerisk && deriskMatrix && deriskMatrix[typeIdx]) {
-              entry[`${type.name}_derisk`] = deriskMatrix[typeIdx][idx];
+              entry[`${type.name}_derisk`] = Number((deriskMatrix[typeIdx][idx] * multiplier).toFixed(2));
             }
           }
         });
@@ -880,7 +887,7 @@ const Chart2D: React.FC<Chart2DProps> = ({
 
       return entry;
     });
-  }, [months, mode, totalPerMonth, totalDeriskPerMonth, aspTypes, visibleTypes, matrix, deriskMatrix, showDerisk]);
+  }, [months, mode, totalPerMonth, totalDeriskPerMonth, aspTypes, visibleTypes, matrix, deriskMatrix, showDerisk, multiplier]);
 
   const visibleAspTypes = aspTypes.filter(t => visibleTypes.includes(t.name));
   const todayMonth = todayMonthIndex !== null ? chartData[todayMonthIndex]?.month : null;
@@ -922,6 +929,10 @@ const Chart2D: React.FC<Chart2DProps> = ({
           border: '1px solid hsl(var(--border))',
           borderRadius: '0.5rem'
         }}
+        formatter={(value: number) => [
+          dataType === 'cost' ? `$${Number(value).toLocaleString()}` : Number(value).toFixed(1),
+          undefined
+        ]}
       />
       <RechartsLegend />
       {renderTodayLine()}
@@ -1043,6 +1054,22 @@ const ControlPanel: React.FC<ControlPanelProps> = ({
 }) => {
   return (
     <div className="flex flex-wrap items-center gap-2 mb-4 p-3 bg-muted/30 rounded-lg border">
+      {/* Data Type Toggle - FIRST */}
+      <div className="flex items-center gap-1.5">
+        <Label className="text-xs text-muted-foreground">Data:</Label>
+        <ToggleGroup 
+          type="single" 
+          value={settings.dataType} 
+          onValueChange={(v) => v && onSettingsChange({ ...settings, dataType: v as 'risk' | 'cost' })}
+          size="sm"
+        >
+          <ToggleGroupItem value="risk" className="text-xs px-2">Risk Points</ToggleGroupItem>
+          <ToggleGroupItem value="cost" className="text-xs px-2">Cost ($)</ToggleGroupItem>
+        </ToggleGroup>
+      </div>
+
+      <Separator orientation="vertical" className="h-6" />
+
       {/* Dimension Toggle */}
       <div className="flex items-center gap-1.5">
         <Label className="text-xs text-muted-foreground">View:</Label>
@@ -1088,22 +1115,6 @@ const ControlPanel: React.FC<ControlPanelProps> = ({
           <ToggleGroupItem value="bars" className="text-xs px-2">Bars</ToggleGroupItem>
           <ToggleGroupItem value="stackedLine" className="text-xs px-2">Stacked Line</ToggleGroupItem>
           <ToggleGroupItem value="stackedBars" className="text-xs px-2">Stacked Bars</ToggleGroupItem>
-        </ToggleGroup>
-      </div>
-
-      <Separator orientation="vertical" className="h-6" />
-
-      {/* Data Type Toggle */}
-      <div className="flex items-center gap-1.5">
-        <Label className="text-xs text-muted-foreground">Data:</Label>
-        <ToggleGroup 
-          type="single" 
-          value={settings.dataType} 
-          onValueChange={(v) => v && onSettingsChange({ ...settings, dataType: v as 'risk' | 'cost' })}
-          size="sm"
-        >
-          <ToggleGroupItem value="risk" className="text-xs px-2">Risk Points</ToggleGroupItem>
-          <ToggleGroupItem value="cost" className="text-xs px-2">Cost ($)</ToggleGroupItem>
         </ToggleGroup>
       </div>
 
@@ -1392,6 +1403,8 @@ export const RiskTimelineChart3D: React.FC<RiskTimelineChart3DProps> = ({
           showDerisk={showDerisk}
           mode={settings.mode}
           yAxisLabel={yAxisLabel}
+          dataType={settings.dataType}
+          dollarPerRiskPoint={settings.dollarPerRiskPoint}
         />
       )}
 
