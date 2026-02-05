@@ -387,20 +387,23 @@ const ProjectWizardContent = () => {
 
   // Fetch control derisk points and costs for risk timeline chart
   const { data: controlPointsData = [] } = useQuery({
-    queryKey: ['control-points-for-timeline'],
+    queryKey: ['control-points-with-costs-v2'],
     queryFn: async () => {
       const { data, error } = await supabase
         .from('mitigation_controls')
         .select('name, points, one_time_cost, monthly_maint_cost')
         .eq('is_active', true);
       if (error) throw error;
-      return (data || []).map(c => ({
+      const result = (data || []).map(c => ({
         name: c.name,
         points: Number(c.points) || 0,
         oneTimeCost: Number(c.one_time_cost) || 0,
         monthlyCost: Number(c.monthly_maint_cost) || 0
       }));
-    }
+      console.log('[ProjectWizard] controlPointsData loaded:', { count: result.length, sample: result[0] });
+      return result;
+    },
+    staleTime: 0
   });
 
   const projectDurationMonths = useMemo(() => {
