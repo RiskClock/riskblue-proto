@@ -1,101 +1,127 @@
 
-## Fix One-Time Costs to Apply at Control Start Dates
 
-### Root Cause
-The current cost calculation (lines 320-370 in `useRiskTimelineData.ts`) aggregates ALL one-time costs from selected controls and applies them to the first month of each class's schedule. This creates a single large spike at project start (May 2023) rather than distributing one-time costs to when each control actually comes online.
+## Bug Analysis: ASP Instance Selections Reset on Navigation
 
-**Current behavior:**
+### Root Cause Identified
+
+When users navigate away from the project page and return, their custom instance/control selections are being overwritten. This happens in **three components**:
+
+- `src/components/wizard/CriticalAssetsStep.tsx`
+- `src/components/wizard/WaterSystemsStep.tsx`
+- `src/components/wizard/ProcessesStep.tsx`
+
+### The Problem Flow
+
+1. User makes custom selections (e.g., unchecks some instances/controls)
+2. Selections are saved to database via `updateFields()` (confirmed working - data is in DB)
+3. User navigates away (to Projects list, etc.)
+4. User navigates back to the project
+5. Step components **remount**, causing `prevRiskToleranceRef.current` to reset to `null`
+6. The risk tolerance filtering effect runs because `null !== parentRiskTolerance`
+7. The effect **overwrites** the user's saved selections with freshly filtered selections based on the current package
+
+### Evidence
+
+Database query confirms saved data exists:
 ```
-Month 1: $70.2k (all one-time costs lumped together)
-Month 2+: $X (ongoing monthly costs)
+selected_asset_instances: [KW014, FEER001, MTM001, ERM001, ...]  (27 items)
+selected_process_instances: [CONT001, WMVP001, MCP001]  (3 items)
+selected_system_instances: [FS001, TWR001, DCW001, ...]  (9 items)
 ```
 
-**Desired behavior:**
-```
-Month 1: $1.2k (one-time cost for Control A) + ongoing
-Month 2: $0.8k (one-time cost for Control B) + ongoing
-Month 3: $2.4k (one-time cost for Control C) + ongoing
-```
+But on remount, the filtering effect (lines 352-401 in CriticalAssetsStep) runs and recalculates selections.
 
-### Why This Matters
-- **Visibility**: Shows when capital expenditures actually occur during construction
-- **Planning**: Helps identify cost concentration periods and cash flow needs
-- **Accuracy**: Reflects actual control implementation timelines
+---
 
-### Solution Approach
+## Solution
 
-**File: `src/hooks/useRiskTimelineData.ts`**
+The fix is to **skip the risk tolerance filtering on initial mount if the user already has saved selections**. This preserves their manual customizations while still allowing the package selector to work when the user actively changes it.
 
-Refactor the `calculateCostMatrix()` function (lines 323-370) to:
+### Technical Changes
 
-1. **Build a control-to-instance mapping** instead of aggregating all costs upfront
-   - For each `selectedControlId` (format: `instanceId::controlName`), extract the instance and control separately
-   - Track which one-time and monthly costs belong to each instance
+**Files to modify:**
+1. `src/components/wizard/CriticalAssetsStep.tsx`
+2. `src/components/wizard/WaterSystemsStep.tsx`
+3. `src/components/wizard/ProcessesStep.tsx`
 
-2. **Calculate per-instance costs** based on the instance's actual schedule
-   - For each instance in a class: get its start date (use class start date as fallback)
-   - Apply selected controls' one-time costs only in the first month that instance is active
-   - Apply monthly costs to all months the instance is active
+**Change in each file:**
 
-3. **Distribute costs proportionally across instances**
-   - If a class has 3 selected instances, divide that class's row cost across those 3 instances
-   - This preserves the proportional distribution while respecting individual schedules
-
-### Technical Implementation
-
-Replace the current `calculateCostMatrix()` logic (lines 323-336) with:
+Modify the risk tolerance filtering useEffect to check if there are existing saved selections before applying the package filter on initial mount:
 
 ```typescript
-// Build control-to-instance lookup: instanceId -> { oneTimeCost, monthlyCost }
-const controlsByInstance = new Map<string, { oneTimeCost: number; monthlyCost: number }>();
+// BEFORE (problematic):
+useEffect(() => {
+  if (!assetItems.length || !controls.length) return;
+  
+  // Run on initial load (when prevRef is null) OR when tolerance actually changes
+  if (prevRiskToleranceRef.current === parentRiskTolerance) return;
+  prevRiskToleranceRef.current = parentRiskTolerance;
+  
+  // ... filters and overwrites selections
+}, [parentRiskTolerance, ...]);
 
-selectedControlIds.forEach(controlId => {
-  const parts = controlId.split('::');
-  if (parts.length !== 2) return;
+// AFTER (fixed):
+useEffect(() => {
+  if (!assetItems.length || !controls.length) return;
   
-  const [instanceId, controlName] = parts;
-  const normalizedName = controlName.toLowerCase().trim();
-  const costs = controlCostLookup.get(normalizedName);
+  // Skip if tolerance hasn't changed
+  if (prevRiskToleranceRef.current === parentRiskTolerance) return;
   
-  if (!costs) return;
+  const isInitialMount = prevRiskToleranceRef.current === null;
+  prevRiskToleranceRef.current = parentRiskTolerance;
   
-  if (!controlsByInstance.has(instanceId)) {
-    controlsByInstance.set(instanceId, { oneTimeCost: 0, monthlyCost: 0 });
+  // On initial mount, PRESERVE existing saved selections instead of re-filtering
+  // Only apply package filtering when user actively changes the tolerance
+  if (isInitialMount) {
+    const existingInstances = data.selectedAssetInstances || [];
+    const existingControls = data.selectedAssetControls || [];
+    
+    // If user has saved selections, preserve them and don't re-filter
+    if (existingInstances.length > 0 || existingControls.length > 0) {
+      return;
+    }
   }
   
-  const instanceCosts = controlsByInstance.get(instanceId)!;
-  instanceCosts.oneTimeCost += costs.oneTimeCost;
-  instanceCosts.monthlyCost += costs.monthlyCost;
-});
+  // ... rest of filtering logic for when tolerance actually changes
+}, [parentRiskTolerance, ...]);
 ```
 
-Then in the row calculation (lines 344-366), for each class:
-- Iterate through `classData.instanceIds` 
-- For each instance that's in `controlsByInstance`, apply its one-time cost at the start of its schedule
-- Distribute monthly costs across all months
+### Why This Works
 
-### Files to Modify
+- **On initial mount with existing data**: The effect sees `isInitialMount = true` and `existingInstances.length > 0`, so it returns early without overwriting
+- **On initial mount without data**: The effect applies the package filter to initialize selections (new project behavior)
+- **On package change**: The effect runs normally because `isInitialMount = false`, allowing the user to switch packages
 
-| File | Section | Change |
-|------|---------|--------|
-| `src/hooks/useRiskTimelineData.ts` | Lines 323-370 in `calculateCostMatrix()` | Refactor to map controls to instances and apply one-time costs at individual instance start dates instead of aggregating |
+### Additional Safeguard
 
-### Expected Result After Fix
+Also add a check to the local state initialization (around line 76-83) to ensure it reads from `data` on every mount:
 
-- One-time costs appear at the beginning of each control's implementation period
-- Spike is eliminated or reduced (depending on how many controls start in Month 1)
-- Remaining spikes correspond to when multiple controls are scheduled to start in the same month
-- Monthly costs continue as before throughout the control duration
-
-### Data Flow Visualization
-
+```typescript
+// Current local state initialization
+const [selectedInstanceIds, setSelectedInstanceIds] = useState<string[]>(
+  data.selectedAssetInstances || []
+);
 ```
-Before:
-  Class A: [70.2k, 2.5k, 2.5k, 2.5k, ...]
-  
-After:
-  Class A: [1.2k+0.8k+1.5k, 2.5k, 2.5k, 2.5k, ...]
-           = [3.5k, 2.5k, 2.5k, 2.5k, ...]
-  (if 3 controls start in Month 1)
+
+This is correct but we should also sync on remount using an effect:
+
+```typescript
+// Sync local state from saved data on mount
+useEffect(() => {
+  if (data.selectedAssetInstances && data.selectedAssetInstances.length > 0) {
+    setSelectedInstanceIds(data.selectedAssetInstances);
+    setSelectedControlIds(new Set(data.selectedAssetControls || []));
+  }
+}, []); // Run once on mount
 ```
+
+---
+
+## Summary
+
+| Issue | Fix |
+|-------|-----|
+| Risk tolerance effect runs on remount and overwrites saved selections | Check for existing saved data and skip filtering on initial mount |
+| Applies to 3 components | CriticalAssetsStep, WaterSystemsStep, ProcessesStep |
+| User-visible behavior after fix | Navigating away and back preserves all custom selections |
 
