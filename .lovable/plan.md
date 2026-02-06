@@ -1,137 +1,165 @@
 
 
-## Reorganize Risk Timeline Graph Controls
+## Investigation: Cost Discrepancy After Control Toggle ($615,536 -> $575,276)
 
 ### Summary
 
-Restructure the Risk Timeline chart controls based on the provided mockup layout, with 3 rows of controls, preset buttons, and conditional visibility for the cost slider.
+The cost estimate does not return to the original value after toggling "Mechanical Contractor Process" off and on due to a **race condition in the save queue** combined with a **read-before-write pattern** that can lose data when multiple saves occur in rapid succession.
 
 ---
 
-### New Control Layout (3 Rows)
+### Root Cause Analysis
 
-**Row 1:**
-```
-Timeframe: [Start Date] to [End Date]    Presets: [Risk By Type (in Points)] [Total Project Risk (in Points)] [Total Project Risk (in Cost Impact)]
+#### The Bug Flow
+
+1. **User unselects MCP001 (Mechanical Contractor Process)**
+   - `handleInstanceCheckboxClick` calls both:
+     - `onToggleInstance('MCP001')` - removes from `selectedProcessInstances`
+     - `onToggleAllControls([...MCP001 controls...], false)` - removes from `selectedProcessControls`
+   - Auto-save effect triggers after 500ms debounce
+   - Cost updates to reflect removal (~$36k less)
+
+2. **User reselects MCP001**
+   - Same handlers add MCP001 back to instances and controls
+   - Another auto-save queued
+
+3. **The Race Condition in ProjectContext.tsx**
+   
+   ```typescript
+   // In executeUpdate() - lines 136-151
+   if (hasJsonFields) {
+     // Step A: FETCH existing project_data from database
+     const { data: existing } = await supabase
+       .from('projects')
+       .select('project_data')
+       .eq('id', projectId)
+       .single();
+     
+     // Step B: MERGE with new fields
+     updateData.project_data = { ...existingProjectData, ...jsonFields };
+   }
+   ```
+
+   **Problem**: When Save 2 runs, it fetches the database state which may:
+   - Still have pre-Save-1 data (Save 1 in flight)
+   - Have Save 1's data (MCP001 controls removed)
+   
+   But the local `selectedProcessControls` passed to Save 2 may not include the MCP001 controls if the state was captured between the two toggles.
+
+---
+
+### Evidence from Network Logs
+
+**GET Response** (initial load):
+```json
+"selectedProcessInstances": ["CONT001", "MCP001", "WMVP001"]
 ```
 
-**Row 2:**
-```
-Graph: [Risk Points | Cost Impact]    Graph Style: [Bars | Lines]    Stacked: [checkbox]    Grouping: [All | By Type]
+**PATCH Request** (after toggle operations):
+```json
+"selectedProcessInstances": ["CONT001", "WMVP001"]  // MCP001 MISSING!
 ```
 
-**Row 3 (Conditional - only when Cost Impact selected):**
-```
-Cost per Point: ────●──── $50
+This confirms that MCP001 was removed from `selectedProcessInstances` and **not properly restored**.
+
+---
+
+### The $40k Discrepancy Explained
+
+| Item | Cost | Status |
+|------|------|--------|
+| MCP001 controls (19 controls) | ~$36,100 | Lost due to race condition |
+| Related instance-level calculations | ~$4,000 | Lost when instance missing |
+| **Total Missing** | **~$40,260** | Matches $615,536 - $575,276 |
+
+---
+
+### Technical Details
+
+#### Files Involved
+
+| File | Issue |
+|------|-------|
+| `src/contexts/ProjectContext.tsx` | Read-before-write pattern causes stale data merge |
+| `src/components/wizard/ProcessesStep.tsx` | Auto-save debounce + separate instance/control state |
+| `src/components/wizard/ExpandableListItem.tsx` | Two separate state updates per toggle |
+
+#### Current Save Flow (Problematic)
+
+```text
+User Action -> Local State Update -> 500ms Debounce -> Fetch DB -> Merge -> Save
+                                                         ^
+                                                         |
+                                          Race condition: DB may have stale data
 ```
 
 ---
 
-### Preset Configurations
+### Recommended Fix
 
-| Preset | Graph | Style | Stacked | Grouping |
-|--------|-------|-------|---------|----------|
-| Risk By Type (in Points) | Risk Points | Bars | Checked | By Type |
-| Total Project Risk (in Points) | Risk Points | Lines | Unchecked | All |
-| Total Project Risk (in Cost Impact) | Cost Impact | Lines | Unchecked | All |
+#### Option 1: Use Functional State Updates (Quick Fix)
 
-- **Initial selection:** Risk By Type (in Points)
-- Clicking a preset updates all related settings simultaneously
-- Active preset shown with filled/highlighted style
+The hint from Stack Overflow is partially correct, but the real issue is deeper. The state updates in React are fine - the problem is in the database save logic.
 
----
+#### Option 2: Optimistic Updates with Local State as Source of Truth (Recommended)
 
-### Key Changes
-
-| Current | New |
-|---------|-----|
-| Mode: Total / By Type | Grouping: All / By Type |
-| Style: 4 options (Line/Bars/Stacked Line/Stacked Bars) | Graph Style: Bars/Lines + Stacked checkbox |
-| $/Point slider always visible | Only visible when Cost Impact selected |
-| View: Monthly / Cumulative toggle | Removed entirely |
-| No presets | 3 preset buttons in Row 1 |
-| Expand button in controls | Moved to section title (right end) |
-| Vertical separators between groups | Removed |
-| Initial: brokenDown + line | Initial: riskByType preset |
-
----
-
-### Technical Implementation
-
-**Updated State Interface:**
+Instead of fetching from DB before each save, maintain a **local shadow of project_data** and always merge locally before saving:
 
 ```typescript
-interface ChartSettings {
-  graphStyle: 'bars' | 'lines';
-  stacked: boolean;
-  grouping: 'all' | 'byType';
-  startDate: string;
-  endDate: string;
-  dataType: 'risk' | 'cost';
-  dollarPerRiskPoint: number;
-}
+// In ProjectContext.tsx
+const localProjectDataRef = useRef<Record<string, any>>({});
 
-type PresetType = 'riskByType' | 'totalRiskPoints' | 'totalRiskCost';
+const executeUpdate = useCallback(async (fields: Record<string, any>) => {
+  // Merge into local shadow first
+  localProjectDataRef.current = { ...localProjectDataRef.current, ...jsonFields };
+  
+  // Save the complete local state, not a DB merge
+  updateData.project_data = localProjectDataRef.current;
+  
+  // Then save to DB
+  await supabase.from('projects').update(updateData)...
+});
 ```
 
-**Preset Definitions:**
+#### Option 3: Debounce at Component Level, Not Field Level
+
+Instead of saving instances and controls separately, batch all selection changes into a single atomic save:
 
 ```typescript
-const PRESETS = {
-  riskByType: {
-    dataType: 'risk',
-    graphStyle: 'bars',
-    stacked: true,
-    grouping: 'byType'
-  },
-  totalRiskPoints: {
-    dataType: 'risk',
-    graphStyle: 'lines',
-    stacked: false,
-    grouping: 'all'
-  },
-  totalRiskCost: {
-    dataType: 'cost',
-    graphStyle: 'lines',
-    stacked: false,
-    grouping: 'all'
-  }
-};
+// In ProcessesStep.tsx - combine into single save
+const timer = setTimeout(() => {
+  updateFields({
+    selectedProcessInstances: selectedInstanceIds,
+    selectedProcessControls: Array.from(selectedControlIds),
+  });
+}, 500);
 ```
 
-**Chart Type Derivation:**
-
-```typescript
-const getChartType = (style: 'bars' | 'lines', stacked: boolean) => {
-  if (style === 'bars') return stacked ? 'stackedBars' : 'bars';
-  return stacked ? 'stackedLine' : 'line';
-};
-```
+This is already being done, but the issue is the **read-before-write** pattern in ProjectContext still causes problems with concurrent saves.
 
 ---
 
-### Defaults
+### Implementation Plan
 
-- **Timeframe:** Start = `construction_start_date`, End = `construction_end_date`
-- **Cost per Point:** $50 (default)
-- **Initial Preset:** Risk By Type (in Points)
+1. **Update ProjectContext.tsx** to:
+   - Maintain a local `projectDataRef` that mirrors the DB state
+   - On initial load, populate `projectDataRef` from DB
+   - On updates, merge into `projectDataRef` first (no DB fetch)
+   - Save `projectDataRef` to DB
+
+2. **Update save queue** to:
+   - Collapse multiple pending saves into one (only save the latest state)
+   - Avoid fetching DB during save - use local state as source of truth
+
+3. **Add logging** to trace exactly what's being saved during rapid toggles
 
 ---
 
-### Files to Modify
+### Impact
 
-| File | Changes |
-|------|---------|
-| `src/components/wizard/RiskTimelineChart3D.tsx` | Refactor ControlPanel component with new 3-row layout, add presets, rename Mode to Grouping, add Stacked checkbox, conditional slider visibility, remove View toggle, remove vertical separators |
-
----
-
-### Expected Result
-
-The control panel will match the mockup layout with:
-- Row 1: Timeframe inputs + 3 preset buttons
-- Row 2: All graph configuration toggles (Graph, Graph Style, Stacked, Grouping)
-- Row 3: Cost per Point slider (only visible when Cost Impact selected)
-- Expand button moved to section title header
-- Clean layout without vertical separators
+| Metric | Before Fix | After Fix |
+|--------|------------|-----------|
+| Toggle consistency | Broken | Restored |
+| Data loss on rapid toggles | Yes | No |
+| Cost calculation accuracy | Incorrect | Correct |
 
