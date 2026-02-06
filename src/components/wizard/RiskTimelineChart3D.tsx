@@ -7,9 +7,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Separator } from "@/components/ui/separator";
 import { format, parseISO } from "date-fns";
-import { Maximize2, DollarSign } from "lucide-react";
+import { Maximize2 } from "lucide-react";
 import { Slider } from "@/components/ui/slider";
 import {
   LineChart,
@@ -28,14 +27,58 @@ import {
 } from "recharts";
 
 interface ChartSettings {
-  mode: 'total' | 'brokenDown';
-  chartType: 'line' | 'bars' | 'stackedLine' | 'stackedBars';
+  graphStyle: 'bars' | 'lines';
+  stacked: boolean;
+  grouping: 'all' | 'byType';
   startDate: string;
   endDate: string;
   dataType: 'risk' | 'cost';
-  costMode: 'monthly' | 'cumulative';
   dollarPerRiskPoint: number;
 }
+
+type PresetType = 'riskByType' | 'totalRiskPoints' | 'totalRiskCost';
+
+const PRESETS: Record<PresetType, Pick<ChartSettings, 'dataType' | 'graphStyle' | 'stacked' | 'grouping'>> = {
+  riskByType: {
+    dataType: 'risk',
+    graphStyle: 'bars',
+    stacked: true,
+    grouping: 'byType'
+  },
+  totalRiskPoints: {
+    dataType: 'risk',
+    graphStyle: 'lines',
+    stacked: false,
+    grouping: 'all'
+  },
+  totalRiskCost: {
+    dataType: 'cost',
+    graphStyle: 'lines',
+    stacked: false,
+    grouping: 'all'
+  }
+};
+
+// Helper to derive chartType from graphStyle + stacked
+const getChartType = (graphStyle: 'bars' | 'lines', stacked: boolean): 'line' | 'bars' | 'stackedLine' | 'stackedBars' => {
+  if (graphStyle === 'bars') return stacked ? 'stackedBars' : 'bars';
+  return stacked ? 'stackedLine' : 'line';
+};
+
+// Helper to detect which preset matches current settings
+const detectPreset = (settings: ChartSettings): PresetType | null => {
+  for (const [key, preset] of Object.entries(PRESETS) as [PresetType, typeof PRESETS[PresetType]][]) {
+    if (
+      settings.dataType === preset.dataType &&
+      settings.graphStyle === preset.graphStyle &&
+      settings.stacked === preset.stacked &&
+      settings.grouping === preset.grouping
+    ) {
+      return key;
+    }
+  }
+  return null;
+};
 
 interface RiskTimelineChart3DProps {
   analysisItems: AnalysisItem[];
@@ -405,7 +448,6 @@ interface ControlPanelProps {
   onSettingsChange: (settings: ChartSettings) => void;
   constructionStartDate?: string;
   constructionEndDate?: string;
-  onFullscreen: () => void;
 }
 
 const ControlPanel: React.FC<ControlPanelProps> = ({
@@ -413,123 +455,141 @@ const ControlPanel: React.FC<ControlPanelProps> = ({
   onSettingsChange,
   constructionStartDate,
   constructionEndDate,
-  onFullscreen,
 }) => {
+  const activePreset = detectPreset(settings);
+
+  const handlePresetClick = (preset: PresetType) => {
+    onSettingsChange({ ...settings, ...PRESETS[preset] });
+  };
+
   return (
-    <div className="flex flex-wrap items-center gap-2 mb-4 p-3 bg-muted/30 rounded-lg border">
-      {/* Data Type Toggle - FIRST */}
-      <div className="flex items-center gap-1.5">
-        <Label className="text-xs text-muted-foreground">Data:</Label>
-        <ToggleGroup 
-          type="single" 
-          value={settings.dataType} 
-          onValueChange={(v) => v && onSettingsChange({ ...settings, dataType: v as 'risk' | 'cost' })}
-          size="sm"
-        >
-          <ToggleGroupItem value="risk" className="text-xs px-2">Risk Points</ToggleGroupItem>
-          <ToggleGroupItem value="cost" className="text-xs px-2">Cost ($)</ToggleGroupItem>
-        </ToggleGroup>
-      </div>
-
-      <Separator orientation="vertical" className="h-6" />
-      
-      {/* Mode Toggle */}
-      <div className="flex items-center gap-1.5">
-        <Label className="text-xs text-muted-foreground">Mode:</Label>
-        <ToggleGroup 
-          type="single" 
-          value={settings.mode} 
-          onValueChange={(v) => v && onSettingsChange({ ...settings, mode: v as 'total' | 'brokenDown' })}
-          size="sm"
-        >
-          <ToggleGroupItem value="total" className="text-xs px-2">Total</ToggleGroupItem>
-          <ToggleGroupItem value="brokenDown" className="text-xs px-2">By Type</ToggleGroupItem>
-        </ToggleGroup>
-      </div>
-
-      <Separator orientation="vertical" className="h-6" />
-      
-      {/* Chart Type Toggle */}
-      <div className="flex items-center gap-1.5">
-        <Label className="text-xs text-muted-foreground">Style:</Label>
-        <ToggleGroup 
-          type="single" 
-          value={settings.chartType} 
-          onValueChange={(v) => v && onSettingsChange({ ...settings, chartType: v as 'line' | 'bars' | 'stackedLine' | 'stackedBars' })}
-          size="sm"
-        >
-          <ToggleGroupItem value="line" className="text-xs px-2">Line</ToggleGroupItem>
-          <ToggleGroupItem value="bars" className="text-xs px-2">Bars</ToggleGroupItem>
-          <ToggleGroupItem value="stackedLine" className="text-xs px-2">Stacked Line</ToggleGroupItem>
-          <ToggleGroupItem value="stackedBars" className="text-xs px-2">Stacked Bars</ToggleGroupItem>
-        </ToggleGroup>
-      </div>
-
-      {/* View Mode Toggle (Monthly/Cumulative) - always visible */}
-      <Separator orientation="vertical" className="h-6" />
-      <div className="flex items-center gap-1.5">
-        <Label className="text-xs text-muted-foreground">View:</Label>
-        <ToggleGroup 
-          type="single" 
-          value={settings.costMode} 
-          onValueChange={(v) => v && onSettingsChange({ ...settings, costMode: v as 'monthly' | 'cumulative' })}
-          size="sm"
-        >
-          <ToggleGroupItem value="monthly" className="text-xs px-2">Monthly</ToggleGroupItem>
-          <ToggleGroupItem value="cumulative" className="text-xs px-2">Cumulative</ToggleGroupItem>
-        </ToggleGroup>
-      </div>
-
-      {/* Dollar Per Risk Point Slider */}
-      <Separator orientation="vertical" className="h-6" />
-      <div className="flex items-center gap-2">
-        <Label className="text-xs text-muted-foreground whitespace-nowrap flex items-center gap-1">
-          <DollarSign className="h-3 w-3" />
-          /Risk Point:
-        </Label>
-        <div className="flex items-center gap-2 w-40">
-          <Slider
-            value={[settings.dollarPerRiskPoint]}
-            onValueChange={(v) => onSettingsChange({ ...settings, dollarPerRiskPoint: v[0] })}
-            min={1}
-            max={100}
-            step={1}
-            className="flex-1"
+    <div className="space-y-3 mb-4 p-3 bg-muted/30 rounded-lg border">
+      {/* Row 1: Timeframe + Presets */}
+      <div className="flex flex-wrap items-center gap-4">
+        <div className="flex items-center gap-1.5">
+          <Label className="text-xs text-muted-foreground">Timeframe:</Label>
+          <Input 
+            type="date" 
+            value={settings.startDate} 
+            onChange={(e) => onSettingsChange({ ...settings, startDate: e.target.value })}
+            className="w-32 h-8 text-xs"
+            min={constructionStartDate}
+            max={settings.endDate || constructionEndDate}
           />
-          <span className="text-xs font-medium w-10 text-right">
-            ${settings.dollarPerRiskPoint}
-          </span>
+          <span className="text-xs text-muted-foreground">to</span>
+          <Input 
+            type="date" 
+            value={settings.endDate} 
+            onChange={(e) => onSettingsChange({ ...settings, endDate: e.target.value })}
+            className="w-32 h-8 text-xs"
+            min={settings.startDate || constructionStartDate}
+            max={constructionEndDate}
+          />
+        </div>
+
+        <div className="flex items-center gap-1.5">
+          <Label className="text-xs text-muted-foreground">Presets:</Label>
+          <div className="flex gap-1">
+            <Button
+              variant={activePreset === 'riskByType' ? 'default' : 'outline'}
+              size="sm"
+              className="text-xs h-8"
+              onClick={() => handlePresetClick('riskByType')}
+            >
+              Risk By Type (in Points)
+            </Button>
+            <Button
+              variant={activePreset === 'totalRiskPoints' ? 'default' : 'outline'}
+              size="sm"
+              className="text-xs h-8"
+              onClick={() => handlePresetClick('totalRiskPoints')}
+            >
+              Total Project Risk (in Points)
+            </Button>
+            <Button
+              variant={activePreset === 'totalRiskCost' ? 'default' : 'outline'}
+              size="sm"
+              className="text-xs h-8"
+              onClick={() => handlePresetClick('totalRiskCost')}
+            >
+              Total Project Risk (in Cost Impact)
+            </Button>
+          </div>
         </div>
       </div>
 
-      <Separator orientation="vertical" className="h-6" />
-      
-      {/* Date Range - inline */}
-      <div className="flex items-center gap-1.5">
-        <Label className="text-xs text-muted-foreground">From:</Label>
-        <Input 
-          type="date" 
-          value={settings.startDate} 
-          onChange={(e) => onSettingsChange({ ...settings, startDate: e.target.value })}
-          className="w-32 h-8 text-xs"
-          min={constructionStartDate}
-          max={settings.endDate || constructionEndDate}
-        />
-        <Label className="text-xs text-muted-foreground">To:</Label>
-        <Input 
-          type="date" 
-          value={settings.endDate} 
-          onChange={(e) => onSettingsChange({ ...settings, endDate: e.target.value })}
-          className="w-32 h-8 text-xs"
-          min={settings.startDate || constructionStartDate}
-          max={constructionEndDate}
-        />
+      {/* Row 2: Graph + Graph Style + Stacked + Grouping */}
+      <div className="flex flex-wrap items-center gap-4">
+        <div className="flex items-center gap-1.5">
+          <Label className="text-xs text-muted-foreground">Graph:</Label>
+          <ToggleGroup 
+            type="single" 
+            value={settings.dataType} 
+            onValueChange={(v) => v && onSettingsChange({ ...settings, dataType: v as 'risk' | 'cost' })}
+            size="sm"
+          >
+            <ToggleGroupItem value="risk" className="text-xs px-2">Risk Points</ToggleGroupItem>
+            <ToggleGroupItem value="cost" className="text-xs px-2">Cost Impact</ToggleGroupItem>
+          </ToggleGroup>
+        </div>
+
+        <div className="flex items-center gap-1.5">
+          <Label className="text-xs text-muted-foreground">Graph Style:</Label>
+          <ToggleGroup 
+            type="single" 
+            value={settings.graphStyle} 
+            onValueChange={(v) => v && onSettingsChange({ ...settings, graphStyle: v as 'bars' | 'lines' })}
+            size="sm"
+          >
+            <ToggleGroupItem value="bars" className="text-xs px-2">Bars</ToggleGroupItem>
+            <ToggleGroupItem value="lines" className="text-xs px-2">Lines</ToggleGroupItem>
+          </ToggleGroup>
+        </div>
+
+        <div className="flex items-center gap-1.5">
+          <Checkbox
+            id="stacked-checkbox"
+            checked={settings.stacked}
+            onCheckedChange={(checked) => onSettingsChange({ ...settings, stacked: checked === true })}
+          />
+          <Label htmlFor="stacked-checkbox" className="text-xs text-muted-foreground cursor-pointer">
+            Stacked
+          </Label>
+        </div>
+
+        <div className="flex items-center gap-1.5">
+          <Label className="text-xs text-muted-foreground">Grouping:</Label>
+          <ToggleGroup 
+            type="single" 
+            value={settings.grouping} 
+            onValueChange={(v) => v && onSettingsChange({ ...settings, grouping: v as 'all' | 'byType' })}
+            size="sm"
+          >
+            <ToggleGroupItem value="all" className="text-xs px-2">All</ToggleGroupItem>
+            <ToggleGroupItem value="byType" className="text-xs px-2">By Type</ToggleGroupItem>
+          </ToggleGroup>
+        </div>
       </div>
-      
-      {/* Fullscreen (Modal) */}
-      <Button variant="outline" size="icon" onClick={onFullscreen} className="ml-auto h-8 w-8">
-        <Maximize2 className="h-4 w-4" />
-      </Button>
+
+      {/* Row 3: Cost per Point slider (only when Cost Impact selected) */}
+      {settings.dataType === 'cost' && (
+        <div className="flex items-center gap-2">
+          <Label className="text-xs text-muted-foreground whitespace-nowrap">Cost per Point:</Label>
+          <div className="flex items-center gap-2 w-48">
+            <Slider
+              value={[settings.dollarPerRiskPoint]}
+              onValueChange={(v) => onSettingsChange({ ...settings, dollarPerRiskPoint: v[0] })}
+              min={1}
+              max={100}
+              step={1}
+              className="flex-1"
+            />
+            <span className="text-xs font-medium w-10 text-right">
+              ${settings.dollarPerRiskPoint}
+            </span>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
@@ -544,14 +604,14 @@ export const RiskTimelineChart3D: React.FC<RiskTimelineChart3DProps> = ({
   const [isModalOpen, setIsModalOpen] = useState(false);
   const initializedRef = useRef(false);
   
-  // Chart settings state
+  // Chart settings state - initial preset is "Risk By Type (in Points)"
   const [settings, setSettings] = useState<ChartSettings>(() => ({
-    mode: 'brokenDown',
-    chartType: 'line',
+    graphStyle: 'bars',
+    stacked: true,
+    grouping: 'byType',
     startDate: projectData.construction_start_date || '',
     endDate: projectData.construction_end_date || '',
     dataType: 'risk',
-    costMode: 'monthly',
     dollarPerRiskPoint: 50,
   }));
 
@@ -589,7 +649,7 @@ export const RiskTimelineChart3D: React.FC<RiskTimelineChart3DProps> = ({
     selectedControlIds,
     controlsData,
     dataType: 'risk', // Always use risk mode - cost is derived in UI
-    costMode: settings.costMode,
+    costMode: 'monthly', // Default to monthly since View toggle was removed
   });
 
   // Track user-hidden types to prevent re-adding them
@@ -641,16 +701,22 @@ export const RiskTimelineChart3D: React.FC<RiskTimelineChart3DProps> = ({
     setIsModalOpen(true);
   }, []);
 
-  // Determine if derisk should be shown
-  const showDerisk = settings.mode === 'total';
+  // Determine if derisk should be shown (only in 'all' grouping mode)
+  const showDerisk = settings.grouping === 'all';
 
-  // Y-axis label based on data type and cost mode
+  // Derive chartType from graphStyle + stacked
+  const chartType = getChartType(settings.graphStyle, settings.stacked);
+
+  // Map grouping to mode for Chart2D and Legend
+  const mode = settings.grouping === 'all' ? 'total' : 'brokenDown';
+
+  // Y-axis label based on data type
   const yAxisLabel = useMemo(() => {
     if (settings.dataType === 'cost') {
-      return settings.costMode === 'cumulative' ? 'Cumulative Cost ($)' : 'Monthly Cost ($)';
+      return 'Cost ($)';
     }
-    return settings.costMode === 'cumulative' ? 'Cumulative Risk Points' : 'Risk Points';
-  }, [settings.dataType, settings.costMode]);
+    return 'Risk Points';
+  }, [settings.dataType]);
 
   // Render chart content - shared between main and modal
   const renderChartContent = (heightClass: string) => (
@@ -660,9 +726,9 @@ export const RiskTimelineChart3D: React.FC<RiskTimelineChart3DProps> = ({
       <Chart2D
         data={data}
         visibleTypes={visibleTypes}
-        chartType={settings.chartType}
+        chartType={chartType}
         showDerisk={showDerisk}
-        mode={settings.mode}
+        mode={mode}
         yAxisLabel={yAxisLabel}
         dataType={settings.dataType}
         dollarPerRiskPoint={settings.dollarPerRiskPoint}
@@ -693,12 +759,17 @@ export const RiskTimelineChart3D: React.FC<RiskTimelineChart3DProps> = ({
   return (
     <>
       <div ref={containerRef} className="space-y-4">
+        <div className="flex items-center justify-between mb-2">
+          <div className="flex-1" />
+          <Button variant="outline" size="icon" onClick={toggleFullscreen} className="h-8 w-8">
+            <Maximize2 className="h-4 w-4" />
+          </Button>
+        </div>
         <ControlPanel
           settings={settings}
           onSettingsChange={setSettings}
           constructionStartDate={projectData.construction_start_date}
           constructionEndDate={projectData.construction_end_date}
-          onFullscreen={toggleFullscreen}
         />
 
         {renderChartContent('h-[400px]')}
@@ -707,7 +778,7 @@ export const RiskTimelineChart3D: React.FC<RiskTimelineChart3DProps> = ({
           aspTypes={data.aspTypes}
           visibleTypes={visibleTypes}
           onToggle={handleToggleType}
-          mode={settings.mode}
+          mode={mode}
           showDerisk={showDerisk}
         />
       </div>
@@ -724,7 +795,6 @@ export const RiskTimelineChart3D: React.FC<RiskTimelineChart3DProps> = ({
               onSettingsChange={setSettings}
               constructionStartDate={projectData.construction_start_date}
               constructionEndDate={projectData.construction_end_date}
-              onFullscreen={() => setIsModalOpen(false)}
             />
             
             <div className="flex-1">
@@ -735,7 +805,7 @@ export const RiskTimelineChart3D: React.FC<RiskTimelineChart3DProps> = ({
               aspTypes={data.aspTypes}
               visibleTypes={visibleTypes}
               onToggle={handleToggleType}
-              mode={settings.mode}
+              mode={mode}
               showDerisk={showDerisk}
             />
           </div>
