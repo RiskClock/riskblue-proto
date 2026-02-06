@@ -89,11 +89,19 @@ export const ProjectProvider: React.FC<ProjectProviderProps> = ({
   
   // Save queue to serialize database writes and prevent concurrent overwrites
   const saveQueue = useRef<Promise<boolean>>(Promise.resolve(true));
+  
+  // LOCAL SOURCE OF TRUTH for project_data JSON fields
+  // This prevents race conditions from read-before-write patterns
+  const projectDataRef = useRef<Record<string, any>>({});
 
   // Update initial data only on first load (prevents overwriting user edits)
   useEffect(() => {
     if (!hasAppliedInitialData.current && Object.keys(initialData).length > 0) {
       setProjectData(initialData);
+      // Initialize the local ref with initial data (source of truth)
+      const { jsonFields } = separateFields(initialData);
+      projectDataRef.current = { ...projectDataRef.current, ...jsonFields };
+      console.log('[ProjectContext] Initialized projectDataRef from initial data:', Object.keys(jsonFields));
       hasAppliedInitialData.current = true;
     }
   }, [initialData]);
@@ -134,22 +142,11 @@ export const ProjectProvider: React.FC<ProjectProviderProps> = ({
       }
       
       if (hasJsonFields) {
-        console.log('[ProjectContext] Fetching existing project_data for merge...');
-        const { data: existing, error: fetchError } = await supabase
-          .from('projects')
-          .select('project_data')
-          .eq('id', projectId)
-          .single();
-        
-        if (fetchError) {
-          console.error('[ProjectContext] Error fetching existing project_data:', fetchError);
-          throw fetchError;
-        }
-        
-        const existingProjectData = (existing?.project_data as Record<string, any>) || {};
-        console.log('[ProjectContext] Existing project_data:', existingProjectData);
-        updateData.project_data = { ...existingProjectData, ...jsonFields };
-        console.log('[ProjectContext] Merged project_data:', updateData.project_data);
+        // FIXED: Merge into local ref first (no DB fetch - eliminates race condition)
+        projectDataRef.current = { ...projectDataRef.current, ...jsonFields };
+        console.log('[ProjectContext] Merged into projectDataRef:', Object.keys(jsonFields));
+        console.log('[ProjectContext] Full projectDataRef state:', projectDataRef.current);
+        updateData.project_data = projectDataRef.current;
       }
 
       console.log('[ProjectContext] Sending update to Supabase:', updateData);
@@ -307,14 +304,9 @@ export const ProjectProvider: React.FC<ProjectProviderProps> = ({
             let updateData: Record<string, any> = { ...tableFields };
             
             if (hasJsonFields) {
-              const { data: existing } = await supabase
-                .from('projects')
-                .select('project_data')
-                .eq('id', projectId)
-                .single();
-              
-              const existingProjectData = (existing?.project_data as Record<string, any>) || {};
-              updateData.project_data = { ...existingProjectData, ...jsonFields };
+              // Use local ref - no DB fetch needed
+              projectDataRef.current = { ...projectDataRef.current, ...jsonFields };
+              updateData.project_data = projectDataRef.current;
             }
             
             await supabase
