@@ -1,165 +1,152 @@
 
 
-## Investigation: Cost Discrepancy After Control Toggle ($615,536 -> $575,276)
+## Investigation: Cost Discrepancy After Control Toggle
 
 ### Summary
 
-The cost estimate does not return to the original value after toggling "Mechanical Contractor Process" off and on due to a **race condition in the save queue** combined with a **read-before-write pattern** that can lose data when multiple saves occur in rapid succession.
+The investigation reveals TWO distinct issues causing the cost display to show unexpected values:
+
+1. **PRIMARY BUG**: There is a mismatch between the controls in `analysisItems` (115) and the controls saved in `projectData.selected*Controls` (99). This 16-control gap causes different costs to be displayed when switching between package view and actual selection view.
+
+2. **SECONDARY BEHAVIOR**: The two-stage cost change the user observes is actually correct behavior for the current (buggy) data state:
+   - First change: Display switches from package cost calculation to actual selected cost
+   - Second change: The toggled control changes are saved and reflected
 
 ---
 
 ### Root Cause Analysis
 
-#### The Bug Flow
+#### The Data Mismatch
 
-1. **User unselects MCP001 (Mechanical Contractor Process)**
-   - `handleInstanceCheckboxClick` calls both:
-     - `onToggleInstance('MCP001')` - removes from `selectedProcessInstances`
-     - `onToggleAllControls([...MCP001 controls...], false)` - removes from `selectedProcessControls`
-   - Auto-save effect triggers after 500ms debounce
-   - Cost updates to reflect removal (~$36k less)
+From database queries:
+- Controls defined in `project_analysis_items`: **115 total**
+- Controls selected in `projectData`: 26 (assets) + 55 (processes) + 18 (systems) = **99 total**
+- **Gap: 16 controls are not in the selected lists**
 
-2. **User reselects MCP001**
-   - Same handlers add MCP001 back to instances and controls
-   - Another auto-save queued
+This gap causes:
+- `totalCostEstimates.lowCost` = calculated from all 115 controls = $615,536
+- `actualSelectedCost` = calculated from 99 selected controls = ~$575,276
 
-3. **The Race Condition in ProjectContext.tsx**
-   
-   ```typescript
-   // In executeUpdate() - lines 136-151
-   if (hasJsonFields) {
-     // Step A: FETCH existing project_data from database
-     const { data: existing } = await supabase
-       .from('projects')
-       .select('project_data')
-       .eq('id', projectId)
-       .single();
-     
-     // Step B: MERGE with new fields
-     updateData.project_data = { ...existingProjectData, ...jsonFields };
-   }
-   ```
-
-   **Problem**: When Save 2 runs, it fetches the database state which may:
-   - Still have pre-Save-1 data (Save 1 in flight)
-   - Have Save 1's data (MCP001 controls removed)
-   
-   But the local `selectedProcessControls` passed to Save 2 may not include the MCP001 controls if the state was captured between the two toggles.
-
----
-
-### Evidence from Network Logs
-
-**GET Response** (initial load):
-```json
-"selectedProcessInstances": ["CONT001", "MCP001", "WMVP001"]
-```
-
-**PATCH Request** (after toggle operations):
-```json
-"selectedProcessInstances": ["CONT001", "WMVP001"]  // MCP001 MISSING!
-```
-
-This confirms that MCP001 was removed from `selectedProcessInstances` and **not properly restored**.
-
----
-
-### The $40k Discrepancy Explained
-
-| Item | Cost | Status |
-|------|------|--------|
-| MCP001 controls (19 controls) | ~$36,100 | Lost due to race condition |
-| Related instance-level calculations | ~$4,000 | Lost when instance missing |
-| **Total Missing** | **~$40,260** | Matches $615,536 - $575,276 |
-
----
-
-### Technical Details
-
-#### Files Involved
-
-| File | Issue |
-|------|-------|
-| `src/contexts/ProjectContext.tsx` | Read-before-write pattern causes stale data merge |
-| `src/components/wizard/ProcessesStep.tsx` | Auto-save debounce + separate instance/control state |
-| `src/components/wizard/ExpandableListItem.tsx` | Two separate state updates per toggle |
-
-#### Current Save Flow (Problematic)
+#### Why the Two-Stage Cost Change
 
 ```text
-User Action -> Local State Update -> 500ms Debounce -> Fetch DB -> Merge -> Save
-                                                         ^
-                                                         |
-                                          Race condition: DB may have stale data
+Initial state:
+- hasManualOverride = false
+- Display shows: totalCostEstimates.lowCost = $615,536
+
+User clicks to unselect MCP001:
+1. handleToggleAllControls runs
+2. onManualControlToggle() is called
+3. hasManualOverride = true
+4. Display switches to: actualSelectedCost = $575,276
+   (This reveals the 16-control gap that was hidden before)
+
+500ms later (auto-save):
+5. updateFields saves new selection (minus MCP001 controls)
+6. projectData.selectedProcessControls updates
+7. actualSelectedCost recalculates = $539,176
+   (Now also missing the 18 MCP001 controls)
 ```
+
+The user perceives this as a bug because:
+- Initial display ($615K) represents the "package" cost with all controls
+- After toggle, display ($539K) represents actual saved selections
+- The $40K difference includes BOTH the data gap AND the toggled controls
+
+---
+
+### Why Controls Are Missing
+
+The 16 missing controls likely stem from one of these scenarios:
+
+1. **Initialization Logic Gap**: When the step components initialize, they may not be capturing all controls from `analysisItems` correctly
+
+2. **Risk Tolerance Filtering Side Effect**: The risk tolerance effect may have filtered out some controls that don't exist in the `mitigation_controls` database table
+
+3. **Historical Data Drift**: Controls may have been added to analysis items after the initial selection was saved, but the selection arrays weren't updated
 
 ---
 
 ### Recommended Fix
 
-#### Option 1: Use Functional State Updates (Quick Fix)
+#### Phase 1: Ensure Selection Initialization Captures All Controls
 
-The hint from Stack Overflow is partially correct, but the real issue is deeper. The state updates in React are fine - the problem is in the database save logic.
-
-#### Option 2: Optimistic Updates with Local State as Source of Truth (Recommended)
-
-Instead of fetching from DB before each save, maintain a **local shadow of project_data** and always merge locally before saving:
+Update the initialization logic in step components to verify all controls from analysis items are included:
 
 ```typescript
-// In ProjectContext.tsx
-const localProjectDataRef = useRef<Record<string, any>>({});
-
-const executeUpdate = useCallback(async (fields: Record<string, any>) => {
-  // Merge into local shadow first
-  localProjectDataRef.current = { ...localProjectDataRef.current, ...jsonFields };
-  
-  // Save the complete local state, not a DB merge
-  updateData.project_data = localProjectDataRef.current;
-  
-  // Then save to DB
-  await supabase.from('projects').update(updateData)...
-});
+// In ProcessesStep initialization effect
+useEffect(() => {
+  if (processItems.length > 0) {
+    // Get ALL control IDs that should exist
+    const allExpectedControlIds = new Set<string>();
+    processItems.forEach(item => {
+      (item.controls || []).forEach(control => {
+        allExpectedControlIds.add(getControlId(item.id, control));
+      });
+    });
+    
+    // Get current saved controls
+    const currentSavedControls = new Set(data.selectedProcessControls || []);
+    
+    // Check for missing controls
+    const missingControls = [...allExpectedControlIds].filter(
+      id => !currentSavedControls.has(id)
+    );
+    
+    // If controls are missing, add them
+    if (missingControls.length > 0) {
+      console.warn('[ProcessesStep] Found missing controls, adding:', missingControls.length);
+      const updatedControls = [...currentSavedControls, ...missingControls];
+      setSelectedControlIds(new Set(updatedControls));
+      updateFields({ selectedProcessControls: updatedControls });
+    }
+  }
+}, [processItems.length]);
 ```
 
-#### Option 3: Debounce at Component Level, Not Field Level
+#### Phase 2: Remove data.selected* from Risk Tolerance Effect Dependencies
 
-Instead of saving instances and controls separately, batch all selection changes into a single atomic save:
+The risk tolerance effect should NOT depend on `data.selected*` because it doesn't need them - it only uses `processItems` to compute filtered selections:
 
 ```typescript
-// In ProcessesStep.tsx - combine into single save
-const timer = setTimeout(() => {
-  updateFields({
-    selectedProcessInstances: selectedInstanceIds,
-    selectedProcessControls: Array.from(selectedControlIds),
-  });
-}, 500);
+// Before (buggy)
+}, [parentRiskTolerance, processItems, processRiskToleranceMap, controlRiskToleranceMap, 
+    controls.length, updateFields, data.selectedProcessInstances, data.selectedProcessControls]);
+
+// After (fixed)
+}, [parentRiskTolerance, processItems, processRiskToleranceMap, controlRiskToleranceMap, 
+    controls.length, updateFields]);
 ```
 
-This is already being done, but the issue is the **read-before-write** pattern in ProjectContext still causes problems with concurrent saves.
+Same fix applies to CriticalAssetsStep and WaterSystemsStep.
 
 ---
 
-### Implementation Plan
+### Files to Modify
 
-1. **Update ProjectContext.tsx** to:
-   - Maintain a local `projectDataRef` that mirrors the DB state
-   - On initial load, populate `projectDataRef` from DB
-   - On updates, merge into `projectDataRef` first (no DB fetch)
-   - Save `projectDataRef` to DB
-
-2. **Update save queue** to:
-   - Collapse multiple pending saves into one (only save the latest state)
-   - Avoid fetching DB during save - use local state as source of truth
-
-3. **Add logging** to trace exactly what's being saved during rapid toggles
+| File | Changes |
+|------|---------|
+| `src/components/wizard/ProcessesStep.tsx` | Add missing control detection in initialization, remove `data.selected*` from risk tolerance effect deps |
+| `src/components/wizard/WaterSystemsStep.tsx` | Same fixes as ProcessesStep |
+| `src/components/wizard/CriticalAssetsStep.tsx` | Same fixes as ProcessesStep |
 
 ---
 
-### Impact
+### Expected Result
 
-| Metric | Before Fix | After Fix |
-|--------|------------|-----------|
-| Toggle consistency | Broken | Restored |
-| Data loss on rapid toggles | Yes | No |
-| Cost calculation accuracy | Incorrect | Correct |
+After implementing these fixes:
+
+| Scenario | Before Fix | After Fix |
+|----------|------------|-----------|
+| Initial load with missing controls | Hidden by package cost display | Controls auto-added to selection |
+| Toggle off/on | Shows inconsistent costs | Shows consistent costs |
+| Switch from package to manual | Cost jumps unexpectedly | Cost matches (all controls selected) |
+
+---
+
+### Technical Notes
+
+The core issue is a data integrity problem where `projectData.selected*Controls` doesn't contain all the controls that exist in `analysisItems`. The initialization logic should be defensive and ensure parity between these two data sources.
+
+The risk tolerance effect dependency on `data.selected*` is unnecessary and potentially harmful - it can cause the effect to re-run when unrelated data changes, even though the guard prevents full execution.
 
