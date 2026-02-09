@@ -12,6 +12,7 @@ interface PdfExportOptions {
   };
   logoBase64?: string;
   skipLogoOnFirstPage?: boolean;
+  returnBlob?: boolean;
 }
 
 /**
@@ -21,7 +22,7 @@ interface PdfExportOptions {
 export async function generatePdfFromElement(
   element: HTMLElement,
   options: PdfExportOptions
-): Promise<void> {
+): Promise<Blob | void> {
   const { filename, margins, logoBase64, skipLogoOnFirstPage = true } = options;
 
   // Capture the HTML element as a canvas
@@ -115,6 +116,10 @@ export async function generatePdfFromElement(
         6
       );
     }
+  }
+
+  if (options.returnBlob) {
+    return pdf.output('blob');
   }
 
   // Save the PDF

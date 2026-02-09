@@ -62,3 +62,6 @@ verify_jwt = false
 
 [functions.copy-procore-files]
 verify_jwt = false
+
+[functions.upload-to-procore]
+verify_jwt = false

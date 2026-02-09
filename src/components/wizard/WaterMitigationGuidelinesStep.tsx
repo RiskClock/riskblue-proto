@@ -1,5 +1,6 @@
+import { useState } from "react";
 import { Button } from "@/components/ui/button";
-import { Download, Send } from "lucide-react";
+import { Download, Send, Upload } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { WaterRiskReport } from "@/components/reports/WaterRiskReport";
 import { generateReportFilename } from "@/lib/reportGenerator";
@@ -7,7 +8,9 @@ import { AnalysisItem } from "@/lib/analysisItemMapper";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { generatePdfFromElement, getImageBase64, waitForImages } from "@/lib/pdfExporter";
+import { ProcoreExportDialog } from "@/components/wizard/ProcoreExportDialog";
 import riskBlueLogo from "@/assets/riskblue-logo.jpg";
+import procoreIcon from "@/assets/icon_procore.png";
 
 interface WaterMitigationGuidelinesStepProps {
   data: any;
@@ -18,7 +21,9 @@ interface WaterMitigationGuidelinesStepProps {
 
 export const WaterMitigationGuidelinesStep = ({ data, analysisItems = [], onBack, onNext }: WaterMitigationGuidelinesStepProps) => {
   const { toast } = useToast();
-
+  const [showProcoreExport, setShowProcoreExport] = useState(false);
+  const [pdfBlobForProcore, setPdfBlobForProcore] = useState<Blob | null>(null);
+  const [pdfFileName, setPdfFileName] = useState("");
   // Fetch control details for the appendix
   const { data: controlDetails = [] } = useQuery({
     queryKey: ['mitigation-controls-details'],
@@ -141,6 +146,93 @@ export const WaterMitigationGuidelinesStep = ({ data, analysisItems = [], onBack
     });
   };
 
+  const handleExportToProcore = async () => {
+    const filename = generateReportFilename(data.name || "unnamed_project", "WaterMitigationGuidelines");
+    
+    toast({
+      title: "Preparing report...",
+      description: "Generating PDF for Procore export...",
+    });
+
+    let preparedByName = "";
+    let createdByName = "";
+    
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      const userIdsToFetch = [user?.id, data.user_id].filter(Boolean) as string[];
+      const uniqueUserIds = [...new Set(userIdsToFetch)];
+      
+      if (uniqueUserIds.length > 0) {
+        const { data: profilesData } = await supabase
+          .from('profiles')
+          .select('user_id, display_name')
+          .in('user_id', uniqueUserIds);
+        
+        const profilesMap = new Map(
+          (profilesData || []).map(p => [p.user_id, p.display_name])
+        );
+        
+        preparedByName = profilesMap.get(user?.id || "") || user?.email || "";
+        createdByName = profilesMap.get(data.user_id) || preparedByName;
+      }
+    } catch (e) {
+      console.error("Failed to fetch profile names:", e);
+    }
+
+    const reportContainer = document.createElement('div');
+    reportContainer.className = 'print-report-container';
+    reportContainer.style.position = 'absolute';
+    reportContainer.style.left = '-9999px';
+    reportContainer.style.top = '0';
+    document.body.appendChild(reportContainer);
+    
+    const root = document.createElement('div');
+    reportContainer.appendChild(root);
+    
+    import('react-dom/client').then(async ({ createRoot }) => {
+      const reactRoot = createRoot(root);
+      reactRoot.render(
+        <WaterRiskReport 
+          data={data} 
+          analysisItems={analysisItems} 
+          controlDetails={controlDetails}
+          preparedBy={preparedByName}
+          createdBy={createdByName}
+        />
+      );
+      
+      await new Promise(resolve => setTimeout(resolve, 500));
+      await waitForImages(reportContainer);
+      const logoBase64 = await getImageBase64(riskBlueLogo);
+      
+      try {
+        const blob = await generatePdfFromElement(reportContainer, {
+          filename,
+          margins: { top: 15, right: 15, bottom: 25, left: 15 },
+          logoBase64,
+          skipLogoOnFirstPage: true,
+          returnBlob: true,
+        });
+
+        if (blob instanceof Blob) {
+          setPdfBlobForProcore(blob);
+          setPdfFileName(`${filename}.pdf`);
+          setShowProcoreExport(true);
+        }
+      } catch (error) {
+        console.error("PDF generation failed:", error);
+        toast({
+          title: "Export Failed",
+          description: "Failed to generate PDF. Please try again.",
+          variant: "destructive",
+        });
+      } finally {
+        reactRoot.unmount();
+        document.body.removeChild(reportContainer);
+      }
+    });
+  };
+
   const handleSendRFP = () => {
     toast({
       title: "RFP Sent",
@@ -229,10 +321,14 @@ export const WaterMitigationGuidelinesStep = ({ data, analysisItems = [], onBack
           </div>
         </div>
 
-        <div className="flex gap-3">
+        <div className="flex gap-3 flex-wrap">
           <Button variant="outline" className="flex-1" onClick={handleExportPDF}>
             <Download className="h-4 w-4 mr-2" />
             Export as PDF
+          </Button>
+          <Button variant="outline" className="flex-1" onClick={handleExportToProcore}>
+            <img src={procoreIcon} alt="" className="h-4 w-4 mr-2" />
+            Export to Procore
           </Button>
           <Button variant="outline" className="flex-1" onClick={handleSendRFP}>
             <Send className="h-4 w-4 mr-2" />
@@ -247,6 +343,13 @@ export const WaterMitigationGuidelinesStep = ({ data, analysisItems = [], onBack
           <Button onClick={handleContinue}>Continue to Proposals</Button>
         </div>
       </div>
+
+      <ProcoreExportDialog
+        isOpen={showProcoreExport}
+        onClose={() => setShowProcoreExport(false)}
+        pdfBlob={pdfBlobForProcore}
+        fileName={pdfFileName}
+      />
     </div>
   );
 };

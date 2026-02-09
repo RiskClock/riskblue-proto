@@ -18,7 +18,8 @@
 - Tracks progress in `analysis_requests` and `analysis_request_files` tables
 - `ProcoreConnectionDialog` now triggers file copy after analysis request creation
 
-## Future: Batch 4 - PDF Export to Procore
-- Edge function to upload generated PDFs back to Procore Documents
-- Folder picker for destination selection
-- Wire into Water Mitigation Guidelines export step
+## Batch 4: PDF Export to Procore ✅
+- Edge function: `upload-to-procore` (multipart upload to Procore Documents API)
+- Component: `ProcoreExportDialog` (company → project → folder picker → upload)
+- Wired into `WaterMitigationGuidelinesStep` with "Export to Procore" button
+- `pdfExporter.ts` updated to support `returnBlob` option for in-memory PDF generation
