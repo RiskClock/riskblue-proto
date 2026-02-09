@@ -1,78 +1,67 @@
 
 
-## Fix: Legend Mismatch in "Total Project Risk (in Cost Impact)" Preset
-
-### Problem
-When the "Total Project Risk (in Cost Impact)" preset is selected, the custom Legend below the chart shows "Total Risk" and "Total Derisk" labels. But the chart actually renders "Risk Cost" (red) and "Controls Cost" (blue) series. The legend doesn't match what's on the graph.
+## Fix: Selection Reset and Checkbox Inconsistency
 
 ### Root Cause
-The `Legend` component only checks `mode === 'total'` to decide what to show, but doesn't consider `dataType`. In cost mode (`dataType === 'cost'`), the chart renders different series ("Risk Cost" / "Controls Cost") than in risk points mode ("Total Risk" / "Total Derisk").
 
-### Changes
+The initialization logic in all three step components has a critical gap:
 
-**File: `src/components/wizard/RiskTimelineChart3D.tsx`**
+1. It only adds missing **controls** but does NOT add missing **instances**
+2. Our recent control-gap fix made this worse by adding controls for 7 instances that aren't in the selected instances list
+3. This creates a state where `selectedControlIds` has entries like `ERM004::Presence of Water Monitoring` but `ERM004` is not in `selectedInstanceIds`
+4. The checkbox logic then shows indeterminate (minus icon) for these instances because `!isInstanceSelected && hasAnyControlSelected` is true
 
-1. Add a `dataType` prop to the `Legend` component interface
-2. Update the `mode === 'total'` branch in Legend to check `dataType`:
-   - If `dataType === 'cost'`: show "Risk Cost" (red) and "Controls Cost" (sky-blue) 
-   - If `dataType === 'risk'`: show "Total Risk" (red) and optionally "Total Derisk" (green) -- current behavior
-3. Pass `dataType={settings.dataType}` to both Legend usages (main view line 777 and modal line 804)
-4. Remove the `<RechartsLegend />` on line 315 to eliminate the redundant built-in legend inside the chart
+### Current Data State
 
-### Technical Detail
+| Data Source | Count |
+|---|---|
+| Analysis items (Assets) | 27 |
+| Saved selectedAssetInstances | 20 (missing 7) |
+| Saved selectedAssetControls | 33 (includes controls for the 7 missing instances) |
 
-The Legend's total-mode block changes from:
+### Fix
+
+Update the initialization logic in all three step components to detect and add missing **instances** alongside missing controls.
+
+**Files to modify:**
+- `src/components/wizard/CriticalAssetsStep.tsx`
+- `src/components/wizard/WaterSystemsStep.tsx`
+- `src/components/wizard/ProcessesStep.tsx`
+
+### Implementation
+
+In the initialization `useEffect` of each step, after the existing instance initialization check (`if (!data.selected*Instances || length === 0`), add an `else` branch that detects missing instances:
 
 ```typescript
-if (mode === 'total') {
-  return (
-    <div className="flex items-center gap-6 text-sm">
-      <div className="flex items-center gap-2">
-        <div className="w-3 h-3 rounded-sm bg-destructive" />
-        <span>Total Risk</span>
-      </div>
-      {showDerisk && (
-        <div className="flex items-center gap-2">
-          <div className="w-3 h-3 rounded-sm bg-emerald-500" />
-          <span>Total Derisk</span>
-        </div>
-      )}
-    </div>
+// Current: only initializes if empty
+if (!data.selectedAssetInstances || data.selectedAssetInstances.length === 0) {
+  instanceIds = assetItems.map(i => i.id);
+  // ...
+} else {
+  // NEW: detect missing instances from analysisItems
+  const allExpectedInstanceIds = assetItems.map(i => i.id);
+  const currentSavedInstances = new Set(data.selectedAssetInstances);
+  const missingInstances = allExpectedInstanceIds.filter(
+    id => !currentSavedInstances.has(id)
   );
-}
-```
-
-To:
-
-```typescript
-if (mode === 'total') {
-  if (dataType === 'cost') {
-    return (
-      <div className="flex items-center gap-6 text-sm">
-        <div className="flex items-center gap-2">
-          <div className="w-3 h-3 rounded-sm bg-destructive" />
-          <span>Risk Cost</span>
-        </div>
-        <div className="flex items-center gap-2">
-          <div className="w-3 h-3 rounded-sm bg-sky-500" />
-          <span>Controls Cost</span>
-        </div>
-      </div>
-    );
+  if (missingInstances.length > 0) {
+    instanceIds = [...currentSavedInstances, ...missingInstances];
+    setSelectedInstanceIds(instanceIds);
+    lastSavedRef.current.instances = instanceIds;
+    shouldPersist = true;
   }
-  return (
-    <div className="flex items-center gap-6 text-sm">
-      <div className="flex items-center gap-2">
-        <div className="w-3 h-3 rounded-sm bg-destructive" />
-        <span>Total Risk</span>
-      </div>
-      {showDerisk && (
-        <div className="flex items-center gap-2">
-          <div className="w-3 h-3 rounded-sm bg-emerald-500" />
-          <span>Total Derisk</span>
-        </div>
-      )}
-    </div>
-  );
 }
 ```
+
+This ensures that when new analysis items appear (or if instances were lost), they get automatically added to the selection -- consistent with the existing behavior for controls.
+
+The same pattern applies to all three step components with their respective field names (`selectedSystemInstances`, `selectedProcessInstances`).
+
+### Expected Result
+
+| Scenario | Before Fix | After Fix |
+|---|---|---|
+| Missing instances in saved data | Instances stay missing, controls show for unselected items | Missing instances auto-added |
+| Checkbox state | Indeterminate for items with controls but no instance selection | Fully checked (instance + controls both selected) |
+| New analysis items added | Not picked up unless list was empty | Auto-detected and added |
+
