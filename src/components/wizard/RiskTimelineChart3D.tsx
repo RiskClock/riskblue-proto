@@ -21,7 +21,7 @@ import {
   YAxis,
   CartesianGrid,
   Tooltip as RechartsTooltip,
-  Legend as RechartsLegend,
+  
   ResponsiveContainer,
   ReferenceLine,
 } from "recharts";
@@ -116,7 +116,8 @@ const Legend: React.FC<{
   onToggle: (name: string) => void;
   mode: 'total' | 'brokenDown';
   showDerisk: boolean;
-}> = ({ aspTypes, visibleTypes, onToggle, mode, showDerisk }) => {
+  dataType?: 'risk' | 'cost';
+}> = ({ aspTypes, visibleTypes, onToggle, mode, showDerisk, dataType = 'risk' }) => {
   const grouped = useMemo(() => {
     const groups: Record<string, typeof aspTypes> = {
       'Asset': [],
@@ -132,6 +133,20 @@ const Legend: React.FC<{
   }, [aspTypes]);
 
   if (mode === 'total') {
+    if (dataType === 'cost') {
+      return (
+        <div className="flex items-center gap-6 text-sm">
+          <div className="flex items-center gap-2">
+            <div className="w-3 h-3 rounded-sm bg-destructive" />
+            <span>Risk Cost</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <div className="w-3 h-3 rounded-sm bg-sky-500" />
+            <span>Controls Cost</span>
+          </div>
+        </div>
+      );
+    }
     return (
       <div className="flex items-center gap-6 text-sm">
         <div className="flex items-center gap-2">
@@ -312,7 +327,7 @@ const Chart2D: React.FC<Chart2DProps> = ({
           undefined
         ]}
       />
-      <RechartsLegend />
+      
       {renderTodayLine()}
     </>
   );
@@ -780,6 +795,7 @@ export const RiskTimelineChart3D: React.FC<RiskTimelineChart3DProps> = ({
           onToggle={handleToggleType}
           mode={mode}
           showDerisk={showDerisk}
+          dataType={settings.dataType}
         />
       </div>
 
@@ -807,6 +823,7 @@ export const RiskTimelineChart3D: React.FC<RiskTimelineChart3DProps> = ({
               onToggle={handleToggleType}
               mode={mode}
               showDerisk={showDerisk}
+              dataType={settings.dataType}
             />
           </div>
         </DialogContent>
