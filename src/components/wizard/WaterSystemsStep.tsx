@@ -321,23 +321,26 @@ export const WaterSystemsStep = ({
   }, [analysisItems.length]); // Only depend on length to run once
 
   const handleToggleInstance = useCallback((instanceId: string) => {
-    setSelectedInstanceIds(prev => 
-      prev.includes(instanceId) 
+    setSelectedInstanceIds(prev => {
+      const next = prev.includes(instanceId) 
         ? prev.filter(id => id !== instanceId) 
-        : [...prev, instanceId]
-    );
-  }, []);
+        : [...prev, instanceId];
+      updateFields({ selectedSystemInstances: next });
+      lastSavedRef.current.instances = next;
+      return next;
+    });
+  }, [updateFields]);
 
   const handleToggleAll = useCallback((instanceIds: string[], selected: boolean) => {
     setSelectedInstanceIds(prev => {
-      if (selected) {
-        const newIds = new Set([...prev, ...instanceIds]);
-        return Array.from(newIds);
-      } else {
-        return prev.filter(id => !instanceIds.includes(id));
-      }
+      const next = selected
+        ? Array.from(new Set([...prev, ...instanceIds]))
+        : prev.filter(id => !instanceIds.includes(id));
+      updateFields({ selectedSystemInstances: next });
+      lastSavedRef.current.instances = next;
+      return next;
     });
-  }, []);
+  }, [updateFields]);
 
   const handleToggleControl = useCallback((controlId: string) => {
     setSelectedControlIds(prev => {
@@ -347,31 +350,31 @@ export const WaterSystemsStep = ({
       } else {
         next.add(controlId);
       }
+      const arr = Array.from(next);
+      updateFields({ selectedSystemControls: arr });
+      lastSavedRef.current.controls = arr;
       return next;
     });
-    // Notify parent of manual override (only if not from risk tolerance change)
     if (!isRiskToleranceUpdateRef.current && onManualControlToggle) {
       onManualControlToggle();
     }
-  }, [onManualControlToggle]);
+  }, [onManualControlToggle, updateFields]);
 
   const handleToggleAllControls = useCallback((controlIds: string[], selected: boolean) => {
     setSelectedControlIds(prev => {
       const next = new Set(prev);
       controlIds.forEach(id => {
-        if (selected) {
-          next.add(id);
-        } else {
-          next.delete(id);
-        }
+        if (selected) next.add(id); else next.delete(id);
       });
+      const arr = Array.from(next);
+      updateFields({ selectedSystemControls: arr });
+      lastSavedRef.current.controls = arr;
       return next;
     });
-    // Notify parent of manual override (only if not from risk tolerance change)
     if (!isRiskToleranceUpdateRef.current && onManualControlToggle) {
       onManualControlToggle();
     }
-  }, [onManualControlToggle]);
+  }, [onManualControlToggle, updateFields]);
 
   // File viewer helpers
   const findDriveFile = (fileName: string): DriveFileInfo | undefined => {
