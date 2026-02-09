@@ -633,14 +633,18 @@ const ProjectWizardContent = () => {
               const durationStr = calculateCriticalAssetDuration(className, projectData);
               classDurationCache.set(`asset:${className}`, parseDurationMonths(durationStr));
             }
-            durationMonths = className ? classDurationCache.get(`asset:${className}`) ?? null : null;
+            durationMonths = className 
+              ? (classDurationCache.get(`asset:${className}`) ?? projectDurationMonths) 
+              : projectDurationMonths;
           } else if (item.category === 'Water System') {
             className = mapToWaterSystemName(item.name);
             if (className && !classDurationCache.has(`system:${className}`)) {
               const durationStr = calculateWaterSystemDuration(className, projectData);
               classDurationCache.set(`system:${className}`, parseDurationMonths(durationStr));
             }
-            durationMonths = className ? classDurationCache.get(`system:${className}`) ?? null : null;
+            durationMonths = className 
+              ? (classDurationCache.get(`system:${className}`) ?? projectDurationMonths) 
+              : projectDurationMonths;
           } else if (item.category === 'Process') {
             durationMonths = projectDurationMonths;
           }
