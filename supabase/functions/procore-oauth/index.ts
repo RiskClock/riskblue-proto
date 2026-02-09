@@ -65,7 +65,7 @@ async function getAuthUser(req: Request) {
   const client = createClient(SUPABASE_URL, Deno.env.get("SUPABASE_ANON_KEY")!, {
     global: { headers: { Authorization: `Bearer ${jwt}` } },
   });
-  const { data: { user }, error } = await client.auth.getUser();
+  const { data: { user }, error } = await client.auth.getUser(jwt);
   if (error || !user) return null;
   return user;
 }
