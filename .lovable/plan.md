@@ -1,53 +1,35 @@
 
 
-## Fix: Missing Instance Detection in All Three Step Components
+## Fix: Stop Re-Adding Intentionally Deselected Items
 
-### Problem
+### Root Cause
 
-The initialization `useEffect` in `CriticalAssetsStep`, `WaterSystemsStep`, and `ProcessesStep` has a gap:
+The "missing instance detection" logic added in the last diff treats every analysis item not in `selectedAssetInstances` as "missing" and re-adds it. But when a user intentionally unchecks ERM001, ERM004, ERM005, those IDs are correctly removed from `selectedAssetInstances`. On reload, the code sees them as "missing" and adds them back -- resetting the user's selections.
 
-- It detects and adds missing **controls** (has an `else` branch for this)
-- It does NOT detect missing **instances** -- only initializes them when the list is completely empty
+The same problem exists for controls: the `else` branch for controls re-adds any control not in `selectedAssetControls`, overriding intentional deselections.
 
-### Current Database State (for project 175bb9c9)
+### Solution
 
-- 27 Asset analysis items exist in `project_analysis_items`
-- `selectedAssetInstances` only has 24 (missing ERM001, ERM004, ERM005)
-- `selectedAssetControls` includes controls for those 3 missing instances (added by the controls gap-fix)
-- Result: checkboxes show indeterminate (minus icon) because controls exist for unselected instances
+Remove the "missing instance" and "missing control" detection `else` branches entirely. They were added to fix the original checkbox inconsistency bug, but that bug's real fix is a **one-time data repair**, not ongoing re-addition logic.
 
-### Fix
+Instead:
+1. **Remove** the `else` branches that re-add missing instances and controls in all three step components
+2. **Add a one-time data repair** that runs only when the specific data drift condition is detected (controls exist for instances not in the selection list), fixes it, and marks it as repaired so it never runs again
 
-Add an `else` branch after the instance initialization check in all three files to detect and re-add missing instances:
+### Implementation
 
 **Files to modify:**
-- `src/components/wizard/CriticalAssetsStep.tsx` (after line 293)
-- `src/components/wizard/WaterSystemsStep.tsx` (after line 276)
-- `src/components/wizard/ProcessesStep.tsx` (same pattern)
+- `src/components/wizard/CriticalAssetsStep.tsx`
+- `src/components/wizard/WaterSystemsStep.tsx`
+- `src/components/wizard/ProcessesStep.tsx`
 
-### Implementation Detail
+**Step 1: Remove the problematic `else` branches**
 
-In each file's initialization `useEffect`, change the instance initialization block from:
-
-```typescript
-if (!data.selectedAssetInstances || data.selectedAssetInstances.length === 0) {
-  instanceIds = assetItems.map(i => i.id);
-  setSelectedInstanceIds(instanceIds);
-  lastSavedRef.current.instances = instanceIds;
-  shouldPersist = true;
-}
-```
-
-To:
+In all three files, remove the `else` block after the instance initialization that detects "missing instances":
 
 ```typescript
-if (!data.selectedAssetInstances || data.selectedAssetInstances.length === 0) {
-  instanceIds = assetItems.map(i => i.id);
-  setSelectedInstanceIds(instanceIds);
-  lastSavedRef.current.instances = instanceIds;
-  shouldPersist = true;
+// REMOVE this else block in all three files:
 } else {
-  // Detect and add missing instances (e.g., from new analysis items or data drift)
   const allExpectedInstanceIds = assetItems.map(i => i.id);
   const currentSavedInstances = new Set<string>(data.selectedAssetInstances);
   const missingInstances = allExpectedInstanceIds.filter(id => !currentSavedInstances.has(id));
@@ -60,12 +42,41 @@ if (!data.selectedAssetInstances || data.selectedAssetInstances.length === 0) {
 }
 ```
 
-The same pattern applies with `selectedSystemInstances` and `selectedProcessInstances` for the other two files.
+Also remove the equivalent `else` block for controls that re-adds "missing controls."
+
+**Step 2: Add orphan control cleanup**
+
+Instead of re-adding missing instances, clean up orphaned controls (controls whose parent instance is not selected). This runs during initialization to fix the inconsistency without overriding user intent:
+
+```typescript
+// After setting instanceIds and controlIds, clean up orphaned controls
+if (data.selectedAssetControls && data.selectedAssetControls.length > 0 
+    && data.selectedAssetInstances && data.selectedAssetInstances.length > 0) {
+  const instanceSet = new Set<string>(instanceIds);
+  const cleanedControls = controlIds.filter(controlId => {
+    // Control IDs are formatted as "instanceId::controlName"
+    const instanceId = controlId.split("::")[0];
+    return instanceSet.has(instanceId);
+  });
+  if (cleanedControls.length !== controlIds.length) {
+    controlIds = cleanedControls;
+    setSelectedControlIds(new Set<string>(cleanedControls));
+    lastSavedRef.current.controls = cleanedControls;
+    shouldPersist = true;
+  }
+}
+```
+
+This approach:
+- Preserves user's intentional deselections (no re-adding)
+- Fixes the checkbox inconsistency by removing orphaned controls rather than re-adding missing instances
+- Only modifies data when there's a genuine inconsistency (controls without parent instances)
 
 ### Expected Result
 
 | Scenario | Before | After |
 |---|---|---|
-| Instances missing from saved data | Stay missing, controls show for unselected items | Auto-detected and re-added |
-| Checkbox state | Indeterminate (minus icon) | Fully checked |
-| New analysis items added after initial save | Not picked up | Auto-added to selection |
+| User unchecks ERM001, ERM004, ERM005 and reopens | All re-selected (reset) | Stay unchecked |
+| Orphaned controls (controls for unselected instances) | Cause indeterminate checkboxes | Cleaned up on load |
+| Brand new project (empty selections) | All selected by default | All selected by default (unchanged) |
+
