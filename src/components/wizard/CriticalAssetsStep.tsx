@@ -290,6 +290,17 @@ export const CriticalAssetsStep = ({
         setSelectedInstanceIds(instanceIds);
         lastSavedRef.current.instances = instanceIds;
         shouldPersist = true;
+      } else {
+        // Detect and add missing instances (e.g., from new analysis items or data drift)
+        const allExpectedInstanceIds = assetItems.map(i => i.id);
+        const currentSavedInstances = new Set<string>(data.selectedAssetInstances);
+        const missingInstances = allExpectedInstanceIds.filter(id => !currentSavedInstances.has(id));
+        if (missingInstances.length > 0) {
+          instanceIds = [...currentSavedInstances, ...missingInstances];
+          setSelectedInstanceIds(instanceIds);
+          lastSavedRef.current.instances = instanceIds;
+          shouldPersist = true;
+        }
       }
       
       // Initialize control selection (all controls selected by default)

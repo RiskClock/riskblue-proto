@@ -189,6 +189,17 @@ export const ProcessesStep = ({
         setSelectedInstanceIds(instanceIds);
         lastSavedRef.current.instances = instanceIds;
         shouldPersist = true;
+      } else {
+        // Detect and add missing instances (e.g., from new analysis items or data drift)
+        const allExpectedInstanceIds = processItems.map(i => i.id);
+        const currentSavedInstances = new Set<string>(data.selectedProcessInstances);
+        const missingInstances = allExpectedInstanceIds.filter(id => !currentSavedInstances.has(id));
+        if (missingInstances.length > 0) {
+          instanceIds = [...currentSavedInstances, ...missingInstances];
+          setSelectedInstanceIds(instanceIds);
+          lastSavedRef.current.instances = instanceIds;
+          shouldPersist = true;
+        }
       }
       
       // Initialize control selection
