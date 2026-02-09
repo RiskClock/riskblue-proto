@@ -1,109 +1,63 @@
 
 
-## Fix: Cost Estimate Flickering on Checkbox Toggle
+## Fix: Cost Estimate Mismatch Between Package Cost and Actual Selected Cost
 
 ### Root Cause
 
-There is a **timing mismatch** between when `hasManualOverride` switches to `true` and when `projectData` actually reflects the new selections.
+There are **two issues** causing the cost to not return to the original value when re-selecting an ASP:
 
-Here is the sequence when a user unchecks an instance:
+**Issue 1: Duration fallback mismatch**
 
-1. **T=0ms**: `handleInstanceCheckboxClick` fires. It:
-   - Updates local state in the step component (`selectedInstanceIds`, `selectedControlIds`)
-   - Calls `onManualControlToggle()` which sets `hasManualOverride = true` **immediately** in ProjectWizard
-2. **T=0ms**: ProjectWizard re-renders. The cost display switches from **package cost** (`totalCostEstimates`) to **`actualSelectedCost`**. But `actualSelectedCost` reads from `projectData.selectedProcessControls` which **has not been updated yet** (still has old values) -- showing the wrong intermediate cost.
-3. **T=500ms**: The step component's debounced auto-save fires, calling `updateFields()` which updates `projectData`. Now `actualSelectedCost` recalculates with the correct controls -- showing the final cost.
+The two cost calculators handle null durations differently:
 
-This explains:
-- **$615,536** = package cost (before `hasManualOverride`)
-- **$575,276** = `actualSelectedCost` with stale `projectData` (intermediate)
-- **$539,176** = `actualSelectedCost` with updated `projectData` (correct)
+- `totalCostEstimates` (package cost, line 490):
+  ```typescript
+  const effectiveDuration = durationMonths ?? projectDurationMonths;
+  ```
+  Falls back to project duration when class-specific duration is null.
 
-When rechecking, `hasManualOverride` is already `true`, so you see `actualSelectedCost` with stale data ($575,276) instead of the package cost.
+- `actualSelectedCost` (line 636):
+  ```typescript
+  durationMonths = className ? classDurationCache.get(`asset:${className}`) ?? null : null;
+  ```
+  Stays `null` when class-specific duration is null -- **no fallback to project duration**.
+
+When `durationMonths` is null, `calculateControlCost` returns only the one-time cost (no monthly component), resulting in a lower total. This is why the values never match.
+
+**Issue 2: `hasManualOverride` never resets**
+
+Once `hasManualOverride` is set to `true` (on first toggle), it stays `true` permanently. Even when the user re-selects everything back to the full set, the display continues using `actualSelectedCost` instead of switching back to the package cost. There is no logic to detect "all controls are re-selected" and reset the flag.
 
 ### Solution
 
-**Eliminate the 500ms delay** by calling `updateFields` immediately when toggling checkboxes, instead of waiting for the debounced auto-save. This ensures `projectData` and `actualSelectedCost` are in sync the moment `hasManualOverride` switches.
+**Fix 1: Add the missing duration fallback in `actualSelectedCost`**
 
-### Files to modify
-- `src/components/wizard/CriticalAssetsStep.tsx`
-- `src/components/wizard/WaterSystemsStep.tsx`
-- `src/components/wizard/ProcessesStep.tsx`
-
-### Implementation
-
-In each step component, update `handleToggleControl`, `handleToggleAllControls`, `handleToggleInstance`, and `handleToggleAll` to immediately call `updateFields` with the new selection state (in addition to updating local state). Also update `lastSavedRef` so the debounced auto-save detects no change and skips.
-
-For example in `ProcessesStep.tsx`:
+In `src/pages/ProjectWizard.tsx`, add `?? projectDurationMonths` to the duration resolution for assets and water systems in the `actualSelectedCost` calculation, matching the pattern used in `totalCostEstimates`:
 
 ```typescript
-const handleToggleInstance = useCallback((instanceId: string) => {
-  setSelectedInstanceIds(prev => {
-    const next = prev.includes(instanceId)
-      ? prev.filter(id => id !== instanceId)
-      : [...prev, instanceId];
-    // Immediately sync to projectData (bypass debounce)
-    updateFields({ selectedProcessInstances: next });
-    lastSavedRef.current.instances = next;
-    return next;
-  });
-}, [updateFields]);
+// Before (line 636):
+durationMonths = className ? classDurationCache.get(`asset:${className}`) ?? null : null;
 
-const handleToggleAll = useCallback((instanceIds: string[], selected: boolean) => {
-  setSelectedInstanceIds(prev => {
-    const next = selected
-      ? Array.from(new Set([...prev, ...instanceIds]))
-      : prev.filter(id => !instanceIds.includes(id));
-    updateFields({ selectedProcessInstances: next });
-    lastSavedRef.current.instances = next;
-    return next;
-  });
-}, [updateFields]);
-
-const handleToggleControl = useCallback((controlId: string) => {
-  setSelectedControlIds(prev => {
-    const next = new Set(prev);
-    if (next.has(controlId)) {
-      next.delete(controlId);
-    } else {
-      next.add(controlId);
-    }
-    const arr = Array.from(next);
-    updateFields({ selectedProcessControls: arr });
-    lastSavedRef.current.controls = arr;
-    return next;
-  });
-  if (!isRiskToleranceUpdateRef.current && onManualControlToggle) {
-    onManualControlToggle();
-  }
-}, [onManualControlToggle, updateFields]);
-
-const handleToggleAllControls = useCallback((controlIds: string[], selected: boolean) => {
-  setSelectedControlIds(prev => {
-    const next = new Set(prev);
-    controlIds.forEach(id => {
-      if (selected) next.add(id); else next.delete(id);
-    });
-    const arr = Array.from(next);
-    updateFields({ selectedProcessControls: arr });
-    lastSavedRef.current.controls = arr;
-    return next;
-  });
-  if (!isRiskToleranceUpdateRef.current && onManualControlToggle) {
-    onManualControlToggle();
-  }
-}, [onManualControlToggle, updateFields]);
+// After:
+durationMonths = className 
+  ? (classDurationCache.get(`asset:${className}`) ?? projectDurationMonths) 
+  : projectDurationMonths;
 ```
 
-The same pattern applies to `CriticalAssetsStep` (using `selectedAssetInstances`/`selectedAssetControls`) and `WaterSystemsStep` (using `selectedSystemInstances`/`selectedSystemControls`).
+Same fix for water systems (line 643).
 
-The debounced auto-save `useEffect` remains as a safety net but will typically detect no changes since `lastSavedRef` is already up to date.
+**Fix 2: No change needed for `hasManualOverride`**
+
+With the duration fallback fixed, `actualSelectedCost` will produce the same value as `totalCostEstimates` when all controls are selected. The user will see the correct cost whether the display uses the package cost or actual selected cost, making the `hasManualOverride` flag a display concern only (both paths produce the same number).
+
+### Files to modify
+- `src/pages/ProjectWizard.tsx` (lines 636 and 643 in the `actualSelectedCost` useMemo)
 
 ### Expected Result
 
 | Scenario | Before | After |
 |---|---|---|
-| Uncheck instance | Cost flickers through 2 values over 500ms | Cost updates to correct value instantly |
-| Recheck instance | Shows stale intermediate cost | Shows correct cost instantly |
-| Rapid toggles | Multiple delayed recalculations | Each toggle immediately reflected |
+| All controls selected, `hasManualOverride=true` | $575,276 (missing monthly costs) | $615,536 (matches package cost) |
+| Uncheck then recheck instance | $575,276 (stuck at wrong value) | $615,536 (returns to original) |
+| Uncheck instance | $539,176 | $539,176 (unchanged, correct) |
 
