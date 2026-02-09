@@ -130,10 +130,9 @@ serve(async (req) => {
     const uploadResult = await uploadResp.json();
 
     // Construct the folder URL for the user to navigate to
-    const folderPath = folderId
-      ? `documents/folders/${folderId}`
-      : `documents`;
-    const folderUrl = `https://sandbox.procore.com/projects/${projectId}/${folderPath}`;
+    const folderUrl = folderId
+      ? `https://sandbox.procore.com/webclients/host/companies/${companyId}/projects/${projectId}/tools/documents?folder_id=${folderId}`
+      : `https://sandbox.procore.com/webclients/host/companies/${companyId}/projects/${projectId}/tools/documents`;
 
     return new Response(
       JSON.stringify({ success: true, file: uploadResult, folderUrl }),
