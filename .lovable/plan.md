@@ -1,82 +1,109 @@
 
 
-## Fix: Stop Re-Adding Intentionally Deselected Items
+## Fix: Cost Estimate Flickering on Checkbox Toggle
 
 ### Root Cause
 
-The "missing instance detection" logic added in the last diff treats every analysis item not in `selectedAssetInstances` as "missing" and re-adds it. But when a user intentionally unchecks ERM001, ERM004, ERM005, those IDs are correctly removed from `selectedAssetInstances`. On reload, the code sees them as "missing" and adds them back -- resetting the user's selections.
+There is a **timing mismatch** between when `hasManualOverride` switches to `true` and when `projectData` actually reflects the new selections.
 
-The same problem exists for controls: the `else` branch for controls re-adds any control not in `selectedAssetControls`, overriding intentional deselections.
+Here is the sequence when a user unchecks an instance:
+
+1. **T=0ms**: `handleInstanceCheckboxClick` fires. It:
+   - Updates local state in the step component (`selectedInstanceIds`, `selectedControlIds`)
+   - Calls `onManualControlToggle()` which sets `hasManualOverride = true` **immediately** in ProjectWizard
+2. **T=0ms**: ProjectWizard re-renders. The cost display switches from **package cost** (`totalCostEstimates`) to **`actualSelectedCost`**. But `actualSelectedCost` reads from `projectData.selectedProcessControls` which **has not been updated yet** (still has old values) -- showing the wrong intermediate cost.
+3. **T=500ms**: The step component's debounced auto-save fires, calling `updateFields()` which updates `projectData`. Now `actualSelectedCost` recalculates with the correct controls -- showing the final cost.
+
+This explains:
+- **$615,536** = package cost (before `hasManualOverride`)
+- **$575,276** = `actualSelectedCost` with stale `projectData` (intermediate)
+- **$539,176** = `actualSelectedCost` with updated `projectData` (correct)
+
+When rechecking, `hasManualOverride` is already `true`, so you see `actualSelectedCost` with stale data ($575,276) instead of the package cost.
 
 ### Solution
 
-Remove the "missing instance" and "missing control" detection `else` branches entirely. They were added to fix the original checkbox inconsistency bug, but that bug's real fix is a **one-time data repair**, not ongoing re-addition logic.
+**Eliminate the 500ms delay** by calling `updateFields` immediately when toggling checkboxes, instead of waiting for the debounced auto-save. This ensures `projectData` and `actualSelectedCost` are in sync the moment `hasManualOverride` switches.
 
-Instead:
-1. **Remove** the `else` branches that re-add missing instances and controls in all three step components
-2. **Add a one-time data repair** that runs only when the specific data drift condition is detected (controls exist for instances not in the selection list), fixes it, and marks it as repaired so it never runs again
-
-### Implementation
-
-**Files to modify:**
+### Files to modify
 - `src/components/wizard/CriticalAssetsStep.tsx`
 - `src/components/wizard/WaterSystemsStep.tsx`
 - `src/components/wizard/ProcessesStep.tsx`
 
-**Step 1: Remove the problematic `else` branches**
+### Implementation
 
-In all three files, remove the `else` block after the instance initialization that detects "missing instances":
+In each step component, update `handleToggleControl`, `handleToggleAllControls`, `handleToggleInstance`, and `handleToggleAll` to immediately call `updateFields` with the new selection state (in addition to updating local state). Also update `lastSavedRef` so the debounced auto-save detects no change and skips.
 
-```typescript
-// REMOVE this else block in all three files:
-} else {
-  const allExpectedInstanceIds = assetItems.map(i => i.id);
-  const currentSavedInstances = new Set<string>(data.selectedAssetInstances);
-  const missingInstances = allExpectedInstanceIds.filter(id => !currentSavedInstances.has(id));
-  if (missingInstances.length > 0) {
-    instanceIds = [...currentSavedInstances, ...missingInstances];
-    setSelectedInstanceIds(instanceIds);
-    lastSavedRef.current.instances = instanceIds;
-    shouldPersist = true;
-  }
-}
-```
-
-Also remove the equivalent `else` block for controls that re-adds "missing controls."
-
-**Step 2: Add orphan control cleanup**
-
-Instead of re-adding missing instances, clean up orphaned controls (controls whose parent instance is not selected). This runs during initialization to fix the inconsistency without overriding user intent:
+For example in `ProcessesStep.tsx`:
 
 ```typescript
-// After setting instanceIds and controlIds, clean up orphaned controls
-if (data.selectedAssetControls && data.selectedAssetControls.length > 0 
-    && data.selectedAssetInstances && data.selectedAssetInstances.length > 0) {
-  const instanceSet = new Set<string>(instanceIds);
-  const cleanedControls = controlIds.filter(controlId => {
-    // Control IDs are formatted as "instanceId::controlName"
-    const instanceId = controlId.split("::")[0];
-    return instanceSet.has(instanceId);
+const handleToggleInstance = useCallback((instanceId: string) => {
+  setSelectedInstanceIds(prev => {
+    const next = prev.includes(instanceId)
+      ? prev.filter(id => id !== instanceId)
+      : [...prev, instanceId];
+    // Immediately sync to projectData (bypass debounce)
+    updateFields({ selectedProcessInstances: next });
+    lastSavedRef.current.instances = next;
+    return next;
   });
-  if (cleanedControls.length !== controlIds.length) {
-    controlIds = cleanedControls;
-    setSelectedControlIds(new Set<string>(cleanedControls));
-    lastSavedRef.current.controls = cleanedControls;
-    shouldPersist = true;
+}, [updateFields]);
+
+const handleToggleAll = useCallback((instanceIds: string[], selected: boolean) => {
+  setSelectedInstanceIds(prev => {
+    const next = selected
+      ? Array.from(new Set([...prev, ...instanceIds]))
+      : prev.filter(id => !instanceIds.includes(id));
+    updateFields({ selectedProcessInstances: next });
+    lastSavedRef.current.instances = next;
+    return next;
+  });
+}, [updateFields]);
+
+const handleToggleControl = useCallback((controlId: string) => {
+  setSelectedControlIds(prev => {
+    const next = new Set(prev);
+    if (next.has(controlId)) {
+      next.delete(controlId);
+    } else {
+      next.add(controlId);
+    }
+    const arr = Array.from(next);
+    updateFields({ selectedProcessControls: arr });
+    lastSavedRef.current.controls = arr;
+    return next;
+  });
+  if (!isRiskToleranceUpdateRef.current && onManualControlToggle) {
+    onManualControlToggle();
   }
-}
+}, [onManualControlToggle, updateFields]);
+
+const handleToggleAllControls = useCallback((controlIds: string[], selected: boolean) => {
+  setSelectedControlIds(prev => {
+    const next = new Set(prev);
+    controlIds.forEach(id => {
+      if (selected) next.add(id); else next.delete(id);
+    });
+    const arr = Array.from(next);
+    updateFields({ selectedProcessControls: arr });
+    lastSavedRef.current.controls = arr;
+    return next;
+  });
+  if (!isRiskToleranceUpdateRef.current && onManualControlToggle) {
+    onManualControlToggle();
+  }
+}, [onManualControlToggle, updateFields]);
 ```
 
-This approach:
-- Preserves user's intentional deselections (no re-adding)
-- Fixes the checkbox inconsistency by removing orphaned controls rather than re-adding missing instances
-- Only modifies data when there's a genuine inconsistency (controls without parent instances)
+The same pattern applies to `CriticalAssetsStep` (using `selectedAssetInstances`/`selectedAssetControls`) and `WaterSystemsStep` (using `selectedSystemInstances`/`selectedSystemControls`).
+
+The debounced auto-save `useEffect` remains as a safety net but will typically detect no changes since `lastSavedRef` is already up to date.
 
 ### Expected Result
 
 | Scenario | Before | After |
 |---|---|---|
-| User unchecks ERM001, ERM004, ERM005 and reopens | All re-selected (reset) | Stay unchecked |
-| Orphaned controls (controls for unselected instances) | Cause indeterminate checkboxes | Cleaned up on load |
-| Brand new project (empty selections) | All selected by default | All selected by default (unchanged) |
+| Uncheck instance | Cost flickers through 2 values over 500ms | Cost updates to correct value instantly |
+| Recheck instance | Shows stale intermediate cost | Shows correct cost instantly |
+| Rapid toggles | Multiple delayed recalculations | Each toggle immediately reflected |
 
