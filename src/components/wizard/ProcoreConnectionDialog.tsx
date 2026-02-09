@@ -53,6 +53,9 @@ export const ProcoreConnectionDialog = ({
     disconnectProcore,
   } = useProcoreToken();
 
+  const LS_COMPANY_KEY = "procore_last_company_id";
+  const LS_PROJECT_KEY = "procore_last_project_id";
+
   const [connectingProcore, setConnectingProcore] = useState(false);
   const [companies, setCompanies] = useState<ProcoreCompany[]>([]);
   const [selectedCompanyId, setSelectedCompanyId] = useState<string>("");
@@ -78,12 +81,16 @@ export const ProcoreConnectionDialog = ({
   // Load projects when company selected
   useEffect(() => {
     if (selectedCompanyId) {
+      localStorage.setItem(LS_COMPANY_KEY, selectedCompanyId);
       loadProjects(selectedCompanyId);
     }
   }, [selectedCompanyId]);
 
   // Load folders when project selected
   useEffect(() => {
+    if (selectedProjectId) {
+      localStorage.setItem(LS_PROJECT_KEY, selectedProjectId);
+    }
     if (selectedProjectId && selectedCompanyId) {
       loadFolders(selectedCompanyId, selectedProjectId);
     }
@@ -114,10 +121,14 @@ export const ProcoreConnectionDialog = ({
     setLoadingCompanies(true);
     try {
       const data = await callProcoreApi("list-companies");
-      setCompanies(data.companies || []);
-      // Auto-select if only one company
-      if (data.companies?.length === 1) {
-        setSelectedCompanyId(String(data.companies[0].id));
+      const loadedCompanies = data.companies || [];
+      setCompanies(loadedCompanies);
+
+      const savedCompanyId = localStorage.getItem(LS_COMPANY_KEY);
+      if (savedCompanyId && loadedCompanies.some((c: ProcoreCompany) => String(c.id) === savedCompanyId)) {
+        setSelectedCompanyId(savedCompanyId);
+      } else if (loadedCompanies.length === 1) {
+        setSelectedCompanyId(String(loadedCompanies[0].id));
       }
     } catch (err) {
       console.error("Error loading companies:", err);
@@ -133,7 +144,13 @@ export const ProcoreConnectionDialog = ({
     setSelectedProjectId("");
     try {
       const data = await callProcoreApi("list-projects", { companyId });
-      setProjects(data.projects || []);
+      const loadedProjects = data.projects || [];
+      setProjects(loadedProjects);
+
+      const savedProjectId = localStorage.getItem(LS_PROJECT_KEY);
+      if (savedProjectId && loadedProjects.some((p: ProcoreProject) => String(p.id) === savedProjectId)) {
+        setSelectedProjectId(savedProjectId);
+      }
     } catch (err) {
       console.error("Error loading projects:", err);
       toast({ title: "Error", description: "Failed to load Procore projects.", variant: "destructive" });

@@ -24,6 +24,7 @@ interface ProcoreFolderTreeProps {
   selectable?: boolean;
   selectedFolderId?: string;
   onSelectFolder?: (folderId: string) => void;
+  hideFiles?: boolean;
   depth?: number;
 }
 
@@ -33,6 +34,7 @@ export const ProcoreFolderTree = ({
   selectable = false,
   selectedFolderId,
   onSelectFolder,
+  hideFiles = false,
   depth = 0,
 }: ProcoreFolderTreeProps) => {
   const [expandedMap, setExpandedMap] = useState<Map<number, SubfolderData>>(new Map());
@@ -143,10 +145,11 @@ export const ProcoreFolderTree = ({
                     selectable={selectable}
                     selectedFolderId={selectedFolderId}
                     onSelectFolder={onSelectFolder}
+                    hideFiles={hideFiles}
                     depth={depth + 1}
                   />
                 )}
-                {subData.files.map((file) => (
+                {!hideFiles && subData.files.map((file) => (
                   <div
                     key={file.id}
                     className="flex items-center gap-1.5 py-1 px-2 text-sm text-muted-foreground"
