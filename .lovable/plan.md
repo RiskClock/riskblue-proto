@@ -1,53 +1,20 @@
 
 
-## Fix: Package Cost Ignores Instance Selections
+## Change Password for ryan.going@pomerleau.ca
 
-### Root Cause
+### Steps
 
-The `totalCostEstimates` calculation iterates over **all** analysis items regardless of whether they are selected. It does not filter by `selectedAssetInstances`, `selectedSystemInstances`, or `selectedProcessInstances`. This means the "package cost" shown initially ($615,536) includes costs for instances the user previously deselected -- it was never the correct number.
-
-When `hasManualOverride` switches to `true`, the display switches to `actualSelectedCost`, which correctly only counts selected controls. This creates the illusion that rechecking doesn't restore the original value, when in reality the original value was inflated.
-
-### Numbers Explained
-
-- **$615,536** = package cost counting ALL instances (including deselected ones) -- overcounted
-- **$575,276** = actual cost of currently selected instances/controls -- correct
-- **$539,176** = $575,276 minus the unchecked $36.1K ASP -- correct
-- The $40,260 gap ($615,536 - $575,276) represents the cost of previously deselected instances that `totalCostEstimates` was incorrectly including
-
-### Solution
-
-Filter `totalCostEstimates` to only include selected instances when processing each category. This ensures the package cost matches `actualSelectedCost` when all controls for selected instances are checked.
-
-### Files to modify
-
-- `src/pages/ProjectWizard.tsx`
+1. **Create** a temporary edge function `admin-reset-password/index.ts` that uses the admin API to update the user's password
+2. **Deploy** and **invoke** it with email `ryan.going@pomerleau.ca` and password `riskblue123!`
+3. **Delete** the edge function immediately after successful execution
 
 ### Implementation
 
-In the `totalCostEstimates` useMemo, before calling `processInstances` for each class group, filter instances to only those present in the corresponding selection arrays:
+The edge function will:
+- Use `SUPABASE_SERVICE_ROLE_KEY` (already configured) to create an admin client
+- Look up the user by email via `auth.admin.listUsers()`
+- Call `auth.admin.updateUserById(userId, { password: "riskblue123!" })`
+- Return success/failure
 
-```text
-// When processing assets:
-const selectedAssetSet = new Set(projectData.selectedAssetInstances || []);
-assetsByClass.forEach((instances, className) => {
-  const selectedInstances = instances.filter(i => selectedAssetSet.has(i.id));
-  if (selectedInstances.length === 0) return;
-  // ... process selectedInstances instead of instances
-});
-
-// Same pattern for water systems (selectedSystemInstances) and processes (selectedProcessInstances)
-```
-
-Add `projectData.selectedAssetInstances`, `projectData.selectedSystemInstances`, and `projectData.selectedProcessInstances` to the useMemo dependency array.
-
-If none of the selection arrays exist yet (brand new project, no saved data), fall back to including all instances (current behavior).
-
-### Expected Result
-
-| Scenario | Before | After |
-|---|---|---|
-| Initial load (some instances previously deselected) | $615,536 (inflated) | $575,276 (correct, matches selected instances) |
-| Uncheck $36.1K ASP | $539,176 | $539,176 (same) |
-| Recheck ASP | $575,276 | $575,276 (matches initial display) |
+No permanent code changes needed -- the function is created, used once, and removed.
 
