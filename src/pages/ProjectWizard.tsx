@@ -27,6 +27,8 @@ import { RepositoryConnectionDialog } from "@/components/wizard/RepositoryConnec
 import { ProcoreConnectionDialog } from "@/components/wizard/ProcoreConnectionDialog";
 import { MitigationResponsePlanStep } from "@/components/wizard/MitigationResponsePlanStep";
 import { WaterMitigationGuidelinesStep } from "@/components/wizard/WaterMitigationGuidelinesStep";
+import { ProcoreExportDialog } from "@/components/wizard/ProcoreExportDialog";
+import procoreIcon from "@/assets/icon_procore.png";
 import { CollaboratorManagementStep } from "@/components/wizard/CollaboratorManagementStep";
 import { CollaboratorsModal } from "@/components/wizard/CollaboratorsModal";
 import { RiskToleranceSelector, RiskTolerance } from "@/components/wizard/RiskToleranceSelector";
@@ -34,7 +36,7 @@ import { ProposalsStep } from "@/components/wizard/ProposalsStep";
 import { ImplementationScheduleStep } from "@/components/wizard/ImplementationScheduleStep";
 import { ProjectFilesUpload, DriveFileInfo } from "@/components/wizard/ProjectFilesUpload";
 import { ResponsePlanUploadChat } from "@/components/ResponsePlanUploadChat";
-import { Download, LogOut, FileText, Loader2, Users, Settings, BarChart3, FilePlus, Upload } from "lucide-react";
+import { Download, LogOut, FileText, Loader2, Users, Settings, BarChart3, FilePlus, Upload, ChevronDown as ChevronDownIcon } from "lucide-react";
 import { DropdownMenuSeparator } from "@/components/ui/dropdown-menu";
 import { Button } from "@/components/ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
@@ -125,6 +127,10 @@ const ProjectWizardContent = () => {
   const [showDriveConnectionDialog, setShowDriveConnectionDialog] = useState(false);
   // Standalone Procore connection dialog
   const [showProcoreConnectionDialog, setShowProcoreConnectionDialog] = useState(false);
+  
+  // Procore export state for guideline tab
+  const [showProcoreExportMain, setShowProcoreExportMain] = useState(false);
+  const [pdfBlobForProcoreMain, setPdfBlobForProcoreMain] = useState<Blob | null>(null);
   
   // Upload drawings state
   const drawingsFileInputRef = useRef<HTMLInputElement>(null);
@@ -1625,117 +1631,222 @@ const ProjectWizardContent = () => {
             
             {/* Bottom Controls */}
             <div className="flex justify-between items-center pt-6">
-              <Button variant="outline" onClick={async () => {
-                // Log export activity
-                logActivity("export_clicked", id);
-                
-                // Show preparing toast
-                toast({
-                  title: "Preparing report...",
-                  description: "Preparing report for export...",
-                });
-                
-                // Get prepared by (current user) and created by (project owner) display names
-                let preparedByName = "";
-                let createdByName = "";
-                
-                // Fetch display names from profiles
-                const userIdsToFetch = [user?.id, projectData.user_id].filter(Boolean) as string[];
-                const uniqueUserIds = [...new Set(userIdsToFetch)];
-                
-                if (uniqueUserIds.length > 0) {
-                  try {
-                    const { data: profilesData } = await supabase
-                      .from('profiles')
-                      .select('user_id, display_name')
-                      .in('user_id', uniqueUserIds);
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="outline">
+                    <Download className="h-4 w-4 mr-2" />
+                    Export
+                    <ChevronDownIcon className="h-3 w-3 ml-1" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="start" className="bg-popover">
+                  <DropdownMenuItem onSelect={async () => {
+                    // Log export activity
+                    logActivity("export_clicked", id);
                     
-                    const profilesMap = new Map(
-                      (profilesData || []).map(p => [p.user_id, p.display_name])
-                    );
-                    
-                    preparedByName = profilesMap.get(user?.id || "") || user?.email || "";
-                    createdByName = profilesMap.get(projectData.user_id) || preparedByName;
-                  } catch (e) {
-                    console.error("Failed to fetch profile names:", e);
-                    // Fallback to email
-                    preparedByName = user?.email || "";
-                    createdByName = preparedByName;
-                  }
-                }
-                
-                // Calculate risk counts for the AI summary
-                const riskCounts = {
-                  assets: analysisItems.filter(i => i.category === "Asset" && (projectData.selectedAssetInstances || []).includes(i.id)).length,
-                  systems: analysisItems.filter(i => i.category === "Water System" && (projectData.selectedSystemInstances || []).includes(i.id)).length,
-                  processes: analysisItems.filter(i => i.category === "Process" && (projectData.selectedProcessInstances || []).includes(i.id)).length,
-                };
-                
-                // Count unique controls
-                const allControlIds = new Set([
-                  ...(projectData.selectedAssetControls || []),
-                  ...(projectData.selectedSystemControls || []),
-                  ...(projectData.selectedProcessControls || []),
-                ]);
-                const controlCount = allControlIds.size;
-                
-                // Call edge function to generate executive summary
-                let executiveSummaryText = "";
-                try {
-                  const { data: summaryData, error } = await supabase.functions.invoke('generate-executive-summary', {
-                    body: { 
-                      projectData, 
-                      riskCounts,
-                      controlCount
-                    }
-                  });
-                  
-                  if (!error && summaryData?.summary) {
-                    executiveSummaryText = summaryData.summary;
-                  } else if (error) {
-                    console.error("Error generating summary:", error);
                     toast({
-                      title: "Note",
-                      description: "Could not generate AI summary. Proceeding with export.",
+                      title: "Preparing report...",
+                      description: "Preparing report for export...",
                     });
-                  }
-                } catch (e) {
-                  console.error("Failed to generate executive summary:", e);
-                }
-                
-                const originalTitle = document.title;
-                document.title = generateReportFilename(projectData.name || "unnamed_project", "WaterRiskDiscovery");
-                
-                // Create a temporary container for the report
-                const reportContainer = document.createElement('div');
-                reportContainer.className = 'print-report-container';
-                document.body.appendChild(reportContainer);
-                
-                // Render the report (we'll do this via React portal in next step)
-                const root = document.createElement('div');
-                reportContainer.appendChild(root);
-                
-                // Import and render
-                import('react-dom/client').then(({ createRoot }) => {
-                  const reactRoot = createRoot(root);
-                  reactRoot.render(<WaterRiskReport data={projectData} analysisItems={analysisItems} controlDetails={controlDetails} executiveSummaryText={executiveSummaryText} preparedBy={preparedByName} createdBy={createdByName} />);
-                  
-                  // Wait longer for images to load, then print
-                  setTimeout(() => {
-                    window.print();
-                    document.title = originalTitle;
                     
-                    // Cleanup after print
-                    setTimeout(() => {
-                      reactRoot.unmount();
-                      document.body.removeChild(reportContainer);
-                    }, 100);
-                  }, 1500);
-                });
-              }}>
-                <Download className="h-4 w-4 mr-2" />
-                Export
-              </Button>
+                    let preparedByName = "";
+                    let createdByName = "";
+                    
+                    const userIdsToFetch = [user?.id, projectData.user_id].filter(Boolean) as string[];
+                    const uniqueUserIds = [...new Set(userIdsToFetch)];
+                    
+                    if (uniqueUserIds.length > 0) {
+                      try {
+                        const { data: profilesData } = await supabase
+                          .from('profiles')
+                          .select('user_id, display_name')
+                          .in('user_id', uniqueUserIds);
+                        
+                        const profilesMap = new Map(
+                          (profilesData || []).map(p => [p.user_id, p.display_name])
+                        );
+                        
+                        preparedByName = profilesMap.get(user?.id || "") || user?.email || "";
+                        createdByName = profilesMap.get(projectData.user_id) || preparedByName;
+                      } catch (e) {
+                        console.error("Failed to fetch profile names:", e);
+                        preparedByName = user?.email || "";
+                        createdByName = preparedByName;
+                      }
+                    }
+                    
+                    const riskCounts = {
+                      assets: analysisItems.filter(i => i.category === "Asset" && (projectData.selectedAssetInstances || []).includes(i.id)).length,
+                      systems: analysisItems.filter(i => i.category === "Water System" && (projectData.selectedSystemInstances || []).includes(i.id)).length,
+                      processes: analysisItems.filter(i => i.category === "Process" && (projectData.selectedProcessInstances || []).includes(i.id)).length,
+                    };
+                    
+                    const allControlIds = new Set([
+                      ...(projectData.selectedAssetControls || []),
+                      ...(projectData.selectedSystemControls || []),
+                      ...(projectData.selectedProcessControls || []),
+                    ]);
+                    const controlCount = allControlIds.size;
+                    
+                    let executiveSummaryText = "";
+                    try {
+                      const { data: summaryData, error } = await supabase.functions.invoke('generate-executive-summary', {
+                        body: { 
+                          projectData, 
+                          riskCounts,
+                          controlCount
+                        }
+                      });
+                      
+                      if (!error && summaryData?.summary) {
+                        executiveSummaryText = summaryData.summary;
+                      } else if (error) {
+                        console.error("Error generating summary:", error);
+                        toast({
+                          title: "Note",
+                          description: "Could not generate AI summary. Proceeding with export.",
+                        });
+                      }
+                    } catch (e) {
+                      console.error("Failed to generate executive summary:", e);
+                    }
+                    
+                    const originalTitle = document.title;
+                    document.title = generateReportFilename(projectData.name || "unnamed_project", "WaterRiskDiscovery");
+                    
+                    const reportContainer = document.createElement('div');
+                    reportContainer.className = 'print-report-container';
+                    document.body.appendChild(reportContainer);
+                    
+                    const root = document.createElement('div');
+                    reportContainer.appendChild(root);
+                    
+                    import('react-dom/client').then(({ createRoot }) => {
+                      const reactRoot = createRoot(root);
+                      reactRoot.render(<WaterRiskReport data={projectData} analysisItems={analysisItems} controlDetails={controlDetails} executiveSummaryText={executiveSummaryText} preparedBy={preparedByName} createdBy={createdByName} />);
+                      
+                      setTimeout(() => {
+                        window.print();
+                        document.title = originalTitle;
+                        
+                        setTimeout(() => {
+                          reactRoot.unmount();
+                          document.body.removeChild(reportContainer);
+                        }, 100);
+                      }, 1500);
+                    });
+                  }}>
+                    <Download className="h-4 w-4 mr-2" />
+                    Download as PDF
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onSelect={async () => {
+                    logActivity("export_clicked", id);
+                    
+                    toast({
+                      title: "Preparing report...",
+                      description: "Generating PDF for Procore export...",
+                    });
+                    
+                    let preparedByName = "";
+                    let createdByName = "";
+                    
+                    const userIdsToFetch = [user?.id, projectData.user_id].filter(Boolean) as string[];
+                    const uniqueUserIds = [...new Set(userIdsToFetch)];
+                    
+                    if (uniqueUserIds.length > 0) {
+                      try {
+                        const { data: profilesData } = await supabase
+                          .from('profiles')
+                          .select('user_id, display_name')
+                          .in('user_id', uniqueUserIds);
+                        
+                        const profilesMap = new Map(
+                          (profilesData || []).map(p => [p.user_id, p.display_name])
+                        );
+                        
+                        preparedByName = profilesMap.get(user?.id || "") || user?.email || "";
+                        createdByName = profilesMap.get(projectData.user_id) || preparedByName;
+                      } catch (e) {
+                        preparedByName = user?.email || "";
+                        createdByName = preparedByName;
+                      }
+                    }
+                    
+                    const riskCounts = {
+                      assets: analysisItems.filter(i => i.category === "Asset" && (projectData.selectedAssetInstances || []).includes(i.id)).length,
+                      systems: analysisItems.filter(i => i.category === "Water System" && (projectData.selectedSystemInstances || []).includes(i.id)).length,
+                      processes: analysisItems.filter(i => i.category === "Process" && (projectData.selectedProcessInstances || []).includes(i.id)).length,
+                    };
+                    
+                    const allControlIds = new Set([
+                      ...(projectData.selectedAssetControls || []),
+                      ...(projectData.selectedSystemControls || []),
+                      ...(projectData.selectedProcessControls || []),
+                    ]);
+                    const controlCount = allControlIds.size;
+                    
+                    let executiveSummaryText = "";
+                    try {
+                      const { data: summaryData, error } = await supabase.functions.invoke('generate-executive-summary', {
+                        body: { projectData, riskCounts, controlCount }
+                      });
+                      if (!error && summaryData?.summary) {
+                        executiveSummaryText = summaryData.summary;
+                      }
+                    } catch (e) {
+                      console.error("Failed to generate executive summary:", e);
+                    }
+                    
+                    // Render report offscreen and generate PDF blob
+                    const reportContainer = document.createElement('div');
+                    reportContainer.style.position = 'absolute';
+                    reportContainer.style.left = '-9999px';
+                    reportContainer.style.width = '210mm';
+                    document.body.appendChild(reportContainer);
+                    
+                    const root = document.createElement('div');
+                    reportContainer.appendChild(root);
+                    
+                    const { createRoot } = await import('react-dom/client');
+                    const reactRoot = createRoot(root);
+                    reactRoot.render(<WaterRiskReport data={projectData} analysisItems={analysisItems} controlDetails={controlDetails} executiveSummaryText={executiveSummaryText} preparedBy={preparedByName} createdBy={createdByName} />);
+                    
+                    // Wait for render + images
+                    await new Promise(resolve => setTimeout(resolve, 2000));
+                    
+                    const { generatePdfFromElement, getImageBase64 } = await import('@/lib/pdfExporter');
+                    const logoBase64 = await getImageBase64(riskBlueLogo);
+                    
+                    const blob = await generatePdfFromElement(reportContainer, {
+                      filename: generateReportFilename(projectData.name || "unnamed_project", "WaterRiskDiscovery"),
+                      margins: { top: 10, right: 10, bottom: 15, left: 10 },
+                      logoBase64,
+                      skipLogoOnFirstPage: true,
+                      returnBlob: true,
+                    });
+                    
+                    reactRoot.unmount();
+                    document.body.removeChild(reportContainer);
+                    
+                    if (blob instanceof Blob) {
+                      setPdfBlobForProcoreMain(blob);
+                      setShowProcoreExportMain(true);
+                    } else {
+                      toast({ title: "Error", description: "Failed to generate PDF for export.", variant: "destructive" });
+                    }
+                  }}>
+                    <img src={procoreIcon} alt="Procore" className="h-4 w-4 mr-2" />
+                    Export to Procore
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+              
+              <ProcoreExportDialog
+                isOpen={showProcoreExportMain}
+                onClose={() => { setShowProcoreExportMain(false); setPdfBlobForProcoreMain(null); }}
+                pdfBlob={pdfBlobForProcoreMain}
+                fileName={generateReportFilename(projectData.name || "unnamed_project", "WaterRiskDiscovery") + ".pdf"}
+              />
               
               <div className="flex items-center gap-4">
                 <div className="flex items-center gap-2">
