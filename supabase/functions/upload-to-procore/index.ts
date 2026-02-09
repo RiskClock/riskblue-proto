@@ -129,8 +129,14 @@ serve(async (req) => {
 
     const uploadResult = await uploadResp.json();
 
+    // Construct the folder URL for the user to navigate to
+    const folderPath = folderId
+      ? `documents/folders/${folderId}`
+      : `documents`;
+    const folderUrl = `https://sandbox.procore.com/projects/${projectId}/${folderPath}`;
+
     return new Response(
-      JSON.stringify({ success: true, file: uploadResult }),
+      JSON.stringify({ success: true, file: uploadResult, folderUrl }),
       { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   } catch (error) {

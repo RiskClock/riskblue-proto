@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Loader2, Check, Upload } from "lucide-react";
+import { Loader2, Check, Upload, ExternalLink, FileText, CheckCircle2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { ProcoreFolderTree } from "@/components/wizard/ProcoreFolderTree";
 import { supabase } from "@/integrations/supabase/client";
@@ -31,6 +31,9 @@ interface ProcoreExportDialogProps {
   fileName: string;
 }
 
+const LS_COMPANY_KEY = "procore_last_company_id";
+const LS_PROJECT_KEY = "procore_last_project_id";
+
 export const ProcoreExportDialog = ({
   isOpen,
   onClose,
@@ -55,6 +58,14 @@ export const ProcoreExportDialog = ({
   const [loadingProjects, setLoadingProjects] = useState(false);
   const [loadingFolders, setLoadingFolders] = useState(false);
   const [uploading, setUploading] = useState(false);
+  const [uploadSuccess, setUploadSuccess] = useState<{ folderUrl: string } | null>(null);
+
+  // Reset success state when dialog closes
+  useEffect(() => {
+    if (!isOpen) {
+      setUploadSuccess(null);
+    }
+  }, [isOpen]);
 
   useEffect(() => {
     if (isConnected && isOpen) {
@@ -63,10 +74,16 @@ export const ProcoreExportDialog = ({
   }, [isConnected, isOpen]);
 
   useEffect(() => {
-    if (selectedCompanyId) loadProjects(selectedCompanyId);
+    if (selectedCompanyId) {
+      localStorage.setItem(LS_COMPANY_KEY, selectedCompanyId);
+      loadProjects(selectedCompanyId);
+    }
   }, [selectedCompanyId]);
 
   useEffect(() => {
+    if (selectedProjectId) {
+      localStorage.setItem(LS_PROJECT_KEY, selectedProjectId);
+    }
     if (selectedProjectId && selectedCompanyId) loadFolders(selectedCompanyId, selectedProjectId);
   }, [selectedProjectId, selectedCompanyId]);
 
@@ -95,9 +112,14 @@ export const ProcoreExportDialog = ({
     setLoadingCompanies(true);
     try {
       const data = await callProcoreApi("list-companies");
-      setCompanies(data.companies || []);
-      if (data.companies?.length === 1) {
-        setSelectedCompanyId(String(data.companies[0].id));
+      const loadedCompanies = data.companies || [];
+      setCompanies(loadedCompanies);
+
+      const savedCompanyId = localStorage.getItem(LS_COMPANY_KEY);
+      if (savedCompanyId && loadedCompanies.some((c: ProcoreCompany) => String(c.id) === savedCompanyId)) {
+        setSelectedCompanyId(savedCompanyId);
+      } else if (loadedCompanies.length === 1) {
+        setSelectedCompanyId(String(loadedCompanies[0].id));
       }
     } catch (err) {
       console.error("Error loading companies:", err);
@@ -115,7 +137,13 @@ export const ProcoreExportDialog = ({
     setSelectedFolderId("");
     try {
       const data = await callProcoreApi("list-projects", { companyId });
-      setProjects(data.projects || []);
+      const loadedProjects = data.projects || [];
+      setProjects(loadedProjects);
+
+      const savedProjectId = localStorage.getItem(LS_PROJECT_KEY);
+      if (savedProjectId && loadedProjects.some((p: ProcoreProject) => String(p.id) === savedProjectId)) {
+        setSelectedProjectId(savedProjectId);
+      }
     } catch (err) {
       console.error("Error loading projects:", err);
       toast({ title: "Error", description: "Failed to load Procore projects.", variant: "destructive" });
@@ -165,7 +193,7 @@ export const ProcoreExportDialog = ({
       const formData = new FormData();
       formData.append("companyId", selectedCompanyId);
       formData.append("projectId", selectedProjectId);
-      if (selectedFolderId) formData.append("folderId", selectedFolderId);
+      if (selectedFolderId && selectedFolderId !== "__root__") formData.append("folderId", selectedFolderId);
       formData.append("fileName", fileName);
       formData.append("file", pdfBlob, fileName);
 
@@ -183,11 +211,8 @@ export const ProcoreExportDialog = ({
         throw new Error(err.error || "Upload failed");
       }
 
-      toast({
-        title: "Exported to Procore",
-        description: `"${fileName}" has been uploaded to Procore Documents.`,
-      });
-      onClose();
+      const result = await resp.json();
+      setUploadSuccess({ folderUrl: result.folderUrl || "" });
     } catch (err) {
       console.error("Procore upload error:", err);
       toast({
@@ -200,8 +225,13 @@ export const ProcoreExportDialog = ({
     }
   };
 
+  const handleDone = () => {
+    setUploadSuccess(null);
+    onClose();
+  };
+
   return (
-    <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
+    <Dialog open={isOpen} onOpenChange={(open) => !open && handleDone()}>
       <DialogContent className="max-w-md">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
@@ -211,7 +241,33 @@ export const ProcoreExportDialog = ({
         </DialogHeader>
 
         <div className="space-y-4">
-          {!isConnected ? (
+          {/* Success state */}
+          {uploadSuccess ? (
+            <div className="space-y-4 py-2">
+              <div className="flex flex-col items-center gap-3 text-center">
+                <CheckCircle2 className="w-10 h-10 text-emerald-500" />
+                <p className="font-medium">Successfully exported to Procore</p>
+              </div>
+              <div className="bg-muted/30 p-3 rounded-md text-sm flex items-center gap-2 overflow-hidden">
+                <FileText className="w-4 h-4 shrink-0 text-muted-foreground" />
+                <span className="text-muted-foreground break-all">{fileName}</span>
+              </div>
+              {uploadSuccess.folderUrl && (
+                <a
+                  href={uploadSuccess.folderUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center gap-2 text-sm text-primary hover:underline justify-center"
+                >
+                  <ExternalLink className="w-4 h-4" />
+                  Open in Procore
+                </a>
+              )}
+              <Button onClick={handleDone} className="w-full">
+                Done
+              </Button>
+            </div>
+          ) : !isConnected ? (
             <div className="space-y-4">
               <p className="text-sm text-muted-foreground">
                 Connect your Procore account to export the PDF report directly to Procore Documents.
@@ -240,9 +296,9 @@ export const ProcoreExportDialog = ({
                 Connected{procoreToken?.procoreEmail ? ` as ${procoreToken.procoreEmail}` : ""}
               </div>
 
-              <div className="bg-muted/30 p-3 rounded-md text-sm">
+              <div className="bg-muted/30 p-3 rounded-md text-sm overflow-hidden">
                 <p className="font-medium mb-1">File to export:</p>
-                <p className="text-muted-foreground truncate">{fileName}</p>
+                <p className="text-muted-foreground break-all">{fileName}</p>
               </div>
 
               {/* Company selector */}
@@ -321,6 +377,7 @@ export const ProcoreExportDialog = ({
                         selectable
                         selectedFolderId={selectedFolderId}
                         onSelectFolder={(id) => setSelectedFolderId(id)}
+                        hideFiles
                       />
                     </div>
                   ) : (
