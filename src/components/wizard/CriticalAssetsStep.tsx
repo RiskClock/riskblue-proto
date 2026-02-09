@@ -290,17 +290,6 @@ export const CriticalAssetsStep = ({
         setSelectedInstanceIds(instanceIds);
         lastSavedRef.current.instances = instanceIds;
         shouldPersist = true;
-      } else {
-        // Detect and add missing instances (e.g., from new analysis items or data drift)
-        const allExpectedInstanceIds = assetItems.map(i => i.id);
-        const currentSavedInstances = new Set<string>(data.selectedAssetInstances);
-        const missingInstances = allExpectedInstanceIds.filter(id => !currentSavedInstances.has(id));
-        if (missingInstances.length > 0) {
-          instanceIds = [...currentSavedInstances, ...missingInstances];
-          setSelectedInstanceIds(instanceIds);
-          lastSavedRef.current.instances = instanceIds;
-          shouldPersist = true;
-        }
       }
       
       // Initialize control selection (all controls selected by default)
@@ -316,21 +305,20 @@ export const CriticalAssetsStep = ({
         lastSavedRef.current.controls = controlArray;
         controlIds = controlArray;
         shouldPersist = true;
-      } else {
-        // Ensure all controls from analysisItems are present in saved selections
-        const allExpectedControlIds = new Set<string>();
-        assetItems.forEach(item => {
-          (item.controls || []).forEach(control => {
-            allExpectedControlIds.add(getControlId(item.id, control));
-          });
+      }
+
+      // Clean up orphaned controls (controls whose parent instance is not selected)
+      if (data.selectedAssetControls && data.selectedAssetControls.length > 0 
+          && data.selectedAssetInstances && data.selectedAssetInstances.length > 0) {
+        const instanceSet = new Set<string>(instanceIds);
+        const cleanedControls = controlIds.filter(controlId => {
+          const instanceId = controlId.split("::")[0];
+          return instanceSet.has(instanceId);
         });
-        const currentSavedControls = new Set<string>(data.selectedAssetControls);
-        const missingControls = [...allExpectedControlIds].filter(id => !currentSavedControls.has(id));
-        if (missingControls.length > 0) {
-          const updatedControls: string[] = [...currentSavedControls, ...missingControls];
-          setSelectedControlIds(new Set<string>(updatedControls));
-          lastSavedRef.current.controls = updatedControls;
-          controlIds = updatedControls;
+        if (cleanedControls.length !== controlIds.length) {
+          controlIds = cleanedControls;
+          setSelectedControlIds(new Set<string>(cleanedControls));
+          lastSavedRef.current.controls = cleanedControls;
           shouldPersist = true;
         }
       }
