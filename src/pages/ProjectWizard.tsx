@@ -1605,8 +1605,8 @@ const ProjectWizardContent = () => {
                     </div>
                   </div>
                   
-                  {/* Risk Timeline Chart - only visible to internal users */}
-                  {isInternalUser && (
+                  {/* Risk Timeline Chart */}
+                  {(
                     <div className="space-y-4 pt-6 border-t">
                       <h3 className="text-md font-medium">Risk Timeline</h3>
                       <RiskTimelineChart3D 
