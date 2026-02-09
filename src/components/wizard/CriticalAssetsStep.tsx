@@ -305,6 +305,23 @@ export const CriticalAssetsStep = ({
         lastSavedRef.current.controls = controlArray;
         controlIds = controlArray;
         shouldPersist = true;
+      } else {
+        // Ensure all controls from analysisItems are present in saved selections
+        const allExpectedControlIds = new Set<string>();
+        assetItems.forEach(item => {
+          (item.controls || []).forEach(control => {
+            allExpectedControlIds.add(getControlId(item.id, control));
+          });
+        });
+        const currentSavedControls = new Set<string>(data.selectedAssetControls);
+        const missingControls = [...allExpectedControlIds].filter(id => !currentSavedControls.has(id));
+        if (missingControls.length > 0) {
+          const updatedControls: string[] = [...currentSavedControls, ...missingControls];
+          setSelectedControlIds(new Set<string>(updatedControls));
+          lastSavedRef.current.controls = updatedControls;
+          controlIds = updatedControls;
+          shouldPersist = true;
+        }
       }
 
       if (shouldPersist) {
@@ -412,7 +429,7 @@ export const CriticalAssetsStep = ({
     setTimeout(() => {
       isRiskToleranceUpdateRef.current = false;
     }, 100);
-  }, [parentRiskTolerance, assetItems, assetRiskToleranceMap, controlRiskToleranceMap, controls.length, updateFields, data.selectedAssetInstances, data.selectedAssetControls]);
+  }, [parentRiskTolerance, assetItems, assetRiskToleranceMap, controlRiskToleranceMap, controls.length, updateFields]);
 
   const handleToggleInstance = useCallback((instanceId: string) => {
     setSelectedInstanceIds(prev => 

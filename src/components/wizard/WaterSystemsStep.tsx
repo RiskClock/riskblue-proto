@@ -288,6 +288,23 @@ export const WaterSystemsStep = ({
         lastSavedRef.current.controls = controlArray;
         controlIds = controlArray;
         shouldPersist = true;
+      } else {
+        // Ensure all controls from analysisItems are present in saved selections
+        const allExpectedControlIds = new Set<string>();
+        systemItems.forEach(item => {
+          (item.controls || []).forEach(control => {
+            allExpectedControlIds.add(getControlId(item.id, control));
+          });
+        });
+        const currentSavedControls = new Set<string>(data.selectedSystemControls);
+        const missingControls = [...allExpectedControlIds].filter(id => !currentSavedControls.has(id));
+        if (missingControls.length > 0) {
+          const updatedControls: string[] = [...currentSavedControls, ...missingControls];
+          setSelectedControlIds(new Set<string>(updatedControls));
+          lastSavedRef.current.controls = updatedControls;
+          controlIds = updatedControls;
+          shouldPersist = true;
+        }
       }
 
       if (shouldPersist) {
@@ -538,7 +555,7 @@ export const WaterSystemsStep = ({
     setTimeout(() => {
       isRiskToleranceUpdateRef.current = false;
     }, 100);
-  }, [parentRiskTolerance, systemItems, systemRiskToleranceMap, controlRiskToleranceMap, controls.length, updateFields, data.selectedSystemInstances, data.selectedSystemControls]);
+  }, [parentRiskTolerance, systemItems, systemRiskToleranceMap, controlRiskToleranceMap, controls.length, updateFields]);
 
   if (isLoading || isLoadingCustom) {
     return (
