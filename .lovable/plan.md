@@ -1,49 +1,56 @@
 
 
-## Fix: Selection Reset and Checkbox Inconsistency
+## Fix: Missing Instance Detection in All Three Step Components
 
-### Root Cause
+### Problem
 
-The initialization logic in all three step components has a critical gap:
+The initialization `useEffect` in `CriticalAssetsStep`, `WaterSystemsStep`, and `ProcessesStep` has a gap:
 
-1. It only adds missing **controls** but does NOT add missing **instances**
-2. Our recent control-gap fix made this worse by adding controls for 7 instances that aren't in the selected instances list
-3. This creates a state where `selectedControlIds` has entries like `ERM004::Presence of Water Monitoring` but `ERM004` is not in `selectedInstanceIds`
-4. The checkbox logic then shows indeterminate (minus icon) for these instances because `!isInstanceSelected && hasAnyControlSelected` is true
+- It detects and adds missing **controls** (has an `else` branch for this)
+- It does NOT detect missing **instances** -- only initializes them when the list is completely empty
 
-### Current Data State
+### Current Database State (for project 175bb9c9)
 
-| Data Source | Count |
-|---|---|
-| Analysis items (Assets) | 27 |
-| Saved selectedAssetInstances | 20 (missing 7) |
-| Saved selectedAssetControls | 33 (includes controls for the 7 missing instances) |
+- 27 Asset analysis items exist in `project_analysis_items`
+- `selectedAssetInstances` only has 24 (missing ERM001, ERM004, ERM005)
+- `selectedAssetControls` includes controls for those 3 missing instances (added by the controls gap-fix)
+- Result: checkboxes show indeterminate (minus icon) because controls exist for unselected instances
 
 ### Fix
 
-Update the initialization logic in all three step components to detect and add missing **instances** alongside missing controls.
+Add an `else` branch after the instance initialization check in all three files to detect and re-add missing instances:
 
 **Files to modify:**
-- `src/components/wizard/CriticalAssetsStep.tsx`
-- `src/components/wizard/WaterSystemsStep.tsx`
-- `src/components/wizard/ProcessesStep.tsx`
+- `src/components/wizard/CriticalAssetsStep.tsx` (after line 293)
+- `src/components/wizard/WaterSystemsStep.tsx` (after line 276)
+- `src/components/wizard/ProcessesStep.tsx` (same pattern)
 
-### Implementation
+### Implementation Detail
 
-In the initialization `useEffect` of each step, after the existing instance initialization check (`if (!data.selected*Instances || length === 0`), add an `else` branch that detects missing instances:
+In each file's initialization `useEffect`, change the instance initialization block from:
 
 ```typescript
-// Current: only initializes if empty
 if (!data.selectedAssetInstances || data.selectedAssetInstances.length === 0) {
   instanceIds = assetItems.map(i => i.id);
-  // ...
+  setSelectedInstanceIds(instanceIds);
+  lastSavedRef.current.instances = instanceIds;
+  shouldPersist = true;
+}
+```
+
+To:
+
+```typescript
+if (!data.selectedAssetInstances || data.selectedAssetInstances.length === 0) {
+  instanceIds = assetItems.map(i => i.id);
+  setSelectedInstanceIds(instanceIds);
+  lastSavedRef.current.instances = instanceIds;
+  shouldPersist = true;
 } else {
-  // NEW: detect missing instances from analysisItems
+  // Detect and add missing instances (e.g., from new analysis items or data drift)
   const allExpectedInstanceIds = assetItems.map(i => i.id);
-  const currentSavedInstances = new Set(data.selectedAssetInstances);
-  const missingInstances = allExpectedInstanceIds.filter(
-    id => !currentSavedInstances.has(id)
-  );
+  const currentSavedInstances = new Set<string>(data.selectedAssetInstances);
+  const missingInstances = allExpectedInstanceIds.filter(id => !currentSavedInstances.has(id));
   if (missingInstances.length > 0) {
     instanceIds = [...currentSavedInstances, ...missingInstances];
     setSelectedInstanceIds(instanceIds);
@@ -53,15 +60,12 @@ if (!data.selectedAssetInstances || data.selectedAssetInstances.length === 0) {
 }
 ```
 
-This ensures that when new analysis items appear (or if instances were lost), they get automatically added to the selection -- consistent with the existing behavior for controls.
-
-The same pattern applies to all three step components with their respective field names (`selectedSystemInstances`, `selectedProcessInstances`).
+The same pattern applies with `selectedSystemInstances` and `selectedProcessInstances` for the other two files.
 
 ### Expected Result
 
-| Scenario | Before Fix | After Fix |
+| Scenario | Before | After |
 |---|---|---|
-| Missing instances in saved data | Instances stay missing, controls show for unselected items | Missing instances auto-added |
-| Checkbox state | Indeterminate for items with controls but no instance selection | Fully checked (instance + controls both selected) |
-| New analysis items added | Not picked up unless list was empty | Auto-detected and added |
-
+| Instances missing from saved data | Stay missing, controls show for unselected items | Auto-detected and re-added |
+| Checkbox state | Indeterminate (minus icon) | Fully checked |
+| New analysis items added after initial save | Not picked up | Auto-added to selection |
