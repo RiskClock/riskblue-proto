@@ -56,3 +56,6 @@ verify_jwt = false
 
 [functions.procore-oauth]
 verify_jwt = false
+
+[functions.list-procore-files]
+verify_jwt = false

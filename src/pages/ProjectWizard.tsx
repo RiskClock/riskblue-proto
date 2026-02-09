@@ -24,6 +24,7 @@ import { ProcessesStep } from "@/components/wizard/ProcessesStep";
 import { RiskTimelineChart3D } from "@/components/wizard/RiskTimelineChart3D";
 import { AWPEditModal } from "@/components/wizard/AWPEditModal";
 import { RepositoryConnectionDialog } from "@/components/wizard/RepositoryConnectionDialog";
+import { ProcoreConnectionDialog } from "@/components/wizard/ProcoreConnectionDialog";
 import { MitigationResponsePlanStep } from "@/components/wizard/MitigationResponsePlanStep";
 import { WaterMitigationGuidelinesStep } from "@/components/wizard/WaterMitigationGuidelinesStep";
 import { CollaboratorManagementStep } from "@/components/wizard/CollaboratorManagementStep";
@@ -122,6 +123,8 @@ const ProjectWizardContent = () => {
   
   // Standalone Google Drive connection dialog
   const [showDriveConnectionDialog, setShowDriveConnectionDialog] = useState(false);
+  // Standalone Procore connection dialog
+  const [showProcoreConnectionDialog, setShowProcoreConnectionDialog] = useState(false);
   
   // Upload drawings state
   const drawingsFileInputRef = useRef<HTMLInputElement>(null);
@@ -1462,12 +1465,11 @@ const ProjectWizardContent = () => {
                             Google Drive
                           </DropdownMenuItem>
                           <DropdownMenuItem
-                            disabled
-                            className="gap-2 opacity-50"
+                            onClick={() => setShowProcoreConnectionDialog(true)}
+                            className="gap-2"
                           >
                             <img src="/icons/icon_procore.png" alt="" className="w-4 h-4" />
                             <span>Procore</span>
-                            <span className="ml-auto text-[10px] text-muted-foreground">Coming Soon</span>
                           </DropdownMenuItem>
                         </DropdownMenuContent>
                       </DropdownMenu>
@@ -1525,12 +1527,11 @@ const ProjectWizardContent = () => {
                           <Button
                             variant="outline"
                             size="sm"
-                            disabled
-                            className="gap-2 opacity-50"
+                            onClick={() => setShowProcoreConnectionDialog(true)}
+                            className="gap-2"
                           >
                             <img src="/icons/icon_procore.png" alt="" className="w-4 h-4" />
                             Procore
-                            <span className="text-[10px] text-muted-foreground">(Coming Soon)</span>
                           </Button>
                         </div>
                       </div>
@@ -1914,6 +1915,20 @@ const ProjectWizardContent = () => {
           toast({
             title: "Analysis Queued",
             description: "Your files are being copied for analysis. This may take up to 48 hours.",
+          });
+        }}
+      />
+      
+      {/* Standalone Procore Connection Dialog */}
+      <ProcoreConnectionDialog
+        isOpen={showProcoreConnectionDialog}
+        onClose={() => setShowProcoreConnectionDialog(false)}
+        projectId={id || "new"}
+        projectName={projectData.name}
+        onAnalysisStarted={() => {
+          toast({
+            title: "Analysis Queued",
+            description: "Your Procore files are being analyzed. This may take up to 48 hours.",
           });
         }}
       />
