@@ -1,20 +1,23 @@
 
 
-## Change Password for ryan.going@pomerleau.ca
+# Procore Integration - Batch 1: OAuth Foundation
 
-### Steps
+## Deliverables
 
-1. **Create** a temporary edge function `admin-reset-password/index.ts` that uses the admin API to update the user's password
-2. **Deploy** and **invoke** it with email `ryan.going@pomerleau.ca` and password `riskblue123!`
-3. **Delete** the edge function immediately after successful execution
+1. **DB migration**: `user_procore_tokens` table (mirrors `user_drive_tokens`) with RLS
+2. **Edge function**: `procore-oauth` with 4 actions: get-auth-url, callback, refresh, get-token
+3. **Page**: `ProcoreConnect.tsx` (popup OAuth, mirrors `GoogleDriveConnect.tsx`)
+4. **Hook**: `useProcoreToken` (mirrors `useDriveToken`)
+5. **Route**: `/connect/procore` in `App.tsx`
 
-### Implementation
+## Action Required From You
 
-The edge function will:
-- Use `SUPABASE_SERVICE_ROLE_KEY` (already configured) to create an admin client
-- Look up the user by email via `auth.admin.listUsers()`
-- Call `auth.admin.updateUserById(userId, { password: "riskblue123!" })`
-- Return success/failure
+Register this redirect URI in your Procore sandbox app settings:
+`https://qbzuchzqeefbzeldftvg.supabase.co/functions/v1/procore-oauth?action=callback`
 
-No permanent code changes needed -- the function is created, used once, and removed.
+## Notes
+
+- Uses existing secrets: `PROCORE_SANDBOX_CLIENT_ID`, `PROCORE_SANDBOX_CLIENT_SECRET`, `DRIVE_TOKEN_ENCRYPTION_KEY`
+- Sandbox OAuth base: `sandbox.procore.com`
+- Future batches: folder listing UI, file copy/analysis, PDF export
 
