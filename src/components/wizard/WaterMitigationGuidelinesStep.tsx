@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
-import { Download, Send, Upload } from "lucide-react";
+import { Download, Send, ChevronDown } from "lucide-react";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { useToast } from "@/hooks/use-toast";
 import { WaterRiskReport } from "@/components/reports/WaterRiskReport";
 import { generateReportFilename } from "@/lib/reportGenerator";
@@ -322,14 +323,25 @@ export const WaterMitigationGuidelinesStep = ({ data, analysisItems = [], onBack
         </div>
 
         <div className="flex gap-3 flex-wrap">
-          <Button variant="outline" className="flex-1" onClick={handleExportPDF}>
-            <Download className="h-4 w-4 mr-2" />
-            Export as PDF
-          </Button>
-          <Button variant="outline" className="flex-1" onClick={handleExportToProcore}>
-            <img src={procoreIcon} alt="" className="h-4 w-4 mr-2" />
-            Export to Procore
-          </Button>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="outline" className="flex-1">
+                <Download className="h-4 w-4 mr-2" />
+                Export
+                <ChevronDown className="h-4 w-4 ml-2" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="start">
+              <DropdownMenuItem onClick={handleExportPDF}>
+                <Download className="h-4 w-4 mr-2" />
+                Download as PDF
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={handleExportToProcore}>
+                <img src={procoreIcon} alt="" className="h-4 w-4 mr-2" />
+                Export to Procore
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
           <Button variant="outline" className="flex-1" onClick={handleSendRFP}>
             <Send className="h-4 w-4 mr-2" />
             Send as RFP
