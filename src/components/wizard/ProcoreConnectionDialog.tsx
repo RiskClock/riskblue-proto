@@ -2,7 +2,8 @@ import { useState, useEffect } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Loader2, Check, Link2, ChevronRight, ArrowLeft } from "lucide-react";
+import { Loader2, Check, Link2 } from "lucide-react";
+import { ProcoreFolderTree } from "@/components/wizard/ProcoreFolderTree";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { useProcoreToken } from "@/hooks/useProcoreToken";
@@ -357,13 +358,18 @@ export const ProcoreConnectionDialog = ({
                       Loading folders...
                     </div>
                   ) : folders.length > 0 ? (
-                    <div className="border rounded-md p-2 max-h-40 overflow-y-auto text-sm space-y-1">
-                      {folders.map((f) => (
-                        <div key={f.id} className="flex items-center gap-2 py-1 px-2 rounded hover:bg-muted/50">
-                          <ChevronRight className="w-3 h-3 text-muted-foreground" />
-                          <span>{f.name}</span>
-                        </div>
-                      ))}
+                    <div className="border rounded-md p-2 max-h-60 overflow-y-auto">
+                      <ProcoreFolderTree
+                        folders={folders}
+                        loadSubfolder={async (folderId) => {
+                          const data = await callProcoreApi("list-subfolder", {
+                            companyId: selectedCompanyId,
+                            projectId: selectedProjectId,
+                            folderId,
+                          });
+                          return data;
+                        }}
+                      />
                     </div>
                   ) : (
                     <p className="text-xs text-muted-foreground">No folders found in this project.</p>

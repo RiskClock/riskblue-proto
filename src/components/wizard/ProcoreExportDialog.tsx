@@ -2,8 +2,9 @@ import { useState, useEffect } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Loader2, Check, Upload, ChevronRight, FolderOpen } from "lucide-react";
+import { Loader2, Check, Upload } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { ProcoreFolderTree } from "@/components/wizard/ProcoreFolderTree";
 import { supabase } from "@/integrations/supabase/client";
 import { useProcoreToken } from "@/hooks/useProcoreToken";
 import procoreIcon from "@/assets/icon_procore.png";
@@ -293,20 +294,35 @@ export const ProcoreExportDialog = ({
                       <Loader2 className="w-4 h-4 animate-spin" /> Loading folders...
                     </div>
                   ) : folders.length > 0 ? (
-                    <Select value={selectedFolderId} onValueChange={setSelectedFolderId}>
-                      <SelectTrigger><SelectValue placeholder="Root folder (default)" /></SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="__root__">Root folder</SelectItem>
-                        {folders.map((f) => (
-                          <SelectItem key={f.id} value={String(f.id)}>
-                            <div className="flex items-center gap-2">
-                              <FolderOpen className="w-3 h-3" />
-                              {f.name}
-                            </div>
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                    <div className="border rounded-md p-2 max-h-48 overflow-y-auto">
+                      <div
+                        className={`flex items-center gap-1.5 py-1 px-2 rounded cursor-pointer text-sm hover:bg-muted/50 transition-colors mb-0.5 ${
+                          !selectedFolderId || selectedFolderId === "__root__"
+                            ? "bg-primary/10 ring-1 ring-primary/30"
+                            : ""
+                        }`}
+                        onClick={() => setSelectedFolderId("__root__")}
+                      >
+                        <span className="flex-1">📁 Root folder</span>
+                        {(!selectedFolderId || selectedFolderId === "__root__") && (
+                          <span className="text-xs px-1.5 py-0.5 rounded bg-primary text-primary-foreground">Selected</span>
+                        )}
+                      </div>
+                      <ProcoreFolderTree
+                        folders={folders}
+                        loadSubfolder={async (folderId) => {
+                          const data = await callProcoreApi("list-subfolder", {
+                            companyId: selectedCompanyId,
+                            projectId: selectedProjectId,
+                            folderId,
+                          });
+                          return data;
+                        }}
+                        selectable
+                        selectedFolderId={selectedFolderId}
+                        onSelectFolder={(id) => setSelectedFolderId(id)}
+                      />
+                    </div>
                   ) : (
                     <p className="text-xs text-muted-foreground">No folders found — file will be uploaded to root.</p>
                   )}

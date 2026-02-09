@@ -157,6 +157,33 @@ serve(async (req) => {
         { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
 
+    // ============= List Subfolder =============
+    if (action === "list-subfolder") {
+      const companyId = bodyData.companyId || url.searchParams.get("companyId");
+      const projectId = bodyData.projectId || url.searchParams.get("projectId");
+      const folderId = bodyData.folderId || url.searchParams.get("folderId");
+      if (!companyId || !projectId || !folderId) {
+        return new Response(JSON.stringify({ error: "companyId, projectId, and folderId required" }),
+          { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+      }
+
+      const resp = await fetch(`${PROCORE_API_BASE}/folders/${folderId}?project_id=${projectId}`, {
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          "Procore-Company-Id": String(companyId),
+        },
+      });
+      if (!resp.ok) {
+        const err = await resp.text();
+        console.error("Procore list subfolder error:", err);
+        return new Response(JSON.stringify({ error: "Failed to list subfolder" }),
+          { status: resp.status, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+      }
+      const data = await resp.json();
+      return new Response(JSON.stringify(data),
+        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    }
+
     return new Response(JSON.stringify({ error: "Invalid action" }),
       { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
   } catch (error) {
