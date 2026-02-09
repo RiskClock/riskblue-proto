@@ -59,3 +59,6 @@ verify_jwt = false
 
 [functions.list-procore-files]
 verify_jwt = false
+
+[functions.copy-procore-files]
+verify_jwt = false

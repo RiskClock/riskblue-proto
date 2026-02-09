@@ -194,6 +194,20 @@ export const ProcoreConnectionDialog = ({
 
       if (insertError) throw new Error(insertError.message);
 
+      // Trigger background file copy
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session) {
+        const copyUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/copy-procore-files`;
+        await fetch(copyUrl, {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${session.access_token}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ analysisRequestId: analysisRequest.id }),
+        });
+      }
+
       // Log activity
       await supabase.from("user_activity_logs").insert({
         user_id: user.id,
@@ -209,7 +223,7 @@ export const ProcoreConnectionDialog = ({
 
       toast({
         title: "Analysis Queued",
-        description: `Procore project "${selectedProject?.name}" submitted for analysis.`,
+        description: `Procore project "${selectedProject?.name}" submitted for analysis. Files are being copied.`,
       });
 
       onAnalysisStarted?.();
