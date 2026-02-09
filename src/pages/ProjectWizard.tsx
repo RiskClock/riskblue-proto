@@ -431,9 +431,18 @@ const ProjectWizardContent = () => {
     // Group analysis items by category using the same grouping as class-level components
     const { assets, waterSystems, processes } = groupByCategory(analysisItems);
     
+    // Build selection sets - if arrays exist, filter; otherwise include all (new project)
+    const selectedAssetSet = projectData.selectedAssetInstances 
+      ? new Set<string>(projectData.selectedAssetInstances) : null;
+    const selectedSystemSet = projectData.selectedSystemInstances 
+      ? new Set<string>(projectData.selectedSystemInstances) : null;
+    const selectedProcessSet = projectData.selectedProcessInstances 
+      ? new Set<string>(projectData.selectedProcessInstances) : null;
+    
     // Group items by their DATABASE class name (matching CriticalAssetsStep/WaterSystemsStep)
     const assetsByClass = new Map<string, AnalysisItem[]>();
     assets.forEach(item => {
+      if (selectedAssetSet && !selectedAssetSet.has(item.id)) return;
       const className = mapToAssetName(item.name);
       if (className) {
         if (!assetsByClass.has(className)) assetsByClass.set(className, []);
@@ -443,6 +452,7 @@ const ProjectWizardContent = () => {
     
     const systemsByClass = new Map<string, AnalysisItem[]>();
     waterSystems.forEach(item => {
+      if (selectedSystemSet && !selectedSystemSet.has(item.id)) return;
       const className = mapToWaterSystemName(item.name);
       if (className) {
         if (!systemsByClass.has(className)) systemsByClass.set(className, []);
@@ -452,6 +462,7 @@ const ProjectWizardContent = () => {
     
     const processesByClass = new Map<string, AnalysisItem[]>();
     processes.forEach(item => {
+      if (selectedProcessSet && !selectedProcessSet.has(item.id)) return;
       const className = mapToProcessName(item.name);
       if (className) {
         if (!processesByClass.has(className)) processesByClass.set(className, []);
@@ -587,7 +598,7 @@ const ProjectWizardContent = () => {
         high: highControls.size
       }
     };
-  }, [analysisItems, controlCosts, pricingTiers, projectDurationMonths, projectData]);
+  }, [analysisItems, controlCosts, pricingTiers, projectDurationMonths, projectData, projectData.selectedAssetInstances, projectData.selectedSystemInstances, projectData.selectedProcessInstances]);
 
   // Calculate actual cost based on currently selected controls using tiered pricing
   // Uses class-specific durations (matching totalCostEstimates logic)
