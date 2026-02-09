@@ -14,6 +14,7 @@ const OAuthCallback = () => {
       try {
         const urlParams = new URLSearchParams(window.location.search);
         const driveConnected = urlParams.get("drive_connected");
+        const procoreConnected = urlParams.get("procore_connected");
         const error = urlParams.get("error");
 
         if (error) {
@@ -26,9 +27,12 @@ const OAuthCallback = () => {
               { type: "google-oauth-callback", success: false, error },
               window.location.origin
             );
+            window.opener.postMessage(
+              { type: "procore-oauth-callback", success: false, error },
+              window.location.origin
+            );
           }
           
-          // Close after delay
           setTimeout(() => window.close(), 2000);
           return;
         }
@@ -37,7 +41,6 @@ const OAuthCallback = () => {
           setStatus("success");
           setMessage("Connected successfully! This window will close...");
           
-          // Post success to opener
           if (window.opener) {
             window.opener.postMessage(
               { type: "google-oauth-callback", success: true },
@@ -45,7 +48,18 @@ const OAuthCallback = () => {
             );
           }
           
-          // Close after brief delay
+          setTimeout(() => window.close(), 1000);
+        } else if (procoreConnected === "true") {
+          setStatus("success");
+          setMessage("Connected to Procore! This window will close...");
+          
+          if (window.opener) {
+            window.opener.postMessage(
+              { type: "procore-oauth-callback", success: true },
+              window.location.origin
+            );
+          }
+          
           setTimeout(() => window.close(), 1000);
         } else {
           setStatus("error");

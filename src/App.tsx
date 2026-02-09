@@ -13,6 +13,7 @@ import Logs from "./pages/Logs";
 import AcceptInvite from "./pages/AcceptInvite";
 import OAuthCallback from "./pages/OAuthCallback";
 import GoogleDriveConnect from "./pages/GoogleDriveConnect";
+import ProcoreConnect from "./pages/ProcoreConnect";
 import ResetPassword from "./pages/ResetPassword";
 import InternalAnalysisQueue from "./pages/InternalAnalysisQueue";
 import NotFound from "./pages/NotFound";
@@ -49,6 +50,7 @@ const App = () => (
             <Route path="/accept-invite" element={<AcceptInvite />} />
             <Route path="/oauth/callback" element={<OAuthCallback />} />
             <Route path="/connect/google-drive" element={<GoogleDriveConnect />} />
+            <Route path="/connect/procore" element={<ProcoreConnect />} />
             <Route path="/reset-password" element={<ResetPassword />} />
             <Route path="/" element={<Navigate to="/projects" />} />
             <Route path="*" element={<NotFound />} />

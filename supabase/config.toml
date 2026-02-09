@@ -53,3 +53,6 @@ verify_jwt = false
 
 [functions.clear-activity-logs]
 verify_jwt = false
+
+[functions.procore-oauth]
+verify_jwt = false

@@ -1346,6 +1346,51 @@ export type Database = {
         }
         Relationships: []
       }
+      user_procore_tokens: {
+        Row: {
+          access_token: string
+          created_at: string | null
+          encrypted_access_token: string | null
+          encrypted_refresh_token: string | null
+          id: string
+          is_encrypted: boolean | null
+          procore_company_id: number | null
+          procore_email: string | null
+          refresh_token: string | null
+          token_expiry: string | null
+          updated_at: string | null
+          user_id: string
+        }
+        Insert: {
+          access_token?: string
+          created_at?: string | null
+          encrypted_access_token?: string | null
+          encrypted_refresh_token?: string | null
+          id?: string
+          is_encrypted?: boolean | null
+          procore_company_id?: number | null
+          procore_email?: string | null
+          refresh_token?: string | null
+          token_expiry?: string | null
+          updated_at?: string | null
+          user_id: string
+        }
+        Update: {
+          access_token?: string
+          created_at?: string | null
+          encrypted_access_token?: string | null
+          encrypted_refresh_token?: string | null
+          id?: string
+          is_encrypted?: boolean | null
+          procore_company_id?: number | null
+          procore_email?: string | null
+          refresh_token?: string | null
+          token_expiry?: string | null
+          updated_at?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
       user_roles: {
         Row: {
           created_at: string
