@@ -180,6 +180,51 @@ export type Database = {
           },
         ]
       }
+      awp_class_prompts: {
+        Row: {
+          awp_class_name: string
+          category: string
+          content_updated_at: string | null
+          created_at: string
+          drive_file_id: string | null
+          drive_file_modified_at: string | null
+          drive_file_name: string | null
+          drive_file_url: string | null
+          id: string
+          is_stale: boolean
+          prompt_content: string | null
+          updated_at: string
+        }
+        Insert: {
+          awp_class_name: string
+          category: string
+          content_updated_at?: string | null
+          created_at?: string
+          drive_file_id?: string | null
+          drive_file_modified_at?: string | null
+          drive_file_name?: string | null
+          drive_file_url?: string | null
+          id?: string
+          is_stale?: boolean
+          prompt_content?: string | null
+          updated_at?: string
+        }
+        Update: {
+          awp_class_name?: string
+          category?: string
+          content_updated_at?: string | null
+          created_at?: string
+          drive_file_id?: string | null
+          drive_file_modified_at?: string | null
+          drive_file_name?: string | null
+          drive_file_url?: string | null
+          id?: string
+          is_stale?: boolean
+          prompt_content?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
       awp_classes: {
         Row: {
           category: string
@@ -550,6 +595,33 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      drive_watch_channels: {
+        Row: {
+          channel_id: string
+          created_at: string
+          drive_file_id: string
+          expiration: string | null
+          id: string
+          resource_id: string | null
+        }
+        Insert: {
+          channel_id: string
+          created_at?: string
+          drive_file_id: string
+          expiration?: string | null
+          id?: string
+          resource_id?: string | null
+        }
+        Update: {
+          channel_id?: string
+          created_at?: string
+          drive_file_id?: string
+          expiration?: string | null
+          id?: string
+          resource_id?: string | null
+        }
+        Relationships: []
       }
       mitigation_controls: {
         Row: {

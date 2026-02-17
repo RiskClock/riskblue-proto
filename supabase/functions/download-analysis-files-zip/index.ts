@@ -59,7 +59,7 @@ serve(async (req) => {
     // Use service role for storage access
     const adminSupabase = createClient(supabaseUrl, supabaseServiceKey);
 
-    // Get analysis request details
+    // Get analysis request details including source_type
     const { data: request, error: reqError } = await adminSupabase
       .from("analysis_requests")
       .select("*, project:projects(name)")
@@ -72,6 +72,11 @@ serve(async (req) => {
         { status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
+
+    // Determine the correct storage bucket based on source_type
+    const storageBucket = request.source_type === "manual_upload" 
+      ? "uploaded-drawings" 
+      : "drive-analysis-files";
 
     // Get all copied files
     const { data: files, error: filesError } = await adminSupabase
@@ -102,11 +107,11 @@ serve(async (req) => {
 
       try {
         const { data: fileData, error: downloadError } = await adminSupabase.storage
-          .from("drive-analysis-files")
+          .from(storageBucket)
           .download(file.storage_path);
 
         if (downloadError || !fileData) {
-          console.error(`Failed to download ${file.relative_path}:`, downloadError);
+          console.error(`Failed to download ${file.relative_path} from ${storageBucket}:`, downloadError);
           continue;
         }
 

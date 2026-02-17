@@ -16,6 +16,7 @@ import GoogleDriveConnect from "./pages/GoogleDriveConnect";
 import ProcoreConnect from "./pages/ProcoreConnect";
 import ResetPassword from "./pages/ResetPassword";
 import InternalAnalysisQueue from "./pages/InternalAnalysisQueue";
+import AnalysisRequestDetail from "./pages/AnalysisRequestDetail";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -47,6 +48,7 @@ const App = () => (
             <Route path="/configuration" element={<ProtectedRoute><Configuration /></ProtectedRoute>} />
             <Route path="/logs" element={<ProtectedRoute><Logs /></ProtectedRoute>} />
             <Route path="/internal/analysis-queue" element={<ProtectedRoute><InternalAnalysisQueue /></ProtectedRoute>} />
+            <Route path="/internal/analysis-queue/:requestId" element={<ProtectedRoute><AnalysisRequestDetail /></ProtectedRoute>} />
             <Route path="/accept-invite" element={<AcceptInvite />} />
             <Route path="/oauth/callback" element={<OAuthCallback />} />
             <Route path="/connect/google-drive" element={<GoogleDriveConnect />} />
