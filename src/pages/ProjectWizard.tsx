@@ -234,8 +234,8 @@ const ProjectWizardContent = () => {
       });
 
       toast({
-        title: "Upload Complete",
-        description: `${files.length} file(s) uploaded successfully. The internal team will analyze them shortly.`,
+        title: "Analysis queued",
+        description: "You will be notified when results are ready for your review.",
       });
 
     } catch (error) {
