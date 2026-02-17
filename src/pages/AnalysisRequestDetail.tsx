@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
@@ -30,6 +30,10 @@ import {
   ShieldAlert,
 } from "lucide-react";
 import { format } from "date-fns";
+import * as pdfjsLib from "pdfjs-dist";
+
+// Set up PDF.js worker
+pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.mjs`;
 
 interface AnalysisFile {
   id: string;
@@ -74,6 +78,10 @@ const statusLabels: Record<string, string> = {
   failed: "Failed",
 };
 
+function getStorageBucket(sourceType: string | undefined): string {
+  return sourceType === "manual_upload" ? "uploaded-drawings" : "drive-analysis-files";
+}
+
 export default function AnalysisRequestDetail() {
   const { requestId } = useParams<{ requestId: string }>();
   const { user } = useAuth();
@@ -83,6 +91,10 @@ export default function AnalysisRequestDetail() {
   const [downloadingZip, setDownloadingZip] = useState(false);
   const [selectedFile, setSelectedFile] = useState<AnalysisFile | null>(null);
   const [downloadingFile, setDownloadingFile] = useState(false);
+  const [pdfPages, setPdfPages] = useState<HTMLCanvasElement[]>([]);
+  const [pdfLoading, setPdfLoading] = useState(false);
+  const [pdfPageCount, setPdfPageCount] = useState(0);
+  const pdfContainerRef = useRef<HTMLDivElement>(null);
 
   const isInternal = user?.email?.toLowerCase().endsWith("@riskclock.com") ?? false;
 
@@ -121,6 +133,81 @@ export default function AnalysisRequestDetail() {
     enabled: isInternal && !!requestId,
   });
 
+  // Load PDF when a PDF file is selected
+  useEffect(() => {
+    if (!selectedFile) {
+      setPdfPages([]);
+      setPdfPageCount(0);
+      return;
+    }
+
+    const isPdf = selectedFile.mime_type === "application/pdf" || selectedFile.name.toLowerCase().endsWith(".pdf");
+    if (!isPdf || !selectedFile.storage_path) {
+      setPdfPages([]);
+      setPdfPageCount(0);
+      return;
+    }
+
+    let cancelled = false;
+    const loadPdf = async () => {
+      setPdfLoading(true);
+      setPdfPages([]);
+      try {
+        const bucket = getStorageBucket(request?.source_type);
+        const { data: blob, error } = await supabase.storage
+          .from(bucket)
+          .download(selectedFile.storage_path!);
+        if (error || !blob) throw error || new Error("Download failed");
+
+        const arrayBuffer = await blob.arrayBuffer();
+        const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+        if (cancelled) return;
+
+        setPdfPageCount(pdf.numPages);
+        const canvases: HTMLCanvasElement[] = [];
+        const maxPages = Math.min(pdf.numPages, 20); // Limit to 20 pages
+
+        for (let i = 1; i <= maxPages; i++) {
+          const page = await pdf.getPage(i);
+          const scale = 1.5;
+          const viewport = page.getViewport({ scale });
+          const canvas = document.createElement("canvas");
+          canvas.width = viewport.width;
+          canvas.height = viewport.height;
+          const ctx = canvas.getContext("2d")!;
+          await page.render({ canvasContext: ctx, viewport, canvas } as any).promise;
+          if (cancelled) return;
+          canvases.push(canvas);
+        }
+
+        setPdfPages(canvases);
+      } catch (e) {
+        console.error("PDF load error:", e);
+        if (!cancelled) {
+          toast({ title: "PDF Preview Failed", description: "Could not render PDF preview.", variant: "destructive" });
+        }
+      } finally {
+        if (!cancelled) setPdfLoading(false);
+      }
+    };
+
+    loadPdf();
+    return () => { cancelled = true; };
+  }, [selectedFile, request?.source_type, toast]);
+
+  // Render PDF canvases into container
+  useEffect(() => {
+    if (!pdfContainerRef.current || pdfPages.length === 0) return;
+    const container = pdfContainerRef.current;
+    container.innerHTML = "";
+    for (const canvas of pdfPages) {
+      canvas.style.width = "100%";
+      canvas.style.height = "auto";
+      canvas.style.marginBottom = "8px";
+      container.appendChild(canvas);
+    }
+  }, [pdfPages]);
+
   const handleDownloadZip = async () => {
     if (!requestId) return;
     setDownloadingZip(true);
@@ -156,8 +243,9 @@ export default function AnalysisRequestDetail() {
     if (!file.storage_path) return;
     setDownloadingFile(true);
     try {
+      const bucket = getStorageBucket(request?.source_type);
       const { data, error } = await supabase.storage
-        .from("drive-analysis-files")
+        .from(bucket)
         .download(file.storage_path);
       if (error) throw error;
       const url = URL.createObjectURL(data);
@@ -177,14 +265,15 @@ export default function AnalysisRequestDetail() {
 
   const getFilePreviewUrl = (file: AnalysisFile): string | null => {
     if (!file.storage_path || !file.mime_type?.startsWith("image/")) return null;
-    const { data } = supabase.storage
-      .from("drive-analysis-files")
-      .getPublicUrl(file.storage_path);
+    const bucket = getStorageBucket(request?.source_type);
+    const { data } = supabase.storage.from(bucket).getPublicUrl(file.storage_path);
     return data?.publicUrl || null;
   };
 
   const totalSize = files?.reduce((sum, f) => sum + (f.size_bytes || 0), 0) || 0;
   const sourceLabel = ((request?.source_type || "google_drive") as string).replace("_", " ");
+
+  const isPdfFile = selectedFile && (selectedFile.mime_type === "application/pdf" || selectedFile.name.toLowerCase().endsWith(".pdf"));
 
   if (!isInternal) {
     return (
@@ -293,7 +382,7 @@ export default function AnalysisRequestDetail() {
 
             {/* Analysis Section */}
             {files && files.length > 0 && (
-              <AnalysisSection requestId={requestId!} files={files} />
+              <AnalysisSection requestId={requestId!} files={files} projectId={request.project_id} />
             )}
           </div>
         )}
@@ -301,13 +390,35 @@ export default function AnalysisRequestDetail() {
 
       {/* File Preview Modal */}
       <Dialog open={!!selectedFile} onOpenChange={(open) => !open && setSelectedFile(null)}>
-        <DialogContent className="sm:max-w-lg">
+        <DialogContent className={isPdfFile ? "sm:max-w-3xl max-h-[90vh]" : "sm:max-w-lg"}>
           <DialogHeader>
             <DialogTitle className="truncate">{selectedFile?.name}</DialogTitle>
           </DialogHeader>
           {selectedFile && (
             <div className="space-y-4">
-              {selectedFile.mime_type?.startsWith("image/") && selectedFile.storage_path ? (
+              {isPdfFile ? (
+                <div className="rounded-lg overflow-auto border bg-muted/30 max-h-[60vh]">
+                  {pdfLoading ? (
+                    <div className="flex items-center justify-center py-12">
+                      <Loader2 className="w-6 h-6 animate-spin mr-2" />
+                      <span className="text-sm text-muted-foreground">Loading PDF...</span>
+                    </div>
+                  ) : pdfPages.length > 0 ? (
+                    <div ref={pdfContainerRef} className="p-2">
+                      {/* canvases rendered via useEffect */}
+                    </div>
+                  ) : (
+                    <div className="text-center py-8 text-muted-foreground text-sm">
+                      Could not render PDF preview.
+                    </div>
+                  )}
+                  {pdfPageCount > 0 && (
+                    <div className="text-xs text-muted-foreground text-center py-1 border-t">
+                      {pdfPageCount} page{pdfPageCount !== 1 ? "s" : ""}{pdfPageCount > 20 ? " (showing first 20)" : ""}
+                    </div>
+                  )}
+                </div>
+              ) : selectedFile.mime_type?.startsWith("image/") && selectedFile.storage_path ? (
                 <div className="rounded-lg overflow-hidden border bg-muted/30">
                   <img
                     src={getFilePreviewUrl(selectedFile) || ""}
