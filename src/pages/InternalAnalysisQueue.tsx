@@ -19,8 +19,20 @@ import {
   ShieldAlert,
   Settings,
   BarChart3,
-  RotateCcw
+  RotateCcw,
+  Trash2
 } from "lucide-react";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 import { format } from "date-fns";
 
 interface AnalysisRequest {
@@ -72,6 +84,7 @@ export default function InternalAnalysisQueue() {
   const { toast } = useToast();
   useHeapIdentify();
   const [retrying, setRetrying] = useState<string | null>(null);
+  const [deleting, setDeleting] = useState<string | null>(null);
 
   const isInternal = user?.email?.toLowerCase().endsWith("@riskclock.com") ?? false;
 
@@ -155,6 +168,38 @@ export default function InternalAnalysisQueue() {
     }
   };
 
+  const handleDelete = async (requestId: string) => {
+    setDeleting(requestId);
+    try {
+      // Delete files first (foreign key dependency)
+      const { error: filesError } = await supabase
+        .from("analysis_request_files")
+        .delete()
+        .eq("analysis_request_id", requestId);
+      if (filesError) throw filesError;
+
+      // Then delete the analysis results
+      await supabase
+        .from("analysis_results")
+        .delete()
+        .eq("analysis_request_id", requestId);
+
+      // Then delete the request itself
+      const { error: requestError } = await supabase
+        .from("analysis_requests")
+        .delete()
+        .eq("id", requestId);
+      if (requestError) throw requestError;
+
+      toast({ title: "Deleted", description: "Analysis request has been deleted." });
+      refetch();
+    } catch (error) {
+      toast({ title: "Delete Failed", description: error instanceof Error ? error.message : "Failed to delete", variant: "destructive" });
+    } finally {
+      setDeleting(null);
+    }
+  };
+
   if (!isInternal) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
@@ -231,6 +276,27 @@ export default function InternalAnalysisQueue() {
                             {retrying === request.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <RotateCcw className="w-4 h-4" />}
                           </Button>
                         )}
+                        <AlertDialog>
+                          <AlertDialogTrigger asChild>
+                            <Button variant="outline" size="sm" className="text-destructive hover:text-destructive" disabled={deleting === request.id}>
+                              {deleting === request.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
+                            </Button>
+                          </AlertDialogTrigger>
+                          <AlertDialogContent>
+                            <AlertDialogHeader>
+                              <AlertDialogTitle>Delete Analysis Request</AlertDialogTitle>
+                              <AlertDialogDescription>
+                                This will permanently delete this analysis request, its files, and results. This action cannot be undone.
+                              </AlertDialogDescription>
+                            </AlertDialogHeader>
+                            <AlertDialogFooter>
+                              <AlertDialogCancel>Cancel</AlertDialogCancel>
+                              <AlertDialogAction onClick={() => handleDelete(request.id)} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+                                Delete
+                              </AlertDialogAction>
+                            </AlertDialogFooter>
+                          </AlertDialogContent>
+                        </AlertDialog>
                       </div>
                     </TableCell>
                   </TableRow>
