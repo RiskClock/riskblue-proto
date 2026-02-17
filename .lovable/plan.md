@@ -1,85 +1,30 @@
 
 
-# Unify Header into a Shared Component
+# Fix: Procore "Submitting..." Stuck UI
 
 ## Problem
 
-The header/navigation bar is duplicated across 7 pages with inconsistent behavior:
-- **Projects page**: Not sticky, uses custom avatar logic
-- **Configuration & Logs pages**: Missing the `@riskclock.com` internal-user guard (shows internal links to all users)
-- **InternalAnalysisQueue**: "Analysis Queue" dropdown item has no `onClick` handler
-- **Logs page**: "Logs" dropdown item has no `onClick` handler  
-- **AnalysisRequestDetail**: Missing avatar, dropdown menu, and all internal navigation links
-- **SolutionProviderPortal**: Shows all internal links as top-level nav items instead of in the dropdown
-- Some pages use `userDisplayName` for avatar, others use `getInitial()` from `useUserDisplayName` hook
+The `ProcoreConnectionDialog` awaits the `copy-procore-files` edge function call (line 244), which blocks the UI at "Submitting..." until the function returns. The edge function makes multiple Procore API calls to list and copy files, which can take longer than the ~60s edge function timeout -- so the request never completes and the user is stuck.
 
-## Solution
+The analysis request IS created successfully in the database (visible in the queue), but the dialog never closes because it's waiting for the copy to finish.
 
-Create a single `AppHeader` component that all pages share.
+## Fix
 
-### New file: `src/components/AppHeader.tsx`
+### 1. Fire-and-forget the copy call in `ProcoreConnectionDialog.tsx`
 
-The component will:
-- Be sticky with `sticky top-0 z-20 border-b bg-card` and include `no-print` class
-- Show the `LogoDropdown` on the left
-- Accept an optional `leftContent` prop for page-specific elements (e.g., the "Saving..." indicator on ProjectWizard)
-- Show consistent right-side navigation:
-  - "Projects" link (always visible)
-  - "Solution Provider Portal" link (only for `@riskclock.com` users, triggers `ProviderSelectionDialog`)
-  - Avatar dropdown with:
-    - Configuration (internal users only)
-    - Analysis Queue (internal users only)
-    - Logs (internal users only)
-    - Separator
-    - Logout
-- Use `useUserDisplayName` hook's `getInitial()` for the avatar consistently
-- Use `useAuth` for `user` and `signOut`
-- Highlight the current page's nav link (optional, using `useLocation`)
+**File:** `src/components/wizard/ProcoreConnectionDialog.tsx`
 
-### Pages to update (replace inline header with `<AppHeader />`):
+Change the `fetch` call on line 244 from `await fetch(...)` to just `fetch(...)` (no await). The dialog should close immediately after creating the analysis request and show the success toast. The copy process continues in the background.
 
-1. **`src/pages/Projects.tsx`** -- Replace lines 211-254. Remove related imports (Avatar, DropdownMenu, LogOut, Settings, etc.). Remove local `userDisplayName` state.
-2. **`src/pages/ProjectWizard.tsx`** -- Replace lines 1282-1333. Pass `leftContent` prop for the saving indicator. Remove related imports.
-3. **`src/pages/Configuration.tsx`** -- Replace lines 363-383. Remove related imports.
-4. **`src/pages/Logs.tsx`** -- Replace lines 278-316. Remove related imports.
-5. **`src/pages/InternalAnalysisQueue.tsx`** -- Replace lines 180-208. Remove related imports.
-6. **`src/pages/AnalysisRequestDetail.tsx`** -- Replace lines 225-232. Remove related imports.
-7. **`src/pages/SolutionProviderPortal.tsx`** -- Replace lines 198-233. Remove related imports.
+This is safe because:
+- The analysis request is already created with status "pending"
+- The Analysis Queue page already polls/displays status updates
+- The copy function updates the request status to "copying" then "copied" or "failed" independently
 
-### What each page keeps
+### 2. No edge function changes needed
 
-- Each page still manages its own `ProviderSelectionDialog` state if needed, OR the `AppHeader` can manage it internally (cleaner approach -- the header owns the dialog)
-- `ProjectWizard` passes a `leftContent` prop with the saving indicator JSX
-
-## Technical Details
-
-### AppHeader component API
-
-```text
-interface AppHeaderProps {
-  leftContent?: React.ReactNode;  // e.g., saving indicator
-}
-```
-
-### Internal imports consolidated into AppHeader
-- `LogoDropdown`
-- `useAuth`
-- `useUserDisplayName`
-- `useNavigate`
-- `Avatar, AvatarFallback`
-- `DropdownMenu` components
-- `ProviderSelectionDialog`
-- Icons: `LogOut, Settings, FileText, BarChart3`
-
-### Files to create
-1. `src/components/AppHeader.tsx`
+The edge function itself is fine -- it runs synchronously and updates the database. The only issue is the frontend blocking on it.
 
 ### Files to modify
-1. `src/pages/Projects.tsx`
-2. `src/pages/ProjectWizard.tsx`
-3. `src/pages/Configuration.tsx`
-4. `src/pages/Logs.tsx`
-5. `src/pages/InternalAnalysisQueue.tsx`
-6. `src/pages/AnalysisRequestDetail.tsx`
-7. `src/pages/SolutionProviderPortal.tsx`
+1. `src/components/wizard/ProcoreConnectionDialog.tsx` -- Remove `await` from the copy-procore-files fetch call (line 244)
 
