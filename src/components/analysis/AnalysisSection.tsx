@@ -78,11 +78,6 @@ interface RiskData {
   impact: number;
 }
 
-interface SourceTableEntry {
-  id: string;
-  name: string;
-  id_prefix: string | null;
-}
 
 interface AnalysisSectionProps {
   requestId: string;
@@ -229,16 +224,15 @@ export function AnalysisSection({ requestId, files, projectId }: AnalysisSection
     },
   });
 
-  // Fetch source table entries for AWP class metadata (id, id_prefix)
-  const { data: sourceEntries } = useQuery({
-    queryKey: ["source-entries-all"],
+  // Fetch AWP classes for correct awp_class_id and category lookup
+  const { data: awpClasses } = useQuery({
+    queryKey: ["awp-classes-all"],
     queryFn: async () => {
-      const [ca, ws, pr] = await Promise.all([
-        supabase.from("critical_assets").select("id, name, id_prefix"),
-        supabase.from("water_systems").select("id, name, id_prefix"),
-        supabase.from("processes").select("id, name, id_prefix"),
-      ]);
-      return [...(ca.data || []), ...(ws.data || []), ...(pr.data || [])] as SourceTableEntry[];
+      const { data, error } = await supabase
+        .from("awp_classes")
+        .select("id, name, category, id_prefix");
+      if (error) throw error;
+      return data;
     },
   });
 
@@ -361,20 +355,23 @@ export function AnalysisSection({ requestId, files, projectId }: AnalysisSection
 
     setAddingToProject((prev) => ({ ...prev, [awpClassName]: true }));
     try {
-      // Find source table entry for this AWP class
-      const sourceEntry = sourceEntries?.find(
-        (e) => e.name.toLowerCase() === awpClassName.toLowerCase()
+      // Find AWP class by fuzzy-matching name (e.g., "Electrical Room" matches "Electrical Rooms")
+      const awpClass = awpClasses?.find(
+        (c) => c.name.toLowerCase() === awpClassName.toLowerCase() ||
+               c.name.toLowerCase().startsWith(awpClassName.toLowerCase()) ||
+               awpClassName.toLowerCase().startsWith(c.name.toLowerCase())
       );
 
-      const idPrefix = sourceEntry?.id_prefix || "AWP";
-      const awpClassId = sourceEntry?.id || null;
+      const idPrefix = awpClass?.id_prefix || "AWP";
+      const awpClassId = awpClass?.id || null;
+      const category = awpClass?.category || "Asset";
 
       // Get existing items count for this class to avoid ID conflicts
       const { data: existingItems } = await supabase
         .from("project_analysis_items")
         .select("item_id")
         .eq("project_id", projectId)
-        .eq("category", awpClassName);
+        .eq("category", category);
 
       const existingCount = existingItems?.length || 0;
 
@@ -385,7 +382,7 @@ export function AnalysisSection({ requestId, files, projectId }: AnalysisSection
           project_id: projectId,
           item_id: itemId,
           name: inst.name,
-          category: awpClassName,
+          category: category,
           floor: inst.floor || null,
           area_sqft: inst.area_sqft || null,
           awp_class_id: awpClassId,
@@ -403,7 +400,7 @@ export function AnalysisSection({ requestId, files, projectId }: AnalysisSection
     } catch (e) {
       toast({
         title: "Failed to Add",
-        description: e instanceof Error ? e.message : "Unknown error",
+        description: (e as any)?.message || "Unknown error",
         variant: "destructive",
       });
     } finally {
