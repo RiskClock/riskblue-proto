@@ -4,17 +4,13 @@ import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator } from "@/components/ui/dropdown-menu";
+import { AppHeader } from "@/components/AppHeader";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Checkbox } from "@/components/ui/checkbox";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
-import { LogOut, ShieldAlert, ChevronLeft, ChevronRight, Settings, FileText, BarChart3, Trash2 } from "lucide-react";
+import { ShieldAlert, ChevronLeft, ChevronRight, Trash2 } from "lucide-react";
 import { useHeapIdentify } from "@/hooks/useHeapIdentify";
-import { useUserDisplayName } from "@/hooks/useUserDisplayName";
-import { LogoDropdown } from "@/components/LogoDropdown";
-import { ProviderSelectionDialog } from "@/components/ProviderSelectionDialog";
 import { format } from "date-fns";
 import { toast } from "sonner";
 
@@ -54,8 +50,6 @@ export default function Logs() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   useHeapIdentify();
-  const { getInitial } = useUserDisplayName();
-  const [showProviderDialog, setShowProviderDialog] = useState(false);
   const [selectedUserId, setSelectedUserId] = useState<string>("all");
   const [page, setPage] = useState(0);
   const [hideInternalUsers, setHideInternalUsers] = useState(false);
@@ -275,45 +269,7 @@ export default function Logs() {
 
   return (
     <div className="min-h-screen bg-background">
-      <header className="sticky top-0 z-20 border-b bg-card">
-        <div className="container mx-auto px-6 py-4 flex items-center justify-between">
-          <LogoDropdown />
-          <div className="flex items-center gap-6">
-            <button onClick={() => navigate("/projects")} className="text-foreground hover:text-primary">
-              Projects
-            </button>
-            <button onClick={() => setShowProviderDialog(true)} className="text-foreground hover:text-primary">
-              Solution Provider Portal
-            </button>
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Avatar className="cursor-pointer">
-                  <AvatarFallback>{getInitial()}</AvatarFallback>
-                </Avatar>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-48">
-                <DropdownMenuItem onClick={() => navigate("/configuration")} className="cursor-pointer">
-                  <Settings className="h-4 w-4 mr-2" />
-                  Configuration
-                </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => navigate("/internal/analysis-queue")} className="cursor-pointer">
-                  <FileText className="h-4 w-4 mr-2" />
-                  Analysis Queue
-                </DropdownMenuItem>
-                <DropdownMenuItem className="cursor-pointer">
-                  <BarChart3 className="h-4 w-4 mr-2" />
-                  Logs
-                </DropdownMenuItem>
-                <DropdownMenuSeparator />
-                <DropdownMenuItem onClick={signOut} className="cursor-pointer">
-                  <LogOut className="h-4 w-4 mr-2" />
-                  Logout
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
-          </div>
-        </div>
-      </header>
+      <AppHeader />
 
       <main className="container mx-auto px-6 py-8">
         <div className="flex items-center justify-between mb-6">
@@ -460,7 +416,7 @@ export default function Logs() {
         )}
       </main>
 
-      <ProviderSelectionDialog open={showProviderDialog} onOpenChange={setShowProviderDialog} />
+      
     </div>
   );
 }
