@@ -1,101 +1,56 @@
 
 
-# Auto-Summarize Analysis Results and Add to Project
+# Fix "Add to Project" Failure
 
-## Overview
+## Root Cause
 
-Three changes:
+Three bugs in the `handleAddToProject` function in `AnalysisSection.tsx`:
 
-1. **Fix result parsing** -- the parser assumes line 0 is the header, but AI output has preamble text; scan for the actual pipe-delimited header row
-2. **Auto-summarize after analysis completes** -- after all files are analyzed for an AWP class, automatically call an edge function that uses Lovable AI to consolidate all per-file results into a deduplicated instance list
-3. **Add to Project button** -- lets internal users insert the summarized instances into `project_analysis_items` for the linked project
-4. **PDF preview in file modal** -- render PDF pages using pdfjs-dist when a PDF file is clicked
+1. **Category CHECK constraint violation**: The code sets `category: awpClassName` (e.g., `"Electrical Room"`), but the `project_analysis_items` table has a CHECK constraint requiring one of `'Asset'`, `'Water System'`, or `'Process'`. This causes the insert to fail with a constraint error.
 
----
+2. **Wrong `awp_class_id` lookup**: The code looks up `awp_class_id` from the source tables (`critical_assets`, `water_systems`, `processes`), but the foreign key references the `awp_classes` table which has entirely different UUIDs. The lookup needs to query `awp_classes` instead.
 
-## 1. Fix Result Parsing
+3. **Error message not displayed**: The Supabase client returns a `PostgrestError` object (not an `Error` instance), so `e instanceof Error` is `false`, and the toast shows "Unknown error" instead of the actual constraint violation message.
 
-**File: `src/components/analysis/AnalysisSection.tsx`**
+## Fix Details
 
-The `parseResultText` function currently assumes line 0 is the header. But the AI output has preamble like "File Name: A2.01.pdf" and "Table of identified Electrical Rooms:" before the actual table.
+### File: `src/components/analysis/AnalysisSection.tsx`
 
-**Fix**: Scan all lines to find the first line with 3+ pipe characters AND containing a known header keyword ("Room Code", "Drawing Label", "Floor", "Level", "Notes"). Use that as the header row. Skip separator rows and "Headers:" / "Rows:" labels.
+**1. Replace the `sourceEntries` query** (lines 233-243)
 
-## 2. New Edge Function: `summarize-analysis`
+Instead of querying `critical_assets`/`water_systems`/`processes` for `id` and `id_prefix`, query the `awp_classes` table which is what `project_analysis_items.awp_class_id` actually references:
 
-**File: `supabase/functions/summarize-analysis/index.ts`**
+```typescript
+const { data: awpClasses } = useQuery({
+  queryKey: ["awp-classes-all"],
+  queryFn: async () => {
+    const { data, error } = await supabase
+      .from("awp_classes")
+      .select("id, name, category, id_prefix");
+    if (error) throw error;
+    return data;
+  },
+});
+```
 
-- Accepts `analysisRequestId` and `awpClassName`
-- Fetches all `analysis_results` with status "complete" for that request + class
-- Concatenates all `result_text` values
-- Calls Lovable AI (google/gemini-2.5-flash) with a prompt to:
-  - Parse the pipe-delimited tables from each file
-  - Deduplicate instances across files (same room on different sheets should appear once)
-  - Return a JSON array via tool calling with fields: `id` (generated code), `name` (label), `floor`, `area_sqft`, `notes`
-- Returns the consolidated list
+**2. Fix `handleAddToProject`** (lines 358-412)
 
-Uses `LOVABLE_API_KEY` (already configured) and the Lovable AI gateway.
+- Look up the AWP class from `awp_classes` by fuzzy-matching the name (e.g., "Electrical Room" matches "Electrical Rooms")
+- Use the matched entry's `category` (`'Asset'`, `'Water System'`, or `'Process'`) for the `category` column
+- Use the matched entry's `id` for `awp_class_id`
+- Use the matched entry's `id_prefix` for generating `item_id`
 
-## 3. Auto-Summarize After Analysis + Add to Project
+**3. Fix error handling** (line 406)
 
-**File: `src/components/analysis/AnalysisSection.tsx`**
+Change from:
+```typescript
+description: e instanceof Error ? e.message : "Unknown error",
+```
+To:
+```typescript
+description: (e as any)?.message || "Unknown error",
+```
 
-After `handleAnalyze` completes (all files processed), automatically call the `summarize-analysis` edge function. Store the summarized instances in component state keyed by AWP class name.
+This ensures PostgrestError messages (like constraint violations) are displayed instead of "Unknown error".
 
-Display the summarized list in a table (ID, Name, Floor, Area, Notes) below the raw parsed results.
-
-Add an **"Add to Project"** button that:
-- Looks up the AWP class from the source tables (`critical_assets`, `water_systems`, `processes`) to get `id` and `id_prefix`
-- Generates proper `item_id` values using `id_prefix` + sequential number (e.g., ERM001, ERM002)
-- Inserts rows into `project_analysis_items` with:
-  - `project_id`: from the analysis request
-  - `item_id`: generated
-  - `name`: from AI summary
-  - `category`: AWP class name
-  - `floor`: from AI summary
-  - `area_sqft`: from AI summary
-  - `awp_class_id`: from source table lookup
-- Shows success toast with count
-
-**Props change**: `AnalysisSectionProps` gains `projectId: string` passed from `AnalysisRequestDetail` (from `request.project_id`).
-
-## 4. PDF Preview in File Modal
-
-**File: `src/pages/AnalysisRequestDetail.tsx`**
-
-- Import `pdfjs-dist` and set worker path
-- When `selectedFile` has PDF mime type:
-  - Download blob from Supabase storage
-  - Load with `pdfjsLib.getDocument()`
-  - Render pages to canvas elements
-- Widen dialog to `sm:max-w-3xl` for PDFs
-- Determine correct bucket based on `source_type` (manual_upload -> uploaded-drawings, else -> drive-analysis-files)
-
----
-
-## Technical Details
-
-### Files to create
-1. `supabase/functions/summarize-analysis/index.ts` -- new edge function
-
-### Files to modify
-1. `src/components/analysis/AnalysisSection.tsx`:
-   - Fix `parseResultText` to scan for header row
-   - Add `projectId` prop
-   - Add auto-summarize logic after analysis completes
-   - Add summarized results display with "Add to Project" button
-   - Add state for `summarizedInstances`, `summarizing`, `addingToProject`
-   - Fetch AWP class metadata (id, id_prefix) from source tables for ID generation
-
-2. `src/pages/AnalysisRequestDetail.tsx`:
-   - Pass `projectId={request.project_id}` to `AnalysisSection`
-   - Add PDF rendering with pdfjs-dist
-   - Dynamic bucket selection based on source_type
-   - Widen dialog for PDF files
-
-### Config update
-- Add `summarize-analysis` function to `supabase/config.toml` with `verify_jwt = false`
-
-### No database migrations required
-The `project_analysis_items` table already has all needed columns.
-
+### No other files need changes. No database changes required.
