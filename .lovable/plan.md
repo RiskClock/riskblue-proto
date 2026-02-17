@@ -1,84 +1,56 @@
 
 
-# Fix: Procore File Download URL Extraction
+# Fix: Resilient Procore File Download with Safe Retry Logic
 
 ## Problem
 
-The `downloadProcoreFile` function checks only `data.url` at the top level of the Procore API response. Procore's `GET /files/{id}` returns the download URL inside the `file_versions` array, so every file fails with "No download URL in file response".
+Downloads fail because `file_versions.url` can be either a presigned storage URL (breaks with auth headers) or a Procore-gated endpoint (requires auth headers). The current code only tries without headers.
 
-## Fix
+## Solution
 
-### File: `supabase/functions/copy-procore-files/index.ts`
+Replace lines 177-182 in `supabase/functions/copy-procore-files/index.ts` with retry logic that includes three safety improvements:
 
-Replace `downloadProcoreFile` (lines 133-164) with an updated version that:
+1. **Try without auth headers first** (handles presigned URLs)
+2. **Only retry with auth headers on 401/403** -- any other failure (404, 500, timeout) throws immediately since retrying won't help
+3. **Guard `new URL()` with try/catch** so a malformed download URL doesn't crash the function
+4. **Include statusText for both attempts** in the final error message
 
-1. Uses `fetchWithTimeout` for both the metadata call and the download fetch
-2. Includes HTTP status codes in all error messages
-3. Extracts the download URL from `file_versions` sorted by highest `number`
-4. Uses explicit branches for `source` logging:
-   - `latest.url` -> `"file_versions.url"`
-   - `latest.prostore_file?.url` -> `"file_versions.prostore_file.url"`
-   - `data.url` fallback -> `"data.url"`
-5. Passes `{ redirect: "follow" }` when fetching the download URL
-
-### Replacement code
+### Replacement code for lines 177-182
 
 ```typescript
-async function downloadProcoreFile(
-  fileId: number, companyId: string, projectId: string, accessToken: string
-): Promise<Blob> {
-  const url = `${PROCORE_API_BASE}/files/${fileId}?project_id=${projectId}`;
-  const resp = await fetchWithTimeout(url, {
-    headers: {
-      Authorization: `Bearer ${accessToken}`,
-      "Procore-Company-Id": companyId,
-    },
-  });
+    let urlHostname = "unknown";
+    try { urlHostname = new URL(downloadUrl).hostname; } catch {}
+    console.log(`File ${fileId}: downloading via ${source} (host: ${urlHostname})`);
 
-  if (!resp.ok) {
-    throw new Error(`Failed to fetch file ${fileId} metadata: ${resp.status} ${resp.statusText}`);
-  }
-
-  const contentType = resp.headers.get("content-type") || "";
-  if (contentType.includes("application/json")) {
-    const data = await resp.json();
-    let downloadUrl: string | null = null;
-    let source = "";
-
-    if (Array.isArray(data.file_versions) && data.file_versions.length > 0) {
-      const sorted = [...data.file_versions].sort((a: any, b: any) => (b.number ?? 0) - (a.number ?? 0));
-      const latest = sorted[0];
-      if (latest.url) {
-        downloadUrl = latest.url;
-        source = "file_versions.url";
-      } else if (latest.prostore_file?.url) {
-        downloadUrl = latest.prostore_file.url;
-        source = "file_versions.prostore_file.url";
-      }
+    // Attempt 1: without auth headers (works for presigned URLs)
+    const resp1 = await fetchWithTimeout(downloadUrl, { redirect: "follow" });
+    if (resp1.ok) {
+      console.log(`File ${fileId}: succeeded without auth headers (${resp1.status})`);
+      return await resp1.blob();
     }
 
-    if (!downloadUrl && data.url) {
-      downloadUrl = data.url;
-      source = "data.url";
+    // Only retry with auth headers on 401/403; other errors won't benefit from retry
+    if (resp1.status !== 401 && resp1.status !== 403) {
+      throw new Error(`Download failed for file ${fileId}: ${resp1.status} ${resp1.statusText}`);
     }
 
-    if (!downloadUrl) {
-      console.error(`File ${fileId}: no download URL. Keys: ${Object.keys(data).join(", ")}`);
-      throw new Error("No download URL in file response");
-    }
+    console.log(`File ${fileId}: attempt without headers returned ${resp1.status}, retrying with auth headers`);
 
-    console.log(`File ${fileId}: downloading via ${source}`);
-    const downloadResp = await fetchWithTimeout(downloadUrl, { redirect: "follow" });
-    if (!downloadResp.ok) {
-      throw new Error(`Download failed for file ${fileId}: ${downloadResp.status} ${downloadResp.statusText}`);
+    // Attempt 2: with Procore auth headers (works for Procore-gated URLs)
+    const resp2 = await fetchWithTimeout(downloadUrl, {
+      redirect: "follow",
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        "Procore-Company-Id": companyId,
+      },
+    });
+    if (!resp2.ok) {
+      throw new Error(`Download failed for file ${fileId}: attempt1=${resp1.status} ${resp1.statusText}, attempt2=${resp2.status} ${resp2.statusText}`);
     }
-    return await downloadResp.blob();
-  }
-
-  return await resp.blob();
-}
+    console.log(`File ${fileId}: succeeded with auth headers (${resp2.status})`);
+    return await resp2.blob();
 ```
 
 ### Files to modify
-1. `supabase/functions/copy-procore-files/index.ts` -- Replace lines 133-164 with the updated function, then deploy
+1. `supabase/functions/copy-procore-files/index.ts` -- Replace lines 177-182 with the retry logic above, then redeploy
 
