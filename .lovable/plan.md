@@ -1,83 +1,85 @@
 
 
-# Show Procore Connection Status and Enable Folder-Level Analysis Submission
+# Unify Header into a Shared Component
 
-## Overview
+## Problem
 
-Update the Procore integration so that:
-1. The UI shows a visual indicator when Procore is already connected (green checkmark/badge next to the Procore button)
-2. Clicking the Procore button when already connected skips the auth step and goes directly to the folder browser
-3. Users can select a specific folder (not just a project) and submit it as a new analysis queue item
-4. The `copy-procore-files` edge function runs synchronously instead of via `EdgeRuntime.waitUntil` (which silently fails), and includes token refresh logic
+The header/navigation bar is duplicated across 7 pages with inconsistent behavior:
+- **Projects page**: Not sticky, uses custom avatar logic
+- **Configuration & Logs pages**: Missing the `@riskclock.com` internal-user guard (shows internal links to all users)
+- **InternalAnalysisQueue**: "Analysis Queue" dropdown item has no `onClick` handler
+- **Logs page**: "Logs" dropdown item has no `onClick` handler  
+- **AnalysisRequestDetail**: Missing avatar, dropdown menu, and all internal navigation links
+- **SolutionProviderPortal**: Shows all internal links as top-level nav items instead of in the dropdown
+- Some pages use `userDisplayName` for avatar, others use `getInitial()` from `useUserDisplayName` hook
 
-## Changes
+## Solution
 
-### 1. Show connection status in ProjectWizard UI
+Create a single `AppHeader` component that all pages share.
 
-**File:** `src/pages/ProjectWizard.tsx`
+### New file: `src/components/AppHeader.tsx`
 
-- Import and use `useProcoreToken` hook at the wizard level
-- Add a green dot or "(Connected)" label next to the Procore button in both the dropdown menu and the empty-state buttons
-- Example: `Procore (Connected)` with a green dot when `isConnected` is true
+The component will:
+- Be sticky with `sticky top-0 z-20 border-b bg-card` and include `no-print` class
+- Show the `LogoDropdown` on the left
+- Accept an optional `leftContent` prop for page-specific elements (e.g., the "Saving..." indicator on ProjectWizard)
+- Show consistent right-side navigation:
+  - "Projects" link (always visible)
+  - "Solution Provider Portal" link (only for `@riskclock.com` users, triggers `ProviderSelectionDialog`)
+  - Avatar dropdown with:
+    - Configuration (internal users only)
+    - Analysis Queue (internal users only)
+    - Logs (internal users only)
+    - Separator
+    - Logout
+- Use `useUserDisplayName` hook's `getInitial()` for the avatar consistently
+- Use `useAuth` for `user` and `signOut`
+- Highlight the current page's nav link (optional, using `useLocation`)
 
-### 2. Update ProcoreConnectionDialog to support folder selection
+### Pages to update (replace inline header with `<AppHeader />`):
 
-**File:** `src/components/wizard/ProcoreConnectionDialog.tsx`
+1. **`src/pages/Projects.tsx`** -- Replace lines 211-254. Remove related imports (Avatar, DropdownMenu, LogOut, Settings, etc.). Remove local `userDisplayName` state.
+2. **`src/pages/ProjectWizard.tsx`** -- Replace lines 1282-1333. Pass `leftContent` prop for the saving indicator. Remove related imports.
+3. **`src/pages/Configuration.tsx`** -- Replace lines 363-383. Remove related imports.
+4. **`src/pages/Logs.tsx`** -- Replace lines 278-316. Remove related imports.
+5. **`src/pages/InternalAnalysisQueue.tsx`** -- Replace lines 180-208. Remove related imports.
+6. **`src/pages/AnalysisRequestDetail.tsx`** -- Replace lines 225-232. Remove related imports.
+7. **`src/pages/SolutionProviderPortal.tsx`** -- Replace lines 198-233. Remove related imports.
 
-- Add state for `selectedFolderId` and `selectedFolderPath` to track which specific folder the user clicks in the folder tree
-- Change the submit logic: instead of sending the entire Procore project, include the selected folder ID in the `drive_folder_id` field (e.g., `procore:{companyId}:{projectId}:{folderId}`)
-- If no folder is selected, default to the root (current behavior)
-- Update the "Analyze" button label to show the selected folder name
-- Allow clicking a folder in the tree to select it (highlight the selected folder)
+### What each page keeps
 
-### 3. Update ProcoreFolderTree to support folder selection callback
-
-**File:** `src/components/wizard/ProcoreFolderTree.tsx`
-
-- Add an `onSelectFolder` callback prop
-- When a folder is clicked, call this callback with the folder ID, name, and path
-- Visually highlight the currently selected folder
-
-### 4. Fix copy-procore-files edge function -- run synchronously and add token refresh
-
-**File:** `supabase/functions/copy-procore-files/index.ts`
-
-- Remove `EdgeRuntime.waitUntil` -- await `copyFilesInBackground` inline before returning the response
-- Add token expiry check: if `tokenData.token_expiry < now()`, call `procore-oauth?action=refresh` via the service role key, then re-read the token
-- Parse the updated `drive_folder_id` format that may include a folder ID (`procore:{companyId}:{projectId}:{folderId}`) and pass `folderId` to `listProcoreFilesRecursively` to scope the file listing
-- This ensures logs are captured and errors propagate properly
-
-### 5. Fix stuck analysis requests (one-time database cleanup)
-
-Run a migration to reset any requests stuck in "copying" with 0 files to "failed" so users can retry.
+- Each page still manages its own `ProviderSelectionDialog` state if needed, OR the `AppHeader` can manage it internally (cleaner approach -- the header owns the dialog)
+- `ProjectWizard` passes a `leftContent` prop with the saving indicator JSX
 
 ## Technical Details
 
-### ProcoreConnectionDialog folder selection flow
+### AppHeader component API
 
 ```text
-1. Dialog opens -> already connected -> show company/project selectors
-2. User selects company + project -> folders load
-3. User clicks a folder in the tree -> folder is highlighted, selectedFolderId is set
-4. User clicks "Analyze [FolderName]" -> creates analysis_request with drive_folder_id = "procore:{companyId}:{projectId}:{folderId}"
-5. copy-procore-files runs synchronously, scoping file listing to that folder
-6. Dialog closes, toast confirms submission
+interface AppHeaderProps {
+  leftContent?: React.ReactNode;  // e.g., saving indicator
+}
 ```
 
-### Token refresh in copy-procore-files
+### Internal imports consolidated into AppHeader
+- `LogoDropdown`
+- `useAuth`
+- `useUserDisplayName`
+- `useNavigate`
+- `Avatar, AvatarFallback`
+- `DropdownMenu` components
+- `ProviderSelectionDialog`
+- Icons: `LogOut, Settings, FileText, BarChart3`
 
-```text
-1. Read token from user_procore_tokens
-2. Check token_expiry against current time
-3. If expired: POST to procore-oauth?action=refresh (using SUPABASE_SERVICE_ROLE_KEY)
-4. Re-read the refreshed token from user_procore_tokens
-5. Proceed with Procore API calls using the valid token
-```
+### Files to create
+1. `src/components/AppHeader.tsx`
 
 ### Files to modify
-1. `src/pages/ProjectWizard.tsx` -- Add Procore connection status indicator
-2. `src/components/wizard/ProcoreConnectionDialog.tsx` -- Add folder selection and per-folder submission
-3. `src/components/wizard/ProcoreFolderTree.tsx` -- Add folder selection callback and visual highlight
-4. `supabase/functions/copy-procore-files/index.ts` -- Run synchronously, add token refresh, support folder-scoped listing
-5. Database migration -- Reset stuck "copying" requests to "failed"
+1. `src/pages/Projects.tsx`
+2. `src/pages/ProjectWizard.tsx`
+3. `src/pages/Configuration.tsx`
+4. `src/pages/Logs.tsx`
+5. `src/pages/InternalAnalysisQueue.tsx`
+6. `src/pages/AnalysisRequestDetail.tsx`
+7. `src/pages/SolutionProviderPortal.tsx`
 
