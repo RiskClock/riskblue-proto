@@ -79,23 +79,62 @@ serve(async (req) => {
       });
     }
 
-    let accessToken = tokenData.access_token;
+    // Fetch access token via get-token (handles both encrypted and legacy)
+    let accessToken: string;
+    try {
+      const getTokenResponse = await fetch(`${supabaseUrl}/functions/v1/google-drive-oauth`, {
+        method: "POST",
+        headers: { Authorization: authHeader, "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "get-token" }),
+      });
+      const tokenResult = await getTokenResponse.json();
 
-    // If encrypted, decrypt via google-drive-oauth
-    if (tokenData.is_encrypted && tokenData.encrypted_access_token) {
-      try {
-        const decryptResponse = await fetch(`${supabaseUrl}/functions/v1/google-drive-oauth`, {
+      if (!getTokenResponse.ok || !tokenResult.accessToken) {
+        return new Response(JSON.stringify({ error: "Failed to retrieve Google Drive token." }), {
+          status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      accessToken = tokenResult.accessToken;
+
+      // If token is expired, refresh and re-fetch
+      if (tokenResult.isExpired) {
+        console.log("Access token expired, refreshing...");
+        const refreshResponse = await fetch(`${supabaseUrl}/functions/v1/google-drive-oauth`, {
+          method: "POST",
+          headers: { Authorization: authHeader, "Content-Type": "application/json" },
+          body: JSON.stringify({ action: "refresh" }),
+        });
+
+        if (!refreshResponse.ok) {
+          console.error("Token refresh failed:", await refreshResponse.text());
+          return new Response(JSON.stringify({ error: "Google Drive token expired. Please reconnect Google Drive." }), {
+            status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
+        }
+
+        // Re-fetch fresh token after refresh
+        const freshResponse = await fetch(`${supabaseUrl}/functions/v1/google-drive-oauth`, {
           method: "POST",
           headers: { Authorization: authHeader, "Content-Type": "application/json" },
           body: JSON.stringify({ action: "get-token" }),
         });
-        const decryptResult = await decryptResponse.json();
-        if (decryptResult.accessToken) {
-          accessToken = decryptResult.accessToken;
+        const freshResult = await freshResponse.json();
+
+        if (!freshResponse.ok || !freshResult.accessToken) {
+          return new Response(JSON.stringify({ error: "Google Drive token expired. Please reconnect Google Drive." }), {
+            status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
         }
-      } catch (e) {
-        console.error("Failed to decrypt token:", e);
+
+        accessToken = freshResult.accessToken;
+        console.log("Token refreshed successfully");
       }
+    } catch (e) {
+      console.error("Failed to get/refresh token:", e);
+      return new Response(JSON.stringify({ error: "Failed to retrieve Google Drive token." }), {
+        status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
     }
 
     // Call Google Drive API to get file metadata
