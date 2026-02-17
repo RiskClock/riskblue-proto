@@ -1,163 +1,126 @@
 
 
-# Multi-Feature Update: Analysis Queue, Upload UX, Configuration Prompts
+# Analysis with OpenAI Responses API from Detail Page
 
-This plan covers 6 items across the analysis queue, upload flow, zip downloads, and configuration page.
+## Overview
 
----
-
-## 1. Upload Drawings Success Message
-
-**File:** `src/pages/ProjectWizard.tsx` (lines 236-239)
-
-Replace the current toast message after successful drawing upload with:
-- Title: "Analysis queued"
-- Description: "You will be notified when results are ready for your review."
+After the files list on the Analysis Request Detail page, show AWP classes that have linked Google Drive prompt docs. Each AWP class gets an "Analyze" button that uploads each drawing file to OpenAI and runs the Responses API with the prompt content from the linked Drive doc. Progress is shown per file.
 
 ---
 
-## 2. Fix Empty ZIP File for Manual Uploads
+## Step 0: Add OpenAI API Key
 
-**Problem:** The `download-analysis-files-zip` edge function always reads from the `drive-analysis-files` storage bucket (line 106), but manually uploaded drawings are stored in the `uploaded-drawings` bucket. So the ZIP downloads contain nothing.
-
-**Fix:** `supabase/functions/download-analysis-files-zip/index.ts`
-
-- Query the `analysis_requests` table to get the `source_type` field.
-- If `source_type === 'manual_upload'`, download files from `uploaded-drawings` bucket instead of `drive-analysis-files`.
-- For Google Drive uploads, continue using `drive-analysis-files` as before.
+Before implementation, you'll be prompted to add your OpenAI API key as a secret (`OPENAI_API_KEY`).
 
 ---
 
-## 3. Analysis Queue Status Labels
+## Step 1: New Edge Function `analyze-drawings`
 
-**File:** `src/pages/InternalAnalysisQueue.tsx`
+**File:** `supabase/functions/analyze-drawings/index.ts`
 
-Update `statusColors` and display labels to use the new workflow statuses:
+This edge function handles a single file analysis:
 
-| DB Status | Display Label | Color |
-|-----------|--------------|-------|
-| pending / copying | Importing Drawings | Blue |
-| copied | Ready for Analysis | Yellow/Amber |
-| processing | Analyzing | Purple |
-| complete | Analysis Complete | Green |
-| failed | Failed | Red |
+1. Accepts: `analysisRequestId`, `fileId` (from `analysis_request_files`), `awpClassName`, `promptContent`
+2. Downloads the file from storage (`uploaded-drawings` or `drive-analysis-files` bucket based on source_type)
+3. Uploads the file to OpenAI (`POST /v1/files` with `purpose: "assistants"`)
+4. Calls OpenAI Responses API (`POST /v1/responses`) with:
+   - `model`: `gpt-4o` (or configurable)
+   - `instructions`: the prompt content from the Drive doc
+   - `input`: reference to the uploaded file
+5. Returns the analysis result text
+6. Stores result in a new `analysis_results` table
 
-Add a `statusLabels` mapping object to translate DB values to display text.
-
----
-
-## 4. Analysis Request Detail Page (Replace Modal with Full Page)
-
-**Current:** Clicking "View" opens a modal with a file tree. Download button is in the list AND modal.
-
-**Changes:**
-
-### New page: `src/pages/AnalysisRequestDetail.tsx`
-- Route: `/internal/analysis-queue/:requestId`
-- Shows full detail of one analysis request:
-  - Project name, requester, submitted date, status, file count, size
-  - File tree (reuse existing `FileTreeItem` component)
-  - Download ZIP button (moved here from the list)
-  - Back button to return to queue
-
-### Update `src/App.tsx`
-- Add route: `/internal/analysis-queue/:requestId`
-
-### Update `src/pages/InternalAnalysisQueue.tsx`
-- "View" button navigates to `/internal/analysis-queue/${request.id}` instead of opening modal
-- Remove the Download button from the table row actions
-- Remove the files modal dialog entirely
+Authentication: Internal users only (`@riskclock.com`).
 
 ---
 
-## 5. Default Prompt Column in Configuration
+## Step 2: Database Migration
 
-**Database changes:**
+New table: `analysis_results`
 
-New table `awp_class_prompts`:
-- `id` (uuid, PK)
-- `awp_class_name` (text, not null) -- matches AWP class name
-- `category` (text, not null) -- critical_assets / water_systems / processes
-- `drive_file_id` (text) -- Google Drive file ID extracted from URL
-- `drive_file_name` (text) -- Display name retrieved from API
-- `drive_file_url` (text) -- Full URL for opening
-- `drive_file_modified_at` (timestamptz) -- Last known modification time
-- `prompt_content` (text) -- Cached content from the doc
-- `content_updated_at` (timestamptz) -- When content was last pulled
-- `is_stale` (boolean, default false) -- Flag when doc has been modified
-- `created_at` / `updated_at` (timestamptz)
+| Column | Type | Notes |
+|--------|------|-------|
+| id | uuid | PK, default gen_random_uuid() |
+| analysis_request_id | uuid | FK to analysis_requests |
+| file_id | uuid | FK to analysis_request_files |
+| awp_class_name | text | Which AWP class prompt was used |
+| result_text | text | Raw response from OpenAI |
+| status | text | pending / processing / complete / failed |
+| error_message | text | Nullable |
+| created_at | timestamptz | default now() |
+| updated_at | timestamptz | default now() |
 
-RLS: Internal users (@riskclock.com) can read/write. Others read-only.
-
-### Configuration page changes (`src/pages/Configuration.tsx`):
-
-- Add a third column "Default Prompt" to the table
-- Each AWP row shows:
-  - If no prompt linked: a text input to paste a Google Drive doc URL + a "Link" button
-  - If prompt linked: the doc name (clickable to open in new tab), last modified timestamp, and a "Change" button
-  - If `is_stale` is true: show an amber indicator "Updated" next to the timestamp
-
-### New edge function: `supabase/functions/resolve-drive-doc/index.ts`
-- Accepts a Google Drive file URL or ID
-- Uses the user's Google Drive access token to:
-  1. Extract the file ID from the URL
-  2. Call Google Drive API to get file name and `modifiedTime`
-  3. Return `{ fileId, fileName, modifiedTime }`
+RLS: Internal users can read/write. Project owners can read.
 
 ---
 
-## 6. Google Drive Watch Notifications for Prompt Docs
+## Step 3: Update `resolve-drive-doc` to Support Content Export
 
-### New edge function: `supabase/functions/watch-drive-doc/index.ts`
-- Sets up a Google Drive Files.watch channel for a given file ID
-- Uses a service-level webhook URL to receive notifications
-- Stores the watch channel info in a new `drive_watch_channels` table
-
-### New table: `drive_watch_channels`
-- `id` (uuid, PK)
-- `drive_file_id` (text)
-- `channel_id` (text) -- Google-assigned channel ID
-- `resource_id` (text)
-- `expiration` (timestamptz) -- Channels expire; need periodic renewal
-- `created_at` (timestamptz)
-
-### New edge function: `supabase/functions/drive-webhook/index.ts`
-- Receives POST from Google when a watched file changes
-- Looks up the `awp_class_prompts` entry for the changed file
-- Sets `is_stale = true` on matching rows
-- Does NOT auto-pull content (per your preference for "flag only")
-
-### Configuration page:
-- When a prompt doc is linked, call `watch-drive-doc` to set up notifications
-- When the "Updated" flag is shown, provide a "Pull Latest" button that:
-  1. Calls Google Drive API to fetch the doc content
-  2. Updates `prompt_content` and `drive_file_modified_at`
-  3. Clears `is_stale`
-
-### Webhook URL:
-- The Drive webhook endpoint will be: `{SUPABASE_URL}/functions/v1/drive-webhook`
-- This needs to be publicly accessible (no JWT verification), so set `verify_jwt = false` in config
-- Validate requests using the `X-Goog-Channel-ID` and `X-Goog-Resource-ID` headers against stored channel info
+Add an optional `exportContent: true` parameter. When set, the function also exports the Google Doc as plain text (using `export?mimeType=text/plain`) and returns `content` alongside the metadata. This is needed to get the actual prompt text to send to OpenAI.
 
 ---
 
-## Technical Summary
+## Step 4: Update Analysis Request Detail Page
 
-### Files to create:
-1. `src/pages/AnalysisRequestDetail.tsx` -- Detail page for analysis requests
-2. `supabase/functions/resolve-drive-doc/index.ts` -- Resolve Drive doc metadata
-3. `supabase/functions/watch-drive-doc/index.ts` -- Set up Drive file watch
-4. `supabase/functions/drive-webhook/index.ts` -- Receive Drive change notifications
+**File:** `src/pages/AnalysisRequestDetail.tsx`
 
-### Files to modify:
-1. `src/pages/ProjectWizard.tsx` -- Update upload success toast
-2. `supabase/functions/download-analysis-files-zip/index.ts` -- Fix bucket selection for manual uploads
-3. `src/pages/InternalAnalysisQueue.tsx` -- New status labels, navigate to detail page, remove download button and modal
-4. `src/pages/Configuration.tsx` -- Add "Default Prompt" column with Drive doc linking
-5. `src/App.tsx` -- Add analysis request detail route
+After the file tree section, add a new "Analysis" section:
 
-### Database migrations:
-1. Create `awp_class_prompts` table with RLS
-2. Create `drive_watch_channels` table with RLS
-3. Update `supabase/config.toml` for new edge functions JWT settings
+### AWP Prompts List
+- Query `awp_class_prompts` where `drive_file_id IS NOT NULL`
+- Display each as a card with:
+  - AWP class name
+  - Linked doc name (clickable)
+  - "Analyze" button
+
+### Analyze Flow
+When "Analyze" is clicked for an AWP class:
+1. Fetch the prompt content via `resolve-drive-doc` with `exportContent: true`
+2. For each file in the request, call `analyze-drawings` edge function
+3. Show progress: "Analyzing file 2 of 15..." with a progress bar
+4. Individual file statuses shown (pending / processing / complete / failed)
+
+### Results Display
+- After analysis completes, show results grouped by file
+- Each result card shows: file name, AWP class, and the response text (rendered as markdown or pre-formatted)
+- Results are persisted in `analysis_results` table and loaded on page revisit
+
+---
+
+## Step 5: Config Updates
+
+**File:** `supabase/config.toml`
+- Add `[functions.analyze-drawings]` with `verify_jwt = false`
+
+---
+
+## Technical Flow
+
+```text
+User clicks "Analyze" for AWP class
+  |
+  v
+Fetch prompt content from Drive doc (resolve-drive-doc with exportContent)
+  |
+  v
+For each drawing file (sequential or parallel):
+  1. Call analyze-drawings edge function
+  2. Edge function downloads file from storage bucket
+  3. Uploads to OpenAI /v1/files
+  4. Calls OpenAI /v1/responses with prompt + file
+  5. Stores result in analysis_results table
+  6. Returns result to frontend
+  |
+  v
+Frontend updates progress bar and renders results
+```
+
+### Files to Create
+1. `supabase/functions/analyze-drawings/index.ts`
+2. Database migration for `analysis_results` table
+
+### Files to Modify
+1. `src/pages/AnalysisRequestDetail.tsx` -- Add AWP prompts section and analysis UI
+2. `supabase/functions/resolve-drive-doc/index.ts` -- Add content export support
+3. `supabase/config.toml` -- Add new function config
 
