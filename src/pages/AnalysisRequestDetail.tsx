@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { LogoDropdown } from "@/components/LogoDropdown";
+import { AnalysisSection } from "@/components/analysis/AnalysisSection";
 import { useHeapIdentify } from "@/hooks/useHeapIdentify";
 import {
   ArrowLeft,
@@ -304,6 +305,11 @@ export default function AnalysisRequestDetail() {
                 <p className="text-sm font-medium text-destructive">Error</p>
                 <p className="text-sm text-destructive/80 mt-1">{request.error_message}</p>
               </div>
+            )}
+
+            {/* Analysis Section */}
+            {files && files.length > 0 && (
+              <AnalysisSection requestId={requestId!} files={files} />
             )}
           </div>
         )}

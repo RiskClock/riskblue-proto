@@ -141,6 +141,57 @@ export type Database = {
           },
         ]
       }
+      analysis_results: {
+        Row: {
+          analysis_request_id: string
+          awp_class_name: string
+          created_at: string
+          error_message: string | null
+          file_id: string
+          id: string
+          result_text: string | null
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          analysis_request_id: string
+          awp_class_name: string
+          created_at?: string
+          error_message?: string | null
+          file_id: string
+          id?: string
+          result_text?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          analysis_request_id?: string
+          awp_class_name?: string
+          created_at?: string
+          error_message?: string | null
+          file_id?: string
+          id?: string
+          result_text?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "analysis_results_analysis_request_id_fkey"
+            columns: ["analysis_request_id"]
+            isOneToOne: false
+            referencedRelation: "analysis_requests"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "analysis_results_file_id_fkey"
+            columns: ["file_id"]
+            isOneToOne: false
+            referencedRelation: "analysis_request_files"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       awp_class_control_mappings: {
         Row: {
           awp_class_id: string | null
