@@ -1,30 +1,48 @@
 
 
-# Fix: Procore "Submitting..." Stuck UI
+# Fix: Procore File Import Using Correct API Endpoint
 
 ## Problem
 
-The `ProcoreConnectionDialog` awaits the `copy-procore-files` edge function call (line 244), which blocks the UI at "Submitting..." until the function returns. The edge function makes multiple Procore API calls to list and copy files, which can take longer than the ~60s edge function timeout -- so the request never completes and the user is stuck.
+The `copy-procore-files` edge function uses incorrect Procore API endpoints to list files in a folder:
 
-The analysis request IS created successfully in the database (visible in the queue), but the dialog never closes because it's waiting for the copy to finish.
+1. `GET /folders?parent_id={folderId}` -- lists child **folders**, not files in the folder
+2. `GET /files?folder_id={folderId}` -- not a valid Procore REST v1.0 endpoint (hangs or returns error)
+
+The working `list-procore-files` function correctly uses `GET /folders/{folderId}?project_id={projectId}`, which returns both subfolders and files in the response object.
+
+The function hangs during these bad API calls, hits the edge function timeout (~60s), and never reaches the "Found X files" log line. Status stays stuck at "copying" with 0 files.
 
 ## Fix
 
-### 1. Fire-and-forget the copy call in `ProcoreConnectionDialog.tsx`
+### File: `supabase/functions/copy-procore-files/index.ts`
 
-**File:** `src/components/wizard/ProcoreConnectionDialog.tsx`
+Rewrite `listProcoreFilesRecursively` to use the correct Procore API:
 
-Change the `fetch` call on line 244 from `await fetch(...)` to just `fetch(...)` (no await). The dialog should close immediately after creating the analysis request and show the success toast. The copy process continues in the background.
+- When `folderId` is provided: call `GET /folders/{folderId}?project_id={projectId}` (same as the working `list-subfolder` action)
+- When no `folderId` (root): call `GET /folders?project_id={projectId}` (returns root-level folders)
+- The response from `GET /folders/{folderId}` includes both a `folders` array and a `files` array -- extract files directly from this response
+- Remove the separate `GET /files?folder_id=...` call entirely (this endpoint does not exist in Procore's API)
+- Add error logging after each API call so failures are visible in logs
+- Add a timeout to each fetch call (e.g., 10 seconds) to prevent the function from hanging indefinitely on a bad request
 
-This is safe because:
-- The analysis request is already created with status "pending"
-- The Analysis Queue page already polls/displays status updates
-- The copy function updates the request status to "copying" then "copied" or "failed" independently
+### Also: clean up stuck requests
 
-### 2. No edge function changes needed
+Run a database update to reset the 3 stuck "copying" requests (with 0 files) back to "failed" so they don't clutter the queue.
 
-The edge function itself is fine -- it runs synchronously and updates the database. The only issue is the frontend blocking on it.
+### Summary of API pattern
+
+```text
+Current (broken):
+  GET /folders?parent_id={folderId}    --> returns child folders only, no files
+  GET /files?folder_id={folderId}      --> invalid endpoint, hangs
+
+Fixed:
+  GET /folders/{folderId}?project_id=  --> returns { folders: [...], files: [...] }
+  Recursively process subfolders the same way
+```
 
 ### Files to modify
-1. `src/components/wizard/ProcoreConnectionDialog.tsx` -- Remove `await` from the copy-procore-files fetch call (line 244)
+1. `supabase/functions/copy-procore-files/index.ts` -- Fix the file listing logic
+2. Database cleanup -- Reset stuck "copying" requests to "failed"
 
