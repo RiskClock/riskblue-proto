@@ -6,8 +6,6 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
-declare const EdgeRuntime: { waitUntil: (promise: Promise<unknown>) => void };
-
 const PROCORE_API_BASE = "https://sandbox.procore.com/rest/v1.0";
 
 function hexToBytes(hex: string): ArrayBuffer {
@@ -63,11 +61,9 @@ async function listProcoreFilesRecursively(
 
   if (folderResp.ok) {
     const folderData = await folderResp.json();
-    // Handle both array response and object with folders/files
     const folders = Array.isArray(folderData) ? folderData : (folderData.folders || []);
     const topFiles = Array.isArray(folderData) ? [] : (folderData.files || []);
 
-    // Add top-level files from this folder response
     for (const file of topFiles) {
       const filePath = relativePath ? `${relativePath}/${file.name}` : file.name;
       allFiles.push({
@@ -84,7 +80,6 @@ async function listProcoreFilesRecursively(
     for (const folder of folders) {
       const folderPath = relativePath ? `${relativePath}/${folder.name}` : folder.name;
 
-      // If the folder response includes nested files, add them
       if (folder.files && Array.isArray(folder.files)) {
         for (const file of folder.files) {
           const filePath = `${folderPath}/${file.name}`;
@@ -100,7 +95,6 @@ async function listProcoreFilesRecursively(
         }
       }
 
-      // Recurse into subfolder
       const subFiles = await listProcoreFilesRecursively(
         companyId, projectId, accessToken, folder.id, folderPath
       );
@@ -126,7 +120,6 @@ async function listProcoreFilesRecursively(
       if (Array.isArray(files)) {
         for (const file of files) {
           const filePath = relativePath ? `${relativePath}/${file.name}` : file.name;
-          // Avoid duplicates
           if (!allFiles.some(f => f.file.id === file.id)) {
             allFiles.push({
               file: {
@@ -155,7 +148,6 @@ async function downloadProcoreFile(
   projectId: string,
   accessToken: string
 ): Promise<Blob> {
-  // Try the standard download endpoint
   const url = `${PROCORE_API_BASE}/files/${fileId}?project_id=${projectId}`;
   const resp = await fetch(url, {
     headers: {
@@ -168,11 +160,9 @@ async function downloadProcoreFile(
     throw new Error(`Failed to download file ${fileId}: ${resp.statusText}`);
   }
 
-  // Procore may return file metadata with a download URL, or the file directly
   const contentType = resp.headers.get("content-type") || "";
   if (contentType.includes("application/json")) {
     const data = await resp.json();
-    // If we got metadata with a URL, follow it
     if (data.url) {
       const downloadResp = await fetch(data.url);
       if (!downloadResp.ok) throw new Error(`Download from URL failed: ${downloadResp.statusText}`);
@@ -184,8 +174,38 @@ async function downloadProcoreFile(
   return await resp.blob();
 }
 
-// Background task to copy files from Procore
-async function copyFilesInBackground(
+// Refresh a user's Procore token via the procore-oauth function
+async function refreshProcoreToken(
+  userId: string,
+  supabaseUrl: string,
+  serviceRoleKey: string
+): Promise<boolean> {
+  console.log(`Refreshing Procore token for user ${userId}`);
+  try {
+    const refreshUrl = `${supabaseUrl}/functions/v1/procore-oauth?action=refresh`;
+    const resp = await fetch(refreshUrl, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${serviceRoleKey}`,
+        "Content-Type": "application/json",
+        "x-supabase-user-id": userId,
+      },
+    });
+    if (!resp.ok) {
+      const errData = await resp.json().catch(() => ({}));
+      console.error("Token refresh failed:", errData);
+      return false;
+    }
+    console.log("Token refresh succeeded");
+    return true;
+  } catch (err) {
+    console.error("Token refresh error:", err);
+    return false;
+  }
+}
+
+// Main copy logic — runs synchronously
+async function copyFiles(
   analysisRequestId: string,
   supabaseUrl: string,
   supabaseServiceKey: string
@@ -203,13 +223,14 @@ async function copyFilesInBackground(
       throw new Error(`Analysis request not found: ${requestError?.message}`);
     }
 
-    // Parse the drive_folder_id field: "procore:{companyId}:{projectId}"
+    // Parse drive_folder_id: "procore:{companyId}:{projectId}" or "procore:{companyId}:{projectId}:{folderId}"
     const parts = (request.drive_folder_id || "").split(":");
     if (parts.length < 3 || parts[0] !== "procore") {
       throw new Error("Invalid Procore reference in drive_folder_id");
     }
     const companyId = parts[1];
     const procoreProjectId = parts[2];
+    const scopedFolderId = parts.length >= 4 ? parseInt(parts[3], 10) : undefined;
 
     // Update status to copying
     await supabase
@@ -218,7 +239,7 @@ async function copyFilesInBackground(
       .eq("id", analysisRequestId);
 
     // Get the user's Procore token
-    const { data: tokenData, error: tokenError } = await supabase
+    let { data: tokenData, error: tokenError } = await supabase
       .from("user_procore_tokens")
       .select("*")
       .eq("user_id", request.user_id)
@@ -226,6 +247,25 @@ async function copyFilesInBackground(
 
     if (tokenError || !tokenData) {
       throw new Error(`Procore token not found: ${tokenError?.message}`);
+    }
+
+    // Check if token is expired and refresh if needed
+    if (tokenData.token_expiry && new Date(tokenData.token_expiry) < new Date()) {
+      console.log("Procore token expired, attempting refresh...");
+      const refreshed = await refreshProcoreToken(request.user_id, supabaseUrl, supabaseServiceKey);
+      if (!refreshed) {
+        throw new Error("Procore token expired and refresh failed. Please reconnect Procore.");
+      }
+      // Re-read the refreshed token
+      const { data: refreshedToken, error: refreshError } = await supabase
+        .from("user_procore_tokens")
+        .select("*")
+        .eq("user_id", request.user_id)
+        .single();
+      if (refreshError || !refreshedToken) {
+        throw new Error("Failed to read refreshed token");
+      }
+      tokenData = refreshedToken;
     }
 
     const encryptionKey = Deno.env.get("DRIVE_TOKEN_ENCRYPTION_KEY");
@@ -237,9 +277,13 @@ async function copyFilesInBackground(
       accessToken = tokenData.access_token;
     }
 
-    // List all files recursively
-    console.log(`Listing Procore files for company ${companyId}, project ${procoreProjectId}`);
-    const files = await listProcoreFilesRecursively(companyId, procoreProjectId, accessToken);
+    // List all files recursively, scoped to folder if specified
+    const scopeLabel = scopedFolderId ? `folder ${scopedFolderId}` : "root";
+    console.log(`Listing Procore files for company ${companyId}, project ${procoreProjectId}, scope: ${scopeLabel}`);
+    const files = await listProcoreFilesRecursively(
+      companyId, procoreProjectId, accessToken,
+      scopedFolderId || undefined
+    );
     console.log(`Found ${files.length} files to copy`);
 
     // Insert file records
@@ -316,7 +360,7 @@ async function copyFilesInBackground(
       }
     }
 
-    const finalStatus = copiedCount === files.length ? "copied" : "failed";
+    const finalStatus = files.length === 0 ? "copied" : (copiedCount === files.length ? "copied" : "failed");
     await supabase
       .from("analysis_requests")
       .update({
@@ -329,7 +373,7 @@ async function copyFilesInBackground(
 
     console.log(`Completed copying ${copiedCount}/${files.length} Procore files`);
   } catch (error) {
-    console.error("Background copy error:", error);
+    console.error("Copy error:", error);
     await supabase
       .from("analysis_requests")
       .update({
@@ -393,13 +437,11 @@ serve(async (req) => {
       );
     }
 
-    // Start background copy task
-    EdgeRuntime.waitUntil(
-      copyFilesInBackground(analysisRequestId, supabaseUrl, supabaseServiceKey)
-    );
+    // Run copy synchronously — ensures logs are captured and errors propagate
+    await copyFiles(analysisRequestId, supabaseUrl, supabaseServiceKey);
 
     return new Response(
-      JSON.stringify({ success: true, message: "Procore file copy started" }),
+      JSON.stringify({ success: true, message: "Procore file copy completed" }),
       { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   } catch (error) {

@@ -48,6 +48,7 @@ import { useProjectRole } from "@/hooks/useProjectRole";
 import { useActivityLogger } from "@/hooks/useActivityLogger";
 import { useHeapIdentify } from "@/hooks/useHeapIdentify";
 import { useUserDisplayName } from "@/hooks/useUserDisplayName";
+import { useProcoreToken } from "@/hooks/useProcoreToken";
 import { 
   AnalysisItem, 
   extractSelectedAssets, 
@@ -93,6 +94,7 @@ const ProjectWizardContent = () => {
   
   // Check if user is internal (has @riskclock.com email)
   const isInternalUser = user?.email?.toLowerCase().endsWith('@riskclock.com') ?? false;
+  const { isConnected: isProcoreConnected } = useProcoreToken();
   
   const [activeTab, setActiveTab] = useState("guideline");
   const [loading, setLoading] = useState(false);
@@ -1476,6 +1478,9 @@ const ProjectWizardContent = () => {
                           >
                             <img src="/icons/icon_procore.png" alt="" className="w-4 h-4" />
                             <span>Procore</span>
+                            {isProcoreConnected && (
+                              <span className="ml-auto flex h-2 w-2 rounded-full bg-green-500" />
+                            )}
                           </DropdownMenuItem>
                         </DropdownMenuContent>
                       </DropdownMenu>
@@ -1538,6 +1543,9 @@ const ProjectWizardContent = () => {
                           >
                             <img src="/icons/icon_procore.png" alt="" className="w-4 h-4" />
                             Procore
+                            {isProcoreConnected && (
+                              <span className="flex h-2 w-2 rounded-full bg-green-500" />
+                            )}
                           </Button>
                         </div>
                       </div>
