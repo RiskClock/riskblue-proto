@@ -1,56 +1,95 @@
 
 
-# Fix: Resilient Procore File Download with Safe Retry Logic
+# Redesign Analysis Request Detail Page
 
-## Problem
+## Overview
 
-Downloads fail because `file_versions.url` can be either a presigned storage URL (breaks with auth headers) or a Procore-gated endpoint (requires auth headers). The current code only tries without headers.
+Three changes to the AnalysisRequestDetail page and AnalysisSection component:
 
-## Solution
+1. Replace file tree with a flat table (columns: File Name, Status, Size) with clickable file names that open a preview/download modal
+2. Consolidate the 3 summary cards + download button into a single compact table header
+3. Parse analysis results into structured asset instance tables (ID, Name, Level, Size) and show risk points with P x I tooltip on each AWP class header
 
-Replace lines 177-182 in `supabase/functions/copy-procore-files/index.ts` with retry logic that includes three safety improvements:
+---
 
-1. **Try without auth headers first** (handles presigned URLs)
-2. **Only retry with auth headers on 401/403** -- any other failure (404, 500, timeout) throws immediately since retrying won't help
-3. **Guard `new URL()` with try/catch** so a malformed download URL doesn't crash the function
-4. **Include statusText for both attempts** in the final error message
+## 1. File List Table + Compact Header
 
-### Replacement code for lines 177-182
+**Remove**: The 3 stat cards (lines 252-266), the standalone Download button section (lines 268-274), and the file tree with `buildFileTree`/`FileTreeItem`.
 
-```typescript
-    let urlHostname = "unknown";
-    try { urlHostname = new URL(downloadUrl).hostname; } catch {}
-    console.log(`File ${fileId}: downloading via ${source} (host: ${urlHostname})`);
+**Replace with**: A single card with a header row like:
 
-    // Attempt 1: without auth headers (works for presigned URLs)
-    const resp1 = await fetchWithTimeout(downloadUrl, { redirect: "follow" });
-    if (resp1.ok) {
-      console.log(`File ${fileId}: succeeded without auth headers (${resp1.status})`);
-      return await resp1.blob();
-    }
-
-    // Only retry with auth headers on 401/403; other errors won't benefit from retry
-    if (resp1.status !== 401 && resp1.status !== 403) {
-      throw new Error(`Download failed for file ${fileId}: ${resp1.status} ${resp1.statusText}`);
-    }
-
-    console.log(`File ${fileId}: attempt without headers returned ${resp1.status}, retrying with auth headers`);
-
-    // Attempt 2: with Procore auth headers (works for Procore-gated URLs)
-    const resp2 = await fetchWithTimeout(downloadUrl, {
-      redirect: "follow",
-      headers: {
-        Authorization: `Bearer ${accessToken}`,
-        "Procore-Company-Id": companyId,
-      },
-    });
-    if (!resp2.ok) {
-      throw new Error(`Download failed for file ${fileId}: attempt1=${resp1.status} ${resp1.statusText}, attempt2=${resp2.status} ${resp2.statusText}`);
-    }
-    console.log(`File ${fileId}: succeeded with auth headers (${resp2.status})`);
-    return await resp2.blob();
+```
+Files (Count: 11, 3.4 MB, Procore)                    [Download ZIP]
 ```
 
-### Files to modify
-1. `supabase/functions/copy-procore-files/index.ts` -- Replace lines 177-182 with the retry logic above, then redeploy
+Below the header, a `<Table>` with columns:
+- **File Name** (from `relative_path`) -- clickable, opens preview modal
+- **Status** -- colored badge
+- **Size** -- formatted bytes
 
+## 2. File Preview/Download Modal
+
+When a file name is clicked, open a `<Dialog>`:
+- Title: file name
+- For images (`mime_type` starts with `image/`): render `<img>` using a signed Supabase storage URL
+- For other types: show metadata (mime type, size)
+- **Download** button that fetches from `drive-analysis-files` bucket via `supabase.storage.from('drive-analysis-files').download(storage_path)`
+
+## 3. Analysis Results as Parsed Asset Instance Table
+
+The `result_text` from the AI is a pipe/tab-delimited table. Parse it into rows and display as a structured `<Table>` with columns: **ID**, **Name**, **Level**, **Size**.
+
+Mapping from the result columns:
+- ID = "Generated Room Code" (e.g., ER001)
+- Name = "Drawing Label" (e.g., ELECTRICAL)
+- Level = "Building Floor / Level" (e.g., FOURTH FLOOR)
+- Size = extracted from "Notes" column (e.g., "103 ft2 / 10 m2")
+
+If no rows are found (the result says "none found" or the table is empty), show "No instances found" message.
+
+## 4. AWP Class Header with Risk Points
+
+For each AWP class (e.g., "Electrical Room"), look up probability and impact from the source tables (`critical_assets`, `water_systems`, `processes`) based on `awp_class_prompts.category`.
+
+Display next to the class name: a badge showing risk points (P x I) with a `<Tooltip>` on hover showing "Probability: X, Impact: Y".
+
+Style risk badges following existing convention:
+- Very High (1-15): orange-500
+- Extreme (16-20): red-600
+- Severe (21-25): red-900
+
+---
+
+## Technical Details
+
+### Files to modify
+
+**1. `src/pages/AnalysisRequestDetail.tsx`**
+- Remove `buildFileTree`, `FileTreeNode` interface, `FileTreeItem` component
+- Remove the 3-card stats grid (lines 252-266)
+- Remove standalone Download section (lines 268-274)
+- Replace file card header (line 279) with consolidated header showing count, total size, source + Download ZIP button
+- Replace tree rendering with a `<Table>` using `Table, TableBody, TableCell, TableHead, TableHeader, TableRow` from `@/components/ui/table`
+- Add `selectedFile` state and a `<Dialog>` for file preview/download
+- Import `Dialog, DialogContent, DialogHeader, DialogTitle` from `@/components/ui/dialog`
+- Import `Tooltip, TooltipContent, TooltipProvider, TooltipTrigger` from `@/components/ui/tooltip`
+
+**2. `src/components/analysis/AnalysisSection.tsx`**
+- Add a query to fetch P x I values from `critical_assets`, `water_systems`, `processes` tables
+- In the AWP class header, add a risk points badge with tooltip showing "Probability: X x Impact: Y"
+- Add a `parseResultText` utility function that:
+  - Splits `result_text` by newlines
+  - Detects pipe-delimited or tab-delimited format
+  - Extracts header row and data rows
+  - Maps columns to ID, Name, Level, Size
+  - Returns an array of `{ id, name, level, size }` objects
+- Replace the `<pre>` result display with a `<Table>` showing the parsed instances
+- If parsing fails or no rows, fall back to showing the raw text in a collapsible section
+- Import `Table` components and `Tooltip` components
+
+### New imports needed
+- `Table, TableBody, TableCell, TableHead, TableHeader, TableRow` from `@/components/ui/table`
+- `Dialog, DialogContent, DialogHeader, DialogTitle` from `@/components/ui/dialog`
+- `Tooltip, TooltipContent, TooltipProvider, TooltipTrigger` from `@/components/ui/tooltip`
+
+### No database changes required
