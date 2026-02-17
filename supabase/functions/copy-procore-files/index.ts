@@ -132,13 +132,10 @@ async function listProcoreFilesRecursively(
 
 // Download a file from Procore
 async function downloadProcoreFile(
-  fileId: number,
-  companyId: string,
-  projectId: string,
-  accessToken: string
+  fileId: number, companyId: string, projectId: string, accessToken: string
 ): Promise<Blob> {
   const url = `${PROCORE_API_BASE}/files/${fileId}?project_id=${projectId}`;
-  const resp = await fetch(url, {
+  const resp = await fetchWithTimeout(url, {
     headers: {
       Authorization: `Bearer ${accessToken}`,
       "Procore-Company-Id": companyId,
@@ -146,18 +143,43 @@ async function downloadProcoreFile(
   });
 
   if (!resp.ok) {
-    throw new Error(`Failed to download file ${fileId}: ${resp.statusText}`);
+    throw new Error(`Failed to fetch file ${fileId} metadata: ${resp.status} ${resp.statusText}`);
   }
 
   const contentType = resp.headers.get("content-type") || "";
   if (contentType.includes("application/json")) {
     const data = await resp.json();
-    if (data.url) {
-      const downloadResp = await fetch(data.url);
-      if (!downloadResp.ok) throw new Error(`Download from URL failed: ${downloadResp.statusText}`);
-      return await downloadResp.blob();
+    let downloadUrl: string | null = null;
+    let source = "";
+
+    if (Array.isArray(data.file_versions) && data.file_versions.length > 0) {
+      const sorted = [...data.file_versions].sort((a: any, b: any) => (b.number ?? 0) - (a.number ?? 0));
+      const latest = sorted[0];
+      if (latest.url) {
+        downloadUrl = latest.url;
+        source = "file_versions.url";
+      } else if (latest.prostore_file?.url) {
+        downloadUrl = latest.prostore_file.url;
+        source = "file_versions.prostore_file.url";
+      }
     }
-    throw new Error("No download URL in file response");
+
+    if (!downloadUrl && data.url) {
+      downloadUrl = data.url;
+      source = "data.url";
+    }
+
+    if (!downloadUrl) {
+      console.error(`File ${fileId}: no download URL. Keys: ${Object.keys(data).join(", ")}`);
+      throw new Error("No download URL in file response");
+    }
+
+    console.log(`File ${fileId}: downloading via ${source}`);
+    const downloadResp = await fetchWithTimeout(downloadUrl, { redirect: "follow" });
+    if (!downloadResp.ok) {
+      throw new Error(`Download failed for file ${fileId}: ${downloadResp.status} ${downloadResp.statusText}`);
+    }
+    return await downloadResp.blob();
   }
 
   return await resp.blob();
