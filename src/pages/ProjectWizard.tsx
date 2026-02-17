@@ -1178,11 +1178,6 @@ const ProjectWizardContent = () => {
       throw new Error("Invalid project ID");
     }
     
-    if (items.length === 0) {
-      console.warn("No analysis items to save");
-      return;
-    }
-    
     // Verify user is authenticated before attempting insert
     const { data: { session } } = await supabase.auth.getSession();
     if (!session) {
@@ -1192,7 +1187,7 @@ const ProjectWizardContent = () => {
     console.log("User authenticated, proceeding with save. User ID:", session.user.id);
     
     try {
-      // First, delete existing items for this project
+      // Always delete existing items for this project first
       const { error: deleteError } = await supabase
         .from('project_analysis_items')
         .delete()
@@ -1200,6 +1195,12 @@ const ProjectWizardContent = () => {
       
       if (deleteError) {
         console.error("Error deleting existing analysis items:", deleteError);
+      }
+
+      // If no new items to insert, we're done
+      if (items.length === 0) {
+        console.log("All items deleted, nothing to insert");
+        return;
       }
 
       // Insert new items - handle both area_sqft (snake_case from edge function) and areaSqft (camelCase)
