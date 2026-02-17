@@ -1,65 +1,58 @@
 
-# Fix: Duplicate Roof Items and Missing Default Controls
 
-## Problem 1: Roof Added Twice
-The existing item count query filters by `category` (e.g., "Asset") instead of by the specific AWP class name. This means it counts ALL assets, not just Electrical Rooms. More importantly, there's no deduplication check -- if items with the same class already exist in the project, the code blindly inserts duplicates.
+# Fix: Deleted Instances Still Show Up After Save
 
-**Fix**: Filter existing items by `name = awpClassName` (e.g., "Electrical Room") instead of by `category`. This ensures correct sequential numbering AND allows us to detect if items already exist.
+## Root Cause
 
-## Problem 2: Default Controls Not Assigned
-The `handleAddToProject` function inserts rows with no `controls` field. The source tables (`critical_assets`, `water_systems`, `processes`) have a `default_control_ids` column that maps class names to default control UUIDs, but the code never resolves these to control names.
+In `saveAnalysisItems` (src/pages/ProjectWizard.tsx, line 1181), there is an early return when `items.length === 0`:
 
-**Fix**: Look up the default control IDs from the source table matching the AWP class name, resolve them to control names via the `mitigation_controls` table, and include them in the inserted rows.
-
-## Technical Changes
-
-### File: `src/components/analysis/AnalysisSection.tsx`
-
-**1. Fix existing item count query (line 370-374)**
-
-Change from filtering by `category` to filtering by `name`:
 ```typescript
-// Before
-.eq("category", category)
-
-// After  
-.eq("name", awpClassName)
+if (items.length === 0) {
+  console.warn("No analysis items to save");
+  return;  // Skips the DELETE + INSERT entirely!
+}
 ```
 
-This ensures sequential IDs are scoped to the specific class (e.g., ERM001-ERM006 for Electrical Rooms only).
+When you delete all 12 items and confirm, the modal calls `onUpdateItems([])` with an empty array. `saveAnalysisItems` hits this early return, so it never executes the `DELETE FROM project_analysis_items WHERE project_id = ...` query. The UI state clears, but the database still has all 12 rows. On the next page load, they reappear.
 
-**2. Add default controls lookup and assignment (inside handleAddToProject)**
+## Fix
 
-Before building rows:
-- Query the appropriate source table (`critical_assets`, `water_systems`, or `processes`) to get `default_control_ids` for the matching class name
-- Query `mitigation_controls` to resolve those UUIDs to control names
-- Include the resolved control names in each inserted row's `controls` array
+**File: `src/pages/ProjectWizard.tsx`** (lines 1181-1184)
+
+Remove the early return for empty items. Instead, when `items.length === 0`, still execute the delete query but skip the insert:
 
 ```typescript
-// Resolve default controls
-let defaultControlNames: string[] = [];
-const sourceTable = category === "Asset" ? "critical_assets" 
-  : category === "Water System" ? "water_systems" : "processes";
-
-const { data: sourceEntry } = await supabase
-  .from(sourceTable)
-  .select("default_control_ids")
-  .eq("name", awpClassName)  // or fuzzy match
-  .maybeSingle();
-
-if (sourceEntry?.default_control_ids?.length) {
-  const { data: controls } = await supabase
-    .from("mitigation_controls")
-    .select("name")
-    .in("id", sourceEntry.default_control_ids);
-  defaultControlNames = controls?.map(c => c.name) || [];
+// Before (broken):
+if (items.length === 0) {
+  console.warn("No analysis items to save");
+  return;
 }
 
-// Then in row construction:
-return {
-  ...existingFields,
-  controls: defaultControlNames,
-};
+// After (fixed):
+// Delete existing items first (always)
+const { error: deleteError } = await supabase
+  .from('project_analysis_items')
+  .delete()
+  .eq('project_id', projectId);
+
+if (deleteError) {
+  console.error("Error deleting existing analysis items:", deleteError);
+}
+
+// If no new items to insert, we're done
+if (items.length === 0) {
+  console.log("All items deleted, nothing to insert");
+  return;
+}
+
+// ...proceed with insert as before
 ```
 
-### No other files or database changes needed.
+This ensures the database DELETE always runs, even when the result is an empty item list.
+
+## Technical Details
+
+- Only one file changes: `src/pages/ProjectWizard.tsx`
+- The fix moves the DELETE query before the empty-items guard
+- The INSERT logic remains unchanged
+- No schema or RLS changes needed
