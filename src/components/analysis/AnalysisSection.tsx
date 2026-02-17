@@ -366,14 +366,33 @@ export function AnalysisSection({ requestId, files, projectId }: AnalysisSection
       const awpClassId = awpClass?.id || null;
       const category = awpClass?.category || "Asset";
 
-      // Get existing items count for this class to avoid ID conflicts
+      // Get existing items count for this specific class to avoid ID conflicts
       const { data: existingItems } = await supabase
         .from("project_analysis_items")
         .select("item_id")
         .eq("project_id", projectId)
-        .eq("category", category);
+        .eq("name", awpClassName);
 
       const existingCount = existingItems?.length || 0;
+
+      // Resolve default controls from source table
+      let defaultControlNames: string[] = [];
+      const sourceTable = category === "Asset" ? "critical_assets"
+        : category === "Water System" ? "water_systems" : "processes";
+
+      const { data: sourceEntry } = await supabase
+        .from(sourceTable as any)
+        .select("default_control_ids")
+        .eq("name", awpClassName)
+        .maybeSingle();
+
+      if ((sourceEntry as any)?.default_control_ids?.length) {
+        const { data: controls } = await supabase
+          .from("mitigation_controls")
+          .select("name")
+          .in("id", (sourceEntry as any).default_control_ids);
+        defaultControlNames = controls?.map((c) => c.name) || [];
+      }
 
       const rows = instances.map((inst, idx) => {
         const seqNum = existingCount + idx + 1;
@@ -387,6 +406,7 @@ export function AnalysisSection({ requestId, files, projectId }: AnalysisSection
           floor: inst.floor || null,
           area_sqft: inst.area_sqft || null,
           awp_class_id: awpClassId,
+          controls: defaultControlNames.length > 0 ? defaultControlNames : null,
         };
       });
 
