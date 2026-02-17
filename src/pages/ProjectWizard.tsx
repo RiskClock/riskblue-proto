@@ -6,8 +6,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useQuery } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
 import { getUserFriendlyError } from "@/lib/errorHandling";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import { LogoDropdown } from "@/components/LogoDropdown";
+import { AppHeader } from "@/components/AppHeader";
 import riskBlueLogo from "@/assets/logo-riskblue.png";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
@@ -36,11 +35,9 @@ import { ProposalsStep } from "@/components/wizard/ProposalsStep";
 import { ImplementationScheduleStep } from "@/components/wizard/ImplementationScheduleStep";
 import { ProjectFilesUpload, DriveFileInfo } from "@/components/wizard/ProjectFilesUpload";
 import { ResponsePlanUploadChat } from "@/components/ResponsePlanUploadChat";
-import { Download, LogOut, FileText, Loader2, Users, Settings, BarChart3, FilePlus, Upload, ChevronDown as ChevronDownIcon } from "lucide-react";
-import { DropdownMenuSeparator } from "@/components/ui/dropdown-menu";
+import { Download, FileText, Loader2, Users, FilePlus, Upload, ChevronDown as ChevronDownIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
-import { ProviderSelectionDialog } from "@/components/ProviderSelectionDialog";
 import { Label } from "@/components/ui/label";
 import { WaterRiskReport } from "@/components/reports/WaterRiskReport";
 import { generateReportFilename } from "@/lib/reportGenerator";
@@ -102,7 +99,7 @@ const ProjectWizardContent = () => {
   const [isSavingNewProject, setIsSavingNewProject] = useState(false);
   const isWebhookCreatingProject = useRef(false);
   const justRestoredFromCache = useRef(false);
-  const [showProviderDialog, setShowProviderDialog] = useState(false);
+  
   const [showGuidelinesDialog, setShowGuidelinesDialog] = useState(false);
   const { getInitial } = useUserDisplayName();
   const [showCollaboratorsModal, setShowCollaboratorsModal] = useState(false);
@@ -1279,58 +1276,16 @@ const ProjectWizardContent = () => {
         <img src={riskBlueLogo} alt="RiskBlue" />
       </div>
       
-      <header className="sticky top-0 z-20 border-b bg-card no-print">
-        <div className="container mx-auto px-6 py-4 flex items-center justify-between">
-          <LogoDropdown />
-          <div className="flex items-center gap-6">
-            {/* Saving indicator */}
-            {(isSaving || hasPendingChanges) && (
-              <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                <Loader2 className="h-4 w-4 animate-spin" />
-                <span>Saving...</span>
-              </div>
-            )}
-            <button onClick={() => navigate("/projects")} className="text-foreground hover:text-primary">
-              Projects
-            </button>
-            {user?.email?.toLowerCase().endsWith("@riskclock.com") && (
-              <button onClick={() => setShowProviderDialog(true)} className="text-foreground hover:text-primary">
-                Solution Provider Portal
-              </button>
-            )}
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Avatar className="cursor-pointer">
-                  <AvatarFallback>{getInitial()}</AvatarFallback>
-                </Avatar>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-48">
-                {user?.email?.toLowerCase().endsWith("@riskclock.com") && (
-                  <>
-                    <DropdownMenuItem onClick={() => navigate("/configuration")} className="cursor-pointer">
-                      <Settings className="h-4 w-4 mr-2" />
-                      Configuration
-                    </DropdownMenuItem>
-                    <DropdownMenuItem onClick={() => navigate("/internal/analysis-queue")} className="cursor-pointer">
-                      <FileText className="h-4 w-4 mr-2" />
-                      Analysis Queue
-                    </DropdownMenuItem>
-                    <DropdownMenuItem onClick={() => navigate("/logs")} className="cursor-pointer">
-                      <BarChart3 className="h-4 w-4 mr-2" />
-                      Logs
-                    </DropdownMenuItem>
-                    <DropdownMenuSeparator />
-                  </>
-                )}
-                <DropdownMenuItem onClick={signOut} className="cursor-pointer">
-                  <LogOut className="h-4 w-4 mr-2" />
-                  Logout
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
-          </div>
-        </div>
-      </header>
+      <AppHeader
+        leftContent={
+          (isSaving || hasPendingChanges) ? (
+            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+              <Loader2 className="h-4 w-4 animate-spin" />
+              <span>Saving...</span>
+            </div>
+          ) : undefined
+        }
+      />
 
       <div className="container mx-auto px-6 pb-8">
         <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
@@ -1963,10 +1918,6 @@ const ProjectWizardContent = () => {
         </Tabs>
       </div>
 
-      <ProviderSelectionDialog 
-        open={showProviderDialog} 
-        onOpenChange={setShowProviderDialog} 
-      />
       
       {/* Bug 2: Key forces remount for proper state reset */}
       <AWPEditModal

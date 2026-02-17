@@ -3,18 +3,14 @@ import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { useToast } from "@/hooks/use-toast";
 import { useActivityLogger } from "@/hooks/useActivityLogger";
 import { useHeapIdentify } from "@/hooks/useHeapIdentify";
 import { getUserFriendlyError } from "@/lib/errorHandling";
 import { formatDateShort } from "@/lib/reportGenerator";
-import { LogoDropdown } from "@/components/LogoDropdown";
-import { Trash2, LogOut, X, Settings, FileText, BarChart3 } from "lucide-react";
-import { DropdownMenuSeparator } from "@/components/ui/dropdown-menu";
+import { AppHeader } from "@/components/AppHeader";
+import { Trash2, X } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
-import { ProviderSelectionDialog } from "@/components/ProviderSelectionDialog";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 
 interface Project {
@@ -46,16 +42,14 @@ const formatLocation = (city?: string, country?: string) => {
 };
 
 const Projects = () => {
-  const { user, signOut } = useAuth();
-  useHeapIdentify(); // Identify user in Heap Analytics
+  const { user } = useAuth();
+  const navigate = useNavigate();
+  const { toast } = useToast();
+  useHeapIdentify();
   const { logActivity } = useActivityLogger();
   const [projects, setProjects] = useState<ProjectWithCreator[]>([]);
   const [loading, setLoading] = useState(true);
   const [userProjectRoles, setUserProjectRoles] = useState<Map<string, string>>(new Map());
-  const [userDisplayName, setUserDisplayName] = useState<string | null>(null);
-  const navigate = useNavigate();
-  const { toast } = useToast();
-  const [showProviderDialog, setShowProviderDialog] = useState(false);
   const [showWelcome, setShowWelcome] = useState(() => 
     sessionStorage.getItem('riskblue_welcome_dismissed') !== 'true'
   );
@@ -68,17 +62,6 @@ const Projects = () => {
   useEffect(() => {
     if (user) {
       fetchProjects();
-      // Fetch current user's display name
-      supabase
-        .from("profiles")
-        .select("display_name")
-        .eq("user_id", user.id)
-        .single()
-        .then(({ data }) => {
-          if (data?.display_name) {
-            setUserDisplayName(data.display_name);
-          }
-        });
     }
   }, [user]);
 
@@ -209,49 +192,7 @@ const Projects = () => {
 
   return (
     <div className="h-screen flex flex-col bg-background overflow-hidden">
-      <header className="border-b bg-card">
-        <div className="container mx-auto px-6 py-4 flex items-center justify-between">
-          <LogoDropdown />
-          <div className="flex items-center gap-6">
-            <button className="text-foreground hover:text-primary">Projects</button>
-            {user?.email?.toLowerCase().endsWith("@riskclock.com") && (
-              <button onClick={() => setShowProviderDialog(true)} className="text-foreground hover:text-primary">
-                Solution Provider Portal
-              </button>
-            )}
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Avatar className="cursor-pointer">
-                  <AvatarFallback>{(userDisplayName?.[0] || user?.email?.[0] || "?").toUpperCase()}</AvatarFallback>
-                </Avatar>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-48">
-                {user?.email?.toLowerCase().endsWith("@riskclock.com") && (
-                  <>
-                    <DropdownMenuItem onClick={() => navigate("/configuration")} className="cursor-pointer">
-                      <Settings className="h-4 w-4 mr-2" />
-                      Configuration
-                    </DropdownMenuItem>
-                    <DropdownMenuItem onClick={() => navigate("/internal/analysis-queue")} className="cursor-pointer">
-                      <FileText className="h-4 w-4 mr-2" />
-                      Analysis Queue
-                    </DropdownMenuItem>
-                    <DropdownMenuItem onClick={() => navigate("/logs")} className="cursor-pointer">
-                      <BarChart3 className="h-4 w-4 mr-2" />
-                      Logs
-                    </DropdownMenuItem>
-                    <DropdownMenuSeparator />
-                  </>
-                )}
-                <DropdownMenuItem onClick={signOut} className="cursor-pointer">
-                  <LogOut className="h-4 w-4 mr-2" />
-                  Logout
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
-          </div>
-        </div>
-      </header>
+      <AppHeader />
 
       <main className="container mx-auto px-6 py-8 flex-1 overflow-auto">
         <div className="mb-8">
@@ -373,10 +314,6 @@ const Projects = () => {
         )}
       </main>
 
-      <ProviderSelectionDialog 
-        open={showProviderDialog} 
-        onOpenChange={setShowProviderDialog} 
-      />
     </div>
   );
 };

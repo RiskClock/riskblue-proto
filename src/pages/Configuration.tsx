@@ -5,7 +5,6 @@ import { supabase } from "@/integrations/supabase/client";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
@@ -13,14 +12,11 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Input } from "@/components/ui/input";
-import { LogOut, Plus, X, Save, RotateCcw, ShieldAlert, Settings, FileText, BarChart3, ExternalLink, AlertTriangle, Loader2, Link2 } from "lucide-react";
-import { DropdownMenuSeparator } from "@/components/ui/dropdown-menu";
+import { AppHeader } from "@/components/AppHeader";
+import { Plus, X, Save, RotateCcw, ShieldAlert, ExternalLink, AlertTriangle, Loader2, Link2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useHeapIdentify } from "@/hooks/useHeapIdentify";
-import { useUserDisplayName } from "@/hooks/useUserDisplayName";
 import { useMitigationControls, getControlNameById } from "@/hooks/useMitigationControls";
-import { LogoDropdown } from "@/components/LogoDropdown";
-import { ProviderSelectionDialog } from "@/components/ProviderSelectionDialog";
 import { format } from "date-fns";
 
 interface AWPItem {
@@ -54,8 +50,6 @@ export default function Configuration() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   useHeapIdentify();
-  const { getInitial } = useUserDisplayName();
-  const [showProviderDialog, setShowProviderDialog] = useState(false);
   const [showSaveDialog, setShowSaveDialog] = useState(false);
   const [showRevertDialog, setShowRevertDialog] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -360,27 +354,7 @@ export default function Configuration() {
 
   return (
     <div className="min-h-screen bg-background">
-      <header className="sticky top-0 z-20 border-b bg-card">
-        <div className="container mx-auto px-6 py-4 flex items-center justify-between">
-          <LogoDropdown />
-          <div className="flex items-center gap-6">
-            <button onClick={() => navigate("/projects")} className="text-foreground hover:text-primary">Projects</button>
-            <button onClick={() => setShowProviderDialog(true)} className="text-foreground hover:text-primary">Solution Provider Portal</button>
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Avatar className="cursor-pointer"><AvatarFallback>{getInitial()}</AvatarFallback></Avatar>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-48">
-                <DropdownMenuItem className="cursor-pointer"><Settings className="h-4 w-4 mr-2" />Configuration</DropdownMenuItem>
-                <DropdownMenuItem onClick={() => navigate("/internal/analysis-queue")} className="cursor-pointer"><FileText className="h-4 w-4 mr-2" />Analysis Queue</DropdownMenuItem>
-                <DropdownMenuItem onClick={() => navigate("/logs")} className="cursor-pointer"><BarChart3 className="h-4 w-4 mr-2" />Logs</DropdownMenuItem>
-                <DropdownMenuSeparator />
-                <DropdownMenuItem onClick={signOut} className="cursor-pointer"><LogOut className="h-4 w-4 mr-2" />Logout</DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
-          </div>
-        </div>
-      </header>
+      <AppHeader />
 
       <main className="container mx-auto px-6 py-8">
         <div className="flex items-center justify-between mb-6">
@@ -472,7 +446,7 @@ export default function Configuration() {
         </AlertDialogContent>
       </AlertDialog>
 
-      <ProviderSelectionDialog open={showProviderDialog} onOpenChange={setShowProviderDialog} />
+      
     </div>
   );
 }

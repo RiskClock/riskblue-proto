@@ -7,7 +7,7 @@ import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { LogoDropdown } from "@/components/LogoDropdown";
+import { AppHeader } from "@/components/AppHeader";
 import { AnalysisSection } from "@/components/analysis/AnalysisSection";
 import { useHeapIdentify } from "@/hooks/useHeapIdentify";
 import {
@@ -222,14 +222,7 @@ export default function AnalysisRequestDetail() {
 
   return (
     <div className="min-h-screen bg-background">
-      <header className="sticky top-0 z-20 border-b bg-card">
-        <div className="container mx-auto px-6 py-4 flex items-center justify-between">
-          <LogoDropdown />
-          <div className="flex items-center gap-6">
-            <button onClick={() => navigate("/projects")} className="text-foreground hover:text-primary">Projects</button>
-          </div>
-        </div>
-      </header>
+      <AppHeader />
 
       <main className="container mx-auto px-6 py-8 max-w-4xl">
         <Button variant="ghost" size="sm" className="mb-4" onClick={() => navigate("/internal/analysis-queue")}>

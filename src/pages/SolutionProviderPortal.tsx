@@ -3,18 +3,15 @@ import { useNavigate, useSearchParams } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
-import { Building2, LogOut } from "lucide-react";
-import { LogoDropdown } from "@/components/LogoDropdown";
+import { Building2 } from "lucide-react";
+import { AppHeader } from "@/components/AppHeader";
 import { SolutionProviderPortalContent } from "@/components/wizard/SolutionProviderPortalContent";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { useAuth } from "@/contexts/AuthContext";
 import { useHeapIdentify } from "@/hooks/useHeapIdentify";
-import { useUserDisplayName } from "@/hooks/useUserDisplayName";
 
 interface Collaborator {
   id: string;
@@ -34,8 +31,7 @@ interface Project {
 export default function SolutionProviderPortal() {
   const navigate = useNavigate();
   const { user, signOut } = useAuth();
-  useHeapIdentify(); // Identify user in Heap Analytics
-  const { getInitial } = useUserDisplayName();
+  useHeapIdentify();
   const [searchParams, setSearchParams] = useSearchParams();
   const [collaborators, setCollaborators] = useState<Collaborator[]>([]);
   const [selectedCollaborator, setSelectedCollaborator] = useState<Collaborator | null>(null);
@@ -195,41 +191,7 @@ export default function SolutionProviderPortal() {
 
   return (
     <div className="min-h-screen bg-background">
-      <header className="sticky top-0 z-20 border-b bg-card">
-        <div className="container mx-auto px-6 py-4 flex items-center justify-between">
-          <LogoDropdown />
-          <div className="flex items-center gap-6">
-            <button onClick={() => navigate("/projects")} className="text-foreground hover:text-primary">
-              Projects
-            </button>
-            <button onClick={() => navigate("/configuration")} className="text-foreground hover:text-primary">
-              Configuration
-            </button>
-            <button onClick={() => navigate("/internal/analysis-queue")} className="text-foreground hover:text-primary">
-              Analysis Queue
-            </button>
-            <button onClick={() => navigate("/logs")} className="text-foreground hover:text-primary">
-              Logs
-            </button>
-            <button onClick={handleExitPortal} className="text-foreground hover:text-primary">
-              Solution Provider Portal
-            </button>
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Avatar className="cursor-pointer">
-                  <AvatarFallback>{getInitial()}</AvatarFallback>
-                </Avatar>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-48">
-                <DropdownMenuItem onClick={signOut} className="cursor-pointer">
-                  <LogOut className="h-4 w-4 mr-2" />
-                  Logout
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
-          </div>
-        </div>
-      </header>
+      <AppHeader />
 
       <main className="container mx-auto px-6 py-8">
         {selectedProject && selectedCollaborator ? (
