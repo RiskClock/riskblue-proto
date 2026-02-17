@@ -241,7 +241,7 @@ export const ProcoreConnectionDialog = ({
       const { data: { session } } = await supabase.auth.getSession();
       if (session) {
         const copyUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/copy-procore-files`;
-        await fetch(copyUrl, {
+        fetch(copyUrl, {
           method: "POST",
           headers: {
             Authorization: `Bearer ${session.access_token}`,
