@@ -1,56 +1,62 @@
 
 
-# Fix "Add to Project" Failure
+# Fix: All 6 Instances Should Appear in Project
 
-## Root Cause
+## Problem
 
-Three bugs in the `handleAddToProject` function in `AnalysisSection.tsx`:
+All 6 instances were actually inserted into the database successfully (ERM001-ERM006). The issue is that the `name` field stores the raw AI label (e.g., "ELECTRICAL", "SUBSTATION ROOM", "IT ROOM") instead of the normalized AWP class name ("Electrical Room").
 
-1. **Category CHECK constraint violation**: The code sets `category: awpClassName` (e.g., `"Electrical Room"`), but the `project_analysis_items` table has a CHECK constraint requiring one of `'Asset'`, `'Water System'`, or `'Process'`. This causes the insert to fail with a constraint error.
+The Project Wizard groups items by their `name` field matching known AWP class names. Since "ELECTRICAL" and "IT ROOM" don't match the pattern for "Electrical Room" in `mapToAssetName`, they are treated as unrecognized items and not displayed under any AWP class.
 
-2. **Wrong `awp_class_id` lookup**: The code looks up `awp_class_id` from the source tables (`critical_assets`, `water_systems`, `processes`), but the foreign key references the `awp_classes` table which has entirely different UUIDs. The lookup needs to query `awp_classes` instead.
+Only "ERM001: Electrical Room" shows because its `name` happens to exactly match.
 
-3. **Error message not displayed**: The Supabase client returns a `PostgrestError` object (not an `Error` instance), so `e instanceof Error` is `false`, and the toast shows "Unknown error" instead of the actual constraint violation message.
+## Fix
 
-## Fix Details
+**File: `src/components/analysis/AnalysisSection.tsx`** -- in the `handleAddToProject` function
 
-### File: `src/components/analysis/AnalysisSection.tsx`
+Change how rows are built so that:
+- `name` is set to the **AWP class name** (e.g., "Electrical Room") instead of the raw AI label
+- The raw AI label (e.g., "ELECTRICAL", "SUBSTATION ROOM") goes into `area_name` to preserve the specific identifier
 
-**1. Replace the `sourceEntries` query** (lines 233-243)
+```text
+Before:
+  name: inst.name         --> "ELECTRICAL", "SUBSTATION ROOM", "IT ROOM"
+  area_name: (not set)
 
-Instead of querying `critical_assets`/`water_systems`/`processes` for `id` and `id_prefix`, query the `awp_classes` table which is what `project_analysis_items.awp_class_id` actually references:
-
-```typescript
-const { data: awpClasses } = useQuery({
-  queryKey: ["awp-classes-all"],
-  queryFn: async () => {
-    const { data, error } = await supabase
-      .from("awp_classes")
-      .select("id, name, category, id_prefix");
-    if (error) throw error;
-    return data;
-  },
-});
+After:
+  name: awpClassName      --> "Electrical Room" (for all instances)
+  area_name: inst.name    --> "ELECTRICAL", "SUBSTATION ROOM", "IT ROOM"
 ```
 
-**2. Fix `handleAddToProject`** (lines 358-412)
+This single change ensures all instances are recognized by the wizard's grouping logic while preserving the specific room labels.
 
-- Look up the AWP class from `awp_classes` by fuzzy-matching the name (e.g., "Electrical Room" matches "Electrical Rooms")
-- Use the matched entry's `category` (`'Asset'`, `'Water System'`, or `'Process'`) for the `category` column
-- Use the matched entry's `id` for `awp_class_id`
-- Use the matched entry's `id_prefix` for generating `item_id`
+Also need to clean up the 5 orphaned items already in the database. The user should delete the existing items and re-add from the analysis page.
 
-**3. Fix error handling** (line 406)
+## Technical Details
 
-Change from:
+### Change in `handleAddToProject` (around line 382-389)
+
+Update the row construction from:
 ```typescript
-description: e instanceof Error ? e.message : "Unknown error",
+return {
+  project_id: projectId,
+  item_id: itemId,
+  name: inst.name,
+  category: category,
+  ...
+};
 ```
 To:
 ```typescript
-description: (e as any)?.message || "Unknown error",
+return {
+  project_id: projectId,
+  item_id: itemId,
+  name: awpClassName,           // Use AWP class name for grouping
+  area_name: inst.name,         // Preserve raw label as area name
+  category: category,
+  ...
+};
 ```
 
-This ensures PostgrestError messages (like constraint violations) are displayed instead of "Unknown error".
-
-### No other files need changes. No database changes required.
+### No other files need changes
+The wizard already reads `area_name` and displays it alongside the item.
