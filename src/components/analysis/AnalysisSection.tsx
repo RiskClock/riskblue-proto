@@ -381,7 +381,8 @@ export function AnalysisSection({ requestId, files, projectId }: AnalysisSection
         return {
           project_id: projectId,
           item_id: itemId,
-          name: inst.name,
+          name: awpClassName,
+          area_name: inst.name,
           category: category,
           floor: inst.floor || null,
           area_sqft: inst.area_sqft || null,
