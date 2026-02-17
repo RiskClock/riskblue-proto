@@ -156,7 +156,7 @@ serve(async (req) => {
 
     // Call OpenAI Responses API
     const responsesPayload = {
-      model: "gpt-4o",
+      model: "gpt-5-mini",
       instructions: promptContent,
       input: [
         {
