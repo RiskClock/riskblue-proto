@@ -6,18 +6,27 @@ import { useQuery } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import { AppHeader } from "@/components/AppHeader";
 import { AnalysisSection } from "@/components/analysis/AnalysisSection";
 import { useHeapIdentify } from "@/hooks/useHeapIdentify";
 import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import {
   ArrowLeft,
   Download,
   Loader2,
-  FileText,
-  Folder,
-  ChevronRight,
-  ChevronDown,
   ShieldAlert,
 } from "lucide-react";
 import { format } from "date-fns";
@@ -32,13 +41,20 @@ interface AnalysisFile {
   copy_status: string;
 }
 
-interface FileTreeNode {
-  name: string;
-  path: string;
-  isFolder: boolean;
-  children: FileTreeNode[];
-  file?: AnalysisFile;
-}
+const fileStatusColors: Record<string, string> = {
+  pending: "text-blue-600 border-blue-300",
+  copying: "text-blue-600 border-blue-300",
+  copied: "text-emerald-600 border-emerald-300",
+  failed: "text-red-600 border-red-300",
+};
+
+const formatBytes = (bytes: number | null): string => {
+  if (!bytes) return "-";
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  if (bytes < 1024 * 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+  return `${(bytes / (1024 * 1024 * 1024)).toFixed(1)} GB`;
+};
 
 const statusColors: Record<string, string> = {
   pending: "bg-blue-100 text-blue-800 border-blue-300",
@@ -58,76 +74,6 @@ const statusLabels: Record<string, string> = {
   failed: "Failed",
 };
 
-const formatBytes = (bytes: number | null): string => {
-  if (!bytes) return "-";
-  if (bytes < 1024) return `${bytes} B`;
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
-  if (bytes < 1024 * 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
-  return `${(bytes / (1024 * 1024 * 1024)).toFixed(1)} GB`;
-};
-
-const buildFileTree = (files: AnalysisFile[]): FileTreeNode[] => {
-  const root: FileTreeNode[] = [];
-  for (const file of files) {
-    const parts = file.relative_path.split("/");
-    let current = root;
-    for (let i = 0; i < parts.length; i++) {
-      const part = parts[i];
-      const isLast = i === parts.length - 1;
-      const path = parts.slice(0, i + 1).join("/");
-      let node = current.find((n) => n.name === part);
-      if (!node) {
-        node = { name: part, path, isFolder: !isLast, children: [], file: isLast ? file : undefined };
-        current.push(node);
-      }
-      current = node.children;
-    }
-  }
-  return root;
-};
-
-const FileTreeItem = ({ node, depth = 0 }: { node: FileTreeNode; depth?: number }) => {
-  const [expanded, setExpanded] = useState(true);
-  return (
-    <div>
-      <div
-        className="flex items-center gap-2 py-1 px-2 hover:bg-muted/50 rounded cursor-pointer"
-        style={{ paddingLeft: `${depth * 16 + 8}px` }}
-        onClick={() => node.isFolder && setExpanded(!expanded)}
-      >
-        {node.isFolder ? (
-          <>
-            {expanded ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
-            <Folder className="w-4 h-4 text-blue-500" />
-          </>
-        ) : (
-          <>
-            <span className="w-4" />
-            <FileText className="w-4 h-4 text-muted-foreground" />
-          </>
-        )}
-        <span className="text-sm truncate flex-1">{node.name}</span>
-        {node.file && (
-          <Badge
-            variant="outline"
-            className={`text-xs ${
-              node.file.copy_status === "copied"
-                ? "text-green-600 border-green-300"
-                : node.file.copy_status === "failed"
-                ? "text-red-600 border-red-300"
-                : "text-yellow-600 border-yellow-300"
-            }`}
-          >
-            {node.file.copy_status}
-          </Badge>
-        )}
-        {node.file?.size_bytes && <span className="text-xs text-muted-foreground">{formatBytes(node.file.size_bytes)}</span>}
-      </div>
-      {node.isFolder && expanded && node.children.map((child, idx) => <FileTreeItem key={child.path || idx} node={child} depth={depth + 1} />)}
-    </div>
-  );
-};
-
 export default function AnalysisRequestDetail() {
   const { requestId } = useParams<{ requestId: string }>();
   const { user } = useAuth();
@@ -135,6 +81,8 @@ export default function AnalysisRequestDetail() {
   const { toast } = useToast();
   useHeapIdentify();
   const [downloadingZip, setDownloadingZip] = useState(false);
+  const [selectedFile, setSelectedFile] = useState<AnalysisFile | null>(null);
+  const [downloadingFile, setDownloadingFile] = useState(false);
 
   const isInternal = user?.email?.toLowerCase().endsWith("@riskclock.com") ?? false;
 
@@ -148,7 +96,6 @@ export default function AnalysisRequestDetail() {
         .single();
       if (error) throw error;
 
-      // Fetch user email
       try {
         const { data: emailsResult } = await supabase.functions.invoke(`get-user-emails?userIds=${data.user_id}`, { method: "GET" });
         if (emailsResult?.emails) {
@@ -205,7 +152,39 @@ export default function AnalysisRequestDetail() {
     }
   };
 
-  const fileTree = files ? buildFileTree(files) : [];
+  const handleDownloadFile = async (file: AnalysisFile) => {
+    if (!file.storage_path) return;
+    setDownloadingFile(true);
+    try {
+      const { data, error } = await supabase.storage
+        .from("drive-analysis-files")
+        .download(file.storage_path);
+      if (error) throw error;
+      const url = URL.createObjectURL(data);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = file.name;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    } catch (error) {
+      toast({ title: "Download Failed", description: error instanceof Error ? error.message : "Failed to download file", variant: "destructive" });
+    } finally {
+      setDownloadingFile(false);
+    }
+  };
+
+  const getFilePreviewUrl = (file: AnalysisFile): string | null => {
+    if (!file.storage_path || !file.mime_type?.startsWith("image/")) return null;
+    const { data } = supabase.storage
+      .from("drive-analysis-files")
+      .getPublicUrl(file.storage_path);
+    return data?.publicUrl || null;
+  };
+
+  const totalSize = files?.reduce((sum, f) => sum + (f.size_bytes || 0), 0) || 0;
+  const sourceLabel = ((request?.source_type || "google_drive") as string).replace("_", " ");
 
   if (!isInternal) {
     return (
@@ -249,48 +228,60 @@ export default function AnalysisRequestDetail() {
               </Badge>
             </div>
 
-            {/* Stats */}
-            <div className="grid grid-cols-3 gap-4">
-              <div className="bg-card border rounded-lg p-4">
-                <p className="text-sm text-muted-foreground">Files</p>
-                <p className="text-2xl font-bold">{request.file_count || 0}</p>
-              </div>
-              <div className="bg-card border rounded-lg p-4">
-                <p className="text-sm text-muted-foreground">Total Size</p>
-                <p className="text-2xl font-bold">{formatBytes(request.total_size_bytes)}</p>
-              </div>
-              <div className="bg-card border rounded-lg p-4">
-                <p className="text-sm text-muted-foreground">Source</p>
-                <p className="text-2xl font-bold capitalize">{(request.source_type || "google_drive").replace("_", " ")}</p>
-              </div>
-            </div>
-
-            {/* Download */}
-            <div className="flex justify-end">
-              <Button onClick={handleDownloadZip} disabled={downloadingZip}>
-                {downloadingZip ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Download className="w-4 h-4 mr-2" />}
-                Download ZIP
-              </Button>
-            </div>
-
-            {/* File tree */}
+            {/* File table with consolidated header */}
             <div className="bg-card border rounded-lg">
-              <div className="px-4 py-3 border-b">
-                <h2 className="font-semibold">Files</h2>
+              <div className="px-4 py-3 border-b flex items-center justify-between">
+                <h2 className="font-semibold text-sm">
+                  Files
+                  <span className="font-normal text-muted-foreground ml-2">
+                    (Count: {files?.length || 0}, {formatBytes(totalSize)}, <span className="capitalize">{sourceLabel}</span>)
+                  </span>
+                </h2>
+                <Button size="sm" onClick={handleDownloadZip} disabled={downloadingZip}>
+                  {downloadingZip ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Download className="w-4 h-4 mr-2" />}
+                  Download ZIP
+                </Button>
               </div>
-              <ScrollArea className="max-h-[500px]">
-                <div className="p-2">
-                  {filesLoading ? (
-                    <div className="flex items-center justify-center py-8">
-                      <Loader2 className="w-6 h-6 animate-spin" />
-                    </div>
-                  ) : !files?.length ? (
-                    <div className="text-center py-8 text-muted-foreground">No files found.</div>
-                  ) : (
-                    fileTree.map((node, idx) => <FileTreeItem key={node.path || idx} node={node} />)
-                  )}
+
+              {filesLoading ? (
+                <div className="flex items-center justify-center py-8">
+                  <Loader2 className="w-6 h-6 animate-spin" />
                 </div>
-              </ScrollArea>
+              ) : !files?.length ? (
+                <div className="text-center py-8 text-muted-foreground">No files found.</div>
+              ) : (
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>File Name</TableHead>
+                      <TableHead className="w-[120px]">Status</TableHead>
+                      <TableHead className="w-[100px] text-right">Size</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {files.map((file) => (
+                      <TableRow key={file.id}>
+                        <TableCell>
+                          <button
+                            className="text-primary hover:underline text-left text-sm cursor-pointer"
+                            onClick={() => setSelectedFile(file)}
+                          >
+                            {file.relative_path}
+                          </button>
+                        </TableCell>
+                        <TableCell>
+                          <Badge variant="outline" className={`text-xs ${fileStatusColors[file.copy_status] || ""}`}>
+                            {file.copy_status}
+                          </Badge>
+                        </TableCell>
+                        <TableCell className="text-right text-sm text-muted-foreground">
+                          {formatBytes(file.size_bytes)}
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              )}
             </div>
 
             {request.error_message && (
@@ -307,6 +298,53 @@ export default function AnalysisRequestDetail() {
           </div>
         )}
       </main>
+
+      {/* File Preview Modal */}
+      <Dialog open={!!selectedFile} onOpenChange={(open) => !open && setSelectedFile(null)}>
+        <DialogContent className="sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="truncate">{selectedFile?.name}</DialogTitle>
+          </DialogHeader>
+          {selectedFile && (
+            <div className="space-y-4">
+              {selectedFile.mime_type?.startsWith("image/") && selectedFile.storage_path ? (
+                <div className="rounded-lg overflow-hidden border bg-muted/30">
+                  <img
+                    src={getFilePreviewUrl(selectedFile) || ""}
+                    alt={selectedFile.name}
+                    className="w-full h-auto max-h-[400px] object-contain"
+                  />
+                </div>
+              ) : (
+                <div className="rounded-lg border bg-muted/30 p-4 space-y-2">
+                  <div className="flex justify-between text-sm">
+                    <span className="text-muted-foreground">Type</span>
+                    <span>{selectedFile.mime_type}</span>
+                  </div>
+                  <div className="flex justify-between text-sm">
+                    <span className="text-muted-foreground">Size</span>
+                    <span>{formatBytes(selectedFile.size_bytes)}</span>
+                  </div>
+                  <div className="flex justify-between text-sm">
+                    <span className="text-muted-foreground">Status</span>
+                    <Badge variant="outline" className={`text-xs ${fileStatusColors[selectedFile.copy_status] || ""}`}>
+                      {selectedFile.copy_status}
+                    </Badge>
+                  </div>
+                </div>
+              )}
+              <Button
+                className="w-full"
+                onClick={() => handleDownloadFile(selectedFile)}
+                disabled={downloadingFile || !selectedFile.storage_path}
+              >
+                {downloadingFile ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Download className="w-4 h-4 mr-2" />}
+                Download
+              </Button>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
