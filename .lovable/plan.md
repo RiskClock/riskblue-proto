@@ -1,48 +1,84 @@
 
 
-# Fix: Procore File Import Using Correct API Endpoint
+# Fix: Procore File Download URL Extraction
 
 ## Problem
 
-The `copy-procore-files` edge function uses incorrect Procore API endpoints to list files in a folder:
-
-1. `GET /folders?parent_id={folderId}` -- lists child **folders**, not files in the folder
-2. `GET /files?folder_id={folderId}` -- not a valid Procore REST v1.0 endpoint (hangs or returns error)
-
-The working `list-procore-files` function correctly uses `GET /folders/{folderId}?project_id={projectId}`, which returns both subfolders and files in the response object.
-
-The function hangs during these bad API calls, hits the edge function timeout (~60s), and never reaches the "Found X files" log line. Status stays stuck at "copying" with 0 files.
+The `downloadProcoreFile` function checks only `data.url` at the top level of the Procore API response. Procore's `GET /files/{id}` returns the download URL inside the `file_versions` array, so every file fails with "No download URL in file response".
 
 ## Fix
 
 ### File: `supabase/functions/copy-procore-files/index.ts`
 
-Rewrite `listProcoreFilesRecursively` to use the correct Procore API:
+Replace `downloadProcoreFile` (lines 133-164) with an updated version that:
 
-- When `folderId` is provided: call `GET /folders/{folderId}?project_id={projectId}` (same as the working `list-subfolder` action)
-- When no `folderId` (root): call `GET /folders?project_id={projectId}` (returns root-level folders)
-- The response from `GET /folders/{folderId}` includes both a `folders` array and a `files` array -- extract files directly from this response
-- Remove the separate `GET /files?folder_id=...` call entirely (this endpoint does not exist in Procore's API)
-- Add error logging after each API call so failures are visible in logs
-- Add a timeout to each fetch call (e.g., 10 seconds) to prevent the function from hanging indefinitely on a bad request
+1. Uses `fetchWithTimeout` for both the metadata call and the download fetch
+2. Includes HTTP status codes in all error messages
+3. Extracts the download URL from `file_versions` sorted by highest `number`
+4. Uses explicit branches for `source` logging:
+   - `latest.url` -> `"file_versions.url"`
+   - `latest.prostore_file?.url` -> `"file_versions.prostore_file.url"`
+   - `data.url` fallback -> `"data.url"`
+5. Passes `{ redirect: "follow" }` when fetching the download URL
 
-### Also: clean up stuck requests
+### Replacement code
 
-Run a database update to reset the 3 stuck "copying" requests (with 0 files) back to "failed" so they don't clutter the queue.
+```typescript
+async function downloadProcoreFile(
+  fileId: number, companyId: string, projectId: string, accessToken: string
+): Promise<Blob> {
+  const url = `${PROCORE_API_BASE}/files/${fileId}?project_id=${projectId}`;
+  const resp = await fetchWithTimeout(url, {
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      "Procore-Company-Id": companyId,
+    },
+  });
 
-### Summary of API pattern
+  if (!resp.ok) {
+    throw new Error(`Failed to fetch file ${fileId} metadata: ${resp.status} ${resp.statusText}`);
+  }
 
-```text
-Current (broken):
-  GET /folders?parent_id={folderId}    --> returns child folders only, no files
-  GET /files?folder_id={folderId}      --> invalid endpoint, hangs
+  const contentType = resp.headers.get("content-type") || "";
+  if (contentType.includes("application/json")) {
+    const data = await resp.json();
+    let downloadUrl: string | null = null;
+    let source = "";
 
-Fixed:
-  GET /folders/{folderId}?project_id=  --> returns { folders: [...], files: [...] }
-  Recursively process subfolders the same way
+    if (Array.isArray(data.file_versions) && data.file_versions.length > 0) {
+      const sorted = [...data.file_versions].sort((a: any, b: any) => (b.number ?? 0) - (a.number ?? 0));
+      const latest = sorted[0];
+      if (latest.url) {
+        downloadUrl = latest.url;
+        source = "file_versions.url";
+      } else if (latest.prostore_file?.url) {
+        downloadUrl = latest.prostore_file.url;
+        source = "file_versions.prostore_file.url";
+      }
+    }
+
+    if (!downloadUrl && data.url) {
+      downloadUrl = data.url;
+      source = "data.url";
+    }
+
+    if (!downloadUrl) {
+      console.error(`File ${fileId}: no download URL. Keys: ${Object.keys(data).join(", ")}`);
+      throw new Error("No download URL in file response");
+    }
+
+    console.log(`File ${fileId}: downloading via ${source}`);
+    const downloadResp = await fetchWithTimeout(downloadUrl, { redirect: "follow" });
+    if (!downloadResp.ok) {
+      throw new Error(`Download failed for file ${fileId}: ${downloadResp.status} ${downloadResp.statusText}`);
+    }
+    return await downloadResp.blob();
+  }
+
+  return await resp.blob();
+}
 ```
 
 ### Files to modify
-1. `supabase/functions/copy-procore-files/index.ts` -- Fix the file listing logic
-2. Database cleanup -- Reset stuck "copying" requests to "failed"
+1. `supabase/functions/copy-procore-files/index.ts` -- Replace lines 133-164 with the updated function, then deploy
 
