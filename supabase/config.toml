@@ -77,3 +77,6 @@ verify_jwt = false
 
 [functions.analyze-drawings]
 verify_jwt = false
+
+[functions.summarize-analysis]
+verify_jwt = false

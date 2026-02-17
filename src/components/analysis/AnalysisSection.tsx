@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
@@ -28,6 +28,8 @@ import {
   ExternalLink,
   ChevronDown,
   ChevronRight,
+  Sparkles,
+  PlusCircle,
 } from "lucide-react";
 
 interface AnalysisFile {
@@ -62,30 +64,70 @@ interface ParsedInstance {
   size: string;
 }
 
+interface SummarizedInstance {
+  id: string;
+  name: string;
+  floor: string;
+  area_sqft: number;
+  notes: string;
+}
+
 interface RiskData {
   name: string;
   probability: number;
   impact: number;
 }
 
+interface SourceTableEntry {
+  id: string;
+  name: string;
+  id_prefix: string | null;
+}
+
 interface AnalysisSectionProps {
   requestId: string;
   files: AnalysisFile[];
+  projectId: string;
 }
+
+const HEADER_KEYWORDS = ["room code", "drawing label", "floor", "level", "notes", "code", "label", "name"];
 
 function parseResultText(resultText: string): ParsedInstance[] {
   const lines = resultText.trim().split("\n").filter((l) => l.trim());
   if (lines.length < 2) return [];
 
-  // Detect delimiter
-  const delimiter = lines[0].includes("|") ? "|" : "\t";
+  // Find the header row: first line with 3+ pipe chars AND a known header keyword
+  let headerIdx = -1;
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+    const pipeCount = (line.match(/\|/g) || []).length;
+    if (pipeCount < 3) continue;
+    const lower = line.toLowerCase();
+    if (HEADER_KEYWORDS.some((kw) => lower.includes(kw))) {
+      headerIdx = i;
+      break;
+    }
+  }
+
+  // Fallback: find first line with 3+ pipes if no keyword match
+  if (headerIdx === -1) {
+    for (let i = 0; i < lines.length; i++) {
+      if ((lines[i].match(/\|/g) || []).length >= 3) {
+        headerIdx = i;
+        break;
+      }
+    }
+  }
+
+  if (headerIdx === -1) return [];
+
+  const delimiter = "|";
   const parseRow = (line: string) =>
     line.split(delimiter).map((c) => c.trim()).filter((c) => c && c !== "---" && !c.match(/^-+$/));
 
-  const headerCells = parseRow(lines[0]);
+  const headerCells = parseRow(lines[headerIdx]);
   if (headerCells.length < 2) return [];
 
-  // Find column indices by matching known header names
   const findCol = (keywords: string[]) =>
     headerCells.findIndex((h) =>
       keywords.some((k) => h.toLowerCase().includes(k.toLowerCase()))
@@ -96,23 +138,27 @@ function parseResultText(resultText: string): ParsedInstance[] {
   const levelCol = findCol(["Floor", "Level"]);
   const notesCol = findCol(["Notes", "Size", "Area"]);
 
-  // Skip separator rows (e.g., |---|---|)
-  const dataLines = lines.slice(1).filter((l) => !l.match(/^\|?\s*-+/));
+  // Data lines: everything after header, skipping separator rows and label rows
+  const dataLines = lines.slice(headerIdx + 1).filter((l) => {
+    if (l.match(/^\|?\s*-+/)) return false;
+    if (l.trim().toLowerCase().startsWith("rows:")) return false;
+    if (l.trim().toLowerCase().startsWith("headers:")) return false;
+    return true;
+  });
 
   const instances: ParsedInstance[] = [];
   for (const line of dataLines) {
     const cells = parseRow(line);
     if (cells.length < 2) continue;
-    // Skip if it looks like "none found"
     if (cells.some((c) => c.toLowerCase().includes("none found"))) continue;
+    if (cells.some((c) => c.toLowerCase().includes("no instances"))) continue;
 
-    const instance: ParsedInstance = {
+    instances.push({
       id: idCol >= 0 && cells[idCol] ? cells[idCol] : cells[0] || "-",
       name: nameCol >= 0 && cells[nameCol] ? cells[nameCol] : cells[1] || "-",
       level: levelCol >= 0 && cells[levelCol] ? cells[levelCol] : "-",
       size: notesCol >= 0 && cells[notesCol] ? cells[notesCol] : "-",
-    };
-    instances.push(instance);
+    });
   }
 
   return instances;
@@ -130,13 +176,17 @@ function getRiskLabel(points: number): string {
   return "Very High";
 }
 
-export function AnalysisSection({ requestId, files }: AnalysisSectionProps) {
+export function AnalysisSection({ requestId, files, projectId }: AnalysisSectionProps) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [analyzingClass, setAnalyzingClass] = useState<string | null>(null);
   const [progress, setProgress] = useState({ current: 0, total: 0 });
   const [fileStatuses, setFileStatuses] = useState<Record<string, string>>({});
   const [expandedRaw, setExpandedRaw] = useState<Record<string, boolean>>({});
+  const [summarizedInstances, setSummarizedInstances] = useState<Record<string, SummarizedInstance[]>>({});
+  const [summarizing, setSummarizing] = useState<Record<string, boolean>>({});
+  const [addingToProject, setAddingToProject] = useState<Record<string, boolean>>({});
+  const [addedToProject, setAddedToProject] = useState<Record<string, boolean>>({});
 
   // Fetch AWP prompts with linked drive docs
   const { data: prompts, isLoading: promptsLoading } = useQuery({
@@ -175,16 +225,46 @@ export function AnalysisSection({ requestId, files }: AnalysisSectionProps) {
         supabase.from("water_systems").select("name, probability, impact"),
         supabase.from("processes").select("name, probability, impact"),
       ]);
-      const all: RiskData[] = [
-        ...(ca.data || []),
-        ...(ws.data || []),
-        ...(pr.data || []),
-      ];
-      return all;
+      return [...(ca.data || []), ...(ws.data || []), ...(pr.data || [])] as RiskData[];
+    },
+  });
+
+  // Fetch source table entries for AWP class metadata (id, id_prefix)
+  const { data: sourceEntries } = useQuery({
+    queryKey: ["source-entries-all"],
+    queryFn: async () => {
+      const [ca, ws, pr] = await Promise.all([
+        supabase.from("critical_assets").select("id, name, id_prefix"),
+        supabase.from("water_systems").select("id, name, id_prefix"),
+        supabase.from("processes").select("id, name, id_prefix"),
+      ]);
+      return [...(ca.data || []), ...(ws.data || []), ...(pr.data || [])] as SourceTableEntry[];
     },
   });
 
   const copiedFiles = files.filter((f) => f.copy_status === "copied" && f.storage_path);
+
+  const handleSummarize = useCallback(async (awpClassName: string) => {
+    setSummarizing((prev) => ({ ...prev, [awpClassName]: true }));
+    try {
+      const { data, error } = await supabase.functions.invoke("summarize-analysis", {
+        body: { analysisRequestId: requestId, awpClassName },
+      });
+      if (error) throw error;
+      if (data?.instances) {
+        setSummarizedInstances((prev) => ({ ...prev, [awpClassName]: data.instances }));
+      }
+    } catch (e) {
+      console.error("Summarize failed:", e);
+      toast({
+        title: "Summarization Failed",
+        description: e instanceof Error ? e.message : "Unknown error",
+        variant: "destructive",
+      });
+    } finally {
+      setSummarizing((prev) => ({ ...prev, [awpClassName]: false }));
+    }
+  }, [requestId, toast]);
 
   const handleAnalyze = async (prompt: AWPPrompt) => {
     if (!prompt.drive_file_id || copiedFiles.length === 0) return;
@@ -260,7 +340,10 @@ export function AnalysisSection({ requestId, files }: AnalysisSectionProps) {
       }
 
       toast({ title: "Analysis Complete", description: `Finished analyzing ${copiedFiles.length} files.` });
-      queryClient.invalidateQueries({ queryKey: ["analysis-results", requestId] });
+      await queryClient.invalidateQueries({ queryKey: ["analysis-results", requestId] });
+
+      // Auto-summarize after analysis completes
+      handleSummarize(prompt.awp_class_name);
     } catch (error) {
       toast({
         title: "Analysis Failed",
@@ -269,6 +352,62 @@ export function AnalysisSection({ requestId, files }: AnalysisSectionProps) {
       });
     } finally {
       setAnalyzingClass(null);
+    }
+  };
+
+  const handleAddToProject = async (awpClassName: string) => {
+    const instances = summarizedInstances[awpClassName];
+    if (!instances || instances.length === 0 || !projectId) return;
+
+    setAddingToProject((prev) => ({ ...prev, [awpClassName]: true }));
+    try {
+      // Find source table entry for this AWP class
+      const sourceEntry = sourceEntries?.find(
+        (e) => e.name.toLowerCase() === awpClassName.toLowerCase()
+      );
+
+      const idPrefix = sourceEntry?.id_prefix || "AWP";
+      const awpClassId = sourceEntry?.id || null;
+
+      // Get existing items count for this class to avoid ID conflicts
+      const { data: existingItems } = await supabase
+        .from("project_analysis_items")
+        .select("item_id")
+        .eq("project_id", projectId)
+        .eq("category", awpClassName);
+
+      const existingCount = existingItems?.length || 0;
+
+      const rows = instances.map((inst, idx) => {
+        const seqNum = existingCount + idx + 1;
+        const itemId = `${idPrefix}${String(seqNum).padStart(3, "0")}`;
+        return {
+          project_id: projectId,
+          item_id: itemId,
+          name: inst.name,
+          category: awpClassName,
+          floor: inst.floor || null,
+          area_sqft: inst.area_sqft || null,
+          awp_class_id: awpClassId,
+        };
+      });
+
+      const { error } = await supabase.from("project_analysis_items").insert(rows);
+      if (error) throw error;
+
+      setAddedToProject((prev) => ({ ...prev, [awpClassName]: true }));
+      toast({
+        title: "Added to Project",
+        description: `${rows.length} ${awpClassName} instances added to the project.`,
+      });
+    } catch (e) {
+      toast({
+        title: "Failed to Add",
+        description: e instanceof Error ? e.message : "Unknown error",
+        variant: "destructive",
+      });
+    } finally {
+      setAddingToProject((prev) => ({ ...prev, [awpClassName]: false }));
     }
   };
 
@@ -299,6 +438,10 @@ export function AnalysisSection({ requestId, files }: AnalysisSectionProps) {
           const hasResults = classResults.length > 0;
           const risk = getRiskForClass(prompt.awp_class_name);
           const riskPoints = risk ? risk.probability * risk.impact : null;
+          const isSummarizing = summarizing[prompt.awp_class_name];
+          const summary = summarizedInstances[prompt.awp_class_name];
+          const isAdding = addingToProject[prompt.awp_class_name];
+          const isAdded = addedToProject[prompt.awp_class_name];
 
           // Aggregate all parsed instances across all result files for this class
           const allInstances: (ParsedInstance & { fileName: string })[] = [];
@@ -363,18 +506,35 @@ export function AnalysisSection({ requestId, files }: AnalysisSectionProps) {
                     )}
                   </div>
                 </div>
-                <Button
-                  size="sm"
-                  onClick={() => handleAnalyze(prompt)}
-                  disabled={isAnalyzing || copiedFiles.length === 0}
-                >
-                  {isAnalyzing ? (
-                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                  ) : (
-                    <Play className="w-4 h-4 mr-2" />
+                <div className="flex items-center gap-2">
+                  {hasResults && !isAnalyzing && !summary && (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => handleSummarize(prompt.awp_class_name)}
+                      disabled={isSummarizing}
+                    >
+                      {isSummarizing ? (
+                        <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                      ) : (
+                        <Sparkles className="w-4 h-4 mr-2" />
+                      )}
+                      {isSummarizing ? "Summarizing..." : "Summarize"}
+                    </Button>
                   )}
-                  {isAnalyzing ? "Analyzing..." : hasResults ? "Re-analyze" : "Analyze"}
-                </Button>
+                  <Button
+                    size="sm"
+                    onClick={() => handleAnalyze(prompt)}
+                    disabled={isAnalyzing || copiedFiles.length === 0}
+                  >
+                    {isAnalyzing ? (
+                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                    ) : (
+                      <Play className="w-4 h-4 mr-2" />
+                    )}
+                    {isAnalyzing ? "Analyzing..." : hasResults ? "Re-analyze" : "Analyze"}
+                  </Button>
+                </div>
               </div>
 
               {/* Progress bar during analysis */}
@@ -414,6 +574,63 @@ export function AnalysisSection({ requestId, files }: AnalysisSectionProps) {
                       );
                     })}
                   </div>
+                </div>
+              )}
+
+              {/* AI Summarized Instances */}
+              {summary && summary.length > 0 && (
+                <div className="border-b">
+                  <div className="px-4 py-2 flex items-center justify-between bg-muted/30">
+                    <div className="flex items-center gap-2">
+                      <Sparkles className="w-4 h-4 text-primary" />
+                      <span className="text-sm font-medium">AI Summary — {summary.length} unique instances</span>
+                    </div>
+                    <Button
+                      size="sm"
+                      variant={isAdded ? "outline" : "default"}
+                      onClick={() => handleAddToProject(prompt.awp_class_name)}
+                      disabled={isAdding || isAdded}
+                    >
+                      {isAdding ? (
+                        <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                      ) : (
+                        <PlusCircle className="w-4 h-4 mr-2" />
+                      )}
+                      {isAdded ? "Added" : "Add to Project"}
+                    </Button>
+                  </div>
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>ID</TableHead>
+                        <TableHead>Name</TableHead>
+                        <TableHead>Floor</TableHead>
+                        <TableHead className="text-right">Area (sqft)</TableHead>
+                        <TableHead>Notes</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {summary.map((inst, idx) => (
+                        <TableRow key={idx}>
+                          <TableCell className="font-mono text-sm">{inst.id}</TableCell>
+                          <TableCell className="text-sm">{inst.name}</TableCell>
+                          <TableCell className="text-sm">{inst.floor}</TableCell>
+                          <TableCell className="text-sm text-right text-muted-foreground">
+                            {inst.area_sqft > 0 ? inst.area_sqft : "-"}
+                          </TableCell>
+                          <TableCell className="text-sm text-muted-foreground max-w-[200px] truncate">
+                            {inst.notes || "-"}
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+              )}
+
+              {summary && summary.length === 0 && !isSummarizing && (
+                <div className="px-4 py-3 text-sm text-muted-foreground bg-muted/30 border-b">
+                  <Sparkles className="w-4 h-4 inline mr-1" /> No unique instances found after summarization.
                 </div>
               )}
 
