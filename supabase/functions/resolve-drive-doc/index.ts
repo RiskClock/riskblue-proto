@@ -41,7 +41,7 @@ serve(async (req) => {
       });
     }
 
-    const { fileUrl } = await req.json();
+    const { fileUrl, exportContent } = await req.json();
     if (!fileUrl) {
       return new Response(JSON.stringify({ error: "fileUrl is required" }), {
         status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -113,11 +113,37 @@ serve(async (req) => {
 
     const fileData = await driveResponse.json();
 
+    let content: string | undefined;
+    if (exportContent) {
+      try {
+        // Export Google Doc as plain text
+        const exportUrl = `https://www.googleapis.com/drive/v3/files/${fileId}/export?mimeType=text/plain`;
+        const exportResponse = await fetch(exportUrl, {
+          headers: { Authorization: `Bearer ${accessToken}` },
+        });
+        if (exportResponse.ok) {
+          content = await exportResponse.text();
+        } else {
+          // If export fails (not a Google Doc), try downloading raw content
+          const downloadUrl = `https://www.googleapis.com/drive/v3/files/${fileId}?alt=media`;
+          const downloadResponse = await fetch(downloadUrl, {
+            headers: { Authorization: `Bearer ${accessToken}` },
+          });
+          if (downloadResponse.ok) {
+            content = await downloadResponse.text();
+          }
+        }
+      } catch (e) {
+        console.error("Failed to export content:", e);
+      }
+    }
+
     return new Response(JSON.stringify({
       fileId: fileData.id,
       fileName: fileData.name,
       modifiedTime: fileData.modifiedTime,
       mimeType: fileData.mimeType,
+      ...(content !== undefined && { content }),
     }), {
       status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" },
     });

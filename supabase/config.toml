@@ -74,3 +74,6 @@ verify_jwt = false
 
 [functions.drive-webhook]
 verify_jwt = false
+
+[functions.analyze-drawings]
+verify_jwt = false
