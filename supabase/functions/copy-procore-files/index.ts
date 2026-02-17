@@ -37,7 +37,20 @@ interface ProcoreFile {
   size?: number;
 }
 
+// Fetch with timeout to prevent hanging on bad endpoints
+async function fetchWithTimeout(url: string, options: RequestInit, timeoutMs = 15000): Promise<Response> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const resp = await fetch(url, { ...options, signal: controller.signal });
+    return resp;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 // Recursively list all files in Procore Documents for a project
+// Uses GET /folders/{folderId}?project_id= which returns { folders: [...], files: [...] }
 async function listProcoreFilesRecursively(
   companyId: string,
   projectId: string,
@@ -47,24 +60,42 @@ async function listProcoreFilesRecursively(
 ): Promise<{ file: ProcoreFile; relativePath: string }[]> {
   const allFiles: { file: ProcoreFile; relativePath: string }[] = [];
 
-  // List folders at this level
-  const folderUrl = folderId
-    ? `${PROCORE_API_BASE}/folders?project_id=${projectId}&parent_id=${folderId}`
+  const headers = {
+    Authorization: `Bearer ${accessToken}`,
+    "Procore-Company-Id": companyId,
+  };
+
+  // Use the correct Procore endpoint:
+  // - With folderId: GET /folders/{folderId}?project_id= returns { folders, files }
+  // - Without folderId (root): GET /folders?project_id= returns array of root folders
+  const url = folderId
+    ? `${PROCORE_API_BASE}/folders/${folderId}?project_id=${projectId}`
     : `${PROCORE_API_BASE}/folders?project_id=${projectId}`;
 
-  const folderResp = await fetch(folderUrl, {
-    headers: {
-      Authorization: `Bearer ${accessToken}`,
-      "Procore-Company-Id": companyId,
-    },
-  });
+  console.log(`Fetching Procore: ${url}`);
 
-  if (folderResp.ok) {
-    const folderData = await folderResp.json();
-    const folders = Array.isArray(folderData) ? folderData : (folderData.folders || []);
-    const topFiles = Array.isArray(folderData) ? [] : (folderData.files || []);
+  let resp: Response;
+  try {
+    resp = await fetchWithTimeout(url, { headers });
+  } catch (err) {
+    console.error(`Procore API fetch failed for ${url}:`, err);
+    return allFiles;
+  }
 
-    for (const file of topFiles) {
+  if (!resp.ok) {
+    const errText = await resp.text().catch(() => "");
+    console.error(`Procore API error ${resp.status} for ${url}: ${errText}`);
+    return allFiles;
+  }
+
+  const data = await resp.json();
+
+  if (folderId) {
+    // Response is an object: { folders: [...], files: [...], name, ... }
+    const files = Array.isArray(data.files) ? data.files : [];
+    const folders = Array.isArray(data.folders) ? data.folders : [];
+
+    for (const file of files) {
       const filePath = relativePath ? `${relativePath}/${file.name}` : file.name;
       allFiles.push({
         file: {
@@ -79,63 +110,21 @@ async function listProcoreFilesRecursively(
 
     for (const folder of folders) {
       const folderPath = relativePath ? `${relativePath}/${folder.name}` : folder.name;
-
-      if (folder.files && Array.isArray(folder.files)) {
-        for (const file of folder.files) {
-          const filePath = `${folderPath}/${file.name}`;
-          allFiles.push({
-            file: {
-              id: file.id,
-              name: file.name,
-              content_type: file.content_type || "application/octet-stream",
-              size: file.size || 0,
-            },
-            relativePath: filePath,
-          });
-        }
-      }
-
       const subFiles = await listProcoreFilesRecursively(
         companyId, projectId, accessToken, folder.id, folderPath
       );
       allFiles.push(...subFiles);
     }
-  }
-
-  // List files at this folder level via the files endpoint
-  const filesUrl = folderId
-    ? `${PROCORE_API_BASE}/files?project_id=${projectId}&folder_id=${folderId}`
-    : `${PROCORE_API_BASE}/files?project_id=${projectId}`;
-
-  try {
-    const filesResp = await fetch(filesUrl, {
-      headers: {
-        Authorization: `Bearer ${accessToken}`,
-        "Procore-Company-Id": companyId,
-      },
-    });
-
-    if (filesResp.ok) {
-      const files = await filesResp.json();
-      if (Array.isArray(files)) {
-        for (const file of files) {
-          const filePath = relativePath ? `${relativePath}/${file.name}` : file.name;
-          if (!allFiles.some(f => f.file.id === file.id)) {
-            allFiles.push({
-              file: {
-                id: file.id,
-                name: file.name,
-                content_type: file.content_type || "application/octet-stream",
-                size: file.size || 0,
-              },
-              relativePath: filePath,
-            });
-          }
-        }
-      }
+  } else {
+    // Root: response is an array of folders
+    const folders = Array.isArray(data) ? data : [];
+    for (const folder of folders) {
+      const folderPath = relativePath ? `${relativePath}/${folder.name}` : folder.name;
+      const subFiles = await listProcoreFilesRecursively(
+        companyId, projectId, accessToken, folder.id, folderPath
+      );
+      allFiles.push(...subFiles);
     }
-  } catch (err) {
-    console.warn("Files endpoint failed, continuing with folder data:", err);
   }
 
   return allFiles;
