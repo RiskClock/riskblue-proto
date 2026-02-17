@@ -68,15 +68,25 @@ export const ProcoreConnectionDialog = ({
   const [submitting, setSubmitting] = useState(false);
   const [step, setStep] = useState<"connect" | "select">("connect");
 
+  // Folder selection state
+  const [selectedFolderId, setSelectedFolderId] = useState<string>("");
+  const [selectedFolderName, setSelectedFolderName] = useState<string>("");
+
   // Load companies when connected
   useEffect(() => {
     if (isConnected && isOpen) {
       setStep("select");
       loadCompanies();
-    } else {
+    } else if (!isConnected) {
       setStep("connect");
     }
   }, [isConnected, isOpen]);
+
+  // Reset folder selection when project changes
+  useEffect(() => {
+    setSelectedFolderId("");
+    setSelectedFolderName("");
+  }, [selectedProjectId]);
 
   // Load projects when company selected
   useEffect(() => {
@@ -164,7 +174,6 @@ export const ProcoreConnectionDialog = ({
     setFolders([]);
     try {
       const data = await callProcoreApi("list-folders", { companyId, projectId: procoreProjectId });
-      // The API returns { folders: [...], files: [...] }
       setFolders(data.folders || []);
     } catch (err) {
       console.error("Error loading folders:", err);
@@ -191,12 +200,28 @@ export const ProcoreConnectionDialog = ({
     }
   };
 
+  const handleSelectFolder = (folderId: string, folderName: string) => {
+    if (selectedFolderId === folderId) {
+      // Deselect
+      setSelectedFolderId("");
+      setSelectedFolderName("");
+    } else {
+      setSelectedFolderId(folderId);
+      setSelectedFolderName(folderName);
+    }
+  };
+
   const handleSubmitAnalysis = async () => {
     if (!selectedProjectId || !selectedCompanyId || !user) return;
     setSubmitting(true);
     try {
       const selectedProject = projects.find(p => String(p.id) === selectedProjectId);
       
+      // Build drive_folder_id with optional folder scoping
+      const driveFolderId = selectedFolderId
+        ? `procore:${selectedCompanyId}:${selectedProjectId}:${selectedFolderId}`
+        : `procore:${selectedCompanyId}:${selectedProjectId}`;
+
       // Create analysis request
       const { data: analysisRequest, error: insertError } = await supabase
         .from("analysis_requests")
@@ -205,14 +230,14 @@ export const ProcoreConnectionDialog = ({
           user_id: user.id,
           source_type: "procore",
           status: "pending",
-          drive_folder_id: `procore:${selectedCompanyId}:${selectedProjectId}`,
+          drive_folder_id: driveFolderId,
         })
         .select()
         .single();
 
       if (insertError) throw new Error(insertError.message);
 
-      // Trigger background file copy
+      // Trigger file copy
       const { data: { session } } = await supabase.auth.getSession();
       if (session) {
         const copyUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/copy-procore-files`;
@@ -235,13 +260,19 @@ export const ProcoreConnectionDialog = ({
           procore_company_id: selectedCompanyId,
           procore_project_id: selectedProjectId,
           procore_project_name: selectedProject?.name,
+          procore_folder_id: selectedFolderId || null,
+          procore_folder_name: selectedFolderName || null,
           analysis_request_id: analysisRequest.id,
         },
       });
 
+      const folderLabel = selectedFolderName
+        ? `folder "${selectedFolderName}"`
+        : `project "${selectedProject?.name}"`;
+
       toast({
         title: "Analysis Queued",
-        description: `Procore project "${selectedProject?.name}" submitted for analysis. Files are being copied.`,
+        description: `Procore ${folderLabel} submitted for analysis. Files are being copied.`,
       });
 
       onAnalysisStarted?.();
@@ -265,8 +296,14 @@ export const ProcoreConnectionDialog = ({
     setFolders([]);
     setSelectedCompanyId("");
     setSelectedProjectId("");
+    setSelectedFolderId("");
+    setSelectedFolderName("");
     setStep("connect");
   };
+
+  const analyzeLabel = selectedFolderName
+    ? `Analyze "${selectedFolderName}"`
+    : "Analyze";
 
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
@@ -365,10 +402,13 @@ export const ProcoreConnectionDialog = ({
                 </div>
               )}
 
-              {/* Folder preview */}
+              {/* Folder browser with selection */}
               {selectedProjectId && (
                 <div className="space-y-2">
-                  <label className="text-sm font-medium">Document Folders</label>
+                  <label className="text-sm font-medium">
+                    Select a Folder
+                    <span className="text-muted-foreground font-normal ml-1">(optional — defaults to entire project)</span>
+                  </label>
                   {loadingFolders ? (
                     <div className="flex items-center gap-2 text-sm text-muted-foreground">
                       <Loader2 className="w-4 h-4 animate-spin" />
@@ -386,6 +426,24 @@ export const ProcoreConnectionDialog = ({
                           });
                           return data;
                         }}
+                        selectable
+                        selectedFolderId={selectedFolderId}
+                        onSelectFolder={(folderId) => {
+                          // Find folder name from the tree
+                          const findName = (folders: ProcoreFolder[]): string => {
+                            for (const f of folders) {
+                              if (String(f.id) === folderId) return f.name;
+                              if (f.folders) {
+                                const found = findName(f.folders);
+                                if (found) return found;
+                              }
+                            }
+                            return "";
+                          };
+                          const name = findName(folders);
+                          handleSelectFolder(folderId, name);
+                        }}
+                        hideFiles
                       />
                     </div>
                   ) : (
@@ -408,7 +466,7 @@ export const ProcoreConnectionDialog = ({
                 ) : (
                   <>
                     <Link2 className="w-4 h-4 mr-2" />
-                    Analyze
+                    {analyzeLabel}
                   </>
                 )}
               </Button>
