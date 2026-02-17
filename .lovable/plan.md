@@ -1,62 +1,65 @@
 
+# Fix: Duplicate Roof Items and Missing Default Controls
 
-# Fix: All 6 Instances Should Appear in Project
+## Problem 1: Roof Added Twice
+The existing item count query filters by `category` (e.g., "Asset") instead of by the specific AWP class name. This means it counts ALL assets, not just Electrical Rooms. More importantly, there's no deduplication check -- if items with the same class already exist in the project, the code blindly inserts duplicates.
 
-## Problem
+**Fix**: Filter existing items by `name = awpClassName` (e.g., "Electrical Room") instead of by `category`. This ensures correct sequential numbering AND allows us to detect if items already exist.
 
-All 6 instances were actually inserted into the database successfully (ERM001-ERM006). The issue is that the `name` field stores the raw AI label (e.g., "ELECTRICAL", "SUBSTATION ROOM", "IT ROOM") instead of the normalized AWP class name ("Electrical Room").
+## Problem 2: Default Controls Not Assigned
+The `handleAddToProject` function inserts rows with no `controls` field. The source tables (`critical_assets`, `water_systems`, `processes`) have a `default_control_ids` column that maps class names to default control UUIDs, but the code never resolves these to control names.
 
-The Project Wizard groups items by their `name` field matching known AWP class names. Since "ELECTRICAL" and "IT ROOM" don't match the pattern for "Electrical Room" in `mapToAssetName`, they are treated as unrecognized items and not displayed under any AWP class.
+**Fix**: Look up the default control IDs from the source table matching the AWP class name, resolve them to control names via the `mitigation_controls` table, and include them in the inserted rows.
 
-Only "ERM001: Electrical Room" shows because its `name` happens to exactly match.
+## Technical Changes
 
-## Fix
+### File: `src/components/analysis/AnalysisSection.tsx`
 
-**File: `src/components/analysis/AnalysisSection.tsx`** -- in the `handleAddToProject` function
+**1. Fix existing item count query (line 370-374)**
 
-Change how rows are built so that:
-- `name` is set to the **AWP class name** (e.g., "Electrical Room") instead of the raw AI label
-- The raw AI label (e.g., "ELECTRICAL", "SUBSTATION ROOM") goes into `area_name` to preserve the specific identifier
+Change from filtering by `category` to filtering by `name`:
+```typescript
+// Before
+.eq("category", category)
 
-```text
-Before:
-  name: inst.name         --> "ELECTRICAL", "SUBSTATION ROOM", "IT ROOM"
-  area_name: (not set)
-
-After:
-  name: awpClassName      --> "Electrical Room" (for all instances)
-  area_name: inst.name    --> "ELECTRICAL", "SUBSTATION ROOM", "IT ROOM"
+// After  
+.eq("name", awpClassName)
 ```
 
-This single change ensures all instances are recognized by the wizard's grouping logic while preserving the specific room labels.
+This ensures sequential IDs are scoped to the specific class (e.g., ERM001-ERM006 for Electrical Rooms only).
 
-Also need to clean up the 5 orphaned items already in the database. The user should delete the existing items and re-add from the analysis page.
+**2. Add default controls lookup and assignment (inside handleAddToProject)**
 
-## Technical Details
+Before building rows:
+- Query the appropriate source table (`critical_assets`, `water_systems`, or `processes`) to get `default_control_ids` for the matching class name
+- Query `mitigation_controls` to resolve those UUIDs to control names
+- Include the resolved control names in each inserted row's `controls` array
 
-### Change in `handleAddToProject` (around line 382-389)
-
-Update the row construction from:
 ```typescript
+// Resolve default controls
+let defaultControlNames: string[] = [];
+const sourceTable = category === "Asset" ? "critical_assets" 
+  : category === "Water System" ? "water_systems" : "processes";
+
+const { data: sourceEntry } = await supabase
+  .from(sourceTable)
+  .select("default_control_ids")
+  .eq("name", awpClassName)  // or fuzzy match
+  .maybeSingle();
+
+if (sourceEntry?.default_control_ids?.length) {
+  const { data: controls } = await supabase
+    .from("mitigation_controls")
+    .select("name")
+    .in("id", sourceEntry.default_control_ids);
+  defaultControlNames = controls?.map(c => c.name) || [];
+}
+
+// Then in row construction:
 return {
-  project_id: projectId,
-  item_id: itemId,
-  name: inst.name,
-  category: category,
-  ...
+  ...existingFields,
+  controls: defaultControlNames,
 };
 ```
-To:
-```typescript
-return {
-  project_id: projectId,
-  item_id: itemId,
-  name: awpClassName,           // Use AWP class name for grouping
-  area_name: inst.name,         // Preserve raw label as area name
-  category: category,
-  ...
-};
-```
 
-### No other files need changes
-The wizard already reads `area_name` and displays it alongside the item.
+### No other files or database changes needed.
