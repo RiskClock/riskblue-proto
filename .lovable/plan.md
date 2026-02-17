@@ -1,44 +1,83 @@
 
 
-# Fix: Expired Google Drive Token in Drawing Analysis
+# Show Procore Connection Status and Enable Folder-Level Analysis Submission
 
-## Problem
+## Overview
 
-When clicking "Analyze", the `resolve-drive-doc` edge function fetches the user's Google Drive access token but never checks if it's expired. It passes the stale token to the Google Drive API, which returns: "Request had invalid authentication credentials."
+Update the Procore integration so that:
+1. The UI shows a visual indicator when Procore is already connected (green checkmark/badge next to the Procore button)
+2. Clicking the Procore button when already connected skips the auth step and goes directly to the folder browser
+3. Users can select a specific folder (not just a project) and submit it as a new analysis queue item
+4. The `copy-procore-files` edge function runs synchronously instead of via `EdgeRuntime.waitUntil` (which silently fails), and includes token refresh logic
 
-The `google-drive-oauth?action=get-token` endpoint returns an `isExpired` flag but does NOT auto-refresh. The `resolve-drive-doc` function ignores this flag entirely.
+## Changes
 
-## Fix
+### 1. Show connection status in ProjectWizard UI
 
-**File:** `supabase/functions/resolve-drive-doc/index.ts` (lines 82-99)
+**File:** `src/pages/ProjectWizard.tsx`
 
-After getting the token from `get-token`, check `isExpired`. If true, call `google-drive-oauth?action=refresh` first, then re-fetch the fresh token. Only then proceed to the Google Drive API calls.
+- Import and use `useProcoreToken` hook at the wizard level
+- Add a green dot or "(Connected)" label next to the Procore button in both the dropdown menu and the empty-state buttons
+- Example: `Procore (Connected)` with a green dot when `isConnected` is true
 
-### Updated logic (pseudocode):
+### 2. Update ProcoreConnectionDialog to support folder selection
 
-```text
-1. Call google-drive-oauth?action=get-token
-2. If decryptResult.isExpired:
-   a. Call google-drive-oauth?action=refresh
-   b. If refresh succeeds, call get-token again to get the new access token
-   c. If refresh fails, return error asking user to reconnect Google Drive
-3. Use the valid access token for Drive API calls
-```
+**File:** `src/components/wizard/ProcoreConnectionDialog.tsx`
+
+- Add state for `selectedFolderId` and `selectedFolderPath` to track which specific folder the user clicks in the folder tree
+- Change the submit logic: instead of sending the entire Procore project, include the selected folder ID in the `drive_folder_id` field (e.g., `procore:{companyId}:{projectId}:{folderId}`)
+- If no folder is selected, default to the root (current behavior)
+- Update the "Analyze" button label to show the selected folder name
+- Allow clicking a folder in the tree to select it (highlight the selected folder)
+
+### 3. Update ProcoreFolderTree to support folder selection callback
+
+**File:** `src/components/wizard/ProcoreFolderTree.tsx`
+
+- Add an `onSelectFolder` callback prop
+- When a folder is clicked, call this callback with the folder ID, name, and path
+- Visually highlight the currently selected folder
+
+### 4. Fix copy-procore-files edge function -- run synchronously and add token refresh
+
+**File:** `supabase/functions/copy-procore-files/index.ts`
+
+- Remove `EdgeRuntime.waitUntil` -- await `copyFilesInBackground` inline before returning the response
+- Add token expiry check: if `tokenData.token_expiry < now()`, call `procore-oauth?action=refresh` via the service role key, then re-read the token
+- Parse the updated `drive_folder_id` format that may include a folder ID (`procore:{companyId}:{projectId}:{folderId}`) and pass `folderId` to `listProcoreFilesRecursively` to scope the file listing
+- This ensures logs are captured and errors propagate properly
+
+### 5. Fix stuck analysis requests (one-time database cleanup)
+
+Run a migration to reset any requests stuck in "copying" with 0 files to "failed" so users can retry.
 
 ## Technical Details
 
-### Changes to `supabase/functions/resolve-drive-doc/index.ts`
+### ProcoreConnectionDialog folder selection flow
 
-Replace the token retrieval block (lines 82-99) to:
-1. Always use the `get-token` action (current behavior for encrypted tokens)
-2. Check the `isExpired` field in the response
-3. If expired, call `google-drive-oauth?action=refresh` with the same auth header
-4. After refresh, call `get-token` again to get the fresh token
-5. If refresh fails, return a clear error: "Google Drive token expired. Please reconnect Google Drive."
+```text
+1. Dialog opens -> already connected -> show company/project selectors
+2. User selects company + project -> folders load
+3. User clicks a folder in the tree -> folder is highlighted, selectedFolderId is set
+4. User clicks "Analyze [FolderName]" -> creates analysis_request with drive_folder_id = "procore:{companyId}:{projectId}:{folderId}"
+5. copy-procore-files runs synchronously, scoping file listing to that folder
+6. Dialog closes, toast confirms submission
+```
 
-This also removes the fallback to `tokenData.access_token` for the non-encrypted path, since the `get-token` action already handles both encrypted and legacy tokens.
+### Token refresh in copy-procore-files
+
+```text
+1. Read token from user_procore_tokens
+2. Check token_expiry against current time
+3. If expired: POST to procore-oauth?action=refresh (using SUPABASE_SERVICE_ROLE_KEY)
+4. Re-read the refreshed token from user_procore_tokens
+5. Proceed with Procore API calls using the valid token
+```
 
 ### Files to modify
-1. `supabase/functions/resolve-drive-doc/index.ts` -- Add token refresh logic
+1. `src/pages/ProjectWizard.tsx` -- Add Procore connection status indicator
+2. `src/components/wizard/ProcoreConnectionDialog.tsx` -- Add folder selection and per-folder submission
+3. `src/components/wizard/ProcoreFolderTree.tsx` -- Add folder selection callback and visual highlight
+4. `supabase/functions/copy-procore-files/index.ts` -- Run synchronously, add token refresh, support folder-scoped listing
+5. Database migration -- Reset stuck "copying" requests to "failed"
 
-No database changes needed.
