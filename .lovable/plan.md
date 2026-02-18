@@ -1,109 +1,114 @@
 
-# Analysis Detail Page — 5 UI Improvements
+# Analysis Section — 3 Improvements
 
-## Overview of Changes
+## Summary of Changes
 
-All changes are in two files:
-- `src/pages/AnalysisRequestDetail.tsx` — Files section collapsible
-- `src/components/analysis/AnalysisSection.tsx` — Progress fix, Display ID rename, live per-file analysis animation, hide raw data
+All changes are in one file: `src/components/analysis/AnalysisSection.tsx`.
 
----
-
-## 1. Files Section — Collapsible, Collapsed by Default
-
-In `AnalysisRequestDetail.tsx`, the Files card header becomes a toggle button. A `filesCollapsed` state defaults to `true`. When collapsed, the table body is hidden; the header shows a `ChevronRight` / `ChevronDown` icon alongside the existing metadata line. The Download ZIP button remains visible in the header at all times.
+No backend changes, no edge function changes, no migration needed.
 
 ---
 
-## 2. Rename "ID" → "Display ID" in the Analysis Results Table
+## 1. Stop / Abort Button
 
-In `AnalysisSection.tsx`, two `<TableHead>` cells labelled `ID` are renamed to `Display ID`:
-- The summarized instances table header (line 623)
-- The raw parsed instances table header (line 662)
+### Problem
+Once analysis starts there is no way to cancel it. The file loop runs to completion even if the user navigates away or wants to stop.
 
-No logic changes — purely a label change.
+### Implementation
 
----
+Use a `useRef<boolean>` abort flag (`abortRef`) rather than `AbortController` because the fetch calls are already fire-and-forget per file — we just need to break the loop cleanly between files.
 
-## 3. Fix Overall Progress Percentage
-
-**Current bug**: `progress.current` is incremented at the start of processing each file (before the API call), so when the last file starts, progress reads 100%.
-
-**Fix**: Increment `progress.current` only after a file finishes (success or failure), not before. The progress state will be updated at the end of each file loop iteration instead of the beginning. This means progress goes from 0% → …% → 100% only when the last file genuinely completes.
-
-Specifically, in `handleAnalyze`:
-- Remove `setProgress({ current: i + 1, total: copiedFiles.length })` from the top of the loop
-- Move it to after the try/catch block (after `setFileStatuses` is set to complete/failed)
-
----
-
-## 4. Per-File Analysis Animation (Replaces the Badge Chip List)
-
-**Current**: Files shown as small badge chips in a wrapped `flex` row. No detail, no per-file progress.
-
-**New design** (inspired by the screenshot reference — list of files with inline status):
-
-Replace the badge-chip block with a vertical list of file rows, each showing:
-
-```
-[ icon ] filename.pdf                 [ status badge ]
-         [ progress bar — only visible when processing ]
-         Detected: Electrical Room EL-B01 on Level P1...  ← simulated detection message
+```typescript
+const abortRef = useRef(false);
 ```
 
-**Per-file states:**
-- `pending` — muted, no bar
-- `processing` — animated spinner icon, progress bar (animated indeterminate pulse), rotating detection message drawn from prompt keywords
-- `complete` — green check, "Complete" badge
-- `failed` — red X, "Failed" badge
+In `handleAnalyze`:
+- Set `abortRef.current = false` at the start of the run.
+- At the top of the per-file loop, check `if (abortRef.current) break;` — this stops the loop cleanly after the current in-flight fetch completes.
+- A `handleStop` function sets `abortRef.current = true`.
 
-**Detection message simulation**: When a file is `processing`, a rotating message cycles every ~1.5s from a set of plausible strings generated from the AWP class name. For example, for "Electrical Room":
+The **Stop** button replaces the Analyze button in the header while `isAnalyzing === true`:
+
 ```
-"Scanning for electrical room labels..."
-"Detected panel room reference on drawing..."
-"Identifying room boundaries..."
-"Cross-referencing floor annotations..."
-"Extracting room codes from title block..."
+[ ⏹ Stop ]   ← shown while analyzing (replaces Analyze / Re-analyze)
+[ ▶ Analyze ] ← shown when idle
 ```
 
-These messages are statically defined per category (Asset / Water System / Process) and parameterized with the class name — no AI call needed, purely cosmetic simulation.
+The Stop button uses `variant="destructive"` so it is visually distinct. Clicking it sets the abort flag; the currently-in-flight file finishes, then the loop exits. The `finally` block runs normally (sets `analyzingClass` to null), leaving any completed-file results in place.
 
-A small `useEffect` inside the rendering block cycles through the messages array using `setInterval` whenever the file status is `processing`.
-
-**Implementation approach**: Extract a new `FileAnalysisRow` sub-component inside `AnalysisSection.tsx` to keep the JSX clean. It receives `fileName`, `status`, `awpClassName`, and renders the row with internal cycling state.
+No toast is shown on stop — the progress panel disappearing is sufficient feedback. The Analyze / Re-analyze button returns to its normal state.
 
 ---
 
-## 5. Hide Raw Data — Only Show Summarized Results
+## 2. Remove Summarize Button
 
-**Current**: After analysis, the raw parsed table (`allInstances`) shows immediately, and raw fallback text is also shown with an expand toggle. The summarized table appears separately above it only after the "Summarize" step.
+The manual Summarize button (currently shown when `hasResults && !isAnalyzing && !summary`) is removed. Auto-summarization already runs after `handleAnalyze` finishes. The button is not needed and adds noise.
 
-**New behavior**:
-- The raw parsed instances table (`allInstances`) is **removed entirely** from the rendered output
-- The raw fallback text block (unparseable results) is also **removed**
-- The summarized instances table (already shown post-summarization) is the **only** result display
-- Summarization is already triggered automatically after analysis completes (`handleSummarize` is called in `finally` block) — this behaviour is unchanged
-- While summarizing, the existing "Summarizing..." spinner in the header is sufficient feedback
-- If summarization yields 0 instances, the "No unique instances found" message already handles this
+When analysis is stopped mid-way, auto-summarize still fires for whatever files completed — this is the correct behavior (partial results are still summarized).
 
-This means the manual "Summarize" button (shown when `hasResults && !isAnalyzing && !summary`) should remain for the re-run case, but the raw table below it is gone.
+The `Sparkles` icon import stays because it is still used in the summary header row and the "No unique instances" message.
 
 ---
 
-## File Changes Summary
+## 3. Persist Summary Across Page Revisits
+
+### Problem
+`summarizedInstances` is React state — it is in-memory only. When the user navigates away and comes back, the summary is gone even though `analysis_results` rows are already in the database.
+
+### Root Cause
+`handleSummarize` fetches from the `summarize-analysis` edge function and stores the result in local state only. On remount the state resets to `{}`.
+
+### Fix: Auto-hydrate from DB results on mount
+
+When `results` loads from the database, for each AWP class that has at least one `complete` result **and** no currently-in-progress analysis, automatically call `handleSummarize` if `summarizedInstances[className]` is not yet populated.
+
+The pattern:
+
+```typescript
+useEffect(() => {
+  if (!results || results.length === 0) return;
+  if (analyzingClass) return; // don't re-hydrate mid-analysis
+
+  // Group completed results by AWP class name
+  const classesWithResults = [...new Set(
+    results
+      .filter(r => r.status === "complete")
+      .map(r => r.awp_class_name)
+  )];
+
+  for (const className of classesWithResults) {
+    if (!summarizedInstances[className] && !summarizing[className]) {
+      handleSummarize(className);
+    }
+  }
+}, [results, analyzingClass]);
+// summarizedInstances and summarizing intentionally omitted from deps
+// to avoid infinite loop — this only runs when results load
+```
+
+**Why this is safe:**
+- The `summarize-analysis` edge function is idempotent — it reads from `analysis_results` and re-runs the AI summarization. Calling it multiple times gives the same output.
+- The dep array excludes `summarizedInstances` and `summarizing` intentionally to avoid re-triggering after state updates.
+- The `analyzingClass` guard prevents hydration from firing mid-run.
+- Because `handleSummarize` is wrapped in `useCallback`, the ref is stable.
+
+This means: on the first visit after analysis completes, the page auto-summarizes and stores the result in state. On re-entry, the same auto-hydrate fires again (fetches from DB, re-summarizes). The cost is one `summarize-analysis` call per AWP class per page load when results exist — acceptable for an internal tool.
+
+---
+
+## File Change Summary
 
 | File | Changes |
 |---|---|
-| `src/pages/AnalysisRequestDetail.tsx` | Add `filesCollapsed` state (default `true`); wrap table body in conditional; add collapse toggle to header |
-| `src/components/analysis/AnalysisSection.tsx` | Fix progress increment timing; rename ID → Display ID; replace badge chip list with `FileAnalysisRow` per-file list with cycling detection messages; remove raw data blocks |
+| `src/components/analysis/AnalysisSection.tsx` | Add `abortRef`; `handleStop`; Stop button in header; auto-hydrate summary on mount from DB results; remove manual Summarize button |
 
-No backend changes. No new dependencies.
+No other files change.
 
 ---
 
 ## Technical Notes
 
-- The `FileAnalysisRow` sub-component uses `useEffect` + `useState` for the cycling detection message. The interval only runs when `status === "processing"`. The interval is cleared on unmount or when status changes.
-- Detection messages are defined as a `Record<string, string[]>` keyed by category (`"Asset"`, `"Water System"`, `"Process"`) with a generic fallback array. The AWP class name is interpolated into the message strings at render time.
-- The per-file indeterminate progress bar uses a CSS animation (`animate-pulse` on a full-width bar) rather than a real value — since we have no sub-file progress signal from the API, a pulsing bar is honest and visually clear.
-- Progress fix: `setProgress({ current: i + 1, total })` moves from line 302 (top of loop) to after the inner try/catch block (after line 333), ensuring it only fires once the file is done.
+- The abort flag is a `useRef` not `useState` to avoid re-renders — the loop checks it synchronously between iterations.
+- The loop check is `if (abortRef.current) break` placed at the **top** of the loop body, before `setFileStatuses`. This means: the current in-flight fetch runs to completion, the file status is set, progress is incremented, then the next iteration is blocked. No files are left in a permanent `"processing"` state.
+- The auto-hydrate `useEffect` runs on `results` change. Since `results` is a React Query query that loads once on mount (and re-fetches on invalidation), this fires once on page entry — not in a loop.
+- `handleSummarize` is already `useCallback`-wrapped with `[requestId, toast]` deps, so it is safe to put in the effect without re-triggering it on every render.
