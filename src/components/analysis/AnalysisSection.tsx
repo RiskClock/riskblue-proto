@@ -34,6 +34,7 @@ import {
   Eye,
   RotateCcw,
   AlertTriangle,
+  Download,
 } from "lucide-react";
 import * as pdfjsLib from "pdfjs-dist";
 
@@ -203,7 +204,7 @@ function InstanceDetailModal({
     setSignedUrl(null);
 
     supabase.storage
-      .from("analysis-files")
+      .from("drive-analysis-files")
       .createSignedUrl(sourceFile.storage_path, 120)
       .then(({ data, error }) => {
         if (error || !data?.signedUrl) {
@@ -693,6 +694,24 @@ export function AnalysisSection({ requestId, files, projectId }: AnalysisSection
     prompts?.forEach((p) => handleAnalyze(p));
   };
 
+  const handleDownloadZip = async () => {
+    try {
+      const { data: sessionData } = await supabase.auth.getSession();
+      const token = sessionData.session?.access_token;
+      const url = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/download-analysis-files-zip?analysisRequestId=${requestId}`;
+      const resp = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
+      const blob = await resp.blob();
+      const blobUrl = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = blobUrl;
+      a.download = `analysis-files-${requestId}.zip`;
+      a.click();
+      URL.revokeObjectURL(blobUrl);
+    } catch (e) {
+      toast({ title: "Download failed", description: String(e), variant: "destructive" });
+    }
+  };
+
   const handleAddToProject = async (awpClassName: string) => {
     const instances = summarizedInstances[awpClassName];
     if (!instances || instances.length === 0 || !projectId) return;
@@ -843,7 +862,7 @@ export function AnalysisSection({ requestId, files, projectId }: AnalysisSection
                 <thead>
                   {/* Header row: file info columns + class abbreviations */}
                   <tr className="border-b">
-                    <th className="sticky left-0 z-10 bg-card px-4 py-2 text-left font-medium text-muted-foreground min-w-[220px] border-r">
+                    <th className="sticky left-0 z-10 bg-card px-4 py-2 text-left font-medium text-muted-foreground min-w-[320px] border-r">
                       File Name
                     </th>
                     <th className="px-3 py-2 text-left font-medium text-muted-foreground w-20">
@@ -865,9 +884,12 @@ export function AnalysisSection({ requestId, files, projectId }: AnalysisSection
 
                   {/* Button sub-row: per-column analyze/stop controls */}
                   <tr className="border-b bg-muted/20">
-                    <td className="sticky left-0 z-10 bg-muted/20 px-4 py-1.5 text-xs text-muted-foreground border-r">
-                      Controls
-                    </td>
+                     <td className="sticky left-0 z-10 bg-muted/20 px-4 py-1.5 border-r">
+                       <Button size="sm" variant="outline" className="h-6 text-xs gap-1" onClick={handleDownloadZip}>
+                         <Download className="w-3 h-3" />
+                         Download ZIP
+                       </Button>
+                     </td>
                     <td className="px-3 py-1.5" />
                     {prompts.map((prompt) => {
                       const className = prompt.awp_class_name;
@@ -923,7 +945,7 @@ export function AnalysisSection({ requestId, files, projectId }: AnalysisSection
                       <td className="sticky left-0 z-10 bg-card hover:bg-muted/30 px-4 py-2 border-r">
                         <Tooltip>
                           <TooltipTrigger asChild>
-                            <span className="text-sm font-medium truncate block max-w-[200px] cursor-default">
+                            <span className="text-sm font-medium truncate block max-w-[300px] cursor-default">
                               {file.name}
                             </span>
                           </TooltipTrigger>
@@ -1034,17 +1056,6 @@ export function AnalysisSection({ requestId, files, projectId }: AnalysisSection
                     <div className="flex items-center gap-2">
                       <span className="text-sm font-medium">{className}</span>
                       <span className="text-xs text-muted-foreground font-mono">({prefix})</span>
-                      {prompt.drive_file_url && (
-                        <a
-                          href={prompt.drive_file_url}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="text-xs text-primary hover:underline inline-flex items-center gap-0.5"
-                        >
-                          {prompt.drive_file_name}
-                          <ExternalLink className="w-2.5 h-2.5 ml-0.5" />
-                        </a>
-                      )}
                       {isSummarizing && (
                         <Loader2 className="w-3.5 h-3.5 animate-spin text-muted-foreground" />
                       )}
