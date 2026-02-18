@@ -140,7 +140,7 @@ Rules for deduplication:
                     items: {
                       type: "object",
                       properties: {
-                        id: { type: "string", description: "Generated room/asset code (e.g., ER001, MRM001)" },
+                        id: { type: "string", description: "The exact plan tag or room identifier as it appears on the drawing (e.g., SWC-B03, SWC-703, ER-101). Use the identifier from the drawing, NOT a generated sequential code." },
                         name: { type: "string", description: "Drawing label or name (e.g., ELECTRICAL, MECHANICAL)" },
                         floor: { type: "string", description: "Building floor or level (e.g., LOWER LEVEL, FOURTH FLOOR)" },
                         area_sqft: { type: "number", description: "Area in square feet if available, or 0 if not specified" },

@@ -1,0 +1,1 @@
+ALTER TABLE public.analysis_requests ADD COLUMN IF NOT EXISTS summary_data jsonb DEFAULT '{}'::jsonb;
