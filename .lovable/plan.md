@@ -1,174 +1,113 @@
 
-# Instance Detail Modal — "View More" per Summary Row
+# Status: Plan Not Yet Implemented
 
-## Overview
+The redesign plan was approved multiple times in conversation but the code changes were never actually written to `src/components/analysis/AnalysisSection.tsx`. The file is still at the original architecture (1,095 lines with `abortRef`, `analyzingClass`, `FileAnalysisRow`, per-card layout, risk badges, etc.).
 
-Three changes in one file: `src/components/analysis/AnalysisSection.tsx`
-
-1. Remove the **Notes** column from the summary table
-2. Add a **View** button (icon) per row that opens an instance detail modal
-3. The modal shows: instance details (notes, floor, area), the source drawing as a PDF preview, and a bounding box overlay when coordinate data is parseable from the raw result text
-
-No backend changes, no migrations, no new dependencies. `pdfjs-dist` is already installed.
+This plan will implement everything agreed upon. One file changes. No DB migrations. No new packages.
 
 ---
 
-## 1. Remove Notes Column
+## What Will Be Implemented
 
-- Remove `<TableHead>Notes</TableHead>` from the summary table header
-- Remove the `<TableCell>` that renders `inst.notes` from each row
-- The notes content moves exclusively into the detail modal
+### 1. Stop Button Fix (AbortController)
 
----
+**Current problem (line 557):** `const abortRef = useRef(false)` is checked only between files. During a 10–60 second `await fetch(...)`, no code runs — clicking Stop sets the flag but nothing happens until the request finishes on its own.
 
-## 2. "View" Button per Row
+**Fix:** Per-class `AbortController` stored in a ref. `signal: controller.signal` is passed to both `fetch()` calls. Calling `controller.abort()` immediately cancels the in-flight HTTP request via the browser's `AbortError` mechanism.
 
-Replace the removed Notes cell with a compact action cell containing an `Eye` icon button (ghost variant, `h-7 w-7`). Clicking it sets `selectedInstance` state and opens the modal.
+### 2. State Architecture Changes
 
-New state added to the component:
+**Removed:**
+- `analyzingClass: string | null` (line 558)
+- `progress: { current, total }` (line 559)
+- `fileStatuses: Record<string, string>` (line 560)
+- `abortRef: useRef<boolean>` (line 557)
+- `FileAnalysisRow` component (lines 107–164)
+- `DETECTION_MESSAGES` constant (lines 52–93)
+- `getDetectionMessages` function (lines 95–98)
 
+**Added:**
 ```typescript
-const [selectedInstance, setSelectedInstance] = useState<{
-  instance: SummarizedInstance;
-  awpClassName: string;
+const [analyzingClasses, setAnalyzingClasses] = useState<Set<string>>(new Set());
+const [classFileStatuses, setClassFileStatuses] = useState<Record<string, Record<string, string>>>({});
+const abortControllers = useRef<Record<string, AbortController>>({});
+const [rawResultModal, setRawResultModal] = useState<{
+  fileName: string; awpClassName: string; resultText: string;
 } | null>(null);
-```
-
----
-
-## 3. Instance Detail Modal
-
-A `Dialog` component renders when `selectedInstance` is set. It closes on the standard X button or clicking outside.
-
-### Modal Layout
-
-```
-┌─────────────────────────────────────────────────────┐
-│  [AWP Class] — [Display ID]                    [X]  │
-├─────────────────────────────────────────────────────┤
-│  DETAILS (left column)    │  DRAWING PREVIEW (right) │
-│  ─────────────────────    │  ────────────────────── │
-│  Name:  ELECTRICAL        │  [PDF page rendered as   │
-│  Floor: Lower Level       │   canvas, with bounding  │
-│  Area:  285 sqft          │   box overlay if avail]  │
-│  Notes: clear label...    │                          │
-│                           │  Source: filename.pdf    │
-└─────────────────────────────────────────────────────┘
-```
-
-### Finding the Source File
-
-When the modal opens, the component searches loaded `results` (already in memory from the `analysis-results` query) for a result whose `result_text` contains the instance's Display ID (the `inst.id` string):
-
-```typescript
-const sourceResult = classResults.find(r =>
-  r.result_text?.includes(instance.id)
+const idPrefixMap = useMemo(
+  () => Object.fromEntries((awpClasses || []).map(c => [c.name, c.id_prefix])),
+  [awpClasses]
 );
-const sourceFile = files.find(f => f.id === sourceResult?.file_id);
 ```
 
-If no match: the modal shows instance details only, with a "Source file not identifiable" note in the preview pane.
+### 3. Updated handleAnalyze / handleStop
 
-### PDF Preview
+`handleAnalyze` updated to:
+- Create `new AbortController()` per class, store in `abortControllers.current[className]`
+- Pass `signal: controller.signal` to both `fetch()` calls
+- On `AbortError`: break loop silently, `finally` cleans up `analyzingClasses`
+- Update `classFileStatuses[className][fileId]` per file as it processes
 
-Uses `pdfjs-dist` (already in the project — used in `FileViewerModal.tsx`). Steps:
-
-1. On modal open (or when `sourceFile` resolves), fetch a signed URL from the storage bucket using `supabase.storage.from("analysis-files").createSignedUrl(storagePath, 60)`
-2. Load the PDF with `pdfjsLib.getDocument(signedUrl)`
-3. Render page 1 (or whichever page contains the instance — page detection described below) to a `<canvas>` element at a fixed resolution (scale 1.5x)
-4. If bounding box coordinates are available, draw an overlay rectangle on the canvas using the Canvas 2D API after page render
-
-### Bounding Box Parsing
-
-The raw `result_text` sometimes includes a "Coordinate on Plan" column. The parser will attempt to extract this:
-
+`handleStop(className: string)` replaces the current `handleStop()`:
 ```typescript
-function parseCoordinatesFromResult(resultText: string, instanceId: string): {
-  x: number; y: number; w: number; h: number; pageNum: number;
-} | null
+const handleStop = (className: string) => {
+  abortControllers.current[className]?.abort();
+};
 ```
 
-Logic:
-- Find the row in the pipe-delimited table where the first cell matches `instanceId`
-- Find the column index for "Coordinate" or "Coordinate on Plan"
-- Parse the value — expected format: `(x, y)` or `x1,y1 – x2,y2` or similar
-- If parseable, return normalized `{x, y, w, h}` as fractions of page dimensions (0–1 range) so they scale with canvas size
-- If not parseable or column absent: return `null` (no overlay drawn)
-
-The overlay is drawn as a semi-transparent blue rectangle (`rgba(59, 130, 246, 0.25)`) with a solid blue border (2px), styled to match the app's primary colour.
-
-### Page Detection
-
-The result text sometimes references a "Sheet / Page Reference" column. If parseable and numeric, use that as the page number. Default: page 1.
-
-### Loading State
-
-While the signed URL is being fetched or the PDF is rendering, show a `Loader2` spinner centered in the preview pane.
-
----
-
-## New Sub-component: `InstanceDetailModal`
-
-Extracted as a separate function component within `AnalysisSection.tsx` for cleanliness:
-
+`handleAnalyzeAll` added:
 ```typescript
-interface InstanceDetailModalProps {
-  instance: SummarizedInstance;
-  awpClassName: string;
-  sourceFile: AnalysisFile | undefined;
-  resultText: string | undefined;
-  onClose: () => void;
-}
+const handleAnalyzeAll = () => {
+  prompts?.forEach(p => handleAnalyze(p));
+};
 ```
 
-Internal state: `signedUrl`, `isLoadingPdf`, `pdfError`. The `useEffect` fetches the signed URL when `sourceFile` changes. A second `useEffect` renders the PDF to canvas when `signedUrl` is available.
+Auto-hydrate `useEffect` updated: `analyzingClass` dependency replaced with `analyzingClasses.size`.
 
----
+### 4. New Component: RawResultModal
 
-## Imports Added
+A `Dialog` that shows raw AI `result_text` for a `(file, class)` pair. Opened by clicking a count cell in the grid. Shows instance count + scrollable `<pre>` block with the raw text.
 
-```typescript
-import { Eye } from "lucide-react";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
-import * as pdfjsLib from "pdfjs-dist";
+### 5. Drawing Analysis Grid (Replaces per-card layout)
+
+A single horizontally-scrollable table. Rows = copied files. Columns = AWP classes.
+
+**Layout:**
+```
+Drawing Analysis                              [▶ Analyze All]
+──────────────────────────────────────────────────────────────
+| File Name        | Size  | Status  | ERM  | EVP  | STE  |
+|                  |       |         | [▶]  | [⏹]  | [↺]  |
+| A2.01-LOWER...   | 481KB | Ready   |  3   |  ◌   |      |
+| A2.02-GROUND...  | 517KB | Ready   |      |      |  1   |
 ```
 
-`pdfjs-dist` worker configuration is already set up in `src/lib/pdfProcessor.ts`. The `InstanceDetailModal` component needs to configure the worker too (or import from `pdfProcessor.ts` — we'll import the existing setup by importing `extractPDFData` from that file to trigger the worker registration, or simply duplicate the two-line worker config since it's idempotent).
+- File Name column: `sticky left-0 bg-card z-10 min-w-[220px]`, `Tooltip` for full name
+- AWP columns: `w-14 text-center`, header shows `idPrefixMap[className]`, `Tooltip` = full name
+- Button sub-row per column: Play / Stop+Loader / Re-analyze based on state
+- `countForCell(fileId, className)` helper returns: `null` (empty), `"loading"` (spinner), `"failed"` (⚠), or `n` (clickable number → opens `RawResultModal`)
 
----
+**Analyze All button** in section header: fires all prompts in parallel. Disabled+spinner while `analyzingClasses.size > 0`.
 
-## Table Structure After Change
+### 6. Analysis Summary — Unified Single Card (Replaces per-card layout)
 
-**Before:**
-| Display ID | Name | Floor | Area (sqft) | Notes |
+All AWP classes always shown in one card. Risk badges removed. Per-class states:
 
-**After:**
-| Display ID | Name | Floor | Area (sqft) | (action) |
+- `!summary && !isSummarizing` → "— Not yet analyzed" muted text
+- `isSummarizing && !summary` → `Loader2` + "Summarizing…"
+- `summary.length === 0` → "None identified"
+- `summary.length > 0` → instance table (Display ID / Name / Floor / Area / Eye button)
 
-The action column has no header text — just the `Eye` icon button per row, right-aligned.
+"Add to Project" button only appears when `summary?.length > 0`.
+
+`InstanceDetailModal` stays at the bottom, completely unchanged.
 
 ---
 
 ## File Change Summary
 
-| File | Changes |
+| File | Change |
 |---|---|
-| `src/components/analysis/AnalysisSection.tsx` | Remove Notes column; add `selectedInstance` state; add `Eye` button per row; add `InstanceDetailModal` sub-component with PDF preview + bounding box overlay |
+| `src/components/analysis/AnalysisSection.tsx` | Full rewrite per above — ~400 lines removed (old UI + old state), ~350 lines added (grid + unified summary + abort logic + RawResultModal) |
 
-No other files change.
-
----
-
-## Technical Notes
-
-- The `Dialog` component from `@radix-ui/react-dialog` (already installed via `src/components/ui/dialog.tsx`) handles focus trapping and accessibility correctly
-- `pdfjsLib.getDocument` accepts a URL string — the signed URL from storage works directly
-- Canvas rendering must happen in a `useEffect` after the canvas `ref` is mounted, after the PDF loads. A `useRef<HTMLCanvasElement>` is used for the canvas element
-- If `sourceFile?.storage_path` is null (file not yet copied), the preview pane shows "Drawing not available" gracefully
-- The modal is `max-w-4xl` to accommodate the two-column layout; on smaller screens the layout stacks vertically via responsive Tailwind classes (`flex-col md:flex-row`)
-- The bounding box overlay is painted with `ctx.strokeRect` + `ctx.fillRect` after `page.render()` completes (the render promise resolves before we draw)
+No other files. No DB changes. No new packages. `RotateCcw` added to lucide-react imports; `useMemo` added to React imports.
