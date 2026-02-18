@@ -103,9 +103,10 @@ interface AnalysisSectionProps {
 // ---------------------------------------------------------------------------
 
 // Returns raw pixel coordinates in the AI's 1024×768 coordinate space
+// searchTerms: array of strings to try matching against row cells (tried in order)
 function parseCoordinatesFromResult(
   resultText: string,
-  instanceId: string
+  searchTerms: string[]
 ): { x1: number; y1: number; x2: number; y2: number; pageNum: number } | null {
   try {
     const lines = resultText.split("\n").filter((l) => l.includes("|"));
@@ -117,13 +118,12 @@ function parseCoordinatesFromResult(
         low.includes("bounding") ||
         low.includes("bbox") ||
         low.includes("box") ||
-        low.includes("coord") ||
-        low.includes("room code") ||
-        low.includes("code")
+        low.includes("coord")
       );
     });
     if (!headerLine) return null;
 
+    const headerIdx = lines.indexOf(headerLine);
     const headers = headerLine.split("|").map((c) => c.trim().toLowerCase());
     const coordCol = headers.findIndex(
       (h) => h.includes("bounding") || h.includes("bbox") || h.includes("box") || h.includes("coord")
@@ -131,11 +131,20 @@ function parseCoordinatesFromResult(
     const pageCol = headers.findIndex((h) => h.includes("page") || h.includes("sheet"));
     if (coordCol === -1) return null;
 
-    // Find the row whose cells contain the instanceId
-    const dataRow = lines.find((l) => {
+    const dataLines = lines.slice(headerIdx + 1).filter((l) => !l.match(/^[\s|:-]+$/));
+
+    // Find a row that matches any of the search terms
+    const validTerms = searchTerms.filter(Boolean);
+    let dataRow = dataLines.find((l) => {
       const cells = l.split("|").map((c) => c.trim());
-      return cells.some((c) => c === instanceId || c.includes(instanceId));
+      return validTerms.some((term) =>
+        cells.some((c) => c.includes(term) || term.includes(c))
+      );
     });
+    // Fallback: first data row that contains a bounding box coordinate
+    if (!dataRow) {
+      dataRow = dataLines.find((l) => /\(\s*\d+/.test(l));
+    }
     if (!dataRow) return null;
 
     const cells = dataRow.split("|").map((c) => c.trim());
@@ -236,16 +245,21 @@ function InstanceDetailModal({
         const ab = await blob.arrayBuffer();
         if (cancelled) return;
 
+        // Build search terms from instance id and name fragments
+        const planCodeMatch = instance.name?.match(/\b([A-Z]+-B?\d+)\b/);
+        const planCode = planCodeMatch?.[1];
+        const searchTerms = [instance.id, instance.name, planCode].filter(Boolean) as string[];
+
         // Parse bounding box
         if (resultText) {
-          const coords = parseCoordinatesFromResult(resultText, instance.id);
+          const coords = parseCoordinatesFromResult(resultText, searchTerms);
           if (coords) setRawCoords({ x1: coords.x1, y1: coords.y1, x2: coords.x2, y2: coords.y2 });
         }
 
         const pdf = await pdfjsLib.getDocument({ data: ab }).promise;
         if (cancelled) return;
 
-        const coords = resultText ? parseCoordinatesFromResult(resultText, instance.id) : null;
+        const coords = resultText ? parseCoordinatesFromResult(resultText, searchTerms) : null;
         const targetPage = coords?.pageNum ?? 1;
         const page = await pdf.getPage(Math.min(targetPage, pdf.numPages));
         if (cancelled) return;
@@ -279,11 +293,13 @@ function InstanceDetailModal({
     return () => { cancelled = true; };
   }, [sourceFile?.storage_path, instance.id, resultText]);
 
-  // Step 2: Compute base dimensions when image loads (fit to container)
+  // Step 2: Compute base dimensions when image loads (fit to container) — exact LocationDetailsModal pattern
   useEffect(() => {
     if (!pageImage || !containerRef.current) return;
-    const containerW = containerRef.current.clientWidth || 600;
-    const containerH = 480;
+    const rect = containerRef.current.getBoundingClientRect();
+    const containerW = rect.width - 32;
+    const containerH = rect.height - 32;
+    if (containerW <= 0 || containerH <= 0) return;
     const imgAspect = pageImage.naturalWidth / pageImage.naturalHeight;
     const containerAspect = containerW / containerH;
     let baseW: number, baseH: number;
@@ -302,11 +318,13 @@ function InstanceDetailModal({
   useEffect(() => {
     if (!pageImage || !baseDimensions || !canvasRef.current) return;
     const canvas = canvasRef.current;
-    const w = baseDimensions.width * zoom;
-    const h = baseDimensions.height * zoom;
+    const w = Math.floor(baseDimensions.width * zoom);
+    const h = Math.floor(baseDimensions.height * zoom);
     canvas.width = w;
     canvas.height = h;
     const ctx = canvas.getContext("2d")!;
+    ctx.imageSmoothingEnabled = true;
+    ctx.imageSmoothingQuality = "high";
     ctx.drawImage(pageImage, 0, 0, w, h);
 
     if (rawCoords) {
@@ -325,21 +343,55 @@ function InstanceDetailModal({
     }
   }, [pageImage, baseDimensions, zoom, rawCoords]);
 
-  const handleZoomIn = () => setZoom((z) => Math.min(4, parseFloat((z + 0.25).toFixed(2))));
-  const handleZoomOut = () => setZoom((z) => Math.max(0.5, parseFloat((z - 0.25).toFixed(2))));
+  // Center-preserving zoom handlers — exact copy from LocationDetailsModal
+  const handleZoomIn = () => {
+    const container = containerRef.current;
+    if (!container) { setZoom(z => Math.min(4, z + 0.25)); return; }
+    const scrollCenterX = container.scrollWidth > 0
+      ? (container.scrollLeft + container.clientWidth / 2) / container.scrollWidth : 0.5;
+    const scrollCenterY = container.scrollHeight > 0
+      ? (container.scrollTop + container.clientHeight / 2) / container.scrollHeight : 0.5;
+    setZoom(prevZoom => {
+      const newZoom = Math.min(4, prevZoom + 0.25);
+      requestAnimationFrame(() => {
+        container.scrollLeft = scrollCenterX * container.scrollWidth - container.clientWidth / 2;
+        container.scrollTop = scrollCenterY * container.scrollHeight - container.clientHeight / 2;
+      });
+      return newZoom;
+    });
+  };
+
+  const handleZoomOut = () => {
+    const container = containerRef.current;
+    if (!container) { setZoom(z => Math.max(0.5, z - 0.25)); return; }
+    const scrollCenterX = container.scrollWidth > 0
+      ? (container.scrollLeft + container.clientWidth / 2) / container.scrollWidth : 0.5;
+    const scrollCenterY = container.scrollHeight > 0
+      ? (container.scrollTop + container.clientHeight / 2) / container.scrollHeight : 0.5;
+    setZoom(prevZoom => {
+      const newZoom = Math.max(0.5, prevZoom - 0.25);
+      requestAnimationFrame(() => {
+        container.scrollLeft = scrollCenterX * container.scrollWidth - container.clientWidth / 2;
+        container.scrollTop = scrollCenterY * container.scrollHeight - container.clientHeight / 2;
+      });
+      return newZoom;
+    });
+  };
 
   return (
     <Dialog open onOpenChange={(open) => { if (!open) onClose(); }}>
-      <DialogContent className="max-w-5xl w-full">
-        <DialogHeader>
+      <DialogContent className="sm:max-w-5xl h-[85vh] flex flex-col p-0">
+        {/* Fixed header */}
+        <DialogHeader className="px-6 pt-6 pb-4 border-b flex-shrink-0">
           <DialogTitle>
             {awpClassName} — <span className="font-mono text-sm">{instance.id}</span>
           </DialogTitle>
         </DialogHeader>
 
-        <div className="flex flex-col md:flex-row gap-6 mt-2">
+        {/* Body: left info panel + right drawing area */}
+        <div className="flex-1 flex min-h-0 overflow-hidden">
           {/* Left panel */}
-          <div className="md:w-56 shrink-0 space-y-3">
+          <div className="w-56 flex-shrink-0 border-r overflow-y-auto p-6 space-y-4">
             <div>
               <p className="text-xs text-muted-foreground uppercase tracking-wide mb-1">Name</p>
               <p className="text-sm font-medium">{instance.name || "—"}</p>
@@ -369,48 +421,53 @@ function InstanceDetailModal({
                 <p className="text-sm text-muted-foreground leading-relaxed">{instance.notes}</p>
               </div>
             )}
+            {sourceFile && (
+              <div>
+                <p className="text-xs text-muted-foreground uppercase tracking-wide mb-1">Source File</p>
+                <p className="text-xs text-muted-foreground truncate" title={sourceFile.name}>{sourceFile.name}</p>
+              </div>
+            )}
           </div>
 
-          {/* Right: drawing area */}
-          <div className="flex-1 min-w-0 flex flex-col">
-            {/* Zoom toolbar */}
-            <div className="flex items-center gap-2 mb-2">
-              <p className="text-xs text-muted-foreground uppercase tracking-wide flex-1">Drawing Preview</p>
-              {pageImage && (
-                <div className="flex items-center gap-1">
-                  <Button variant="outline" size="icon" className="h-7 w-7" onClick={handleZoomOut} disabled={zoom <= 0.5}>
-                    <ZoomOut className="h-3.5 w-3.5" />
-                  </Button>
-                  <span className="text-xs tabular-nums w-10 text-center">{Math.round(zoom * 100)}%</span>
-                  <Button variant="outline" size="icon" className="h-7 w-7" onClick={handleZoomIn} disabled={zoom >= 4}>
-                    <ZoomIn className="h-3.5 w-3.5" />
-                  </Button>
-                </div>
-              )}
+          {/* Right: drawing area with fixed toolbar + scrollable canvas */}
+          <div className="flex-1 min-w-0 flex flex-col overflow-hidden">
+            {/* Fixed zoom toolbar */}
+            <div className="h-12 flex-shrink-0 flex items-center justify-between px-4 border-b bg-background">
+              <span className="text-sm text-muted-foreground">Drawing Preview</span>
+              <div className="flex items-center gap-2">
+                <Button variant="outline" size="icon" className="h-8 w-8" onClick={handleZoomOut} disabled={zoom <= 0.5}>
+                  <ZoomOut className="w-4 h-4" />
+                </Button>
+                <span className="text-sm min-w-[3rem] text-center tabular-nums">{Math.round(zoom * 100)}%</span>
+                <Button variant="outline" size="icon" className="h-8 w-8" onClick={handleZoomIn} disabled={zoom >= 4}>
+                  <ZoomIn className="w-4 h-4" />
+                </Button>
+              </div>
             </div>
 
+            {/* Scrollable drawing container */}
             <div
               ref={containerRef}
-              className="border rounded-md overflow-auto bg-muted/20 relative min-h-[300px] max-h-[500px] flex items-start justify-start"
+              className="flex-1 min-h-0 overflow-auto bg-muted/30 m-4 border rounded-lg p-4"
             >
               {!sourceFile?.storage_path ? (
-                <p className="text-sm text-muted-foreground m-auto">Drawing not available</p>
+                <div className="flex items-center justify-center h-full">
+                  <p className="text-sm text-muted-foreground">Drawing not available</p>
+                </div>
               ) : pdfError ? (
-                <p className="text-sm text-destructive m-auto">{pdfError}</p>
+                <div className="flex items-center justify-center h-full">
+                  <p className="text-sm text-destructive">{pdfError}</p>
+                </div>
               ) : isLoadingPdf ? (
-                <div className="absolute inset-0 flex items-center justify-center">
+                <div className="flex items-center justify-center h-full">
                   <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
                 </div>
               ) : (
-                <canvas ref={canvasRef} style={{ display: "block" }} />
+                <div className="flex items-start justify-start min-h-full min-w-full">
+                  <canvas ref={canvasRef} className="rounded shadow-sm" style={{ maxWidth: "none", maxHeight: "none" }} />
+                </div>
               )}
             </div>
-
-            {sourceFile && (
-              <p className="text-xs text-muted-foreground mt-1.5 truncate">
-                Source: {sourceFile.name}
-              </p>
-            )}
           </div>
         </div>
       </DialogContent>
@@ -745,6 +802,16 @@ export function AnalysisSection({ requestId, files, projectId, sourceType }: Ana
 
   const handleStop = (className: string) => {
     abortControllers.current[className]?.abort();
+    // Immediately clear processing statuses so spinners disappear
+    setClassFileStatuses((prev) => {
+      const classStatuses = { ...(prev[className] || {}) };
+      for (const fileId of Object.keys(classStatuses)) {
+        if (classStatuses[fileId] === "processing") {
+          delete classStatuses[fileId];
+        }
+      }
+      return { ...prev, [className]: classStatuses };
+    });
   };
 
   const handleSummarize = useCallback(async (awpClassName: string) => {
@@ -791,6 +858,10 @@ export function AnalysisSection({ requestId, files, projectId, sourceType }: Ana
   const handleAnalyze = async (prompt: AWPPrompt) => {
     if (!prompt.drive_file_id || copiedFiles.length === 0) return;
     const className = prompt.awp_class_name;
+
+    // Clear existing values for this class before re-analyzing
+    setSummarizedInstances((prev) => { const n = { ...prev }; delete n[className]; return n; });
+    setAddedToProject((prev) => { const n = { ...prev }; delete n[className]; return n; });
 
     // Create per-class AbortController
     const controller = new AbortController();
@@ -1089,10 +1160,7 @@ export function AnalysisSection({ requestId, files, projectId, sourceType }: Ana
                         {copiedFiles.length} files · {formatBytes(totalSizeBytes)} · {sourceLabel}
                       </span>
                     </th>
-                    <th className="px-3 py-2 text-left font-medium text-muted-foreground w-20">
-                      Size
-                    </th>
-                    {sortedPrompts.map((prompt) => (
+                     {sortedPrompts.map((prompt) => (
                       <th key={prompt.id} className="w-14 px-2 py-2 text-center font-medium text-muted-foreground">
                         <Tooltip>
                           <TooltipTrigger asChild>
@@ -1114,7 +1182,7 @@ export function AnalysisSection({ requestId, files, projectId, sourceType }: Ana
                          Download ZIP
                        </Button>
                      </td>
-                    <td className="px-3 py-1.5" />
+                    
                      {sortedPrompts.map((prompt) => {
                        const className = prompt.awp_class_name;
                        const isAnalyzing = analyzingClasses.has(className);
@@ -1175,12 +1243,8 @@ export function AnalysisSection({ requestId, files, projectId, sourceType }: Ana
                         </button>
                       </td>
 
-                      {/* Size */}
-                      <td className="px-3 py-2 text-xs text-muted-foreground whitespace-nowrap">
-                        {formatBytes((file as any).size_bytes)}
-                      </td>
 
-                      {/* Per-class cells */}
+                       {/* Per-class cells */}
                        {sortedPrompts.map((prompt) => {
                         const val = countForCell(file.id, prompt.awp_class_name);
                         const className = prompt.awp_class_name;
@@ -1385,14 +1449,22 @@ export function AnalysisSection({ requestId, files, projectId, sourceType }: Ana
       {selectedInstance && (() => {
         const { instance, awpClassName } = selectedInstance;
         const classResults = getResultsForClass(awpClassName);
-        const sourceResult = classResults.find((r) => r.result_text?.includes(instance.id));
+        // Combine all complete result_texts so bounding box parser can search across all files
+        const combinedResultText = classResults
+          .filter((r) => r.status === "complete" && r.result_text)
+          .map((r) => r.result_text!)
+          .join("\n");
+        // Pick the file whose result_text contains the instance name or any identifier fragment
+        const sourceResult =
+          classResults.find((r) => r.result_text && r.status === "complete" && r.result_text.includes(instance.name)) ||
+          classResults.find((r) => r.status === "complete" && r.result_text);
         const sourceFile = files.find((f) => f.id === sourceResult?.file_id);
         return (
           <InstanceDetailModal
             instance={instance}
             awpClassName={awpClassName}
             sourceFile={sourceFile}
-            resultText={sourceResult?.result_text ?? undefined}
+            resultText={combinedResultText || undefined}
             onClose={() => setSelectedInstance(null)}
           />
         );
