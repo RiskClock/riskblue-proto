@@ -20,6 +20,12 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import {
   Loader2,
   Play,
   Square,
@@ -32,7 +38,15 @@ import {
   Sparkles,
   PlusCircle,
   File,
+  Eye,
 } from "lucide-react";
+import * as pdfjsLib from "pdfjs-dist";
+
+// Configure PDF.js worker (idempotent — safe to call multiple times)
+pdfjsLib.GlobalWorkerOptions.workerSrc = new URL(
+  "pdfjs-dist/build/pdf.worker.mjs",
+  import.meta.url
+).toString();
 
 // Detection messages per AWP category, parameterized by class name
 const DETECTION_MESSAGES: Record<string, (name: string) => string[]> = {
@@ -202,6 +216,255 @@ interface AnalysisSectionProps {
   projectId: string;
 }
 
+// ---------------------------------------------------------------------------
+// Helpers for bounding-box parsing
+// ---------------------------------------------------------------------------
+
+function parseCoordinatesFromResult(
+  resultText: string,
+  instanceId: string
+): { x: number; y: number; w: number; h: number; pageNum: number } | null {
+  try {
+    const lines = resultText.split("\n").filter((l) => l.includes("|"));
+    if (lines.length < 2) return null;
+
+    // Find header row
+    const headerLine = lines.find((l) => {
+      const low = l.toLowerCase();
+      return low.includes("coord") || low.includes("room code") || low.includes("code");
+    });
+    if (!headerLine) return null;
+
+    const headers = headerLine.split("|").map((c) => c.trim().toLowerCase());
+    const coordCol = headers.findIndex((h) => h.includes("coord"));
+    const pageCol = headers.findIndex((h) => h.includes("page") || h.includes("sheet"));
+    if (coordCol === -1) return null;
+
+    // Find data row for this instance
+    const dataRow = lines.find((l) => {
+      const cells = l.split("|").map((c) => c.trim());
+      return cells.some((c) => c === instanceId);
+    });
+    if (!dataRow) return null;
+
+    const cells = dataRow.split("|").map((c) => c.trim());
+    const coordCell = cells[coordCol] || "";
+
+    // Parse various coordinate formats
+    // "(x, y)" → treat as centre point, emit a small fixed-size box
+    const pointMatch = coordCell.match(/\(?\s*(-?\d+(?:\.\d+)?)\s*,\s*(-?\d+(?:\.\d+)?)\s*\)?/);
+    // "x1,y1 – x2,y2" or "x1,y1 to x2,y2"
+    const rangeMatch = coordCell.match(
+      /(-?\d+(?:\.\d+)?)\s*,\s*(-?\d+(?:\.\d+)?)\s*(?:–|-|to)\s*(-?\d+(?:\.\d+)?)\s*,\s*(-?\d+(?:\.\d+)?)/i
+    );
+
+    let pageNum = 1;
+    if (pageCol !== -1) {
+      const pv = parseInt(cells[pageCol] || "1", 10);
+      if (!isNaN(pv) && pv > 0) pageNum = pv;
+    }
+
+    if (rangeMatch) {
+      const x1 = parseFloat(rangeMatch[1]);
+      const y1 = parseFloat(rangeMatch[2]);
+      const x2 = parseFloat(rangeMatch[3]);
+      const y2 = parseFloat(rangeMatch[4]);
+      // Normalise to 0-1 assuming typical drawing dimensions (e.g. 2000×1500 pts)
+      const W = 2000, H = 1500;
+      return {
+        x: Math.min(x1, x2) / W,
+        y: Math.min(y1, y2) / H,
+        w: Math.abs(x2 - x1) / W,
+        h: Math.abs(y2 - y1) / H,
+        pageNum,
+      };
+    }
+
+    if (pointMatch) {
+      const cx = parseFloat(pointMatch[1]);
+      const cy = parseFloat(pointMatch[2]);
+      const W = 2000, H = 1500;
+      const boxW = 0.05, boxH = 0.05;
+      return {
+        x: cx / W - boxW / 2,
+        y: cy / H - boxH / 2,
+        w: boxW,
+        h: boxH,
+        pageNum,
+      };
+    }
+
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+// ---------------------------------------------------------------------------
+// InstanceDetailModal sub-component
+// ---------------------------------------------------------------------------
+
+interface InstanceDetailModalProps {
+  instance: SummarizedInstance;
+  awpClassName: string;
+  sourceFile: AnalysisFile | undefined;
+  resultText: string | undefined;
+  onClose: () => void;
+}
+
+function InstanceDetailModal({
+  instance,
+  awpClassName,
+  sourceFile,
+  resultText,
+  onClose,
+}: InstanceDetailModalProps) {
+  const [signedUrl, setSignedUrl] = useState<string | null>(null);
+  const [isLoadingPdf, setIsLoadingPdf] = useState(false);
+  const [pdfError, setPdfError] = useState<string | null>(null);
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+
+  // Fetch signed URL when sourceFile is available
+  useEffect(() => {
+    if (!sourceFile?.storage_path) return;
+    setIsLoadingPdf(true);
+    setPdfError(null);
+    setSignedUrl(null);
+
+    supabase.storage
+      .from("analysis-files")
+      .createSignedUrl(sourceFile.storage_path, 120)
+      .then(({ data, error }) => {
+        if (error || !data?.signedUrl) {
+          setPdfError("Could not load drawing preview.");
+          setIsLoadingPdf(false);
+        } else {
+          setSignedUrl(data.signedUrl);
+        }
+      });
+  }, [sourceFile?.storage_path]);
+
+  // Render PDF to canvas when signed URL is ready
+  useEffect(() => {
+    if (!signedUrl || !canvasRef.current) return;
+
+    let cancelled = false;
+
+    const coords = resultText
+      ? parseCoordinatesFromResult(resultText, instance.id)
+      : null;
+    const targetPage = coords?.pageNum ?? 1;
+
+    pdfjsLib
+      .getDocument(signedUrl)
+      .promise.then(async (pdf) => {
+        if (cancelled) return;
+        const page = await pdf.getPage(Math.min(targetPage, pdf.numPages));
+        if (cancelled) return;
+
+        const viewport = page.getViewport({ scale: 1.5 });
+        const canvas = canvasRef.current!;
+        canvas.width = viewport.width;
+        canvas.height = viewport.height;
+        const ctx = canvas.getContext("2d")!;
+
+        await page.render({ canvasContext: ctx, viewport, canvas: canvasRef.current! }).promise;
+        if (cancelled) return;
+
+        // Draw bounding box overlay
+        if (coords) {
+          const bx = coords.x * viewport.width;
+          const by = coords.y * viewport.height;
+          const bw = coords.w * viewport.width;
+          const bh = coords.h * viewport.height;
+
+          ctx.fillStyle = "rgba(59, 130, 246, 0.25)";
+          ctx.fillRect(bx, by, bw, bh);
+          ctx.strokeStyle = "rgba(59, 130, 246, 0.9)";
+          ctx.lineWidth = 2;
+          ctx.strokeRect(bx, by, bw, bh);
+        }
+
+        setIsLoadingPdf(false);
+      })
+      .catch((err) => {
+        if (cancelled) return;
+        console.error("PDF render error:", err);
+        setPdfError("Failed to render drawing.");
+        setIsLoadingPdf(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [signedUrl, instance.id, resultText]);
+
+  return (
+    <Dialog open onOpenChange={(open) => { if (!open) onClose(); }}>
+      <DialogContent className="max-w-4xl w-full">
+        <DialogHeader>
+          <DialogTitle>
+            {awpClassName} — <span className="font-mono text-sm">{instance.id}</span>
+          </DialogTitle>
+        </DialogHeader>
+
+        <div className="flex flex-col md:flex-row gap-6 mt-2">
+          {/* Left: instance details */}
+          <div className="md:w-56 shrink-0 space-y-3">
+            <div>
+              <p className="text-xs text-muted-foreground uppercase tracking-wide mb-1">Name</p>
+              <p className="text-sm font-medium">{instance.name || "—"}</p>
+            </div>
+            <div>
+              <p className="text-xs text-muted-foreground uppercase tracking-wide mb-1">Floor</p>
+              <p className="text-sm">{instance.floor || "—"}</p>
+            </div>
+            <div>
+              <p className="text-xs text-muted-foreground uppercase tracking-wide mb-1">Area (sqft)</p>
+              <p className="text-sm">{instance.area_sqft > 0 ? instance.area_sqft : "—"}</p>
+            </div>
+            {instance.notes && (
+              <div>
+                <p className="text-xs text-muted-foreground uppercase tracking-wide mb-1">Notes</p>
+                <p className="text-sm text-muted-foreground leading-relaxed">{instance.notes}</p>
+              </div>
+            )}
+          </div>
+
+          {/* Right: PDF preview */}
+          <div className="flex-1 min-w-0">
+            <p className="text-xs text-muted-foreground uppercase tracking-wide mb-2">Drawing Preview</p>
+            <div className="border rounded-md overflow-auto bg-muted/20 relative min-h-[300px] max-h-[500px] flex items-center justify-center">
+              {!sourceFile?.storage_path ? (
+                <p className="text-sm text-muted-foreground">Drawing not available</p>
+              ) : pdfError ? (
+                <p className="text-sm text-destructive">{pdfError}</p>
+              ) : (
+                <>
+                  {isLoadingPdf && (
+                    <div className="absolute inset-0 flex items-center justify-center">
+                      <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
+                    </div>
+                  )}
+                  <canvas
+                    ref={canvasRef}
+                    className={`max-w-full ${isLoadingPdf ? "opacity-0" : "opacity-100"}`}
+                  />
+                </>
+              )}
+            </div>
+            {sourceFile && (
+              <p className="text-xs text-muted-foreground mt-1.5 truncate">
+                Source: {sourceFile.name}
+              </p>
+            )}
+          </div>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 const HEADER_KEYWORDS = ["room code", "drawing label", "floor", "level", "notes", "code", "label", "name"];
 
 function parseResultText(resultText: string): ParsedInstance[] {
@@ -299,6 +562,10 @@ export function AnalysisSection({ requestId, files, projectId }: AnalysisSection
   const [summarizing, setSummarizing] = useState<Record<string, boolean>>({});
   const [addingToProject, setAddingToProject] = useState<Record<string, boolean>>({});
   const [addedToProject, setAddedToProject] = useState<Record<string, boolean>>({});
+  const [selectedInstance, setSelectedInstance] = useState<{
+    instance: SummarizedInstance;
+    awpClassName: string;
+  } | null>(null);
 
   // Fetch AWP prompts with linked drive docs
   const { data: prompts, isLoading: promptsLoading } = useQuery({
@@ -755,7 +1022,7 @@ export function AnalysisSection({ requestId, files, projectId }: AnalysisSection
                         <TableHead>Name</TableHead>
                         <TableHead>Floor</TableHead>
                         <TableHead className="text-right">Area (sqft)</TableHead>
-                        <TableHead>Notes</TableHead>
+                        <TableHead className="w-10" />
                       </TableRow>
                     </TableHeader>
                     <TableBody>
@@ -767,8 +1034,15 @@ export function AnalysisSection({ requestId, files, projectId }: AnalysisSection
                           <TableCell className="text-sm text-right text-muted-foreground">
                             {inst.area_sqft > 0 ? inst.area_sqft : "-"}
                           </TableCell>
-                          <TableCell className="text-sm text-muted-foreground max-w-[200px] truncate">
-                            {inst.notes || "-"}
+                          <TableCell className="text-right py-1">
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              className="h-7 w-7 p-0"
+                              onClick={() => setSelectedInstance({ instance: inst, awpClassName: prompt.awp_class_name })}
+                            >
+                              <Eye className="w-4 h-4" />
+                            </Button>
                           </TableCell>
                         </TableRow>
                       ))}
@@ -799,6 +1073,23 @@ export function AnalysisSection({ requestId, files, projectId }: AnalysisSection
           );
         })}
       </div>
+
+      {/* Instance Detail Modal */}
+      {selectedInstance && (() => {
+        const { instance, awpClassName } = selectedInstance;
+        const classResults = getResultsForClass(awpClassName);
+        const sourceResult = classResults.find((r) => r.result_text?.includes(instance.id));
+        const sourceFile = files.find((f) => f.id === sourceResult?.file_id);
+        return (
+          <InstanceDetailModal
+            instance={instance}
+            awpClassName={awpClassName}
+            sourceFile={sourceFile}
+            resultText={sourceResult?.result_text ?? undefined}
+            onClose={() => setSelectedInstance(null)}
+          />
+        );
+      })()}
     </TooltipProvider>
   );
 }
