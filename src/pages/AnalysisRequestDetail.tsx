@@ -28,6 +28,8 @@ import {
   Download,
   Loader2,
   ShieldAlert,
+  ChevronDown,
+  ChevronRight,
 } from "lucide-react";
 import { format } from "date-fns";
 import * as pdfjsLib from "pdfjs-dist";
@@ -89,6 +91,7 @@ export default function AnalysisRequestDetail() {
   const { toast } = useToast();
   useHeapIdentify();
   const [downloadingZip, setDownloadingZip] = useState(false);
+  const [filesCollapsed, setFilesCollapsed] = useState(true);
   const [selectedFile, setSelectedFile] = useState<AnalysisFile | null>(null);
   const [downloadingFile, setDownloadingFile] = useState(false);
   const [pdfPages, setPdfPages] = useState<HTMLCanvasElement[]>([]);
@@ -317,59 +320,71 @@ export default function AnalysisRequestDetail() {
               </Badge>
             </div>
 
-            {/* File table with consolidated header */}
+            {/* File table with consolidated header — collapsible */}
             <div className="bg-card border rounded-lg">
               <div className="px-4 py-3 border-b flex items-center justify-between">
-                <h2 className="font-semibold text-sm">
-                  Files
-                  <span className="font-normal text-muted-foreground ml-2">
-                    (Count: {files?.length || 0}, {formatBytes(totalSize)}, <span className="capitalize">{sourceLabel}</span>)
-                  </span>
-                </h2>
+                <button
+                  className="flex items-center gap-2 text-left hover:text-foreground transition-colors"
+                  onClick={() => setFilesCollapsed((c) => !c)}
+                >
+                  {filesCollapsed ? (
+                    <ChevronRight className="w-4 h-4 text-muted-foreground shrink-0" />
+                  ) : (
+                    <ChevronDown className="w-4 h-4 text-muted-foreground shrink-0" />
+                  )}
+                  <h2 className="font-semibold text-sm">
+                    Files
+                    <span className="font-normal text-muted-foreground ml-2">
+                      (Count: {files?.length || 0}, {formatBytes(totalSize)}, <span className="capitalize">{sourceLabel}</span>)
+                    </span>
+                  </h2>
+                </button>
                 <Button size="sm" onClick={handleDownloadZip} disabled={downloadingZip}>
                   {downloadingZip ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Download className="w-4 h-4 mr-2" />}
                   Download ZIP
                 </Button>
               </div>
 
-              {filesLoading ? (
-                <div className="flex items-center justify-center py-8">
-                  <Loader2 className="w-6 h-6 animate-spin" />
-                </div>
-              ) : !files?.length ? (
-                <div className="text-center py-8 text-muted-foreground">No files found.</div>
-              ) : (
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>File Name</TableHead>
-                      <TableHead className="w-[120px]">Status</TableHead>
-                      <TableHead className="w-[100px] text-right">Size</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {files.map((file) => (
-                      <TableRow key={file.id}>
-                        <TableCell>
-                          <button
-                            className="text-primary hover:underline text-left text-sm cursor-pointer"
-                            onClick={() => setSelectedFile(file)}
-                          >
-                            {file.relative_path}
-                          </button>
-                        </TableCell>
-                        <TableCell>
-                          <Badge variant="outline" className={`text-xs ${fileStatusColors[file.copy_status] || ""}`}>
-                            {file.copy_status}
-                          </Badge>
-                        </TableCell>
-                        <TableCell className="text-right text-sm text-muted-foreground">
-                          {formatBytes(file.size_bytes)}
-                        </TableCell>
+              {!filesCollapsed && (
+                filesLoading ? (
+                  <div className="flex items-center justify-center py-8">
+                    <Loader2 className="w-6 h-6 animate-spin" />
+                  </div>
+                ) : !files?.length ? (
+                  <div className="text-center py-8 text-muted-foreground">No files found.</div>
+                ) : (
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>File Name</TableHead>
+                        <TableHead className="w-[120px]">Status</TableHead>
+                        <TableHead className="w-[100px] text-right">Size</TableHead>
                       </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
+                    </TableHeader>
+                    <TableBody>
+                      {files.map((file) => (
+                        <TableRow key={file.id}>
+                          <TableCell>
+                            <button
+                              className="text-primary hover:underline text-left text-sm cursor-pointer"
+                              onClick={() => setSelectedFile(file)}
+                            >
+                              {file.relative_path}
+                            </button>
+                          </TableCell>
+                          <TableCell>
+                            <Badge variant="outline" className={`text-xs ${fileStatusColors[file.copy_status] || ""}`}>
+                              {file.copy_status}
+                            </Badge>
+                          </TableCell>
+                          <TableCell className="text-right text-sm text-muted-foreground">
+                            {formatBytes(file.size_bytes)}
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                )
               )}
             </div>
 
