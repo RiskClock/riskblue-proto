@@ -30,7 +30,123 @@ import {
   ChevronRight,
   Sparkles,
   PlusCircle,
+  File,
 } from "lucide-react";
+
+// Detection messages per AWP category, parameterized by class name
+const DETECTION_MESSAGES: Record<string, (name: string) => string[]> = {
+  Asset: (name) => [
+    `Scanning for ${name.toLowerCase()} labels...`,
+    `Detecting room boundaries on drawing...`,
+    `Cross-referencing floor annotations...`,
+    `Extracting room codes from title block...`,
+    `Identifying ${name.toLowerCase()} references...`,
+    `Parsing drawing notes and legends...`,
+    `Locating room designation markers...`,
+    `Reading floor plan annotations...`,
+  ],
+  "Water System": (name) => [
+    `Tracing ${name.toLowerCase()} piping layout...`,
+    `Identifying pipe diameter annotations...`,
+    `Locating valve and fitting labels...`,
+    `Reading riser diagram references...`,
+    `Extracting zone designations...`,
+    `Cross-referencing mechanical schedule...`,
+    `Detecting flow direction indicators...`,
+    `Parsing ${name.toLowerCase()} connection points...`,
+  ],
+  Process: (name) => [
+    `Scanning for ${name.toLowerCase()} indicators...`,
+    `Reading construction sequence notes...`,
+    `Identifying phase markers on drawing...`,
+    `Extracting schedule references...`,
+    `Detecting ${name.toLowerCase()} annotations...`,
+    `Cross-referencing specification notes...`,
+    `Parsing detail callouts...`,
+    `Locating key plan references...`,
+  ],
+  default: (name) => [
+    `Scanning drawing for ${name.toLowerCase()}...`,
+    `Analyzing title block information...`,
+    `Reading floor and level designations...`,
+    `Extracting annotation data...`,
+    `Cross-referencing drawing notes...`,
+    `Identifying relevant markers...`,
+    `Parsing drawing content...`,
+    `Finalizing detection results...`,
+  ],
+};
+
+function getDetectionMessages(awpClassName: string, category: string): string[] {
+  const factory = DETECTION_MESSAGES[category] || DETECTION_MESSAGES["default"];
+  return factory(awpClassName);
+}
+
+interface FileAnalysisRowProps {
+  fileName: string;
+  status: string | undefined;
+  awpClassName: string;
+  category: string;
+}
+
+function FileAnalysisRow({ fileName, status, awpClassName, category }: FileAnalysisRowProps) {
+  const [msgIdx, setMsgIdx] = useState(0);
+  const messages = getDetectionMessages(awpClassName, category);
+
+  useEffect(() => {
+    if (status !== "processing") return;
+    setMsgIdx(0);
+    const interval = setInterval(() => {
+      setMsgIdx((prev) => (prev + 1) % messages.length);
+    }, 1500);
+    return () => clearInterval(interval);
+  }, [status, messages.length]);
+
+  const shortName = fileName.length > 50 ? fileName.slice(0, 47) + "..." : fileName;
+
+  return (
+    <div className="px-4 py-2.5 space-y-1">
+      <div className="flex items-center justify-between gap-3">
+      <div className="flex items-center gap-2 min-w-0">
+          {status === "complete" ? (
+            <CheckCircle className="w-4 h-4 text-[hsl(var(--chart-2))] shrink-0" />
+          ) : status === "failed" ? (
+            <XCircle className="w-4 h-4 text-destructive shrink-0" />
+          ) : status === "processing" ? (
+            <Loader2 className="w-4 h-4 text-primary shrink-0 animate-spin" />
+          ) : (
+            <File className="w-4 h-4 text-muted-foreground shrink-0" />
+          )}
+          <span className={`text-sm truncate ${status === "complete" ? "text-foreground" : status === "failed" ? "text-destructive" : "text-muted-foreground"}`}>
+            {shortName}
+          </span>
+        </div>
+        <Badge
+          variant="outline"
+          className={`text-xs shrink-0 ${
+            status === "complete"
+              ? "border-[hsl(var(--chart-2))] text-[hsl(var(--chart-2))]"
+              : status === "failed"
+              ? "text-destructive border-destructive/40"
+              : status === "processing"
+              ? "text-primary border-primary/40"
+              : "text-muted-foreground border-muted"
+          }`}
+        >
+          {status === "complete" ? "Complete" : status === "failed" ? "Failed" : status === "processing" ? "Analyzing" : "Pending"}
+        </Badge>
+      </div>
+      {status === "processing" && (
+        <div className="pl-6 space-y-1.5">
+          <div className="h-1 rounded-full bg-muted overflow-hidden">
+            <div className="h-full bg-primary rounded-full animate-pulse w-full" />
+          </div>
+          <p className="text-xs text-muted-foreground animate-pulse">{messages[msgIdx]}</p>
+        </div>
+      )}
+    </div>
+  );
+}
 
 interface AnalysisFile {
   id: string;
@@ -177,7 +293,6 @@ export function AnalysisSection({ requestId, files, projectId }: AnalysisSection
   const [analyzingClass, setAnalyzingClass] = useState<string | null>(null);
   const [progress, setProgress] = useState({ current: 0, total: 0 });
   const [fileStatuses, setFileStatuses] = useState<Record<string, string>>({});
-  const [expandedRaw, setExpandedRaw] = useState<Record<string, boolean>>({});
   const [summarizedInstances, setSummarizedInstances] = useState<Record<string, SummarizedInstance[]>>({});
   const [summarizing, setSummarizing] = useState<Record<string, boolean>>({});
   const [addingToProject, setAddingToProject] = useState<Record<string, boolean>>({});
@@ -299,7 +414,6 @@ export function AnalysisSection({ requestId, files, projectId }: AnalysisSection
 
       for (let i = 0; i < copiedFiles.length; i++) {
         const file = copiedFiles[i];
-        setProgress({ current: i + 1, total: copiedFiles.length });
         setFileStatuses((prev) => ({ ...prev, [file.id]: "processing" }));
 
         try {
@@ -331,6 +445,9 @@ export function AnalysisSection({ requestId, files, projectId }: AnalysisSection
           setFileStatuses((prev) => ({ ...prev, [file.id]: "failed" }));
           console.error(`Error analyzing ${file.name}:`, e);
         }
+
+        // Increment progress AFTER the file finishes (success or failure)
+        setProgress({ current: i + 1, total: copiedFiles.length });
       }
 
       toast({ title: "Analysis Complete", description: `Finished analyzing ${copiedFiles.length} files.` });
@@ -555,42 +672,33 @@ export function AnalysisSection({ requestId, files, projectId }: AnalysisSection
                 </div>
               </div>
 
-              {/* Progress bar during analysis */}
+              {/* Per-file analysis progress */}
               {isAnalyzing && (
-                <div className="px-4 py-3 space-y-2">
-                  <div className="flex items-center justify-between text-sm">
+                <div className="border-b">
+                  <div className="px-4 py-2 flex items-center justify-between text-sm border-b border-muted">
                     <span className="text-muted-foreground">
-                      Analyzing file {progress.current} of {progress.total}...
+                      {progress.current < progress.total
+                        ? `Analyzing file ${progress.current + 1} of ${progress.total}...`
+                        : `Finishing up...`}
                     </span>
-                    <span className="text-muted-foreground">
-                      {Math.round((progress.current / progress.total) * 100)}%
+                    <span className="text-muted-foreground font-medium">
+                      {progress.total > 0 ? Math.round((progress.current / progress.total) * 100) : 0}%
                     </span>
                   </div>
-                  <Progress value={(progress.current / progress.total) * 100} className="h-2" />
-                  <div className="flex flex-wrap gap-2 mt-2">
-                    {copiedFiles.map((file) => {
-                      const status = fileStatuses[file.id];
-                      return (
-                        <Badge
-                          key={file.id}
-                          variant="outline"
-                          className={`text-xs ${
-                            status === "complete"
-                              ? "text-emerald-600 border-emerald-300"
-                              : status === "failed"
-                              ? "text-red-600 border-red-300"
-                              : status === "processing"
-                              ? "text-blue-600 border-blue-300"
-                              : "text-muted-foreground"
-                          }`}
-                        >
-                          {status === "complete" && <CheckCircle className="w-3 h-3 mr-1" />}
-                          {status === "failed" && <XCircle className="w-3 h-3 mr-1" />}
-                          {status === "processing" && <Loader2 className="w-3 h-3 mr-1 animate-spin" />}
-                          {file.name.length > 30 ? file.name.slice(0, 27) + "..." : file.name}
-                        </Badge>
-                      );
-                    })}
+                  <Progress
+                    value={progress.total > 0 ? (progress.current / progress.total) * 100 : 0}
+                    className="h-1 rounded-none"
+                  />
+                  <div className="divide-y">
+                    {copiedFiles.map((file) => (
+                      <FileAnalysisRow
+                        key={file.id}
+                        fileName={file.name}
+                        status={fileStatuses[file.id]}
+                        awpClassName={prompt.awp_class_name}
+                        category={prompt.category}
+                      />
+                    ))}
                   </div>
                 </div>
               )}
@@ -620,7 +728,7 @@ export function AnalysisSection({ requestId, files, projectId }: AnalysisSection
                   <Table>
                     <TableHeader>
                       <TableRow>
-                        <TableHead>ID</TableHead>
+                        <TableHead>Display ID</TableHead>
                         <TableHead>Name</TableHead>
                         <TableHead>Floor</TableHead>
                         <TableHead className="text-right">Area (sqft)</TableHead>
@@ -652,69 +760,14 @@ export function AnalysisSection({ requestId, files, projectId }: AnalysisSection
                 </div>
               )}
 
-              {/* Parsed asset instance table */}
-              {!isAnalyzing && hasResults && (
-                <div className="divide-y">
-                  {allInstances.length > 0 && (
-                    <Table>
-                      <TableHeader>
-                        <TableRow>
-                          <TableHead>ID</TableHead>
-                          <TableHead>Name</TableHead>
-                          <TableHead>Level</TableHead>
-                          <TableHead>Size</TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {allInstances.map((inst, idx) => (
-                          <TableRow key={idx}>
-                            <TableCell className="font-mono text-sm">{inst.id}</TableCell>
-                            <TableCell className="text-sm">{inst.name}</TableCell>
-                            <TableCell className="text-sm">{inst.level}</TableCell>
-                            <TableCell className="text-sm text-muted-foreground">{inst.size}</TableCell>
-                          </TableRow>
-                        ))}
-                      </TableBody>
-                    </Table>
-                  )}
-
-                  {allInstances.length === 0 && rawFallbacks.length === 0 && failedResults.length === 0 && (
-                    <p className="px-4 py-3 text-sm text-muted-foreground">No instances found.</p>
-                  )}
-
-                  {/* Failed results */}
+              {/* Failed results (shown after analysis, no raw data) */}
+              {!isAnalyzing && hasResults && failedResults.length > 0 && (
+                <div className="divide-y border-t">
                   {failedResults.map((fr, idx) => (
                     <div key={`fail-${idx}`} className="px-4 py-2 flex items-center gap-2">
-                      <XCircle className="w-4 h-4 text-red-500 shrink-0" />
+                      <XCircle className="w-4 h-4 text-destructive shrink-0" />
                       <span className="text-sm font-medium">{fr.fileName}</span>
                       <span className="text-sm text-destructive">{fr.error}</span>
-                    </div>
-                  ))}
-
-                  {/* Raw fallbacks (unparseable results) */}
-                  {rawFallbacks.map((fb) => (
-                    <div key={fb.resultId} className="px-4 py-2">
-                      <button
-                        className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground cursor-pointer"
-                        onClick={() =>
-                          setExpandedRaw((prev) => ({
-                            ...prev,
-                            [fb.resultId]: !prev[fb.resultId],
-                          }))
-                        }
-                      >
-                        {expandedRaw[fb.resultId] ? (
-                          <ChevronDown className="w-4 h-4" />
-                        ) : (
-                          <ChevronRight className="w-4 h-4" />
-                        )}
-                        {fb.fileName} — raw output
-                      </button>
-                      {expandedRaw[fb.resultId] && (
-                        <pre className="text-sm text-muted-foreground whitespace-pre-wrap bg-muted/30 rounded p-3 mt-1 max-h-[200px] overflow-auto">
-                          {fb.text}
-                        </pre>
-                      )}
                     </div>
                   ))}
                 </div>
