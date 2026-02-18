@@ -221,6 +221,8 @@ function InstanceDetailModal({
   const [rawCoords, setRawCoords] = useState<{ x1: number; y1: number; x2: number; y2: number } | null>(null);
   const [isLoadingPdf, setIsLoadingPdf] = useState(false);
   const [pdfError, setPdfError] = useState<string | null>(null);
+  const [pdfViewport, setPdfViewport] = useState<pdfjsLib.PageViewport | null>(null);
+  const [offscreenSize, setOffscreenSize] = useState<{ w: number; h: number } | null>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
 
@@ -232,6 +234,8 @@ function InstanceDetailModal({
     setPageImage(null);
     setRawCoords(null);
     setBaseDimensions(null);
+    setPdfViewport(null);
+    setOffscreenSize(null);
     setZoom(1);
 
     let cancelled = false;
@@ -266,6 +270,8 @@ function InstanceDetailModal({
 
         // Render at high resolution (scale 4) to offscreen canvas
         const viewport = page.getViewport({ scale: 4 });
+        setPdfViewport(viewport);
+        setOffscreenSize({ w: viewport.width, h: viewport.height });
         const offscreen = document.createElement("canvas");
         offscreen.width = viewport.width;
         offscreen.height = viewport.height;
@@ -327,21 +333,28 @@ function InstanceDetailModal({
     ctx.imageSmoothingQuality = "high";
     ctx.drawImage(pageImage, 0, 0, w, h);
 
-    if (rawCoords) {
-      // AI coordinate space is 1024×768
-      const scaleX = w / 1024;
-      const scaleY = h / 768;
-      const bx = rawCoords.x1 * scaleX;
-      const by = rawCoords.y1 * scaleY;
-      const bw = (rawCoords.x2 - rawCoords.x1) * scaleX;
-      const bh = (rawCoords.y2 - rawCoords.y1) * scaleY;
+    if (rawCoords && pdfViewport && offscreenSize) {
+      // Convert PDF user-space (pts, origin bottom-left) → offscreen canvas pixels.
+      // convertToViewportRectangle handles Y-axis flip and scale in one step.
+      const [vx1, vy1, vx2, vy2] = pdfViewport.convertToViewportRectangle([
+        rawCoords.x1, rawCoords.y1, rawCoords.x2, rawCoords.y2,
+      ]);
+      // Normalize to [0..1] using offscreen canvas size, then map to display canvas
+      const nx1 = Math.min(vx1, vx2) / offscreenSize.w;
+      const ny1 = Math.min(vy1, vy2) / offscreenSize.h;
+      const nx2 = Math.max(vx1, vx2) / offscreenSize.w;
+      const ny2 = Math.max(vy1, vy2) / offscreenSize.h;
+      const bx = nx1 * w;
+      const by = ny1 * h;
+      const bw = (nx2 - nx1) * w;
+      const bh = (ny2 - ny1) * h;
       ctx.fillStyle = "rgba(239, 68, 68, 0.15)";
       ctx.fillRect(bx, by, bw, bh);
       ctx.strokeStyle = "rgba(239, 68, 68, 0.9)";
       ctx.lineWidth = 2.5;
       ctx.strokeRect(bx, by, bw, bh);
     }
-  }, [pageImage, baseDimensions, zoom, rawCoords]);
+  }, [pageImage, baseDimensions, zoom, rawCoords, pdfViewport, offscreenSize]);
 
   // Center-preserving zoom handlers — exact copy from LocationDetailsModal
   const handleZoomIn = () => {
@@ -731,6 +744,18 @@ export function AnalysisSection({ requestId, files, projectId, sourceType }: Ana
     },
   });
 
+  const { data: savedSummaryData, refetch: refetchSummary } = useQuery({
+    queryKey: ["analysis-request-summary", requestId],
+    queryFn: async () => {
+      const { data } = await supabase
+        .from("analysis_requests")
+        .select("summary_data")
+        .eq("id", requestId)
+        .single();
+      return (data?.summary_data as unknown as Record<string, SummarizedInstance[]>) || {};
+    },
+  });
+
   const { data: awpClasses } = useQuery({
     queryKey: ["awp-classes-all"],
     queryFn: async () => {
@@ -823,6 +848,18 @@ export function AnalysisSection({ requestId, files, projectId, sourceType }: Ana
       if (error) throw error;
       if (data?.instances) {
         setSummarizedInstances((prev) => ({ ...prev, [awpClassName]: data.instances }));
+        // Persist to DB so it survives page reloads
+        const { data: req } = await supabase
+          .from("analysis_requests")
+          .select("summary_data")
+          .eq("id", requestId)
+          .single();
+        const existing = (req?.summary_data as unknown as Record<string, unknown>) || {};
+        await supabase
+          .from("analysis_requests")
+          .update({ summary_data: { ...existing, [awpClassName]: data.instances } as any })
+          .eq("id", requestId);
+        await refetchSummary();
       }
     } catch (e) {
       console.error("Summarize failed:", e);
@@ -834,26 +871,19 @@ export function AnalysisSection({ requestId, files, projectId, sourceType }: Ana
     } finally {
       setSummarizing((prev) => ({ ...prev, [awpClassName]: false }));
     }
-  }, [requestId, toast]);
+  }, [requestId, toast, refetchSummary]);
 
-  // Auto-hydrate summaries from DB results on page mount / re-entry
+  // Hydrate summarized instances from DB on mount (avoids re-calling the AI)
   useEffect(() => {
-    if (!results || results.length === 0) return;
-    if (analyzingClasses.size > 0) return;
-
-    const classesWithResults = [...new Set(
-      results
-        .filter((r) => r.status === "complete")
-        .map((r) => r.awp_class_name)
-    )];
-
-    for (const className of classesWithResults) {
-      if (!summarizedInstances[className] && !summarizing[className]) {
-        handleSummarize(className);
+    if (!savedSummaryData) return;
+    setSummarizedInstances((prev) => {
+      const merged = { ...prev };
+      for (const [className, instances] of Object.entries(savedSummaryData)) {
+        if (!merged[className]) merged[className] = instances as SummarizedInstance[];
       }
-    }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [results, analyzingClasses.size]);
+      return merged;
+    });
+  }, [savedSummaryData]);
 
   const handleAnalyze = async (prompt: AWPPrompt) => {
     if (!prompt.drive_file_id || copiedFiles.length === 0) return;
@@ -862,6 +892,21 @@ export function AnalysisSection({ requestId, files, projectId, sourceType }: Ana
     // Clear existing values for this class before re-analyzing
     setSummarizedInstances((prev) => { const n = { ...prev }; delete n[className]; return n; });
     setAddedToProject((prev) => { const n = { ...prev }; delete n[className]; return n; });
+
+    // Clear saved summary for this class from DB
+    (async () => {
+      const { data: req } = await supabase
+        .from("analysis_requests")
+        .select("summary_data")
+        .eq("id", requestId)
+        .single();
+      const existingSum = (req?.summary_data as unknown as Record<string, unknown>) || {};
+      delete existingSum[className];
+      await supabase
+        .from("analysis_requests")
+        .update({ summary_data: existingSum as any })
+        .eq("id", requestId);
+    })();
 
     // Create per-class AbortController
     const controller = new AbortController();

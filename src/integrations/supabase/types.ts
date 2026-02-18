@@ -111,6 +111,7 @@ export type Database = {
           source_type: string
           status: string
           storage_path: string | null
+          summary_data: Json | null
           total_size_bytes: number | null
           updated_at: string
           user_id: string
@@ -125,6 +126,7 @@ export type Database = {
           source_type?: string
           status?: string
           storage_path?: string | null
+          summary_data?: Json | null
           total_size_bytes?: number | null
           updated_at?: string
           user_id: string
@@ -139,6 +141,7 @@ export type Database = {
           source_type?: string
           status?: string
           storage_path?: string | null
+          summary_data?: Json | null
           total_size_bytes?: number | null
           updated_at?: string
           user_id?: string
