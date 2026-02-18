@@ -50,6 +50,10 @@ export type Database = {
           id: string
           mime_type: string
           name: string
+          openai_file_expires_at: string | null
+          openai_file_id: string | null
+          openai_file_status: string | null
+          openai_file_uploaded_at: string | null
           relative_path: string
           size_bytes: number | null
           storage_path: string | null
@@ -62,6 +66,10 @@ export type Database = {
           id?: string
           mime_type: string
           name: string
+          openai_file_expires_at?: string | null
+          openai_file_id?: string | null
+          openai_file_status?: string | null
+          openai_file_uploaded_at?: string | null
           relative_path: string
           size_bytes?: number | null
           storage_path?: string | null
@@ -74,6 +82,10 @@ export type Database = {
           id?: string
           mime_type?: string
           name?: string
+          openai_file_expires_at?: string | null
+          openai_file_id?: string | null
+          openai_file_status?: string | null
+          openai_file_uploaded_at?: string | null
           relative_path?: string
           size_bytes?: number | null
           storage_path?: string | null
