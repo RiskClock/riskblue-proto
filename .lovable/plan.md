@@ -1,125 +1,124 @@
 
-# All 7 Fixes: Drawing Preview, AWP Ordering/Prefix, Grid Width, Clickable Files, Header Labels, Remove Files Section, Column Lock
+# InstanceDetailModal: Zoom Controls, Red Bounding Box Fix, Coordinate Display
 
-## Files changed
-1. `src/components/analysis/AnalysisSection.tsx` — drawing fix, AWP ordering + correct prefix, clickable filenames + FilePreviewModal, File Name header labels, first-column width lock
-2. `src/pages/AnalysisRequestDetail.tsx` — widen to max-w-7xl, remove Files collapsible section + file preview modal + unused state/effects
+## Root Causes Found
 
----
+### 1. Bounding box never drawn — column name mismatch
+The `parseCoordinatesFromResult` function (line 111–119) searches for a header containing `"coord"`. The actual AI output column is `"Bounding Box (x_min, y_min, x_max, y_max)"` — which does contain "coord" in the sense that `bounding box` does not. Wait — "coord" vs "bounding box" — the header is literally `Bounding Box (x_min, y_min, x_max, y_max)`. The function checks `h.includes("coord")` which fails to match `"bounding box"`.
 
-## Fix 1: Drawing "Failed to render drawing" — root cause confirmed
+**Additionally**, the function tries to find the instance row by matching `instanceId` (e.g. `SWC-B04`) in any cell. For the pipe-delimited format in the DB, the rows are not pipe-delimited — they use the format:
+```
+SWC-B04 | A2.01.pdf | ELECTRICAL SWC-B04 | ...  | (260, 500, 420, 620)
+```
+That IS pipe-delimited, so row matching should work — but only if the header is matched first.
 
-The `InstanceDetailModal` (lines 195–334) still uses **`createSignedUrl` + string URL** passed to `pdfjsLib.getDocument(signedUrl)`. PDF.js makes a network request for that URL using byte-range headers which Supabase Storage CDN rejects, causing the render to fail.
+**Fix**: Expand `coordCol` search to also match `"bounding"`, `"bbox"`, `"box"`.
 
-The working pattern (already used in `AnalysisRequestDetail.tsx` lines 155–196) is `.download()` → blob → `ArrayBuffer` → `getDocument({ data: arrayBuffer })`.
+### 2. Scale is wrong — AI uses 1024×768, code uses 2000×1500
+The AI explicitly states: *"page width ≈ 1024 px, height ≈ 768 px"*. The current normalization divides by `W=2000, H=1500`, making all boxes 2x too small and offset. 
 
-**Changes to `InstanceDetailModal`:**
-- Replace state `signedUrl: string | null` with `pdfArrayBuffer: ArrayBuffer | null`
-- Replace the first `useEffect` (lines 200–217): call `.download(sourceFile.storage_path)` → `.arrayBuffer()` → `setPdfArrayBuffer(ab)`
-- Replace the second `useEffect` dependency `signedUrl` with `pdfArrayBuffer`, and change `getDocument(signedUrl)` to `getDocument({ data: pdfArrayBuffer })`
+**Fix**: Change W/H to `1024`/`768` (the AI's stated coordinate space). Also parse the `(x_min, y_min, x_max, y_max)` format: four numbers in parentheses separated by commas.
 
-This mirrors exactly what `AnalysisRequestDetail.tsx` does and is known to work.
+### 3. Bounding box is blue, not red
+Current: `rgba(59, 130, 246, ...)` (blue). User wants red.
+**Fix**: Change to `rgba(239, 68, 68, 0.25)` fill, `rgba(239, 68, 68, 0.9)` stroke.
 
----
+### 4. No zoom controls in InstanceDetailModal
+The `LocationDetailsModal` renders PDF pages into `HTMLImageElement` arrays (via offscreen canvas at scale 4), then re-draws at `baseDimensions × zoom` on a display canvas. The `InstanceDetailModal` renders directly onto a single `<canvas>` with `scale: 1.5` and no zoom support.
 
-## Fix 2: AWP ordering matches Configuration page + correct ID prefix
+**Fix**: Adopt the same two-step approach:
+- Step 1: Render PDF page to offscreen canvas at high resolution (scale 4) → convert to `HTMLImageElement`
+- Step 2: Display via a display canvas at `baseDimensions × zoom`, re-drawn when zoom changes
+- Add `ZoomIn`, `ZoomOut`, reset (percentage label) buttons in a fixed toolbar above the drawing area
 
-**Current problem**: Prompts are fetched `order("awp_class_name")` (alphabetical). The `idPrefixMap` is built from `awp_classes` table which may have timing issues and doesn't guarantee the same order as the Configuration page.
+### 5. Bounding box must scale with zoom
+After switching to the image-based zoom approach, the bounding box overlay must be re-drawn on the display canvas at each zoom level (scaled proportionally from the raw AI coordinates).
 
-**Confirmed source-of-truth order** (from DB):
+**Fix**: In the draw effect, after `ctx.drawImage(img, ...)`, compute bounding box pixel positions as fractions of the display canvas size and draw the red rectangle.
 
-Critical Assets (display_order 1–9): ERM, ELVP, STE, MRM, ERS, MRS, MTM, FEER, KW
-
-Water Systems (display_order 1–6): TWR, HYD, FS, SPSDD, DHW, DCW
-
-Processes (display_order 1–4): CONT, WMVP, MCP, ENGP
-
-**Fix**: Add a new query `awpOrderData` that fetches `name, id_prefix, display_order` from all three source tables in parallel (same as the `useAWPOptions` hook pattern). Build a `globalOrderMap: Record<name, number>` (assets = 0+i, water systems = 1000+i, processes = 2000+i) and a `sourcePrefixMap: Record<name, string>`. Then:
-
-1. Replace `idPrefixMap` (built from `awp_classes`) with `sourcePrefixMap` (built from source tables) — this ensures the correct prefix (e.g., "ERM" not "ELE") even before the `awp_classes` query returns
-2. Sort `prompts` by `globalOrderMap` before rendering — this makes both the grid columns and the Analysis Summary rows match Configuration page order
-
-**The fallback** `prompt.awp_class_name.slice(0, 3).toUpperCase()` at line 876 and `className.slice(0, 3).toUpperCase()` at line 1046 are replaced by `sourcePrefixMap[className] || idPrefixMap[className] || "???"` — so if a name is in either map it gets the right abbreviation.
+### 6. List coordinates in left panel
+Add a "Bounding Box" field in the left panel of `InstanceDetailModal` showing the raw parsed coordinates (e.g. `(260, 500) → (420, 620)`). If no coordinates are available, show "—".
 
 ---
 
-## Fix 3: Clickable file names open a FilePreviewModal
+## Changes — one file only: `src/components/analysis/AnalysisSection.tsx`
 
-Add new state: `const [previewFile, setPreviewFile] = useState<AnalysisFile | null>(null);`
+### A. Fix `parseCoordinatesFromResult` — header matching + scale
 
-Change the file name `<span>` (line 948–950) to a `<button>` that sets `previewFile`. This button uses the same styling pattern as the existing file preview in `AnalysisRequestDetail`.
+Lines 103–175: Replace the entire function with an improved version that:
+1. Matches column headers containing `"bounding"`, `"bbox"`, `"box"`, OR `"coord"` (case-insensitive)
+2. Parses `(x_min, y_min, x_max, y_max)` four-number format: `\((\d+),\s*(\d+),\s*(\d+),\s*(\d+)\)`
+3. Returns raw pixel coordinates (not normalized fractions) in the AI's 1024×768 space
+4. Returns a new shape: `{ x1, y1, x2, y2, pageNum }` (absolute pixels in AI space)
 
-Add a new `FilePreviewModal` component (between `RawResultModal` and `parseResultText`) that:
-- Accepts `file: AnalysisFile`, `sourceType: string`, `onClose: () => void`
-- Downloads the blob from `supabase.storage.from("drive-analysis-files").download(file.storage_path)` 
-- Renders all PDF pages using the same canvas loop pattern as `AnalysisRequestDetail.tsx` lines 166–184
-- Shows in a `Dialog` with `max-w-4xl` width
+Also add a companion `getBoundingBoxForInstance(resultText, instanceId)` that returns `{ x1, y1, x2, y2 } | null` for display in the left panel.
 
-Add `sourceType?: string` to `AnalysisSectionProps` and pass `request?.source_type` from `AnalysisRequestDetail.tsx`.
+### B. Refactor `InstanceDetailModal` — zoom + image-based rendering
 
----
+Replace the current state and render approach:
 
-## Fix 4: "File Name" header — add count, size, source sub-labels
+**State changes:**
+```typescript
+// Remove:
+const [pdfArrayBuffer, setPdfArrayBuffer] = useState<ArrayBuffer | null>(null);
 
-Change the sticky `<th>` (lines 865–867) from just "File Name" to:
-
-```tsx
-<th className="sticky left-0 z-10 bg-card px-4 py-2 text-left font-medium text-muted-foreground min-w-[320px] border-r">
-  <span className="block text-sm">File Name</span>
-  <span className="block text-xs font-normal text-muted-foreground/70">
-    {copiedFiles.length} files · {formatBytes(totalSizeBytes)} · {sourceLabel}
-  </span>
-</th>
+// Add:
+const [pageImage, setPageImage] = useState<HTMLImageElement | null>(null);
+const [zoom, setZoom] = useState(1);
+const [baseDimensions, setBaseDimensions] = useState<{ width: number; height: number } | null>(null);
+const [rawCoords, setRawCoords] = useState<{ x1: number; y1: number; x2: number; y2: number } | null>(null);
+const containerRef = useRef<HTMLDivElement>(null);
 ```
 
-`totalSizeBytes` = `copiedFiles.reduce((sum, f) => sum + (f.size_bytes || 0), 0)`. `sourceLabel` = `sourceType?.replace("_", " ") || "google drive"`.
+**Load effect (replaces first useEffect):**
+- Download blob from storage
+- Convert to ArrayBuffer
+- `pdfjsLib.getDocument({ data: ab })` → get target page → `getViewport({ scale: 4 })` → render to offscreen canvas → `canvas.toDataURL()` → create `HTMLImageElement` → `setPageImage(img)`
+- Parse bounding box from `resultText` using updated parser → `setRawCoords(...)`
+
+**Base dimensions effect (new):**
+- Triggered by `pageImage` change (not zoom)
+- Measure `containerRef.current` dimensions
+- Compute `baseDimensions` to fit the image within the container
+
+**Draw effect (replaces second useEffect):**
+- Triggered by `baseDimensions`, `zoom`, `pageImage`, `rawCoords`
+- `canvas.width = baseDimensions.width × zoom`, `canvas.height = ...`
+- `ctx.drawImage(pageImage, 0, 0, canvas.width, canvas.height)`
+- If `rawCoords`: scale from AI 1024×768 space to canvas pixel space:
+  ```
+  scaleX = canvas.width / 1024
+  scaleY = canvas.height / 768
+  bx = rawCoords.x1 × scaleX
+  by = rawCoords.y1 × scaleY
+  bw = (rawCoords.x2 - rawCoords.x1) × scaleX
+  bh = (rawCoords.y2 - rawCoords.y1) × scaleY
+  ```
+  Draw red fill + red stroke rect
+
+**Zoom handlers** (same as `LocationDetailsModal`):
+```typescript
+const handleZoomIn = () => { setZoom(z => Math.min(4, z + 0.25)); };
+const handleZoomOut = () => { setZoom(z => Math.max(0.5, z - 0.25)); };
+```
+
+**UI changes:**
+- Add a fixed-height toolbar above the drawing area: `[ZoomOut] [50%] [ZoomIn]`
+- Add `containerRef` to the scrollable drawing div
+- Left panel: add "Bounding Box" row showing `(x1, y1) → (x2, y2)` or "—"
+
+### C. Add `ZoomIn`, `ZoomOut` to lucide-react imports (line 27)
+
+These are not currently imported in `AnalysisSection.tsx`.
 
 ---
 
-## Fix 5: Remove "Files" collapsible section from AnalysisRequestDetail
+## Summary of changes
 
-Remove from `AnalysisRequestDetail.tsx`:
-- State: `filesCollapsed`, `selectedFile`, `downloadingFile`, `downloadingZip`, `pdfPages`, `pdfLoading`, `pdfPageCount`, `pdfContainerRef`
-- Both `useEffect` hooks for PDF loading and canvas rendering (lines 139–212)
-- `handleDownloadZip`, `handleDownloadFile`, `getFilePreviewUrl` functions
-- The entire Files collapsible section `<div>` (lines 323–389)
-- The File Preview `<Dialog>` at the bottom (lines 406–473)
-- Remove unused imports: `ChevronDown`, `ChevronRight`, `pdfjsLib`, `Table*`, `Dialog*`, `Download` (if unused after), `useRef`, `useCallback`
+| # | Location | Change |
+|---|---|---|
+| 1 | Lines 103–175 | Rewrite `parseCoordinatesFromResult` to match `"bounding"/"box"/"bbox"` + parse `(x1,y1,x2,y2)` format + use 1024×768 AI space |
+| 2 | Lines 181–335 | Refactor `InstanceDetailModal`: add `zoom`/`baseDimensions`/`pageImage`/`rawCoords` state; render PDF page to offscreen canvas → image → display canvas; draw red bounding box scaled to zoom; add ZoomIn/ZoomOut toolbar; add Bounding Box row in left panel |
+| 3 | Line 27 | Add `ZoomIn`, `ZoomOut` to lucide-react imports |
 
-Keep: The `AnalysisSection` call and the error message block.
-
----
-
-## Fix 6: Widen the page
-
-Line 298: `max-w-4xl` → `max-w-[1400px]` (wider than 7xl=1280px for full grid visibility)
-
----
-
-## Fix 7: First-column width consistency
-
-Both the Download ZIP sub-row `<td>` and every file body `<td>` in the sticky first column get explicit `min-w-[320px]` to guarantee the column never changes width as rows render.
-
-Current `<td>` at line 887: add `min-w-[320px]` class.
-Current `<td>` at line 945: add `min-w-[320px]` class.
-
----
-
-## Technical implementation summary
-
-| # | File | Lines affected | Change |
-|---|---|---|---|
-| 1 | AnalysisSection.tsx | 195–270 | Blob download in InstanceDetailModal |
-| 2 | AnalysisSection.tsx | 478–521 | Add awpOrderData query; build sourcePrefixMap + sortedPrompts |
-| 3 | AnalysisSection.tsx | 872–882, 1044–1046 | Use sourcePrefixMap for column headers + summary prefix |
-| 4 | AnalysisSection.tsx | 478–486 | prompts → sortedPrompts (sorted by globalOrderMap) |
-| 5 | AnalysisSection.tsx | 945–954 | span → button for clickable filename |
-| 6 | AnalysisSection.tsx | 92–96 | Add sourceType? prop |
-| 7 | AnalysisSection.tsx | 336–364 | Add FilePreviewModal component |
-| 8 | AnalysisSection.tsx | 865–867 | File Name header with count/size/source |
-| 9 | AnalysisSection.tsx | 887, 945 | min-w-[320px] on sticky first column tds |
-| 10 | AnalysisRequestDetail.tsx | 298 | max-w-4xl → max-w-[1400px] |
-| 11 | AnalysisRequestDetail.tsx | 93–100, 139–212, 214–274, 323–389, 406–473 | Remove Files section + state + effects + modal |
-| 12 | AnalysisRequestDetail.tsx | 399–401 | Pass sourceType prop to AnalysisSection |
-
-No new packages. No DB migrations. No other files.
+No DB changes. No new packages. No other files.
