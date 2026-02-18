@@ -93,6 +93,7 @@ interface AnalysisSectionProps {
   requestId: string;
   files: AnalysisFile[];
   projectId: string;
+  sourceType?: string;
 }
 
 // ---------------------------------------------------------------------------
@@ -192,7 +193,7 @@ function InstanceDetailModal({
   resultText,
   onClose,
 }: InstanceDetailModalProps) {
-  const [signedUrl, setSignedUrl] = useState<string | null>(null);
+  const [pdfArrayBuffer, setPdfArrayBuffer] = useState<ArrayBuffer | null>(null);
   const [isLoadingPdf, setIsLoadingPdf] = useState(false);
   const [pdfError, setPdfError] = useState<string | null>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -201,23 +202,23 @@ function InstanceDetailModal({
     if (!sourceFile?.storage_path) return;
     setIsLoadingPdf(true);
     setPdfError(null);
-    setSignedUrl(null);
+    setPdfArrayBuffer(null);
 
     supabase.storage
       .from("drive-analysis-files")
-      .createSignedUrl(sourceFile.storage_path, 120)
-      .then(({ data, error }) => {
-        if (error || !data?.signedUrl) {
+      .download(sourceFile.storage_path)
+      .then(({ data: blob, error }) => {
+        if (error || !blob) {
           setPdfError("Could not load drawing preview.");
           setIsLoadingPdf(false);
         } else {
-          setSignedUrl(data.signedUrl);
+          blob.arrayBuffer().then((ab) => setPdfArrayBuffer(ab));
         }
       });
   }, [sourceFile?.storage_path]);
 
   useEffect(() => {
-    if (!signedUrl || !canvasRef.current) return;
+    if (!pdfArrayBuffer || !canvasRef.current) return;
 
     let cancelled = false;
 
@@ -227,7 +228,7 @@ function InstanceDetailModal({
     const targetPage = coords?.pageNum ?? 1;
 
     pdfjsLib
-      .getDocument(signedUrl)
+      .getDocument({ data: pdfArrayBuffer })
       .promise.then(async (pdf) => {
         if (cancelled) return;
         const page = await pdf.getPage(Math.min(targetPage, pdf.numPages));
@@ -267,7 +268,7 @@ function InstanceDetailModal({
     return () => {
       cancelled = true;
     };
-  }, [signedUrl, instance.id, resultText]);
+  }, [pdfArrayBuffer, instance.id, resultText]);
 
   return (
     <Dialog open onOpenChange={(open) => { if (!open) onClose(); }}>
@@ -364,8 +365,95 @@ function RawResultModal({ fileName, awpClassName, resultText, instanceCount, onC
 }
 
 // ---------------------------------------------------------------------------
-// parseResultText
+// FilePreviewModal
 // ---------------------------------------------------------------------------
+
+interface FilePreviewModalProps {
+  file: AnalysisFile;
+  onClose: () => void;
+}
+
+function FilePreviewModal({ file, onClose }: FilePreviewModalProps) {
+  const [pages, setPages] = useState<HTMLCanvasElement[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!file.storage_path) { setError("No file available."); return; }
+    let cancelled = false;
+    setLoading(true);
+    setError(null);
+    setPages([]);
+
+    (async () => {
+      try {
+        const { data: blob, error: dlErr } = await supabase.storage
+          .from("drive-analysis-files")
+          .download(file.storage_path!);
+        if (dlErr || !blob) throw dlErr || new Error("Download failed");
+        const ab = await blob.arrayBuffer();
+        if (cancelled) return;
+        const pdf = await pdfjsLib.getDocument({ data: ab }).promise;
+        if (cancelled) return;
+        const maxPages = Math.min(pdf.numPages, 20);
+        const canvases: HTMLCanvasElement[] = [];
+        for (let i = 1; i <= maxPages; i++) {
+          const page = await pdf.getPage(i);
+          const viewport = page.getViewport({ scale: 1.5 });
+          const canvas = document.createElement("canvas");
+          canvas.width = viewport.width;
+          canvas.height = viewport.height;
+          const ctx = canvas.getContext("2d")!;
+          await page.render({ canvasContext: ctx, viewport, canvas } as any).promise;
+          if (cancelled) return;
+          canvases.push(canvas);
+        }
+        setPages(canvases);
+      } catch (e) {
+        if (!cancelled) setError("Could not render file preview.");
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [file.storage_path]);
+
+  useEffect(() => {
+    if (!containerRef.current || pages.length === 0) return;
+    const container = containerRef.current;
+    container.innerHTML = "";
+    for (const canvas of pages) {
+      canvas.style.width = "100%";
+      canvas.style.height = "auto";
+      canvas.style.marginBottom = "8px";
+      container.appendChild(canvas);
+    }
+  }, [pages]);
+
+  return (
+    <Dialog open onOpenChange={(open) => { if (!open) onClose(); }}>
+      <DialogContent className="max-w-4xl max-h-[90vh]">
+        <DialogHeader>
+          <DialogTitle className="truncate text-sm font-mono">{file.name}</DialogTitle>
+        </DialogHeader>
+        <div className="overflow-auto max-h-[75vh] rounded border bg-muted/20">
+          {loading && (
+            <div className="flex items-center justify-center py-12">
+              <Loader2 className="w-6 h-6 animate-spin mr-2" />
+              <span className="text-sm text-muted-foreground">Loading…</span>
+            </div>
+          )}
+          {error && <p className="text-sm text-destructive text-center py-8">{error}</p>}
+          {!loading && !error && pages.length === 0 && (
+            <p className="text-sm text-muted-foreground text-center py-8">No preview available.</p>
+          )}
+          <div ref={containerRef} className="p-2" />
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
 
 const HEADER_KEYWORDS = ["room code", "drawing label", "floor", "level", "notes", "code", "label", "name"];
 
@@ -449,7 +537,7 @@ function formatBytes(bytes: number | null | undefined): string {
 // AnalysisSection
 // ---------------------------------------------------------------------------
 
-export function AnalysisSection({ requestId, files, projectId }: AnalysisSectionProps) {
+export function AnalysisSection({ requestId, files, projectId, sourceType }: AnalysisSectionProps) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
@@ -473,6 +561,7 @@ export function AnalysisSection({ requestId, files, projectId }: AnalysisSection
     instance: SummarizedInstance;
     awpClassName: string;
   } | null>(null);
+  const [previewFile, setPreviewFile] = useState<AnalysisFile | null>(null);
 
   // ---- Queries ----
   const { data: prompts, isLoading: promptsLoading } = useQuery({
@@ -512,13 +601,61 @@ export function AnalysisSection({ requestId, files, projectId }: AnalysisSection
     },
   });
 
+  // ---- Source-of-truth AWP order + prefix from source tables ----
+  const { data: awpOrderData } = useQuery({
+    queryKey: ["awp-source-order"],
+    queryFn: async () => {
+      const [a, w, p] = await Promise.all([
+        supabase.from("critical_assets").select("name, id_prefix, display_order").eq("is_active", true).order("display_order"),
+        supabase.from("water_systems").select("name, id_prefix, display_order").eq("is_active", true).order("display_order"),
+        supabase.from("processes").select("name, id_prefix, display_order").eq("is_active", true).order("display_order"),
+      ]);
+      return [
+        ...(a.data || []).map((x, i) => ({ name: x.name, id_prefix: x.id_prefix, globalOrder: i })),
+        ...(w.data || []).map((x, i) => ({ name: x.name, id_prefix: x.id_prefix, globalOrder: 1000 + i })),
+        ...(p.data || []).map((x, i) => ({ name: x.name, id_prefix: x.id_prefix, globalOrder: 2000 + i })),
+      ];
+    },
+    staleTime: 1000 * 60 * 30,
+  });
+
   const copiedFiles = files.filter((f) => f.copy_status === "copied" && f.storage_path);
 
-  // id_prefix lookup map
+  // id_prefix lookup from awp_classes (fallback)
   const idPrefixMap = useMemo(
     () => Object.fromEntries((awpClasses || []).map((c) => [c.name, c.id_prefix])),
     [awpClasses]
   );
+
+  // Source-of-truth prefix map (preferred over awp_classes)
+  const sourcePrefixMap = useMemo(
+    () => Object.fromEntries((awpOrderData || []).filter(x => x.id_prefix).map((x) => [x.name, x.id_prefix!])),
+    [awpOrderData]
+  );
+
+  // Global order map for sorting
+  const globalOrderMap = useMemo(
+    () => Object.fromEntries((awpOrderData || []).map((x) => [x.name, x.globalOrder])),
+    [awpOrderData]
+  );
+
+  // Sorted prompts to match Configuration page order
+  const sortedPrompts = useMemo(() => {
+    if (!prompts) return [];
+    return [...prompts].sort((a, b) => {
+      const oa = globalOrderMap[a.awp_class_name] ?? 9999;
+      const ob = globalOrderMap[b.awp_class_name] ?? 9999;
+      return oa - ob;
+    });
+  }, [prompts, globalOrderMap]);
+
+  // Helper to get the best prefix for a class name
+  const getPrefix = (className: string) =>
+    sourcePrefixMap[className] || idPrefixMap[className] || className.slice(0, 3).toUpperCase();
+
+  // File Name header metadata
+  const totalSizeBytes = copiedFiles.reduce((sum, f) => sum + ((f as any).size_bytes || 0), 0);
+  const sourceLabel = (sourceType || "google_drive").replace(/_/g, " ");
 
   // ---- Handlers ----
 
@@ -691,7 +828,7 @@ export function AnalysisSection({ requestId, files, projectId }: AnalysisSection
   };
 
   const handleAnalyzeAll = () => {
-    prompts?.forEach((p) => handleAnalyze(p));
+    sortedPrompts.forEach((p) => handleAnalyze(p));
   };
 
   const handleDownloadZip = async () => {
@@ -863,17 +1000,20 @@ export function AnalysisSection({ requestId, files, projectId }: AnalysisSection
                   {/* Header row: file info columns + class abbreviations */}
                   <tr className="border-b">
                     <th className="sticky left-0 z-10 bg-card px-4 py-2 text-left font-medium text-muted-foreground min-w-[320px] border-r">
-                      File Name
+                      <span className="block text-sm">File Name</span>
+                      <span className="block text-xs font-normal text-muted-foreground/70">
+                        {copiedFiles.length} files · {formatBytes(totalSizeBytes)} · {sourceLabel}
+                      </span>
                     </th>
                     <th className="px-3 py-2 text-left font-medium text-muted-foreground w-20">
                       Size
                     </th>
-                    {prompts.map((prompt) => (
+                    {sortedPrompts.map((prompt) => (
                       <th key={prompt.id} className="w-14 px-2 py-2 text-center font-medium text-muted-foreground">
                         <Tooltip>
                           <TooltipTrigger asChild>
                             <span className="cursor-default font-mono text-xs">
-                              {idPrefixMap[prompt.awp_class_name] || prompt.awp_class_name.slice(0, 3).toUpperCase()}
+                              {getPrefix(prompt.awp_class_name)}
                             </span>
                           </TooltipTrigger>
                           <TooltipContent>{prompt.awp_class_name}</TooltipContent>
@@ -884,57 +1024,57 @@ export function AnalysisSection({ requestId, files, projectId }: AnalysisSection
 
                   {/* Button sub-row: per-column analyze/stop controls */}
                   <tr className="border-b bg-muted/20">
-                     <td className="sticky left-0 z-10 bg-muted/20 px-4 py-1.5 border-r">
+                     <td className="sticky left-0 z-10 bg-muted/20 px-4 py-1.5 border-r min-w-[320px]">
                        <Button size="sm" variant="outline" className="h-6 text-xs gap-1" onClick={handleDownloadZip}>
                          <Download className="w-3 h-3" />
                          Download ZIP
                        </Button>
                      </td>
                     <td className="px-3 py-1.5" />
-                    {prompts.map((prompt) => {
-                      const className = prompt.awp_class_name;
-                      const isAnalyzing = analyzingClasses.has(className);
-                      const hasResults = (results?.some((r) => r.awp_class_name === className)) || false;
+                     {sortedPrompts.map((prompt) => {
+                       const className = prompt.awp_class_name;
+                       const isAnalyzing = analyzingClasses.has(className);
+                       const hasResults = (results?.some((r) => r.awp_class_name === className)) || false;
 
-                      return (
-                        <td key={prompt.id} className="w-14 px-2 py-1.5 text-center">
-                          {isAnalyzing ? (
-                            <div className="flex items-center justify-center gap-1">
-                              <Loader2 className="w-3 h-3 animate-spin text-muted-foreground" />
-                              <Button
-                                size="icon"
-                                variant="destructive"
-                                className="h-6 w-6"
-                                onClick={() => handleStop(className)}
-                              >
-                                <Square className="w-3 h-3" />
-                              </Button>
-                            </div>
-                          ) : (
-                            <Tooltip>
-                              <TooltipTrigger asChild>
-                                <Button
-                                  size="icon"
-                                  variant="ghost"
-                                  className="h-6 w-6"
-                                  disabled={copiedFiles.length === 0}
-                                  onClick={() => handleAnalyze(prompt)}
-                                >
-                                  {hasResults ? (
-                                    <RotateCcw className="w-3 h-3" />
-                                  ) : (
-                                    <Play className="w-3 h-3" />
-                                  )}
-                                </Button>
-                              </TooltipTrigger>
-                              <TooltipContent>
-                                {hasResults ? `Re-analyze ${className}` : `Analyze ${className}`}
-                              </TooltipContent>
-                            </Tooltip>
-                          )}
-                        </td>
-                      );
-                    })}
+                       return (
+                         <td key={prompt.id} className="w-14 px-2 py-1.5 text-center">
+                           {isAnalyzing ? (
+                             <div className="flex items-center justify-center gap-1">
+                               <Loader2 className="w-3 h-3 animate-spin text-muted-foreground" />
+                               <Button
+                                 size="icon"
+                                 variant="destructive"
+                                 className="h-6 w-6"
+                                 onClick={() => handleStop(className)}
+                               >
+                                 <Square className="w-3 h-3" />
+                               </Button>
+                             </div>
+                           ) : (
+                             <Tooltip>
+                               <TooltipTrigger asChild>
+                                 <Button
+                                   size="icon"
+                                   variant="ghost"
+                                   className="h-6 w-6"
+                                   disabled={copiedFiles.length === 0}
+                                   onClick={() => handleAnalyze(prompt)}
+                                 >
+                                   {hasResults ? (
+                                     <RotateCcw className="w-3 h-3" />
+                                   ) : (
+                                     <Play className="w-3 h-3" />
+                                   )}
+                                 </Button>
+                               </TooltipTrigger>
+                               <TooltipContent>
+                                 {hasResults ? `Re-analyze ${className}` : `Analyze ${className}`}
+                               </TooltipContent>
+                             </Tooltip>
+                           )}
+                         </td>
+                       );
+                     })}
                   </tr>
                 </thead>
 
@@ -942,15 +1082,13 @@ export function AnalysisSection({ requestId, files, projectId }: AnalysisSection
                   {copiedFiles.map((file) => (
                     <tr key={file.id} className="border-b hover:bg-muted/30 transition-colors">
                       {/* File name (sticky) */}
-                      <td className="sticky left-0 z-10 bg-card hover:bg-muted/30 px-4 py-2 border-r">
-                        <Tooltip>
-                          <TooltipTrigger asChild>
-                            <span className="text-sm font-medium truncate block max-w-[300px] cursor-default">
-                              {file.name}
-                            </span>
-                          </TooltipTrigger>
-                          <TooltipContent className="max-w-sm break-all">{file.name}</TooltipContent>
-                        </Tooltip>
+                      <td className="sticky left-0 z-10 bg-card hover:bg-muted/30 px-4 py-2 border-r min-w-[320px]">
+                        <button
+                          className="text-sm font-medium truncate block max-w-[300px] text-primary hover:underline text-left"
+                          onClick={() => setPreviewFile(file)}
+                        >
+                          {file.name}
+                        </button>
                       </td>
 
                       {/* Size */}
@@ -959,7 +1097,7 @@ export function AnalysisSection({ requestId, files, projectId }: AnalysisSection
                       </td>
 
                       {/* Per-class cells */}
-                      {prompts.map((prompt) => {
+                       {sortedPrompts.map((prompt) => {
                         const val = countForCell(file.id, prompt.awp_class_name);
                         const className = prompt.awp_class_name;
 
@@ -1041,9 +1179,9 @@ export function AnalysisSection({ requestId, files, projectId }: AnalysisSection
           </div>
 
           <div className="divide-y">
-            {prompts.map((prompt) => {
+            {sortedPrompts.map((prompt) => {
               const className = prompt.awp_class_name;
-              const prefix = idPrefixMap[className] || className.slice(0, 3).toUpperCase();
+              const prefix = getPrefix(className);
               const isSummarizing = summarizing[className];
               const summary = summarizedInstances[className];
               const isAdding = addingToProject[className];
@@ -1139,6 +1277,14 @@ export function AnalysisSection({ requestId, files, projectId }: AnalysisSection
           </div>
         </div>
       </div>
+
+      {/* FilePreviewModal */}
+      {previewFile && (
+        <FilePreviewModal
+          file={previewFile}
+          onClose={() => setPreviewFile(null)}
+        />
+      )}
 
       {/* RawResultModal */}
       {rawResultModal && (
