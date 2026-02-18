@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
@@ -22,6 +22,7 @@ import {
 import {
   Loader2,
   Play,
+  Square,
   CheckCircle,
   XCircle,
   FileText,
@@ -290,6 +291,7 @@ function getRiskLabel(points: number): string {
 export function AnalysisSection({ requestId, files, projectId }: AnalysisSectionProps) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const abortRef = useRef(false);
   const [analyzingClass, setAnalyzingClass] = useState<string | null>(null);
   const [progress, setProgress] = useState({ current: 0, total: 0 });
   const [fileStatuses, setFileStatuses] = useState<Record<string, string>>({});
@@ -353,6 +355,10 @@ export function AnalysisSection({ requestId, files, projectId }: AnalysisSection
 
   const copiedFiles = files.filter((f) => f.copy_status === "copied" && f.storage_path);
 
+  const handleStop = () => {
+    abortRef.current = true;
+  };
+
   const handleSummarize = useCallback(async (awpClassName: string) => {
     setSummarizing((prev) => ({ ...prev, [awpClassName]: true }));
     try {
@@ -375,8 +381,28 @@ export function AnalysisSection({ requestId, files, projectId }: AnalysisSection
     }
   }, [requestId, toast]);
 
+  // Auto-hydrate summaries from DB results on page mount / re-entry
+  useEffect(() => {
+    if (!results || results.length === 0) return;
+    if (analyzingClass) return;
+
+    const classesWithResults = [...new Set(
+      results
+        .filter((r) => r.status === "complete")
+        .map((r) => r.awp_class_name)
+    )];
+
+    for (const className of classesWithResults) {
+      if (!summarizedInstances[className] && !summarizing[className]) {
+        handleSummarize(className);
+      }
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [results, analyzingClass]);
+
   const handleAnalyze = async (prompt: AWPPrompt) => {
     if (!prompt.drive_file_id || copiedFiles.length === 0) return;
+    abortRef.current = false;
     setAnalyzingClass(prompt.awp_class_name);
     setProgress({ current: 0, total: copiedFiles.length });
     setFileStatuses({});
@@ -413,6 +439,9 @@ export function AnalysisSection({ requestId, files, projectId }: AnalysisSection
       }
 
       for (let i = 0; i < copiedFiles.length; i++) {
+        // Check abort flag before starting each file
+        if (abortRef.current) break;
+
         const file = copiedFiles[i];
         setFileStatuses((prev) => ({ ...prev, [file.id]: "processing" }));
 
@@ -450,10 +479,12 @@ export function AnalysisSection({ requestId, files, projectId }: AnalysisSection
         setProgress({ current: i + 1, total: copiedFiles.length });
       }
 
-      toast({ title: "Analysis Complete", description: `Finished analyzing ${copiedFiles.length} files.` });
+      if (!abortRef.current) {
+        toast({ title: "Analysis Complete", description: `Finished analyzing ${copiedFiles.length} files.` });
+      }
       await queryClient.invalidateQueries({ queryKey: ["analysis-results", requestId] });
 
-      // Auto-summarize after analysis completes
+      // Auto-summarize after analysis completes (even if partially aborted)
       handleSummarize(prompt.awp_class_name);
     } catch (error) {
       toast({
@@ -642,33 +673,25 @@ export function AnalysisSection({ requestId, files, projectId }: AnalysisSection
                   </div>
                 </div>
                 <div className="flex items-center gap-2">
-                  {hasResults && !isAnalyzing && !summary && (
+                  {isAnalyzing ? (
                     <Button
                       size="sm"
-                      variant="outline"
-                      onClick={() => handleSummarize(prompt.awp_class_name)}
-                      disabled={isSummarizing}
+                      variant="destructive"
+                      onClick={handleStop}
                     >
-                      {isSummarizing ? (
-                        <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                      ) : (
-                        <Sparkles className="w-4 h-4 mr-2" />
-                      )}
-                      {isSummarizing ? "Summarizing..." : "Summarize"}
+                      <Square className="w-4 h-4 mr-2" />
+                      Stop
+                    </Button>
+                  ) : (
+                    <Button
+                      size="sm"
+                      onClick={() => handleAnalyze(prompt)}
+                      disabled={copiedFiles.length === 0}
+                    >
+                      <Play className="w-4 h-4 mr-2" />
+                      {hasResults ? "Re-analyze" : "Analyze"}
                     </Button>
                   )}
-                  <Button
-                    size="sm"
-                    onClick={() => handleAnalyze(prompt)}
-                    disabled={isAnalyzing || copiedFiles.length === 0}
-                  >
-                    {isAnalyzing ? (
-                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                    ) : (
-                      <Play className="w-4 h-4 mr-2" />
-                    )}
-                    {isAnalyzing ? "Analyzing..." : hasResults ? "Re-analyze" : "Analyze"}
-                  </Button>
                 </div>
               </div>
 
