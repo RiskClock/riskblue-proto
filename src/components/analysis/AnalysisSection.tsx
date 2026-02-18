@@ -1,10 +1,8 @@
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-import { Progress } from "@/components/ui/progress";
 import {
   Table,
   TableBody,
@@ -29,16 +27,13 @@ import {
   Loader2,
   Play,
   Square,
-  CheckCircle,
   XCircle,
-  FileText,
   ExternalLink,
-  ChevronDown,
-  ChevronRight,
   Sparkles,
   PlusCircle,
-  File,
   Eye,
+  RotateCcw,
+  AlertTriangle,
 } from "lucide-react";
 import * as pdfjsLib from "pdfjs-dist";
 
@@ -48,126 +43,16 @@ pdfjsLib.GlobalWorkerOptions.workerSrc = new URL(
   import.meta.url
 ).toString();
 
-// Detection messages per AWP category, parameterized by class name
-const DETECTION_MESSAGES: Record<string, (name: string) => string[]> = {
-  Asset: (name) => [
-    `Scanning for ${name.toLowerCase()} labels...`,
-    `Detecting room boundaries on drawing...`,
-    `Cross-referencing floor annotations...`,
-    `Extracting room codes from title block...`,
-    `Identifying ${name.toLowerCase()} references...`,
-    `Parsing drawing notes and legends...`,
-    `Locating room designation markers...`,
-    `Reading floor plan annotations...`,
-  ],
-  "Water System": (name) => [
-    `Tracing ${name.toLowerCase()} piping layout...`,
-    `Identifying pipe diameter annotations...`,
-    `Locating valve and fitting labels...`,
-    `Reading riser diagram references...`,
-    `Extracting zone designations...`,
-    `Cross-referencing mechanical schedule...`,
-    `Detecting flow direction indicators...`,
-    `Parsing ${name.toLowerCase()} connection points...`,
-  ],
-  Process: (name) => [
-    `Scanning for ${name.toLowerCase()} indicators...`,
-    `Reading construction sequence notes...`,
-    `Identifying phase markers on drawing...`,
-    `Extracting schedule references...`,
-    `Detecting ${name.toLowerCase()} annotations...`,
-    `Cross-referencing specification notes...`,
-    `Parsing detail callouts...`,
-    `Locating key plan references...`,
-  ],
-  default: (name) => [
-    `Scanning drawing for ${name.toLowerCase()}...`,
-    `Analyzing title block information...`,
-    `Reading floor and level designations...`,
-    `Extracting annotation data...`,
-    `Cross-referencing drawing notes...`,
-    `Identifying relevant markers...`,
-    `Parsing drawing content...`,
-    `Finalizing detection results...`,
-  ],
-};
-
-function getDetectionMessages(awpClassName: string, category: string): string[] {
-  const factory = DETECTION_MESSAGES[category] || DETECTION_MESSAGES["default"];
-  return factory(awpClassName);
-}
-
-interface FileAnalysisRowProps {
-  fileName: string;
-  status: string | undefined;
-  awpClassName: string;
-  category: string;
-}
-
-function FileAnalysisRow({ fileName, status, awpClassName, category }: FileAnalysisRowProps) {
-  const [msgIdx, setMsgIdx] = useState(0);
-  const messages = getDetectionMessages(awpClassName, category);
-
-  useEffect(() => {
-    if (status !== "processing") return;
-    setMsgIdx(0);
-    const interval = setInterval(() => {
-      setMsgIdx((prev) => (prev + 1) % messages.length);
-    }, 1500);
-    return () => clearInterval(interval);
-  }, [status, messages.length]);
-
-  const shortName = fileName.length > 50 ? fileName.slice(0, 47) + "..." : fileName;
-
-  return (
-    <div className="px-4 py-2.5 space-y-1">
-      <div className="flex items-center justify-between gap-3">
-      <div className="flex items-center gap-2 min-w-0">
-          {status === "complete" ? (
-            <CheckCircle className="w-4 h-4 text-[hsl(var(--chart-2))] shrink-0" />
-          ) : status === "failed" ? (
-            <XCircle className="w-4 h-4 text-destructive shrink-0" />
-          ) : status === "processing" ? (
-            <Loader2 className="w-4 h-4 text-primary shrink-0 animate-spin" />
-          ) : (
-            <File className="w-4 h-4 text-muted-foreground shrink-0" />
-          )}
-          <span className={`text-sm truncate ${status === "complete" ? "text-foreground" : status === "failed" ? "text-destructive" : "text-muted-foreground"}`}>
-            {shortName}
-          </span>
-        </div>
-        <Badge
-          variant="outline"
-          className={`text-xs shrink-0 ${
-            status === "complete"
-              ? "border-[hsl(var(--chart-2))] text-[hsl(var(--chart-2))]"
-              : status === "failed"
-              ? "text-destructive border-destructive/40"
-              : status === "processing"
-              ? "text-primary border-primary/40"
-              : "text-muted-foreground border-muted"
-          }`}
-        >
-          {status === "complete" ? "Complete" : status === "failed" ? "Failed" : status === "processing" ? "Analyzing" : "Pending"}
-        </Badge>
-      </div>
-      {status === "processing" && (
-        <div className="pl-6 space-y-1.5">
-          <div className="h-1 rounded-full bg-muted overflow-hidden">
-            <div className="h-full bg-primary rounded-full animate-pulse w-full" />
-          </div>
-          <p className="text-xs text-muted-foreground animate-pulse">{messages[msgIdx]}</p>
-        </div>
-      )}
-    </div>
-  );
-}
+// ---------------------------------------------------------------------------
+// Interfaces
+// ---------------------------------------------------------------------------
 
 interface AnalysisFile {
   id: string;
   name: string;
   storage_path: string | null;
   copy_status: string;
+  size_bytes?: number | null;
 }
 
 interface AWPPrompt {
@@ -203,13 +88,6 @@ interface SummarizedInstance {
   notes: string;
 }
 
-interface RiskData {
-  name: string;
-  probability: number;
-  impact: number;
-}
-
-
 interface AnalysisSectionProps {
   requestId: string;
   files: AnalysisFile[];
@@ -228,7 +106,6 @@ function parseCoordinatesFromResult(
     const lines = resultText.split("\n").filter((l) => l.includes("|"));
     if (lines.length < 2) return null;
 
-    // Find header row
     const headerLine = lines.find((l) => {
       const low = l.toLowerCase();
       return low.includes("coord") || low.includes("room code") || low.includes("code");
@@ -240,7 +117,6 @@ function parseCoordinatesFromResult(
     const pageCol = headers.findIndex((h) => h.includes("page") || h.includes("sheet"));
     if (coordCol === -1) return null;
 
-    // Find data row for this instance
     const dataRow = lines.find((l) => {
       const cells = l.split("|").map((c) => c.trim());
       return cells.some((c) => c === instanceId);
@@ -250,10 +126,7 @@ function parseCoordinatesFromResult(
     const cells = dataRow.split("|").map((c) => c.trim());
     const coordCell = cells[coordCol] || "";
 
-    // Parse various coordinate formats
-    // "(x, y)" → treat as centre point, emit a small fixed-size box
     const pointMatch = coordCell.match(/\(?\s*(-?\d+(?:\.\d+)?)\s*,\s*(-?\d+(?:\.\d+)?)\s*\)?/);
-    // "x1,y1 – x2,y2" or "x1,y1 to x2,y2"
     const rangeMatch = coordCell.match(
       /(-?\d+(?:\.\d+)?)\s*,\s*(-?\d+(?:\.\d+)?)\s*(?:–|-|to)\s*(-?\d+(?:\.\d+)?)\s*,\s*(-?\d+(?:\.\d+)?)/i
     );
@@ -269,7 +142,6 @@ function parseCoordinatesFromResult(
       const y1 = parseFloat(rangeMatch[2]);
       const x2 = parseFloat(rangeMatch[3]);
       const y2 = parseFloat(rangeMatch[4]);
-      // Normalise to 0-1 assuming typical drawing dimensions (e.g. 2000×1500 pts)
       const W = 2000, H = 1500;
       return {
         x: Math.min(x1, x2) / W,
@@ -301,7 +173,7 @@ function parseCoordinatesFromResult(
 }
 
 // ---------------------------------------------------------------------------
-// InstanceDetailModal sub-component
+// InstanceDetailModal sub-component (unchanged)
 // ---------------------------------------------------------------------------
 
 interface InstanceDetailModalProps {
@@ -324,7 +196,6 @@ function InstanceDetailModal({
   const [pdfError, setPdfError] = useState<string | null>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
-  // Fetch signed URL when sourceFile is available
   useEffect(() => {
     if (!sourceFile?.storage_path) return;
     setIsLoadingPdf(true);
@@ -344,7 +215,6 @@ function InstanceDetailModal({
       });
   }, [sourceFile?.storage_path]);
 
-  // Render PDF to canvas when signed URL is ready
   useEffect(() => {
     if (!signedUrl || !canvasRef.current) return;
 
@@ -371,7 +241,6 @@ function InstanceDetailModal({
         await page.render({ canvasContext: ctx, viewport, canvas: canvasRef.current! }).promise;
         if (cancelled) return;
 
-        // Draw bounding box overlay
         if (coords) {
           const bx = coords.x * viewport.width;
           const by = coords.y * viewport.height;
@@ -409,7 +278,6 @@ function InstanceDetailModal({
         </DialogHeader>
 
         <div className="flex flex-col md:flex-row gap-6 mt-2">
-          {/* Left: instance details */}
           <div className="md:w-56 shrink-0 space-y-3">
             <div>
               <p className="text-xs text-muted-foreground uppercase tracking-wide mb-1">Name</p>
@@ -431,7 +299,6 @@ function InstanceDetailModal({
             )}
           </div>
 
-          {/* Right: PDF preview */}
           <div className="flex-1 min-w-0">
             <p className="text-xs text-muted-foreground uppercase tracking-wide mb-2">Drawing Preview</p>
             <div className="border rounded-md overflow-auto bg-muted/20 relative min-h-[300px] max-h-[500px] flex items-center justify-center">
@@ -465,13 +332,46 @@ function InstanceDetailModal({
   );
 }
 
+// ---------------------------------------------------------------------------
+// RawResultModal
+// ---------------------------------------------------------------------------
+
+interface RawResultModalProps {
+  fileName: string;
+  awpClassName: string;
+  resultText: string;
+  instanceCount: number;
+  onClose: () => void;
+}
+
+function RawResultModal({ fileName, awpClassName, resultText, instanceCount, onClose }: RawResultModalProps) {
+  return (
+    <Dialog open onOpenChange={(open) => { if (!open) onClose(); }}>
+      <DialogContent className="max-w-2xl">
+        <DialogHeader>
+          <DialogTitle className="font-mono text-sm truncate">{fileName}</DialogTitle>
+        </DialogHeader>
+        <p className="text-xs text-muted-foreground mb-2">
+          {awpClassName} — {instanceCount} instance{instanceCount !== 1 ? "s" : ""} detected
+        </p>
+        <pre className="text-xs overflow-auto max-h-96 whitespace-pre-wrap font-mono bg-muted p-3 rounded">
+          {resultText}
+        </pre>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// parseResultText
+// ---------------------------------------------------------------------------
+
 const HEADER_KEYWORDS = ["room code", "drawing label", "floor", "level", "notes", "code", "label", "name"];
 
 function parseResultText(resultText: string): ParsedInstance[] {
   const lines = resultText.trim().split("\n").filter((l) => l.trim());
   if (lines.length < 2) return [];
 
-  // Find the header row: first line with 3+ pipe chars AND a known header keyword
   let headerIdx = -1;
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i];
@@ -484,7 +384,6 @@ function parseResultText(resultText: string): ParsedInstance[] {
     }
   }
 
-  // Fallback: find first line with 3+ pipes if no keyword match
   if (headerIdx === -1) {
     for (let i = 0; i < lines.length; i++) {
       if ((lines[i].match(/\|/g) || []).length >= 3) {
@@ -513,7 +412,6 @@ function parseResultText(resultText: string): ParsedInstance[] {
   const levelCol = findCol(["Floor", "Level"]);
   const notesCol = findCol(["Notes", "Size", "Area"]);
 
-  // Data lines: everything after header, skipping separator rows and label rows
   const dataLines = lines.slice(headerIdx + 1).filter((l) => {
     if (l.match(/^\|?\s*-+/)) return false;
     if (l.trim().toLowerCase().startsWith("rows:")) return false;
@@ -539,25 +437,33 @@ function parseResultText(resultText: string): ParsedInstance[] {
   return instances;
 }
 
-function getRiskBadgeStyle(points: number): string {
-  if (points >= 21) return "text-red-900 border-red-900";
-  if (points >= 16) return "text-red-600 border-red-600";
-  return "text-orange-500 border-orange-500";
+function formatBytes(bytes: number | null | undefined): string {
+  if (!bytes) return "";
+  if (bytes < 1024) return `${bytes}B`;
+  if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)}KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)}MB`;
 }
 
-function getRiskLabel(points: number): string {
-  if (points >= 21) return "Severe";
-  if (points >= 16) return "Extreme";
-  return "Very High";
-}
+// ---------------------------------------------------------------------------
+// AnalysisSection
+// ---------------------------------------------------------------------------
 
 export function AnalysisSection({ requestId, files, projectId }: AnalysisSectionProps) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
-  const abortRef = useRef(false);
-  const [analyzingClass, setAnalyzingClass] = useState<string | null>(null);
-  const [progress, setProgress] = useState({ current: 0, total: 0 });
-  const [fileStatuses, setFileStatuses] = useState<Record<string, string>>({});
+
+  // ---- New state architecture ----
+  const [analyzingClasses, setAnalyzingClasses] = useState<Set<string>>(new Set());
+  const [classFileStatuses, setClassFileStatuses] = useState<Record<string, Record<string, string>>>({});
+  const abortControllers = useRef<Record<string, AbortController>>({});
+  const [rawResultModal, setRawResultModal] = useState<{
+    fileName: string;
+    awpClassName: string;
+    resultText: string;
+    instanceCount: number;
+  } | null>(null);
+
+  // ---- Unchanged state ----
   const [summarizedInstances, setSummarizedInstances] = useState<Record<string, SummarizedInstance[]>>({});
   const [summarizing, setSummarizing] = useState<Record<string, boolean>>({});
   const [addingToProject, setAddingToProject] = useState<Record<string, boolean>>({});
@@ -567,7 +473,7 @@ export function AnalysisSection({ requestId, files, projectId }: AnalysisSection
     awpClassName: string;
   } | null>(null);
 
-  // Fetch AWP prompts with linked drive docs
+  // ---- Queries ----
   const { data: prompts, isLoading: promptsLoading } = useQuery({
     queryKey: ["awp-prompts-linked"],
     queryFn: async () => {
@@ -581,7 +487,6 @@ export function AnalysisSection({ requestId, files, projectId }: AnalysisSection
     },
   });
 
-  // Fetch existing results
   const { data: results } = useQuery({
     queryKey: ["analysis-results", requestId],
     queryFn: async () => {
@@ -595,20 +500,6 @@ export function AnalysisSection({ requestId, files, projectId }: AnalysisSection
     },
   });
 
-  // Fetch risk data from all three source tables
-  const { data: riskData } = useQuery({
-    queryKey: ["risk-data-all"],
-    queryFn: async () => {
-      const [ca, ws, pr] = await Promise.all([
-        supabase.from("critical_assets").select("name, probability, impact"),
-        supabase.from("water_systems").select("name, probability, impact"),
-        supabase.from("processes").select("name, probability, impact"),
-      ]);
-      return [...(ca.data || []), ...(ws.data || []), ...(pr.data || [])] as RiskData[];
-    },
-  });
-
-  // Fetch AWP classes for correct awp_class_id and category lookup
   const { data: awpClasses } = useQuery({
     queryKey: ["awp-classes-all"],
     queryFn: async () => {
@@ -622,8 +513,16 @@ export function AnalysisSection({ requestId, files, projectId }: AnalysisSection
 
   const copiedFiles = files.filter((f) => f.copy_status === "copied" && f.storage_path);
 
-  const handleStop = () => {
-    abortRef.current = true;
+  // id_prefix lookup map
+  const idPrefixMap = useMemo(
+    () => Object.fromEntries((awpClasses || []).map((c) => [c.name, c.id_prefix])),
+    [awpClasses]
+  );
+
+  // ---- Handlers ----
+
+  const handleStop = (className: string) => {
+    abortControllers.current[className]?.abort();
   };
 
   const handleSummarize = useCallback(async (awpClassName: string) => {
@@ -651,7 +550,7 @@ export function AnalysisSection({ requestId, files, projectId }: AnalysisSection
   // Auto-hydrate summaries from DB results on page mount / re-entry
   useEffect(() => {
     if (!results || results.length === 0) return;
-    if (analyzingClass) return;
+    if (analyzingClasses.size > 0) return;
 
     const classesWithResults = [...new Set(
       results
@@ -665,14 +564,20 @@ export function AnalysisSection({ requestId, files, projectId }: AnalysisSection
       }
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [results, analyzingClass]);
+  }, [results, analyzingClasses.size]);
 
   const handleAnalyze = async (prompt: AWPPrompt) => {
     if (!prompt.drive_file_id || copiedFiles.length === 0) return;
-    abortRef.current = false;
-    setAnalyzingClass(prompt.awp_class_name);
-    setProgress({ current: 0, total: copiedFiles.length });
-    setFileStatuses({});
+    const className = prompt.awp_class_name;
+
+    // Create per-class AbortController
+    const controller = new AbortController();
+    abortControllers.current[className] = controller;
+
+    setAnalyzingClasses((prev) => new Set([...prev, className]));
+    setClassFileStatuses((prev) => ({ ...prev, [className]: {} }));
+
+    let aborted = false;
 
     try {
       const { data: sessionData } = await supabase.auth.getSession();
@@ -682,6 +587,7 @@ export function AnalysisSection({ requestId, files, projectId }: AnalysisSection
         `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/resolve-drive-doc`,
         {
           method: "POST",
+          signal: controller.signal,
           headers: {
             Authorization: `Bearer ${token}`,
             "Content-Type": "application/json",
@@ -705,18 +611,20 @@ export function AnalysisSection({ requestId, files, projectId }: AnalysisSection
         throw new Error("Could not retrieve prompt content from the linked document");
       }
 
-      for (let i = 0; i < copiedFiles.length; i++) {
-        // Check abort flag before starting each file
-        if (abortRef.current) break;
+      for (const file of copiedFiles) {
+        if (controller.signal.aborted) { aborted = true; break; }
 
-        const file = copiedFiles[i];
-        setFileStatuses((prev) => ({ ...prev, [file.id]: "processing" }));
+        setClassFileStatuses((prev) => ({
+          ...prev,
+          [className]: { ...(prev[className] || {}), [file.id]: "processing" },
+        }));
 
         try {
           const analyzeResponse = await fetch(
             `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/analyze-drawings`,
             {
               method: "POST",
+              signal: controller.signal,
               headers: {
                 Authorization: `Bearer ${token}`,
                 "Content-Type": "application/json",
@@ -724,44 +632,65 @@ export function AnalysisSection({ requestId, files, projectId }: AnalysisSection
               body: JSON.stringify({
                 analysisRequestId: requestId,
                 fileId: file.id,
-                awpClassName: prompt.awp_class_name,
+                awpClassName: className,
                 promptContent,
               }),
             }
           );
 
+          setClassFileStatuses((prev) => ({
+            ...prev,
+            [className]: {
+              ...(prev[className] || {}),
+              [file.id]: analyzeResponse.ok ? "complete" : "failed",
+            },
+          }));
+
           if (!analyzeResponse.ok) {
-            const err = await analyzeResponse.json();
-            setFileStatuses((prev) => ({ ...prev, [file.id]: "failed" }));
+            const err = await analyzeResponse.json().catch(() => ({}));
             console.error(`Failed to analyze ${file.name}:`, err.error);
-          } else {
-            setFileStatuses((prev) => ({ ...prev, [file.id]: "complete" }));
           }
         } catch (e) {
-          setFileStatuses((prev) => ({ ...prev, [file.id]: "failed" }));
+          if ((e as Error).name === "AbortError") { aborted = true; break; }
+          setClassFileStatuses((prev) => ({
+            ...prev,
+            [className]: { ...(prev[className] || {}), [file.id]: "failed" },
+          }));
           console.error(`Error analyzing ${file.name}:`, e);
         }
-
-        // Increment progress AFTER the file finishes (success or failure)
-        setProgress({ current: i + 1, total: copiedFiles.length });
       }
 
-      if (!abortRef.current) {
+      if (!aborted) {
         toast({ title: "Analysis Complete", description: `Finished analyzing ${copiedFiles.length} files.` });
       }
+
       await queryClient.invalidateQueries({ queryKey: ["analysis-results", requestId] });
 
-      // Auto-summarize after analysis completes (even if partially aborted)
-      handleSummarize(prompt.awp_class_name);
+      if (!aborted) {
+        handleSummarize(className);
+      }
     } catch (error) {
-      toast({
-        title: "Analysis Failed",
-        description: error instanceof Error ? error.message : "Unknown error",
-        variant: "destructive",
-      });
+      if ((error as Error).name === "AbortError") {
+        // silently swallow
+      } else {
+        toast({
+          title: "Analysis Failed",
+          description: error instanceof Error ? error.message : "Unknown error",
+          variant: "destructive",
+        });
+      }
     } finally {
-      setAnalyzingClass(null);
+      setAnalyzingClasses((prev) => {
+        const next = new Set(prev);
+        next.delete(className);
+        return next;
+      });
+      delete abortControllers.current[className];
     }
+  };
+
+  const handleAnalyzeAll = () => {
+    prompts?.forEach((p) => handleAnalyze(p));
   };
 
   const handleAddToProject = async (awpClassName: string) => {
@@ -770,18 +699,17 @@ export function AnalysisSection({ requestId, files, projectId }: AnalysisSection
 
     setAddingToProject((prev) => ({ ...prev, [awpClassName]: true }));
     try {
-      // Find AWP class by fuzzy-matching name (e.g., "Electrical Room" matches "Electrical Rooms")
       const awpClass = awpClasses?.find(
-        (c) => c.name.toLowerCase() === awpClassName.toLowerCase() ||
-               c.name.toLowerCase().startsWith(awpClassName.toLowerCase()) ||
-               awpClassName.toLowerCase().startsWith(c.name.toLowerCase())
+        (c) =>
+          c.name.toLowerCase() === awpClassName.toLowerCase() ||
+          c.name.toLowerCase().startsWith(awpClassName.toLowerCase()) ||
+          awpClassName.toLowerCase().startsWith(c.name.toLowerCase())
       );
 
       const idPrefix = awpClass?.id_prefix || "AWP";
       const awpClassId = awpClass?.id || null;
       const category = awpClass?.category || "Asset";
 
-      // Get existing items count for this specific class to avoid ID conflicts
       const { data: existingItems } = await supabase
         .from("project_analysis_items")
         .select("item_id")
@@ -790,10 +718,10 @@ export function AnalysisSection({ requestId, files, projectId }: AnalysisSection
 
       const existingCount = existingItems?.length || 0;
 
-      // Resolve default controls from source table
       let defaultControlNames: string[] = [];
-      const sourceTable = category === "Asset" ? "critical_assets"
-        : category === "Water System" ? "water_systems" : "processes";
+      const sourceTable =
+        category === "Asset" ? "critical_assets" :
+        category === "Water System" ? "water_systems" : "processes";
 
       const { data: sourceEntry } = await supabase
         .from(sourceTable as any)
@@ -844,11 +772,30 @@ export function AnalysisSection({ requestId, files, projectId }: AnalysisSection
     }
   };
 
+  // ---- Cell helpers ----
+
+  type CellValue = "loading" | "failed" | number | null;
+
+  const countForCell = (fileId: string, className: string): CellValue => {
+    const liveStatus = classFileStatuses[className]?.[fileId];
+    if (liveStatus === "processing") return "loading";
+    if (liveStatus === "failed") return "failed";
+
+    // Fall back to DB results
+    const result = results?.find((r) => r.file_id === fileId && r.awp_class_name === className);
+    if (!result) return null;
+    if (result.status === "failed") return "failed";
+    if (result.status === "complete" && result.result_text) {
+      const parsed = parseResultText(result.result_text);
+      return parsed.length;
+    }
+    return null;
+  };
+
   const getResultsForClass = (className: string) =>
     results?.filter((r) => r.awp_class_name === className) || [];
 
-  const getRiskForClass = (className: string): RiskData | undefined =>
-    riskData?.find((r) => r.name.toLowerCase() === className.toLowerCase());
+  // ---- Early returns ----
 
   if (promptsLoading) {
     return (
@@ -860,219 +807,338 @@ export function AnalysisSection({ requestId, files, projectId }: AnalysisSection
 
   if (!prompts?.length) return null;
 
+  const anyAnalyzing = analyzingClasses.size > 0;
+
   return (
     <TooltipProvider delayDuration={0}>
-      <div className="space-y-4">
-        <h2 className="text-lg font-semibold">Drawing Analysis</h2>
+      <div className="space-y-6">
 
-        {prompts.map((prompt) => {
-          const classResults = getResultsForClass(prompt.awp_class_name);
-          const isAnalyzing = analyzingClass === prompt.awp_class_name;
-          const hasResults = classResults.length > 0;
-          const risk = getRiskForClass(prompt.awp_class_name);
-          const riskPoints = risk ? risk.probability * risk.impact : null;
-          const isSummarizing = summarizing[prompt.awp_class_name];
-          const summary = summarizedInstances[prompt.awp_class_name];
-          const isAdding = addingToProject[prompt.awp_class_name];
-          const isAdded = addedToProject[prompt.awp_class_name];
+        {/* ================================================================
+            Drawing Analysis Grid
+        ================================================================ */}
+        <div className="bg-card border rounded-lg overflow-hidden">
+          <div className="px-4 py-3 border-b flex items-center justify-between">
+            <h2 className="text-base font-semibold">Drawing Analysis</h2>
+            <Button
+              size="sm"
+              onClick={handleAnalyzeAll}
+              disabled={anyAnalyzing || copiedFiles.length === 0}
+            >
+              {anyAnalyzing ? (
+                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+              ) : (
+                <Play className="w-4 h-4 mr-2" />
+              )}
+              Analyze All
+            </Button>
+          </div>
 
-          // Aggregate all parsed instances across all result files for this class
-          const allInstances: (ParsedInstance & { fileName: string })[] = [];
-          const failedResults: { fileName: string; error: string }[] = [];
-          const rawFallbacks: { resultId: string; fileName: string; text: string }[] = [];
+          {copiedFiles.length === 0 ? (
+            <div className="px-4 py-6 text-sm text-muted-foreground text-center">
+              No files ready for analysis.
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full caption-bottom text-sm border-collapse">
+                <thead>
+                  {/* Header row: file info columns + class abbreviations */}
+                  <tr className="border-b">
+                    <th className="sticky left-0 z-10 bg-card px-4 py-2 text-left font-medium text-muted-foreground min-w-[220px] border-r">
+                      File Name
+                    </th>
+                    <th className="px-3 py-2 text-left font-medium text-muted-foreground w-20">
+                      Size
+                    </th>
+                    {prompts.map((prompt) => (
+                      <th key={prompt.id} className="w-14 px-2 py-2 text-center font-medium text-muted-foreground">
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <span className="cursor-default font-mono text-xs">
+                              {idPrefixMap[prompt.awp_class_name] || prompt.awp_class_name.slice(0, 3).toUpperCase()}
+                            </span>
+                          </TooltipTrigger>
+                          <TooltipContent>{prompt.awp_class_name}</TooltipContent>
+                        </Tooltip>
+                      </th>
+                    ))}
+                  </tr>
 
-          if (!isAnalyzing && hasResults) {
-            for (const result of classResults) {
-              const file = files.find((f) => f.id === result.file_id);
-              const fileName = file?.name || "Unknown file";
+                  {/* Button sub-row: per-column analyze/stop controls */}
+                  <tr className="border-b bg-muted/20">
+                    <td className="sticky left-0 z-10 bg-muted/20 px-4 py-1.5 text-xs text-muted-foreground border-r">
+                      Controls
+                    </td>
+                    <td className="px-3 py-1.5" />
+                    {prompts.map((prompt) => {
+                      const className = prompt.awp_class_name;
+                      const isAnalyzing = analyzingClasses.has(className);
+                      const hasResults = (results?.some((r) => r.awp_class_name === className)) || false;
 
-              if (result.status === "failed") {
-                failedResults.push({ fileName, error: result.error_message || "Unknown error" });
-                continue;
-              }
+                      return (
+                        <td key={prompt.id} className="w-14 px-2 py-1.5 text-center">
+                          {isAnalyzing ? (
+                            <div className="flex items-center justify-center gap-1">
+                              <Loader2 className="w-3 h-3 animate-spin text-muted-foreground" />
+                              <Button
+                                size="icon"
+                                variant="destructive"
+                                className="h-6 w-6"
+                                onClick={() => handleStop(className)}
+                              >
+                                <Square className="w-3 h-3" />
+                              </Button>
+                            </div>
+                          ) : (
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <Button
+                                  size="icon"
+                                  variant="ghost"
+                                  className="h-6 w-6"
+                                  disabled={copiedFiles.length === 0}
+                                  onClick={() => handleAnalyze(prompt)}
+                                >
+                                  {hasResults ? (
+                                    <RotateCcw className="w-3 h-3" />
+                                  ) : (
+                                    <Play className="w-3 h-3" />
+                                  )}
+                                </Button>
+                              </TooltipTrigger>
+                              <TooltipContent>
+                                {hasResults ? `Re-analyze ${className}` : `Analyze ${className}`}
+                              </TooltipContent>
+                            </Tooltip>
+                          )}
+                        </td>
+                      );
+                    })}
+                  </tr>
+                </thead>
 
-              if (result.status === "complete" && result.result_text) {
-                const parsed = parseResultText(result.result_text);
-                if (parsed.length > 0) {
-                  for (const inst of parsed) {
-                    allInstances.push({ ...inst, fileName });
-                  }
-                } else {
-                  rawFallbacks.push({ resultId: result.id, fileName, text: result.result_text });
-                }
-              }
-            }
-          }
+                <tbody>
+                  {copiedFiles.map((file) => (
+                    <tr key={file.id} className="border-b hover:bg-muted/30 transition-colors">
+                      {/* File name (sticky) */}
+                      <td className="sticky left-0 z-10 bg-card hover:bg-muted/30 px-4 py-2 border-r">
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <span className="text-sm font-medium truncate block max-w-[200px] cursor-default">
+                              {file.name}
+                            </span>
+                          </TooltipTrigger>
+                          <TooltipContent className="max-w-sm break-all">{file.name}</TooltipContent>
+                        </Tooltip>
+                      </td>
 
-          return (
-            <div key={prompt.id} className="bg-card border rounded-lg">
-              <div className="px-4 py-3 border-b flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <FileText className="w-5 h-5 text-muted-foreground" />
-                  <div className="flex items-center gap-2">
-                    <span className="font-medium">{prompt.awp_class_name}</span>
-                    {riskPoints !== null && (
-                      <Tooltip>
-                        <TooltipTrigger asChild>
-                          <Badge
-                            variant="outline"
-                            className={`text-xs cursor-default ${getRiskBadgeStyle(riskPoints)}`}
-                          >
-                            {getRiskLabel(riskPoints)} ({riskPoints})
-                          </Badge>
-                        </TooltipTrigger>
-                        <TooltipContent>
-                          <p>Probability: {risk!.probability} × Impact: {risk!.impact}</p>
-                        </TooltipContent>
-                      </Tooltip>
-                    )}
-                    {prompt.drive_file_name && (
-                      <a
-                        href={prompt.drive_file_url || "#"}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="text-xs text-primary hover:underline inline-flex items-center gap-1"
+                      {/* Size */}
+                      <td className="px-3 py-2 text-xs text-muted-foreground whitespace-nowrap">
+                        {formatBytes((file as any).size_bytes)}
+                      </td>
+
+                      {/* Per-class cells */}
+                      {prompts.map((prompt) => {
+                        const val = countForCell(file.id, prompt.awp_class_name);
+                        const className = prompt.awp_class_name;
+
+                        if (val === "loading") {
+                          return (
+                            <td key={prompt.id} className="w-14 px-2 py-2 text-center">
+                              <Loader2 className="w-3 h-3 animate-spin text-muted-foreground mx-auto" />
+                            </td>
+                          );
+                        }
+
+                        if (val === "failed") {
+                          return (
+                            <td key={prompt.id} className="w-14 px-2 py-2 text-center">
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <span>
+                                    <AlertTriangle className="w-3.5 h-3.5 text-destructive mx-auto" />
+                                  </span>
+                                </TooltipTrigger>
+                                <TooltipContent>Analysis failed for this file</TooltipContent>
+                              </Tooltip>
+                            </td>
+                          );
+                        }
+
+                        if (typeof val === "number" && val > 0) {
+                          // Clickable count — open RawResultModal
+                          const result = results?.find(
+                            (r) => r.file_id === file.id && r.awp_class_name === className
+                          );
+                          return (
+                            <td key={prompt.id} className="w-14 px-2 py-2 text-center">
+                              <button
+                                className="text-xs font-semibold text-primary hover:underline"
+                                onClick={() => {
+                                  if (result?.result_text) {
+                                    setRawResultModal({
+                                      fileName: file.name,
+                                      awpClassName: className,
+                                      resultText: result.result_text,
+                                      instanceCount: val,
+                                    });
+                                  }
+                                }}
+                              >
+                                {val}
+                              </button>
+                            </td>
+                          );
+                        }
+
+                        if (typeof val === "number" && val === 0) {
+                          return (
+                            <td key={prompt.id} className="w-14 px-2 py-2 text-center text-xs text-muted-foreground">
+                              0
+                            </td>
+                          );
+                        }
+
+                        // null — not yet analyzed
+                        return <td key={prompt.id} className="w-14 px-2 py-2" />;
+                      })}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+
+        {/* ================================================================
+            Analysis Summary — Unified Single Card
+        ================================================================ */}
+        <div className="bg-card border rounded-lg overflow-hidden">
+          <div className="px-4 py-3 border-b flex items-center gap-2">
+            <Sparkles className="w-4 h-4 text-primary" />
+            <h2 className="text-base font-semibold">Analysis Summary</h2>
+          </div>
+
+          <div className="divide-y">
+            {prompts.map((prompt) => {
+              const className = prompt.awp_class_name;
+              const prefix = idPrefixMap[className] || className.slice(0, 3).toUpperCase();
+              const isSummarizing = summarizing[className];
+              const summary = summarizedInstances[className];
+              const isAdding = addingToProject[className];
+              const isAdded = addedToProject[className];
+
+              return (
+                <div key={prompt.id}>
+                  {/* Sub-header */}
+                  <div className="px-4 py-2.5 flex items-center justify-between bg-muted/20">
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm font-medium">{className}</span>
+                      <span className="text-xs text-muted-foreground font-mono">({prefix})</span>
+                      {prompt.drive_file_url && (
+                        <a
+                          href={prompt.drive_file_url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-xs text-primary hover:underline inline-flex items-center gap-0.5"
+                        >
+                          {prompt.drive_file_name}
+                          <ExternalLink className="w-2.5 h-2.5 ml-0.5" />
+                        </a>
+                      )}
+                      {isSummarizing && (
+                        <Loader2 className="w-3.5 h-3.5 animate-spin text-muted-foreground" />
+                      )}
+                    </div>
+
+                    {summary && summary.length > 0 && (
+                      <Button
+                        size="sm"
+                        variant={isAdded ? "outline" : "default"}
+                        onClick={() => handleAddToProject(className)}
+                        disabled={isAdding || isAdded}
                       >
-                        {prompt.drive_file_name}
-                        <ExternalLink className="w-3 h-3" />
-                      </a>
+                        {isAdding ? (
+                          <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                        ) : (
+                          <PlusCircle className="w-4 h-4 mr-2" />
+                        )}
+                        {isAdded ? "Added" : "Add to Project"}
+                      </Button>
                     )}
                   </div>
-                </div>
-                <div className="flex items-center gap-2">
-                  {isAnalyzing ? (
-                    <Button
-                      size="sm"
-                      variant="destructive"
-                      onClick={handleStop}
-                    >
-                      <Square className="w-4 h-4 mr-2" />
-                      Stop
-                    </Button>
-                  ) : (
-                    <Button
-                      size="sm"
-                      onClick={() => handleAnalyze(prompt)}
-                      disabled={copiedFiles.length === 0}
-                    >
-                      <Play className="w-4 h-4 mr-2" />
-                      {hasResults ? "Re-analyze" : "Analyze"}
-                    </Button>
+
+                  {/* Content */}
+                  {!summary && !isSummarizing && (
+                    <div className="px-4 py-3 text-sm text-muted-foreground">
+                      — Not yet analyzed
+                    </div>
+                  )}
+
+                  {isSummarizing && !summary && (
+                    <div className="px-4 py-3 flex items-center gap-2 text-sm text-muted-foreground">
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      Summarizing…
+                    </div>
+                  )}
+
+                  {summary && summary.length === 0 && (
+                    <div className="px-4 py-3 text-sm text-muted-foreground">
+                      None identified
+                    </div>
+                  )}
+
+                  {summary && summary.length > 0 && (
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Display ID</TableHead>
+                          <TableHead>Name</TableHead>
+                          <TableHead>Floor</TableHead>
+                          <TableHead className="text-right">Area (sqft)</TableHead>
+                          <TableHead className="w-10" />
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {summary.map((inst, idx) => (
+                          <TableRow key={idx}>
+                            <TableCell className="font-mono text-sm">{inst.id}</TableCell>
+                            <TableCell className="text-sm">{inst.name}</TableCell>
+                            <TableCell className="text-sm">{inst.floor}</TableCell>
+                            <TableCell className="text-sm text-right text-muted-foreground">
+                              {inst.area_sqft > 0 ? inst.area_sqft : "—"}
+                            </TableCell>
+                            <TableCell className="text-right py-1">
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                className="h-7 w-7 p-0"
+                                onClick={() => setSelectedInstance({ instance: inst, awpClassName: className })}
+                              >
+                                <Eye className="w-4 h-4" />
+                              </Button>
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
                   )}
                 </div>
-              </div>
-
-              {/* Per-file analysis progress */}
-              {isAnalyzing && (
-                <div className="border-b">
-                  <div className="px-4 py-2 flex items-center justify-between text-sm border-b border-muted">
-                    <span className="text-muted-foreground">
-                      {progress.current < progress.total
-                        ? `Analyzing file ${progress.current + 1} of ${progress.total}...`
-                        : `Finishing up...`}
-                    </span>
-                    <span className="text-muted-foreground font-medium">
-                      {progress.total > 0 ? Math.round((progress.current / progress.total) * 100) : 0}%
-                    </span>
-                  </div>
-                  <Progress
-                    value={progress.total > 0 ? (progress.current / progress.total) * 100 : 0}
-                    className="h-1 rounded-none"
-                  />
-                  <div className="divide-y">
-                    {copiedFiles.map((file) => (
-                      <FileAnalysisRow
-                        key={file.id}
-                        fileName={file.name}
-                        status={fileStatuses[file.id]}
-                        awpClassName={prompt.awp_class_name}
-                        category={prompt.category}
-                      />
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {/* AI Summarized Instances */}
-              {summary && summary.length > 0 && (
-                <div className="border-b">
-                  <div className="px-4 py-2 flex items-center justify-between bg-muted/30">
-                    <div className="flex items-center gap-2">
-                      <Sparkles className="w-4 h-4 text-primary" />
-                      <span className="text-sm font-medium">AI Summary — {summary.length} unique instances</span>
-                    </div>
-                    <Button
-                      size="sm"
-                      variant={isAdded ? "outline" : "default"}
-                      onClick={() => handleAddToProject(prompt.awp_class_name)}
-                      disabled={isAdding || isAdded}
-                    >
-                      {isAdding ? (
-                        <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                      ) : (
-                        <PlusCircle className="w-4 h-4 mr-2" />
-                      )}
-                      {isAdded ? "Added" : "Add to Project"}
-                    </Button>
-                  </div>
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>Display ID</TableHead>
-                        <TableHead>Name</TableHead>
-                        <TableHead>Floor</TableHead>
-                        <TableHead className="text-right">Area (sqft)</TableHead>
-                        <TableHead className="w-10" />
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {summary.map((inst, idx) => (
-                        <TableRow key={idx}>
-                          <TableCell className="font-mono text-sm">{inst.id}</TableCell>
-                          <TableCell className="text-sm">{inst.name}</TableCell>
-                          <TableCell className="text-sm">{inst.floor}</TableCell>
-                          <TableCell className="text-sm text-right text-muted-foreground">
-                            {inst.area_sqft > 0 ? inst.area_sqft : "-"}
-                          </TableCell>
-                          <TableCell className="text-right py-1">
-                            <Button
-                              size="sm"
-                              variant="ghost"
-                              className="h-7 w-7 p-0"
-                              onClick={() => setSelectedInstance({ instance: inst, awpClassName: prompt.awp_class_name })}
-                            >
-                              <Eye className="w-4 h-4" />
-                            </Button>
-                          </TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                </div>
-              )}
-
-              {summary && summary.length === 0 && !isSummarizing && (
-                <div className="px-4 py-3 text-sm text-muted-foreground bg-muted/30 border-b">
-                  <Sparkles className="w-4 h-4 inline mr-1" /> No unique instances found after summarization.
-                </div>
-              )}
-
-              {/* Failed results (shown after analysis, no raw data) */}
-              {!isAnalyzing && hasResults && failedResults.length > 0 && (
-                <div className="divide-y border-t">
-                  {failedResults.map((fr, idx) => (
-                    <div key={`fail-${idx}`} className="px-4 py-2 flex items-center gap-2">
-                      <XCircle className="w-4 h-4 text-destructive shrink-0" />
-                      <span className="text-sm font-medium">{fr.fileName}</span>
-                      <span className="text-sm text-destructive">{fr.error}</span>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          );
-        })}
+              );
+            })}
+          </div>
+        </div>
       </div>
+
+      {/* RawResultModal */}
+      {rawResultModal && (
+        <RawResultModal
+          fileName={rawResultModal.fileName}
+          awpClassName={rawResultModal.awpClassName}
+          resultText={rawResultModal.resultText}
+          instanceCount={rawResultModal.instanceCount}
+          onClose={() => setRawResultModal(null)}
+        />
+      )}
 
       {/* Instance Detail Modal */}
       {selectedInstance && (() => {
