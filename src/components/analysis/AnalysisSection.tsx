@@ -35,6 +35,8 @@ import {
   RotateCcw,
   AlertTriangle,
   Download,
+  ZoomIn,
+  ZoomOut,
 } from "lucide-react";
 import * as pdfjsLib from "pdfjs-dist";
 
@@ -100,38 +102,55 @@ interface AnalysisSectionProps {
 // Helpers for bounding-box parsing
 // ---------------------------------------------------------------------------
 
+// Returns raw pixel coordinates in the AI's 1024×768 coordinate space
 function parseCoordinatesFromResult(
   resultText: string,
   instanceId: string
-): { x: number; y: number; w: number; h: number; pageNum: number } | null {
+): { x1: number; y1: number; x2: number; y2: number; pageNum: number } | null {
   try {
     const lines = resultText.split("\n").filter((l) => l.includes("|"));
     if (lines.length < 2) return null;
 
     const headerLine = lines.find((l) => {
       const low = l.toLowerCase();
-      return low.includes("coord") || low.includes("room code") || low.includes("code");
+      return (
+        low.includes("bounding") ||
+        low.includes("bbox") ||
+        low.includes("box") ||
+        low.includes("coord") ||
+        low.includes("room code") ||
+        low.includes("code")
+      );
     });
     if (!headerLine) return null;
 
     const headers = headerLine.split("|").map((c) => c.trim().toLowerCase());
-    const coordCol = headers.findIndex((h) => h.includes("coord"));
+    const coordCol = headers.findIndex(
+      (h) => h.includes("bounding") || h.includes("bbox") || h.includes("box") || h.includes("coord")
+    );
     const pageCol = headers.findIndex((h) => h.includes("page") || h.includes("sheet"));
     if (coordCol === -1) return null;
 
+    // Find the row whose cells contain the instanceId
     const dataRow = lines.find((l) => {
       const cells = l.split("|").map((c) => c.trim());
-      return cells.some((c) => c === instanceId);
+      return cells.some((c) => c === instanceId || c.includes(instanceId));
     });
     if (!dataRow) return null;
 
     const cells = dataRow.split("|").map((c) => c.trim());
     const coordCell = cells[coordCol] || "";
 
-    const pointMatch = coordCell.match(/\(?\s*(-?\d+(?:\.\d+)?)\s*,\s*(-?\d+(?:\.\d+)?)\s*\)?/);
+    // Parse (x_min, y_min, x_max, y_max) four-number format
+    const fourMatch = coordCell.match(
+      /\(\s*(-?\d+(?:\.\d+)?)\s*,\s*(-?\d+(?:\.\d+)?)\s*,\s*(-?\d+(?:\.\d+)?)\s*,\s*(-?\d+(?:\.\d+)?)\s*\)/
+    );
+    // Range format: x1,y1 - x2,y2
     const rangeMatch = coordCell.match(
       /(-?\d+(?:\.\d+)?)\s*,\s*(-?\d+(?:\.\d+)?)\s*(?:–|-|to)\s*(-?\d+(?:\.\d+)?)\s*,\s*(-?\d+(?:\.\d+)?)/i
     );
+    // Single point format: (x, y)
+    const pointMatch = coordCell.match(/\(?\s*(-?\d+(?:\.\d+)?)\s*,\s*(-?\d+(?:\.\d+)?)\s*\)?/);
 
     let pageNum = 1;
     if (pageCol !== -1) {
@@ -139,33 +158,27 @@ function parseCoordinatesFromResult(
       if (!isNaN(pv) && pv > 0) pageNum = pv;
     }
 
+    if (fourMatch) {
+      const x1 = parseFloat(fourMatch[1]);
+      const y1 = parseFloat(fourMatch[2]);
+      const x2 = parseFloat(fourMatch[3]);
+      const y2 = parseFloat(fourMatch[4]);
+      return { x1: Math.min(x1, x2), y1: Math.min(y1, y2), x2: Math.max(x1, x2), y2: Math.max(y1, y2), pageNum };
+    }
+
     if (rangeMatch) {
       const x1 = parseFloat(rangeMatch[1]);
       const y1 = parseFloat(rangeMatch[2]);
       const x2 = parseFloat(rangeMatch[3]);
       const y2 = parseFloat(rangeMatch[4]);
-      const W = 2000, H = 1500;
-      return {
-        x: Math.min(x1, x2) / W,
-        y: Math.min(y1, y2) / H,
-        w: Math.abs(x2 - x1) / W,
-        h: Math.abs(y2 - y1) / H,
-        pageNum,
-      };
+      return { x1: Math.min(x1, x2), y1: Math.min(y1, y2), x2: Math.max(x1, x2), y2: Math.max(y1, y2), pageNum };
     }
 
     if (pointMatch) {
       const cx = parseFloat(pointMatch[1]);
       const cy = parseFloat(pointMatch[2]);
-      const W = 2000, H = 1500;
-      const boxW = 0.05, boxH = 0.05;
-      return {
-        x: cx / W - boxW / 2,
-        y: cy / H - boxH / 2,
-        w: boxW,
-        h: boxH,
-        pageNum,
-      };
+      // Create a small box around the point (50px radius in AI space)
+      return { x1: cx - 50, y1: cy - 50, x2: cx + 50, y2: cy + 50, pageNum };
     }
 
     return null;
@@ -193,86 +206,131 @@ function InstanceDetailModal({
   resultText,
   onClose,
 }: InstanceDetailModalProps) {
-  const [pdfArrayBuffer, setPdfArrayBuffer] = useState<ArrayBuffer | null>(null);
+  const [pageImage, setPageImage] = useState<HTMLImageElement | null>(null);
+  const [zoom, setZoom] = useState(1);
+  const [baseDimensions, setBaseDimensions] = useState<{ width: number; height: number } | null>(null);
+  const [rawCoords, setRawCoords] = useState<{ x1: number; y1: number; x2: number; y2: number } | null>(null);
   const [isLoadingPdf, setIsLoadingPdf] = useState(false);
   const [pdfError, setPdfError] = useState<string | null>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
 
+  // Step 1: Download PDF → render to offscreen canvas at scale 4 → convert to HTMLImageElement
   useEffect(() => {
     if (!sourceFile?.storage_path) return;
     setIsLoadingPdf(true);
     setPdfError(null);
-    setPdfArrayBuffer(null);
-
-    supabase.storage
-      .from("drive-analysis-files")
-      .download(sourceFile.storage_path)
-      .then(({ data: blob, error }) => {
-        if (error || !blob) {
-          setPdfError("Could not load drawing preview.");
-          setIsLoadingPdf(false);
-        } else {
-          blob.arrayBuffer().then((ab) => setPdfArrayBuffer(ab));
-        }
-      });
-  }, [sourceFile?.storage_path]);
-
-  useEffect(() => {
-    if (!pdfArrayBuffer || !canvasRef.current) return;
+    setPageImage(null);
+    setRawCoords(null);
+    setBaseDimensions(null);
+    setZoom(1);
 
     let cancelled = false;
 
-    const coords = resultText
-      ? parseCoordinatesFromResult(resultText, instance.id)
-      : null;
-    const targetPage = coords?.pageNum ?? 1;
-
-    pdfjsLib
-      .getDocument({ data: pdfArrayBuffer })
-      .promise.then(async (pdf) => {
+    (async () => {
+      try {
+        const { data: blob, error: dlErr } = await supabase.storage
+          .from("drive-analysis-files")
+          .download(sourceFile.storage_path!);
+        if (dlErr || !blob) throw dlErr || new Error("Download failed");
+        const ab = await blob.arrayBuffer();
         if (cancelled) return;
+
+        // Parse bounding box
+        if (resultText) {
+          const coords = parseCoordinatesFromResult(resultText, instance.id);
+          if (coords) setRawCoords({ x1: coords.x1, y1: coords.y1, x2: coords.x2, y2: coords.y2 });
+        }
+
+        const pdf = await pdfjsLib.getDocument({ data: ab }).promise;
+        if (cancelled) return;
+
+        const coords = resultText ? parseCoordinatesFromResult(resultText, instance.id) : null;
+        const targetPage = coords?.pageNum ?? 1;
         const page = await pdf.getPage(Math.min(targetPage, pdf.numPages));
         if (cancelled) return;
 
-        const viewport = page.getViewport({ scale: 1.5 });
-        const canvas = canvasRef.current!;
-        canvas.width = viewport.width;
-        canvas.height = viewport.height;
-        const ctx = canvas.getContext("2d")!;
-
-        await page.render({ canvasContext: ctx, viewport, canvas: canvasRef.current! }).promise;
+        // Render at high resolution (scale 4) to offscreen canvas
+        const viewport = page.getViewport({ scale: 4 });
+        const offscreen = document.createElement("canvas");
+        offscreen.width = viewport.width;
+        offscreen.height = viewport.height;
+        const ctx = offscreen.getContext("2d")!;
+        await page.render({ canvasContext: ctx, viewport, canvas: offscreen } as any).promise;
         if (cancelled) return;
 
-        if (coords) {
-          const bx = coords.x * viewport.width;
-          const by = coords.y * viewport.height;
-          const bw = coords.w * viewport.width;
-          const bh = coords.h * viewport.height;
+        // Convert to HTMLImageElement
+        const img = new Image();
+        img.src = offscreen.toDataURL();
+        await new Promise<void>((resolve) => { img.onload = () => resolve(); });
+        if (cancelled) return;
 
-          ctx.fillStyle = "rgba(59, 130, 246, 0.25)";
-          ctx.fillRect(bx, by, bw, bh);
-          ctx.strokeStyle = "rgba(59, 130, 246, 0.9)";
-          ctx.lineWidth = 2;
-          ctx.strokeRect(bx, by, bw, bh);
+        setPageImage(img);
+      } catch (e) {
+        if (!cancelled) {
+          console.error("PDF render error:", e);
+          setPdfError("Failed to render drawing.");
         }
+      } finally {
+        if (!cancelled) setIsLoadingPdf(false);
+      }
+    })();
 
-        setIsLoadingPdf(false);
-      })
-      .catch((err) => {
-        if (cancelled) return;
-        console.error("PDF render error:", err);
-        setPdfError("Failed to render drawing.");
-        setIsLoadingPdf(false);
-      });
+    return () => { cancelled = true; };
+  }, [sourceFile?.storage_path, instance.id, resultText]);
 
-    return () => {
-      cancelled = true;
-    };
-  }, [pdfArrayBuffer, instance.id, resultText]);
+  // Step 2: Compute base dimensions when image loads (fit to container)
+  useEffect(() => {
+    if (!pageImage || !containerRef.current) return;
+    const containerW = containerRef.current.clientWidth || 600;
+    const containerH = 480;
+    const imgAspect = pageImage.naturalWidth / pageImage.naturalHeight;
+    const containerAspect = containerW / containerH;
+    let baseW: number, baseH: number;
+    if (imgAspect > containerAspect) {
+      baseW = containerW;
+      baseH = containerW / imgAspect;
+    } else {
+      baseH = containerH;
+      baseW = containerH * imgAspect;
+    }
+    setBaseDimensions({ width: baseW, height: baseH });
+    setZoom(1);
+  }, [pageImage]);
+
+  // Step 3: Draw image + red bounding box overlay onto display canvas
+  useEffect(() => {
+    if (!pageImage || !baseDimensions || !canvasRef.current) return;
+    const canvas = canvasRef.current;
+    const w = baseDimensions.width * zoom;
+    const h = baseDimensions.height * zoom;
+    canvas.width = w;
+    canvas.height = h;
+    const ctx = canvas.getContext("2d")!;
+    ctx.drawImage(pageImage, 0, 0, w, h);
+
+    if (rawCoords) {
+      // AI coordinate space is 1024×768
+      const scaleX = w / 1024;
+      const scaleY = h / 768;
+      const bx = rawCoords.x1 * scaleX;
+      const by = rawCoords.y1 * scaleY;
+      const bw = (rawCoords.x2 - rawCoords.x1) * scaleX;
+      const bh = (rawCoords.y2 - rawCoords.y1) * scaleY;
+      ctx.fillStyle = "rgba(239, 68, 68, 0.15)";
+      ctx.fillRect(bx, by, bw, bh);
+      ctx.strokeStyle = "rgba(239, 68, 68, 0.9)";
+      ctx.lineWidth = 2.5;
+      ctx.strokeRect(bx, by, bw, bh);
+    }
+  }, [pageImage, baseDimensions, zoom, rawCoords]);
+
+  const handleZoomIn = () => setZoom((z) => Math.min(4, parseFloat((z + 0.25).toFixed(2))));
+  const handleZoomOut = () => setZoom((z) => Math.max(0.5, parseFloat((z - 0.25).toFixed(2))));
 
   return (
     <Dialog open onOpenChange={(open) => { if (!open) onClose(); }}>
-      <DialogContent className="max-w-4xl w-full">
+      <DialogContent className="max-w-5xl w-full">
         <DialogHeader>
           <DialogTitle>
             {awpClassName} — <span className="font-mono text-sm">{instance.id}</span>
@@ -280,6 +338,7 @@ function InstanceDetailModal({
         </DialogHeader>
 
         <div className="flex flex-col md:flex-row gap-6 mt-2">
+          {/* Left panel */}
           <div className="md:w-56 shrink-0 space-y-3">
             <div>
               <p className="text-xs text-muted-foreground uppercase tracking-wide mb-1">Name</p>
@@ -293,6 +352,17 @@ function InstanceDetailModal({
               <p className="text-xs text-muted-foreground uppercase tracking-wide mb-1">Area (sqft)</p>
               <p className="text-sm">{instance.area_sqft > 0 ? instance.area_sqft : "—"}</p>
             </div>
+            <div>
+              <p className="text-xs text-muted-foreground uppercase tracking-wide mb-1">Bounding Box</p>
+              {rawCoords ? (
+                <p className="text-xs font-mono text-muted-foreground leading-relaxed">
+                  ({Math.round(rawCoords.x1)}, {Math.round(rawCoords.y1)})<br />
+                  → ({Math.round(rawCoords.x2)}, {Math.round(rawCoords.y2)})
+                </p>
+              ) : (
+                <p className="text-sm text-muted-foreground">—</p>
+              )}
+            </div>
             {instance.notes && (
               <div>
                 <p className="text-xs text-muted-foreground uppercase tracking-wide mb-1">Notes</p>
@@ -301,27 +371,41 @@ function InstanceDetailModal({
             )}
           </div>
 
-          <div className="flex-1 min-w-0">
-            <p className="text-xs text-muted-foreground uppercase tracking-wide mb-2">Drawing Preview</p>
-            <div className="border rounded-md overflow-auto bg-muted/20 relative min-h-[300px] max-h-[500px] flex items-center justify-center">
-              {!sourceFile?.storage_path ? (
-                <p className="text-sm text-muted-foreground">Drawing not available</p>
-              ) : pdfError ? (
-                <p className="text-sm text-destructive">{pdfError}</p>
-              ) : (
-                <>
-                  {isLoadingPdf && (
-                    <div className="absolute inset-0 flex items-center justify-center">
-                      <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
-                    </div>
-                  )}
-                  <canvas
-                    ref={canvasRef}
-                    className={`max-w-full ${isLoadingPdf ? "opacity-0" : "opacity-100"}`}
-                  />
-                </>
+          {/* Right: drawing area */}
+          <div className="flex-1 min-w-0 flex flex-col">
+            {/* Zoom toolbar */}
+            <div className="flex items-center gap-2 mb-2">
+              <p className="text-xs text-muted-foreground uppercase tracking-wide flex-1">Drawing Preview</p>
+              {pageImage && (
+                <div className="flex items-center gap-1">
+                  <Button variant="outline" size="icon" className="h-7 w-7" onClick={handleZoomOut} disabled={zoom <= 0.5}>
+                    <ZoomOut className="h-3.5 w-3.5" />
+                  </Button>
+                  <span className="text-xs tabular-nums w-10 text-center">{Math.round(zoom * 100)}%</span>
+                  <Button variant="outline" size="icon" className="h-7 w-7" onClick={handleZoomIn} disabled={zoom >= 4}>
+                    <ZoomIn className="h-3.5 w-3.5" />
+                  </Button>
+                </div>
               )}
             </div>
+
+            <div
+              ref={containerRef}
+              className="border rounded-md overflow-auto bg-muted/20 relative min-h-[300px] max-h-[500px] flex items-start justify-start"
+            >
+              {!sourceFile?.storage_path ? (
+                <p className="text-sm text-muted-foreground m-auto">Drawing not available</p>
+              ) : pdfError ? (
+                <p className="text-sm text-destructive m-auto">{pdfError}</p>
+              ) : isLoadingPdf ? (
+                <div className="absolute inset-0 flex items-center justify-center">
+                  <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
+                </div>
+              ) : (
+                <canvas ref={canvasRef} style={{ display: "block" }} />
+              )}
+            </div>
+
             {sourceFile && (
               <p className="text-xs text-muted-foreground mt-1.5 truncate">
                 Source: {sourceFile.name}
