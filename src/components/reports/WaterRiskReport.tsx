@@ -573,7 +573,7 @@ export const WaterRiskReport = ({ data, analysisItems = [], controlDetails = [],
                         </div>
                         {/* Drawing image or placeholder */}
                         {(() => {
-                          const drawingUrl = getDrawingImage(location.id);
+                          const drawingUrl = location.drawingUrl || getDrawingImage(location.id);
                           return drawingUrl ? (
                             <div className="mt-2 p-2 border border-gray-200 rounded bg-white flex justify-center">
                               <img 
