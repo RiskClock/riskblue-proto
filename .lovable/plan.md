@@ -1,138 +1,150 @@
+# Auto Fit-Selection on Modal Open (with 4 Safeguards)
 
-# Two Fixes: Live Count Updates During Analysis · PDF Bytes Re-fetched on Cache Miss
+## What needs to change
 
-## Issue 1: Counts don't update as files complete
+One file: `src/components/analysis/AnalysisSection.tsx`
 
-### Root cause
-`countForCell` reads from the `results` React Query cache (line 1216):
-```typescript
-const result = results?.find((r) => r.file_id === fileId && r.awp_class_name === className);
-```
-This query (`queryKey: ["analysis-results", requestId]`) is only invalidated **once**, at the very end of the entire loop (line 1080):
-```typescript
-await queryClient.invalidateQueries({ queryKey: ["analysis-results", requestId] });
-```
-That means while the ERM column is analyzing 11 files sequentially, the grid shows spinners for each file as they process but **the count cells only populate all at once after the last file finishes**. The user sees nothing change until completion.
+Three targeted edits:
 
-### Fix
-Invalidate the results query **after each individual file** completes successfully, not just at the end of the loop. Move `queryClient.invalidateQueries(...)` inside the per-file loop, right after the status is updated to `complete`:
-
-```typescript
-// Inside the for...of loop, after:
-setClassFileStatuses((prev) => ({
-  ...prev,
-  [className]: {
-    ...(prev[className] || {}),
-    [file.id]: analyzeResponse.ok ? "complete" : "failed",
-  },
-}));
-
-// Add immediately after:
-if (analyzeResponse.ok) {
-  await queryClient.invalidateQueries({ queryKey: ["analysis-results", requestId] });
-}
-```
-
-Keep the existing post-loop invalidation as a final safety flush (it's cheap and idempotent).
-
-This makes `countForCell` immediately re-read from DB for that file so its count appears as soon as the edge function returns — while the next file's spinner appears in parallel.
+1. Add `const didAutoFitRef = useRef(false);` alongside the existing refs in `InstanceDetailModal` (only declare it here — do not redeclare it inside the fit-selection effect).
+2. Reset scroll + reset `didAutoFitRef` in the Step 2 `[pageImage]` effect
+3. Insert the new fit-selection `useEffect` between Step 3 (line 505) and the zoom handlers (line 507)
 
 ---
 
-## Issue 2: OpenAI receives reference (file_id) with expired/invalid file → "raster image provided"
+## Current code anchor points
 
-### Root cause — the cache hit path sends only a `file_id`, not bytes
+- **Line 354–355** — existing refs (`canvasRef`, `containerRef`): add `didAutoFitRef` here
+- **Lines 446–465** — Step 2 effect (`[pageImage]`): add `containerRef.current?.scrollTo({ left: 0, top: 0 })` and `didAutoFitRef.current = false` after `setZoom(1)` on line 464
+- **Line 505** — end of Step 3 effect `}, [pageImage, baseDimensions, zoom, rawCoords, pdfViewport, offscreenSize]);` — insert fit-selection `useEffect` immediately after
 
-When `shouldReuseFile()` returns `true`, the code takes the **cache hit branch** (line 202–205):
-```typescript
-if (shouldReuseFile(fileRecord) && !mimeWasCorrected) {
-  openaiFileId = fileRecord.openai_file_id as string;   // just an ID string
-  // NO download, NO blob, NO byte verification
-}
-```
-The cached `openai_file_id` is then sent to the Responses API. If that file has expired on OpenAI's side **but our local TTL/expiry hasn't caught it yet** (e.g., the expiry field wasn't returned or is slightly off), OpenAI silently falls back to treating the request as image-only and says "original PDF not provided."
+---
 
-Additionally, there's no log confirming what MIME type and byte size the *cache-hit* path eventually sends — because it sends nothing, only a file_id reference. The user's note is correct: "we must re-fetch the PDF bytes from storage whenever the cached file is expired and attach it as `application/pdf`." But the subtler issue is that even non-expired cached files can be silently stale if OpenAI's actual TTL doesn't match what `expires_at` says.
+## The new fit-selection useEffect (full code)
 
-### Fix — Add detailed logging before the Responses API call to confirm the file reference
-
-Since the cache hit path sends only a file_id (no bytes — that's how OpenAI file refs work), we need to confirm **at the Responses API call site** what we're sending:
+Inserted after line 505, before line 507 (`const handleZoomIn`):
 
 ```typescript
-// Just before the fetch to /v1/responses:
-console.log(`[analyze-drawings] Responses API call: file_id=${openaiFileId}, fileRecord.name=${fileRecord.name}, effectiveMime=${effectiveMime}, cacheHit=${shouldReuseFile(fileRecord) && !mimeWasCorrected}`);
-```
+// Step 4: Auto fit-selection — fires once per modal open when all data is ready
+// uses didAutoFitRef declared above with other refs
 
-Also add logging inside the **upload path** confirming actual blob size:
-```typescript
-console.log(`[analyze-drawings] Uploading to OpenAI: name=${fileRecord.name}, mime=${effectiveMime}, blobSize=${pdfBlob.size} bytes`);
-```
+useEffect(() => {
+  // Guard: only run once per load
+  if (didAutoFitRef.current) return;
+  if (!rawCoords || !pdfViewport || !offscreenSize || !baseDimensions) return;
+  const container = containerRef.current;
+  if (!container) return;
 
-### Fix — Force fresh re-upload if the Responses API response indicates raster fallback
+  // Convert PDF user-space → offscreen canvas pixels
+  const [vx1, vy1, vx2, vy2] = pdfViewport.convertToViewportRectangle([
+    rawCoords.x1, rawCoords.y1, rawCoords.x2, rawCoords.y2,
+  ]);
 
-Add a check on the successful Responses API response: if `resultText` contains the phrase `"raster image"` or `"original PDF not"` (indicators the model fell back), treat the cached file as invalid and **immediately re-upload** by:
-1. Setting `openai_file_status = "invalid"` on the file record
-2. Updating the result as `failed` with message `"Model received raster image instead of PDF — cached file expired. Re-analyze to re-upload."`
-3. Returning a 422 so the frontend marks the cell as failed (not silently 0)
+  // Normalise to [0..1] and map to base canvas pixels (zoom = 1)
+  const nx1 = Math.min(vx1, vx2) / offscreenSize.w;
+  const ny1 = Math.min(vy1, vy2) / offscreenSize.h;
+  const nx2 = Math.max(vx1, vx2) / offscreenSize.w;
+  const ny2 = Math.max(vy1, vy2) / offscreenSize.h;
 
-This turns a silent wrong result into a visible failure that prompts the user to click Re-analyze, which will then correctly re-upload the PDF bytes.
+  const bx = nx1 * baseDimensions.width;
+  const by = ny1 * baseDimensions.height;
+  const bw = (nx2 - nx1) * baseDimensions.width;
+  const bh = (ny2 - ny1) * baseDimensions.height;
 
-```typescript
-// After extracting resultText, before storing:
-const rasterFallbackDetected =
-  resultText.toLowerCase().includes("raster image") ||
-  resultText.toLowerCase().includes("original pdf not");
+  // Safeguard 1: skip zero-size bbox
+  if (bw <= 1 || bh <= 1) return;
 
-if (rasterFallbackDetected) {
-  // Invalidate cache so next run re-uploads
-  await adminSupabase.from("analysis_request_files")
-    .update({ openai_file_status: "invalid" })
-    .eq("id", fileId);
+  // Compute fit zoom (20% padding, clamped 1.0–4.0)
+  const PADDING = 0.20;
+  const fitScale = Math.min(
+    container.clientWidth  / (bw * (1 + PADDING)),
+    container.clientHeight / (bh * (1 + PADDING)),
+  );
+  const targetZoom = Math.min(4.0, Math.max(1.0, fitScale));
 
-  await adminSupabase.from("analysis_results")
-    .update({
-      status: "failed",
-      error_message: "Model received raster image instead of PDF — cached OpenAI file expired. Re-analyze to re-upload.",
-    })
-    .eq("file_id", fileId)
-    .eq("analysis_request_id", analysisRequestId)
-    .eq("awp_class_name", awpClassName);
+  // bbox center in zoomed-canvas pixels (used inside double-RAF closure)
+  const cx = (bx + bw / 2) * targetZoom;
+  const cy = (by + bh / 2) * targetZoom;
 
-  return new Response(JSON.stringify({
-    error: "Cached OpenAI file expired (model got raster image). Re-analyze to re-upload PDF.",
-  }), {
-    status: 422, headers: { ...corsHeaders, "Content-Type": "application/json" },
+  // Mark as done before applying (prevents any re-entry)
+  didAutoFitRef.current = true;
+
+  setZoom(targetZoom);
+
+  requestAnimationFrame(() => {
+    requestAnimationFrame(() => {
+      const c = containerRef.current;
+      if (!c) return;
+      // Safeguard 2: non-negative clamp for maxLeft/maxTop
+      const maxLeft = Math.max(0, c.scrollWidth  - c.clientWidth);
+      const maxTop  = Math.max(0, c.scrollHeight - c.clientHeight);
+      const left = Math.min(maxLeft, Math.max(0, cx - c.clientWidth  / 2));
+      const top  = Math.min(maxTop,  Math.max(0, cy - c.clientHeight / 2));
+      c.scrollTo({ left, top }); // instant, no animation
+    });
   });
-}
+}, [rawCoords, pdfViewport, offscreenSize, baseDimensions]);
 ```
 
-### Additional logging for cache-hit vs. fresh-upload
-Also add a log line right after the cache-hit decision to make it easy to confirm in logs:
+---
+
+## Step 2 additions (reset on new image load)
+
+Inside the `[pageImage]` effect, after `setZoom(1)` on line 464:
+
 ```typescript
-if (shouldReuseFile(fileRecord) && !mimeWasCorrected) {
-  openaiFileId = fileRecord.openai_file_id as string;
-  console.log(`[analyze-drawings] Cache hit for file ${fileId}: reusing OpenAI file_id=${openaiFileId}, uploadedAt=${fileRecord.openai_file_uploaded_at}, expiresAt=${fileRecord.openai_file_expires_at}`);
-} else {
-  // ...upload path with blob size log
-}
+setZoom(1);
+// Safeguard 3: reset scroll position
+containerRef.current?.scrollTo({ left: 0, top: 0 });
+// Safeguard 4: allow auto-fit to fire again for the new image
+didAutoFitRef.current = false;
+```
+
+---
+
+## Why this is safe against loops
+
+The dep array is `[rawCoords, pdfViewport, offscreenSize, baseDimensions]`. All four are set during PDF load and never changed by zoom or scroll operations. `didAutoFitRef.current` is set to `true` before calling `setZoom`, so even if `setZoom` somehow re-triggered this effect (it can't — `zoom` is not in the dep array), the guard at the top would exit immediately.
+
+The Step 2 effect resets `didAutoFitRef.current = false` whenever a new image loads (`[pageImage]` dep), which is exactly what allows the fit to re-run on the next modal open.
+
+---
+
+## Sequencing of all effects per modal open
+
+```text
+1. Step 1 effect fires (new sourceFile/instance):
+   → resets all state to null, setZoom(1)
+
+2. PDF downloads + renders → setPageImage(img)
+
+3. Step 2 effect fires ([pageImage]):
+   → sets baseDimensions, setZoom(1)
+   → scrollTo(0, 0)               ← Safeguard 3
+   → didAutoFitRef.current = false ← Safeguard 4
+
+4. Step 3 effect fires ([..., baseDimensions]):
+   → draws image + red bbox overlay onto canvas at zoom=1
+
+5. Fit-selection effect fires ([rawCoords, pdfViewport, offscreenSize, baseDimensions]):
+   → guard: didAutoFitRef.current is false → proceeds
+   → guard: bw/bh > 1 → proceeds
+   → computes targetZoom, sets didAutoFitRef.current = true
+   → setZoom(targetZoom)
+
+6. Step 3 redraws at targetZoom (zoom changed)
+
+7. double-RAF fires → scrollTo(left, top) with clamped scroll
 ```
 
 ---
 
 ## Files changed
 
-| File | Change |
-|---|---|
-| `src/components/analysis/AnalysisSection.tsx` | Invalidate `["analysis-results", requestId]` query after each successful per-file completion inside the loop (not just after all files) |
-| `supabase/functions/analyze-drawings/index.ts` | Add detailed logging at cache-hit and upload paths; detect raster-fallback in result text and fail fast with cache invalidation |
 
-No DB changes. No new packages. No other files.
+| File                                          | Lines touched                                                                                                      |
+| --------------------------------------------- | ------------------------------------------------------------------------------------------------------------------ |
+| `src/components/analysis/AnalysisSection.tsx` | Add `didAutoFitRef` at line ~355; 2 lines in Step 2 effect at line ~464; new `useEffect` (30 lines) after line 505 |
 
----
 
-## Summary
-
-| # | Symptom | Root cause | Fix |
-|---|---|---|---|
-| 1 | Counts all appear at once at the end | `invalidateQueries` called once after the full loop | Move invalidation inside the loop, after each file completes |
-| 2 | "raster image provided" = 0 detections, silently wrong | Cached file_id expired on OpenAI's side but local TTL didn't catch it | Detect raster fallback phrase in result text → fail fast + invalidate cache → user re-analyzes with fresh PDF upload |
+No DB changes. No new dependencies. No edge function changes.
