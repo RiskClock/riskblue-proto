@@ -99,101 +99,163 @@ interface AnalysisSectionProps {
 }
 
 // ---------------------------------------------------------------------------
-// Helpers for bounding-box parsing
+// Helpers: extract room tag IDs from AI result text (table format)
 // ---------------------------------------------------------------------------
 
-// Returns raw pixel coordinates in the AI's 1024×768 coordinate space
-// searchTerms: array of strings to try matching against row cells (tried in order)
-function parseCoordinatesFromResult(
-  resultText: string,
-  searchTerms: string[]
-): { x1: number; y1: number; x2: number; y2: number; pageNum: number } | null {
+/**
+ * Parse the AI result text (markdown table) and return all room-tag strings
+ * found in the "Room Code / Generated Room Code / ID" column.
+ * Also extracts the page number if present.
+ */
+function parseRoomTagsFromResult(
+  resultText: string
+): Array<{ tag: string; pageNum: number }> {
   try {
     const lines = resultText.split("\n").filter((l) => l.includes("|"));
-    if (lines.length < 2) return null;
+    if (lines.length < 2) return [];
 
-    const headerLine = lines.find((l) => {
-      const low = l.toLowerCase();
-      return (
-        low.includes("bounding") ||
-        low.includes("bbox") ||
-        low.includes("box") ||
-        low.includes("coord")
-      );
-    });
-    if (!headerLine) return null;
+    // Find header row
+    let headerIdx = -1;
+    const HEADER_KW = ["room code", "generated room", "code", "id", "label", "name"];
+    for (let i = 0; i < lines.length; i++) {
+      const low = lines[i].toLowerCase();
+      if (HEADER_KW.some((k) => low.includes(k)) && (lines[i].match(/\|/g) || []).length >= 2) {
+        headerIdx = i;
+        break;
+      }
+    }
+    if (headerIdx === -1) return [];
 
-    const headerIdx = lines.indexOf(headerLine);
-    const headers = headerLine.split("|").map((c) => c.trim().toLowerCase());
-    const coordCol = headers.findIndex(
-      (h) => h.includes("bounding") || h.includes("bbox") || h.includes("box") || h.includes("coord")
+    const headers = lines[headerIdx].split("|").map((c) => c.trim().toLowerCase());
+    const idCol = headers.findIndex((h) =>
+      h.includes("generated room") || h.includes("room code") || h.includes("code") || h === "id"
     );
     const pageCol = headers.findIndex((h) => h.includes("page") || h.includes("sheet"));
-    if (coordCol === -1) return null;
+    if (idCol === -1) return [];
 
     const dataLines = lines.slice(headerIdx + 1).filter((l) => !l.match(/^[\s|:-]+$/));
+    const tags: Array<{ tag: string; pageNum: number }> = [];
 
-    // Find a row that matches any of the search terms
-    const validTerms = searchTerms.filter(Boolean);
-    let dataRow = dataLines.find((l) => {
-      const cells = l.split("|").map((c) => c.trim());
-      return validTerms.some((term) =>
-        cells.some((c) => c.includes(term) || term.includes(c))
+    for (const line of dataLines) {
+      const cells = line.split("|").map((c) => c.trim());
+      const tag = cells[idCol];
+      if (!tag || tag === "-" || tag.toLowerCase().includes("none") || tag.toLowerCase().includes("no instance")) continue;
+      let pageNum = 1;
+      if (pageCol !== -1) {
+        const pv = parseInt(cells[pageCol] || "1", 10);
+        if (!isNaN(pv) && pv > 0) pageNum = pv;
+      }
+      tags.push({ tag, pageNum });
+    }
+    return tags;
+  } catch {
+    return [];
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Deterministic BBox from pdf.js text layer
+// ---------------------------------------------------------------------------
+
+interface PDFBBox {
+  x1: number; // PDF user space (pts, bottom-left origin)
+  y1: number;
+  x2: number;
+  y2: number;
+  pageNum: number;
+}
+
+/**
+ * Search all pages of a loaded PDF document for any of the given search terms
+ * using the text layer. Returns the union bounding box of all matching text
+ * items on the first page where a match is found.
+ *
+ * Matching strategy:
+ *  1. Exact match of item.str against a term (e.g. "SWC-B04")
+ *  2. Partial match where term is a substring of item.str or vice-versa
+ *  3. If the label spans multiple items on the same page (e.g. "ELECTRICAL" + "SWC-B04"),
+ *     all nearby items within ±40 pts vertically are unioned into one bbox.
+ */
+async function findBBoxInTextLayer(
+  pdf: pdfjsLib.PDFDocumentProxy,
+  searchTerms: string[],
+  hintPageNum?: number
+): Promise<PDFBBox | null> {
+  const validTerms = searchTerms.filter(Boolean).map((t) => t.trim()).filter((t) => t.length > 1);
+  if (validTerms.length === 0) return null;
+
+  // Try hinted page first, then all pages
+  const pageOrder: number[] = [];
+  if (hintPageNum && hintPageNum >= 1 && hintPageNum <= pdf.numPages) {
+    pageOrder.push(hintPageNum);
+  }
+  for (let i = 1; i <= pdf.numPages; i++) {
+    if (!pageOrder.includes(i)) pageOrder.push(i);
+  }
+
+  for (const pageNum of pageOrder) {
+    const page = await pdf.getPage(pageNum);
+    const textContent = await page.getTextContent();
+    const items = textContent.items as Array<{
+      str: string;
+      transform: number[];
+      width: number;
+      height: number;
+    }>;
+
+    // Find all items that match any search term
+    const matchingItems = items.filter((item) => {
+      const s = item.str.trim();
+      if (!s) return false;
+      return validTerms.some(
+        (term) => s === term || s.includes(term) || term.includes(s)
       );
     });
-    // Fallback: first data row that contains a bounding box coordinate
-    if (!dataRow) {
-      dataRow = dataLines.find((l) => /\(\s*\d+/.test(l));
-    }
-    if (!dataRow) return null;
 
-    const cells = dataRow.split("|").map((c) => c.trim());
-    const coordCell = cells[coordCol] || "";
+    if (matchingItems.length === 0) continue;
 
-    // Parse (x_min, y_min, x_max, y_max) four-number format
-    const fourMatch = coordCell.match(
-      /\(\s*(-?\d+(?:\.\d+)?)\s*,\s*(-?\d+(?:\.\d+)?)\s*,\s*(-?\d+(?:\.\d+)?)\s*,\s*(-?\d+(?:\.\d+)?)\s*\)/
-    );
-    // Range format: x1,y1 - x2,y2
-    const rangeMatch = coordCell.match(
-      /(-?\d+(?:\.\d+)?)\s*,\s*(-?\d+(?:\.\d+)?)\s*(?:–|-|to)\s*(-?\d+(?:\.\d+)?)\s*,\s*(-?\d+(?:\.\d+)?)/i
-    );
-    // Single point format: (x, y)
-    const pointMatch = coordCell.match(/\(?\s*(-?\d+(?:\.\d+)?)\s*,\s*(-?\d+(?:\.\d+)?)\s*\)?/);
+    console.log(`[BBox] text layer match on page ${pageNum}:`, matchingItems.map((i) => ({ str: i.str, x: i.transform[4], y: i.transform[5], w: i.width, h: i.height })));
 
-    let pageNum = 1;
-    if (pageCol !== -1) {
-      const pv = parseInt(cells[pageCol] || "1", 10);
-      if (!isNaN(pv) && pv > 0) pageNum = pv;
-    }
+    // For each matching item, also pull in nearby items on the same page
+    // (within ±40 pts vertically) that share the same x-column roughly
+    const primaryItem = matchingItems[0];
+    const primaryX = primaryItem.transform[4];
+    const primaryY = primaryItem.transform[5];
 
-    if (fourMatch) {
-      const x1 = parseFloat(fourMatch[1]);
-      const y1 = parseFloat(fourMatch[2]);
-      const x2 = parseFloat(fourMatch[3]);
-      const y2 = parseFloat(fourMatch[4]);
-      return { x1: Math.min(x1, x2), y1: Math.min(y1, y2), x2: Math.max(x1, x2), y2: Math.max(y1, y2), pageNum };
+    const relatedItems = items.filter((item) => {
+      const s = item.str.trim();
+      if (!s) return false;
+      const iy = item.transform[5];
+      const ix = item.transform[4];
+      // Within ±40 pts vertically, ±200 pts horizontally
+      return Math.abs(iy - primaryY) <= 40 && Math.abs(ix - primaryX) <= 200;
+    });
+
+    // Union all matching + related items
+    const allItems = [...matchingItems];
+    // Only include related items that are themselves meaningful (not just stray chars)
+    for (const r of relatedItems) {
+      if (!allItems.includes(r)) allItems.push(r);
     }
 
-    if (rangeMatch) {
-      const x1 = parseFloat(rangeMatch[1]);
-      const y1 = parseFloat(rangeMatch[2]);
-      const x2 = parseFloat(rangeMatch[3]);
-      const y2 = parseFloat(rangeMatch[4]);
-      return { x1: Math.min(x1, x2), y1: Math.min(y1, y2), x2: Math.max(x1, x2), y2: Math.max(y1, y2), pageNum };
+    // Compute union bbox in PDF user space (bottom-left origin)
+    let x1 = Infinity, y1 = Infinity, x2 = -Infinity, y2 = -Infinity;
+    for (const item of allItems) {
+      const [, , , , tx, ty] = item.transform;
+      const iw = Math.abs(item.width);
+      const ih = Math.abs(item.height) || 10; // fallback height
+      x1 = Math.min(x1, tx);
+      y1 = Math.min(y1, ty);
+      x2 = Math.max(x2, tx + iw);
+      y2 = Math.max(y2, ty + ih);
     }
 
-    if (pointMatch) {
-      const cx = parseFloat(pointMatch[1]);
-      const cy = parseFloat(pointMatch[2]);
-      // Create a small box around the point (50px radius in AI space)
-      return { x1: cx - 50, y1: cy - 50, x2: cx + 50, y2: cy + 50, pageNum };
-    }
-
-    return null;
-  } catch {
-    return null;
+    // Add a small padding (4 pts) around the bbox
+    const PAD = 4;
+    return { x1: x1 - PAD, y1: y1 - PAD, x2: x2 + PAD, y2: y2 + PAD, pageNum };
   }
+
+  return null;
 }
 
 // ---------------------------------------------------------------------------
@@ -249,26 +311,41 @@ function InstanceDetailModal({
         const ab = await blob.arrayBuffer();
         if (cancelled) return;
 
-        // Build search terms from instance id and name fragments
-        const planCodeMatch = instance.name?.match(/\b([A-Z]+-B?\d+)\b/);
-        const planCode = planCodeMatch?.[1];
-        const searchTerms = [instance.id, instance.name, planCode].filter(Boolean) as string[];
+        // Build search terms: prefer room tags parsed from AI result, fallback to instance id/name
+        const aiTags = resultText ? parseRoomTagsFromResult(resultText) : [];
+        // Find tags that reference this specific instance
+        const instanceTag = aiTags.find(
+          (t) => t.tag === instance.id || t.tag.includes(instance.id) || instance.id.includes(t.tag) ||
+                 t.tag === instance.name || t.tag.includes(instance.name) || instance.name.includes(t.tag)
+        ) || aiTags[0];
 
-        // Parse bounding box
-        if (resultText) {
-          const coords = parseCoordinatesFromResult(resultText, searchTerms);
-          console.log(`[BBox] instance.id=${instance.id} instance.name=${instance.name}`);
-          console.log(`[BBox] searchTerms=`, searchTerms);
-          console.log(`[BBox] resultText length=${resultText.length}, snippet=`, resultText.slice(0, 400));
-          console.log(`[BBox] parsed coords=`, coords);
-          if (coords) setRawCoords({ x1: coords.x1, y1: coords.y1, x2: coords.x2, y2: coords.y2 });
-        }
+        const planCodeMatch = (instance.id || instance.name)?.match(/\b([A-Z]+-B?\d+[A-Z]?)\b/);
+        const planCode = planCodeMatch?.[1];
+        const searchTerms = [
+          instanceTag?.tag,
+          instance.id,
+          planCode,
+          instance.name,
+        ].filter(Boolean) as string[];
+
+        console.log(`[BBox] opening: instance.id=${instance.id} instance.name=${instance.name}`);
+        console.log(`[BBox] searchTerms=`, searchTerms);
+        console.log(`[BBox] aiTags from result=`, aiTags);
 
         const pdf = await pdfjsLib.getDocument({ data: ab }).promise;
         if (cancelled) return;
 
-        const coords = resultText ? parseCoordinatesFromResult(resultText, searchTerms) : null;
-        const targetPage = coords?.pageNum ?? 1;
+        // Deterministic bbox: search PDF text layer for the room tag
+        const hintPage = instanceTag?.pageNum;
+        const textBBox = await findBBoxInTextLayer(pdf, searchTerms, hintPage);
+        if (cancelled) return;
+
+        console.log(`[BBox] text layer result=`, textBBox);
+        if (textBBox) {
+          setRawCoords({ x1: textBBox.x1, y1: textBBox.y1, x2: textBBox.x2, y2: textBBox.y2 });
+        }
+
+        const targetPage = textBBox?.pageNum ?? hintPage ?? 1;
         const page = await pdf.getPage(Math.min(targetPage, pdf.numPages));
         if (cancelled) return;
 
