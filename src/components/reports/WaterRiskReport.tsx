@@ -580,6 +580,9 @@ export const WaterRiskReport = ({ data, analysisItems = [], controlDetails = [],
                                 src={drawingUrl} 
                                 alt={`Drawing for ${location.id}`} 
                                 className="max-w-full max-h-64 object-contain rounded border border-gray-200"
+                                loading="eager"
+                                referrerPolicy="no-referrer"
+                                crossOrigin="anonymous"
                               />
                             </div>
                           ) : (
