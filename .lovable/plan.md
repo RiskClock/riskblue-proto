@@ -1,136 +1,105 @@
 
-# Fix: AWPEditModal "Select All" Bug on Item Edit
+
+# Fix: Drawing Images Fail to Load from Private Storage Bucket
 
 ## Root Cause
 
-In `src/pages/ProjectWizard.tsx` lines 1943-1965, the `onUpdateItems` callback (fired when the AWP Edit Modal saves) has this code:
+The `awp-drawings` storage bucket is **private**, but the upload code uses `getPublicUrl()` to generate the URL saved to the database. Public URLs return an error for private buckets, so the image never loads.
+
+**Upload code (both AWPItemEditModal.tsx and AWPEditModal.tsx):**
+```typescript
+const { data: urlData } = supabase.storage
+  .from('awp-drawings')
+  .getPublicUrl(data.path);  // This does NOT work for private buckets
+finalDrawingUrl = urlData.publicUrl;
+```
+
+**Viewer code (LocationDetailsModal.tsx):**
+```typescript
+img.src = url;  // Tries to load the public URL, gets 400/empty response
+img.onerror = () => setError("Failed to load drawing image");
+```
+
+## Recommended Fix
+
+Use **signed URLs** at render time. This keeps the bucket private (appropriate given the existing RLS policies) while ensuring authenticated users can view drawings.
+
+### Changes
+
+**1. `src/components/wizard/AWPItemEditModal.tsx` (line 136-139)**
+
+Instead of storing the full public URL, store just the storage path:
 
 ```typescript
-// Auto-select all new items and their controls so they appear in PDF export
-const assetInstances = items.filter(i => i.category === "Asset").map(i => i.id);
-const systemInstances = items.filter(i => i.category === "Water System").map(i => i.id);
-const processInstances = items.filter(i => i.category === "Process").map(i => i.id);
-// ...builds ALL controls...
-updateFields({
-    selectedAssetInstances: assetInstances,
-    selectedAssetControls: assetControls,
-    selectedWaterSystemInstances: systemInstances,
-    ...
-});
+// Before (broken):
+const { data: urlData } = supabase.storage
+  .from('awp-drawings')
+  .getPublicUrl(data.path);
+finalDrawingUrl = urlData.publicUrl;
+
+// After (fixed):
+finalDrawingUrl = data.path;
 ```
 
-This **replaces** all selections with every single item, regardless of what the user had previously selected. Even editing one water system pipe diameter triggers this code, causing every critical asset instance to become selected.
+**2. `src/components/wizard/AWPEditModal.tsx` (line 479-481)**
 
-Additionally, it writes to the **legacy key** `selectedWaterSystemInstances` instead of the canonical `selectedSystemInstances`, creating a data inconsistency.
+Same change -- store the path, not the public URL:
 
-## Fix
+```typescript
+// Before:
+const { data: urlData } = supabase.storage
+  .from('awp-drawings')
+  .getPublicUrl(data.path);
+drawingUrl = urlData.publicUrl;
 
-**File: `src/pages/ProjectWizard.tsx` (lines 1943-1965)**
-
-Replace the unconditional "select all" logic with a **merge** approach that:
-
-1. Preserves existing selections for items that still exist
-2. Auto-selects only truly NEW items (items whose IDs were not in the previous `analysisItems` list)
-3. Uses the canonical key names (`selectedSystemInstances` / `selectedSystemControls`) instead of the legacy `selectedWaterSystem*` keys
-
-The updated logic:
-
-```text
-1. Capture the set of OLD item IDs (from the analysisItems state BEFORE the update)
-2. For each category (Asset, Water System, Process):
-   a. Get current saved selections from projectData
-   b. Remove any selections for items that were DELETED (no longer in updated list)
-   c. Add selections for items that are NEW (not in old set)
-   d. Keep existing selections for items that still exist unchanged
-3. Do the same for controls
-4. Save using canonical keys (selectedSystemInstances, selectedSystemControls)
+// After:
+drawingUrl = data.path;
 ```
 
-This ensures:
-- Editing a water system attribute does NOT change any asset selections
-- Adding a new item auto-selects it (and its controls)
-- Deleting an item removes it from selections
-- Existing manual deselections are preserved
+**3. `src/components/wizard/LocationDetailsModal.tsx` (lines 51-53, 77-91)**
 
-**Secondary fix** (same file, line 1140-1141): Also update the analysis import path (lines 1138-1143) to use canonical keys:
-- `selectedWaterSystemInstances` -> `selectedSystemInstances`
-- `selectedWaterSystemControls` -> `selectedSystemControls`
+When loading a custom drawing URL, detect whether it's a storage path or a full URL. If it's a storage path, generate a signed URL first:
 
-## Files Changed
+```typescript
+import { supabase } from "@/integrations/supabase/client";
+
+// In loadStaticImage or a new helper:
+const resolveDrawingUrl = async (url: string): Promise<string> => {
+  // If it's already a full URL (legacy data), check if it's a public URL for awp-drawings
+  // and convert to signed URL
+  if (url.startsWith('http')) {
+    const awpMatch = url.match(/\/awp-drawings\/(.+)$/);
+    if (awpMatch) {
+      const { data } = await supabase.storage
+        .from('awp-drawings')
+        .createSignedUrl(awpMatch[1], 3600); // 1 hour expiry
+      return data?.signedUrl || url;
+    }
+    return url; // Non-storage URL, use as-is
+  }
+  // It's a storage path -- generate signed URL
+  const { data } = await supabase.storage
+    .from('awp-drawings')
+    .createSignedUrl(url, 3600);
+  return data?.signedUrl || url;
+};
+```
+
+Update the loading effect to call `resolveDrawingUrl` before setting `img.src`.
+
+This approach:
+- Fixes the current bug for DHW002 and any other uploaded drawings
+- Is backward-compatible with existing database records (full public URLs get converted)
+- Works for new uploads (which will store just the path)
+- Keeps the bucket private with RLS intact
+
+### Files Changed
 
 | File | Change |
 |---|---|
-| `src/pages/ProjectWizard.tsx` | Replace `onUpdateItems` callback (lines 1943-1965) with merge-based selection logic. Fix legacy key names at lines 1140-1141. |
+| `src/components/wizard/AWPItemEditModal.tsx` | Store storage path instead of public URL |
+| `src/components/wizard/AWPEditModal.tsx` | Store storage path instead of public URL |
+| `src/components/wizard/LocationDetailsModal.tsx` | Resolve storage paths/legacy URLs to signed URLs before loading |
 
-No other files change. No DB changes. No new dependencies.
+No database migrations needed. No new dependencies.
 
-## Technical Details
-
-The new `onUpdateItems` callback will look like:
-
-```typescript
-onUpdateItems={async (items, changeCount) => {
-  // Capture old item IDs before updating state
-  const oldItemIds = new Set(analysisItems.map(i => i.id));
-  
-  setAnalysisItems(items);
-  
-  // Save to database
-  if (id && id !== "new") {
-    try {
-      await saveAnalysisItems(id, items);
-      toast({ title: "Saved", description: `${changeCount || items.length} change(s) saved successfully` });
-    } catch (error) {
-      console.error("Error saving analysis items:", error);
-    }
-  }
-  
-  // Merge selections: preserve existing, auto-select NEW items only
-  const newItemIds = new Set(items.map(i => i.id));
-  
-  // Helper to merge selections for a category
-  const mergeSelections = (
-    category: string,
-    existingInstanceKey: string,
-    existingControlKey: string
-  ) => {
-    const categoryItems = items.filter(i => i.category === category);
-    const categoryItemIds = new Set(categoryItems.map(i => i.id));
-    
-    // Current saved selections - keep only items that still exist
-    const currentInstances: string[] = projectData[existingInstanceKey] || [];
-    const currentControls: string[] = projectData[existingControlKey] || [];
-    
-    const survivingInstances = currentInstances.filter(id => categoryItemIds.has(id));
-    const survivingControls = currentControls.filter(cid => {
-      const instanceId = cid.split("::")[0];
-      return categoryItemIds.has(instanceId);
-    });
-    
-    // Find truly new items (not in old set)
-    const newItems = categoryItems.filter(i => !oldItemIds.has(i.id));
-    const newInstanceIds = newItems.map(i => i.id);
-    const newControlIds = newItems.flatMap(i =>
-      (i.controls || []).map(c => `${i.id}::${c}`)
-    );
-    
-    return {
-      instances: [...survivingInstances, ...newInstanceIds],
-      controls: [...survivingControls, ...newControlIds],
-    };
-  };
-  
-  const assets = mergeSelections("Asset", "selectedAssetInstances", "selectedAssetControls");
-  const systems = mergeSelections("Water System", "selectedSystemInstances", "selectedSystemControls");
-  const processes = mergeSelections("Process", "selectedProcessInstances", "selectedProcessControls");
-  
-  updateFields({
-    selectedAssetInstances: assets.instances,
-    selectedAssetControls: assets.controls,
-    selectedSystemInstances: systems.instances,
-    selectedSystemControls: systems.controls,
-    selectedProcessInstances: processes.instances,
-    selectedProcessControls: processes.controls,
-  });
-}}
-```
