@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Loader2, ZoomIn, ZoomOut, RotateCw, AlertCircle, ChevronLeft, ChevronRight, FileImage } from "lucide-react";
 import { AnalysisItem } from "@/lib/analysisItemMapper";
 import { getDrawingImage } from "@/lib/drawingMapper";
+import { supabase } from "@/integrations/supabase/client";
 import type { DriveFileInfo } from "./ProjectFilesUpload";
 import * as pdfjsLib from "pdfjs-dist";
 import pdfjsWorker from "pdfjs-dist/build/pdf.worker.min.mjs?url";
@@ -74,20 +75,45 @@ export const LocationDetailsModal = ({
     }
   }, [isOpen, showDrawingViewer, location, drawingUrl]);
 
-  // Load static image from public folder
-  const loadStaticImage = (url: string) => {
-    const img = new Image();
-    img.onload = () => {
-      setPageImages([img]);
-      setTotalPages(1);
-      setOriginalSize({ width: img.naturalWidth, height: img.naturalHeight });
+  // Resolve a drawing URL: convert storage paths or legacy public URLs to signed URLs
+  const resolveDrawingUrl = async (url: string): Promise<string> => {
+    if (url.startsWith('http')) {
+      const awpMatch = url.match(/\/awp-drawings\/(.+?)(\?.*)?$/);
+      if (awpMatch) {
+        const { data } = await supabase.storage
+          .from('awp-drawings')
+          .createSignedUrl(awpMatch[1], 3600);
+        return data?.signedUrl || url;
+      }
+      return url; // Non-storage URL, use as-is
+    }
+    // It's a storage path — generate signed URL
+    const { data } = await supabase.storage
+      .from('awp-drawings')
+      .createSignedUrl(url, 3600);
+    return data?.signedUrl || url;
+  };
+
+  // Load static image from public folder or signed URL
+  const loadStaticImage = async (url: string) => {
+    try {
+      const resolvedUrl = await resolveDrawingUrl(url);
+      const img = new Image();
+      img.onload = () => {
+        setPageImages([img]);
+        setTotalPages(1);
+        setOriginalSize({ width: img.naturalWidth, height: img.naturalHeight });
+        setLoading(false);
+      };
+      img.onerror = () => {
+        setError("Failed to load drawing image");
+        setLoading(false);
+      };
+      img.src = resolvedUrl;
+    } catch {
+      setError("Failed to resolve drawing URL");
       setLoading(false);
-    };
-    img.onerror = () => {
-      setError("Failed to load drawing image");
-      setLoading(false);
-    };
-    img.src = url;
+    }
   };
 
   const loadFile = async () => {

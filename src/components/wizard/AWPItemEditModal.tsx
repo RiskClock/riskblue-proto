@@ -133,10 +133,7 @@ export const AWPItemEditModal = ({
         .upload(fileName, drawingFile);
       
       if (!error && data) {
-        const { data: urlData } = supabase.storage
-          .from('awp-drawings')
-          .getPublicUrl(data.path);
-        finalDrawingUrl = urlData.publicUrl;
+        finalDrawingUrl = data.path;
       }
       setUploadingDrawing(false);
     }
