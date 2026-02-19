@@ -20,20 +20,27 @@ const resolveDrawingUrls = async (items: AnalysisItem[]): Promise<AnalysisItem[]
     resolved.map(async (item) => {
       if (!item.drawingUrl) return;
       const url = item.drawingUrl;
+
+      // Step 1: Resolve storage path to signed URL
+      let signedUrl = url;
       if (url.startsWith('http')) {
         const awpMatch = url.match(/\/awp-drawings\/(.+)$/);
         if (awpMatch) {
           const { data } = await supabase.storage
             .from('awp-drawings')
             .createSignedUrl(awpMatch[1], 3600);
-          if (data?.signedUrl) item.drawingUrl = data.signedUrl;
+          if (data?.signedUrl) signedUrl = data.signedUrl;
         }
       } else {
         const { data } = await supabase.storage
           .from('awp-drawings')
           .createSignedUrl(url, 3600);
-        if (data?.signedUrl) item.drawingUrl = data.signedUrl;
+        if (data?.signedUrl) signedUrl = data.signedUrl;
       }
+
+      // Step 2: Convert to base64 for html2canvas compatibility
+      const base64 = await getImageBase64(signedUrl);
+      item.drawingUrl = base64 || signedUrl;
     })
   );
   return resolved;
