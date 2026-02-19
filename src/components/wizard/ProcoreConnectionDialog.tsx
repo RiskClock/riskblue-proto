@@ -443,7 +443,7 @@ export const ProcoreConnectionDialog = ({
                           const name = findName(folders);
                           handleSelectFolder(folderId, name);
                         }}
-                        hideFiles
+                        hideFiles={false}
                       />
                     </div>
                   ) : (

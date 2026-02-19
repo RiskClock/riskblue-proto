@@ -37,6 +37,20 @@ interface ProcoreFile {
   size?: number;
 }
 
+/**
+ * Infer the correct MIME type from the filename when Procore reports a generic
+ * "application/octet-stream" (which is common for PDFs and images).
+ */
+function inferMimeType(filename: string, reported: string | undefined): string {
+  if (reported && reported !== "application/octet-stream") return reported;
+  const lower = filename.toLowerCase();
+  if (lower.endsWith(".pdf")) return "application/pdf";
+  if (lower.endsWith(".png")) return "image/png";
+  if (lower.endsWith(".jpg") || lower.endsWith(".jpeg")) return "image/jpeg";
+  if (lower.endsWith(".dwg")) return "image/vnd.dwg";
+  return reported || "application/octet-stream";
+}
+
 // Fetch with timeout to prevent hanging on bad endpoints
 async function fetchWithTimeout(url: string, options: RequestInit, timeoutMs = 15000): Promise<Response> {
   const controller = new AbortController();
@@ -322,12 +336,12 @@ async function copyFiles(
     );
     console.log(`Found ${files.length} files to copy`);
 
-    // Insert file records
+    // Insert file records — infer MIME from filename for files Procore tags as octet-stream
     const fileRecords = files.map(({ file, relativePath }) => ({
       analysis_request_id: analysisRequestId,
       drive_file_id: `procore:${file.id}`,
       name: file.name,
-      mime_type: file.content_type || "application/octet-stream",
+      mime_type: inferMimeType(file.name, file.content_type),
       size_bytes: file.size || null,
       relative_path: relativePath,
       copy_status: "pending",
@@ -366,7 +380,7 @@ async function copyFiles(
         const { error: uploadError } = await supabase.storage
           .from("drive-analysis-files")
           .upload(storagePath, blob, {
-            contentType: file.content_type || "application/octet-stream",
+            contentType: inferMimeType(file.name, file.content_type),
             upsert: true,
           });
 
