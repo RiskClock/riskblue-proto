@@ -1,89 +1,119 @@
 
-# Four Fixes: PDF MIME Type for OpenAI Upload · Procore File Visibility · FilePreviewModal Zoom · parseResultText Fallback
+# Two Fixes: Live Count Updates During Analysis · PDF Bytes Re-fetched on Cache Miss
 
-## Root causes (all confirmed)
+## Issue 1: Counts don't update as files complete
 
-### 1. Critical: OpenAI receives `application/octet-stream` instead of `application/pdf`
-
-From the database:
-```
-mime_type: application/octet-stream  (for every single Procore file)
-name: A2.10-ROOF-PLAN-Rev.14.pdf
-```
-
-In `copy-procore-files`, Procore's API returns `content_type` as `application/octet-stream` (or nothing) for many files. This gets stored verbatim in `analysis_request_files.mime_type`.
-
-In `analyze-drawings`, line 209:
+### Root cause
+`countForCell` reads from the `results` React Query cache (line 1216):
 ```typescript
-uploadForm.append("file", fileData, fileRecord.name);
+const result = results?.find((r) => r.file_id === fileId && r.awp_class_name === className);
 ```
-`fileData` is a `Blob` downloaded from storage. Storage preserves the content-type it was uploaded with — which is `application/octet-stream`. So OpenAI receives a file with type `application/octet-stream`, treats it as a raster image, says "original PDF not provided", and refuses to return PDF-point bboxes.
-
-**Fix**: In `analyze-drawings`, before uploading to OpenAI:
-1. Add a PDF guardrail — if `mime_type !== "application/pdf"` AND filename doesn't end with `.pdf`, fail fast with a clear error: `"Detection requires a PDF file for PDF-point bboxes. This file appears to be: {mime_type}"`.
-2. If `mime_type` is `application/octet-stream` but the filename ends with `.pdf`, reconstruct the Blob with `type: "application/pdf"` before appending to FormData. This ensures OpenAI receives `Content-Type: application/pdf` in the multipart boundary.
-
-Also fix `copy-procore-files` to detect the MIME type from the filename for files Procore reports as `application/octet-stream`:
+This query (`queryKey: ["analysis-results", requestId]`) is only invalidated **once**, at the very end of the entire loop (line 1080):
 ```typescript
-function inferMimeType(filename: string, reported: string): string {
-  if (reported && reported !== "application/octet-stream") return reported;
-  const lower = filename.toLowerCase();
-  if (lower.endsWith(".pdf")) return "application/pdf";
-  if (lower.endsWith(".png")) return "image/png";
-  if (lower.endsWith(".jpg") || lower.endsWith(".jpeg")) return "image/jpeg";
-  return reported || "application/octet-stream";
+await queryClient.invalidateQueries({ queryKey: ["analysis-results", requestId] });
+```
+That means while the ERM column is analyzing 11 files sequentially, the grid shows spinners for each file as they process but **the count cells only populate all at once after the last file finishes**. The user sees nothing change until completion.
+
+### Fix
+Invalidate the results query **after each individual file** completes successfully, not just at the end of the loop. Move `queryClient.invalidateQueries(...)` inside the per-file loop, right after the status is updated to `complete`:
+
+```typescript
+// Inside the for...of loop, after:
+setClassFileStatuses((prev) => ({
+  ...prev,
+  [className]: {
+    ...(prev[className] || {}),
+    [file.id]: analyzeResponse.ok ? "complete" : "failed",
+  },
+}));
+
+// Add immediately after:
+if (analyzeResponse.ok) {
+  await queryClient.invalidateQueries({ queryKey: ["analysis-results", requestId] });
 }
 ```
-Apply when building `fileRecords` and when uploading to storage.
 
-**Add logging** in `analyze-drawings` before the OpenAI upload:
+Keep the existing post-loop invalidation as a final safety flush (it's cheap and idempotent).
+
+This makes `countForCell` immediately re-read from DB for that file so its count appears as soon as the edge function returns — while the next file's spinner appears in parallel.
+
+---
+
+## Issue 2: OpenAI receives reference (file_id) with expired/invalid file → "raster image provided"
+
+### Root cause — the cache hit path sends only a `file_id`, not bytes
+
+When `shouldReuseFile()` returns `true`, the code takes the **cache hit branch** (line 202–205):
 ```typescript
-console.log(`Uploading file ${fileId} to OpenAI: name=${fileRecord.name}, mime=${effectiveMime}, size=${fileData.size}`);
-```
-This confirms PDF bytes are sent.
-
-**Cache invalidation**: The currently cached OpenAI file IDs for this analysis request were uploaded as `application/octet-stream`. They must be invalidated so a fresh upload happens with the correct MIME type. In `analyze-drawings`, after determining `effectiveMime`, if the cached file was uploaded before this fix (i.e., when `openai_file_status === "active"` but we now know mime was wrong), we should force re-upload. The simplest approach: add a check — if `effectiveMime === "application/pdf"` but the existing `openai_file_status` is `"active"` and `openai_file_uploaded_at` predates this fix, invalidate. Actually, the cleanest approach is: after computing `effectiveMime`, if it differs from `fileRecord.mime_type` (because we corrected `octet-stream` to `pdf`), force `shouldReuseFile` to return false by treating it as a cache miss. Implement this by checking: `const mimeWasWrong = effectiveMime !== fileRecord.mime_type` and if `mimeWasWrong`, skip the cache path entirely.
-
-### 2. Procore file list: `hideFiles={true}` propagates recursively
-
-In `ProcoreConnectionDialog.tsx` line 446: `hideFiles` is passed as `true` to `ProcoreFolderTree`. The component at line 148 passes `hideFiles={hideFiles}` recursively to all child trees. At line 152: `{!hideFiles && subData.files.map(...)}` — so files are never shown at any depth.
-
-**Fix**: Change line 446 from `hideFiles` (shorthand for `hideFiles={true}`) to `hideFiles={false}`. Files inside expanded subfolders will then render.
-
-### 3. FilePreviewModal: no zoom
-
-The modal at lines 530–609 renders canvases into `containerRef.innerHTML` with no zoom state. It uses `max-h-[90vh]` but no zoom controls.
-
-**Fix**: Refactor `FilePreviewModal` to match the `InstanceDetailModal` pattern:
-- Add `zoom` state (default 1, range 0.25–4) and `scrollRef` for center-preserving scroll
-- Change modal structure to `max-w-5xl h-[90vh] flex flex-col p-0` with:
-  - Fixed header: file name + zoom controls (ZoomIn/ZoomOut buttons + `{Math.round(zoom * 100)}%` label)
-  - Scrollable body: `ref={scrollRef}` + `flex-1 overflow-auto`
-  - Inner wrapper: `style={{ transform: \`scale(\${zoom})\`, transformOrigin: 'top center', width: 'fit-content', margin: '0 auto', padding: '16px' }}`
-- The canvases are stored in `pages` state (not appended via innerHTML), and rendered as React elements: `{pages.map((canvas, i) => <canvas key={i} ref={el => el && el !== canvas && el.replaceWith(canvas)} />)}` — actually simpler to use a `useEffect` that appends canvases into a ref div (as currently done), but with the zoom transform applied to the container
-- Center-preserving zoom handlers (same as `InstanceDetailModal`'s `handleZoomIn`/`handleZoomOut`)
-
-### 4. `parseResultText` fallback for numbered-list format
-
-When OpenAI was receiving a raster image, it returned results in a different plain-text format (numbered entries like `1) Room tag: SWC-B03`). `parseResultText` found no pipe-table header → returned `[]` → all counts showed 0.
-
-After the PDF mime fix, the model should return proper table format. But as a robustness measure, add fallbacks after the existing table parser:
-
-```typescript
-// Fallback 1: numbered entries like "1) " or "1. "
-if (instances.length === 0) {
-  const numberedMatches = resultText.match(/^\s*\d+[.)]\s/gm) || [];
-  if (numberedMatches.length > 0) {
-    return numberedMatches.map((_, i) => ({ id: String(i + 1), name: "-", level: "-", size: "-" }));
-  }
+if (shouldReuseFile(fileRecord) && !mimeWasCorrected) {
+  openaiFileId = fileRecord.openai_file_id as string;   // just an ID string
+  // NO download, NO blob, NO byte verification
 }
-// Fallback 2: "Total ... Found: N" or "Total: N"
-if (instances.length === 0) {
-  const totalMatch = resultText.match(/total[^:]*:\s*(\d+)/i);
-  if (totalMatch) {
-    const n = parseInt(totalMatch[1], 10);
-    if (n > 0) return Array.from({ length: n }, (_, i) => ({ id: String(i + 1), name: "-", level: "-", size: "-" }));
-  }
+```
+The cached `openai_file_id` is then sent to the Responses API. If that file has expired on OpenAI's side **but our local TTL/expiry hasn't caught it yet** (e.g., the expiry field wasn't returned or is slightly off), OpenAI silently falls back to treating the request as image-only and says "original PDF not provided."
+
+Additionally, there's no log confirming what MIME type and byte size the *cache-hit* path eventually sends — because it sends nothing, only a file_id reference. The user's note is correct: "we must re-fetch the PDF bytes from storage whenever the cached file is expired and attach it as `application/pdf`." But the subtler issue is that even non-expired cached files can be silently stale if OpenAI's actual TTL doesn't match what `expires_at` says.
+
+### Fix — Add detailed logging before the Responses API call to confirm the file reference
+
+Since the cache hit path sends only a file_id (no bytes — that's how OpenAI file refs work), we need to confirm **at the Responses API call site** what we're sending:
+
+```typescript
+// Just before the fetch to /v1/responses:
+console.log(`[analyze-drawings] Responses API call: file_id=${openaiFileId}, fileRecord.name=${fileRecord.name}, effectiveMime=${effectiveMime}, cacheHit=${shouldReuseFile(fileRecord) && !mimeWasCorrected}`);
+```
+
+Also add logging inside the **upload path** confirming actual blob size:
+```typescript
+console.log(`[analyze-drawings] Uploading to OpenAI: name=${fileRecord.name}, mime=${effectiveMime}, blobSize=${pdfBlob.size} bytes`);
+```
+
+### Fix — Force fresh re-upload if the Responses API response indicates raster fallback
+
+Add a check on the successful Responses API response: if `resultText` contains the phrase `"raster image"` or `"original PDF not"` (indicators the model fell back), treat the cached file as invalid and **immediately re-upload** by:
+1. Setting `openai_file_status = "invalid"` on the file record
+2. Updating the result as `failed` with message `"Model received raster image instead of PDF — cached file expired. Re-analyze to re-upload."`
+3. Returning a 422 so the frontend marks the cell as failed (not silently 0)
+
+This turns a silent wrong result into a visible failure that prompts the user to click Re-analyze, which will then correctly re-upload the PDF bytes.
+
+```typescript
+// After extracting resultText, before storing:
+const rasterFallbackDetected =
+  resultText.toLowerCase().includes("raster image") ||
+  resultText.toLowerCase().includes("original pdf not");
+
+if (rasterFallbackDetected) {
+  // Invalidate cache so next run re-uploads
+  await adminSupabase.from("analysis_request_files")
+    .update({ openai_file_status: "invalid" })
+    .eq("id", fileId);
+
+  await adminSupabase.from("analysis_results")
+    .update({
+      status: "failed",
+      error_message: "Model received raster image instead of PDF — cached OpenAI file expired. Re-analyze to re-upload.",
+    })
+    .eq("file_id", fileId)
+    .eq("analysis_request_id", analysisRequestId)
+    .eq("awp_class_name", awpClassName);
+
+  return new Response(JSON.stringify({
+    error: "Cached OpenAI file expired (model got raster image). Re-analyze to re-upload PDF.",
+  }), {
+    status: 422, headers: { ...corsHeaders, "Content-Type": "application/json" },
+  });
+}
+```
+
+### Additional logging for cache-hit vs. fresh-upload
+Also add a log line right after the cache-hit decision to make it easy to confirm in logs:
+```typescript
+if (shouldReuseFile(fileRecord) && !mimeWasCorrected) {
+  openaiFileId = fileRecord.openai_file_id as string;
+  console.log(`[analyze-drawings] Cache hit for file ${fileId}: reusing OpenAI file_id=${openaiFileId}, uploadedAt=${fileRecord.openai_file_uploaded_at}, expiresAt=${fileRecord.openai_file_expires_at}`);
+} else {
+  // ...upload path with blob size log
 }
 ```
 
@@ -93,47 +123,16 @@ if (instances.length === 0) {
 
 | File | Change |
 |---|---|
-| `supabase/functions/copy-procore-files/index.ts` | Add `inferMimeType()` helper; apply it when building file records and uploading to storage |
-| `supabase/functions/analyze-drawings/index.ts` | Compute `effectiveMime` from filename if stored mime is `octet-stream`; add PDF guardrail (fail fast if not PDF); force cache miss if mime was corrected; add logging before upload |
-| `src/components/wizard/ProcoreConnectionDialog.tsx` | Change `hideFiles` → `hideFiles={false}` at line 446 |
-| `src/components/analysis/AnalysisSection.tsx` | Add zoom state + zoom controls to `FilePreviewModal`; add `parseResultText` fallbacks |
+| `src/components/analysis/AnalysisSection.tsx` | Invalidate `["analysis-results", requestId]` query after each successful per-file completion inside the loop (not just after all files) |
+| `supabase/functions/analyze-drawings/index.ts` | Add detailed logging at cache-hit and upload paths; detect raster-fallback in result text and fail fast with cache invalidation |
 
-No DB changes. No new packages.
+No DB changes. No new packages. No other files.
 
 ---
 
-## Key implementation details
+## Summary
 
-### `analyze-drawings` — MIME fix + guardrail
-
-```typescript
-// After downloading fileData blob:
-const storedMime = fileRecord.mime_type as string | null;
-const isPdfByName = fileRecord.name?.toLowerCase().endsWith(".pdf");
-const effectiveMime = (storedMime && storedMime !== "application/octet-stream")
-  ? storedMime
-  : isPdfByName ? "application/pdf" : storedMime ?? "application/octet-stream";
-
-// Guardrail: only PDFs are supported for PDF-point bbox detection
-if (effectiveMime !== "application/pdf") {
-  await adminSupabase.from("analysis_results")
-    .update({ status: "failed", error_message: `Detection requires a PDF file. File type: ${effectiveMime}` })
-    .eq("file_id", fileId).eq("analysis_request_id", analysisRequestId).eq("awp_class_name", awpClassName);
-  return new Response(JSON.stringify({ error: `Detection requires a PDF file for PDF-point bboxes. File type: ${effectiveMime}` }), {
-    status: 422, headers: { ...corsHeaders, "Content-Type": "application/json" },
-  });
-}
-
-// Force cache miss if stored mime was wrong (previously uploaded as octet-stream)
-const mimeWasCorrected = storedMime !== effectiveMime;
-
-// In shouldReuseFile check:
-if (shouldReuseFile(fileRecord) && !mimeWasCorrected) {
-  // cache hit
-} else {
-  // Re-upload with correct mime type
-  const pdfBlob = new Blob([await fileData.arrayBuffer()], { type: "application/pdf" });
-  uploadForm.append("file", pdfBlob, fileRecord.name);
-  // ... log: console.log(`Uploading ${fileId}: name=${fileRecord.name}, mime=application/pdf, size=${pdfBlob.size}`);
-}
-```
+| # | Symptom | Root cause | Fix |
+|---|---|---|---|
+| 1 | Counts all appear at once at the end | `invalidateQueries` called once after the full loop | Move invalidation inside the loop, after each file completes |
+| 2 | "raster image provided" = 0 detections, silently wrong | Cached file_id expired on OpenAI's side but local TTL didn't catch it | Detect raster fallback phrase in result text → fail fast + invalidate cache → user re-analyzes with fresh PDF upload |
