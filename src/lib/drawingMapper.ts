@@ -4,6 +4,11 @@
 
 // Import all drawings as ES6 modules for reliable PDF export
 import drawingTWR001 from '/assets/drawings/TWR001.png';
+import drawingDCW001 from '/assets/drawings/DCW001.png';
+import drawingDCW002 from '/assets/drawings/DCW002.png';
+import drawingDCW003 from '/assets/drawings/DCW003.png';
+import drawingDHW001 from '/assets/drawings/DHW001.png';
+import drawingDHW002 from '/assets/drawings/DHW002.png';
 import drawingDHWHWZE001 from '/assets/drawings/DHW-HWZE001.png';
 import drawingDHWHWR001 from '/assets/drawings/DHW-HWR001.png';
 import drawingDCWZE001 from '/assets/drawings/DCW-ZE001.png';
@@ -42,11 +47,16 @@ const DRAWING_IMAGES: Record<string, string> = {
   'TWR001': drawingTWR001,
   
   // Domestic Hot Water
+  'DHW001': drawingDHW001,
+  'DHW002': drawingDHW002,
   'DHW-HWZE001': drawingDHWHWZE001,
   'DHW-HWR001': drawingDHWHWR001,
   'DHW-ZE001': drawingDHWHWZE001, // Alias
   
   // Domestic Cold Water
+  'DCW001': drawingDCW001,
+  'DCW002': drawingDCW002,
+  'DCW003': drawingDCW003,
   'DCW-ZE001': drawingDCWZE001,
   'DCW-ME001': drawingDCWME001,
   'DCW-MCE001': drawingDCWMCE001,
