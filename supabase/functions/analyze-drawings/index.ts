@@ -202,7 +202,7 @@ serve(async (req) => {
     if (shouldReuseFile(fileRecord) && !mimeWasCorrected) {
       // Cache hit — skip upload entirely
       openaiFileId = fileRecord.openai_file_id as string;
-      console.log(`Cache hit for file ${fileId}: reusing OpenAI file ${openaiFileId}`);
+      console.log(`[analyze-drawings] Cache hit for file ${fileId}: reusing OpenAI file_id=${openaiFileId}, uploadedAt=${fileRecord.openai_file_uploaded_at}, expiresAt=${fileRecord.openai_file_expires_at}`);
     } else {
       // Cache miss, stale, or mime was previously wrong — download and re-upload
       if (mimeWasCorrected) {
@@ -316,6 +316,8 @@ serve(async (req) => {
       ],
     };
 
+    console.log(`[analyze-drawings] Responses API call: file_id=${openaiFileId}, name=${fileRecord.name}, effectiveMime=${effectiveMime}, cacheHit=${shouldReuseFile(fileRecord) && !mimeWasCorrected}`);
+
     const responsesResponse = await fetch("https://api.openai.com/v1/responses", {
       method: "POST",
       headers: {
@@ -382,6 +384,33 @@ serve(async (req) => {
           }
         }
       }
+    }
+
+    // Detect raster fallback — means the cached OpenAI file expired silently
+    const rasterFallbackDetected =
+      resultText.toLowerCase().includes("raster image") ||
+      resultText.toLowerCase().includes("original pdf not");
+
+    if (rasterFallbackDetected) {
+      console.warn(`[analyze-drawings] Raster fallback detected for file ${fileId} (${fileRecord.name}) — invalidating cache`);
+      await adminSupabase.from("analysis_request_files")
+        .update({ openai_file_status: "invalid" })
+        .eq("id", fileId);
+
+      await adminSupabase.from("analysis_results")
+        .update({
+          status: "failed",
+          error_message: "Model received raster image instead of PDF — cached OpenAI file expired. Re-analyze to re-upload.",
+        })
+        .eq("file_id", fileId)
+        .eq("analysis_request_id", analysisRequestId)
+        .eq("awp_class_name", awpClassName);
+
+      return new Response(JSON.stringify({
+        error: "Cached OpenAI file expired (model got raster image). Re-analyze to re-upload PDF.",
+      }), {
+        status: 422, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
     }
 
     // Store result

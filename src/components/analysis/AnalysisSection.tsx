@@ -1059,7 +1059,10 @@ export function AnalysisSection({ requestId, files, projectId, sourceType }: Ana
             },
           }));
 
-          if (!analyzeResponse.ok) {
+          if (analyzeResponse.ok) {
+            // Invalidate after each file so counts update live as files complete
+            await queryClient.invalidateQueries({ queryKey: ["analysis-results", requestId] });
+          } else {
             const err = await analyzeResponse.json().catch(() => ({}));
             console.error(`Failed to analyze ${file.name}:`, err.error);
           }
