@@ -13,6 +13,32 @@ import { ProcoreExportDialog } from "@/components/wizard/ProcoreExportDialog";
 import riskBlueLogo from "@/assets/riskblue-logo.jpg";
 import procoreIcon from "@/assets/icon_procore.png";
 
+/** Resolve storage paths and legacy public URLs to signed URLs */
+const resolveDrawingUrls = async (items: AnalysisItem[]): Promise<AnalysisItem[]> => {
+  const resolved = items.map(item => ({ ...item }));
+  await Promise.all(
+    resolved.map(async (item) => {
+      if (!item.drawingUrl) return;
+      const url = item.drawingUrl;
+      if (url.startsWith('http')) {
+        const awpMatch = url.match(/\/awp-drawings\/(.+)$/);
+        if (awpMatch) {
+          const { data } = await supabase.storage
+            .from('awp-drawings')
+            .createSignedUrl(awpMatch[1], 3600);
+          if (data?.signedUrl) item.drawingUrl = data.signedUrl;
+        }
+      } else {
+        const { data } = await supabase.storage
+          .from('awp-drawings')
+          .createSignedUrl(url, 3600);
+        if (data?.signedUrl) item.drawingUrl = data.signedUrl;
+      }
+    })
+  );
+  return resolved;
+};
+
 interface WaterMitigationGuidelinesStepProps {
   data: any;
   analysisItems?: AnalysisItem[];
@@ -96,11 +122,14 @@ export const WaterMitigationGuidelinesStep = ({ data, analysisItems = [], onBack
     
     // Import and render
     import('react-dom/client').then(async ({ createRoot }) => {
+      // Pre-resolve custom drawing URLs to signed URLs
+      const resolvedItems = await resolveDrawingUrls(analysisItems);
+      
       const reactRoot = createRoot(root);
       reactRoot.render(
         <WaterRiskReport 
           data={data} 
-          analysisItems={analysisItems} 
+          analysisItems={resolvedItems} 
           controlDetails={controlDetails}
           preparedBy={preparedByName}
           createdBy={createdByName}
@@ -191,11 +220,14 @@ export const WaterMitigationGuidelinesStep = ({ data, analysisItems = [], onBack
     reportContainer.appendChild(root);
     
     import('react-dom/client').then(async ({ createRoot }) => {
+      // Pre-resolve custom drawing URLs to signed URLs
+      const resolvedItems = await resolveDrawingUrls(analysisItems);
+      
       const reactRoot = createRoot(root);
       reactRoot.render(
         <WaterRiskReport 
           data={data} 
-          analysisItems={analysisItems} 
+          analysisItems={resolvedItems} 
           controlDetails={controlDetails}
           preparedBy={preparedByName}
           createdBy={createdByName}
