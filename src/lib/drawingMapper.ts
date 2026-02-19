@@ -47,11 +47,16 @@ const DRAWING_IMAGES: Record<string, string> = {
   'TWR001': drawingTWR001,
   
   // Domestic Hot Water
+  'DHW001': drawingDHW001,
+  'DHW002': drawingDHW002,
   'DHW-HWZE001': drawingDHWHWZE001,
   'DHW-HWR001': drawingDHWHWR001,
   'DHW-ZE001': drawingDHWHWZE001, // Alias
   
   // Domestic Cold Water
+  'DCW001': drawingDCW001,
+  'DCW002': drawingDCW002,
+  'DCW003': drawingDCW003,
   'DCW-ZE001': drawingDCWZE001,
   'DCW-ME001': drawingDCWME001,
   'DCW-MCE001': drawingDCWMCE001,
