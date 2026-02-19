@@ -111,8 +111,11 @@ serve(async (req) => {
       }
 
       if (!tokenData) {
-        return new Response(JSON.stringify({ error: "No token found" }),
-          { status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+        console.log(`[get-token] No token record found for user: ${user.id}`);
+        return new Response(
+          JSON.stringify({ error: "No token found", needs_reauth: true }),
+          { status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
       }
 
       let accessToken: string;
@@ -124,6 +127,12 @@ serve(async (req) => {
 
       const expiresAt = tokenData.token_expiry ? new Date(tokenData.token_expiry) : null;
       const isExpired = expiresAt ? expiresAt < new Date() : false;
+
+      // Log token state before returning
+      console.log(
+        `[get-token] Token found for user: ${user.id}, isExpired: ${isExpired}, ` +
+        `hasRefreshToken: ${!!tokenData.refresh_token || !!tokenData.encrypted_refresh_token}`
+      );
 
       return new Response(JSON.stringify({
         accessToken,
@@ -328,9 +337,25 @@ serve(async (req) => {
       const refreshData = await refreshResponse.json();
 
       if (!refreshResponse.ok) {
-        console.error("Token refresh error:", refreshData);
-        return new Response(JSON.stringify({ error: "Token refresh failed", details: refreshData }),
-          { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+        console.error(`[refresh] Token refresh failed for user: ${user.id}`, refreshData);
+
+        if (refreshData?.error === "invalid_grant") {
+          console.log(`[refresh] invalid_grant — deleting dead token record for user: ${user.id}`);
+          await supabase
+            .from("user_procore_tokens")
+            .delete()
+            .eq("user_id", user.id);
+
+          return new Response(
+            JSON.stringify({ error: "Token refresh failed", needs_reauth: true, details: refreshData }),
+            { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          );
+        }
+
+        return new Response(
+          JSON.stringify({ error: "Token refresh failed", details: refreshData }),
+          { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
       }
 
       const newExpiry = new Date(Date.now() + (refreshData.expires_in || 7200) * 1000).toISOString();
@@ -353,6 +378,7 @@ serve(async (req) => {
 
       // Procore may rotate refresh tokens
       if (refreshData.refresh_token) {
+        console.log(`[refresh] Procore returned a new refresh_token for user: ${user.id} — storing rotated token`);
         if (ENCRYPTION_KEY) {
           try {
             updateData.encrypted_refresh_token = await encryptToken(refreshData.refresh_token, ENCRYPTION_KEY);
@@ -363,6 +389,8 @@ serve(async (req) => {
         } else {
           updateData.refresh_token = refreshData.refresh_token;
         }
+      } else {
+        console.log(`[refresh] Procore did NOT return a new refresh_token for user: ${user.id}`);
       }
 
       await supabase.from("user_procore_tokens").update(updateData).eq("user_id", user.id);
