@@ -1,169 +1,139 @@
 
-# Three Changes: PDF User-Space Bounding Boxes · Drawing Tag as ID · Save/Load Summary
+# Four Fixes: PDF MIME Type for OpenAI Upload · Procore File Visibility · FilePreviewModal Zoom · parseResultText Fallback
 
-## Current state of the code
+## Root causes (all confirmed)
 
-### Bounding box (lines 260-343)
-The load effect renders the PDF page via `page.getViewport({ scale: 4 })` and stores the resulting `HTMLImageElement` in `pageImage`. But the **viewport object itself is discarded** — it's never stored in state. The draw effect (lines 330-342) then uses:
+### 1. Critical: OpenAI receives `application/octet-stream` instead of `application/pdf`
+
+From the database:
+```
+mime_type: application/octet-stream  (for every single Procore file)
+name: A2.10-ROOF-PLAN-Rev.14.pdf
+```
+
+In `copy-procore-files`, Procore's API returns `content_type` as `application/octet-stream` (or nothing) for many files. This gets stored verbatim in `analysis_request_files.mime_type`.
+
+In `analyze-drawings`, line 209:
 ```typescript
-const scaleX = w / 1024;
-const scaleY = h / 768;
+uploadForm.append("file", fileData, fileRecord.name);
 ```
-This is the hardcoded space the AI no longer uses (prompt has been updated). The correct transform is `viewport.convertToViewportRectangle([x1, y1, x2, y2])`, which handles scale AND Y-axis flip from PDF bottom-left origin to canvas top-left. Since the viewport was rendered at `scale: 4`, its output is in offscreen pixel space. We then normalize by `offscreenSize` (the offscreen canvas dimensions) and multiply by the display canvas size.
+`fileData` is a `Blob` downloaded from storage. Storage preserves the content-type it was uploaded with — which is `application/octet-stream`. So OpenAI receives a file with type `application/octet-stream`, treats it as a raster image, says "original PDF not provided", and refuses to return PDF-point bboxes.
 
-### Display ID (summarize-analysis/index.ts line 143)
-```json
-"id": { "type": "string", "description": "Generated room/asset code (e.g., ER001, MRM001)" }
+**Fix**: In `analyze-drawings`, before uploading to OpenAI:
+1. Add a PDF guardrail — if `mime_type !== "application/pdf"` AND filename doesn't end with `.pdf`, fail fast with a clear error: `"Detection requires a PDF file for PDF-point bboxes. This file appears to be: {mime_type}"`.
+2. If `mime_type` is `application/octet-stream` but the filename ends with `.pdf`, reconstruct the Blob with `type: "application/pdf"` before appending to FormData. This ensures OpenAI receives `Content-Type: application/pdf` in the multipart boundary.
+
+Also fix `copy-procore-files` to detect the MIME type from the filename for files Procore reports as `application/octet-stream`:
+```typescript
+function inferMimeType(filename: string, reported: string): string {
+  if (reported && reported !== "application/octet-stream") return reported;
+  const lower = filename.toLowerCase();
+  if (lower.endsWith(".pdf")) return "application/pdf";
+  if (lower.endsWith(".png")) return "image/png";
+  if (lower.endsWith(".jpg") || lower.endsWith(".jpeg")) return "image/jpeg";
+  return reported || "application/octet-stream";
+}
 ```
-This tells the AI to fabricate a code. The table header reads "Display ID" and shows `inst.id`. It should show the plan tag (`SWC-B03`).
+Apply when building `fileRecords` and when uploading to storage.
 
-### Summary persistence (lines 839-856)
-Every page mount triggers `handleSummarize()` for every class with complete results, calling the AI each time. There is no `summary_data` column on `analysis_requests` (confirmed from schema). Need to add it and wire save/load.
+**Add logging** in `analyze-drawings` before the OpenAI upload:
+```typescript
+console.log(`Uploading file ${fileId} to OpenAI: name=${fileRecord.name}, mime=${effectiveMime}, size=${fileData.size}`);
+```
+This confirms PDF bytes are sent.
+
+**Cache invalidation**: The currently cached OpenAI file IDs for this analysis request were uploaded as `application/octet-stream`. They must be invalidated so a fresh upload happens with the correct MIME type. In `analyze-drawings`, after determining `effectiveMime`, if the cached file was uploaded before this fix (i.e., when `openai_file_status === "active"` but we now know mime was wrong), we should force re-upload. The simplest approach: add a check — if `effectiveMime === "application/pdf"` but the existing `openai_file_status` is `"active"` and `openai_file_uploaded_at` predates this fix, invalidate. Actually, the cleanest approach is: after computing `effectiveMime`, if it differs from `fileRecord.mime_type` (because we corrected `octet-stream` to `pdf`), force `shouldReuseFile` to return false by treating it as a cache miss. Implement this by checking: `const mimeWasWrong = effectiveMime !== fileRecord.mime_type` and if `mimeWasWrong`, skip the cache path entirely.
+
+### 2. Procore file list: `hideFiles={true}` propagates recursively
+
+In `ProcoreConnectionDialog.tsx` line 446: `hideFiles` is passed as `true` to `ProcoreFolderTree`. The component at line 148 passes `hideFiles={hideFiles}` recursively to all child trees. At line 152: `{!hideFiles && subData.files.map(...)}` — so files are never shown at any depth.
+
+**Fix**: Change line 446 from `hideFiles` (shorthand for `hideFiles={true}`) to `hideFiles={false}`. Files inside expanded subfolders will then render.
+
+### 3. FilePreviewModal: no zoom
+
+The modal at lines 530–609 renders canvases into `containerRef.innerHTML` with no zoom state. It uses `max-h-[90vh]` but no zoom controls.
+
+**Fix**: Refactor `FilePreviewModal` to match the `InstanceDetailModal` pattern:
+- Add `zoom` state (default 1, range 0.25–4) and `scrollRef` for center-preserving scroll
+- Change modal structure to `max-w-5xl h-[90vh] flex flex-col p-0` with:
+  - Fixed header: file name + zoom controls (ZoomIn/ZoomOut buttons + `{Math.round(zoom * 100)}%` label)
+  - Scrollable body: `ref={scrollRef}` + `flex-1 overflow-auto`
+  - Inner wrapper: `style={{ transform: \`scale(\${zoom})\`, transformOrigin: 'top center', width: 'fit-content', margin: '0 auto', padding: '16px' }}`
+- The canvases are stored in `pages` state (not appended via innerHTML), and rendered as React elements: `{pages.map((canvas, i) => <canvas key={i} ref={el => el && el !== canvas && el.replaceWith(canvas)} />)}` — actually simpler to use a `useEffect` that appends canvases into a ref div (as currently done), but with the zoom transform applied to the container
+- Center-preserving zoom handlers (same as `InstanceDetailModal`'s `handleZoomIn`/`handleZoomOut`)
+
+### 4. `parseResultText` fallback for numbered-list format
+
+When OpenAI was receiving a raster image, it returned results in a different plain-text format (numbered entries like `1) Room tag: SWC-B03`). `parseResultText` found no pipe-table header → returned `[]` → all counts showed 0.
+
+After the PDF mime fix, the model should return proper table format. But as a robustness measure, add fallbacks after the existing table parser:
+
+```typescript
+// Fallback 1: numbered entries like "1) " or "1. "
+if (instances.length === 0) {
+  const numberedMatches = resultText.match(/^\s*\d+[.)]\s/gm) || [];
+  if (numberedMatches.length > 0) {
+    return numberedMatches.map((_, i) => ({ id: String(i + 1), name: "-", level: "-", size: "-" }));
+  }
+}
+// Fallback 2: "Total ... Found: N" or "Total: N"
+if (instances.length === 0) {
+  const totalMatch = resultText.match(/total[^:]*:\s*(\d+)/i);
+  if (totalMatch) {
+    const n = parseInt(totalMatch[1], 10);
+    if (n > 0) return Array.from({ length: n }, (_, i) => ({ id: String(i + 1), name: "-", level: "-", size: "-" }));
+  }
+}
+```
 
 ---
 
-## Changes
+## Files changed
 
-### 1. Database migration
-Add `summary_data jsonb DEFAULT '{}'::jsonb` to `analysis_requests`.
+| File | Change |
+|---|---|
+| `supabase/functions/copy-procore-files/index.ts` | Add `inferMimeType()` helper; apply it when building file records and uploading to storage |
+| `supabase/functions/analyze-drawings/index.ts` | Compute `effectiveMime` from filename if stored mime is `octet-stream`; add PDF guardrail (fail fast if not PDF); force cache miss if mime was corrected; add logging before upload |
+| `src/components/wizard/ProcoreConnectionDialog.tsx` | Change `hideFiles` → `hideFiles={false}` at line 446 |
+| `src/components/analysis/AnalysisSection.tsx` | Add zoom state + zoom controls to `FilePreviewModal`; add `parseResultText` fallbacks |
 
-### 2. `supabase/functions/summarize-analysis/index.ts` — line 143
-Change:
-```
-"id": { "type": "string", "description": "Generated room/asset code (e.g., ER001, MRM001)" }
-```
-To:
-```
-"id": { "type": "string", "description": "The exact plan tag or room identifier as it appears on the drawing (e.g., SWC-B03, SWC-703, ER-101). Use the identifier from the drawing, NOT a generated sequential code." }
-```
+No DB changes. No new packages.
 
-### 3. `src/components/analysis/AnalysisSection.tsx`
+---
 
-#### A. Store pdf.js viewport in state (load effect, lines 259-282)
-Add two new state variables to `InstanceDetailModal`:
+## Key implementation details
+
+### `analyze-drawings` — MIME fix + guardrail
+
 ```typescript
-const [pdfViewport, setPdfViewport] = useState<pdfjsLib.PageViewport | null>(null);
-const [offscreenSize, setOffscreenSize] = useState<{ w: number; h: number } | null>(null);
-```
-After `const viewport = page.getViewport({ scale: 4 })` (line 268), add:
-```typescript
-setPdfViewport(viewport);
-setOffscreenSize({ w: viewport.width, h: viewport.height });
-```
-Also reset these in the cleanup at the top of the effect (alongside `setPageImage(null)` etc.).
+// After downloading fileData blob:
+const storedMime = fileRecord.mime_type as string | null;
+const isPdfByName = fileRecord.name?.toLowerCase().endsWith(".pdf");
+const effectiveMime = (storedMime && storedMime !== "application/octet-stream")
+  ? storedMime
+  : isPdfByName ? "application/pdf" : storedMime ?? "application/octet-stream";
 
-Add both to the draw effect dependency array.
-
-#### B. Replace hardcoded 1024×768 with viewport.convertToViewportRectangle (lines 330-343)
-Replace:
-```typescript
-if (rawCoords) {
-  const scaleX = w / 1024;
-  const scaleY = h / 768;
-  const bx = rawCoords.x1 * scaleX;
-  ...
-}
-```
-With:
-```typescript
-if (rawCoords && pdfViewport && offscreenSize) {
-  // Convert PDF user-space (pts, origin bottom-left) → offscreen canvas pixels
-  // viewport.convertToViewportRectangle handles Y-flip and scale in one step
-  const [vx1, vy1, vx2, vy2] = pdfViewport.convertToViewportRectangle([
-    rawCoords.x1, rawCoords.y1, rawCoords.x2, rawCoords.y2,
-  ]);
-  // Normalize to [0..1] using offscreen canvas size, then apply to display canvas
-  const nx1 = Math.min(vx1, vx2) / offscreenSize.w;
-  const ny1 = Math.min(vy1, vy2) / offscreenSize.h;
-  const nx2 = Math.max(vx1, vx2) / offscreenSize.w;
-  const ny2 = Math.max(vy1, vy2) / offscreenSize.h;
-  const bx = nx1 * w;
-  const by = ny1 * h;
-  const bw = (nx2 - nx1) * w;
-  const bh = (ny2 - ny1) * h;
-  ctx.fillStyle = "rgba(239, 68, 68, 0.15)";
-  ctx.fillRect(bx, by, bw, bh);
-  ctx.strokeStyle = "rgba(239, 68, 68, 0.9)";
-  ctx.lineWidth = 2.5;
-  ctx.strokeRect(bx, by, bw, bh);
-}
-```
-
-#### C. Summary persistence — new query + hydrate effect + save after summarize + clear on re-analyze
-
-**New query** (after the existing `results` query at line 721):
-```typescript
-const { data: savedSummaryData, refetch: refetchSummary } = useQuery({
-  queryKey: ["analysis-request-summary", requestId],
-  queryFn: async () => {
-    const { data } = await supabase
-      .from("analysis_requests")
-      .select("summary_data")
-      .eq("id", requestId)
-      .single();
-    return (data?.summary_data as Record<string, SummarizedInstance[]>) || {};
-  },
-});
-```
-
-**Replace auto-summarize effect** (lines 839-856) with a DB-hydration effect:
-```typescript
-useEffect(() => {
-  if (!savedSummaryData) return;
-  setSummarizedInstances((prev) => {
-    const merged = { ...prev };
-    for (const [className, instances] of Object.entries(savedSummaryData)) {
-      if (!merged[className]) merged[className] = instances as SummarizedInstance[];
-    }
-    return merged;
+// Guardrail: only PDFs are supported for PDF-point bbox detection
+if (effectiveMime !== "application/pdf") {
+  await adminSupabase.from("analysis_results")
+    .update({ status: "failed", error_message: `Detection requires a PDF file. File type: ${effectiveMime}` })
+    .eq("file_id", fileId).eq("analysis_request_id", analysisRequestId).eq("awp_class_name", awpClassName);
+  return new Response(JSON.stringify({ error: `Detection requires a PDF file for PDF-point bboxes. File type: ${effectiveMime}` }), {
+    status: 422, headers: { ...corsHeaders, "Content-Type": "application/json" },
   });
-}, [savedSummaryData]);
-```
-This loads saved summaries on mount without calling the AI. The AI is only called after a fresh analysis completes (existing call at line 963).
+}
 
-**Save after summarize** — update `handleSummarize` (lines 824-826):
-```typescript
-if (data?.instances) {
-  setSummarizedInstances((prev) => ({ ...prev, [awpClassName]: data.instances }));
-  // Persist to DB so it survives page reloads
-  const { data: req } = await supabase
-    .from("analysis_requests")
-    .select("summary_data")
-    .eq("id", requestId)
-    .single();
-  const existing = (req?.summary_data as Record<string, unknown>) || {};
-  await supabase
-    .from("analysis_requests")
-    .update({ summary_data: { ...existing, [awpClassName]: data.instances } })
-    .eq("id", requestId);
-  await refetchSummary();
+// Force cache miss if stored mime was wrong (previously uploaded as octet-stream)
+const mimeWasCorrected = storedMime !== effectiveMime;
+
+// In shouldReuseFile check:
+if (shouldReuseFile(fileRecord) && !mimeWasCorrected) {
+  // cache hit
+} else {
+  // Re-upload with correct mime type
+  const pdfBlob = new Blob([await fileData.arrayBuffer()], { type: "application/pdf" });
+  uploadForm.append("file", pdfBlob, fileRecord.name);
+  // ... log: console.log(`Uploading ${fileId}: name=${fileRecord.name}, mime=application/pdf, size=${pdfBlob.size}`);
 }
 ```
-
-**Clear on re-analyze** — in `handleAnalyze` after clearing local state (line 863-864), also clear from DB:
-```typescript
-// Clear saved summary for this class from DB
-const { data: req } = await supabase
-  .from("analysis_requests")
-  .select("summary_data")
-  .eq("id", requestId)
-  .single();
-const existingSum = (req?.summary_data as Record<string, unknown>) || {};
-delete existingSum[className];
-await supabase
-  .from("analysis_requests")
-  .update({ summary_data: existingSum })
-  .eq("id", requestId);
-```
-
----
-
-## Summary
-
-| # | Problem | Fix |
-|---|---|---|
-| 1 | Bounding box wrong position | Store `pdfViewport` + `offscreenSize` during PDF render; replace `w/1024` math with `viewport.convertToViewportRectangle(...)` + normalize |
-| 2 | Display ID shows `ER001` not `SWC-B03` | Update `summarize-analysis` tool schema: `id` = exact plan tag from drawing |
-| 3 | Summary re-runs AI on every page load | Add `summary_data jsonb` to `analysis_requests`; save after summarize; hydrate from DB on mount; skip re-call |
-
-**Files**: `src/components/analysis/AnalysisSection.tsx`, `supabase/functions/summarize-analysis/index.ts`, + 1 DB migration. No new packages.
