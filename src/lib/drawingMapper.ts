@@ -4,12 +4,16 @@
 
 // Import all drawings as ES6 modules for reliable PDF export
 import drawingTWR001 from '/assets/drawings/TWR001.png';
+import drawingDCW001 from '/assets/drawings/DCW001.png';
+import drawingDCW002 from '/assets/drawings/DCW002.png';
+import drawingDCW003 from '/assets/drawings/DCW003.png';
+import drawingDHW001 from '/assets/drawings/DHW001.png';
+import drawingDHW002 from '/assets/drawings/DHW002.png';
 import drawingDHWHWZE001 from '/assets/drawings/DHW-HWZE001.png';
 import drawingDHWHWR001 from '/assets/drawings/DHW-HWR001.png';
 import drawingDCWZE001 from '/assets/drawings/DCW-ZE001.png';
 import drawingDCWME001 from '/assets/drawings/DCW-ME001.png';
 import drawingDCWMCE001 from '/assets/drawings/DCW-MCE001.png';
-import drawingFS001 from '/assets/drawings/FS001.png';
 import drawingSPSDD001 from '/assets/drawings/SPSDD001.png';
 import drawingSPSDD002 from '/assets/drawings/SPSDD002.png';
 import drawingKW001 from '/assets/drawings/KW001.png';
