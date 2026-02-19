@@ -166,12 +166,48 @@ serve(async (req) => {
 
     let openaiFileId: string;
 
-    if (shouldReuseFile(fileRecord)) {
+    // ------------------------------------------------------------------
+    // Determine effective MIME type (Procore often stores octet-stream)
+    // ------------------------------------------------------------------
+
+    const storedMime = fileRecord.mime_type as string | null;
+    const isPdfByName = (fileRecord.name as string | null)?.toLowerCase().endsWith(".pdf") ?? false;
+    const effectiveMime =
+      storedMime && storedMime !== "application/octet-stream"
+        ? storedMime
+        : isPdfByName
+        ? "application/pdf"
+        : storedMime ?? "application/octet-stream";
+
+    // Guardrail: only PDFs produce PDF-point bboxes
+    if (effectiveMime !== "application/pdf") {
+      await adminSupabase.from("analysis_results")
+        .update({
+          status: "failed",
+          error_message: `Detection requires a PDF file. File type: ${effectiveMime}`,
+        })
+        .eq("file_id", fileId)
+        .eq("analysis_request_id", analysisRequestId)
+        .eq("awp_class_name", awpClassName);
+      return new Response(
+        JSON.stringify({ error: `Detection requires a PDF file for PDF-point bboxes. File type: ${effectiveMime}` }),
+        { status: 422, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    // If the stored mime was wrong (octet-stream corrected to pdf), force cache miss
+    // so the file is re-uploaded to OpenAI with the correct Content-Type.
+    const mimeWasCorrected = storedMime !== effectiveMime;
+
+    if (shouldReuseFile(fileRecord) && !mimeWasCorrected) {
       // Cache hit — skip upload entirely
       openaiFileId = fileRecord.openai_file_id as string;
       console.log(`Cache hit for file ${fileId}: reusing OpenAI file ${openaiFileId}`);
     } else {
-      // Cache miss or stale — download and re-upload
+      // Cache miss, stale, or mime was previously wrong — download and re-upload
+      if (mimeWasCorrected) {
+        console.log(`Cache invalidated for file ${fileId}: mime corrected from '${storedMime}' to '${effectiveMime}'`);
+      }
 
       const storageBucket = request.source_type === "manual_upload"
         ? "uploaded-drawings"
@@ -204,9 +240,13 @@ serve(async (req) => {
         });
       }
 
+      // Reconstruct blob with correct MIME type so OpenAI receives application/pdf
+      const pdfBlob = new Blob([await fileData.arrayBuffer()], { type: effectiveMime });
+      console.log(`Uploading file ${fileId} to OpenAI: name=${fileRecord.name}, mime=${effectiveMime}, size=${pdfBlob.size}`);
+
       // Upload to OpenAI with expires_after so the response includes expires_at
       const uploadForm = new FormData();
-      uploadForm.append("file", fileData, fileRecord.name);
+      uploadForm.append("file", pdfBlob, fileRecord.name as string);
       uploadForm.append("purpose", "assistants");
       uploadForm.append("expires_after[anchor]", "created_at");
       uploadForm.append("expires_after[seconds]", "259200"); // 3 days
