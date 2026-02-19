@@ -257,6 +257,10 @@ function InstanceDetailModal({
         // Parse bounding box
         if (resultText) {
           const coords = parseCoordinatesFromResult(resultText, searchTerms);
+          console.log(`[BBox] instance.id=${instance.id} instance.name=${instance.name}`);
+          console.log(`[BBox] searchTerms=`, searchTerms);
+          console.log(`[BBox] resultText length=${resultText.length}, snippet=`, resultText.slice(0, 400));
+          console.log(`[BBox] parsed coords=`, coords);
           if (coords) setRawCoords({ x1: coords.x1, y1: coords.y1, x2: coords.x2, y2: coords.y2 });
         }
 
@@ -336,9 +340,13 @@ function InstanceDetailModal({
     if (rawCoords && pdfViewport && offscreenSize) {
       // Convert PDF user-space (pts, origin bottom-left) → offscreen canvas pixels.
       // convertToViewportRectangle handles Y-axis flip and scale in one step.
-      const [vx1, vy1, vx2, vy2] = pdfViewport.convertToViewportRectangle([
+      console.log(`[BBox] drawing: rawCoords=`, rawCoords);
+      console.log(`[BBox] pdfViewport scale=${pdfViewport.scale}, width=${pdfViewport.width}, height=${pdfViewport.height}`);
+      const viewportRect = pdfViewport.convertToViewportRectangle([
         rawCoords.x1, rawCoords.y1, rawCoords.x2, rawCoords.y2,
       ]);
+      console.log(`[BBox] convertToViewportRectangle output=`, viewportRect);
+      const [vx1, vy1, vx2, vy2] = viewportRect;
       // Normalize to [0..1] using offscreen canvas size, then map to display canvas
       const nx1 = Math.min(vx1, vx2) / offscreenSize.w;
       const ny1 = Math.min(vy1, vy2) / offscreenSize.h;
@@ -1572,22 +1580,20 @@ export function AnalysisSection({ requestId, files, projectId, sourceType }: Ana
       {selectedInstance && (() => {
         const { instance, awpClassName } = selectedInstance;
         const classResults = getResultsForClass(awpClassName);
-        // Combine all complete result_texts so bounding box parser can search across all files
-        const combinedResultText = classResults
-          .filter((r) => r.status === "complete" && r.result_text)
-          .map((r) => r.result_text!)
-          .join("\n");
-        // Pick the file whose result_text contains the instance name or any identifier fragment
+        // Find the specific file whose result_text contains this instance id or name.
+        // Use per-file result text (not combined) so bbox parser matches the correct row.
         const sourceResult =
+          classResults.find((r) => r.result_text && r.status === "complete" && r.result_text.includes(instance.id)) ||
           classResults.find((r) => r.result_text && r.status === "complete" && r.result_text.includes(instance.name)) ||
           classResults.find((r) => r.status === "complete" && r.result_text);
         const sourceFile = files.find((f) => f.id === sourceResult?.file_id);
+        console.log(`[BBox] opening modal: instance.id=${instance.id} instance.name=${instance.name} sourceFile=${sourceFile?.name} sourceResult file_id=${sourceResult?.file_id}`);
         return (
           <InstanceDetailModal
             instance={instance}
             awpClassName={awpClassName}
             sourceFile={sourceFile}
-            resultText={combinedResultText || undefined}
+            resultText={sourceResult?.result_text || undefined}
             onClose={() => setSelectedInstance(null)}
           />
         );
