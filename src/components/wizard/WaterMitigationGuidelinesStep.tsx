@@ -138,6 +138,7 @@ export const WaterMitigationGuidelinesStep = ({ data, analysisItems = [], onBack
     import('react-dom/client').then(async ({ createRoot }) => {
       // Pre-resolve custom drawing URLs to signed URLs
       const resolvedItems = await resolveDrawingUrls(analysisItems);
+      console.table(resolvedItems.filter(i => i.drawingUrl).map(i => ({ name: i.name, urlPrefix: i.drawingUrl?.slice(0, 40) })));
       
       const reactRoot = createRoot(root);
       reactRoot.render(
