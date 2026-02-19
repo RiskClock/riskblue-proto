@@ -165,24 +165,53 @@ interface PDFBBox {
   pageNum: number;
 }
 
+/** Normalize a PDF text item string for matching: case-fold, trim, collapse whitespace,
+ *  and normalize all hyphen/dash variants to ASCII hyphen. */
+function normalizeText(s: string): string {
+  return s
+    .trim()
+    .toLowerCase()
+    .replace(/[\u2010\u2011\u2012\u2013\u2014\u2015\uFE58\uFE63\uFF0D]/g, "-") // normalize dashes
+    .replace(/\s+/g, " ");
+}
+
 /**
- * Search all pages of a loaded PDF document for any of the given search terms
- * using the text layer. Returns the union bounding box of all matching text
- * items on the first page where a match is found.
+ * Compute a bbox from a single text item's transform matrix.
+ * Returns [x1, y1, x2, y2] in PDF user space (bottom-left origin).
+ */
+function itemBBox(item: { transform: number[]; width: number; height: number }): [number, number, number, number] {
+  const [, , , , tx, ty] = item.transform;
+  const iw = Math.abs(item.width);
+  const ih = Math.abs(item.height) || 10;
+  return [tx, ty, tx + iw, ty + ih];
+}
+
+/**
+ * Search all pages of a loaded PDF document for the exact room tag string.
  *
  * Matching strategy:
- *  1. Exact match of item.str against a term (e.g. "SWC-B04")
- *  2. Partial match where term is a substring of item.str or vice-versa
- *  3. If the label spans multiple items on the same page (e.g. "ELECTRICAL" + "SWC-B04"),
- *     all nearby items within ±40 pts vertically are unioned into one bbox.
+ *  1. Exact full-string match (after normalisation) of item.str against the primary tag
+ *     (e.g. item.str normalised === "swc-b04").
+ *  2. If the tag is split across consecutive items on the same line (same Y ± 4 pts,
+ *     adjacent X), concatenate them and check for a full match.
+ *  3. Optionally union the nearest "room name" line (ELECTRICAL / IT ROOM / etc.)
+ *     that is within ±60 pts vertically of the matched tag centre — but ONLY if
+ *     it is a known room-name keyword and within ±80 pts horizontally.
+ *  4. If no exact match is found → return null (never fall back to page bounds).
+ *  5. Partial/substring matches (e.g. "includes('B05')") are NOT used.
  */
+const ROOM_NAME_KEYWORDS = [
+  "electrical", "substation", "it room", "telecom", "transformer",
+  "generator", "switchgear", "mdf", "idf", "ups", "power",
+];
+
 async function findBBoxInTextLayer(
   pdf: pdfjsLib.PDFDocumentProxy,
-  searchTerms: string[],
+  primaryTag: string,        // e.g. "SWC-B04" — the exact tag to locate
   hintPageNum?: number
 ): Promise<PDFBBox | null> {
-  const validTerms = searchTerms.filter(Boolean).map((t) => t.trim()).filter((t) => t.length > 1);
-  if (validTerms.length === 0) return null;
+  const normTag = normalizeText(primaryTag);
+  if (!normTag || normTag.length < 2) return null;
 
   // Try hinted page first, then all pages
   const pageOrder: number[] = [];
@@ -203,59 +232,96 @@ async function findBBoxInTextLayer(
       height: number;
     }>;
 
-    // Find all items that match any search term
-    const matchingItems = items.filter((item) => {
-      const s = item.str.trim();
-      if (!s) return false;
-      return validTerms.some(
-        (term) => s === term || s.includes(term) || term.includes(s)
-      );
-    });
-
-    if (matchingItems.length === 0) continue;
-
-    console.log(`[BBox] text layer match on page ${pageNum}:`, matchingItems.map((i) => ({ str: i.str, x: i.transform[4], y: i.transform[5], w: i.width, h: i.height })));
-
-    // For each matching item, also pull in nearby items on the same page
-    // (within ±40 pts vertically) that share the same x-column roughly
-    const primaryItem = matchingItems[0];
-    const primaryX = primaryItem.transform[4];
-    const primaryY = primaryItem.transform[5];
-
-    const relatedItems = items.filter((item) => {
-      const s = item.str.trim();
-      if (!s) return false;
-      const iy = item.transform[5];
-      const ix = item.transform[4];
-      // Within ±40 pts vertically, ±200 pts horizontally
-      return Math.abs(iy - primaryY) <= 40 && Math.abs(ix - primaryX) <= 200;
-    });
-
-    // Union all matching + related items
-    const allItems = [...matchingItems];
-    // Only include related items that are themselves meaningful (not just stray chars)
-    for (const r of relatedItems) {
-      if (!allItems.includes(r)) allItems.push(r);
+    // --- Pass 1: exact single-item match ---
+    let matchedItem: typeof items[0] | null = null;
+    for (const item of items) {
+      if (normalizeText(item.str) === normTag) {
+        matchedItem = item;
+        break;
+      }
     }
 
-    // Compute union bbox in PDF user space (bottom-left origin)
-    let x1 = Infinity, y1 = Infinity, x2 = -Infinity, y2 = -Infinity;
-    for (const item of allItems) {
-      const [, , , , tx, ty] = item.transform;
-      const iw = Math.abs(item.width);
-      const ih = Math.abs(item.height) || 10; // fallback height
-      x1 = Math.min(x1, tx);
-      y1 = Math.min(y1, ty);
-      x2 = Math.max(x2, tx + iw);
-      y2 = Math.max(y2, ty + ih);
+    // --- Pass 2: tag split across consecutive items on the same line ---
+    if (!matchedItem) {
+      for (let i = 0; i < items.length - 1; i++) {
+        // Try concatenating up to 4 adjacent items with close Y and X positions
+        let concat = "";
+        let spanItems: typeof items = [];
+        for (let j = i; j < Math.min(i + 4, items.length); j++) {
+          const baseY = items[i].transform[5];
+          const curY = items[j].transform[5];
+          if (Math.abs(curY - baseY) > 4) break; // different line
+          concat += items[j].str;
+          spanItems.push(items[j]);
+          if (normalizeText(concat) === normTag) {
+            // Use the first item in the span as the anchor; bbox will cover all
+            matchedItem = items[i];
+            // Override with a synthetic "wide" item covering the span
+            const [sx1,, , , ,] = itemBBox(spanItems[0]);
+            const [,, sx2, sy2,,] = itemBBox(spanItems[spanItems.length - 1]);
+            matchedItem = {
+              ...items[i],
+              width: sx2 - sx1,
+            };
+            break;
+          }
+        }
+        if (matchedItem) break;
+      }
     }
 
-    // Add a small padding (4 pts) around the bbox
+    if (!matchedItem) continue; // try next page
+
+    console.log(`[BBox] exact match "${primaryTag}" on page ${pageNum}:`, {
+      str: matchedItem.str, x: matchedItem.transform[4], y: matchedItem.transform[5],
+      w: matchedItem.width, h: matchedItem.height,
+    });
+
+    // Compute base bbox from the matched tag item
+    const [mx1, my1, mx2, my2] = itemBBox(matchedItem);
+    const tagCentreX = (mx1 + mx2) / 2;
+    const tagCentreY = (my1 + my2) / 2;
+
+    // --- Pass 3: find the nearest room-name line within ±60 pts vertically ---
+    let rnx1 = mx1, rny1 = my1, rnx2 = mx2, rny2 = my2;
+    let foundRoomName = false;
+    let bestDist = Infinity;
+
+    for (const item of items) {
+      const norm = normalizeText(item.str);
+      if (!ROOM_NAME_KEYWORDS.some((kw) => norm.includes(kw))) continue;
+      const [ix1, iy1, ix2, iy2] = itemBBox(item);
+      const iCentreX = (ix1 + ix2) / 2;
+      const iCentreY = (iy1 + iy2) / 2;
+      const dy = Math.abs(iCentreY - tagCentreY);
+      const dx = Math.abs(iCentreX - tagCentreX);
+      if (dy > 60 || dx > 80) continue; // outside proximity window
+      if (dy < bestDist) {
+        bestDist = dy;
+        rnx1 = Math.min(mx1, ix1);
+        rny1 = Math.min(my1, iy1);
+        rnx2 = Math.max(mx2, ix2);
+        rny2 = Math.max(my2, iy2);
+        foundRoomName = true;
+      }
+    }
+
+    if (foundRoomName) {
+      console.log(`[BBox] unioned with nearby room-name line`);
+    }
+
     const PAD = 4;
-    return { x1: x1 - PAD, y1: y1 - PAD, x2: x2 + PAD, y2: y2 + PAD, pageNum };
+    return {
+      x1: (foundRoomName ? rnx1 : mx1) - PAD,
+      y1: (foundRoomName ? rny1 : my1) - PAD,
+      x2: (foundRoomName ? rnx2 : mx2) + PAD,
+      y2: (foundRoomName ? rny2 : my2) + PAD,
+      pageNum,
+    };
   }
 
-  return null;
+  console.log(`[BBox] no exact match found for "${primaryTag}" — not drawing bbox`);
+  return null; // no fallback to page bounds
 }
 
 // ---------------------------------------------------------------------------
@@ -311,33 +377,30 @@ function InstanceDetailModal({
         const ab = await blob.arrayBuffer();
         if (cancelled) return;
 
-        // Build search terms: prefer room tags parsed from AI result, fallback to instance id/name
+        // Determine the primary tag to search for — exact room code takes priority.
+        // We parse the AI result for any tag that exactly matches instance.id,
+        // then fall back to instance.id itself (which is the room code e.g. "SWC-B04").
         const aiTags = resultText ? parseRoomTagsFromResult(resultText) : [];
-        // Find tags that reference this specific instance
         const instanceTag = aiTags.find(
-          (t) => t.tag === instance.id || t.tag.includes(instance.id) || instance.id.includes(t.tag) ||
-                 t.tag === instance.name || t.tag.includes(instance.name) || instance.name.includes(t.tag)
-        ) || aiTags[0];
+          (t) => t.tag === instance.id
+        ) ?? aiTags.find(
+          (t) => t.tag.toUpperCase() === instance.id.toUpperCase()
+        ) ?? aiTags[0];
 
-        const planCodeMatch = (instance.id || instance.name)?.match(/\b([A-Z]+-B?\d+[A-Z]?)\b/);
-        const planCode = planCodeMatch?.[1];
-        const searchTerms = [
-          instanceTag?.tag,
-          instance.id,
-          planCode,
-          instance.name,
-        ].filter(Boolean) as string[];
+        // Primary tag: use the exact tag string from AI result if available,
+        // otherwise fall back to instance.id (e.g. "SWC-B04").
+        const primaryTag = instanceTag?.tag ?? instance.id;
+        const hintPage = instanceTag?.pageNum;
 
         console.log(`[BBox] opening: instance.id=${instance.id} instance.name=${instance.name}`);
-        console.log(`[BBox] searchTerms=`, searchTerms);
+        console.log(`[BBox] primaryTag="${primaryTag}" hintPage=${hintPage}`);
         console.log(`[BBox] aiTags from result=`, aiTags);
 
         const pdf = await pdfjsLib.getDocument({ data: ab }).promise;
         if (cancelled) return;
 
-        // Deterministic bbox: search PDF text layer for the room tag
-        const hintPage = instanceTag?.pageNum;
-        const textBBox = await findBBoxInTextLayer(pdf, searchTerms, hintPage);
+        // Deterministic bbox: exact match in PDF text layer — no substring/partial fallback
+        const textBBox = await findBBoxInTextLayer(pdf, primaryTag, hintPage);
         if (cancelled) return;
 
         console.log(`[BBox] text layer result=`, textBBox);
