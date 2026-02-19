@@ -476,11 +476,7 @@ export const AWPEditModal = ({
         return { tempId: row.tempId, url: null };
       }
       
-      const { data: urlData } = supabase.storage
-        .from('awp-drawings')
-        .getPublicUrl(data.path);
-      
-      return { tempId: row.tempId, url: urlData.publicUrl };
+      return { tempId: row.tempId, url: data.path };
     });
     
     const uploadResults = await Promise.all(uploadPromises);
