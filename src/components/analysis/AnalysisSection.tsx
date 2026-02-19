@@ -353,6 +353,7 @@ function InstanceDetailModal({
   const [offscreenSize, setOffscreenSize] = useState<{ w: number; h: number } | null>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
+  const didAutoFitRef = useRef(false);
 
   // Step 1: Download PDF → render to offscreen canvas at scale 4 → convert to HTMLImageElement
   useEffect(() => {
@@ -462,6 +463,10 @@ function InstanceDetailModal({
     }
     setBaseDimensions({ width: baseW, height: baseH });
     setZoom(1);
+    // Safeguard 3: reset scroll position on new image load
+    containerRef.current?.scrollTo({ left: 0, top: 0 });
+    // Safeguard 4: allow auto-fit to fire again for the new image
+    didAutoFitRef.current = false;
   }, [pageImage]);
 
   // Step 3: Draw image + red bounding box overlay onto display canvas
@@ -503,6 +508,64 @@ function InstanceDetailModal({
       ctx.strokeRect(bx, by, bw, bh);
     }
   }, [pageImage, baseDimensions, zoom, rawCoords, pdfViewport, offscreenSize]);
+
+  // Step 4: Auto fit-selection — fires once per modal open when all data is ready
+  useEffect(() => {
+    // Guard: only run once per load
+    if (didAutoFitRef.current) return;
+    if (!rawCoords || !pdfViewport || !offscreenSize || !baseDimensions) return;
+    const container = containerRef.current;
+    if (!container) return;
+
+    // Convert PDF user-space → offscreen canvas pixels
+    const [vx1, vy1, vx2, vy2] = pdfViewport.convertToViewportRectangle([
+      rawCoords.x1, rawCoords.y1, rawCoords.x2, rawCoords.y2,
+    ]);
+
+    // Normalise to [0..1] and map to base canvas pixels (zoom = 1)
+    const nx1 = Math.min(vx1, vx2) / offscreenSize.w;
+    const ny1 = Math.min(vy1, vy2) / offscreenSize.h;
+    const nx2 = Math.max(vx1, vx2) / offscreenSize.w;
+    const ny2 = Math.max(vy1, vy2) / offscreenSize.h;
+
+    const bx = nx1 * baseDimensions.width;
+    const by = ny1 * baseDimensions.height;
+    const bw = (nx2 - nx1) * baseDimensions.width;
+    const bh = (ny2 - ny1) * baseDimensions.height;
+
+    // Safeguard 1: skip zero-size bbox
+    if (bw <= 1 || bh <= 1) return;
+
+    // Compute fit zoom (20% padding, clamped 1.0–4.0)
+    const PADDING = 0.20;
+    const fitScale = Math.min(
+      container.clientWidth  / (bw * (1 + PADDING)),
+      container.clientHeight / (bh * (1 + PADDING)),
+    );
+    const targetZoom = Math.min(4.0, Math.max(1.0, fitScale));
+
+    // bbox center in zoomed-canvas pixels (captured in closure for double-RAF)
+    const cx = (bx + bw / 2) * targetZoom;
+    const cy = (by + bh / 2) * targetZoom;
+
+    // Mark as done before applying (prevents any re-entry)
+    didAutoFitRef.current = true;
+
+    setZoom(targetZoom);
+
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        const c = containerRef.current;
+        if (!c) return;
+        // Safeguard 2: non-negative clamp for maxLeft/maxTop
+        const maxLeft = Math.max(0, c.scrollWidth  - c.clientWidth);
+        const maxTop  = Math.max(0, c.scrollHeight - c.clientHeight);
+        const left = Math.min(maxLeft, Math.max(0, cx - c.clientWidth  / 2));
+        const top  = Math.min(maxTop,  Math.max(0, cy - c.clientHeight / 2));
+        c.scrollTo({ left, top }); // instant, no animation
+      });
+    });
+  }, [rawCoords, pdfViewport, offscreenSize, baseDimensions]);
 
   // Center-preserving zoom handlers — exact copy from LocationDetailsModal
   const handleZoomIn = () => {
