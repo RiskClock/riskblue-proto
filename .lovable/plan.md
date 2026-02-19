@@ -1,105 +1,43 @@
 
 
-# Fix: Drawing Images Fail to Load from Private Storage Bucket
+# Fix: Custom Drawings Missing from PDF Export
 
 ## Root Cause
 
-The `awp-drawings` storage bucket is **private**, but the upload code uses `getPublicUrl()` to generate the URL saved to the database. Public URLs return an error for private buckets, so the image never loads.
-
-**Upload code (both AWPItemEditModal.tsx and AWPEditModal.tsx):**
-```typescript
-const { data: urlData } = supabase.storage
-  .from('awp-drawings')
-  .getPublicUrl(data.path);  // This does NOT work for private buckets
-finalDrawingUrl = urlData.publicUrl;
-```
-
-**Viewer code (LocationDetailsModal.tsx):**
-```typescript
-img.src = url;  // Tries to load the public URL, gets 400/empty response
-img.onerror = () => setError("Failed to load drawing image");
-```
-
-## Recommended Fix
-
-Use **signed URLs** at render time. This keeps the bucket private (appropriate given the existing RLS policies) while ensuring authenticated users can view drawings.
-
-### Changes
-
-**1. `src/components/wizard/AWPItemEditModal.tsx` (line 136-139)**
-
-Instead of storing the full public URL, store just the storage path:
+In `src/components/reports/WaterRiskReport.tsx` (line 576), the drawing lookup only uses the **static mapper**:
 
 ```typescript
-// Before (broken):
-const { data: urlData } = supabase.storage
-  .from('awp-drawings')
-  .getPublicUrl(data.path);
-finalDrawingUrl = urlData.publicUrl;
-
-// After (fixed):
-finalDrawingUrl = data.path;
+const drawingUrl = getDrawingImage(location.id);
 ```
 
-**2. `src/components/wizard/AWPEditModal.tsx` (line 479-481)**
+It never checks `location.drawingUrl` (the custom drawing uploaded by the user and stored in the database). So even though drawings load fine in the `LocationDetailsModal` (which does check `drawingUrl`), the PDF report ignores them entirely.
 
-Same change -- store the path, not the public URL:
+Additionally, custom drawings are now stored as **storage paths** (per the earlier fix), which require async signed URL resolution -- but `WaterRiskReport` is a synchronous React component that can't call `createSignedUrl` inline.
+
+## Fix
+
+### Step 1: Pre-resolve drawing URLs before rendering the report
+
+In `src/components/wizard/WaterMitigationGuidelinesStep.tsx`, before rendering `WaterRiskReport`, iterate through `analysisItems` and resolve any storage-path `drawingUrl` values into signed URLs. Pass the resolved items to the report.
+
+This happens in both `handleExportPDF` and `handleExportToProcore` -- extract a shared helper that:
+1. Clones the `analysisItems` array
+2. For each item with a `drawingUrl`, calls `resolveDrawingUrl` to get a signed URL
+3. Passes the resolved items to `WaterRiskReport`
+
+### Step 2: Update `WaterRiskReport` to use custom drawings
+
+In `src/components/reports/WaterRiskReport.tsx` (line 576), update the drawing lookup to check `location.drawingUrl` first, then fall back to `getDrawingImage(location.id)`:
 
 ```typescript
-// Before:
-const { data: urlData } = supabase.storage
-  .from('awp-drawings')
-  .getPublicUrl(data.path);
-drawingUrl = urlData.publicUrl;
-
-// After:
-drawingUrl = data.path;
+const drawingUrl = location.drawingUrl || getDrawingImage(location.id);
 ```
 
-**3. `src/components/wizard/LocationDetailsModal.tsx` (lines 51-53, 77-91)**
+Since the URLs are already pre-resolved to signed URLs in Step 1, this works synchronously.
 
-When loading a custom drawing URL, detect whether it's a storage path or a full URL. If it's a storage path, generate a signed URL first:
-
-```typescript
-import { supabase } from "@/integrations/supabase/client";
-
-// In loadStaticImage or a new helper:
-const resolveDrawingUrl = async (url: string): Promise<string> => {
-  // If it's already a full URL (legacy data), check if it's a public URL for awp-drawings
-  // and convert to signed URL
-  if (url.startsWith('http')) {
-    const awpMatch = url.match(/\/awp-drawings\/(.+)$/);
-    if (awpMatch) {
-      const { data } = await supabase.storage
-        .from('awp-drawings')
-        .createSignedUrl(awpMatch[1], 3600); // 1 hour expiry
-      return data?.signedUrl || url;
-    }
-    return url; // Non-storage URL, use as-is
-  }
-  // It's a storage path -- generate signed URL
-  const { data } = await supabase.storage
-    .from('awp-drawings')
-    .createSignedUrl(url, 3600);
-  return data?.signedUrl || url;
-};
-```
-
-Update the loading effect to call `resolveDrawingUrl` before setting `img.src`.
-
-This approach:
-- Fixes the current bug for DHW002 and any other uploaded drawings
-- Is backward-compatible with existing database records (full public URLs get converted)
-- Works for new uploads (which will store just the path)
-- Keeps the bucket private with RLS intact
-
-### Files Changed
+## Files Changed
 
 | File | Change |
 |---|---|
-| `src/components/wizard/AWPItemEditModal.tsx` | Store storage path instead of public URL |
-| `src/components/wizard/AWPEditModal.tsx` | Store storage path instead of public URL |
-| `src/components/wizard/LocationDetailsModal.tsx` | Resolve storage paths/legacy URLs to signed URLs before loading |
-
-No database migrations needed. No new dependencies.
-
+| `src/components/wizard/WaterMitigationGuidelinesStep.tsx` | Add `resolveDrawingUrl` helper; pre-resolve `drawingUrl` on analysis items before rendering the report (in both PDF and Procore export flows) |
+| `src/components/reports/WaterRiskReport.tsx` | Line 576: check `location.drawingUrl` before falling back to static mapper |
