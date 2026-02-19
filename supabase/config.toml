@@ -80,3 +80,6 @@ verify_jwt = false
 
 [functions.summarize-analysis]
 verify_jwt = false
+
+[functions.storage-image-proxy]
+verify_jwt = false

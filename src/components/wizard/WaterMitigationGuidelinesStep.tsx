@@ -8,12 +8,12 @@ import { generateReportFilename } from "@/lib/reportGenerator";
 import { AnalysisItem } from "@/lib/analysisItemMapper";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { generatePdfFromElement, getImageBase64, waitForImages } from "@/lib/pdfExporter";
+import { generatePdfFromElement, getImageBase64, waitForImages, proxyImageToDataUrl } from "@/lib/pdfExporter";
 import { ProcoreExportDialog } from "@/components/wizard/ProcoreExportDialog";
 import riskBlueLogo from "@/assets/riskblue-logo.jpg";
 import procoreIcon from "@/assets/icon_procore.png";
 
-/** Resolve storage paths and legacy public URLs to signed URLs */
+/** Resolve storage paths and legacy public URLs to data URLs via proxy */
 const resolveDrawingUrls = async (items: AnalysisItem[]): Promise<AnalysisItem[]> => {
   const resolved = items.map(item => ({ ...item }));
   await Promise.all(
@@ -21,26 +21,33 @@ const resolveDrawingUrls = async (items: AnalysisItem[]): Promise<AnalysisItem[]
       if (!item.drawingUrl) return;
       const url = item.drawingUrl;
 
-      // Step 1: Resolve storage path to signed URL
-      let signedUrl = url;
-      if (url.startsWith('http')) {
-        const awpMatch = url.match(/\/awp-drawings\/(.+)$/);
-        if (awpMatch) {
-          const { data } = await supabase.storage
-            .from('awp-drawings')
-            .createSignedUrl(awpMatch[1], 3600);
-          if (data?.signedUrl) signedUrl = data.signedUrl;
-        }
+      // Already a data URL — skip
+      if (url.startsWith('data:')) return;
+
+      let storagePath: string | null = null;
+
+      if (!url.startsWith('http')) {
+        // Plain storage path
+        storagePath = url;
       } else {
-        const { data } = await supabase.storage
-          .from('awp-drawings')
-          .createSignedUrl(url, 3600);
-        if (data?.signedUrl) signedUrl = data.signedUrl;
+        // Try to extract path from full URL (public or signed)
+        const awpMatch = url.match(/\/awp-drawings\/(.+?)(?:\?|$)/);
+        if (awpMatch) {
+          storagePath = decodeURIComponent(awpMatch[1]);
+        }
       }
 
-      // Step 2: Convert to base64 for html2canvas compatibility
-      const base64 = await getImageBase64(signedUrl);
-      item.drawingUrl = base64 || signedUrl;
+      if (storagePath) {
+        const dataUrl = await proxyImageToDataUrl('awp-drawings', storagePath);
+        console.log('[PDF] drawingUrl prefix', dataUrl?.slice(0, 30) || '(empty)');
+        if (dataUrl) {
+          item.drawingUrl = dataUrl;
+        } else {
+          console.warn('[PDF] proxy failed for path, leaving as-is:', storagePath);
+        }
+      } else {
+        console.warn('[PDF] unrecognized drawingUrl format, may not render:', url.slice(0, 60));
+      }
     })
   );
   return resolved;
@@ -143,8 +150,9 @@ export const WaterMitigationGuidelinesStep = ({ data, analysisItems = [], onBack
         />
       );
       
-      // Give React time to render, then wait for images
-      await new Promise(resolve => setTimeout(resolve, 500));
+      // Wait for React to commit, then for images to load
+      await new Promise(requestAnimationFrame);
+      await new Promise(requestAnimationFrame);
       await waitForImages(reportContainer);
 
       // Get the logo as base64 for footer
@@ -241,7 +249,8 @@ export const WaterMitigationGuidelinesStep = ({ data, analysisItems = [], onBack
         />
       );
       
-      await new Promise(resolve => setTimeout(resolve, 500));
+      await new Promise(requestAnimationFrame);
+      await new Promise(requestAnimationFrame);
       await waitForImages(reportContainer);
       const logoBase64 = await getImageBase64(riskBlueLogo);
       

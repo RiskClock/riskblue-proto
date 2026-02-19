@@ -1,5 +1,6 @@
 import jsPDF from 'jspdf';
 import html2canvas from 'html2canvas';
+import { supabase } from '@/integrations/supabase/client';
 
 
 interface PdfExportOptions {
@@ -127,6 +128,49 @@ export async function generatePdfFromElement(
 }
 
 /**
+ * Fetches an image from private storage via the storage-image-proxy edge function
+ * and converts it to a base64 data URL. Bypasses CORS entirely.
+ */
+export async function proxyImageToDataUrl(bucket: string, path: string): Promise<string> {
+  try {
+    const projectId = import.meta.env.VITE_SUPABASE_PROJECT_ID;
+    const session = await supabase.auth.getSession();
+    const token = session.data.session?.access_token;
+    if (!token) {
+      console.warn('[PDF] proxyImageToDataUrl: no auth token');
+      return '';
+    }
+
+    const proxyUrl = `https://${projectId}.supabase.co/functions/v1/storage-image-proxy?bucket=${encodeURIComponent(bucket)}&path=${encodeURIComponent(path)}`;
+    const res = await fetch(proxyUrl, {
+      method: 'GET',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'apikey': import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
+      },
+      credentials: 'omit',
+      cache: 'no-store',
+    });
+
+    if (!res.ok) {
+      console.warn('[PDF] proxyImageToDataUrl failed', { bucket, path, status: res.status });
+      return '';
+    }
+
+    const blob = await res.blob();
+    return await new Promise<string>((resolve) => {
+      const reader = new FileReader();
+      reader.onloadend = () => resolve(typeof reader.result === 'string' ? reader.result : '');
+      reader.onerror = () => resolve('');
+      reader.readAsDataURL(blob);
+    });
+  } catch (e) {
+    console.warn('[PDF] proxyImageToDataUrl error', { bucket, path, error: e });
+    return '';
+  }
+}
+
+/**
  * Converts an image source to base64 string.
  */
 export function getImageBase64(imgSrc: string): Promise<string> {
@@ -151,7 +195,7 @@ export function getImageBase64(imgSrc: string): Promise<string> {
 }
 
 /**
- * Waits for all images in a container to load.
+ * Waits for all images in a container to load (with naturalWidth validation).
  */
 export function waitForImages(container: HTMLElement): Promise<void> {
   return new Promise((resolve) => {
@@ -170,7 +214,7 @@ export function waitForImages(container: HTMLElement): Promise<void> {
     };
 
     images.forEach((img) => {
-      if (img.complete && img.naturalHeight !== 0) {
+      if (img.complete && img.naturalWidth > 0) {
         checkComplete();
       } else {
         img.onload = checkComplete;
