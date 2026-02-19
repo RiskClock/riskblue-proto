@@ -1,43 +1,65 @@
 
 
-# Fix: Custom Drawings Missing from PDF Export
+# Fix: Custom Drawings Not Rendering in PDF Export
 
 ## Root Cause
 
-In `src/components/reports/WaterRiskReport.tsx` (line 576), the drawing lookup only uses the **static mapper**:
+The signed URLs generated for custom drawings are **cross-origin** (pointing to the Supabase storage endpoint). While `html2canvas` has a `useCORS: true` option, cross-origin images frequently fail to render in the canvas capture, resulting in broken image placeholders in the exported PDF.
+
+The logo already works because it's converted to base64 via `getImageBase64()` before being added to the PDF. Custom drawings need the same treatment.
+
+## Solution
+
+In the `resolveDrawingUrls` helper (in `WaterMitigationGuidelinesStep.tsx`), after resolving storage paths to signed URLs, convert each signed URL to a **base64 data URL** using the existing `getImageBase64` utility. This ensures `html2canvas` can render them without any cross-origin restrictions.
+
+## Changes
+
+### File: `src/components/wizard/WaterMitigationGuidelinesStep.tsx`
+
+Update the `resolveDrawingUrls` function to add a base64 conversion step after obtaining signed URLs:
 
 ```typescript
-const drawingUrl = getDrawingImage(location.id);
+import { generatePdfFromElement, getImageBase64, waitForImages } from "@/lib/pdfExporter";
+
+const resolveDrawingUrls = async (items: AnalysisItem[]): Promise<AnalysisItem[]> => {
+  const resolved = items.map(item => ({ ...item }));
+  await Promise.all(
+    resolved.map(async (item) => {
+      if (!item.drawingUrl) return;
+      const url = item.drawingUrl;
+
+      // Step 1: Resolve storage path to signed URL
+      let signedUrl = url;
+      if (url.startsWith('http')) {
+        const awpMatch = url.match(/\/awp-drawings\/(.+)$/);
+        if (awpMatch) {
+          const { data } = await supabase.storage
+            .from('awp-drawings')
+            .createSignedUrl(awpMatch[1], 3600);
+          if (data?.signedUrl) signedUrl = data.signedUrl;
+        }
+      } else {
+        const { data } = await supabase.storage
+          .from('awp-drawings')
+          .createSignedUrl(url, 3600);
+        if (data?.signedUrl) signedUrl = data.signedUrl;
+      }
+
+      // Step 2: Convert to base64 for html2canvas compatibility
+      const base64 = await getImageBase64(signedUrl);
+      item.drawingUrl = base64 || signedUrl;
+    })
+  );
+  return resolved;
+};
 ```
 
-It never checks `location.drawingUrl` (the custom drawing uploaded by the user and stored in the database). So even though drawings load fine in the `LocationDetailsModal` (which does check `drawingUrl`), the PDF report ignores them entirely.
-
-Additionally, custom drawings are now stored as **storage paths** (per the earlier fix), which require async signed URL resolution -- but `WaterRiskReport` is a synchronous React component that can't call `createSignedUrl` inline.
-
-## Fix
-
-### Step 1: Pre-resolve drawing URLs before rendering the report
-
-In `src/components/wizard/WaterMitigationGuidelinesStep.tsx`, before rendering `WaterRiskReport`, iterate through `analysisItems` and resolve any storage-path `drawingUrl` values into signed URLs. Pass the resolved items to the report.
-
-This happens in both `handleExportPDF` and `handleExportToProcore` -- extract a shared helper that:
-1. Clones the `analysisItems` array
-2. For each item with a `drawingUrl`, calls `resolveDrawingUrl` to get a signed URL
-3. Passes the resolved items to `WaterRiskReport`
-
-### Step 2: Update `WaterRiskReport` to use custom drawings
-
-In `src/components/reports/WaterRiskReport.tsx` (line 576), update the drawing lookup to check `location.drawingUrl` first, then fall back to `getDrawingImage(location.id)`:
-
-```typescript
-const drawingUrl = location.drawingUrl || getDrawingImage(location.id);
-```
-
-Since the URLs are already pre-resolved to signed URLs in Step 1, this works synchronously.
+The key addition is the `getImageBase64(signedUrl)` call after resolving the signed URL. This fetches the image via a temporary `<img>` element and converts it to a `data:image/jpeg;base64,...` string that `html2canvas` can render reliably regardless of origin.
 
 ## Files Changed
 
 | File | Change |
 |---|---|
-| `src/components/wizard/WaterMitigationGuidelinesStep.tsx` | Add `resolveDrawingUrl` helper; pre-resolve `drawingUrl` on analysis items before rendering the report (in both PDF and Procore export flows) |
-| `src/components/reports/WaterRiskReport.tsx` | Line 576: check `location.drawingUrl` before falling back to static mapper |
+| `src/components/wizard/WaterMitigationGuidelinesStep.tsx` | Add base64 conversion step in `resolveDrawingUrls` after signed URL resolution |
+
+No other files need changes. The `getImageBase64` utility is already imported.
