@@ -1137,8 +1137,8 @@ const ProjectWizardContent = () => {
       // Clear stale selections from previous analysis - these will be reinitialized by child components
       selectedAssetInstances: [],
       selectedAssetControls: [],
-      selectedWaterSystemInstances: [],
-      selectedWaterSystemControls: [],
+      selectedSystemInstances: [],
+      selectedSystemControls: [],
       selectedProcessInstances: [],
       selectedProcessControls: [],
     };
@@ -1927,6 +1927,9 @@ const ProjectWizardContent = () => {
         onClose={() => setShowAWPEditModal(false)}
         analysisItems={analysisItems}
         onUpdateItems={async (items, changeCount) => {
+          // Capture old item IDs before updating state
+          const oldItemIds = new Set(analysisItems.map(i => i.id));
+          
           setAnalysisItems(items);
           // Issue 14: Save to database
           if (id && id !== "new") {
@@ -1940,28 +1943,48 @@ const ProjectWizardContent = () => {
               console.error("Error saving analysis items:", error);
             }
           }
-          // Auto-select all new items and their controls so they appear in PDF export
-          const assetInstances = items.filter(i => i.category === "Asset").map(i => i.id);
-          const systemInstances = items.filter(i => i.category === "Water System").map(i => i.id);
-          const processInstances = items.filter(i => i.category === "Process").map(i => i.id);
           
-          const assetControls = items
-            .filter(i => i.category === "Asset")
-            .flatMap(i => (i.controls || []).map(c => `${i.id}::${c}`));
-          const systemControls = items
-            .filter(i => i.category === "Water System")
-            .flatMap(i => (i.controls || []).map(c => `${i.id}::${c}`));
-          const processControls = items
-            .filter(i => i.category === "Process")
-            .flatMap(i => (i.controls || []).map(c => `${i.id}::${c}`));
+          // Merge selections: preserve existing, auto-select NEW items only
+          const mergeSelections = (
+            category: string,
+            existingInstanceKey: string,
+            existingControlKey: string
+          ) => {
+            const categoryItems = items.filter(i => i.category === category);
+            const categoryItemIds = new Set(categoryItems.map(i => i.id));
+            
+            const currentInstances: string[] = projectData[existingInstanceKey] || [];
+            const currentControls: string[] = projectData[existingControlKey] || [];
+            
+            const survivingInstances = currentInstances.filter(sid => categoryItemIds.has(sid));
+            const survivingControls = currentControls.filter(cid => {
+              const instanceId = cid.split("::")[0];
+              return categoryItemIds.has(instanceId);
+            });
+            
+            const newItems = categoryItems.filter(i => !oldItemIds.has(i.id));
+            const newInstanceIds = newItems.map(i => i.id);
+            const newControlIds = newItems.flatMap(i =>
+              (i.controls || []).map(c => `${i.id}::${c}`)
+            );
+            
+            return {
+              instances: [...survivingInstances, ...newInstanceIds],
+              controls: [...survivingControls, ...newControlIds],
+            };
+          };
+          
+          const assets = mergeSelections("Asset", "selectedAssetInstances", "selectedAssetControls");
+          const systems = mergeSelections("Water System", "selectedSystemInstances", "selectedSystemControls");
+          const processes = mergeSelections("Process", "selectedProcessInstances", "selectedProcessControls");
           
           updateFields({
-            selectedAssetInstances: assetInstances,
-            selectedAssetControls: assetControls,
-            selectedWaterSystemInstances: systemInstances,
-            selectedWaterSystemControls: systemControls,
-            selectedProcessInstances: processInstances,
-            selectedProcessControls: processControls,
+            selectedAssetInstances: assets.instances,
+            selectedAssetControls: assets.controls,
+            selectedSystemInstances: systems.instances,
+            selectedSystemControls: systems.controls,
+            selectedProcessInstances: processes.instances,
+            selectedProcessControls: processes.controls,
           });
         }}
         projectId={id || "new"}
