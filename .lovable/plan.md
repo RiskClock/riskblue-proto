@@ -1,72 +1,53 @@
 
 
-# Fix: Storage Image Proxy Not Working for PDF Export
+# Fix: "Google Drive not connected" Error During Analysis
 
-## Root Causes Identified
+## Root Cause
 
-Three critical issues are preventing the proxy from working:
+The `resolve-drive-doc` edge function fetches prompt content from Google Docs (stored in `awp_class_prompts.drive_file_id`). It currently looks up the Google Drive token using **the logged-in user's ID** (`user.id`). 
 
-### 1. Edge function is NOT deployed
-The `storage-image-proxy` function returns 404 ("Requested function was not found"). The code exists but was never successfully deployed, so every call from `proxyImageToDataUrl` fails silently and falls back to the raw storage path (which then breaks in html2canvas).
+The problem: the logged-in analyst (`diogo.beltran@riskclock.com`, ID `cb7e39fc-...`) does **not** have a Google Drive token stored. The Drive tokens belong to `qbo@riskclock.com` (IDs `870f542a-...` and `18806ed7-...`).
 
-### 2. CORS origin mismatch
-The `ALLOWED_ORIGINS` list includes:
-- `https://id-preview--58794b56-02f4-4069-8e25-14e967742082.lovable.app`
+Since the prompts are **shared internal Google Docs** (not user-specific files), any internal user's Drive token should work to read them.
 
-But the browser is actually running on:
-- `https://58794b56-02f4-4069-8e25-14e967742082.lovableproject.com`
+## Fix
 
-Even once deployed, the CORS preflight would be rejected because the actual origin is not in the allowlist.
+### 1. Update `supabase/functions/resolve-drive-doc/index.ts`
 
-### 3. `getClaims()` may not exist on `@supabase/supabase-js@2`
-The edge function imports `@supabase/supabase-js@2` from esm.sh without a specific minor version. The `getClaims` method was added relatively recently. If the resolved version doesn't include it, the function will crash at runtime with a "not a function" error.
+Change the Drive token lookup logic (lines 70-79):
 
-## Fix Plan
+**Current behavior**: Queries `user_drive_tokens` where `user_id = user.id` (the logged-in user).
 
-### File: `supabase/functions/storage-image-proxy/index.ts`
+**New behavior**: 
+1. First try the logged-in user's token (existing behavior).
+2. If not found, fall back to **any** available internal user's Drive token from `user_drive_tokens`. Since all internal users share the same Google Workspace, any token can access the shared Google Docs.
+3. Log which token owner is being used for debugging.
 
-1. **Fix CORS origins**: Add `*.lovableproject.com` origin and use a more robust origin check that covers both preview and published domains.
-
-2. **Replace `getClaims` with `getUser`**: Use the established `getUser(token)` pattern that works reliably across all `@supabase/supabase-js@2` versions, consistent with the project's other edge functions.
-
-3. **Pin the supabase-js import** to a specific version for stability.
-
-Updated ALLOWED_ORIGINS:
-```
-const ALLOWED_ORIGINS = [
-  "https://id-preview--58794b56-02f4-4069-8e25-14e967742082.lovable.app",
-  "https://58794b56-02f4-4069-8e25-14e967742082.lovableproject.com",
-  "https://riskblue-proto.lovable.app",
-  "http://localhost:5173",
-  "http://localhost:3000",
-];
+```text
+-- Pseudocode for the lookup change:
+1. Try: SELECT ... FROM user_drive_tokens WHERE user_id = current_user.id
+2. If no result: SELECT ... FROM user_drive_tokens LIMIT 1  (fallback)
+3. If still no result: return "Google Drive not connected" error
 ```
 
-Replace `getClaims` block with `getUser`:
-```typescript
-const { data: userData, error: userError } = await anonClient.auth.getUser(token);
-if (userError || !userData?.user) {
-  return new Response(JSON.stringify({ error: "Unauthorized" }), {
-    status: 401,
-    headers: { ...corsHeaders, "Content-Type": "application/json" },
-  });
-}
-```
+This is safe because:
+- The function already restricts access to `@riskclock.com` emails only (line 37)
+- The prompts are shared company Google Docs, not user-private files
+- The fallback only applies when the current user has no token
 
-### Deploy the function
-After the code fix, deploy `storage-image-proxy` to make it available.
+### 2. No client-side changes needed
 
-### Add diagnostic logging
-Add a `console.table` debug block in `resolveDrawingUrls` (temporary) to log which images resolved successfully and which failed, so we can verify in the next test.
+The `AnalysisSection.tsx` code is correct -- it passes `prompt.drive_file_id` to `resolve-drive-doc`. The only issue is server-side token lookup.
 
 ## Files Changed
 
 | File | Change |
 |---|---|
-| `supabase/functions/storage-image-proxy/index.ts` | Fix CORS origins, replace `getClaims` with `getUser`, pin import version |
-| `src/components/wizard/WaterMitigationGuidelinesStep.tsx` | Add temporary diagnostic logging after resolve step |
+| `supabase/functions/resolve-drive-doc/index.ts` | Add fallback Drive token lookup: try current user first, then any available internal user's token |
 
-## Verification
+## Security
 
-After deployment, the proxy should return 200 with image bytes. The `proxyImageToDataUrl` function will convert those bytes to a `data:image/png;base64,...` URL, which html2canvas can render without any CORS issues.
+- Access is already gated to `@riskclock.com` emails
+- The fallback token is only used to read shared internal Google Docs (prompt templates)
+- No new permissions or secrets needed
 
