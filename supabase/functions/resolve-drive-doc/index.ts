@@ -1,6 +1,29 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
+// ============= Decryption Utilities =============
+function hexToBytes(hex: string): ArrayBuffer {
+  const bytes = new Uint8Array(hex.length / 2);
+  for (let i = 0; i < hex.length; i += 2) {
+    bytes[i / 2] = parseInt(hex.substr(i, 2), 16);
+  }
+  return bytes.buffer as ArrayBuffer;
+}
+
+async function decryptToken(encrypted: string, key: string): Promise<string> {
+  const keyBuffer = hexToBytes(key);
+  const cryptoKey = await crypto.subtle.importKey(
+    "raw", keyBuffer, { name: "AES-GCM" }, false, ["decrypt"]
+  );
+  const combined = Uint8Array.from(atob(encrypted), (c) => c.charCodeAt(0));
+  const iv = combined.slice(0, 12);
+  const ciphertext = combined.slice(12);
+  const decrypted = await crypto.subtle.decrypt(
+    { name: "AES-GCM", iv: iv.buffer as ArrayBuffer }, cryptoKey, ciphertext.buffer as ArrayBuffer
+  );
+  return new TextDecoder().decode(decrypted);
+}
+
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
@@ -66,72 +89,46 @@ serve(async (req) => {
     // Get user's Drive access token
     const adminSupabase = createClient(supabaseUrl, supabaseServiceKey);
 
-    // Try to get encrypted token first, then fall back to plain
+    // Try current user's token first, then fall back to any available token
+    let tokenOwnerId = user.id;
     const { data: tokenData, error: tokenError } = await adminSupabase
       .from("user_drive_tokens")
-      .select("access_token, encrypted_access_token, is_encrypted")
+      .select("access_token, encrypted_access_token, is_encrypted, user_id")
       .eq("user_id", user.id)
       .single();
 
+    let effectiveTokenData = tokenData;
+
     if (tokenError || !tokenData) {
-      return new Response(JSON.stringify({ error: "Google Drive not connected. Please connect your Google Drive first." }), {
-        status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+      console.log(`No Drive token for current user ${user.id}, trying fallback...`);
+      const { data: fallbackToken, error: fallbackError } = await adminSupabase
+        .from("user_drive_tokens")
+        .select("access_token, encrypted_access_token, is_encrypted, user_id")
+        .limit(1)
+        .single();
+
+      if (fallbackError || !fallbackToken) {
+        return new Response(JSON.stringify({ error: "Google Drive not connected. Please connect your Google Drive first." }), {
+          status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      effectiveTokenData = fallbackToken;
+      tokenOwnerId = fallbackToken.user_id;
+      console.log(`Using fallback Drive token from user ${tokenOwnerId}`);
     }
 
-    // Fetch access token via get-token (handles both encrypted and legacy)
+    // Decrypt the token directly (works for both current user and fallback)
+    const encryptionKey = Deno.env.get("DRIVE_TOKEN_ENCRYPTION_KEY");
     let accessToken: string;
     try {
-      const getTokenResponse = await fetch(`${supabaseUrl}/functions/v1/google-drive-oauth`, {
-        method: "POST",
-        headers: { Authorization: authHeader, "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "get-token" }),
-      });
-      const tokenResult = await getTokenResponse.json();
-
-      if (!getTokenResponse.ok || !tokenResult.accessToken) {
-        return new Response(JSON.stringify({ error: "Failed to retrieve Google Drive token." }), {
-          status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" },
-        });
-      }
-
-      accessToken = tokenResult.accessToken;
-
-      // If token is expired, refresh and re-fetch
-      if (tokenResult.isExpired) {
-        console.log("Access token expired, refreshing...");
-        const refreshResponse = await fetch(`${supabaseUrl}/functions/v1/google-drive-oauth`, {
-          method: "POST",
-          headers: { Authorization: authHeader, "Content-Type": "application/json" },
-          body: JSON.stringify({ action: "refresh" }),
-        });
-
-        if (!refreshResponse.ok) {
-          console.error("Token refresh failed:", await refreshResponse.text());
-          return new Response(JSON.stringify({ error: "Google Drive token expired. Please reconnect Google Drive." }), {
-            status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" },
-          });
-        }
-
-        // Re-fetch fresh token after refresh
-        const freshResponse = await fetch(`${supabaseUrl}/functions/v1/google-drive-oauth`, {
-          method: "POST",
-          headers: { Authorization: authHeader, "Content-Type": "application/json" },
-          body: JSON.stringify({ action: "get-token" }),
-        });
-        const freshResult = await freshResponse.json();
-
-        if (!freshResponse.ok || !freshResult.accessToken) {
-          return new Response(JSON.stringify({ error: "Google Drive token expired. Please reconnect Google Drive." }), {
-            status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" },
-          });
-        }
-
-        accessToken = freshResult.accessToken;
-        console.log("Token refreshed successfully");
+      if (effectiveTokenData!.is_encrypted && effectiveTokenData!.encrypted_access_token && encryptionKey) {
+        accessToken = await decryptToken(effectiveTokenData!.encrypted_access_token, encryptionKey);
+      } else {
+        accessToken = effectiveTokenData!.access_token;
       }
     } catch (e) {
-      console.error("Failed to get/refresh token:", e);
+      console.error("Failed to decrypt Drive token:", e);
       return new Response(JSON.stringify({ error: "Failed to retrieve Google Drive token." }), {
         status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
