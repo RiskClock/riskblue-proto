@@ -1727,7 +1727,7 @@ export function AnalysisSection({ requestId, files, projectId, sourceType }: Ana
                         if (typeof val === "number" && val > 0) {
                           // Clickable count — open RawResultModal
                           const result = results?.find(
-                            (r) => r.file_id === file.id && r.awp_class_name === className
+                            (r) => r.file_id === file.id && r.awp_class_name === className && r.status === "complete" && r.result_text
                           );
                           return (
                             <td key={prompt.id} className="w-14 px-2 py-2 text-center">
@@ -1753,26 +1753,28 @@ export function AnalysisSection({ requestId, files, projectId, sourceType }: Ana
 
                         if (typeof val === "number" && val === 0) {
                           const result0 = results?.find(
-                            (r) => r.file_id === file.id && r.awp_class_name === className
+                            (r) => r.file_id === file.id && r.awp_class_name === className && r.status === "complete" && r.result_text
                           );
                           return (
                             <td key={prompt.id} className="w-14 px-2 py-2 text-center">
-                              <button
-                                className="text-xs text-muted-foreground hover:text-foreground hover:underline"
-                                onClick={() => {
-                                  if (result0?.result_text) {
+                              {result0?.result_text ? (
+                                <button
+                                  className="text-xs text-muted-foreground hover:text-foreground hover:underline cursor-pointer"
+                                  onClick={() => {
                                     setRawResultModal({
                                       fileName: file.name,
                                       awpClassName: className,
-                                      resultText: result0.result_text,
+                                      resultText: result0.result_text!,
                                       instanceCount: 0,
                                       sourceFile: file,
                                     });
-                                  }
-                                }}
-                              >
-                                0
-                              </button>
+                                  }}
+                                >
+                                  0
+                                </button>
+                              ) : (
+                                <span className="text-xs text-muted-foreground">0</span>
+                              )}
                             </td>
                           );
                         }
