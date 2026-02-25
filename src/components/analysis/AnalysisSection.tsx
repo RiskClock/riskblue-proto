@@ -708,22 +708,139 @@ interface RawResultModalProps {
   awpClassName: string;
   resultText: string;
   instanceCount: number;
+  sourceFile?: AnalysisFile;
   onClose: () => void;
 }
 
-function RawResultModal({ fileName, awpClassName, resultText, instanceCount, onClose }: RawResultModalProps) {
+function RawResultModal({ fileName, awpClassName, resultText, instanceCount, sourceFile, onClose }: RawResultModalProps) {
+  const [pages, setPages] = useState<HTMLCanvasElement[]>([]);
+  const [pdfLoading, setPdfLoading] = useState(false);
+  const [pdfError, setPdfError] = useState<string | null>(null);
+  const [zoom, setZoom] = useState(1);
+  const pdfContainerRef = useRef<HTMLDivElement>(null);
+  const pdfScrollRef = useRef<HTMLDivElement>(null);
+
+  // Load PDF from storage
+  useEffect(() => {
+    const storagePath = sourceFile?.storage_path;
+    if (!storagePath) { setPdfError("Drawing not available"); return; }
+    let cancelled = false;
+    setPdfLoading(true);
+    setPdfError(null);
+    setPages([]);
+    setZoom(1);
+
+    (async () => {
+      try {
+        const { data: blob, error: dlErr } = await supabase.storage
+          .from("drive-analysis-files")
+          .download(storagePath);
+        if (dlErr || !blob) throw dlErr || new Error("Download failed");
+        const ab = await blob.arrayBuffer();
+        if (cancelled) return;
+        const pdf = await pdfjsLib.getDocument({ data: ab }).promise;
+        if (cancelled) return;
+        const maxPages = Math.min(pdf.numPages, 20);
+        const canvases: HTMLCanvasElement[] = [];
+        for (let i = 1; i <= maxPages; i++) {
+          const page = await pdf.getPage(i);
+          const viewport = page.getViewport({ scale: 2 });
+          const canvas = document.createElement("canvas");
+          canvas.width = viewport.width;
+          canvas.height = viewport.height;
+          const ctx = canvas.getContext("2d")!;
+          await page.render({ canvasContext: ctx, viewport, canvas } as any).promise;
+          if (cancelled) return;
+          canvases.push(canvas);
+        }
+        setPages(canvases);
+      } catch (e) {
+        if (!cancelled) setPdfError("Could not render drawing.");
+      } finally {
+        if (!cancelled) setPdfLoading(false);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [sourceFile?.storage_path]);
+
+  // Mount canvases into container
+  useEffect(() => {
+    if (!pdfContainerRef.current || pages.length === 0) return;
+    const container = pdfContainerRef.current;
+    container.innerHTML = "";
+    for (const canvas of pages) {
+      canvas.style.display = "block";
+      canvas.style.maxWidth = "100%";
+      canvas.style.height = "auto";
+      canvas.style.marginBottom = "8px";
+      container.appendChild(canvas);
+    }
+  }, [pages]);
+
+  const handleZoom = (delta: number) => {
+    const scroll = pdfScrollRef.current;
+    if (!scroll) { setZoom(z => Math.min(4, Math.max(0.25, z + delta))); return; }
+    const cx = scroll.scrollWidth > 0 ? (scroll.scrollLeft + scroll.clientWidth / 2) / scroll.scrollWidth : 0.5;
+    const cy = scroll.scrollHeight > 0 ? (scroll.scrollTop + scroll.clientHeight / 2) / scroll.scrollHeight : 0.5;
+    setZoom(prev => {
+      const next = Math.min(4, Math.max(0.25, prev + delta));
+      requestAnimationFrame(() => {
+        scroll.scrollLeft = cx * scroll.scrollWidth - scroll.clientWidth / 2;
+        scroll.scrollTop = cy * scroll.scrollHeight - scroll.clientHeight / 2;
+      });
+      return next;
+    });
+  };
+
   return (
     <Dialog open onOpenChange={(open) => { if (!open) onClose(); }}>
-      <DialogContent className="max-w-2xl">
-        <DialogHeader>
+      <DialogContent className="sm:max-w-5xl h-[85vh] flex flex-col p-4 gap-2">
+        <DialogHeader className="flex-shrink-0">
           <DialogTitle className="font-mono text-sm truncate">{fileName}</DialogTitle>
+          <p className="text-xs text-muted-foreground">
+            {awpClassName} — {instanceCount} instance{instanceCount !== 1 ? "s" : ""} detected
+          </p>
         </DialogHeader>
-        <p className="text-xs text-muted-foreground mb-2">
-          {awpClassName} — {instanceCount} instance{instanceCount !== 1 ? "s" : ""} detected
-        </p>
-        <pre className="text-xs overflow-auto max-h-96 whitespace-pre-wrap font-mono bg-muted p-3 rounded">
-          {resultText}
-        </pre>
+        <div className="flex flex-1 gap-3 min-h-0 overflow-hidden">
+          {/* Left: Drawing viewer */}
+          <div className="flex-[6] flex flex-col min-w-0 border rounded-lg overflow-hidden bg-muted/30">
+            <div className="h-10 flex-shrink-0 flex items-center justify-between px-3 border-b bg-background">
+              <span className="text-xs text-muted-foreground truncate">Drawing Preview</span>
+              <div className="flex items-center gap-1">
+                <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => handleZoom(-0.25)} disabled={zoom <= 0.25}>
+                  <ZoomOut className="w-3.5 h-3.5" />
+                </Button>
+                <span className="text-xs w-10 text-center">{Math.round(zoom * 100)}%</span>
+                <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => handleZoom(0.25)} disabled={zoom >= 4}>
+                  <ZoomIn className="w-3.5 h-3.5" />
+                </Button>
+              </div>
+            </div>
+            <div ref={pdfScrollRef} className="flex-1 overflow-auto p-2">
+              {pdfLoading ? (
+                <div className="flex items-center justify-center h-full">
+                  <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
+                </div>
+              ) : pdfError ? (
+                <div className="flex items-center justify-center h-full text-xs text-muted-foreground">{pdfError}</div>
+              ) : (
+                <div
+                  ref={pdfContainerRef}
+                  style={{ transform: `scale(${zoom})`, transformOrigin: "top left" }}
+                />
+              )}
+            </div>
+          </div>
+          {/* Right: AI response text */}
+          <div className="flex-[4] flex flex-col min-w-0 border rounded-lg overflow-hidden">
+            <div className="h-10 flex-shrink-0 flex items-center px-3 border-b bg-background">
+              <span className="text-xs text-muted-foreground">AI Response</span>
+            </div>
+            <div className="flex-1 overflow-auto p-3">
+              <pre className="text-xs whitespace-pre-wrap font-mono">{resultText}</pre>
+            </div>
+          </div>
+        </div>
       </DialogContent>
     </Dialog>
   );
@@ -990,6 +1107,7 @@ export function AnalysisSection({ requestId, files, projectId, sourceType }: Ana
     awpClassName: string;
     resultText: string;
     instanceCount: number;
+    sourceFile?: AnalysisFile;
   } | null>(null);
 
   // ---- Unchanged state ----
@@ -1622,6 +1740,7 @@ export function AnalysisSection({ requestId, files, projectId, sourceType }: Ana
                                       awpClassName: className,
                                       resultText: result.result_text,
                                       instanceCount: val,
+                                      sourceFile: file,
                                     });
                                   }
                                 }}
@@ -1633,9 +1752,27 @@ export function AnalysisSection({ requestId, files, projectId, sourceType }: Ana
                         }
 
                         if (typeof val === "number" && val === 0) {
+                          const result0 = results?.find(
+                            (r) => r.file_id === file.id && r.awp_class_name === className
+                          );
                           return (
-                            <td key={prompt.id} className="w-14 px-2 py-2 text-center text-xs text-muted-foreground">
-                              0
+                            <td key={prompt.id} className="w-14 px-2 py-2 text-center">
+                              <button
+                                className="text-xs text-muted-foreground hover:text-foreground hover:underline"
+                                onClick={() => {
+                                  if (result0?.result_text) {
+                                    setRawResultModal({
+                                      fileName: file.name,
+                                      awpClassName: className,
+                                      resultText: result0.result_text,
+                                      instanceCount: 0,
+                                      sourceFile: file,
+                                    });
+                                  }
+                                }}
+                              >
+                                0
+                              </button>
                             </td>
                           );
                         }
@@ -1775,6 +1912,7 @@ export function AnalysisSection({ requestId, files, projectId, sourceType }: Ana
           awpClassName={rawResultModal.awpClassName}
           resultText={rawResultModal.resultText}
           instanceCount={rawResultModal.instanceCount}
+          sourceFile={rawResultModal.sourceFile}
           onClose={() => setRawResultModal(null)}
         />
       )}
