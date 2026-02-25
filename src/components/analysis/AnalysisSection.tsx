@@ -794,7 +794,7 @@ function RawResultModal({ fileName, awpClassName, resultText, instanceCount, sou
 
   return (
     <Dialog open onOpenChange={(open) => { if (!open) onClose(); }}>
-      <DialogContent className="sm:max-w-5xl h-[85vh] flex flex-col p-4 gap-2">
+      <DialogContent className="sm:max-w-[95vw] max-w-[1800px] h-[90vh] flex flex-col p-4 gap-2">
         <DialogHeader className="flex-shrink-0">
           <DialogTitle className="font-mono text-sm truncate">{fileName}</DialogTitle>
           <p className="text-xs text-muted-foreground">
