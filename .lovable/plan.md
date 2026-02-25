@@ -1,44 +1,29 @@
-# Enhance Analysis Result Modal with Drawing Viewer + Make "0" Cells Clickable
 
-## Overview
 
-Two changes to the Drawing Analysis grid:
+# Use Full Width for the Raw Result Modal
 
-1. **Upgrade the RawResultModal** to show the source PDF drawing on the right side (with zoom/pan), alongside the AI response text on the left. This reuses the same PDF rendering pattern already used in `InstanceDetailModal` and `FilePreviewModal`.
-2. **Make "0" detection cells clickable** so users can read the AI's reasoning for why no instances were found on a given sheet.
+## Problem
+The `RawResultModal` is limited to `sm:max-w-5xl` (1024px), leaving large margins on wider screens. Both the drawing preview and AI response text would benefit from more horizontal space.
 
-## Changes
+## Fix
 
 ### File: `src/components/analysis/AnalysisSection.tsx`
 
-**A. Redesign `RawResultModal` (lines 706-730)**
+**Single change on line 797**: Widen the dialog from `sm:max-w-5xl` to `sm:max-w-[95vw]` (or `max-w-[1600px]` as a reasonable cap) and increase height slightly.
 
-- Change the layout from a simple text-only dialog to a split-panel layout similar to `InstanceDetailModal`:
-  - **Right panel (~40%)**: Scrollable area showing the file name, AWP class, instance count, and the full AI response text in a `<pre>` block.
-  - **Left panel (~60%)**: PDF drawing viewer with zoom in/out controls, loaded from `drive-analysis-files` storage using the file's `storage_path`.
-- Add `sourceFile: AnalysisFile | undefined` to the `RawResultModalProps` interface so the modal knows which file to load.
-- Reuse the same PDF download + render pattern from `InstanceDetailModal` (download blob from storage, render with pdf.js at scale 2, display in a scrollable container with center-preserving zoom).
-- The dialog size changes to `sm:max-w-5xl h-[85vh]` to accommodate the split layout.
+```
+// Before
+<DialogContent className="sm:max-w-5xl h-[85vh] flex flex-col p-4 gap-2">
 
-**B. Update `RawResultModal` invocation (lines 988-993, 1618-1628)**
+// After
+<DialogContent className="sm:max-w-[95vw] max-w-[1800px] h-[90vh] flex flex-col p-4 gap-2">
+```
 
-- Add `sourceFile` to the `rawResultModal` state type.
-- When opening the modal (the `onClick` handler at line 1618), also pass the corresponding `AnalysisFile` object.
+This one-line change makes the modal stretch to 95% of the viewport width (capped at 1800px), giving substantially more room to both the drawing viewer and the AI response panel.
 
-**C. Make "0" cells clickable (lines 1635-1641)**
+## Files Changed
 
-- Replace the plain `0` text with a clickable `<button>` (same style as the `> 0` cells but in muted color).
-- On click, find the result for that file+class combination and open `RawResultModal` with the result text and source file.
-- This lets users read the AI reasoning for why zero instances were detected.
+| File | Change |
+|---|---|
+| `src/components/analysis/AnalysisSection.tsx` | Line 797: widen dialog max-width from `5xl` to `95vw` (capped at 1800px), height from 85vh to 90vh |
 
-## Technical Details
-
-The PDF viewer in the redesigned `RawResultModal` will:
-
-- Download the PDF blob from `supabase.storage.from("drive-analysis-files").download(storagePath)`
-- Render all pages (up to 20) at scale 2 using pdf.js
-- Display in a scrollable container with `transform: scale(zoom)` and center-preserving zoom handlers
-- Show a loading spinner while the PDF loads
-- Gracefully handle missing `storage_path` with a "Drawing not available" message
-
-No new components are created -- all changes are within the existing `AnalysisSection.tsx` file, following the established patterns.
