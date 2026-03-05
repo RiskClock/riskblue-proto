@@ -1814,6 +1814,7 @@ const ProjectWizardContent = () => {
                       logoBase64,
                       skipLogoOnFirstPage: true,
                       returnBlob: true,
+                      fullBleedFirstPage: true,
                     });
                     
                     reactRoot.unmount();
