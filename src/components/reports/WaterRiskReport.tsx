@@ -1043,7 +1043,6 @@ export const WaterRiskReport = ({ data, analysisItems = [], controlDetails = [],
         <p>This report is confidential and prepared exclusively for {data.name || "the specified project"}</p>
         <p>Generated: {formatDate(new Date())}</p>
       </footer>
-      </footer>
       </div>
     </div>
   );
