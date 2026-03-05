@@ -5,9 +5,10 @@ import { getControlId } from "@/components/wizard/ExpandableListItem";
 import { calculateSystemOrAssetDates, TimelineData } from "@/lib/durationCalculator";
 import { getDrawingImage } from "@/lib/drawingMapper";
 import { differenceInMonths, format } from "date-fns";
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer, ReferenceLine, Legend } from "recharts";
 
-// Import all images as ES6 modules for reliable PDF export
 import riskBlueLogo from "@/assets/riskblue-logo.jpg";
+import coverPageBg from "@/assets/img_coverpage.jpg";
 import residentialImg from "@/assets/type1-residential.avif";
 import mixedUseImg from "@/assets/type2-mixeduse.avif";
 import institutionalImg from "@/assets/type3-institutional.avif";
@@ -145,6 +146,13 @@ interface ControlDetail {
   description: string;
 }
 
+interface RiskTimelineChartData {
+  months: string[];
+  totalPerMonth: number[];
+  totalDeriskPerMonth: number[];
+  todayMonthIndex: number | null;
+}
+
 interface WaterRiskReportProps {
   data: any;
   analysisItems?: AnalysisItem[];
@@ -152,9 +160,10 @@ interface WaterRiskReportProps {
   executiveSummaryText?: string;
   preparedBy?: string;
   createdBy?: string;
+  riskTimelineData?: RiskTimelineChartData;
 }
 
-export const WaterRiskReport = ({ data, analysisItems = [], controlDetails = [], executiveSummaryText, preparedBy, createdBy }: WaterRiskReportProps) => {
+export const WaterRiskReport = ({ data, analysisItems = [], controlDetails = [], executiveSummaryText, preparedBy, createdBy, riskTimelineData }: WaterRiskReportProps) => {
   const timelinePhases = getTimelinePhases(data);
   
   // Build timeline data for duration calculation
@@ -633,8 +642,61 @@ export const WaterRiskReport = ({ data, analysisItems = [], controlDetails = [],
   };
 
   return (
-    <div className="print-report bg-white text-black p-4 max-w-[210mm] mx-auto text-[11px] relative">
+    <div className="print-report bg-white text-black max-w-[210mm] mx-auto text-[11px] relative">
       
+      {/* Cover Page */}
+      <div style={{ width: '210mm', height: '297mm', position: 'relative', overflow: 'hidden', pageBreakAfter: 'always' }}>
+        {/* Background Image */}
+        <img 
+          src={coverPageBg} 
+          alt="" 
+          style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', objectFit: 'cover' }}
+        />
+        {/* Blue Overlay */}
+        <div style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', backgroundColor: 'rgba(20, 128, 249, 0.35)' }} />
+        
+        {/* Cover Content */}
+        <div style={{ position: 'relative', zIndex: 1, display: 'flex', flexDirection: 'column', height: '100%', padding: '60px 50px' }}>
+          {/* Top: Logo */}
+          <div style={{ textAlign: 'center', marginBottom: '80px' }}>
+            <img src={riskBlueLogo} alt="RiskBlue Logo" style={{ height: '48px', display: 'inline-block' }} />
+          </div>
+          
+          {/* Center: Title and Project Info */}
+          <div style={{ flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'center', textAlign: 'center' }}>
+            <h1 style={{ fontSize: '32px', fontWeight: 'bold', color: 'white', marginBottom: '16px', letterSpacing: '1px' }}>
+              Water Mitigation Guideline
+            </h1>
+            <p style={{ fontSize: '24px', fontWeight: '600', color: 'white', marginBottom: '8px' }}>
+              {data.name || "Untitled Project"}
+            </p>
+            {(data.city || data.state) && (
+              <p style={{ fontSize: '16px', color: 'rgba(255,255,255,0.85)' }}>
+                {[data.city, data.state].filter(Boolean).join(', ')}
+              </p>
+            )}
+          </div>
+          
+          {/* Bottom: Attribution, Status, Date, Confidential */}
+          <div style={{ color: 'white', fontSize: '12px' }}>
+            {preparedBy && createdBy && preparedBy.toLowerCase() === createdBy.toLowerCase() ? (
+              <p style={{ marginBottom: '4px' }}>Prepared and Created by: {preparedBy}</p>
+            ) : (
+              <>
+                {preparedBy && <p style={{ marginBottom: '2px' }}>Prepared by: {preparedBy}</p>}
+                {createdBy && <p style={{ marginBottom: '4px' }}>Created by: {createdBy}</p>}
+              </>
+            )}
+            <p style={{ marginBottom: '4px' }}>Status: Issued for Review</p>
+            <p style={{ marginBottom: '16px' }}>{formatDate(new Date())}</p>
+            <p style={{ fontSize: '10px', color: 'rgba(255,255,255,0.7)', fontStyle: 'italic' }}>
+              Confidential. For project stakeholders only.
+            </p>
+          </div>
+        </div>
+      </div>
+
+      <div className="p-4">
       {/* Header with Logo and "Built in RiskBlue" - first page only */}
       <div className="print-header flex justify-between items-start mb-4 pb-2 border-b-2 border-gray-300">
         <div>
@@ -671,6 +733,42 @@ export const WaterRiskReport = ({ data, analysisItems = [], controlDetails = [],
                 {paragraph}
               </p>
             ))}
+          </div>
+        )}
+
+        {/* Risk Timeline Chart */}
+        {riskTimelineData && riskTimelineData.months.length > 0 && (
+          <div className="mb-3">
+            <p className="text-[10px] font-semibold text-gray-700 mb-1.5">Risk Timeline — Total Risk Points</p>
+            <div className="bg-gray-50 p-2 rounded border border-gray-200" style={{ height: '280px' }}>
+              <ResponsiveContainer width="100%" height="100%">
+                <LineChart
+                  data={riskTimelineData.months.map((month, i) => ({
+                    month: format(new Date(month + '-01'), 'MMM yy'),
+                    'Total Risk': riskTimelineData.totalPerMonth[i] || 0,
+                    'Total Derisk': riskTimelineData.totalDeriskPerMonth[i] || 0,
+                  }))}
+                  margin={{ top: 5, right: 20, left: 10, bottom: 5 }}
+                >
+                  <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+                  <XAxis dataKey="month" tick={{ fontSize: 8 }} interval="preserveStartEnd" />
+                  <YAxis tick={{ fontSize: 8 }} />
+                  <RechartsTooltip contentStyle={{ fontSize: '10px' }} />
+                  <Legend wrapperStyle={{ fontSize: '9px' }} />
+                  <Line type="stepAfter" dataKey="Total Risk" stroke="#ef4444" strokeWidth={2} dot={false} />
+                  <Line type="stepAfter" dataKey="Total Derisk" stroke="#22c55e" strokeWidth={2} dot={false} />
+                  {riskTimelineData.todayMonthIndex !== null && (
+                    <ReferenceLine
+                      x={format(new Date(riskTimelineData.months[riskTimelineData.todayMonthIndex] + '-01'), 'MMM yy')}
+                      stroke="#000"
+                      strokeWidth={2}
+                      strokeDasharray="4 4"
+                      label={{ value: 'Today', position: 'top', fontSize: 8 }}
+                    />
+                  )}
+                </LineChart>
+              </ResponsiveContainer>
+            </div>
           </div>
         )}
         
@@ -945,6 +1043,7 @@ export const WaterRiskReport = ({ data, analysisItems = [], controlDetails = [],
         <p>This report is confidential and prepared exclusively for {data.name || "the specified project"}</p>
         <p>Generated: {formatDate(new Date())}</p>
       </footer>
+      </div>
     </div>
   );
 };

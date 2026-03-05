@@ -21,6 +21,7 @@ import { WaterSystemsStep } from "@/components/wizard/WaterSystemsStep";
 
 import { ProcessesStep } from "@/components/wizard/ProcessesStep";
 import { RiskTimelineChart3D } from "@/components/wizard/RiskTimelineChart3D";
+import { useRiskTimelineData } from "@/hooks/useRiskTimelineData";
 import { AWPEditModal } from "@/components/wizard/AWPEditModal";
 import { RepositoryConnectionDialog } from "@/components/wizard/RepositoryConnectionDialog";
 import { ProcoreConnectionDialog } from "@/components/wizard/ProcoreConnectionDialog";
@@ -412,6 +413,32 @@ const ProjectWizardContent = () => {
       return result;
     },
     staleTime: 0
+  });
+
+  // Compute risk timeline data for PDF report (Total Risk Points preset)
+  const pdfSelectedInstanceIds = useMemo(() => [
+    ...(projectData.selectedAssetInstances || []),
+    ...(projectData.selectedSystemInstances || []),
+    ...(projectData.selectedProcessInstances || [])
+  ], [projectData.selectedAssetInstances, projectData.selectedSystemInstances, projectData.selectedProcessInstances]);
+
+  const pdfSelectedControlIds = useMemo(() => [
+    ...(projectData.selectedAssetControls || []),
+    ...(projectData.selectedSystemControls || []),
+    ...(projectData.selectedProcessControls || [])
+  ], [projectData.selectedAssetControls, projectData.selectedSystemControls, projectData.selectedProcessControls]);
+
+  const riskTimelineForPdf = useRiskTimelineData({
+    analysisItems,
+    projectData,
+    aspPIValues,
+    startDateFilter: projectData.construction_start_date || '',
+    endDateFilter: projectData.construction_end_date || '',
+    selectedInstanceIds: pdfSelectedInstanceIds,
+    selectedControlIds: pdfSelectedControlIds,
+    controlsData: controlPointsData,
+    dataType: 'risk',
+    costMode: 'monthly',
   });
 
   const projectDurationMonths = useMemo(() => {
@@ -1687,7 +1714,7 @@ const ProjectWizardContent = () => {
                     
                     import('react-dom/client').then(({ createRoot }) => {
                       const reactRoot = createRoot(root);
-                      reactRoot.render(<WaterRiskReport data={projectData} analysisItems={analysisItems} controlDetails={controlDetails} executiveSummaryText={executiveSummaryText} preparedBy={preparedByName} createdBy={createdByName} />);
+                      reactRoot.render(<WaterRiskReport data={projectData} analysisItems={analysisItems} controlDetails={controlDetails} executiveSummaryText={executiveSummaryText} preparedBy={preparedByName} createdBy={createdByName} riskTimelineData={riskTimelineForPdf.hasData ? { months: riskTimelineForPdf.months, totalPerMonth: riskTimelineForPdf.totalPerMonth, totalDeriskPerMonth: riskTimelineForPdf.totalDeriskPerMonth || [], todayMonthIndex: riskTimelineForPdf.todayMonthIndex } : undefined} />);
                       
                       setTimeout(() => {
                         window.print();
@@ -1773,7 +1800,7 @@ const ProjectWizardContent = () => {
                     
                     const { createRoot } = await import('react-dom/client');
                     const reactRoot = createRoot(root);
-                    reactRoot.render(<WaterRiskReport data={projectData} analysisItems={analysisItems} controlDetails={controlDetails} executiveSummaryText={executiveSummaryText} preparedBy={preparedByName} createdBy={createdByName} />);
+                    reactRoot.render(<WaterRiskReport data={projectData} analysisItems={analysisItems} controlDetails={controlDetails} executiveSummaryText={executiveSummaryText} preparedBy={preparedByName} createdBy={createdByName} riskTimelineData={riskTimelineForPdf.hasData ? { months: riskTimelineForPdf.months, totalPerMonth: riskTimelineForPdf.totalPerMonth, totalDeriskPerMonth: riskTimelineForPdf.totalDeriskPerMonth || [], todayMonthIndex: riskTimelineForPdf.todayMonthIndex } : undefined} />);
                     
                     // Wait for render + images
                     await new Promise(resolve => setTimeout(resolve, 2000));
@@ -1860,6 +1887,7 @@ const ProjectWizardContent = () => {
                       analysisItems={analysisItems}
                       onBack={() => {}}
                       onNext={() => {}}
+                      riskTimelineData={riskTimelineForPdf.hasData ? { months: riskTimelineForPdf.months, totalPerMonth: riskTimelineForPdf.totalPerMonth, totalDeriskPerMonth: riskTimelineForPdf.totalDeriskPerMonth || [], todayMonthIndex: riskTimelineForPdf.todayMonthIndex } : undefined}
                     />
                   </DialogContent>
                 </Dialog>

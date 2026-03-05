@@ -320,11 +320,11 @@ const Chart2D: React.FC<Chart2DProps> = ({
           border: '1px solid hsl(var(--border))',
           borderRadius: '0.5rem'
         }}
-        formatter={(value: number) => [
+        formatter={(value: number, name: string) => [
           dataType === 'cost' 
             ? (value >= 1000 ? `$${(value / 1000).toFixed(1)}k` : `$${value}`)
             : Number(value).toFixed(1),
-          undefined
+          name
         ]}
       />
       

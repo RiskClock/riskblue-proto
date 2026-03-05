@@ -355,7 +355,8 @@ export const useRiskTimelineData = ({
         const classStartIdx = months.indexOf(classStartMonth);
         const classEndIdx = months.indexOf(classEndMonth);
         
-        const effectiveClassStartIdx = classStartIdx === -1 ? 0 : classStartIdx;
+        const startClipped = classStartIdx === -1;
+        const effectiveClassStartIdx = startClipped ? 0 : classStartIdx;
         const effectiveClassEndIdx = classEndIdx === -1 ? months.length - 1 : classEndIdx;
         
         if (effectiveClassStartIdx > effectiveClassEndIdx) return row;
@@ -369,8 +370,10 @@ export const useRiskTimelineData = ({
           const instanceStartIdx = effectiveClassStartIdx;
           const instanceEndIdx = effectiveClassEndIdx;
           
-          // Add one-time cost only to the instance's start month
-          row[instanceStartIdx] += instanceCosts.oneTimeCost;
+          // Add one-time cost only if the start month is within the visible range
+          if (!startClipped) {
+            row[instanceStartIdx] += instanceCosts.oneTimeCost;
+          }
           
           // Add monthly cost to all months in the instance's range
           for (let i = instanceStartIdx; i <= instanceEndIdx; i++) {
@@ -624,7 +627,8 @@ export const useRiskTimelineData = ({
         const startIdx = months.indexOf(startMonth);
         const endIdx = months.indexOf(endMonth);
         
-        const effectiveStartIdx = startIdx === -1 ? 0 : startIdx;
+        const startClipped = startIdx === -1;
+        const effectiveStartIdx = startClipped ? 0 : startIdx;
         const effectiveEndIdx = endIdx === -1 ? months.length - 1 : endIdx;
         
         if (effectiveStartIdx > effectiveEndIdx) return;
@@ -635,10 +639,9 @@ export const useRiskTimelineData = ({
           costPerMonth[i] += monthlyCost;
         }
         
-        // Add one-time cost only once per unique control name (not per instance)
+        // Add one-time cost only if the start month is within the visible range
         const oneTimeCost = controlCost.oneTimeCost || 0;
-        if (oneTimeCost > 0 && !oneTimeCostAdded.has(normalizedControlName)) {
-          // Add to first month of first instance using this control
+        if (oneTimeCost > 0 && !startClipped && !oneTimeCostAdded.has(normalizedControlName)) {
           costPerMonth[effectiveStartIdx] += oneTimeCost;
           oneTimeCostAdded.add(normalizedControlName);
         }
