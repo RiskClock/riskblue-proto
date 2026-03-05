@@ -645,18 +645,20 @@ export const WaterRiskReport = ({ data, analysisItems = [], controlDetails = [],
     <div className="print-report bg-white text-black max-w-[210mm] mx-auto text-[11px] relative">
       
       {/* Cover Page */}
-      <div style={{ width: '210mm', height: '297mm', position: 'relative', overflow: 'hidden', pageBreakAfter: 'always' }}>
-        {/* Background Image */}
+      <div id="cover-page" style={{ width: '210mm', height: '297mm', position: 'relative', overflow: 'hidden', margin: 0, padding: 0, pageBreakAfter: 'always' }}>
+        {/* Layer 1: Background Image */}
         <img 
           src={coverPageBg} 
           alt="" 
-          style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', objectFit: 'cover' }}
+          style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', objectFit: 'cover', zIndex: 0 }}
         />
-        {/* Blue Overlay */}
-        <div style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', backgroundColor: 'rgba(20, 128, 249, 0.35)' }} />
+        {/* Layer 2: Blue Overlay */}
+        <div style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', backgroundColor: 'rgba(20, 128, 249, 0.35)', zIndex: 1 }} />
+        {/* Layer 3: Black Translucent Inset Panel */}
+        <div style={{ position: 'absolute', inset: '24px', background: 'rgba(0,0,0,0.28)', border: '1px solid rgba(255,255,255,0.10)', boxShadow: '0 0 0 1px rgba(0,0,0,0.15) inset', zIndex: 2 }} />
         
-        {/* Cover Content */}
-        <div style={{ position: 'relative', zIndex: 1, display: 'flex', flexDirection: 'column', height: '100%', padding: '60px 50px' }}>
+        {/* Layer 4: Content */}
+        <div style={{ position: 'relative', zIndex: 3, display: 'flex', flexDirection: 'column', height: '100%', padding: '60px 50px' }}>
           
           {/* Center block: Logo + Title + Project Info */}
           <div style={{ flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'center', textAlign: 'center' }}>

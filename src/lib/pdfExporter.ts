@@ -15,6 +15,7 @@ interface PdfExportOptions {
   skipLogoOnFirstPage?: boolean;
   returnBlob?: boolean;
   fullBleedFirstPage?: boolean;
+  debugSaveCoverPng?: boolean;
 }
 
 /**
