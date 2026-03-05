@@ -1,29 +1,29 @@
 
 
-# Fix All Remaining Cover Page Issues
+# Use Full Width for the Raw Result Modal
 
-## Changes
+## Problem
+The `RawResultModal` is limited to `sm:max-w-5xl` (1024px), leaving large margins on wider screens. Both the drawing preview and AI response text would benefit from more horizontal space.
 
-### 1. Eliminate duplicate cover page (`src/components/reports/WaterRiskReport.tsx`)
-Wrap everything after `#cover-page` (line 698 onward, the `<div className="p-4">` through end) inside `<div id="report-body">`. The exporter already queries `#report-body` but currently falls back to the full container because no such element exists, causing the cover to render twice.
+## Fix
 
-### 2. Update inset panel styling (same file, line 658)
-- Change `inset: '24px'` to `inset: '48px'`
-- Remove `border` and `boxShadow` properties entirely
+### File: `src/components/analysis/AnalysisSection.tsx`
 
-### 3. Replace cover logo with transparent version
-- Save uploaded `RiskBlue_complete_blackbg.png` as `src/assets/logo-riskblue-white.png`
-- Import it in `WaterRiskReport.tsx` and use it for the cover page logo (line 665)
-- Increase logo height from `48px` to `64px`
+**Single change on line 797**: Widen the dialog from `sm:max-w-5xl` to `sm:max-w-[95vw]` (or `max-w-[1600px]` as a reasonable cap) and increase height slightly.
 
-### 4. Fix squished footer logos (`src/lib/pdfExporter.ts`, line 161)
-Currently hardcoded as `18mm x 6mm` (3:1 ratio), distorting the logo. Change to `18mm x 8.2mm` (~2.2:1 ratio matching the actual logo proportions), and adjust Y position accordingly: `pageHeight - 14` instead of `pageHeight - 12`.
+```
+// Before
+<DialogContent className="sm:max-w-5xl h-[85vh] flex flex-col p-4 gap-2">
 
-## Files
+// After
+<DialogContent className="sm:max-w-[95vw] max-w-[1800px] h-[90vh] flex flex-col p-4 gap-2">
+```
+
+This one-line change makes the modal stretch to 95% of the viewport width (capped at 1800px), giving substantially more room to both the drawing viewer and the AI response panel.
+
+## Files Changed
 
 | File | Change |
 |---|---|
-| `src/assets/logo-riskblue-white.png` | New file (uploaded transparent logo) |
-| `src/components/reports/WaterRiskReport.tsx` | Wrap body in `#report-body`; thicker inset (48px), no border/shadow; new logo, bigger (64px) |
-| `src/lib/pdfExporter.ts` | Footer logo: `18x8.2` instead of `18x6` |
+| `src/components/analysis/AnalysisSection.tsx` | Line 797: widen dialog max-width from `5xl` to `95vw` (capped at 1800px), height from 85vh to 90vh |
 
