@@ -146,6 +146,13 @@ interface ControlDetail {
   description: string;
 }
 
+interface RiskTimelineChartData {
+  months: string[];
+  totalPerMonth: number[];
+  totalDeriskPerMonth: number[];
+  todayMonthIndex: number | null;
+}
+
 interface WaterRiskReportProps {
   data: any;
   analysisItems?: AnalysisItem[];
@@ -153,9 +160,10 @@ interface WaterRiskReportProps {
   executiveSummaryText?: string;
   preparedBy?: string;
   createdBy?: string;
+  riskTimelineData?: RiskTimelineChartData;
 }
 
-export const WaterRiskReport = ({ data, analysisItems = [], controlDetails = [], executiveSummaryText, preparedBy, createdBy }: WaterRiskReportProps) => {
+export const WaterRiskReport = ({ data, analysisItems = [], controlDetails = [], executiveSummaryText, preparedBy, createdBy, riskTimelineData }: WaterRiskReportProps) => {
   const timelinePhases = getTimelinePhases(data);
   
   // Build timeline data for duration calculation
