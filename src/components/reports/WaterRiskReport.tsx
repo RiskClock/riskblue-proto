@@ -5,9 +5,10 @@ import { getControlId } from "@/components/wizard/ExpandableListItem";
 import { calculateSystemOrAssetDates, TimelineData } from "@/lib/durationCalculator";
 import { getDrawingImage } from "@/lib/drawingMapper";
 import { differenceInMonths, format } from "date-fns";
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer, ReferenceLine, Legend } from "recharts";
 
-// Import all images as ES6 modules for reliable PDF export
 import riskBlueLogo from "@/assets/riskblue-logo.jpg";
+import coverPageBg from "@/assets/img_coverpage.jpg";
 import residentialImg from "@/assets/type1-residential.avif";
 import mixedUseImg from "@/assets/type2-mixeduse.avif";
 import institutionalImg from "@/assets/type3-institutional.avif";
