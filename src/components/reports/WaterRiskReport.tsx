@@ -5,7 +5,7 @@ import { getControlId } from "@/components/wizard/ExpandableListItem";
 import { calculateSystemOrAssetDates, TimelineData } from "@/lib/durationCalculator";
 import { getDrawingImage } from "@/lib/drawingMapper";
 import { differenceInMonths, format } from "date-fns";
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer, ReferenceLine, Legend } from "recharts";
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ReferenceLine, Legend } from "recharts";
 
 import riskBlueLogo from "@/assets/logo-riskblue.png";
 import coverPageBg from "@/assets/img_coverpage.jpg";
