@@ -1702,30 +1702,41 @@ const ProjectWizardContent = () => {
                       console.error("Failed to generate executive summary:", e);
                     }
                     
-                    const originalTitle = document.title;
-                    document.title = generateReportFilename(projectData.name || "unnamed_project", "WaterRiskDiscovery");
-                    
+                    // Render report offscreen and generate PDF programmatically
                     const reportContainer = document.createElement('div');
-                    reportContainer.className = 'print-report-container';
+                    reportContainer.style.position = 'absolute';
+                    reportContainer.style.left = '-9999px';
+                    reportContainer.style.width = '210mm';
                     document.body.appendChild(reportContainer);
                     
                     const root = document.createElement('div');
                     reportContainer.appendChild(root);
                     
-                    import('react-dom/client').then(({ createRoot }) => {
-                      const reactRoot = createRoot(root);
-                      reactRoot.render(<WaterRiskReport data={projectData} analysisItems={analysisItems} controlDetails={controlDetails} executiveSummaryText={executiveSummaryText} preparedBy={preparedByName} createdBy={createdByName} riskTimelineData={riskTimelineForPdf.hasData ? { months: riskTimelineForPdf.months, totalPerMonth: riskTimelineForPdf.totalPerMonth, totalDeriskPerMonth: riskTimelineForPdf.totalDeriskPerMonth || [], todayMonthIndex: riskTimelineForPdf.todayMonthIndex } : undefined} />);
-                      
-                      setTimeout(() => {
-                        window.print();
-                        document.title = originalTitle;
-                        
-                        setTimeout(() => {
-                          reactRoot.unmount();
-                          document.body.removeChild(reportContainer);
-                        }, 100);
-                      }, 1500);
+                    const { createRoot } = await import('react-dom/client');
+                    const reactRoot = createRoot(root);
+                    reactRoot.render(<WaterRiskReport data={projectData} analysisItems={analysisItems} controlDetails={controlDetails} executiveSummaryText={executiveSummaryText} preparedBy={preparedByName} createdBy={createdByName} riskTimelineData={riskTimelineForPdf.hasData ? { months: riskTimelineForPdf.months, totalPerMonth: riskTimelineForPdf.totalPerMonth, totalDeriskPerMonth: riskTimelineForPdf.totalDeriskPerMonth || [], todayMonthIndex: riskTimelineForPdf.todayMonthIndex } : undefined} />);
+                    
+                    // Wait for render + images
+                    await new Promise(resolve => setTimeout(resolve, 2000));
+                    
+                    const { generatePdfFromElement, getImageBase64 } = await import('@/lib/pdfExporter');
+                    const logoBase64 = await getImageBase64(riskBlueLogo);
+                    
+                    const coverEl = reportContainer.querySelector('#cover-page') as HTMLElement | null;
+                    const bodyEl = reportContainer.querySelector('#report-body') as HTMLElement || reportContainer;
+                    
+                    await generatePdfFromElement(bodyEl, {
+                      filename: generateReportFilename(projectData.name || "unnamed_project", "WaterRiskDiscovery"),
+                      margins: { top: 10, right: 10, bottom: 15, left: 10 },
+                      logoBase64,
+                      skipLogoOnFirstPage: true,
+                      returnBlob: false,
+                      fullBleedFirstPage: true,
+                      coverElement: coverEl || undefined,
                     });
+                    
+                    reactRoot.unmount();
+                    document.body.removeChild(reportContainer);
                   }}>
                     <Download className="h-4 w-4 mr-2" />
                     Download as PDF
