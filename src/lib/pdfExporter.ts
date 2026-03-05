@@ -112,6 +112,14 @@ export async function generatePdfFromElement(
         sourceHeight
       );
 
+      // Debug: save cover page canvas as PNG for diagnostics
+      if (options.debugSaveCoverPng && page === 0) {
+        const link = document.createElement('a');
+        link.download = 'debug-cover-page.png';
+        link.href = pageCanvas.toDataURL('image/png');
+        link.click();
+      }
+
       const pageImgData = pageCanvas.toDataURL('image/jpeg', 0.98);
       const pageImgHeight = (sourceHeight / 2) * scale;
 
