@@ -53,14 +53,22 @@ const resolveDrawingUrls = async (items: AnalysisItem[]): Promise<AnalysisItem[]
   return resolved;
 };
 
+interface RiskTimelineChartData {
+  months: string[];
+  totalPerMonth: number[];
+  totalDeriskPerMonth: number[];
+  todayMonthIndex: number | null;
+}
+
 interface WaterMitigationGuidelinesStepProps {
   data: any;
   analysisItems?: AnalysisItem[];
   onBack: () => void;
   onNext: (data: any) => void;
+  riskTimelineData?: RiskTimelineChartData;
 }
 
-export const WaterMitigationGuidelinesStep = ({ data, analysisItems = [], onBack, onNext }: WaterMitigationGuidelinesStepProps) => {
+export const WaterMitigationGuidelinesStep = ({ data, analysisItems = [], onBack, onNext, riskTimelineData }: WaterMitigationGuidelinesStepProps) => {
   const { toast } = useToast();
   const [showProcoreExport, setShowProcoreExport] = useState(false);
   const [pdfBlobForProcore, setPdfBlobForProcore] = useState<Blob | null>(null);
