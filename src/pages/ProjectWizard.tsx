@@ -1714,7 +1714,7 @@ const ProjectWizardContent = () => {
                     
                     import('react-dom/client').then(({ createRoot }) => {
                       const reactRoot = createRoot(root);
-                      reactRoot.render(<WaterRiskReport data={projectData} analysisItems={analysisItems} controlDetails={controlDetails} executiveSummaryText={executiveSummaryText} preparedBy={preparedByName} createdBy={createdByName} />);
+                      reactRoot.render(<WaterRiskReport data={projectData} analysisItems={analysisItems} controlDetails={controlDetails} executiveSummaryText={executiveSummaryText} preparedBy={preparedByName} createdBy={createdByName} riskTimelineData={riskTimelineForPdf.hasData ? { months: riskTimelineForPdf.months, totalPerMonth: riskTimelineForPdf.totalPerMonth, totalDeriskPerMonth: riskTimelineForPdf.totalDeriskPerMonth || [], todayMonthIndex: riskTimelineForPdf.todayMonthIndex } : undefined} />);
                       
                       setTimeout(() => {
                         window.print();
@@ -1800,7 +1800,7 @@ const ProjectWizardContent = () => {
                     
                     const { createRoot } = await import('react-dom/client');
                     const reactRoot = createRoot(root);
-                    reactRoot.render(<WaterRiskReport data={projectData} analysisItems={analysisItems} controlDetails={controlDetails} executiveSummaryText={executiveSummaryText} preparedBy={preparedByName} createdBy={createdByName} />);
+                    reactRoot.render(<WaterRiskReport data={projectData} analysisItems={analysisItems} controlDetails={controlDetails} executiveSummaryText={executiveSummaryText} preparedBy={preparedByName} createdBy={createdByName} riskTimelineData={riskTimelineForPdf.hasData ? { months: riskTimelineForPdf.months, totalPerMonth: riskTimelineForPdf.totalPerMonth, totalDeriskPerMonth: riskTimelineForPdf.totalDeriskPerMonth || [], todayMonthIndex: riskTimelineForPdf.todayMonthIndex } : undefined} />);
                     
                     // Wait for render + images
                     await new Promise(resolve => setTimeout(resolve, 2000));
