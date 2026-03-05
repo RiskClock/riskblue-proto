@@ -21,6 +21,7 @@ import { WaterSystemsStep } from "@/components/wizard/WaterSystemsStep";
 
 import { ProcessesStep } from "@/components/wizard/ProcessesStep";
 import { RiskTimelineChart3D } from "@/components/wizard/RiskTimelineChart3D";
+import { useRiskTimelineData } from "@/hooks/useRiskTimelineData";
 import { AWPEditModal } from "@/components/wizard/AWPEditModal";
 import { RepositoryConnectionDialog } from "@/components/wizard/RepositoryConnectionDialog";
 import { ProcoreConnectionDialog } from "@/components/wizard/ProcoreConnectionDialog";
@@ -412,6 +413,32 @@ const ProjectWizardContent = () => {
       return result;
     },
     staleTime: 0
+  });
+
+  // Compute risk timeline data for PDF report (Total Risk Points preset)
+  const pdfSelectedInstanceIds = useMemo(() => [
+    ...(projectData.selectedAssetInstances || []),
+    ...(projectData.selectedSystemInstances || []),
+    ...(projectData.selectedProcessInstances || [])
+  ], [projectData.selectedAssetInstances, projectData.selectedSystemInstances, projectData.selectedProcessInstances]);
+
+  const pdfSelectedControlIds = useMemo(() => [
+    ...(projectData.selectedAssetControls || []),
+    ...(projectData.selectedSystemControls || []),
+    ...(projectData.selectedProcessControls || [])
+  ], [projectData.selectedAssetControls, projectData.selectedSystemControls, projectData.selectedProcessControls]);
+
+  const riskTimelineForPdf = useRiskTimelineData({
+    analysisItems,
+    projectData,
+    aspPIValues,
+    startDateFilter: projectData.construction_start_date || '',
+    endDateFilter: projectData.construction_end_date || '',
+    selectedInstanceIds: pdfSelectedInstanceIds,
+    selectedControlIds: pdfSelectedControlIds,
+    controlsData: controlPointsData,
+    dataType: 'risk',
+    costMode: 'monthly',
   });
 
   const projectDurationMonths = useMemo(() => {
