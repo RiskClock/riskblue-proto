@@ -1887,6 +1887,7 @@ const ProjectWizardContent = () => {
                       analysisItems={analysisItems}
                       onBack={() => {}}
                       onNext={() => {}}
+                      riskTimelineData={riskTimelineForPdf.hasData ? { months: riskTimelineForPdf.months, totalPerMonth: riskTimelineForPdf.totalPerMonth, totalDeriskPerMonth: riskTimelineForPdf.totalDeriskPerMonth || [], todayMonthIndex: riskTimelineForPdf.todayMonthIndex } : undefined}
                     />
                   </DialogContent>
                 </Dialog>
