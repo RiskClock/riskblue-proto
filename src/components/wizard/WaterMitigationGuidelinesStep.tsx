@@ -169,6 +169,9 @@ export const WaterMitigationGuidelinesStep = ({ data, analysisItems = [], onBack
       const logoBase64 = await getImageBase64(riskBlueLogo);
       
       try {
+        // Find the cover page element for separate capture
+        const coverEl = reportContainer.querySelector('#cover-page') as HTMLElement | null;
+
         // Generate PDF using jsPDF + html2canvas directly
         await generatePdfFromElement(reportContainer, {
           filename,
@@ -181,6 +184,7 @@ export const WaterMitigationGuidelinesStep = ({ data, analysisItems = [], onBack
           logoBase64,
           skipLogoOnFirstPage: true,
           fullBleedFirstPage: true,
+          coverElement: coverEl || undefined,
         });
 
         toast({
@@ -267,6 +271,8 @@ export const WaterMitigationGuidelinesStep = ({ data, analysisItems = [], onBack
       const logoBase64 = await getImageBase64(riskBlueLogo);
       
       try {
+        const coverEl = reportContainer.querySelector('#cover-page') as HTMLElement | null;
+
         const blob = await generatePdfFromElement(reportContainer, {
           filename,
           margins: { top: 15, right: 15, bottom: 25, left: 15 },
@@ -274,6 +280,7 @@ export const WaterMitigationGuidelinesStep = ({ data, analysisItems = [], onBack
           skipLogoOnFirstPage: true,
           returnBlob: true,
           fullBleedFirstPage: true,
+          coverElement: coverEl || undefined,
         });
 
         if (blob instanceof Blob) {

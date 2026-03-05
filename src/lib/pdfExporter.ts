@@ -16,6 +16,9 @@ interface PdfExportOptions {
   returnBlob?: boolean;
   fullBleedFirstPage?: boolean;
   debugSaveCoverPng?: boolean;
+  debugDrawPageOutline?: boolean;
+  /** If provided, this element is captured separately as a full-bleed cover page (page 1). */
+  coverElement?: HTMLElement;
 }
 
 /**
@@ -26,19 +29,7 @@ export async function generatePdfFromElement(
   element: HTMLElement,
   options: PdfExportOptions
 ): Promise<Blob | void> {
-  const { filename, margins, logoBase64, skipLogoOnFirstPage = true, fullBleedFirstPage = false } = options;
-
-  // Capture the HTML element as a canvas
-  const canvas = await html2canvas(element, {
-    scale: 2,
-    useCORS: true,
-    logging: false,
-    allowTaint: true,
-  });
-
-  const imgData = canvas.toDataURL('image/jpeg', 0.98);
-  const imgWidth = canvas.width;
-  const imgHeight = canvas.height;
+  const { filename, margins, logoBase64, skipLogoOnFirstPage = true, fullBleedFirstPage = false, coverElement } = options;
 
   // Create PDF in A4 format
   const pdf = new jsPDF({
@@ -49,41 +40,90 @@ export async function generatePdfFromElement(
 
   const pageWidth = pdf.internal.pageSize.getWidth();
   const pageHeight = pdf.internal.pageSize.getHeight();
-
-  // Calculate content area dimensions
   const contentWidth = pageWidth - margins.left - margins.right;
   const contentHeight = pageHeight - margins.top - margins.bottom;
 
-  // Calculate scale to fit width
-  const scale = contentWidth / (imgWidth / 2); // Divide by 2 because html2canvas scale is 2
+  let bodyStartPage = 0;
+
+  // ── Page 1: Separate cover capture ──
+  if (coverElement) {
+    const coverCanvas = await html2canvas(coverElement, {
+      scale: 2, useCORS: true, logging: false, allowTaint: true,
+    });
+
+    // Debug: save raw cover PNG
+    if (options.debugSaveCoverPng) {
+      const link = document.createElement('a');
+      link.download = 'debug-cover-page.png';
+      link.href = coverCanvas.toDataURL('image/png');
+      link.click();
+    }
+
+    // Crop-to-fill: scale to cover the full A4 page
+    const coverImgW = coverCanvas.width;
+    const coverImgH = coverCanvas.height;
+    const coverAspect = coverImgW / coverImgH;
+    const pageAspect = pageWidth / pageHeight;
+
+    let drawW: number, drawH: number, drawX: number, drawY: number;
+    if (coverAspect > pageAspect) {
+      // Image wider than page — fit height, crop width
+      drawH = pageHeight;
+      drawW = pageHeight * coverAspect;
+      drawX = -(drawW - pageWidth) / 2;
+      drawY = 0;
+    } else {
+      // Image taller than page — fit width, crop height
+      drawW = pageWidth;
+      drawH = pageWidth / coverAspect;
+      drawX = 0;
+      drawY = -(drawH - pageHeight) / 2;
+    }
+
+    const coverImgData = coverCanvas.toDataURL('image/jpeg', 0.98);
+    pdf.addImage(coverImgData, 'JPEG', drawX, drawY, drawW, drawH);
+
+    // Debug: draw red outline at page edges
+    if (options.debugDrawPageOutline) {
+      pdf.setDrawColor(255, 0, 0);
+      pdf.setLineWidth(0.5);
+      pdf.rect(0, 0, pageWidth, pageHeight);
+    }
+
+    bodyStartPage = 1;
+  }
+
+  // ── Remaining pages: capture the body element ──
+  const canvas = await html2canvas(element, {
+    scale: 2, useCORS: true, logging: false, allowTaint: true,
+  });
+
+  const imgWidth = canvas.width;
+  const imgHeight = canvas.height;
+  const scale = contentWidth / (imgWidth / 2);
   const scaledHeight = (imgHeight / 2) * scale;
 
-  // Calculate how many pages we need
-  // If fullBleedFirstPage, first page uses full page height, rest use contentHeight
-  const firstPageH = fullBleedFirstPage ? pageHeight : contentHeight;
+  // When we have a separate cover, the body element should NOT include the cover.
+  // Calculate pages for the body content only (always with margins).
+  const firstPageH = (!coverElement && fullBleedFirstPage) ? pageHeight : contentHeight;
   const totalPages = scaledHeight <= firstPageH ? 1 : 1 + Math.ceil((scaledHeight - firstPageH) / contentHeight);
 
-  // Add content page by page
   for (let page = 0; page < totalPages; page++) {
-    if (page > 0) {
+    if (page > 0 || bodyStartPage > 0) {
       pdf.addPage();
     }
 
-    // For the first page with fullBleed, use zero margins
-    const isFullBleed = fullBleedFirstPage && page === 0;
+    const isFullBleed = !coverElement && fullBleedFirstPage && page === 0;
     const pageMarginLeft = isFullBleed ? 0 : margins.left;
     const pageMarginTop = isFullBleed ? 0 : margins.top;
     const pageContentWidth = isFullBleed ? pageWidth : contentWidth;
     const pageContentHeight = isFullBleed ? pageHeight : contentHeight;
 
-    // Calculate the portion of the image to show on this page
-    // For page 0 we use its own content height; for subsequent pages we accumulate
     let sourceY: number;
     if (page === 0) {
       sourceY = 0;
     } else {
-      // First page consumed its own content height, subsequent pages use normal contentHeight
-      const firstPageContentH = fullBleedFirstPage ? pageHeight : contentHeight;
+      const firstPageContentH = isFullBleed ? pageHeight : contentHeight;
       sourceY = (firstPageContentH + (page - 1) * contentHeight) / scale * 2;
     }
     const sourceHeight = Math.min(
@@ -93,27 +133,16 @@ export async function generatePdfFromElement(
 
     if (sourceHeight <= 0) break;
 
-    // Create a temporary canvas for this page's content
     const pageCanvas = document.createElement('canvas');
     pageCanvas.width = imgWidth;
     pageCanvas.height = sourceHeight;
     const ctx = pageCanvas.getContext('2d');
     
     if (ctx) {
-      ctx.drawImage(
-        canvas,
-        0,
-        sourceY,
-        imgWidth,
-        sourceHeight,
-        0,
-        0,
-        imgWidth,
-        sourceHeight
-      );
+      ctx.drawImage(canvas, 0, sourceY, imgWidth, sourceHeight, 0, 0, imgWidth, sourceHeight);
 
-      // Debug: save cover page canvas as PNG for diagnostics
-      if (options.debugSaveCoverPng && page === 0) {
+      // Debug: save first body page as PNG (only if no separate cover)
+      if (!coverElement && options.debugSaveCoverPng && page === 0) {
         const link = document.createElement('a');
         link.download = 'debug-cover-page.png';
         link.href = pageCanvas.toDataURL('image/png');
@@ -123,26 +152,13 @@ export async function generatePdfFromElement(
       const pageImgData = pageCanvas.toDataURL('image/jpeg', 0.98);
       const pageImgHeight = (sourceHeight / 2) * scale;
 
-      pdf.addImage(
-        pageImgData,
-        'JPEG',
-        pageMarginLeft,
-        pageMarginTop,
-        pageContentWidth,
-        pageImgHeight
-      );
+      pdf.addImage(pageImgData, 'JPEG', pageMarginLeft, pageMarginTop, pageContentWidth, pageImgHeight);
     }
 
-    // Add logo to footer (skip first page if specified)
-    if (logoBase64 && (!skipLogoOnFirstPage || page > 0)) {
-      pdf.addImage(
-        logoBase64,
-        'PNG',
-        pageWidth - margins.right - 18,
-        pageHeight - 12,
-        18,
-        6
-      );
+    // Add logo to footer (skip cover page)
+    const globalPageIndex = bodyStartPage + page;
+    if (logoBase64 && (!skipLogoOnFirstPage || globalPageIndex > 0)) {
+      pdf.addImage(logoBase64, 'PNG', pageWidth - margins.right - 18, pageHeight - 12, 18, 6);
     }
   }
 
@@ -150,7 +166,6 @@ export async function generatePdfFromElement(
     return pdf.output('blob');
   }
 
-  // Save the PDF
   pdf.save(`${filename}.pdf`);
 }
 
