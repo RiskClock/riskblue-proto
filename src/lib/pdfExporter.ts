@@ -16,6 +16,9 @@ interface PdfExportOptions {
   returnBlob?: boolean;
   fullBleedFirstPage?: boolean;
   debugSaveCoverPng?: boolean;
+  debugDrawPageOutline?: boolean;
+  /** If provided, this element is captured separately as a full-bleed cover page (page 1). */
+  coverElement?: HTMLElement;
 }
 
 /**
