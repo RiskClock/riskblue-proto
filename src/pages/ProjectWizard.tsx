@@ -1819,13 +1819,17 @@ const ProjectWizardContent = () => {
                     const { generatePdfFromElement, getImageBase64 } = await import('@/lib/pdfExporter');
                     const logoBase64 = await getImageBase64(riskBlueLogo);
                     
-                    const blob = await generatePdfFromElement(reportContainer, {
+                    const coverElProcore = reportContainer.querySelector('#cover-page') as HTMLElement | null;
+                    const bodyElProcore = reportContainer.querySelector('#report-body') as HTMLElement || reportContainer;
+                    
+                    const blob = await generatePdfFromElement(bodyElProcore, {
                       filename: generateReportFilename(projectData.name || "unnamed_project", "WaterRiskDiscovery"),
                       margins: { top: 10, right: 10, bottom: 15, left: 10 },
                       logoBase64,
                       skipLogoOnFirstPage: true,
                       returnBlob: true,
                       fullBleedFirstPage: true,
+                      coverElement: coverElProcore || undefined,
                     });
                     
                     reactRoot.unmount();
