@@ -14,6 +14,7 @@ interface PdfExportOptions {
   logoBase64?: string;
   skipLogoOnFirstPage?: boolean;
   returnBlob?: boolean;
+  fullBleedFirstPage?: boolean;
 }
 
 /**
@@ -24,7 +25,7 @@ export async function generatePdfFromElement(
   element: HTMLElement,
   options: PdfExportOptions
 ): Promise<Blob | void> {
-  const { filename, margins, logoBase64, skipLogoOnFirstPage = true } = options;
+  const { filename, margins, logoBase64, skipLogoOnFirstPage = true, fullBleedFirstPage = false } = options;
 
   // Capture the HTML element as a canvas
   const canvas = await html2canvas(element, {
@@ -57,7 +58,9 @@ export async function generatePdfFromElement(
   const scaledHeight = (imgHeight / 2) * scale;
 
   // Calculate how many pages we need
-  const totalPages = Math.ceil(scaledHeight / contentHeight);
+  // If fullBleedFirstPage, first page uses full page height, rest use contentHeight
+  const firstPageH = fullBleedFirstPage ? pageHeight : contentHeight;
+  const totalPages = scaledHeight <= firstPageH ? 1 : 1 + Math.ceil((scaledHeight - firstPageH) / contentHeight);
 
   // Add content page by page
   for (let page = 0; page < totalPages; page++) {
@@ -65,12 +68,29 @@ export async function generatePdfFromElement(
       pdf.addPage();
     }
 
+    // For the first page with fullBleed, use zero margins
+    const isFullBleed = fullBleedFirstPage && page === 0;
+    const pageMarginLeft = isFullBleed ? 0 : margins.left;
+    const pageMarginTop = isFullBleed ? 0 : margins.top;
+    const pageContentWidth = isFullBleed ? pageWidth : contentWidth;
+    const pageContentHeight = isFullBleed ? pageHeight : contentHeight;
+
     // Calculate the portion of the image to show on this page
-    const sourceY = (page * contentHeight) / scale * 2; // Convert back to canvas pixels
+    // For page 0 we use its own content height; for subsequent pages we accumulate
+    let sourceY: number;
+    if (page === 0) {
+      sourceY = 0;
+    } else {
+      // First page consumed its own content height, subsequent pages use normal contentHeight
+      const firstPageContentH = fullBleedFirstPage ? pageHeight : contentHeight;
+      sourceY = (firstPageContentH + (page - 1) * contentHeight) / scale * 2;
+    }
     const sourceHeight = Math.min(
-      (contentHeight / scale) * 2,
+      (pageContentHeight / scale) * 2,
       imgHeight - sourceY
     );
+
+    if (sourceHeight <= 0) break;
 
     // Create a temporary canvas for this page's content
     const pageCanvas = document.createElement('canvas');
@@ -97,20 +117,18 @@ export async function generatePdfFromElement(
       pdf.addImage(
         pageImgData,
         'JPEG',
-        margins.left,
-        margins.top,
-        contentWidth,
+        pageMarginLeft,
+        pageMarginTop,
+        pageContentWidth,
         pageImgHeight
       );
     }
 
     // Add logo to footer (skip first page if specified)
     if (logoBase64 && (!skipLogoOnFirstPage || page > 0)) {
-      // Logo dimensions: 18mm wide x 6mm tall
-      // Position: right-aligned with margin, 8mm from bottom
       pdf.addImage(
         logoBase64,
-        'JPEG',
+        'PNG',
         pageWidth - margins.right - 18,
         pageHeight - 12,
         18,

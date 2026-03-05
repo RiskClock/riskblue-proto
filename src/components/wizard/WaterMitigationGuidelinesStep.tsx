@@ -10,7 +10,7 @@ import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { generatePdfFromElement, getImageBase64, waitForImages, proxyImageToDataUrl } from "@/lib/pdfExporter";
 import { ProcoreExportDialog } from "@/components/wizard/ProcoreExportDialog";
-import riskBlueLogo from "@/assets/riskblue-logo.jpg";
+import riskBlueLogo from "@/assets/logo-riskblue.png";
 import procoreIcon from "@/assets/icon_procore.png";
 
 /** Resolve storage paths and legacy public URLs to data URLs via proxy */
@@ -180,6 +180,7 @@ export const WaterMitigationGuidelinesStep = ({ data, analysisItems = [], onBack
           },
           logoBase64,
           skipLogoOnFirstPage: true,
+          fullBleedFirstPage: true,
         });
 
         toast({
@@ -272,6 +273,7 @@ export const WaterMitigationGuidelinesStep = ({ data, analysisItems = [], onBack
           logoBase64,
           skipLogoOnFirstPage: true,
           returnBlob: true,
+          fullBleedFirstPage: true,
         });
 
         if (blob instanceof Blob) {

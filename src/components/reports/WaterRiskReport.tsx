@@ -7,7 +7,7 @@ import { getDrawingImage } from "@/lib/drawingMapper";
 import { differenceInMonths, format } from "date-fns";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer, ReferenceLine, Legend } from "recharts";
 
-import riskBlueLogo from "@/assets/riskblue-logo.jpg";
+import riskBlueLogo from "@/assets/logo-riskblue.png";
 import coverPageBg from "@/assets/img_coverpage.jpg";
 import residentialImg from "@/assets/type1-residential.avif";
 import mixedUseImg from "@/assets/type2-mixeduse.avif";
@@ -657,28 +657,25 @@ export const WaterRiskReport = ({ data, analysisItems = [], controlDetails = [],
         
         {/* Cover Content */}
         <div style={{ position: 'relative', zIndex: 1, display: 'flex', flexDirection: 'column', height: '100%', padding: '60px 50px' }}>
-          {/* Top: Logo */}
-          <div style={{ textAlign: 'center', marginBottom: '80px' }}>
-            <img src={riskBlueLogo} alt="RiskBlue Logo" style={{ height: '48px', display: 'inline-block' }} />
-          </div>
           
-          {/* Center: Title and Project Info */}
+          {/* Center block: Logo + Title + Project Info */}
           <div style={{ flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'center', textAlign: 'center' }}>
-            <h1 style={{ fontSize: '32px', fontWeight: 'bold', color: 'white', marginBottom: '16px', letterSpacing: '1px' }}>
+            <img src={riskBlueLogo} alt="RiskBlue Logo" style={{ height: '48px', display: 'inline-block', marginBottom: '24px', alignSelf: 'center' }} />
+            <p style={{ fontSize: '28px', fontWeight: '600', color: 'white', marginBottom: '20px', letterSpacing: '1px' }}>
               Water Mitigation Guideline
-            </h1>
-            <p style={{ fontSize: '24px', fontWeight: '600', color: 'white', marginBottom: '8px' }}>
-              {data.name || "Untitled Project"}
             </p>
+            <h1 style={{ fontSize: '40px', fontWeight: 'bold', color: 'white', marginBottom: '12px' }}>
+              {data.name || "Untitled Project"}
+            </h1>
             {(data.city || data.state) && (
-              <p style={{ fontSize: '16px', color: 'rgba(255,255,255,0.85)' }}>
+              <p style={{ fontSize: '28px', fontWeight: '600', color: 'rgba(255,255,255,0.9)' }}>
                 {[data.city, data.state].filter(Boolean).join(', ')}
               </p>
             )}
           </div>
           
-          {/* Bottom: Attribution, Status, Date, Confidential */}
-          <div style={{ color: 'white', fontSize: '12px' }}>
+          {/* Bottom-left: Attribution, Status, Date, Confidential */}
+          <div style={{ color: 'white', fontSize: '16px', lineHeight: '1.6' }}>
             {preparedBy && createdBy && preparedBy.toLowerCase() === createdBy.toLowerCase() ? (
               <p style={{ marginBottom: '4px' }}>Prepared and Created by: {preparedBy}</p>
             ) : (
@@ -688,8 +685,8 @@ export const WaterRiskReport = ({ data, analysisItems = [], controlDetails = [],
               </>
             )}
             <p style={{ marginBottom: '4px' }}>Status: Issued for Review</p>
-            <p style={{ marginBottom: '16px' }}>{formatDate(new Date())}</p>
-            <p style={{ fontSize: '10px', color: 'rgba(255,255,255,0.7)', fontStyle: 'italic' }}>
+            <p style={{ marginBottom: '16px' }}>{format(new Date(), 'MMMM d, yyyy')}</p>
+            <p style={{ fontSize: '13px', color: 'rgba(255,255,255,0.7)', fontStyle: 'italic' }}>
               Confidential. For project stakeholders only.
             </p>
           </div>
@@ -740,34 +737,34 @@ export const WaterRiskReport = ({ data, analysisItems = [], controlDetails = [],
         {riskTimelineData && riskTimelineData.months.length > 0 && (
           <div className="mb-3">
             <p className="text-[10px] font-semibold text-gray-700 mb-1.5">Risk Timeline — Total Risk Points</p>
-            <div className="bg-gray-50 p-2 rounded border border-gray-200" style={{ height: '280px' }}>
-              <ResponsiveContainer width="100%" height="100%">
-                <LineChart
-                  data={riskTimelineData.months.map((month, i) => ({
-                    month: format(new Date(month + '-01'), 'MMM yy'),
-                    'Total Risk': riskTimelineData.totalPerMonth[i] || 0,
-                    'Total Derisk': riskTimelineData.totalDeriskPerMonth[i] || 0,
-                  }))}
-                  margin={{ top: 5, right: 20, left: 10, bottom: 5 }}
-                >
-                  <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
-                  <XAxis dataKey="month" tick={{ fontSize: 8 }} interval="preserveStartEnd" />
-                  <YAxis tick={{ fontSize: 8 }} />
-                  <RechartsTooltip contentStyle={{ fontSize: '10px' }} />
-                  <Legend wrapperStyle={{ fontSize: '9px' }} />
-                  <Line type="stepAfter" dataKey="Total Risk" stroke="#ef4444" strokeWidth={2} dot={false} />
-                  <Line type="stepAfter" dataKey="Total Derisk" stroke="#22c55e" strokeWidth={2} dot={false} />
-                  {riskTimelineData.todayMonthIndex !== null && (
-                    <ReferenceLine
-                      x={format(new Date(riskTimelineData.months[riskTimelineData.todayMonthIndex] + '-01'), 'MMM yy')}
-                      stroke="#000"
-                      strokeWidth={2}
-                      strokeDasharray="4 4"
-                      label={{ value: 'Today', position: 'top', fontSize: 8 }}
-                    />
-                  )}
-                </LineChart>
-              </ResponsiveContainer>
+            <div className="bg-gray-50 p-2 rounded border border-gray-200">
+              <LineChart
+                width={680}
+                height={260}
+                data={riskTimelineData.months.map((month, i) => ({
+                  month: format(new Date(month + '-01'), 'MMM yy'),
+                  'Total Risk': riskTimelineData.totalPerMonth[i] || 0,
+                  'Total Derisk': riskTimelineData.totalDeriskPerMonth[i] || 0,
+                }))}
+                margin={{ top: 5, right: 20, left: 10, bottom: 5 }}
+              >
+                <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+                <XAxis dataKey="month" tick={{ fontSize: 8 }} interval="preserveStartEnd" />
+                <YAxis tick={{ fontSize: 8 }} />
+                <RechartsTooltip contentStyle={{ fontSize: '10px' }} />
+                <Legend wrapperStyle={{ fontSize: '9px' }} />
+                <Line type="stepAfter" dataKey="Total Risk" stroke="#ef4444" strokeWidth={2} dot={false} />
+                <Line type="stepAfter" dataKey="Total Derisk" stroke="#22c55e" strokeWidth={2} dot={false} />
+                {riskTimelineData.todayMonthIndex !== null && (
+                  <ReferenceLine
+                    x={format(new Date(riskTimelineData.months[riskTimelineData.todayMonthIndex] + '-01'), 'MMM yy')}
+                    stroke="#000"
+                    strokeWidth={2}
+                    strokeDasharray="4 4"
+                    label={{ value: 'Today', position: 'top', fontSize: 8 }}
+                  />
+                )}
+              </LineChart>
             </div>
           </div>
         )}
