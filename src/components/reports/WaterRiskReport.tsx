@@ -8,6 +8,7 @@ import { differenceInMonths, format } from "date-fns";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ReferenceLine, Legend } from "recharts";
 
 import riskBlueLogo from "@/assets/logo-riskblue.png";
+import riskBlueLogoWhite from "@/assets/logo-riskblue-white.png";
 import coverPageBg from "@/assets/img_coverpage.jpg";
 import residentialImg from "@/assets/type1-residential.avif";
 import mixedUseImg from "@/assets/type2-mixeduse.avif";
@@ -655,14 +656,14 @@ export const WaterRiskReport = ({ data, analysisItems = [], controlDetails = [],
         {/* Layer 2: Blue Overlay */}
         <div style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', backgroundColor: 'rgba(20, 128, 249, 0.35)', zIndex: 1 }} />
         {/* Layer 3: Black Translucent Inset Panel */}
-        <div style={{ position: 'absolute', inset: '24px', background: 'rgba(0,0,0,0.28)', border: '1px solid rgba(255,255,255,0.10)', boxShadow: '0 0 0 1px rgba(0,0,0,0.15) inset', zIndex: 2 }} />
+        <div style={{ position: 'absolute', inset: '48px', background: 'rgba(0,0,0,0.28)', zIndex: 2 }} />
         
         {/* Layer 4: Content */}
         <div style={{ position: 'relative', zIndex: 3, display: 'flex', flexDirection: 'column', height: '100%', padding: '60px 50px' }}>
           
           {/* Center block: Logo + Title + Project Info */}
           <div style={{ flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'center', textAlign: 'center' }}>
-            <img src={riskBlueLogo} alt="RiskBlue Logo" style={{ height: '48px', display: 'inline-block', marginBottom: '24px', alignSelf: 'center' }} />
+            <img src={riskBlueLogoWhite} alt="RiskBlue Logo" style={{ height: '64px', display: 'inline-block', marginBottom: '24px', alignSelf: 'center' }} />
             <p style={{ fontSize: '28px', fontWeight: '600', color: 'white', marginBottom: '20px', letterSpacing: '1px' }}>
               Water Mitigation Guideline
             </p>
@@ -695,7 +696,7 @@ export const WaterRiskReport = ({ data, analysisItems = [], controlDetails = [],
         </div>
       </div>
 
-      <div className="p-4">
+      <div id="report-body" className="p-4">
       {/* Header with Logo and "Built in RiskBlue" - first page only */}
       <div className="print-header flex justify-between items-start mb-4 pb-2 border-b-2 border-gray-300">
         <div>

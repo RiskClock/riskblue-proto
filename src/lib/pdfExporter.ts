@@ -158,7 +158,7 @@ export async function generatePdfFromElement(
     // Add logo to footer (skip cover page)
     const globalPageIndex = bodyStartPage + page;
     if (logoBase64 && (!skipLogoOnFirstPage || globalPageIndex > 0)) {
-      pdf.addImage(logoBase64, 'PNG', pageWidth - margins.right - 18, pageHeight - 12, 18, 6);
+      pdf.addImage(logoBase64, 'PNG', pageWidth - margins.right - 18, pageHeight - 14, 18, 8.2);
     }
   }
 
