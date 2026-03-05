@@ -1,29 +1,21 @@
 
 
-# Use Full Width for the Raw Result Modal
+# Remove `window.print()` and Replace with Programmatic PDF Export
 
 ## Problem
-The `RawResultModal` is limited to `sm:max-w-5xl` (1024px), leaving large margins on wider screens. Both the drawing preview and AI response text would benefit from more horizontal space.
+In `src/pages/ProjectWizard.tsx` (lines 1705-1728), the "Download as PDF" button on the main project wizard still uses `window.print()` (Chrome print dialog). The Procore export path (lines 1791-1818) already uses the programmatic `generatePdfFromElement` approach correctly.
 
 ## Fix
 
-### File: `src/components/analysis/AnalysisSection.tsx`
+**File: `src/pages/ProjectWizard.tsx` (lines 1705-1728)**
 
-**Single change on line 797**: Widen the dialog from `sm:max-w-5xl` to `sm:max-w-[95vw]` (or `max-w-[1600px]` as a reasonable cap) and increase height slightly.
+Replace the `window.print()` block with the same programmatic approach used by the Procore export path:
+1. Render `WaterRiskReport` off-screen in a container positioned at `left: -9999px` with `width: 210mm`
+2. Wait for render + images
+3. Call `generatePdfFromElement` with `returnBlob: false` (triggers `pdf.save()` download)
+4. Pass `fullBleedFirstPage: true`, `coverElement` from `#cover-page` query, and the logo
+5. Clean up the container afterward
+6. Remove `document.title` manipulation (no longer needed without Chrome print)
 
-```
-// Before
-<DialogContent className="sm:max-w-5xl h-[85vh] flex flex-col p-4 gap-2">
-
-// After
-<DialogContent className="sm:max-w-[95vw] max-w-[1800px] h-[90vh] flex flex-col p-4 gap-2">
-```
-
-This one-line change makes the modal stretch to 95% of the viewport width (capped at 1800px), giving substantially more room to both the drawing viewer and the AI response panel.
-
-## Files Changed
-
-| File | Change |
-|---|---|
-| `src/components/analysis/AnalysisSection.tsx` | Line 797: widen dialog max-width from `5xl` to `95vw` (capped at 1800px), height from 85vh to 90vh |
+This mirrors what `WaterMitigationGuidelinesStep.tsx` already does for its export. No other files need changes.
 
