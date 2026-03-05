@@ -156,6 +156,7 @@ export const WaterMitigationGuidelinesStep = ({ data, analysisItems = [], onBack
           controlDetails={controlDetails}
           preparedBy={preparedByName}
           createdBy={createdByName}
+          riskTimelineData={riskTimelineData}
         />
       );
       
@@ -255,6 +256,7 @@ export const WaterMitigationGuidelinesStep = ({ data, analysisItems = [], onBack
           controlDetails={controlDetails}
           preparedBy={preparedByName}
           createdBy={createdByName}
+          riskTimelineData={riskTimelineData}
         />
       );
       
