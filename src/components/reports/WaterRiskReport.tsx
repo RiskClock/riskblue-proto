@@ -728,7 +728,7 @@ export const WaterRiskReport = ({ data, analysisItems = [], controlDetails = [],
         </div>
       </div>
 
-      <div id="report-body" className="p-4">
+      <div id="report-body" className="p-4 leading-[1.2]">
       {/* Header with Logo and "Built in RiskBlue" - first page only */}
       <div className="print-header flex justify-between items-start mb-4 pb-2 border-b-2 border-gray-300">
         <div>
