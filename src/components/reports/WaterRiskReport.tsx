@@ -763,7 +763,7 @@ export const WaterRiskReport = ({ data, analysisItems = [], controlDetails = [],
                     x={format(new Date(riskTimelineData.months[riskTimelineData.todayMonthIndex] + '-01'), 'MMM yy')}
                     stroke="#000"
                     strokeWidth={2}
-                    strokeDasharray=""
+                    
                     label={{ value: 'Today', position: 'top', fontSize: 8 }}
                   />
                 )}
@@ -776,16 +776,16 @@ export const WaterRiskReport = ({ data, analysisItems = [], controlDetails = [],
         <div className="mb-3">
           <p className="text-[11px] font-semibold text-gray-700 mb-1.5">Identified Risks</p>
           <div className="grid grid-cols-3 gap-2">
-            <div className="bg-gray-50 p-2 rounded border border-gray-200 flex flex-col items-center justify-center text-center">
-              <p className="text-[10px] text-gray-600">Critical Assets</p>
+            <div className="bg-gray-50 p-2 rounded border border-gray-200 flex flex-col items-center justify-center text-center min-h-[60px]">
+              <p className="text-[11px] text-gray-600">Critical Assets</p>
               <p className="text-xl font-bold text-gray-900">{totalAssets}</p>
             </div>
-            <div className="bg-gray-50 p-2 rounded border border-gray-200 flex flex-col items-center justify-center text-center">
-              <p className="text-[10px] text-gray-600">Water Systems</p>
+            <div className="bg-gray-50 p-2 rounded border border-gray-200 flex flex-col items-center justify-center text-center min-h-[60px]">
+              <p className="text-[11px] text-gray-600">Water Systems</p>
               <p className="text-xl font-bold text-gray-900">{totalSystems}</p>
             </div>
-            <div className="bg-gray-50 p-2 rounded border border-gray-200 flex flex-col items-center justify-center text-center">
-              <p className="text-[10px] text-gray-600">Processes</p>
+            <div className="bg-gray-50 p-2 rounded border border-gray-200 flex flex-col items-center justify-center text-center min-h-[60px]">
+              <p className="text-[11px] text-gray-600">Processes</p>
               <p className="text-xl font-bold text-gray-900">{totalProcesses}</p>
             </div>
           </div>
@@ -793,10 +793,10 @@ export const WaterRiskReport = ({ data, analysisItems = [], controlDetails = [],
         
         {/* Mitigation Measures Section */}
         <div>
-          <p className="text-[10px] font-semibold text-gray-700 mb-1.5">Mitigation Measures</p>
+          <p className="text-[11px] font-semibold text-gray-700 mb-1.5">Mitigation Measures</p>
           <div className="grid grid-cols-1 gap-2">
-            <div className="bg-gray-50 p-2 rounded border border-gray-200 flex flex-col items-center justify-center text-center">
-              <p className="text-[10px] text-gray-600">Controls to be Implemented</p>
+            <div className="bg-gray-50 p-2 rounded border border-gray-200 flex flex-col items-center justify-center text-center min-h-[60px]">
+              <p className="text-[11px] text-gray-600">Controls to be Implemented</p>
               <p className="text-xl font-bold text-gray-900">{totalControls}</p>
             </div>
           </div>
@@ -809,20 +809,20 @@ export const WaterRiskReport = ({ data, analysisItems = [], controlDetails = [],
         <div className="grid grid-cols-2 gap-3 mb-3">
           <div className="space-y-1.5">
             <div>
-              <p className="text-[10px] font-semibold text-gray-600">Project Name</p>
-              <p className="text-[11px] text-gray-900">{data.name || "—"}</p>
+              <p className="text-[11px] font-semibold text-gray-600">Project Name</p>
+              <p className="text-[12px] text-gray-900">{data.name || "—"}</p>
             </div>
             <div>
-              <p className="text-[10px] font-semibold text-gray-600">Address</p>
-              <p className="text-[11px] text-gray-900">{data.address_1 || data.address || "—"}</p>
-              <p className="text-[11px] text-gray-900">
+              <p className="text-[11px] font-semibold text-gray-600">Address</p>
+              <p className="text-[12px] text-gray-900">{data.address_1 || data.address || "—"}</p>
+              <p className="text-[12px] text-gray-900">
                 {[data.city, data.state, data.zip_code].filter(Boolean).join(', ') || "—"}
               </p>
-              {data.country && <p className="text-[11px] text-gray-900">{data.country}</p>}
+              {data.country && <p className="text-[12px] text-gray-900">{data.country}</p>}
             </div>
             <div>
-              <p className="text-[10px] font-semibold text-gray-600">Builder's Risk Policy</p>
-              <p className="text-[11px] text-gray-900 capitalize">{data.has_builders_risk_policy ? "Yes" : "No"}</p>
+              <p className="text-[11px] font-semibold text-gray-600">Builder's Risk Policy</p>
+              <p className="text-[12px] text-gray-900 capitalize">{data.has_builders_risk_policy ? "Yes" : "No"}</p>
             </div>
           </div>
           <div className="space-y-1.5">
@@ -834,10 +834,10 @@ export const WaterRiskReport = ({ data, analysisItems = [], controlDetails = [],
                   <img 
                     src={constructionTypeConfig[data.project_type].image} 
                     alt={constructionTypeConfig[data.project_type].label}
-                    className="object-contain rounded border border-gray-200 bg-white"
-                    style={{ width: '24px', height: '24px', display: 'inline-block' }}
+                    className="object-contain rounded border border-gray-200 bg-white flex-shrink-0"
+                    style={{ width: '24px', height: '24px', display: 'inline-block', verticalAlign: 'middle' }}
                   />
-                  <p className="text-[11px] text-gray-900">{constructionTypeConfig[data.project_type].label}</p>
+                  <p className="text-[12px] text-gray-900">{constructionTypeConfig[data.project_type].label}</p>
                 </div>
               </div>
             )}
@@ -850,10 +850,10 @@ export const WaterRiskReport = ({ data, analysisItems = [], controlDetails = [],
                   <img 
                     src={buildingTypeConfig[data.building_type].image} 
                     alt={buildingTypeConfig[data.building_type].label}
-                    className="object-contain rounded border border-gray-200 bg-white"
-                    style={{ width: '24px', height: '24px', display: 'inline-block' }}
+                    className="object-contain rounded border border-gray-200 bg-white flex-shrink-0"
+                    style={{ width: '24px', height: '24px', display: 'inline-block', verticalAlign: 'middle' }}
                   />
-                  <p className="text-[11px] text-gray-900">{buildingTypeConfig[data.building_type].label}</p>
+                  <p className="text-[12px] text-gray-900">{buildingTypeConfig[data.building_type].label}</p>
                 </div>
               </div>
             )}
@@ -866,10 +866,10 @@ export const WaterRiskReport = ({ data, analysisItems = [], controlDetails = [],
                   <img 
                     src={towerTypeConfig[data.tower_type].image} 
                     alt={towerTypeConfig[data.tower_type].label}
-                    className="object-contain rounded border border-gray-200 bg-white"
-                    style={{ width: '24px', height: '24px', display: 'inline-block' }}
+                    className="object-contain rounded border border-gray-200 bg-white flex-shrink-0"
+                    style={{ width: '24px', height: '24px', display: 'inline-block', verticalAlign: 'middle' }}
                   />
-                  <p className="text-[11px] text-gray-900">{towerTypeConfig[data.tower_type].label}</p>
+                  <p className="text-[12px] text-gray-900">{towerTypeConfig[data.tower_type].label}</p>
                 </div>
               </div>
             )}
@@ -889,8 +889,8 @@ export const WaterRiskReport = ({ data, analysisItems = [], controlDetails = [],
                     <img 
                       src={config.image} 
                       alt={config.label}
-                      className="object-contain"
-                      style={{ width: '20px', height: '20px', display: 'inline-block' }}
+                      className="object-contain flex-shrink-0"
+                      style={{ width: '20px', height: '20px', display: 'inline-block', verticalAlign: 'middle' }}
                     />
                     <span className="text-[11px] text-gray-900">{config.label}</span>
                   </div>
@@ -1038,7 +1038,7 @@ export const WaterRiskReport = ({ data, analysisItems = [], controlDetails = [],
       )}
 
       {/* Footer */}
-      <footer className="mt-6 pt-3 border-t-2 border-gray-300 text-center text-[10px] text-gray-600">
+      <footer className="mt-6 pt-3 border-t-2 border-gray-300 text-center text-[11px] text-gray-600">
         <p className="font-semibold">RiskBlue Water Risk Management Solutions</p>
         <p>This report is confidential and prepared exclusively for {data.name || "the specified project"}</p>
         <p>Generated: {formatDate(new Date())}</p>
