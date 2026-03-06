@@ -596,7 +596,7 @@ export const WaterRiskReport = ({ data, analysisItems = [], controlDetails = [],
                               />
                             </div>
                           ) : (
-                            <div className="mt-2 p-2 border-2 border-dashed border-gray-300 rounded bg-gray-50 flex flex-col items-center justify-center h-16">
+                            <div className="mt-2 p-2 border-2 border-dashed border-gray-300 rounded bg-gray-50 flex flex-col items-center justify-center h-16 text-center">
                               <p className="text-xs text-gray-400">No drawing available</p>
                             </div>
                           );
@@ -757,13 +757,13 @@ export const WaterRiskReport = ({ data, analysisItems = [], controlDetails = [],
                 <RechartsTooltip contentStyle={{ fontSize: '10px' }} />
                 <Legend wrapperStyle={{ fontSize: '9px' }} />
                 <Line type="stepAfter" dataKey="Total Risk" stroke="#ef4444" strokeWidth={2} dot={false} />
-                <Line type="stepAfter" dataKey="Total Derisk" stroke="#22c55e" strokeWidth={2} dot={false} />
+                <Line type="stepAfter" dataKey="Total Derisk" stroke="#22c55e" strokeWidth={2} dot={false} strokeDasharray="6 4" />
                 {riskTimelineData.todayMonthIndex !== null && (
                   <ReferenceLine
                     x={format(new Date(riskTimelineData.months[riskTimelineData.todayMonthIndex] + '-01'), 'MMM yy')}
                     stroke="#000"
                     strokeWidth={2}
-                    strokeDasharray="4 4"
+                    strokeDasharray=""
                     label={{ value: 'Today', position: 'top', fontSize: 8 }}
                   />
                 )}
