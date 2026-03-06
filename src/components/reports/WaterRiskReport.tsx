@@ -478,18 +478,18 @@ export const WaterRiskReport = ({ data, analysisItems = [], controlDetails = [],
             const durationInfo = getDurationInfo(group.name, category);
             return (
               <div key={index} className="bg-gray-50 p-2 rounded border border-gray-200 print-keep-together">
-                <div className="flex justify-between items-start mb-1">
-                  <div>
-                    <h3 className="font-bold text-[13px] text-gray-900">{group.name}</h3>
-                    {durationInfo && (
-                      <p className="text-[11px] text-gray-600 mt-0.5">
-                        {durationInfo.startDate} – {durationInfo.endDate} ({durationInfo.duration})
-                      </p>
-                    )}
+                <div className="mb-1">
+                  <div className="flex justify-between items-center">
+                    <h3 className="font-bold text-[13px] text-gray-900 leading-none">{group.name}</h3>
+                    <span className={`px-1.5 py-0.5 rounded text-[10px] font-semibold ${badgeColor} inline-flex items-center leading-none${index === 0 ? ' debug-marker debug-marker-badge' : ''}`}>
+                      {group.locations.length} {group.locations.length === 1 ? 'Location' : 'Locations'}
+                    </span>
                   </div>
-                  <span className={`px-1.5 py-0.5 rounded text-[10px] font-semibold ${badgeColor} inline-flex items-center mt-[2px]${index === 0 ? ' debug-marker debug-marker-badge' : ''}`}>
-                    {group.locations.length} {group.locations.length === 1 ? 'Location' : 'Locations'}
-                  </span>
+                  {durationInfo && (
+                    <p className="text-[11px] text-gray-600 mt-1 leading-none">
+                      {durationInfo.startDate} – {durationInfo.endDate} ({durationInfo.duration})
+                    </p>
+                  )}
                 </div>
                 
                 {/* Location list - inline with details right-aligned */}
@@ -501,7 +501,9 @@ export const WaterRiskReport = ({ data, analysisItems = [], controlDetails = [],
                     return (
                       <div key={i} className="text-[11px] text-gray-700 flex justify-between items-center">
                         <div className="flex items-center">
-                          <div className={`w-0.5 h-3 ${barBg} mr-2 flex-shrink-0 mt-[2px]${isFirstDebugTarget ? ' debug-marker debug-marker-bar' : ''}`} />
+                          <div className="w-2 h-[16px] flex items-center justify-center mr-1">
+                            <div className={`w-0.5 h-3 ${barBg} flex-shrink-0${isFirstDebugTarget ? ' debug-marker debug-marker-bar' : ''}`} />
+                          </div>
                           <div className="flex gap-1 items-center">
                             <span className={`text-gray-500 font-medium${isFirstDebugTarget ? ' debug-marker debug-marker-label' : ''}`}>{location.id}:</span>
                             <span>{location.areaName || location.name}</span>
@@ -575,18 +577,18 @@ export const WaterRiskReport = ({ data, analysisItems = [], controlDetails = [],
             const durationInfo = getDurationInfo(group.name, category);
             return (
               <div key={index} className="bg-gray-50 p-2 rounded border border-gray-200 print-keep-together">
-                <div className="flex justify-between items-start mb-1">
-                  <div>
-                    <h4 className="font-bold text-[13px] text-gray-900">{group.name}</h4>
-                    {durationInfo && (
-                      <p className="text-[11px] text-gray-600 mt-0.5">
-                        {durationInfo.startDate} – {durationInfo.endDate} ({durationInfo.duration})
-                      </p>
-                    )}
+                <div className="mb-1">
+                  <div className="flex justify-between items-center">
+                    <h4 className="font-bold text-[13px] text-gray-900 leading-none">{group.name}</h4>
+                    <span className={`px-1.5 py-0.5 rounded text-[10px] font-semibold ${badgeColor} inline-flex items-center leading-none`}>
+                      {group.locations.length} {group.locations.length === 1 ? 'Location' : 'Locations'}
+                    </span>
                   </div>
-                  <span className={`px-1.5 py-0.5 rounded text-[10px] font-semibold ${badgeColor} inline-flex items-center mt-[2px]`}>
-                    {group.locations.length} {group.locations.length === 1 ? 'Location' : 'Locations'}
-                  </span>
+                  {durationInfo && (
+                    <p className="text-[11px] text-gray-600 mt-1 leading-none">
+                      {durationInfo.startDate} – {durationInfo.endDate} ({durationInfo.duration})
+                    </p>
+                  )}
                 </div>
                 
                 {/* Location list WITH drawings */}
@@ -596,7 +598,9 @@ export const WaterRiskReport = ({ data, analysisItems = [], controlDetails = [],
                     const barBg = borderToBgMap[borderColor] || "bg-gray-300";
                     return (
                       <div key={i} className="text-[11px] text-gray-700 flex">
-                        <div className={`w-0.5 ${barBg} flex-shrink-0 self-stretch mr-2`} />
+                        <div className="w-2 flex-shrink-0 flex justify-center">
+                          <div className={`w-0.5 ${barBg} mt-[2px] mb-[2px]`} />
+                        </div>
                         <div className="flex-1">
                           <div className="flex justify-between items-center">
                             <div className="flex gap-1 items-center">
