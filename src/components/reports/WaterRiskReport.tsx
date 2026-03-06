@@ -472,7 +472,7 @@ export const WaterRiskReport = ({ data, analysisItems = [], controlDetails = [],
     
     return (
       <section className="mb-4">
-        <h2 className="text-base font-bold text-gray-900 mb-2 border-b border-gray-300 pb-1">{title}</h2>
+        <h2 className="text-base font-bold text-gray-900 mb-1.5 border-b border-gray-300 pb-1.5">{title}</h2>
         <div className="space-y-3">
           {groups.map((group, index) => {
             const durationInfo = getDurationInfo(group.name, category);
