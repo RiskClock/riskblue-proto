@@ -1726,7 +1726,7 @@ const ProjectWizardContent = () => {
                     const bodyEl = reportContainer.querySelector('#report-body') as HTMLElement || reportContainer;
                     
                     await generatePdfFromElement(bodyEl, {
-                      filename: generateReportFilename(projectData.name || "unnamed_project", "WaterRiskDiscovery"),
+                      filename: generateReportFilename(projectData.name || "unnamed_project", "Water Mitigation Guideline"),
                       margins: { top: 10, right: 10, bottom: 15, left: 10 },
                       logoBase64,
                       skipLogoOnFirstPage: true,
@@ -1823,7 +1823,7 @@ const ProjectWizardContent = () => {
                     const bodyElProcore = reportContainer.querySelector('#report-body') as HTMLElement || reportContainer;
                     
                     const blob = await generatePdfFromElement(bodyElProcore, {
-                      filename: generateReportFilename(projectData.name || "unnamed_project", "WaterRiskDiscovery"),
+                      filename: generateReportFilename(projectData.name || "unnamed_project", "Water Mitigation Guideline"),
                       margins: { top: 10, right: 10, bottom: 15, left: 10 },
                       logoBase64,
                       skipLogoOnFirstPage: true,
@@ -1852,7 +1852,7 @@ const ProjectWizardContent = () => {
                 isOpen={showProcoreExportMain}
                 onClose={() => { setShowProcoreExportMain(false); setPdfBlobForProcoreMain(null); }}
                 pdfBlob={pdfBlobForProcoreMain}
-                fileName={generateReportFilename(projectData.name || "unnamed_project", "WaterRiskDiscovery") + ".pdf"}
+                fileName={generateReportFilename(projectData.name || "unnamed_project", "Water Mitigation Guideline") + ".pdf"}
               />
               
               <div className="flex items-center gap-4">
