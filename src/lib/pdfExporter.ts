@@ -215,7 +215,7 @@ export async function proxyImageToDataUrl(bucket: string, path: string): Promise
 /**
  * Converts an image source to base64 string.
  */
-export function getImageBase64(imgSrc: string): Promise<string> {
+export function getImageBase64(imgSrc: string, format: 'png' | 'jpeg' = 'png'): Promise<string> {
   return new Promise((resolve) => {
     const img = new Image();
     img.crossOrigin = 'anonymous';
@@ -225,7 +225,9 @@ export function getImageBase64(imgSrc: string): Promise<string> {
       canvas.height = img.naturalHeight || img.height;
       const ctx = canvas.getContext('2d');
       ctx?.drawImage(img, 0, 0);
-      const base64 = canvas.toDataURL('image/jpeg', 0.92);
+      const base64 = format === 'png'
+        ? canvas.toDataURL('image/png')
+        : canvas.toDataURL('image/jpeg', 0.92);
       resolve(base64);
     };
     img.onerror = () => {
