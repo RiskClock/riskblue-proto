@@ -466,16 +466,16 @@ export const WaterRiskReport = ({ data, analysisItems = [], controlDetails = [],
             const durationInfo = getDurationInfo(group.name, category);
             return (
               <div key={index} className="bg-gray-50 p-2 rounded border border-gray-200 print-keep-together">
-                <div className="flex justify-between items-start mb-1">
+                <div className="flex justify-between items-center mb-1">
                   <div>
                     <h3 className="font-bold text-[13px] text-gray-900">{group.name}</h3>
                     {durationInfo && (
-                      <p className="text-[10px] text-gray-600 mt-0.5">
+                      <p className="text-[11px] text-gray-600 mt-0.5">
                         {durationInfo.startDate} – {durationInfo.endDate} ({durationInfo.duration})
                       </p>
                     )}
                   </div>
-                  <span className={`px-1.5 py-0.5 rounded text-[9px] font-semibold ${badgeColor}`}>
+                  <span className={`px-1.5 py-0.5 rounded text-[10px] font-semibold ${badgeColor} flex items-center`}>
                     {group.locations.length} {group.locations.length === 1 ? 'Location' : 'Locations'}
                   </span>
                 </div>
@@ -486,12 +486,12 @@ export const WaterRiskReport = ({ data, analysisItems = [], controlDetails = [],
                     const details = renderLocationDetails(location);
                     return (
                       <div key={i} className={`text-[11px] text-gray-700 border-l-2 ${borderColor} pl-2 flex justify-between items-center`}>
-                        <div className="flex gap-1 items-baseline">
+                        <div className="flex gap-1 items-center">
                           <span className="text-gray-500 font-medium">{location.id}:</span>
                           <span>{location.areaName || location.name}</span>
                         </div>
                         {details.length > 0 && (
-                          <span className="text-[9px] text-gray-500 ml-2">{details.join('  •  ')}</span>
+                          <span className="text-[10px] text-gray-500 ml-2">{details.join('  •  ')}</span>
                         )}
                       </div>
                     );
@@ -501,8 +501,8 @@ export const WaterRiskReport = ({ data, analysisItems = [], controlDetails = [],
                 {/* Common Controls */}
                 {group.commonControls.length > 0 && (
                   <div className="mt-2 pt-1.5 border-t border-gray-200">
-                    <p className="text-[10px] font-semibold text-gray-700 mb-0.5">Controls:</p>
-                    <ul className="list-disc list-inside text-[10px] text-gray-700 space-y-0">
+                    <p className="text-[11px] font-semibold text-gray-700 mb-0.5">Controls:</p>
+                    <ul className="list-disc list-outside ml-4 text-[11px] text-gray-700 space-y-0">
                       {group.commonControls.map((control, i) => (
                         <li key={i}>{control}</li>
                       ))}
@@ -513,11 +513,11 @@ export const WaterRiskReport = ({ data, analysisItems = [], controlDetails = [],
                 {/* Location-specific controls (if different from common) */}
                 {group.locationsWithDifferentControls.length > 0 && group.locationsWithDifferentControls.some(i => i.controls.length > 0) && (
                   <div className="mt-1.5 pt-1.5 border-t border-gray-200">
-                    <p className="text-[10px] font-semibold text-gray-700 mb-0.5">Location-Specific Controls:</p>
+                    <p className="text-[11px] font-semibold text-gray-700 mb-0.5">Location-Specific Controls:</p>
                     {group.locationsWithDifferentControls.filter(i => i.controls.length > 0).map(({ location, controls }, i) => (
                       <div key={i} className="ml-2 mb-1">
-                        <p className="text-[10px] text-gray-600 font-medium">{location.id}:</p>
-                        <ul className="list-disc list-inside text-[10px] text-gray-700 ml-1">
+                        <p className="text-[11px] text-gray-600 font-medium">{location.id}:</p>
+                        <ul className="list-disc list-outside ml-4 text-[11px] text-gray-700">
                           {controls.map((control, j) => (
                             <li key={j}>{control}</li>
                           ))}
@@ -552,16 +552,16 @@ export const WaterRiskReport = ({ data, analysisItems = [], controlDetails = [],
             const durationInfo = getDurationInfo(group.name, category);
             return (
               <div key={index} className="bg-gray-50 p-2 rounded border border-gray-200 print-keep-together">
-                <div className="flex justify-between items-start mb-1">
+                <div className="flex justify-between items-center mb-1">
                   <div>
                     <h4 className="font-bold text-[13px] text-gray-900">{group.name}</h4>
                     {durationInfo && (
-                      <p className="text-[10px] text-gray-600 mt-0.5">
+                      <p className="text-[11px] text-gray-600 mt-0.5">
                         {durationInfo.startDate} – {durationInfo.endDate} ({durationInfo.duration})
                       </p>
                     )}
                   </div>
-                  <span className={`px-1.5 py-0.5 rounded text-[9px] font-semibold ${badgeColor}`}>
+                  <span className={`px-1.5 py-0.5 rounded text-[10px] font-semibold ${badgeColor} flex items-center`}>
                     {group.locations.length} {group.locations.length === 1 ? 'Location' : 'Locations'}
                   </span>
                 </div>
@@ -573,12 +573,12 @@ export const WaterRiskReport = ({ data, analysisItems = [], controlDetails = [],
                     return (
                       <div key={i} className={`text-[11px] text-gray-700 border-l-2 ${borderColor} pl-2`}>
                         <div className="flex justify-between items-center">
-                          <div className="flex gap-1 items-baseline">
+                          <div className="flex gap-1 items-center">
                             <span className="text-gray-500 font-medium">{location.id}:</span>
                             <span>{location.areaName || location.name}</span>
                           </div>
                           {details.length > 0 && (
-                            <span className="text-[9px] text-gray-500 ml-2">{details.join('  •  ')}</span>
+                            <span className="text-[10px] text-gray-500 ml-2">{details.join('  •  ')}</span>
                           )}
                         </div>
                         {/* Drawing image or placeholder */}
@@ -609,8 +609,8 @@ export const WaterRiskReport = ({ data, analysisItems = [], controlDetails = [],
                 {/* Common Controls */}
                 {group.commonControls.length > 0 && (
                   <div className="mt-2 pt-1.5 border-t border-gray-200">
-                    <p className="text-[10px] font-semibold text-gray-700 mb-0.5">Controls:</p>
-                    <ul className="list-disc list-inside text-[10px] text-gray-700 space-y-0">
+                    <p className="text-[11px] font-semibold text-gray-700 mb-0.5">Controls:</p>
+                    <ul className="list-disc list-outside ml-4 text-[11px] text-gray-700 space-y-0">
                       {group.commonControls.map((control, i) => (
                         <li key={i}>{control}</li>
                       ))}
@@ -621,11 +621,11 @@ export const WaterRiskReport = ({ data, analysisItems = [], controlDetails = [],
                 {/* Location-specific controls */}
                 {group.locationsWithDifferentControls.length > 0 && group.locationsWithDifferentControls.some(i => i.controls.length > 0) && (
                   <div className="mt-1.5 pt-1.5 border-t border-gray-200">
-                    <p className="text-[10px] font-semibold text-gray-700 mb-0.5">Location-Specific Controls:</p>
+                    <p className="text-[11px] font-semibold text-gray-700 mb-0.5">Location-Specific Controls:</p>
                     {group.locationsWithDifferentControls.filter(i => i.controls.length > 0).map(({ location, controls }, i) => (
                       <div key={i} className="ml-2 mb-1">
-                        <p className="text-[10px] text-gray-600 font-medium">{location.id}:</p>
-                        <ul className="list-disc list-inside text-[10px] text-gray-700 ml-1">
+                        <p className="text-[11px] text-gray-600 font-medium">{location.id}:</p>
+                        <ul className="list-disc list-outside ml-4 text-[11px] text-gray-700">
                           {controls.map((control, j) => (
                             <li key={j}>{control}</li>
                           ))}
