@@ -487,7 +487,7 @@ export const WaterRiskReport = ({ data, analysisItems = [], controlDetails = [],
                       </p>
                     )}
                   </div>
-                  <span className={`px-1.5 py-0.5 rounded text-[10px] font-semibold ${badgeColor} flex items-center`}>
+                  <span className={`px-1.5 py-0.5 rounded text-[10px] font-semibold ${badgeColor} flex items-center${index === 0 ? ' debug-marker debug-marker-badge' : ''}`}>
                     {group.locations.length} {group.locations.length === 1 ? 'Location' : 'Locations'}
                   </span>
                 </div>
@@ -497,12 +497,13 @@ export const WaterRiskReport = ({ data, analysisItems = [], controlDetails = [],
                   {group.locations.map((location, i) => {
                     const details = renderLocationDetails(location);
                     const barBg = borderToBgMap[borderColor] || "bg-gray-300";
+                    const isFirstDebugTarget = index === 0 && i === 0;
                     return (
                       <div key={i} className="text-[11px] text-gray-700 flex">
-                        <div className={`w-0.5 ${barBg} flex-shrink-0 self-stretch mr-2`} />
+                        <div className={`w-0.5 ${barBg} flex-shrink-0 self-stretch mr-2${isFirstDebugTarget ? ' debug-marker debug-marker-bar' : ''}`} />
                         <div className="flex-1 flex justify-between items-start">
                           <div className="flex gap-1 items-start">
-                            <span className="text-gray-500 font-medium">{location.id}:</span>
+                            <span className={`text-gray-500 font-medium${isFirstDebugTarget ? ' debug-marker debug-marker-label' : ''}`}>{location.id}:</span>
                             <span>{location.areaName || location.name}</span>
                           </div>
                           {details.length > 0 && (
@@ -728,7 +729,7 @@ export const WaterRiskReport = ({ data, analysisItems = [], controlDetails = [],
         </div>
       </div>
 
-      <div id="report-body" className="p-4 leading-[1.2]">
+      <div id="report-body" className="p-4">
       {/* Header with Logo and "Built in RiskBlue" - first page only */}
       <div className="print-header flex justify-between items-start mb-4 pb-2 border-b-2 border-gray-300">
         <div>

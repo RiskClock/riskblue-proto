@@ -165,6 +165,88 @@ export const WaterMitigationGuidelinesStep = ({ data, analysisItems = [], onBack
       await new Promise(requestAnimationFrame);
       await waitForImages(reportContainer);
 
+      // Debug offset instrumentation (gated behind ?debugPdf=1)
+      const isDebugMode = new URLSearchParams(window.location.search).has('debugPdf');
+      if (isDebugMode) {
+        try {
+          const { default: html2canvas } = await import('html2canvas');
+          const bodyEl = reportContainer.querySelector('#report-body') as HTMLElement;
+          if (bodyEl) {
+            const containerRect = bodyEl.getBoundingClientRect();
+            const markers = bodyEl.querySelectorAll('.debug-marker');
+            
+            // Stage A: Collect DOM rects
+            const domMetrics: Array<{ class: string; top: number; left: number; width: number; height: number }> = [];
+            markers.forEach(el => {
+              const rect = el.getBoundingClientRect();
+              domMetrics.push({
+                class: el.className,
+                top: rect.top - containerRect.top,
+                left: rect.left - containerRect.left,
+                width: rect.width,
+                height: rect.height,
+              });
+            });
+            
+            // Stage B: Capture canvas and sample pixels
+            const debugCanvas = await html2canvas(bodyEl, { scale: 2, useCORS: true, allowTaint: true });
+            const ctx = debugCanvas.getContext('2d');
+            const SCAN_RADIUS = 5; // scan ±5 pixels around expected position
+            
+            const canvasSamples: Array<{ class: string; expectedX: number; expectedY: number; pixelGrid: string[][] }> = [];
+            if (ctx) {
+              domMetrics.forEach(metric => {
+                const cx = Math.round(metric.left * 2 + metric.width);
+                const cy = Math.round(metric.top * 2 + metric.height);
+                const grid: string[][] = [];
+                for (let dy = -SCAN_RADIUS; dy <= SCAN_RADIUS; dy++) {
+                  const row: string[] = [];
+                  for (let dx = -SCAN_RADIUS; dx <= SCAN_RADIUS; dx++) {
+                    const px = cx + dx;
+                    const py = cy + dy;
+                    if (px >= 0 && py >= 0 && px < debugCanvas.width && py < debugCanvas.height) {
+                      const d = ctx.getImageData(px, py, 1, 1).data;
+                      row.push(`rgba(${d[0]},${d[1]},${d[2]},${d[3]})`);
+                    } else {
+                      row.push('OOB');
+                    }
+                  }
+                  grid.push(row);
+                }
+                canvasSamples.push({
+                  class: metric.class,
+                  expectedX: cx,
+                  expectedY: cy,
+                  pixelGrid: grid,
+                });
+              });
+            }
+            
+            const debugReport = {
+              timestamp: new Date().toISOString(),
+              containerSize: { width: containerRect.width, height: containerRect.height },
+              canvasSize: { width: debugCanvas.width, height: debugCanvas.height },
+              scale: 2,
+              scanRadius: SCAN_RADIUS,
+              domMetrics,
+              canvasSamples,
+            };
+            
+            // Download as JSON
+            const blob = new Blob([JSON.stringify(debugReport, null, 2)], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'debug-offset-report.json';
+            a.click();
+            URL.revokeObjectURL(url);
+            console.log('[PDF Debug] Offset report downloaded', debugReport);
+          }
+        } catch (debugErr) {
+          console.error('[PDF Debug] Instrumentation failed:', debugErr);
+        }
+      }
+
       // Get the logo as base64 for footer
       const logoBase64 = await getImageBase64(riskBlueLogo);
       
