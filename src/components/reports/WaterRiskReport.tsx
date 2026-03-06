@@ -902,8 +902,8 @@ export const WaterRiskReport = ({ data, analysisItems = [], controlDetails = [],
 
         {/* Building Details */}
         <div className="bg-gray-50 p-2 rounded border border-gray-200">
-          <p className="text-[10px] font-semibold text-gray-700 mb-1.5">Building Details</p>
-          <div className="grid grid-cols-3 gap-2 text-[10px]">
+          <p className="text-[11px] font-semibold text-gray-700 mb-1.5">Building Details</p>
+          <div className="grid grid-cols-3 gap-2 text-[11px]">
             {data.total_floors && (
               <div>
                 <span className="text-gray-600">Total Floors:</span>
@@ -952,8 +952,8 @@ export const WaterRiskReport = ({ data, analysisItems = [], controlDetails = [],
               return (
                 <div key={index} className="flex justify-between items-center py-1 border-b border-gray-200">
                   <div>
-                    <p className="font-semibold text-[11px] text-gray-900">{phase.name}</p>
-                    <p className="text-[10px] text-gray-600">{phase.description}</p>
+                    <p className="font-semibold text-[12px] text-gray-900">{phase.name}</p>
+                    <p className="text-[11px] text-gray-600">{phase.description}</p>
                   </div>
                   <div className="text-right text-[11px] text-gray-700 whitespace-nowrap">
                     {phase.date ? (
@@ -1018,14 +1018,14 @@ export const WaterRiskReport = ({ data, analysisItems = [], controlDetails = [],
                         <h3 className="font-bold text-[12px] text-gray-900 mb-1">{control.name}</h3>
                         {control.description && (
                           <div className="mb-1">
-                            <span className="text-[9px] font-semibold text-gray-600">Description: </span>
-                            <span className="text-[10px] text-gray-700">{control.description}</span>
+                            <span className="text-[10px] font-semibold text-gray-600">Description: </span>
+                            <span className="text-[11px] text-gray-700">{control.description}</span>
                           </div>
                         )}
                         {control.action && (
                           <div>
-                            <span className="text-[9px] font-semibold text-gray-600">Action: </span>
-                            <span className="text-[10px] text-gray-700">{control.action}</span>
+                            <span className="text-[10px] font-semibold text-gray-600">Action: </span>
+                            <span className="text-[11px] text-gray-700">{control.action}</span>
                           </div>
                         )}
                       </div>
