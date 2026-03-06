@@ -487,7 +487,7 @@ export const WaterRiskReport = ({ data, analysisItems = [], controlDetails = [],
                       </p>
                     )}
                   </div>
-                  <span className={`px-1.5 py-0.5 rounded text-[10px] font-semibold ${badgeColor} flex items-center relative top-[1px]${index === 0 ? ' debug-marker debug-marker-badge' : ''}`}>
+                  <span className={`px-1.5 py-0.5 rounded text-[10px] font-semibold ${badgeColor} flex items-center relative top-[2px]${index === 0 ? ' debug-marker debug-marker-badge' : ''}`}>
                     {group.locations.length} {group.locations.length === 1 ? 'Location' : 'Locations'}
                   </span>
                 </div>
@@ -501,7 +501,7 @@ export const WaterRiskReport = ({ data, analysisItems = [], controlDetails = [],
                     return (
                       <div key={i} className="text-[11px] text-gray-700 flex justify-between items-center">
                         <div className="flex items-center">
-                          <div className={`w-0.5 h-3 ${barBg} mr-2 flex-shrink-0${isFirstDebugTarget ? ' debug-marker debug-marker-bar' : ''}`} />
+                          <div className={`w-0.5 h-3 ${barBg} mr-2 flex-shrink-0 relative top-[2px]${isFirstDebugTarget ? ' debug-marker debug-marker-bar' : ''}`} />
                           <div className="flex gap-1 items-center">
                             <span className={`text-gray-500 font-medium${isFirstDebugTarget ? ' debug-marker debug-marker-label' : ''}`}>{location.id}:</span>
                             <span>{location.areaName || location.name}</span>
@@ -584,7 +584,7 @@ export const WaterRiskReport = ({ data, analysisItems = [], controlDetails = [],
                       </p>
                     )}
                   </div>
-                  <span className={`px-1.5 py-0.5 rounded text-[10px] font-semibold ${badgeColor} flex items-center relative top-[1px]`}>
+                  <span className={`px-1.5 py-0.5 rounded text-[10px] font-semibold ${badgeColor} flex items-center relative top-[2px]`}>
                     {group.locations.length} {group.locations.length === 1 ? 'Location' : 'Locations'}
                   </span>
                 </div>
@@ -809,17 +809,17 @@ export const WaterRiskReport = ({ data, analysisItems = [], controlDetails = [],
         <div className="mb-3">
           <p className="text-[11px] font-semibold text-gray-700 mb-1.5">Identified Risks</p>
           <div className="grid grid-cols-3 gap-2">
-            <div className="bg-gray-50 px-2 py-3 rounded border border-gray-200 flex flex-col items-center justify-center text-center gap-1">
-              <p className="text-[11px] text-gray-600 leading-tight">Critical Assets</p>
-              <p className="text-xl font-bold text-gray-900 leading-none">{totalAssets}</p>
+            <div className="bg-gray-50 px-2 py-3 rounded border border-gray-200 flex flex-col items-center justify-center text-center gap-0.5">
+              <p className="text-[11px] text-gray-600 leading-none">Critical Assets</p>
+              <p className="text-xl font-bold text-gray-900 leading-none pt-0.5">{totalAssets}</p>
             </div>
-            <div className="bg-gray-50 px-2 py-3 rounded border border-gray-200 flex flex-col items-center justify-center text-center gap-1">
-              <p className="text-[11px] text-gray-600 leading-tight">Water Systems</p>
-              <p className="text-xl font-bold text-gray-900 leading-none">{totalSystems}</p>
+            <div className="bg-gray-50 px-2 py-3 rounded border border-gray-200 flex flex-col items-center justify-center text-center gap-0.5">
+              <p className="text-[11px] text-gray-600 leading-none">Water Systems</p>
+              <p className="text-xl font-bold text-gray-900 leading-none pt-0.5">{totalSystems}</p>
             </div>
-            <div className="bg-gray-50 px-2 py-3 rounded border border-gray-200 flex flex-col items-center justify-center text-center gap-1">
-              <p className="text-[11px] text-gray-600 leading-tight">Processes</p>
-              <p className="text-xl font-bold text-gray-900 leading-none">{totalProcesses}</p>
+            <div className="bg-gray-50 px-2 py-3 rounded border border-gray-200 flex flex-col items-center justify-center text-center gap-0.5">
+              <p className="text-[11px] text-gray-600 leading-none">Processes</p>
+              <p className="text-xl font-bold text-gray-900 leading-none pt-0.5">{totalProcesses}</p>
             </div>
           </div>
         </div>
@@ -828,9 +828,9 @@ export const WaterRiskReport = ({ data, analysisItems = [], controlDetails = [],
         <div>
           <p className="text-[11px] font-semibold text-gray-700 mb-1.5">Mitigation Measures</p>
           <div className="grid grid-cols-1 gap-2">
-            <div className="bg-gray-50 px-2 py-3 rounded border border-gray-200 flex flex-col items-center justify-center text-center gap-1">
-              <p className="text-[11px] text-gray-600 leading-tight">Controls to be Implemented</p>
-              <p className="text-xl font-bold text-gray-900 leading-none">{totalControls}</p>
+            <div className="bg-gray-50 px-2 py-3 rounded border border-gray-200 flex flex-col items-center justify-center text-center gap-0.5">
+              <p className="text-[11px] text-gray-600 leading-none">Controls to be Implemented</p>
+              <p className="text-xl font-bold text-gray-900 leading-none pt-0.5">{totalControls}</p>
             </div>
           </div>
         </div>
@@ -868,7 +868,7 @@ export const WaterRiskReport = ({ data, analysisItems = [], controlDetails = [],
                     src={constructionTypeConfig[data.project_type].image} 
                     alt={constructionTypeConfig[data.project_type].label}
                     className="object-contain rounded border border-gray-200 bg-white flex-shrink-0"
-                    style={{ width: '24px', height: '24px', display: 'inline-block', position: 'relative', top: '1px' }}
+                    style={{ width: '24px', height: '24px', display: 'inline-block', position: 'relative', top: '2px' }}
                   />
                   <p className="text-[12px] text-gray-900">{constructionTypeConfig[data.project_type].label}</p>
                 </div>
@@ -884,7 +884,7 @@ export const WaterRiskReport = ({ data, analysisItems = [], controlDetails = [],
                     src={buildingTypeConfig[data.building_type].image} 
                     alt={buildingTypeConfig[data.building_type].label}
                     className="object-contain rounded border border-gray-200 bg-white flex-shrink-0"
-                    style={{ width: '24px', height: '24px', display: 'inline-block', position: 'relative', top: '1px' }}
+                    style={{ width: '24px', height: '24px', display: 'inline-block', position: 'relative', top: '2px' }}
                   />
                   <p className="text-[12px] text-gray-900">{buildingTypeConfig[data.building_type].label}</p>
                 </div>
@@ -900,7 +900,7 @@ export const WaterRiskReport = ({ data, analysisItems = [], controlDetails = [],
                     src={towerTypeConfig[data.tower_type].image} 
                     alt={towerTypeConfig[data.tower_type].label}
                     className="object-contain rounded border border-gray-200 bg-white flex-shrink-0"
-                    style={{ width: '24px', height: '24px', display: 'inline-block', position: 'relative', top: '1px' }}
+                    style={{ width: '24px', height: '24px', display: 'inline-block', position: 'relative', top: '2px' }}
                   />
                   <p className="text-[12px] text-gray-900">{towerTypeConfig[data.tower_type].label}</p>
                 </div>
@@ -923,7 +923,7 @@ export const WaterRiskReport = ({ data, analysisItems = [], controlDetails = [],
                       src={config.image} 
                       alt={config.label}
                       className="object-contain flex-shrink-0"
-                      style={{ width: '20px', height: '20px', display: 'inline-block', position: 'relative', top: '1px' }}
+                      style={{ width: '20px', height: '20px', display: 'inline-block', position: 'relative', top: '2px' }}
                     />
                     <span className="text-[11px] text-gray-900">{config.label}</span>
                   </div>
