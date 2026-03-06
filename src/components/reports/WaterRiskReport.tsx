@@ -501,8 +501,8 @@ export const WaterRiskReport = ({ data, analysisItems = [], controlDetails = [],
                     return (
                       <div key={i} className="text-[11px] text-gray-700 flex">
                         <div className={`w-0.5 ${barBg} flex-shrink-0 self-stretch mr-2${isFirstDebugTarget ? ' debug-marker debug-marker-bar' : ''}`} />
-                        <div className="flex-1 flex justify-between items-start">
-                          <div className="flex gap-1 items-start">
+                        <div className="flex-1 flex justify-between items-center">
+                          <div className="flex gap-1 items-center">
                             <span className={`text-gray-500 font-medium${isFirstDebugTarget ? ' debug-marker debug-marker-label' : ''}`}>{location.id}:</span>
                             <span>{location.areaName || location.name}</span>
                           </div>
@@ -598,8 +598,8 @@ export const WaterRiskReport = ({ data, analysisItems = [], controlDetails = [],
                       <div key={i} className="text-[11px] text-gray-700 flex">
                         <div className={`w-0.5 ${barBg} flex-shrink-0 self-stretch mr-2`} />
                         <div className="flex-1">
-                          <div className="flex justify-between items-start">
-                            <div className="flex gap-1 items-start">
+                          <div className="flex justify-between items-center">
+                            <div className="flex gap-1 items-center">
                               <span className="text-gray-500 font-medium">{location.id}:</span>
                               <span>{location.areaName || location.name}</span>
                             </div>
@@ -863,7 +863,7 @@ export const WaterRiskReport = ({ data, analysisItems = [], controlDetails = [],
             {data.project_type && constructionTypeConfig[data.project_type] && (
               <div>
                 <p className="text-[11px] font-semibold text-gray-600">Construction Type</p>
-                <div className="flex items-start gap-1.5">
+                <div className="flex items-center gap-1.5">
                   <img 
                     src={constructionTypeConfig[data.project_type].image} 
                     alt={constructionTypeConfig[data.project_type].label}
@@ -879,7 +879,7 @@ export const WaterRiskReport = ({ data, analysisItems = [], controlDetails = [],
             {data.building_type && buildingTypeConfig[data.building_type] && (
               <div>
                 <p className="text-[11px] font-semibold text-gray-600">Building Type</p>
-                <div className="flex items-start gap-1.5">
+                <div className="flex items-center gap-1.5">
                   <img 
                     src={buildingTypeConfig[data.building_type].image} 
                     alt={buildingTypeConfig[data.building_type].label}
@@ -895,7 +895,7 @@ export const WaterRiskReport = ({ data, analysisItems = [], controlDetails = [],
             {data.tower_type && towerTypeConfig[data.tower_type] && (
               <div>
                 <p className="text-[11px] font-semibold text-gray-600">Tower Configuration</p>
-                <div className="flex items-start gap-1.5">
+                <div className="flex items-center gap-1.5">
                   <img 
                     src={towerTypeConfig[data.tower_type].image} 
                     alt={towerTypeConfig[data.tower_type].label}
@@ -918,7 +918,7 @@ export const WaterRiskReport = ({ data, analysisItems = [], controlDetails = [],
                 const config = structuralTypeConfig[typeId];
                 if (!config) return null;
                 return (
-                  <div key={typeId} className="flex items-start gap-1.5 bg-gray-50 px-2 py-1 rounded border border-gray-200">
+                  <div key={typeId} className="flex items-center gap-1.5 bg-gray-50 px-2 py-1 rounded border border-gray-200">
                     <img 
                       src={config.image} 
                       alt={config.label}
