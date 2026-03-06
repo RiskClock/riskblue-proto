@@ -151,6 +151,21 @@ export async function generatePdfFromElement(
 
   const totalPages = pageBreaks.length;
 
+  // Pre-calculate logo dimensions from natural aspect ratio
+  let logoW = 18;
+  const logoH = 8.2;
+  if (logoBase64) {
+    const dims = await new Promise<{ w: number; h: number }>((resolve) => {
+      const img = new Image();
+      img.onload = () => resolve({ w: img.naturalWidth, h: img.naturalHeight });
+      img.onerror = () => resolve({ w: 18, h: 8.2 });
+      img.src = logoBase64;
+    });
+    if (dims.h > 0) {
+      logoW = logoH * (dims.w / dims.h);
+    }
+  }
+
   for (let page = 0; page < totalPages; page++) {
     if (page > 0 || bodyStartPage > 0) {
       pdf.addPage();
@@ -195,7 +210,7 @@ export async function generatePdfFromElement(
     // Add logo to footer (skip cover page)
     const globalPageIndex = bodyStartPage + page;
     if (logoBase64 && (!skipLogoOnFirstPage || globalPageIndex > 0)) {
-      pdf.addImage(logoBase64, 'PNG', pageWidth - margins.right - 18, pageHeight - 14, 18, 8.2);
+      pdf.addImage(logoBase64, 'PNG', pageWidth - margins.right - logoW, pageHeight - 14, logoW, logoH);
     }
   }
 
