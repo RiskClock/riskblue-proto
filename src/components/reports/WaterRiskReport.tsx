@@ -499,17 +499,17 @@ export const WaterRiskReport = ({ data, analysisItems = [], controlDetails = [],
                     const barBg = borderToBgMap[borderColor] || "bg-gray-300";
                     const isFirstDebugTarget = index === 0 && i === 0;
                     return (
-                      <div key={i} className="text-[11px] text-gray-700 flex">
-                        <div className={`w-0.5 ${barBg} flex-shrink-0 self-stretch mr-2${isFirstDebugTarget ? ' debug-marker debug-marker-bar' : ''}`} />
-                        <div className="flex-1 flex justify-between items-center">
+                      <div key={i} className="text-[11px] text-gray-700 flex justify-between items-center">
+                        <div className="flex items-center">
+                          <div className={`w-0.5 h-4 ${barBg} mr-2 flex-shrink-0${isFirstDebugTarget ? ' debug-marker debug-marker-bar' : ''}`} />
                           <div className="flex gap-1 items-center">
                             <span className={`text-gray-500 font-medium${isFirstDebugTarget ? ' debug-marker debug-marker-label' : ''}`}>{location.id}:</span>
                             <span>{location.areaName || location.name}</span>
                           </div>
-                          {details.length > 0 && (
-                            <span className="text-[10px] text-gray-500 ml-2">{details.join('  •  ')}</span>
-                          )}
                         </div>
+                        {details.length > 0 && (
+                          <span className="text-[10px] text-gray-500 ml-2">{details.join('  •  ')}</span>
+                        )}
                       </div>
                     );
                   })}
