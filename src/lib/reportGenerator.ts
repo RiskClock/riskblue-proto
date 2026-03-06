@@ -27,7 +27,7 @@ export const formatDate = (date: string | Date | null | undefined): string => {
   try {
     const dateObj = parseLocalDate(date);
     if (!isValid(dateObj)) return "—";
-    return format(dateObj, "MMM dd, yyyy");
+    return format(dateObj, "MMM d, yyyy");
   } catch {
     return "—";
   }
@@ -38,7 +38,7 @@ export const formatDateShort = (date: string | Date | null | undefined): string 
   try {
     const dateObj = parseLocalDate(date);
     if (!isValid(dateObj)) return "—";
-    return format(dateObj, "M/dd/yy");
+    return format(dateObj, "M/d/yy");
   } catch {
     return "—";
   }
@@ -49,11 +49,11 @@ export const formatRiskLevel = (level: string | undefined): string => {
   return level.charAt(0).toUpperCase() + level.slice(1);
 };
 
-export const generateReportFilename = (projectName: string, reportType: string = "WaterMitigationGuideline"): string => {
+export const generateReportFilename = (projectName: string, reportType: string = "Water Mitigation Guideline"): string => {
   const cleanName = projectName || "Unnamed Project";
-  const exportDate = format(new Date(), "yyyy-MM-dd");
-  const exportTime = format(new Date(), "HH-mm-ss");
-  return `RiskBlue ${reportType} ${cleanName} ${exportDate} ${exportTime}`;
+  const now = new Date();
+  const exportDateTime = format(now, "yyyy-MM-dd_HH-mm-ss");
+  return `RiskBlue ${reportType} ${cleanName} ${exportDateTime}`;
 };
 
 export const calculateTotalCost = (selectedItems: any[], costField: string = 'cost'): number => {

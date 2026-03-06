@@ -466,16 +466,16 @@ export const WaterRiskReport = ({ data, analysisItems = [], controlDetails = [],
             const durationInfo = getDurationInfo(group.name, category);
             return (
               <div key={index} className="bg-gray-50 p-2 rounded border border-gray-200 print-keep-together">
-                <div className="flex justify-between items-start mb-1">
+                <div className="flex justify-between items-center mb-1">
                   <div>
-                    <h3 className="font-bold text-[12px] text-gray-900">{group.name}</h3>
+                    <h3 className="font-bold text-[13px] text-gray-900">{group.name}</h3>
                     {durationInfo && (
-                      <p className="text-[10px] text-gray-600 mt-0.5">
+                      <p className="text-[11px] text-gray-600 mt-0.5">
                         {durationInfo.startDate} – {durationInfo.endDate} ({durationInfo.duration})
                       </p>
                     )}
                   </div>
-                  <span className={`px-1.5 py-0.5 rounded text-[9px] font-semibold ${badgeColor}`}>
+                  <span className={`px-1.5 py-0.5 rounded text-[10px] font-semibold ${badgeColor} flex items-center`}>
                     {group.locations.length} {group.locations.length === 1 ? 'Location' : 'Locations'}
                   </span>
                 </div>
@@ -485,13 +485,13 @@ export const WaterRiskReport = ({ data, analysisItems = [], controlDetails = [],
                   {group.locations.map((location, i) => {
                     const details = renderLocationDetails(location);
                     return (
-                      <div key={i} className={`text-[10px] text-gray-700 border-l-2 ${borderColor} pl-2 flex justify-between items-baseline`}>
-                        <div className="flex gap-1 items-baseline">
+                      <div key={i} className={`text-[11px] text-gray-700 border-l-2 ${borderColor} pl-2 flex justify-between items-center`}>
+                        <div className="flex gap-1 items-center">
                           <span className="text-gray-500 font-medium">{location.id}:</span>
                           <span>{location.areaName || location.name}</span>
                         </div>
                         {details.length > 0 && (
-                          <span className="text-[9px] text-gray-500 ml-2">{details.join('  •  ')}</span>
+                          <span className="text-[10px] text-gray-500 ml-2">{details.join('  •  ')}</span>
                         )}
                       </div>
                     );
@@ -501,8 +501,8 @@ export const WaterRiskReport = ({ data, analysisItems = [], controlDetails = [],
                 {/* Common Controls */}
                 {group.commonControls.length > 0 && (
                   <div className="mt-2 pt-1.5 border-t border-gray-200">
-                    <p className="text-[10px] font-semibold text-gray-700 mb-0.5">Controls:</p>
-                    <ul className="list-disc list-inside text-[10px] text-gray-700 space-y-0">
+                    <p className="text-[11px] font-semibold text-gray-700 mb-0.5">Controls:</p>
+                    <ul className="list-disc list-outside ml-4 text-[11px] text-gray-700 space-y-0">
                       {group.commonControls.map((control, i) => (
                         <li key={i}>{control}</li>
                       ))}
@@ -513,11 +513,11 @@ export const WaterRiskReport = ({ data, analysisItems = [], controlDetails = [],
                 {/* Location-specific controls (if different from common) */}
                 {group.locationsWithDifferentControls.length > 0 && group.locationsWithDifferentControls.some(i => i.controls.length > 0) && (
                   <div className="mt-1.5 pt-1.5 border-t border-gray-200">
-                    <p className="text-[10px] font-semibold text-gray-700 mb-0.5">Location-Specific Controls:</p>
+                    <p className="text-[11px] font-semibold text-gray-700 mb-0.5">Location-Specific Controls:</p>
                     {group.locationsWithDifferentControls.filter(i => i.controls.length > 0).map(({ location, controls }, i) => (
                       <div key={i} className="ml-2 mb-1">
-                        <p className="text-[10px] text-gray-600 font-medium">{location.id}:</p>
-                        <ul className="list-disc list-inside text-[10px] text-gray-700 ml-1">
+                        <p className="text-[11px] text-gray-600 font-medium">{location.id}:</p>
+                        <ul className="list-disc list-outside ml-4 text-[11px] text-gray-700">
                           {controls.map((control, j) => (
                             <li key={j}>{control}</li>
                           ))}
@@ -552,16 +552,16 @@ export const WaterRiskReport = ({ data, analysisItems = [], controlDetails = [],
             const durationInfo = getDurationInfo(group.name, category);
             return (
               <div key={index} className="bg-gray-50 p-2 rounded border border-gray-200 print-keep-together">
-                <div className="flex justify-between items-start mb-1">
+                <div className="flex justify-between items-center mb-1">
                   <div>
-                    <h4 className="font-bold text-[12px] text-gray-900">{group.name}</h4>
+                    <h4 className="font-bold text-[13px] text-gray-900">{group.name}</h4>
                     {durationInfo && (
-                      <p className="text-[10px] text-gray-600 mt-0.5">
+                      <p className="text-[11px] text-gray-600 mt-0.5">
                         {durationInfo.startDate} – {durationInfo.endDate} ({durationInfo.duration})
                       </p>
                     )}
                   </div>
-                  <span className={`px-1.5 py-0.5 rounded text-[9px] font-semibold ${badgeColor}`}>
+                  <span className={`px-1.5 py-0.5 rounded text-[10px] font-semibold ${badgeColor} flex items-center`}>
                     {group.locations.length} {group.locations.length === 1 ? 'Location' : 'Locations'}
                   </span>
                 </div>
@@ -571,14 +571,14 @@ export const WaterRiskReport = ({ data, analysisItems = [], controlDetails = [],
                   {group.locations.map((location, i) => {
                     const details = renderLocationDetails(location, true);
                     return (
-                      <div key={i} className={`text-[10px] text-gray-700 border-l-2 ${borderColor} pl-2`}>
-                        <div className="flex justify-between items-baseline">
-                          <div className="flex gap-1 items-baseline">
+                      <div key={i} className={`text-[11px] text-gray-700 border-l-2 ${borderColor} pl-2`}>
+                        <div className="flex justify-between items-center">
+                          <div className="flex gap-1 items-center">
                             <span className="text-gray-500 font-medium">{location.id}:</span>
                             <span>{location.areaName || location.name}</span>
                           </div>
                           {details.length > 0 && (
-                            <span className="text-[9px] text-gray-500 ml-2">{details.join('  •  ')}</span>
+                            <span className="text-[10px] text-gray-500 ml-2">{details.join('  •  ')}</span>
                           )}
                         </div>
                         {/* Drawing image or placeholder */}
@@ -596,7 +596,7 @@ export const WaterRiskReport = ({ data, analysisItems = [], controlDetails = [],
                               />
                             </div>
                           ) : (
-                            <div className="mt-2 p-2 border-2 border-dashed border-gray-300 rounded bg-gray-50 flex flex-col items-center justify-center h-16">
+                            <div className="mt-2 p-2 border-2 border-dashed border-gray-300 rounded bg-gray-50 flex flex-col items-center justify-center h-16 text-center">
                               <p className="text-xs text-gray-400">No drawing available</p>
                             </div>
                           );
@@ -609,8 +609,8 @@ export const WaterRiskReport = ({ data, analysisItems = [], controlDetails = [],
                 {/* Common Controls */}
                 {group.commonControls.length > 0 && (
                   <div className="mt-2 pt-1.5 border-t border-gray-200">
-                    <p className="text-[10px] font-semibold text-gray-700 mb-0.5">Controls:</p>
-                    <ul className="list-disc list-inside text-[10px] text-gray-700 space-y-0">
+                    <p className="text-[11px] font-semibold text-gray-700 mb-0.5">Controls:</p>
+                    <ul className="list-disc list-outside ml-4 text-[11px] text-gray-700 space-y-0">
                       {group.commonControls.map((control, i) => (
                         <li key={i}>{control}</li>
                       ))}
@@ -621,11 +621,11 @@ export const WaterRiskReport = ({ data, analysisItems = [], controlDetails = [],
                 {/* Location-specific controls */}
                 {group.locationsWithDifferentControls.length > 0 && group.locationsWithDifferentControls.some(i => i.controls.length > 0) && (
                   <div className="mt-1.5 pt-1.5 border-t border-gray-200">
-                    <p className="text-[10px] font-semibold text-gray-700 mb-0.5">Location-Specific Controls:</p>
+                    <p className="text-[11px] font-semibold text-gray-700 mb-0.5">Location-Specific Controls:</p>
                     {group.locationsWithDifferentControls.filter(i => i.controls.length > 0).map(({ location, controls }, i) => (
                       <div key={i} className="ml-2 mb-1">
-                        <p className="text-[10px] text-gray-600 font-medium">{location.id}:</p>
-                        <ul className="list-disc list-inside text-[10px] text-gray-700 ml-1">
+                        <p className="text-[11px] text-gray-600 font-medium">{location.id}:</p>
+                        <ul className="list-disc list-outside ml-4 text-[11px] text-gray-700">
                           {controls.map((control, j) => (
                             <li key={j}>{control}</li>
                           ))}
@@ -643,7 +643,7 @@ export const WaterRiskReport = ({ data, analysisItems = [], controlDetails = [],
   };
 
   return (
-    <div className="print-report bg-white text-black max-w-[210mm] mx-auto text-[11px] relative">
+    <div className="print-report bg-white text-black max-w-[210mm] mx-auto text-[12px] relative" style={{ fontFamily: 'Inter, system-ui, sans-serif' }}>
       
       {/* Cover Page */}
       <div id="cover-page" style={{ width: '210mm', height: '297mm', position: 'relative', overflow: 'hidden', margin: 0, padding: 0, pageBreakAfter: 'always' }}>
@@ -659,7 +659,7 @@ export const WaterRiskReport = ({ data, analysisItems = [], controlDetails = [],
         <div style={{ position: 'absolute', inset: '48px', background: 'rgba(0,0,0,0.28)', zIndex: 2 }} />
         
         {/* Layer 4: Content */}
-        <div style={{ position: 'relative', zIndex: 3, display: 'flex', flexDirection: 'column', height: '100%', padding: '60px 50px' }}>
+        <div style={{ position: 'relative', zIndex: 3, display: 'flex', flexDirection: 'column', height: '100%', padding: '60px 50px 100px 100px' }}>
           
           {/* Center block: Logo + Title + Project Info */}
           <div style={{ flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'center', textAlign: 'center' }}>
@@ -702,18 +702,18 @@ export const WaterRiskReport = ({ data, analysisItems = [], controlDetails = [],
         <div>
           <h1 className="text-xl font-bold text-gray-900 mb-1">Water Mitigation Guideline</h1>
           {preparedBy && createdBy && preparedBy.toLowerCase() === createdBy.toLowerCase() ? (
-            <p className="text-[10px] text-gray-600">Prepared and Created by: {preparedBy}</p>
+            <p className="text-[11px] text-gray-600">Prepared and Created by: {preparedBy}</p>
           ) : (
             <>
               {preparedBy && (
-                <p className="text-[10px] text-gray-600">Prepared by: {preparedBy}</p>
+                <p className="text-[11px] text-gray-600">Prepared by: {preparedBy}</p>
               )}
               {createdBy && (
-                <p className="text-[10px] text-gray-600">Created by: {createdBy}</p>
+                <p className="text-[11px] text-gray-600">Created by: {createdBy}</p>
               )}
             </>
           )}
-          <p className="text-[10px] text-gray-600">Generated: {formatDate(new Date())}</p>
+          <p className="text-[11px] text-gray-600">Generated: {formatDate(new Date())}</p>
         </div>
         <div className="flex items-center gap-2">
           <span className="text-sm text-gray-500">Built in</span>
@@ -727,7 +727,7 @@ export const WaterRiskReport = ({ data, analysisItems = [], controlDetails = [],
         
         {/* AI-Generated Summary Paragraphs */}
         {executiveSummaryText && (
-          <div className="mb-3 text-[11px] text-gray-800 leading-relaxed">
+          <div className="mb-3 text-[12px] text-gray-800 leading-relaxed">
             {executiveSummaryText.split('\n\n').map((paragraph, index) => (
               <p key={index} className={index > 0 ? "mt-2" : ""}>
                 {paragraph}
@@ -739,7 +739,7 @@ export const WaterRiskReport = ({ data, analysisItems = [], controlDetails = [],
         {/* Risk Timeline Chart */}
         {riskTimelineData && riskTimelineData.months.length > 0 && (
           <div className="mb-3">
-            <p className="text-[10px] font-semibold text-gray-700 mb-1.5">Risk Timeline — Total Risk Points</p>
+            <p className="text-[11px] font-semibold text-gray-700 mb-1.5">Risk Timeline</p>
             <div className="bg-gray-50 p-2 rounded border border-gray-200">
               <LineChart
                 width={680}
@@ -749,21 +749,21 @@ export const WaterRiskReport = ({ data, analysisItems = [], controlDetails = [],
                   'Total Risk': riskTimelineData.totalPerMonth[i] || 0,
                   'Total Derisk': riskTimelineData.totalDeriskPerMonth[i] || 0,
                 }))}
-                margin={{ top: 5, right: 20, left: 10, bottom: 5 }}
+                margin={{ top: 10, right: 5, left: 5, bottom: 5 }}
               >
                 <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
                 <XAxis dataKey="month" tick={{ fontSize: 8 }} interval="preserveStartEnd" />
-                <YAxis tick={{ fontSize: 8 }} />
+                <YAxis tick={{ fontSize: 8 }} label={{ value: 'Risk Points', angle: -90, position: 'insideLeft', fontSize: 9 }} />
                 <RechartsTooltip contentStyle={{ fontSize: '10px' }} />
                 <Legend wrapperStyle={{ fontSize: '9px' }} />
                 <Line type="stepAfter" dataKey="Total Risk" stroke="#ef4444" strokeWidth={2} dot={false} />
-                <Line type="stepAfter" dataKey="Total Derisk" stroke="#22c55e" strokeWidth={2} dot={false} />
+                <Line type="stepAfter" dataKey="Total Derisk" stroke="#22c55e" strokeWidth={2} dot={false} strokeDasharray="6 4" />
                 {riskTimelineData.todayMonthIndex !== null && (
                   <ReferenceLine
                     x={format(new Date(riskTimelineData.months[riskTimelineData.todayMonthIndex] + '-01'), 'MMM yy')}
                     stroke="#000"
                     strokeWidth={2}
-                    strokeDasharray="4 4"
+                    
                     label={{ value: 'Today', position: 'top', fontSize: 8 }}
                   />
                 )}
@@ -774,18 +774,18 @@ export const WaterRiskReport = ({ data, analysisItems = [], controlDetails = [],
         
         {/* Risks Section */}
         <div className="mb-3">
-          <p className="text-[10px] font-semibold text-gray-700 mb-1.5">Identified Risks</p>
+          <p className="text-[11px] font-semibold text-gray-700 mb-1.5">Identified Risks</p>
           <div className="grid grid-cols-3 gap-2">
-            <div className="bg-gray-50 p-2 rounded border border-gray-200 flex flex-col items-center justify-center text-center">
-              <p className="text-[10px] text-gray-600">Critical Assets</p>
+            <div className="bg-gray-50 p-2 rounded border border-gray-200 flex flex-col items-center justify-center text-center min-h-[60px]">
+              <p className="text-[11px] text-gray-600">Critical Assets</p>
               <p className="text-xl font-bold text-gray-900">{totalAssets}</p>
             </div>
-            <div className="bg-gray-50 p-2 rounded border border-gray-200 flex flex-col items-center justify-center text-center">
-              <p className="text-[10px] text-gray-600">Water Systems</p>
+            <div className="bg-gray-50 p-2 rounded border border-gray-200 flex flex-col items-center justify-center text-center min-h-[60px]">
+              <p className="text-[11px] text-gray-600">Water Systems</p>
               <p className="text-xl font-bold text-gray-900">{totalSystems}</p>
             </div>
-            <div className="bg-gray-50 p-2 rounded border border-gray-200 flex flex-col items-center justify-center text-center">
-              <p className="text-[10px] text-gray-600">Processes</p>
+            <div className="bg-gray-50 p-2 rounded border border-gray-200 flex flex-col items-center justify-center text-center min-h-[60px]">
+              <p className="text-[11px] text-gray-600">Processes</p>
               <p className="text-xl font-bold text-gray-900">{totalProcesses}</p>
             </div>
           </div>
@@ -793,10 +793,10 @@ export const WaterRiskReport = ({ data, analysisItems = [], controlDetails = [],
         
         {/* Mitigation Measures Section */}
         <div>
-          <p className="text-[10px] font-semibold text-gray-700 mb-1.5">Mitigation Measures</p>
+          <p className="text-[11px] font-semibold text-gray-700 mb-1.5">Mitigation Measures</p>
           <div className="grid grid-cols-1 gap-2">
-            <div className="bg-gray-50 p-2 rounded border border-gray-200 flex flex-col items-center justify-center text-center">
-              <p className="text-[10px] text-gray-600">Controls to be Implemented</p>
+            <div className="bg-gray-50 p-2 rounded border border-gray-200 flex flex-col items-center justify-center text-center min-h-[60px]">
+              <p className="text-[11px] text-gray-600">Controls to be Implemented</p>
               <p className="text-xl font-bold text-gray-900">{totalControls}</p>
             </div>
           </div>
@@ -809,35 +809,35 @@ export const WaterRiskReport = ({ data, analysisItems = [], controlDetails = [],
         <div className="grid grid-cols-2 gap-3 mb-3">
           <div className="space-y-1.5">
             <div>
-              <p className="text-[10px] font-semibold text-gray-600">Project Name</p>
-              <p className="text-[11px] text-gray-900">{data.name || "—"}</p>
+              <p className="text-[11px] font-semibold text-gray-600">Project Name</p>
+              <p className="text-[12px] text-gray-900">{data.name || "—"}</p>
             </div>
             <div>
-              <p className="text-[10px] font-semibold text-gray-600">Address</p>
-              <p className="text-[11px] text-gray-900">{data.address_1 || data.address || "—"}</p>
-              <p className="text-[11px] text-gray-900">
+              <p className="text-[11px] font-semibold text-gray-600">Address</p>
+              <p className="text-[12px] text-gray-900">{data.address_1 || data.address || "—"}</p>
+              <p className="text-[12px] text-gray-900">
                 {[data.city, data.state, data.zip_code].filter(Boolean).join(', ') || "—"}
               </p>
-              {data.country && <p className="text-[11px] text-gray-900">{data.country}</p>}
+              {data.country && <p className="text-[12px] text-gray-900">{data.country}</p>}
             </div>
             <div>
-              <p className="text-[10px] font-semibold text-gray-600">Builder's Risk Policy</p>
-              <p className="text-[11px] text-gray-900 capitalize">{data.has_builders_risk_policy ? "Yes" : "No"}</p>
+              <p className="text-[11px] font-semibold text-gray-600">Builder's Risk Policy</p>
+              <p className="text-[12px] text-gray-900 capitalize">{data.has_builders_risk_policy ? "Yes" : "No"}</p>
             </div>
           </div>
           <div className="space-y-1.5">
             {/* Construction Type with Icon */}
             {data.project_type && constructionTypeConfig[data.project_type] && (
               <div>
-                <p className="text-[10px] font-semibold text-gray-600">Construction Type</p>
+                <p className="text-[11px] font-semibold text-gray-600">Construction Type</p>
                 <div className="flex items-center gap-1.5">
                   <img 
                     src={constructionTypeConfig[data.project_type].image} 
                     alt={constructionTypeConfig[data.project_type].label}
-                    className="object-contain rounded border border-gray-200 bg-white"
-                    style={{ width: '24px', height: '24px', display: 'inline-block' }}
+                    className="object-contain rounded border border-gray-200 bg-white flex-shrink-0"
+                    style={{ width: '24px', height: '24px', display: 'inline-block', verticalAlign: 'middle' }}
                   />
-                  <p className="text-[11px] text-gray-900">{constructionTypeConfig[data.project_type].label}</p>
+                  <p className="text-[12px] text-gray-900">{constructionTypeConfig[data.project_type].label}</p>
                 </div>
               </div>
             )}
@@ -845,15 +845,15 @@ export const WaterRiskReport = ({ data, analysisItems = [], controlDetails = [],
             {/* Building Type with Icon */}
             {data.building_type && buildingTypeConfig[data.building_type] && (
               <div>
-                <p className="text-[10px] font-semibold text-gray-600">Building Type</p>
+                <p className="text-[11px] font-semibold text-gray-600">Building Type</p>
                 <div className="flex items-center gap-1.5">
                   <img 
                     src={buildingTypeConfig[data.building_type].image} 
                     alt={buildingTypeConfig[data.building_type].label}
-                    className="object-contain rounded border border-gray-200 bg-white"
-                    style={{ width: '24px', height: '24px', display: 'inline-block' }}
+                    className="object-contain rounded border border-gray-200 bg-white flex-shrink-0"
+                    style={{ width: '24px', height: '24px', display: 'inline-block', verticalAlign: 'middle' }}
                   />
-                  <p className="text-[11px] text-gray-900">{buildingTypeConfig[data.building_type].label}</p>
+                  <p className="text-[12px] text-gray-900">{buildingTypeConfig[data.building_type].label}</p>
                 </div>
               </div>
             )}
@@ -861,15 +861,15 @@ export const WaterRiskReport = ({ data, analysisItems = [], controlDetails = [],
             {/* Tower Configuration with Icon */}
             {data.tower_type && towerTypeConfig[data.tower_type] && (
               <div>
-                <p className="text-[10px] font-semibold text-gray-600">Tower Configuration</p>
+                <p className="text-[11px] font-semibold text-gray-600">Tower Configuration</p>
                 <div className="flex items-center gap-1.5">
                   <img 
                     src={towerTypeConfig[data.tower_type].image} 
                     alt={towerTypeConfig[data.tower_type].label}
-                    className="object-contain rounded border border-gray-200 bg-white"
-                    style={{ width: '24px', height: '24px', display: 'inline-block' }}
+                    className="object-contain rounded border border-gray-200 bg-white flex-shrink-0"
+                    style={{ width: '24px', height: '24px', display: 'inline-block', verticalAlign: 'middle' }}
                   />
-                  <p className="text-[11px] text-gray-900">{towerTypeConfig[data.tower_type].label}</p>
+                  <p className="text-[12px] text-gray-900">{towerTypeConfig[data.tower_type].label}</p>
                 </div>
               </div>
             )}
@@ -879,7 +879,7 @@ export const WaterRiskReport = ({ data, analysisItems = [], controlDetails = [],
         {/* Structural Types */}
         {structuralTypes.length > 0 && (
           <div className="mb-3">
-            <p className="text-[10px] font-semibold text-gray-600 mb-1">Structural Type</p>
+            <p className="text-[11px] font-semibold text-gray-600 mb-1">Structural Type</p>
             <div className="flex flex-wrap gap-2">
               {structuralTypes.map((typeId: string) => {
                 const config = structuralTypeConfig[typeId];
@@ -889,10 +889,10 @@ export const WaterRiskReport = ({ data, analysisItems = [], controlDetails = [],
                     <img 
                       src={config.image} 
                       alt={config.label}
-                      className="object-contain"
-                      style={{ width: '20px', height: '20px', display: 'inline-block' }}
+                      className="object-contain flex-shrink-0"
+                      style={{ width: '20px', height: '20px', display: 'inline-block', verticalAlign: 'middle' }}
                     />
-                    <span className="text-[10px] text-gray-900">{config.label}</span>
+                    <span className="text-[11px] text-gray-900">{config.label}</span>
                   </div>
                 );
               })}
@@ -902,8 +902,8 @@ export const WaterRiskReport = ({ data, analysisItems = [], controlDetails = [],
 
         {/* Building Details */}
         <div className="bg-gray-50 p-2 rounded border border-gray-200">
-          <p className="text-[10px] font-semibold text-gray-700 mb-1.5">Building Details</p>
-          <div className="grid grid-cols-3 gap-2 text-[10px]">
+          <p className="text-[11px] font-semibold text-gray-700 mb-1.5">Building Details</p>
+          <div className="grid grid-cols-3 gap-2 text-[11px]">
             {data.total_floors && (
               <div>
                 <span className="text-gray-600">Total Floors:</span>
@@ -952,10 +952,10 @@ export const WaterRiskReport = ({ data, analysisItems = [], controlDetails = [],
               return (
                 <div key={index} className="flex justify-between items-center py-1 border-b border-gray-200">
                   <div>
-                    <p className="font-semibold text-[11px] text-gray-900">{phase.name}</p>
-                    <p className="text-[10px] text-gray-600">{phase.description}</p>
+                    <p className="font-semibold text-[12px] text-gray-900">{phase.name}</p>
+                    <p className="text-[11px] text-gray-600">{phase.description}</p>
                   </div>
-                  <div className="text-right text-[10px] text-gray-700 whitespace-nowrap">
+                  <div className="text-right text-[11px] text-gray-700 whitespace-nowrap">
                     {phase.date ? (
                       <p>{formatDate(phase.date)}</p>
                     ) : (
@@ -981,7 +981,7 @@ export const WaterRiskReport = ({ data, analysisItems = [], controlDetails = [],
       {(assetGroups.length > 0 || systemGroups.length > 0 || processGroups.length > 0) && (
         <section className="mb-4 page-break-before">
           <h2 className="text-base font-bold text-gray-900 mb-2 border-b border-gray-300 pb-1">Appendix A: Locations</h2>
-          <p className="text-[10px] text-gray-600 mb-3">
+          <p className="text-[11px] text-gray-600 mb-3">
             Detailed location information with drawing references for all selected assets, water systems, and processes.
           </p>
           {renderAppendixASection("Critical Assets", assetGroups, "Asset", "bg-blue-100 text-blue-800", "border-blue-200")}
@@ -1015,17 +1015,17 @@ export const WaterRiskReport = ({ data, analysisItems = [], controlDetails = [],
                         />
                       )}
                       <div className="flex-1">
-                        <h3 className="font-bold text-[11px] text-gray-900 mb-1">{control.name}</h3>
+                        <h3 className="font-bold text-[12px] text-gray-900 mb-1">{control.name}</h3>
                         {control.description && (
                           <div className="mb-1">
-                            <span className="text-[9px] font-semibold text-gray-600">Description: </span>
-                            <span className="text-[10px] text-gray-700">{control.description}</span>
+                            <span className="text-[10px] font-semibold text-gray-600">Description: </span>
+                            <span className="text-[11px] text-gray-700">{control.description}</span>
                           </div>
                         )}
                         {control.action && (
                           <div>
-                            <span className="text-[9px] font-semibold text-gray-600">Action: </span>
-                            <span className="text-[10px] text-gray-700">{control.action}</span>
+                            <span className="text-[10px] font-semibold text-gray-600">Action: </span>
+                            <span className="text-[11px] text-gray-700">{control.action}</span>
                           </div>
                         )}
                       </div>
@@ -1038,7 +1038,7 @@ export const WaterRiskReport = ({ data, analysisItems = [], controlDetails = [],
       )}
 
       {/* Footer */}
-      <footer className="mt-6 pt-3 border-t-2 border-gray-300 text-center text-[10px] text-gray-600">
+      <footer className="mt-6 pt-3 border-t-2 border-gray-300 text-center text-[11px] text-gray-600">
         <p className="font-semibold">RiskBlue Water Risk Management Solutions</p>
         <p>This report is confidential and prepared exclusively for {data.name || "the specified project"}</p>
         <p>Generated: {formatDate(new Date())}</p>

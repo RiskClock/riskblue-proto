@@ -103,10 +103,53 @@ export async function generatePdfFromElement(
   const scale = contentWidth / (imgWidth / 2);
   const scaledHeight = (imgHeight / 2) * scale;
 
-  // When we have a separate cover, the body element should NOT include the cover.
-  // Calculate pages for the body content only (always with margins).
+  // Smart page breaking: find section boundaries to avoid cutting content
+  const sectionBreakPoints: number[] = []; // in canvas pixel coordinates (scale=2)
+  const keepTogetherElements = element.querySelectorAll('.print-keep-together, section, .page-break-avoid, .page-break-before');
+  keepTogetherElements.forEach((el) => {
+    const rect = (el as HTMLElement).getBoundingClientRect();
+    const containerRect = element.getBoundingClientRect();
+    const topInCanvas = (rect.top - containerRect.top) * 2; // scale=2
+    sectionBreakPoints.push(topInCanvas);
+  });
+  sectionBreakPoints.sort((a, b) => a - b);
+
+  // Find the best break point near a target Y position (in canvas pixels)
+  const findBestBreak = (targetY: number, maxY: number): number => {
+    // Look for a section boundary within 15% of content height before the target
+    const tolerance = contentHeight / scale * 2 * 0.15;
+    let bestBreak = targetY;
+    for (const bp of sectionBreakPoints) {
+      if (bp >= targetY - tolerance && bp <= targetY) {
+        bestBreak = bp;
+      }
+    }
+    return Math.min(bestBreak, maxY);
+  };
+
+  // Calculate pages with smart breaks
+  const pageBreaks: number[] = [0]; // sourceY positions in canvas pixels
+  let currentY = 0;
   const firstPageH = (!coverElement && fullBleedFirstPage) ? pageHeight : contentHeight;
-  const totalPages = scaledHeight <= firstPageH ? 1 : 1 + Math.ceil((scaledHeight - firstPageH) / contentHeight);
+  const firstPagePixels = (firstPageH / scale) * 2;
+  
+  if (scaledHeight > firstPageH) {
+    let nextBreak = findBestBreak(firstPagePixels, imgHeight);
+    pageBreaks.push(nextBreak);
+    currentY = nextBreak;
+    
+    const normalPagePixels = (contentHeight / scale) * 2;
+    while (currentY < imgHeight - normalPagePixels * 0.1) {
+      const targetY = currentY + normalPagePixels;
+      if (targetY >= imgHeight) break;
+      nextBreak = findBestBreak(targetY, imgHeight);
+      if (nextBreak <= currentY) break;
+      pageBreaks.push(nextBreak);
+      currentY = nextBreak;
+    }
+  }
+
+  const totalPages = pageBreaks.length;
 
   for (let page = 0; page < totalPages; page++) {
     if (page > 0 || bodyStartPage > 0) {
@@ -119,16 +162,11 @@ export async function generatePdfFromElement(
     const pageContentWidth = isFullBleed ? pageWidth : contentWidth;
     const pageContentHeight = isFullBleed ? pageHeight : contentHeight;
 
-    let sourceY: number;
-    if (page === 0) {
-      sourceY = 0;
-    } else {
-      const firstPageContentH = isFullBleed ? pageHeight : contentHeight;
-      sourceY = (firstPageContentH + (page - 1) * contentHeight) / scale * 2;
-    }
+    const sourceY = pageBreaks[page];
+    const nextSourceY = page + 1 < totalPages ? pageBreaks[page + 1] : imgHeight;
     const sourceHeight = Math.min(
-      (pageContentHeight / scale) * 2,
-      imgHeight - sourceY
+      nextSourceY - sourceY,
+      (pageContentHeight / scale) * 2
     );
 
     if (sourceHeight <= 0) break;
@@ -141,7 +179,6 @@ export async function generatePdfFromElement(
     if (ctx) {
       ctx.drawImage(canvas, 0, sourceY, imgWidth, sourceHeight, 0, 0, imgWidth, sourceHeight);
 
-      // Debug: save first body page as PNG (only if no separate cover)
       if (!coverElement && options.debugSaveCoverPng && page === 0) {
         const link = document.createElement('a');
         link.download = 'debug-cover-page.png';
@@ -215,7 +252,7 @@ export async function proxyImageToDataUrl(bucket: string, path: string): Promise
 /**
  * Converts an image source to base64 string.
  */
-export function getImageBase64(imgSrc: string): Promise<string> {
+export function getImageBase64(imgSrc: string, format: 'png' | 'jpeg' = 'png'): Promise<string> {
   return new Promise((resolve) => {
     const img = new Image();
     img.crossOrigin = 'anonymous';
@@ -225,7 +262,9 @@ export function getImageBase64(imgSrc: string): Promise<string> {
       canvas.height = img.naturalHeight || img.height;
       const ctx = canvas.getContext('2d');
       ctx?.drawImage(img, 0, 0);
-      const base64 = canvas.toDataURL('image/jpeg', 0.92);
+      const base64 = format === 'png'
+        ? canvas.toDataURL('image/png')
+        : canvas.toDataURL('image/jpeg', 0.92);
       resolve(base64);
     };
     img.onerror = () => {

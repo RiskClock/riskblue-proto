@@ -96,7 +96,7 @@ export const WaterMitigationGuidelinesStep = ({ data, analysisItems = [], onBack
   };
 
   const handleExportPDF = async () => {
-    const filename = generateReportFilename(data.name || "unnamed_project", "WaterMitigationGuidelines");
+    const filename = generateReportFilename(data.name || "unnamed_project", "Water Mitigation Guideline");
     
     // Show preparing toast
     toast({
@@ -207,7 +207,7 @@ export const WaterMitigationGuidelinesStep = ({ data, analysisItems = [], onBack
   };
 
   const handleExportToProcore = async () => {
-    const filename = generateReportFilename(data.name || "unnamed_project", "WaterMitigationGuidelines");
+    const filename = generateReportFilename(data.name || "unnamed_project", "Water Mitigation Guideline");
     
     toast({
       title: "Preparing report...",
