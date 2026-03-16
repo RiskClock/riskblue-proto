@@ -382,28 +382,32 @@ export const WaterMitigationGuidelinesStep = ({ data, analysisItems = [], onBack
     }
   };
 
-  const handleExportToProcore = async () => {
+  const handleExportToProcore = () => {
     const filename = generateReportFilename(data.name || "unnamed_project", "Water Mitigation Guideline");
     setPdfFileName(`${filename}.pdf`);
     setPdfBlobForProcore(null);
-    setShowProcoreExport(true);
-    const result = await generatePdfBlob();
-    if (result) {
-      setPdfBlobForProcore(result.blob);
-      setPdfFileName(result.filename);
-    }
+    setTimeout(async () => {
+      setShowProcoreExport(true);
+      const result = await generatePdfBlob();
+      if (result) {
+        setPdfBlobForProcore(result.blob);
+        setPdfFileName(result.filename);
+      }
+    }, 0);
   };
 
-  const handleExportToEpic = async () => {
+  const handleExportToEpic = () => {
     const filename = generateReportFilename(data.name || "unnamed_project", "Water Mitigation Guideline");
     setPdfFileName(`${filename}.pdf`);
     setPdfBlobForEpic(null);
-    setShowEpicExport(true);
-    const result = await generatePdfBlob();
-    if (result) {
-      setPdfBlobForEpic(result.blob);
-      setPdfFileName(result.filename);
-    }
+    setTimeout(async () => {
+      setShowEpicExport(true);
+      const result = await generatePdfBlob();
+      if (result) {
+        setPdfBlobForEpic(result.blob);
+        setPdfFileName(result.filename);
+      }
+    }, 0);
   };
 
   const handleSendRFP = () => {
