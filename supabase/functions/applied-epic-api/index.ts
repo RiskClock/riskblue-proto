@@ -151,6 +151,7 @@ Deno.serve(async (req) => {
 
       if (!res.ok) {
         const text = await res.text();
+        console.error("Epic upload-file failed:", res.status, text);
         throw new Error(`Failed to upload file: ${res.status} ${text}`);
       }
 
