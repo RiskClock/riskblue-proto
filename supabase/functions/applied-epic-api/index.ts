@@ -118,13 +118,16 @@ Deno.serve(async (req) => {
         }),
       });
 
+      const rawText = await res.text();
+      console.log("Epic create-attachment status:", res.status, "body:", rawText);
+
       if (!res.ok) {
-        const text = await res.text();
-        console.error("Epic create-attachment failed:", res.status, text);
-        throw new Error(`Failed to create attachment: ${res.status} ${text}`);
+        console.error("Epic create-attachment failed:", res.status, rawText);
+        throw new Error(`Failed to create attachment: ${res.status} ${rawText}`);
       }
 
-      const attachment = await res.json();
+      const attachment = JSON.parse(rawText);
+      console.log("Epic create-attachment parsed:", JSON.stringify(attachment));
       return new Response(JSON.stringify({ attachment }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
