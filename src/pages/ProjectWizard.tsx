@@ -1852,8 +1852,7 @@ const ProjectWizardContent = () => {
                   </DropdownMenuItem>
                   <DropdownMenuItem onSelect={() => {
                     logActivity("export_clicked", id);
-                    const filename = generateReportFilename(projectData.name || "unnamed_project", "Water Mitigation Guideline");
-                    setPdfFileNameEpicMain(`${filename}.pdf`);
+                    
                     setPdfBlobForEpicMain(null);
                     setTimeout(async () => {
                       setShowEpicExportMain(true);
