@@ -90,13 +90,15 @@ Deno.serve(async (req) => {
       const payload = await res.json();
       const folders = Array.isArray(payload)
         ? payload
-        : Array.isArray(payload?.folders)
-          ? payload.folders
-          : Array.isArray(payload?.items)
-            ? payload.items
-            : Array.isArray(payload?.data)
-              ? payload.data
-              : [];
+        : Array.isArray(payload?._embedded?.attachmentFolders)
+          ? payload._embedded.attachmentFolders
+          : Array.isArray(payload?.folders)
+            ? payload.folders
+            : Array.isArray(payload?.items)
+              ? payload.items
+              : Array.isArray(payload?.data)
+                ? payload.data
+                : [];
       return new Response(JSON.stringify({ folders }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });

@@ -1,47 +1,29 @@
 
 
-# Fix: Export Dialog Not Appearing Immediately
+# Use Full Width for the Raw Result Modal
 
-## Root Cause
-
-`handleExportToProcore` and `handleExportToEpic` call `setShow...Export(true)` synchronously, but they run inside a `DropdownMenuItem onClick`. The Radix dropdown unmounts on click, and React batches the dialog-open state update with the unmount — so the dialog doesn't actually render until the `await generatePdfBlob()` resolves.
+## Problem
+The `RawResultModal` is limited to `sm:max-w-5xl` (1024px), leaving large margins on wider screens. Both the drawing preview and AI response text would benefit from more horizontal space.
 
 ## Fix
 
-**File: `src/components/wizard/WaterMitigationGuidelinesStep.tsx`**
+### File: `src/components/analysis/AnalysisSection.tsx`
 
-Wrap the dialog open + PDF generation in a `setTimeout(..., 0)` to decouple it from the dropdown's unmount cycle:
+**Single change on line 797**: Widen the dialog from `sm:max-w-5xl` to `sm:max-w-[95vw]` (or `max-w-[1600px]` as a reasonable cap) and increase height slightly.
 
-```typescript
-const handleExportToProcore = () => {
-  const filename = generateReportFilename(data.name || "unnamed_project", "Water Mitigation Guideline");
-  setPdfFileName(`${filename}.pdf`);
-  setPdfBlobForProcore(null);
-  setTimeout(async () => {
-    setShowProcoreExport(true);
-    const result = await generatePdfBlob();
-    if (result) {
-      setPdfBlobForProcore(result.blob);
-      setPdfFileName(result.filename);
-    }
-  }, 0);
-};
+```
+// Before
+<DialogContent className="sm:max-w-5xl h-[85vh] flex flex-col p-4 gap-2">
+
+// After
+<DialogContent className="sm:max-w-[95vw] max-w-[1800px] h-[90vh] flex flex-col p-4 gap-2">
 ```
 
-Same pattern for `handleExportToEpic`.
-
-## Combined with folder fix
-
-This plan also includes the folder parsing fix from the previous approval:
-
-**File: `supabase/functions/applied-epic-api/index.ts`**
-
-Update folder normalization to extract from `payload._embedded.attachmentFolders` (the actual HAL+JSON response format).
+This one-line change makes the modal stretch to 95% of the viewport width (capped at 1800px), giving substantially more room to both the drawing viewer and the AI response panel.
 
 ## Files Changed
 
 | File | Change |
 |---|---|
-| `src/components/wizard/WaterMitigationGuidelinesStep.tsx` | setTimeout to decouple dialog open from dropdown unmount |
-| `supabase/functions/applied-epic-api/index.ts` | Parse `_embedded.attachmentFolders` from HAL+JSON response |
+| `src/components/analysis/AnalysisSection.tsx` | Line 797: widen dialog max-width from `5xl` to `95vw` (capped at 1800px), height from 85vh to 90vh |
 
