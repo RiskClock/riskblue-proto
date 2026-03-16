@@ -1850,104 +1850,104 @@ const ProjectWizardContent = () => {
                     <img src={procoreIcon} alt="Procore" className="h-4 w-4 mr-2" />
                     Upload to Procore
                   </DropdownMenuItem>
-                  <DropdownMenuItem onSelect={async () => {
+                  <DropdownMenuItem onSelect={() => {
                     logActivity("export_clicked", id);
-                    
-                    toast({
-                      title: "Preparing report...",
-                      description: "Generating PDF for Applied Epic export...",
-                    });
-                    
-                    let preparedByName = "";
-                    let createdByName = "";
-                    
-                    const userIdsToFetch = [user?.id, projectData.user_id].filter(Boolean) as string[];
-                    const uniqueUserIds = [...new Set(userIdsToFetch)];
-                    
-                    if (uniqueUserIds.length > 0) {
-                      try {
-                        const { data: profilesData } = await supabase
-                          .from('profiles')
-                          .select('user_id, display_name')
-                          .in('user_id', uniqueUserIds);
-                        
-                        const profilesMap = new Map(
-                          (profilesData || []).map(p => [p.user_id, p.display_name])
-                        );
-                        
-                        preparedByName = profilesMap.get(user?.id || "") || user?.email || "";
-                        createdByName = profilesMap.get(projectData.user_id) || preparedByName;
-                      } catch (e) {
-                        preparedByName = user?.email || "";
-                        createdByName = preparedByName;
-                      }
-                    }
-                    
-                    const riskCounts = {
-                      assets: analysisItems.filter(i => i.category === "Asset" && (projectData.selectedAssetInstances || []).includes(i.id)).length,
-                      systems: analysisItems.filter(i => i.category === "Water System" && (projectData.selectedSystemInstances || []).includes(i.id)).length,
-                      processes: analysisItems.filter(i => i.category === "Process" && (projectData.selectedProcessInstances || []).includes(i.id)).length,
-                    };
-                    
-                    const allControlIds = new Set([
-                      ...(projectData.selectedAssetControls || []),
-                      ...(projectData.selectedSystemControls || []),
-                      ...(projectData.selectedProcessControls || []),
-                    ]);
-                    const controlCount = allControlIds.size;
-                    
-                    let executiveSummaryText = "";
-                    try {
-                      const { data: summaryData, error } = await supabase.functions.invoke('generate-executive-summary', {
-                        body: { projectData, riskCounts, controlCount }
-                      });
-                      if (!error && summaryData?.summary) {
-                        executiveSummaryText = summaryData.summary;
-                      }
-                    } catch (e) {
-                      console.error("Failed to generate executive summary:", e);
-                    }
-                    
-                    const reportContainer = document.createElement('div');
-                    reportContainer.style.position = 'absolute';
-                    reportContainer.style.left = '-9999px';
-                    reportContainer.style.width = '210mm';
-                    document.body.appendChild(reportContainer);
-                    
-                    const root = document.createElement('div');
-                    reportContainer.appendChild(root);
-                    
-                    const { createRoot } = await import('react-dom/client');
-                    const reactRoot = createRoot(root);
-                    reactRoot.render(<WaterRiskReport data={projectData} analysisItems={analysisItems} controlDetails={controlDetails} executiveSummaryText={executiveSummaryText} preparedBy={preparedByName} createdBy={createdByName} riskTimelineData={riskTimelineForPdf.hasData ? { months: riskTimelineForPdf.months, totalPerMonth: riskTimelineForPdf.totalPerMonth, totalDeriskPerMonth: riskTimelineForPdf.totalDeriskPerMonth || [], todayMonthIndex: riskTimelineForPdf.todayMonthIndex } : undefined} />);
-                    
-                    await new Promise(resolve => setTimeout(resolve, 2000));
-                    
-                    const { generatePdfFromElement, getImageBase64 } = await import('@/lib/pdfExporter');
-                    const logoBase64 = await getImageBase64(riskBlueLogo);
-                    
-                    const coverElEpic = reportContainer.querySelector('#cover-page') as HTMLElement | null;
-                    const bodyElEpic = reportContainer.querySelector('#report-body') as HTMLElement || reportContainer;
-                    
-                    const blob = await generatePdfFromElement(bodyElEpic, {
-                      filename: generateReportFilename(projectData.name || "unnamed_project", "Water Mitigation Guideline"),
-                      margins: { top: 10, right: 10, bottom: 15, left: 10 },
-                      logoBase64,
-                      skipLogoOnFirstPage: true,
-                      returnBlob: true,
-                      fullBleedFirstPage: true,
-                      coverElement: coverElEpic || undefined,
-                    });
-                    
-                    reactRoot.unmount();
-                    document.body.removeChild(reportContainer);
-                    
-                    if (blob instanceof Blob) {
-                      setPdfBlobForEpicMain(blob);
+                    const filename = generateReportFilename(projectData.name || "unnamed_project", "Water Mitigation Guideline");
+                    setPdfFileNameEpicMain(`${filename}.pdf`);
+                    setPdfBlobForEpicMain(null);
+                    setTimeout(async () => {
                       setShowEpicExportMain(true);
-                    } else {
-                      toast({ title: "Error", description: "Failed to generate PDF for export.", variant: "destructive" });
-                    }
+                      
+                      let preparedByName = "";
+                      let createdByName = "";
+                      
+                      const userIdsToFetch = [user?.id, projectData.user_id].filter(Boolean) as string[];
+                      const uniqueUserIds = [...new Set(userIdsToFetch)];
+                      
+                      if (uniqueUserIds.length > 0) {
+                        try {
+                          const { data: profilesData } = await supabase
+                            .from('profiles')
+                            .select('user_id, display_name')
+                            .in('user_id', uniqueUserIds);
+                          
+                          const profilesMap = new Map(
+                            (profilesData || []).map(p => [p.user_id, p.display_name])
+                          );
+                          
+                          preparedByName = profilesMap.get(user?.id || "") || user?.email || "";
+                          createdByName = profilesMap.get(projectData.user_id) || preparedByName;
+                        } catch (e) {
+                          preparedByName = user?.email || "";
+                          createdByName = preparedByName;
+                        }
+                      }
+                      
+                      const riskCounts = {
+                        assets: analysisItems.filter(i => i.category === "Asset" && (projectData.selectedAssetInstances || []).includes(i.id)).length,
+                        systems: analysisItems.filter(i => i.category === "Water System" && (projectData.selectedSystemInstances || []).includes(i.id)).length,
+                        processes: analysisItems.filter(i => i.category === "Process" && (projectData.selectedProcessInstances || []).includes(i.id)).length,
+                      };
+                      
+                      const allControlIds = new Set([
+                        ...(projectData.selectedAssetControls || []),
+                        ...(projectData.selectedSystemControls || []),
+                        ...(projectData.selectedProcessControls || []),
+                      ]);
+                      const controlCount = allControlIds.size;
+                      
+                      let executiveSummaryText = "";
+                      try {
+                        const { data: summaryData, error } = await supabase.functions.invoke('generate-executive-summary', {
+                          body: { projectData, riskCounts, controlCount }
+                        });
+                        if (!error && summaryData?.summary) {
+                          executiveSummaryText = summaryData.summary;
+                        }
+                      } catch (e) {
+                        console.error("Failed to generate executive summary:", e);
+                      }
+                      
+                      const reportContainer = document.createElement('div');
+                      reportContainer.style.position = 'absolute';
+                      reportContainer.style.left = '-9999px';
+                      reportContainer.style.width = '210mm';
+                      document.body.appendChild(reportContainer);
+                      
+                      const root = document.createElement('div');
+                      reportContainer.appendChild(root);
+                      
+                      const { createRoot } = await import('react-dom/client');
+                      const reactRoot = createRoot(root);
+                      reactRoot.render(<WaterRiskReport data={projectData} analysisItems={analysisItems} controlDetails={controlDetails} executiveSummaryText={executiveSummaryText} preparedBy={preparedByName} createdBy={createdByName} riskTimelineData={riskTimelineForPdf.hasData ? { months: riskTimelineForPdf.months, totalPerMonth: riskTimelineForPdf.totalPerMonth, totalDeriskPerMonth: riskTimelineForPdf.totalDeriskPerMonth || [], todayMonthIndex: riskTimelineForPdf.todayMonthIndex } : undefined} />);
+                      
+                      await new Promise(resolve => setTimeout(resolve, 2000));
+                      
+                      const { generatePdfFromElement, getImageBase64 } = await import('@/lib/pdfExporter');
+                      const logoBase64 = await getImageBase64(riskBlueLogo);
+                      
+                      const coverElEpic = reportContainer.querySelector('#cover-page') as HTMLElement | null;
+                      const bodyElEpic = reportContainer.querySelector('#report-body') as HTMLElement || reportContainer;
+                      
+                      const blob = await generatePdfFromElement(bodyElEpic, {
+                        filename: generateReportFilename(projectData.name || "unnamed_project", "Water Mitigation Guideline"),
+                        margins: { top: 10, right: 10, bottom: 15, left: 10 },
+                        logoBase64,
+                        skipLogoOnFirstPage: true,
+                        returnBlob: true,
+                        fullBleedFirstPage: true,
+                        coverElement: coverElEpic || undefined,
+                      });
+                      
+                      reactRoot.unmount();
+                      document.body.removeChild(reportContainer);
+                      
+                      if (blob instanceof Blob) {
+                        setPdfBlobForEpicMain(blob);
+                      } else {
+                        toast({ title: "Error", description: "Failed to generate PDF for export.", variant: "destructive" });
+                      }
+                    }, 0);
                   }}>
                     <img src={epicIcon} alt="Applied Epic" className="h-4 w-4 mr-2" />
                     Upload to Applied Epic
