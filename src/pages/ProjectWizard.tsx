@@ -1957,11 +1957,19 @@ const ProjectWizardContent = () => {
                     Upload to AMS360 (coming soon)
                   </DropdownMenuItem>
                 </DropdownMenuContent>
+              </DropdownMenu>
               
               <ProcoreExportDialog
                 isOpen={showProcoreExportMain}
                 onClose={() => { setShowProcoreExportMain(false); setPdfBlobForProcoreMain(null); }}
                 pdfBlob={pdfBlobForProcoreMain}
+                fileName={generateReportFilename(projectData.name || "unnamed_project", "Water Mitigation Guideline") + ".pdf"}
+              />
+
+              <AppliedEpicExportDialog
+                isOpen={showEpicExportMain}
+                onClose={() => { setShowEpicExportMain(false); setPdfBlobForEpicMain(null); }}
+                pdfBlob={pdfBlobForEpicMain}
                 fileName={generateReportFilename(projectData.name || "unnamed_project", "Water Mitigation Guideline") + ".pdf"}
               />
               
