@@ -493,7 +493,15 @@ export const WaterMitigationGuidelinesStep = ({ data, analysisItems = [], onBack
               </DropdownMenuItem>
               <DropdownMenuItem onClick={handleExportToProcore}>
                 <img src={procoreIcon} alt="" className="h-4 w-4 mr-2" />
-                Export to Procore
+                Upload to Procore
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={handleExportToEpic}>
+                <img src={epicIcon} alt="" className="h-4 w-4 mr-2" />
+                Upload to Applied Epic
+              </DropdownMenuItem>
+              <DropdownMenuItem disabled className="opacity-50">
+                <img src={ams360Icon} alt="" className="h-4 w-4 mr-2" />
+                Upload to AMS360 (coming soon)
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
