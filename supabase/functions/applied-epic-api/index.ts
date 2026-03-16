@@ -101,6 +101,82 @@ Deno.serve(async (req) => {
       });
     }
 
+    if (action === "create-and-upload") {
+      const { description, folderId, uploadFileName, fileBase64 } = params;
+
+      if (!uploadFileName || !fileBase64) {
+        throw new Error("uploadFileName and fileBase64 are required");
+      }
+
+      // Step 1: Get token
+      const token = await getEpicToken();
+
+      // Step 2: Create attachment
+      const attachmentUrl = `${EPIC_BASE_URL}/epic/attachment/v2/attachments?description=${encodeURIComponent(description || uploadFileName)}&folder=${encodeURIComponent(folderId || "")}`;
+      const createRes = await fetch(attachmentUrl, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          active: true,
+          uploadFileName,
+        }),
+      });
+
+      const createRawText = await createRes.text();
+      console.log("Epic create-attachment status:", createRes.status);
+      console.log("Epic create-attachment response:", createRawText);
+
+      if (!createRes.ok) {
+        throw new Error(`Failed to create attachment: ${createRes.status} ${createRawText}`);
+      }
+
+      const attachment = JSON.parse(createRawText);
+      const uploadUrl = attachment?.uploadUrl;
+
+      if (!uploadUrl) {
+        console.error("Epic create-attachment parsed (no uploadUrl):", JSON.stringify(attachment));
+        throw new Error("No uploadUrl returned from Applied Epic.");
+      }
+
+      console.log("Epic uploadUrl length:", uploadUrl.length);
+      console.log("Epic uploadUrl value:", uploadUrl);
+      const epicHost = new URL(EPIC_BASE_URL).host;
+      const uploadHost = new URL(uploadUrl).host;
+      console.log("Epic upload target host:", uploadHost, "Epic API host:", epicHost, "same:", uploadHost === epicHost);
+
+      // Step 3: Decode and upload
+      const binaryStr = atob(fileBase64);
+      const bytes = new Uint8Array(binaryStr.length);
+      for (let i = 0; i < binaryStr.length; i++) {
+        bytes[i] = binaryStr.charCodeAt(i);
+      }
+
+      console.log("Epic upload-file request:", { uploadUrl, method: "PUT", bodyBytes: bytes.length });
+
+      const uploadRes = await fetch(uploadUrl, {
+        method: "PUT",
+        headers: { "Content-Type": "application/octet-stream" },
+        body: bytes,
+      });
+
+      const uploadBody = await uploadRes.text();
+      const uploadHeaders = Object.fromEntries(uploadRes.headers.entries());
+      console.log("Epic upload response status:", uploadRes.status);
+      console.log("Epic upload response headers:", JSON.stringify(uploadHeaders));
+      console.log("Epic upload response body:", uploadBody);
+
+      if (!uploadRes.ok) {
+        throw new Error(`Failed to upload file: ${uploadRes.status} ${uploadBody}`);
+      }
+
+      return new Response(JSON.stringify({ success: true, attachment }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
     if (action === "create-attachment") {
       const { description, folderId, uploadFileName } = params;
 

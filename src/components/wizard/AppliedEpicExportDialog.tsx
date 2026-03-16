@@ -90,30 +90,7 @@ export const AppliedEpicExportDialog = ({
     setError(null);
 
     try {
-      // Step 1: Create attachment to get uploadUrl
-      setUploadStep("Creating attachment record...");
-      const { data: createData, error: createError } = await supabase.functions.invoke(
-        "applied-epic-api",
-        {
-          body: {
-            action: "create-attachment",
-            description: fileName,
-            folderId: selectedFolderId,
-            uploadFileName: fileName,
-          },
-        }
-      );
-
-      if (createError) throw new Error(createError.message);
-      if (createData?.error) throw new Error(createData.error);
-
-      const uploadUrl = createData?.attachment?.uploadUrl;
-      if (!uploadUrl) {
-        throw new Error("No uploadUrl returned from Applied Epic. The attachment was created but file upload cannot proceed.");
-      }
-
-      // Step 2: Upload binary PDF
-      setUploadStep("Uploading PDF...");
+      setUploadStep("Preparing upload...");
 
       const arrayBuffer = await pdfBlob.arrayBuffer();
       const bytes = new Uint8Array(arrayBuffer);
@@ -123,19 +100,23 @@ export const AppliedEpicExportDialog = ({
       }
       const fileBase64 = btoa(binary);
 
-      const { data: uploadData, error: uploadError } = await supabase.functions.invoke(
+      setUploadStep("Uploading to Applied Epic...");
+
+      const { data, error: fnError } = await supabase.functions.invoke(
         "applied-epic-api",
         {
           body: {
-            action: "upload-file",
-            uploadUrl,
+            action: "create-and-upload",
+            description: fileName,
+            folderId: selectedFolderId,
+            uploadFileName: fileName,
             fileBase64,
           },
         }
       );
 
-      if (uploadError) throw new Error(uploadError.message);
-      if (uploadData?.error) throw new Error(uploadData.error);
+      if (fnError) throw new Error(fnError.message);
+      if (data?.error) throw new Error(data.error);
 
       setSuccess(true);
       toast({
