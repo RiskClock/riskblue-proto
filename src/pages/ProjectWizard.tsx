@@ -1851,7 +1851,7 @@ const ProjectWizardContent = () => {
                     Upload to Procore
                   </DropdownMenuItem>
                   <DropdownMenuItem onSelect={async () => {
-                    logActivity("export_epic_clicked", id);
+                    logActivity("export_clicked", id);
                     
                     toast({
                       title: "Preparing report...",
