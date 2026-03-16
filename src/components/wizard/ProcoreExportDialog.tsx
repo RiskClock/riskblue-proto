@@ -400,7 +400,7 @@ export const ProcoreExportDialog = ({
                 ) : (
                   <>
                     <Upload className="w-4 h-4 mr-2" />
-                    Export to Procore
+                    Upload to Procore
                   </>
                 )}
               </Button>

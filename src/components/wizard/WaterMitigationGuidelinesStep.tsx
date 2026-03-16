@@ -525,6 +525,13 @@ export const WaterMitigationGuidelinesStep = ({ data, analysisItems = [], onBack
         pdfBlob={pdfBlobForProcore}
         fileName={pdfFileName}
       />
+
+      <AppliedEpicExportDialog
+        isOpen={showEpicExport}
+        onClose={() => { setShowEpicExport(false); setPdfBlobForEpic(null); }}
+        pdfBlob={pdfBlobForEpic}
+        fileName={pdfFileName}
+      />
     </div>
   );
 };
