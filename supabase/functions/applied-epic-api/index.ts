@@ -120,6 +120,7 @@ Deno.serve(async (req) => {
 
       if (!res.ok) {
         const text = await res.text();
+        console.error("Epic create-attachment failed:", res.status, text);
         throw new Error(`Failed to create attachment: ${res.status} ${text}`);
       }
 
@@ -150,6 +151,7 @@ Deno.serve(async (req) => {
 
       if (!res.ok) {
         const text = await res.text();
+        console.error("Epic upload-file failed:", res.status, text);
         throw new Error(`Failed to upload file: ${res.status} ${text}`);
       }
 
@@ -163,6 +165,7 @@ Deno.serve(async (req) => {
       { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   } catch (error) {
+    console.error("applied-epic-api error:", error);
     const message = error instanceof Error ? error.message : "Internal error";
     const status = message === "Unauthorized" ? 401 : 500;
     return new Response(JSON.stringify({ error: message }), {
