@@ -382,100 +382,24 @@ export const WaterMitigationGuidelinesStep = ({ data, analysisItems = [], onBack
     }
   };
 
-
-    const filename = generateReportFilename(data.name || "unnamed_project", "Water Mitigation Guideline");
-    
-    toast({
-      title: "Preparing report...",
-      description: "Generating PDF for Procore export...",
-    });
-
-    let preparedByName = "";
-    let createdByName = "";
-    
-    try {
-      const { data: { user } } = await supabase.auth.getUser();
-      const userIdsToFetch = [user?.id, data.user_id].filter(Boolean) as string[];
-      const uniqueUserIds = [...new Set(userIdsToFetch)];
-      
-      if (uniqueUserIds.length > 0) {
-        const { data: profilesData } = await supabase
-          .from('profiles')
-          .select('user_id, display_name')
-          .in('user_id', uniqueUserIds);
-        
-        const profilesMap = new Map(
-          (profilesData || []).map(p => [p.user_id, p.display_name])
-        );
-        
-        preparedByName = profilesMap.get(user?.id || "") || user?.email || "";
-        createdByName = profilesMap.get(data.user_id) || preparedByName;
-      }
-    } catch (e) {
-      console.error("Failed to fetch profile names:", e);
+  const handleExportToProcore = async () => {
+    toast({ title: "Preparing report...", description: "Generating PDF for Procore export..." });
+    const result = await generatePdfBlob();
+    if (result) {
+      setPdfBlobForProcore(result.blob);
+      setPdfFileName(result.filename);
+      setShowProcoreExport(true);
     }
+  };
 
-    const reportContainer = document.createElement('div');
-    reportContainer.className = 'print-report-container';
-    reportContainer.style.position = 'absolute';
-    reportContainer.style.left = '-9999px';
-    reportContainer.style.top = '0';
-    document.body.appendChild(reportContainer);
-    
-    const root = document.createElement('div');
-    reportContainer.appendChild(root);
-    
-    import('react-dom/client').then(async ({ createRoot }) => {
-      // Pre-resolve custom drawing URLs to signed URLs
-      const resolvedItems = await resolveDrawingUrls(analysisItems);
-      
-      const reactRoot = createRoot(root);
-      reactRoot.render(
-        <WaterRiskReport 
-          data={data} 
-          analysisItems={resolvedItems} 
-          controlDetails={controlDetails}
-          preparedBy={preparedByName}
-          createdBy={createdByName}
-          riskTimelineData={riskTimelineData}
-        />
-      );
-      
-      await new Promise(requestAnimationFrame);
-      await new Promise(requestAnimationFrame);
-      await waitForImages(reportContainer);
-      const logoBase64 = await getImageBase64(riskBlueLogo);
-      
-      try {
-        const coverEl = reportContainer.querySelector('#cover-page') as HTMLElement | null;
-
-        const blob = await generatePdfFromElement(reportContainer, {
-          filename,
-          margins: { top: 15, right: 15, bottom: 25, left: 15 },
-          logoBase64,
-          skipLogoOnFirstPage: true,
-          returnBlob: true,
-          fullBleedFirstPage: true,
-          coverElement: coverEl || undefined,
-        });
-
-        if (blob instanceof Blob) {
-          setPdfBlobForProcore(blob);
-          setPdfFileName(`${filename}.pdf`);
-          setShowProcoreExport(true);
-        }
-      } catch (error) {
-        console.error("PDF generation failed:", error);
-        toast({
-          title: "Export Failed",
-          description: "Failed to generate PDF. Please try again.",
-          variant: "destructive",
-        });
-      } finally {
-        reactRoot.unmount();
-        document.body.removeChild(reportContainer);
-      }
-    });
+  const handleExportToEpic = async () => {
+    toast({ title: "Preparing report...", description: "Generating PDF for Applied Epic export..." });
+    const result = await generatePdfBlob();
+    if (result) {
+      setPdfBlobForEpic(result.blob);
+      setPdfFileName(result.filename);
+      setShowEpicExport(true);
+    }
   };
 
   const handleSendRFP = () => {
