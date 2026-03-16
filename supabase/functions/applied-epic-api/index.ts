@@ -120,6 +120,7 @@ Deno.serve(async (req) => {
 
       if (!res.ok) {
         const text = await res.text();
+        console.error("Epic create-attachment failed:", res.status, text);
         throw new Error(`Failed to create attachment: ${res.status} ${text}`);
       }
 
