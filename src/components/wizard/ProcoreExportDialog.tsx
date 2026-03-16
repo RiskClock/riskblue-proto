@@ -236,7 +236,7 @@ export const ProcoreExportDialog = ({
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <img src={procoreIcon} alt="Procore" className="w-5 h-5" />
-            Export to Procore
+            Upload to Procore
           </DialogTitle>
         </DialogHeader>
 
