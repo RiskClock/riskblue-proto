@@ -165,6 +165,7 @@ Deno.serve(async (req) => {
       { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   } catch (error) {
+    console.error("applied-epic-api error:", error);
     const message = error instanceof Error ? error.message : "Internal error";
     const status = message === "Unauthorized" ? 401 : 500;
     return new Response(JSON.stringify({ error: message }), {
