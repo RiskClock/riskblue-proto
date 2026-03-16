@@ -28,7 +28,10 @@ import { ProcoreConnectionDialog } from "@/components/wizard/ProcoreConnectionDi
 import { MitigationResponsePlanStep } from "@/components/wizard/MitigationResponsePlanStep";
 import { WaterMitigationGuidelinesStep } from "@/components/wizard/WaterMitigationGuidelinesStep";
 import { ProcoreExportDialog } from "@/components/wizard/ProcoreExportDialog";
+import { AppliedEpicExportDialog } from "@/components/wizard/AppliedEpicExportDialog";
 import procoreIcon from "@/assets/icon_procore.png";
+import epicIcon from "@/assets/logo_appliedepic.png";
+import ams360Icon from "@/assets/logo_ams360.png";
 import { CollaboratorManagementStep } from "@/components/wizard/CollaboratorManagementStep";
 import { CollaboratorsModal } from "@/components/wizard/CollaboratorsModal";
 import { RiskToleranceSelector, RiskTolerance } from "@/components/wizard/RiskToleranceSelector";
