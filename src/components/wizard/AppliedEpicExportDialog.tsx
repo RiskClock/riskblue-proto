@@ -42,14 +42,16 @@ export const AppliedEpicExportDialog = ({
   const [success, setSuccess] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Fetch folders on open
+  // Fetch folders once pdfBlob is available
   useEffect(() => {
     if (!isOpen) return;
     setSuccess(false);
     setError(null);
     setUploadStep("");
-    loadFolders();
-  }, [isOpen]);
+    if (pdfBlob) {
+      loadFolders();
+    }
+  }, [isOpen, pdfBlob]);
 
   const loadFolders = async () => {
     setFoldersLoading(true);
