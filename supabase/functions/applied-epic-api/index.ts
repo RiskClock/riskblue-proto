@@ -101,16 +101,15 @@ Deno.serve(async (req) => {
       }
 
       const token = await getEpicToken();
-      const res = await fetch(`${EPIC_BASE_URL}/attachments`, {
+      const attachmentUrl = `${EPIC_BASE_URL}/epic/attachment/v2/attachments?description=${encodeURIComponent(description || uploadFileName)}&folder=${encodeURIComponent(folder || "")}`;
+      const res = await fetch(attachmentUrl, {
         method: "POST",
         headers: {
           Authorization: `Bearer ${token}`,
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          description: description || uploadFileName,
           active: true,
-          folder,
           attachTo: { id: attachTo.id, type: attachTo.type },
           uploadFileName,
         }),
