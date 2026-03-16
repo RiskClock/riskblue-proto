@@ -11,7 +11,6 @@ const CONSUMER_SECRET = Deno.env.get("APPLIEDEPIC_CONSUMER_SECRET")!;
 const EPIC_BASE_URL =
   Deno.env.get("APPLIEDEPIC_BASE_URL") || "https://api.myappliedproducts.com";
 
-// Module-level token cache – reused across requests within same isolate
 let cachedToken: { access_token: string; expires_at: number } | null = null;
 
 async function getEpicToken(): Promise<string> {
@@ -43,7 +42,6 @@ async function getEpicToken(): Promise<string> {
   return data.access_token;
 }
 
-/** Validate Supabase JWT and return user id */
 async function authenticateUser(req: Request): Promise<string> {
   const authHeader = req.headers.get("Authorization");
   if (!authHeader?.startsWith("Bearer ")) {
@@ -70,7 +68,6 @@ Deno.serve(async (req) => {
   }
 
   try {
-    // Authenticate user via Supabase JWT
     await authenticateUser(req);
 
     const { action, ...params } = await req.json();
@@ -105,14 +102,10 @@ Deno.serve(async (req) => {
     }
 
     if (action === "create-attachment") {
-      const { description, folder, attachTo, uploadFileName } = params;
-
-      if (!attachTo?.id || !attachTo?.type) {
-        throw new Error("attachTo.id and attachTo.type are required");
-      }
+      const { description, folderId, uploadFileName } = params;
 
       const token = await getEpicToken();
-      const attachmentUrl = `${EPIC_BASE_URL}/epic/attachment/v2/attachments?description=${encodeURIComponent(description || uploadFileName)}&folder=${encodeURIComponent(folder || "")}`;
+      const attachmentUrl = `${EPIC_BASE_URL}/epic/attachment/v2/attachments?description=${encodeURIComponent(description || uploadFileName)}&folder=${encodeURIComponent(folderId || "")}`;
       const res = await fetch(attachmentUrl, {
         method: "POST",
         headers: {
@@ -121,7 +114,6 @@ Deno.serve(async (req) => {
         },
         body: JSON.stringify({
           active: true,
-          attachTo: { id: attachTo.id, type: attachTo.type },
           uploadFileName,
         }),
       });
@@ -144,7 +136,6 @@ Deno.serve(async (req) => {
         throw new Error("uploadUrl and fileBase64 are required");
       }
 
-      // Decode base64 to binary
       const binaryStr = atob(fileBase64);
       const bytes = new Uint8Array(binaryStr.length);
       for (let i = 0; i < binaryStr.length; i++) {
