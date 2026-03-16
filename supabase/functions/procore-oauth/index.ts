@@ -113,8 +113,16 @@ serve(async (req) => {
       if (!tokenData) {
         console.log(`[get-token] No token record found for user: ${user.id}`);
         return new Response(
-          JSON.stringify({ error: "No token found", needs_reauth: true }),
-          { status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          JSON.stringify({
+            accessToken: null,
+            procoreEmail: null,
+            procoreCompanyId: null,
+            expiresAt: null,
+            isExpired: true,
+            needs_reauth: true,
+            connected: false,
+          }),
+          { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
         );
       }
 
