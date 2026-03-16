@@ -10,8 +10,11 @@ import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { generatePdfFromElement, getImageBase64, waitForImages, proxyImageToDataUrl } from "@/lib/pdfExporter";
 import { ProcoreExportDialog } from "@/components/wizard/ProcoreExportDialog";
+import { AppliedEpicExportDialog } from "@/components/wizard/AppliedEpicExportDialog";
 import riskBlueLogo from "@/assets/logo-riskblue.png";
 import procoreIcon from "@/assets/icon_procore.png";
+import epicIcon from "@/assets/logo_appliedepic.png";
+import ams360Icon from "@/assets/logo_ams360.png";
 
 /** Resolve storage paths and legacy public URLs to data URLs via proxy */
 const resolveDrawingUrls = async (items: AnalysisItem[]): Promise<AnalysisItem[]> => {
