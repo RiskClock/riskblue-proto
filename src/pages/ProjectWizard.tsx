@@ -134,6 +134,8 @@ const ProjectWizardContent = () => {
   // Procore export state for guideline tab
   const [showProcoreExportMain, setShowProcoreExportMain] = useState(false);
   const [pdfBlobForProcoreMain, setPdfBlobForProcoreMain] = useState<Blob | null>(null);
+  const [showEpicExportMain, setShowEpicExportMain] = useState(false);
+  const [pdfBlobForEpicMain, setPdfBlobForEpicMain] = useState<Blob | null>(null);
   
   // Upload drawings state
   const drawingsFileInputRef = useRef<HTMLInputElement>(null);
