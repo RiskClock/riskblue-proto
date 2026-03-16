@@ -10,8 +10,11 @@ import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { generatePdfFromElement, getImageBase64, waitForImages, proxyImageToDataUrl } from "@/lib/pdfExporter";
 import { ProcoreExportDialog } from "@/components/wizard/ProcoreExportDialog";
+import { AppliedEpicExportDialog } from "@/components/wizard/AppliedEpicExportDialog";
 import riskBlueLogo from "@/assets/logo-riskblue.png";
 import procoreIcon from "@/assets/icon_procore.png";
+import epicIcon from "@/assets/logo_appliedepic.png";
+import ams360Icon from "@/assets/logo_ams360.png";
 
 /** Resolve storage paths and legacy public URLs to data URLs via proxy */
 const resolveDrawingUrls = async (items: AnalysisItem[]): Promise<AnalysisItem[]> => {
@@ -71,7 +74,9 @@ interface WaterMitigationGuidelinesStepProps {
 export const WaterMitigationGuidelinesStep = ({ data, analysisItems = [], onBack, onNext, riskTimelineData }: WaterMitigationGuidelinesStepProps) => {
   const { toast } = useToast();
   const [showProcoreExport, setShowProcoreExport] = useState(false);
+  const [showEpicExport, setShowEpicExport] = useState(false);
   const [pdfBlobForProcore, setPdfBlobForProcore] = useState<Blob | null>(null);
+  const [pdfBlobForEpic, setPdfBlobForEpic] = useState<Blob | null>(null);
   const [pdfFileName, setPdfFileName] = useState("");
   // Fetch control details for the appendix
   const { data: controlDetails = [] } = useQuery({
@@ -288,32 +293,27 @@ export const WaterMitigationGuidelinesStep = ({ data, analysisItems = [], onBack
     });
   };
 
-  const handleExportToProcore = async () => {
+  const generatePdfBlob = async (): Promise<{ blob: Blob; filename: string } | null> => {
     const filename = generateReportFilename(data.name || "unnamed_project", "Water Mitigation Guideline");
-    
-    toast({
-      title: "Preparing report...",
-      description: "Generating PDF for Procore export...",
-    });
 
     let preparedByName = "";
     let createdByName = "";
-    
+
     try {
       const { data: { user } } = await supabase.auth.getUser();
       const userIdsToFetch = [user?.id, data.user_id].filter(Boolean) as string[];
       const uniqueUserIds = [...new Set(userIdsToFetch)];
-      
+
       if (uniqueUserIds.length > 0) {
         const { data: profilesData } = await supabase
           .from('profiles')
           .select('user_id, display_name')
           .in('user_id', uniqueUserIds);
-        
+
         const profilesMap = new Map(
           (profilesData || []).map(p => [p.user_id, p.display_name])
         );
-        
+
         preparedByName = profilesMap.get(user?.id || "") || user?.email || "";
         createdByName = profilesMap.get(data.user_id) || preparedByName;
       }
@@ -327,61 +327,79 @@ export const WaterMitigationGuidelinesStep = ({ data, analysisItems = [], onBack
     reportContainer.style.left = '-9999px';
     reportContainer.style.top = '0';
     document.body.appendChild(reportContainer);
-    
+
     const root = document.createElement('div');
     reportContainer.appendChild(root);
-    
-    import('react-dom/client').then(async ({ createRoot }) => {
-      // Pre-resolve custom drawing URLs to signed URLs
-      const resolvedItems = await resolveDrawingUrls(analysisItems);
-      
-      const reactRoot = createRoot(root);
-      reactRoot.render(
-        <WaterRiskReport 
-          data={data} 
-          analysisItems={resolvedItems} 
-          controlDetails={controlDetails}
-          preparedBy={preparedByName}
-          createdBy={createdByName}
-          riskTimelineData={riskTimelineData}
-        />
-      );
-      
-      await new Promise(requestAnimationFrame);
-      await new Promise(requestAnimationFrame);
-      await waitForImages(reportContainer);
-      const logoBase64 = await getImageBase64(riskBlueLogo);
-      
-      try {
-        const coverEl = reportContainer.querySelector('#cover-page') as HTMLElement | null;
 
-        const blob = await generatePdfFromElement(reportContainer, {
-          filename,
-          margins: { top: 15, right: 15, bottom: 25, left: 15 },
-          logoBase64,
-          skipLogoOnFirstPage: true,
-          returnBlob: true,
-          fullBleedFirstPage: true,
-          coverElement: coverEl || undefined,
-        });
+    const { createRoot } = await import('react-dom/client');
+    const resolvedItems = await resolveDrawingUrls(analysisItems);
 
-        if (blob instanceof Blob) {
-          setPdfBlobForProcore(blob);
-          setPdfFileName(`${filename}.pdf`);
-          setShowProcoreExport(true);
-        }
-      } catch (error) {
-        console.error("PDF generation failed:", error);
-        toast({
-          title: "Export Failed",
-          description: "Failed to generate PDF. Please try again.",
-          variant: "destructive",
-        });
-      } finally {
-        reactRoot.unmount();
-        document.body.removeChild(reportContainer);
+    const reactRoot = createRoot(root);
+    reactRoot.render(
+      <WaterRiskReport
+        data={data}
+        analysisItems={resolvedItems}
+        controlDetails={controlDetails}
+        preparedBy={preparedByName}
+        createdBy={createdByName}
+        riskTimelineData={riskTimelineData}
+      />
+    );
+
+    await new Promise(requestAnimationFrame);
+    await new Promise(requestAnimationFrame);
+    await waitForImages(reportContainer);
+    const logoBase64 = await getImageBase64(riskBlueLogo);
+
+    try {
+      const coverEl = reportContainer.querySelector('#cover-page') as HTMLElement | null;
+
+      const blob = await generatePdfFromElement(reportContainer, {
+        filename,
+        margins: { top: 15, right: 15, bottom: 25, left: 15 },
+        logoBase64,
+        skipLogoOnFirstPage: true,
+        returnBlob: true,
+        fullBleedFirstPage: true,
+        coverElement: coverEl || undefined,
+      });
+
+      if (blob instanceof Blob) {
+        return { blob, filename: `${filename}.pdf` };
       }
-    });
+      return null;
+    } catch (error) {
+      console.error("PDF generation failed:", error);
+      toast({
+        title: "Export Failed",
+        description: "Failed to generate PDF. Please try again.",
+        variant: "destructive",
+      });
+      return null;
+    } finally {
+      reactRoot.unmount();
+      document.body.removeChild(reportContainer);
+    }
+  };
+
+  const handleExportToProcore = async () => {
+    toast({ title: "Preparing report...", description: "Generating PDF for Procore export..." });
+    const result = await generatePdfBlob();
+    if (result) {
+      setPdfBlobForProcore(result.blob);
+      setPdfFileName(result.filename);
+      setShowProcoreExport(true);
+    }
+  };
+
+  const handleExportToEpic = async () => {
+    toast({ title: "Preparing report...", description: "Generating PDF for Applied Epic export..." });
+    const result = await generatePdfBlob();
+    if (result) {
+      setPdfBlobForEpic(result.blob);
+      setPdfFileName(result.filename);
+      setShowEpicExport(true);
+    }
   };
 
   const handleSendRFP = () => {
@@ -488,7 +506,15 @@ export const WaterMitigationGuidelinesStep = ({ data, analysisItems = [], onBack
               </DropdownMenuItem>
               <DropdownMenuItem onClick={handleExportToProcore}>
                 <img src={procoreIcon} alt="" className="h-4 w-4 mr-2" />
-                Export to Procore
+                Upload to Procore
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={handleExportToEpic}>
+                <img src={epicIcon} alt="" className="h-4 w-4 mr-2" />
+                Upload to Applied Epic
+              </DropdownMenuItem>
+              <DropdownMenuItem disabled className="opacity-50">
+                <img src={ams360Icon} alt="" className="h-4 w-4 mr-2" />
+                Upload to AMS360 (coming soon)
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
@@ -510,6 +536,13 @@ export const WaterMitigationGuidelinesStep = ({ data, analysisItems = [], onBack
         isOpen={showProcoreExport}
         onClose={() => setShowProcoreExport(false)}
         pdfBlob={pdfBlobForProcore}
+        fileName={pdfFileName}
+      />
+
+      <AppliedEpicExportDialog
+        isOpen={showEpicExport}
+        onClose={() => { setShowEpicExport(false); setPdfBlobForEpic(null); }}
+        pdfBlob={pdfBlobForEpic}
         fileName={pdfFileName}
       />
     </div>

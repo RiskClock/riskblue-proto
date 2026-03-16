@@ -25,7 +25,7 @@ export const useProjectMutation = (
   
   const [isSaving, setIsSaving] = useState(false);
   const pendingUpdates = useRef<Record<string, any>>({});
-  const debounceTimer = useRef<NodeJS.Timeout | null>(null);
+  const debounceTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const flushPromise = useRef<Promise<void> | null>(null);
 
   // Execute the batched update
