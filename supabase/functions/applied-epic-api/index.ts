@@ -56,13 +56,12 @@ async function authenticateUser(req: Request): Promise<string> {
     { global: { headers: { Authorization: authHeader } } }
   );
 
-  const token = authHeader.replace("Bearer ", "");
-  const { data, error } = await supabase.auth.getClaims(token);
-  if (error || !data?.claims) {
+  const { data: { user }, error } = await supabase.auth.getUser();
+  if (error || !user) {
     throw new Error("Unauthorized");
   }
 
-  return data.claims.sub as string;
+  return user.id;
 }
 
 Deno.serve(async (req) => {
