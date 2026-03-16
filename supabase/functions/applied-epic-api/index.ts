@@ -77,9 +77,12 @@ Deno.serve(async (req) => {
 
     if (action === "list-folders") {
       const token = await getEpicToken();
-      const res = await fetch(`${EPIC_BASE_URL}/attachment-folders`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
+      const res = await fetch(
+        `${EPIC_BASE_URL}/epic/attachment-folder/v1/attachment-folders?limit=100&embed=parentFolder&accountTypes=CLIENT,VENDOR&Accept-Language=en-US`,
+        {
+          headers: { Authorization: `Bearer ${token}` },
+        }
+      );
       if (!res.ok) {
         const text = await res.text();
         throw new Error(`Failed to list folders: ${res.status} ${text}`);
@@ -98,16 +101,15 @@ Deno.serve(async (req) => {
       }
 
       const token = await getEpicToken();
-      const res = await fetch(`${EPIC_BASE_URL}/attachments`, {
+      const attachmentUrl = `${EPIC_BASE_URL}/epic/attachment/v2/attachments?description=${encodeURIComponent(description || uploadFileName)}&folder=${encodeURIComponent(folder || "")}`;
+      const res = await fetch(attachmentUrl, {
         method: "POST",
         headers: {
           Authorization: `Bearer ${token}`,
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          description: description || uploadFileName,
           active: true,
-          folder,
           attachTo: { id: attachTo.id, type: attachTo.type },
           uploadFileName,
         }),

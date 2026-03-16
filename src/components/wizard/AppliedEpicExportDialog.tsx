@@ -42,14 +42,16 @@ export const AppliedEpicExportDialog = ({
   const [success, setSuccess] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Fetch folders on open
+  // Fetch folders once pdfBlob is available
   useEffect(() => {
     if (!isOpen) return;
     setSuccess(false);
     setError(null);
     setUploadStep("");
-    loadFolders();
-  }, [isOpen]);
+    if (pdfBlob) {
+      loadFolders();
+    }
+  }, [isOpen, pdfBlob]);
 
   const loadFolders = async () => {
     setFoldersLoading(true);
@@ -166,8 +168,13 @@ export const AppliedEpicExportDialog = ({
         </DialogHeader>
 
         <div className="space-y-4">
-          {/* Success state */}
-          {success ? (
+          {/* PDF generating state */}
+          {!pdfBlob && !success ? (
+            <div className="flex flex-col items-center gap-3 py-8">
+              <Loader2 className="w-8 h-8 animate-spin text-primary" />
+              <p className="text-sm text-muted-foreground">Generating PDF report...</p>
+            </div>
+          ) : success ? (
             <div className="space-y-4 py-2">
               <div className="flex flex-col items-center gap-3 text-center">
                 <CheckCircle2 className="w-10 h-10 text-emerald-500" />

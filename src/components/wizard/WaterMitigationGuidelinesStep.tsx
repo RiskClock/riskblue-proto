@@ -383,22 +383,26 @@ export const WaterMitigationGuidelinesStep = ({ data, analysisItems = [], onBack
   };
 
   const handleExportToProcore = async () => {
-    toast({ title: "Preparing report...", description: "Generating PDF for Procore export..." });
+    const filename = generateReportFilename(data.name || "unnamed_project", "Water Mitigation Guideline");
+    setPdfFileName(`${filename}.pdf`);
+    setPdfBlobForProcore(null);
+    setShowProcoreExport(true);
     const result = await generatePdfBlob();
     if (result) {
       setPdfBlobForProcore(result.blob);
       setPdfFileName(result.filename);
-      setShowProcoreExport(true);
     }
   };
 
   const handleExportToEpic = async () => {
-    toast({ title: "Preparing report...", description: "Generating PDF for Applied Epic export..." });
+    const filename = generateReportFilename(data.name || "unnamed_project", "Water Mitigation Guideline");
+    setPdfFileName(`${filename}.pdf`);
+    setPdfBlobForEpic(null);
+    setShowEpicExport(true);
     const result = await generatePdfBlob();
     if (result) {
       setPdfBlobForEpic(result.blob);
       setPdfFileName(result.filename);
-      setShowEpicExport(true);
     }
   };
 

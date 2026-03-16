@@ -241,8 +241,13 @@ export const ProcoreExportDialog = ({
         </DialogHeader>
 
         <div className="space-y-4">
-          {/* Success state */}
-          {uploadSuccess ? (
+          {/* PDF generating state */}
+          {!pdfBlob && !uploadSuccess ? (
+            <div className="flex flex-col items-center gap-3 py-8">
+              <Loader2 className="w-8 h-8 animate-spin text-primary" />
+              <p className="text-sm text-muted-foreground">Generating PDF report...</p>
+            </div>
+          ) : uploadSuccess ? (
             <div className="space-y-4 py-2">
               <div className="flex flex-col items-center gap-3 text-center">
                 <CheckCircle2 className="w-10 h-10 text-emerald-500" />
