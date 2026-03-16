@@ -83,7 +83,7 @@ export const ProjectProvider: React.FC<ProjectProviderProps> = ({
   const [hasPendingChanges, setHasPendingChanges] = useState(false);
   
   const pendingUpdates = useRef<Record<string, any>>({});
-  const debounceTimer = useRef<NodeJS.Timeout | null>(null);
+  const debounceTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const hasAppliedInitialData = useRef(false);
   const isNewProject = !projectId || projectId === 'new';
   
