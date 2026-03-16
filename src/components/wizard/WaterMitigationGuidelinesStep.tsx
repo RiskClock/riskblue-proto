@@ -293,7 +293,96 @@ export const WaterMitigationGuidelinesStep = ({ data, analysisItems = [], onBack
     });
   };
 
-  const handleExportToProcore = async () => {
+  const generatePdfBlob = async (): Promise<{ blob: Blob; filename: string } | null> => {
+    const filename = generateReportFilename(data.name || "unnamed_project", "Water Mitigation Guideline");
+
+    let preparedByName = "";
+    let createdByName = "";
+
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      const userIdsToFetch = [user?.id, data.user_id].filter(Boolean) as string[];
+      const uniqueUserIds = [...new Set(userIdsToFetch)];
+
+      if (uniqueUserIds.length > 0) {
+        const { data: profilesData } = await supabase
+          .from('profiles')
+          .select('user_id, display_name')
+          .in('user_id', uniqueUserIds);
+
+        const profilesMap = new Map(
+          (profilesData || []).map(p => [p.user_id, p.display_name])
+        );
+
+        preparedByName = profilesMap.get(user?.id || "") || user?.email || "";
+        createdByName = profilesMap.get(data.user_id) || preparedByName;
+      }
+    } catch (e) {
+      console.error("Failed to fetch profile names:", e);
+    }
+
+    const reportContainer = document.createElement('div');
+    reportContainer.className = 'print-report-container';
+    reportContainer.style.position = 'absolute';
+    reportContainer.style.left = '-9999px';
+    reportContainer.style.top = '0';
+    document.body.appendChild(reportContainer);
+
+    const root = document.createElement('div');
+    reportContainer.appendChild(root);
+
+    const { createRoot } = await import('react-dom/client');
+    const resolvedItems = await resolveDrawingUrls(analysisItems);
+
+    const reactRoot = createRoot(root);
+    reactRoot.render(
+      <WaterRiskReport
+        data={data}
+        analysisItems={resolvedItems}
+        controlDetails={controlDetails}
+        preparedBy={preparedByName}
+        createdBy={createdByName}
+        riskTimelineData={riskTimelineData}
+      />
+    );
+
+    await new Promise(requestAnimationFrame);
+    await new Promise(requestAnimationFrame);
+    await waitForImages(reportContainer);
+    const logoBase64 = await getImageBase64(riskBlueLogo);
+
+    try {
+      const coverEl = reportContainer.querySelector('#cover-page') as HTMLElement | null;
+
+      const blob = await generatePdfFromElement(reportContainer, {
+        filename,
+        margins: { top: 15, right: 15, bottom: 25, left: 15 },
+        logoBase64,
+        skipLogoOnFirstPage: true,
+        returnBlob: true,
+        fullBleedFirstPage: true,
+        coverElement: coverEl || undefined,
+      });
+
+      if (blob instanceof Blob) {
+        return { blob, filename: `${filename}.pdf` };
+      }
+      return null;
+    } catch (error) {
+      console.error("PDF generation failed:", error);
+      toast({
+        title: "Export Failed",
+        description: "Failed to generate PDF. Please try again.",
+        variant: "destructive",
+      });
+      return null;
+    } finally {
+      reactRoot.unmount();
+      document.body.removeChild(reportContainer);
+    }
+  };
+
+
     const filename = generateReportFilename(data.name || "unnamed_project", "Water Mitigation Guideline");
     
     toast({
