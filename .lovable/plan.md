@@ -1,29 +1,47 @@
 
 
-# Use Full Width for the Raw Result Modal
+# Fix: Applied Epic Edge Function Auth Error
 
 ## Problem
-The `RawResultModal` is limited to `sm:max-w-5xl` (1024px), leaving large margins on wider screens. Both the drawing preview and AI response text would benefit from more horizontal space.
+The `applied-epic-api` edge function uses `supabase.auth.getClaims(token)` for JWT verification, but this method doesn't exist in the Supabase JS client v2. This causes the function to throw "Unauthorized" before it ever reaches the Epic API calls, which is why the dialog shows "Edge Function returned a non-2xx status code" and there are no meaningful logs.
+
+## Root Cause
+The `authenticateUser()` function on line 60 calls `getClaims()` which is not a valid method. Every other edge function in this project uses `getUser()` instead.
 
 ## Fix
 
-### File: `src/components/analysis/AnalysisSection.tsx`
+### File: `supabase/functions/applied-epic-api/index.ts`
 
-**Single change on line 797**: Widen the dialog from `sm:max-w-5xl` to `sm:max-w-[95vw]` (or `max-w-[1600px]` as a reasonable cap) and increase height slightly.
+Replace the `authenticateUser` function (lines 47-66) to use `getUser()` — matching the pattern used in `procore-oauth`, `google-drive-oauth`, and all other functions:
 
+```typescript
+async function authenticateUser(req: Request): Promise<string> {
+  const authHeader = req.headers.get("Authorization");
+  if (!authHeader?.startsWith("Bearer ")) {
+    throw new Error("Unauthorized");
+  }
+
+  const supabase = createClient(
+    Deno.env.get("SUPABASE_URL")!,
+    Deno.env.get("SUPABASE_ANON_KEY")!,
+    { global: { headers: { Authorization: authHeader } } }
+  );
+
+  const { data: { user }, error } = await supabase.auth.getUser();
+  if (error || !user) {
+    throw new Error("Unauthorized");
+  }
+
+  return user.id;
+}
 ```
-// Before
-<DialogContent className="sm:max-w-5xl h-[85vh] flex flex-col p-4 gap-2">
 
-// After
-<DialogContent className="sm:max-w-[95vw] max-w-[1800px] h-[90vh] flex flex-col p-4 gap-2">
-```
-
-This one-line change makes the modal stretch to 95% of the viewport width (capped at 1800px), giving substantially more room to both the drawing viewer and the AI response panel.
+## Logos
+The Applied Epic and AMS360 logos are already correctly copied to `src/assets/` and imported in all three components (`ProjectWizard.tsx`, `WaterMitigationGuidelinesStep.tsx`, `AppliedEpicExportDialog.tsx`). No changes needed there.
 
 ## Files Changed
 
 | File | Change |
 |---|---|
-| `src/components/analysis/AnalysisSection.tsx` | Line 797: widen dialog max-width from `5xl` to `95vw` (capped at 1800px), height from 85vh to 90vh |
+| `supabase/functions/applied-epic-api/index.ts` | Replace `getClaims()` with `getUser()` in `authenticateUser` |
 
