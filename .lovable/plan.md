@@ -1,29 +1,34 @@
 
 
-# Use Full Width for the Raw Result Modal
+# Fix Epic API Endpoints + Immediate Dialog with PDF Loading
 
-## Problem
-The `RawResultModal` is limited to `sm:max-w-5xl` (1024px), leaving large margins on wider screens. Both the drawing preview and AI response text would benefit from more horizontal space.
+## Changes
 
-## Fix
+### 1. Edge Function: Fix endpoint paths only (keep POST, keep JSON body)
 
-### File: `src/components/analysis/AnalysisSection.tsx`
+**File: `supabase/functions/applied-epic-api/index.ts`**
 
-**Single change on line 797**: Widen the dialog from `sm:max-w-5xl` to `sm:max-w-[95vw]` (or `max-w-[1600px]` as a reasonable cap) and increase height slightly.
+- **Token** (line 23): Keep as-is — `POST /v1/auth/connect/token` is correct
+- **List folders** (line 80): Change URL from `/attachment-folders` to `/epic/attachment-folder/v1/attachment-folders?limit=100&embed=parentFolder&accountTypes=CLIENT,VENDOR&Accept-Language=en-US`
+- **Create attachment** (line 101): Change URL from `/attachments` to `/epic/attachment/v2/attachments?description=${encodeURIComponent(description)}&folder=${folder}`. Keep JSON body as-is for `attachTo` and `uploadFileName`.
 
-```
-// Before
-<DialogContent className="sm:max-w-5xl h-[85vh] flex flex-col p-4 gap-2">
+### 2. UX: Open dialog immediately, show PDF generating spinner
 
-// After
-<DialogContent className="sm:max-w-[95vw] max-w-[1800px] h-[90vh] flex flex-col p-4 gap-2">
-```
+**File: `src/components/wizard/WaterMitigationGuidelinesStep.tsx`**
+- `handleExportToProcore` and `handleExportToEpic`: Open the dialog first (`setShow...Export(true)`), then generate PDF in background, then set blob. Remove toast calls.
 
-This one-line change makes the modal stretch to 95% of the viewport width (capped at 1800px), giving substantially more room to both the drawing viewer and the AI response panel.
+**File: `src/components/wizard/AppliedEpicExportDialog.tsx`**
+- When `isOpen && !pdfBlob`, show a "Generating PDF..." spinner instead of the form. Defer folder fetching until pdfBlob is available.
 
-## Files Changed
+**File: `src/components/wizard/ProcoreExportDialog.tsx`**
+- Same: when `isOpen && !pdfBlob`, show "Generating PDF..." spinner before the normal flow.
+
+### Files Changed
 
 | File | Change |
 |---|---|
-| `src/components/analysis/AnalysisSection.tsx` | Line 797: widen dialog max-width from `5xl` to `95vw` (capped at 1800px), height from 85vh to 90vh |
+| `supabase/functions/applied-epic-api/index.ts` | Fix folders + create-attachment URL paths |
+| `src/components/wizard/WaterMitigationGuidelinesStep.tsx` | Open dialogs immediately, generate PDF after |
+| `src/components/wizard/AppliedEpicExportDialog.tsx` | Add PDF generating spinner state |
+| `src/components/wizard/ProcoreExportDialog.tsx` | Add PDF generating spinner state |
 
