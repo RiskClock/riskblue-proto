@@ -74,7 +74,9 @@ interface WaterMitigationGuidelinesStepProps {
 export const WaterMitigationGuidelinesStep = ({ data, analysisItems = [], onBack, onNext, riskTimelineData }: WaterMitigationGuidelinesStepProps) => {
   const { toast } = useToast();
   const [showProcoreExport, setShowProcoreExport] = useState(false);
+  const [showEpicExport, setShowEpicExport] = useState(false);
   const [pdfBlobForProcore, setPdfBlobForProcore] = useState<Blob | null>(null);
+  const [pdfBlobForEpic, setPdfBlobForEpic] = useState<Blob | null>(null);
   const [pdfFileName, setPdfFileName] = useState("");
   // Fetch control details for the appendix
   const { data: controlDetails = [] } = useQuery({
