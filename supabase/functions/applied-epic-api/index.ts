@@ -118,13 +118,16 @@ Deno.serve(async (req) => {
         }),
       });
 
+      const rawText = await res.text();
+      console.log("Epic create-attachment status:", res.status, "body:", rawText);
+
       if (!res.ok) {
-        const text = await res.text();
-        console.error("Epic create-attachment failed:", res.status, text);
-        throw new Error(`Failed to create attachment: ${res.status} ${text}`);
+        console.error("Epic create-attachment failed:", res.status, rawText);
+        throw new Error(`Failed to create attachment: ${res.status} ${rawText}`);
       }
 
-      const attachment = await res.json();
+      const attachment = JSON.parse(rawText);
+      console.log("Epic create-attachment parsed:", JSON.stringify(attachment));
       return new Response(JSON.stringify({ attachment }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
@@ -136,6 +139,11 @@ Deno.serve(async (req) => {
       if (!uploadUrl || !fileBase64) {
         throw new Error("uploadUrl and fileBase64 are required");
       }
+
+      const epicHost = new URL(EPIC_BASE_URL).host;
+      const uploadHost = new URL(uploadUrl).host;
+      console.log("Epic upload target host:", uploadHost, "Epic API host:", epicHost, "same:", uploadHost === epicHost);
+      console.log("Epic upload-file request:", { uploadUrl, method: "PUT", bodyLength: fileBase64.length });
 
       const binaryStr = atob(fileBase64);
       const bytes = new Uint8Array(binaryStr.length);
@@ -151,7 +159,8 @@ Deno.serve(async (req) => {
 
       if (!res.ok) {
         const text = await res.text();
-        console.error("Epic upload-file failed:", res.status, text);
+        const headers = Object.fromEntries(res.headers.entries());
+        console.error("Epic upload-file failed:", res.status, text, "response headers:", JSON.stringify(headers));
         throw new Error(`Failed to upload file: ${res.status} ${text}`);
       }
 
