@@ -87,7 +87,16 @@ Deno.serve(async (req) => {
         const text = await res.text();
         throw new Error(`Failed to list folders: ${res.status} ${text}`);
       }
-      const folders = await res.json();
+      const payload = await res.json();
+      const folders = Array.isArray(payload)
+        ? payload
+        : Array.isArray(payload?.folders)
+          ? payload.folders
+          : Array.isArray(payload?.items)
+            ? payload.items
+            : Array.isArray(payload?.data)
+              ? payload.data
+              : [];
       return new Response(JSON.stringify({ folders }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });

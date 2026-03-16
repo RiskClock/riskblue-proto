@@ -62,7 +62,25 @@ export const AppliedEpicExportDialog = ({
       });
       if (fnError) throw new Error(fnError.message);
       if (data?.error) throw new Error(data.error);
-      setFolders(data.folders || []);
+      const rawFolders = data?.folders;
+      const normalizedFolders = Array.isArray(rawFolders)
+        ? rawFolders
+        : Array.isArray(rawFolders?.folders)
+          ? rawFolders.folders
+          : Array.isArray(rawFolders?.items)
+            ? rawFolders.items
+            : Array.isArray(rawFolders?.data)
+              ? rawFolders.data
+              : [];
+
+      const safeFolders: EpicFolder[] = normalizedFolders
+        .map((folder: any) => ({
+          id: String(folder?.id ?? folder?.folderId ?? ""),
+          name: String(folder?.name ?? folder?.displayName ?? "Unnamed Folder"),
+        }))
+        .filter((folder: EpicFolder) => folder.id.length > 0);
+
+      setFolders(safeFolders);
     } catch (err: any) {
       console.error("Failed to load Epic folders:", err);
       setFoldersError(err.message || "Failed to load folders");

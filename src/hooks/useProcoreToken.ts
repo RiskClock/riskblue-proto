@@ -90,6 +90,12 @@ export function useProcoreToken() {
 
       const data = await response.json();
 
+      if (data?.needs_reauth || !data?.accessToken) {
+        setProcoreToken(null);
+        setNeedsReauth(true);
+        return;
+      }
+
       if (data.isExpired) {
         // Try refresh once — result handled inside refreshTokenInternal
         const refreshed = await refreshTokenInternal();
