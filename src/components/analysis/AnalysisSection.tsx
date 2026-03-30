@@ -1474,6 +1474,10 @@ export function AnalysisSection({ requestId, files, projectId, sourceType }: Ana
       setAnalyzingClasses((prev) => {
         const next = new Set(prev);
         next.delete(className);
+        // If no more classes are analyzing, mark request as complete
+        if (next.size === 0) {
+          supabase.from("analysis_requests").update({ status: "complete" }).eq("id", requestId);
+        }
         return next;
       });
       delete abortControllers.current[className];
