@@ -1606,7 +1606,7 @@ export function AnalysisSection({ requestId, files, projectId, sourceType }: Ana
                 <thead>
                   {/* Header row: file info columns + class abbreviations */}
                   <tr className="border-b">
-                    <th className="sticky left-0 z-10 bg-card px-4 py-2 text-left font-medium text-muted-foreground min-w-[320px] border-r">
+                    <th className="sticky left-0 z-10 bg-card px-4 py-2 text-left font-medium text-muted-foreground min-w-[180px] max-w-[320px] w-auto border-r">
                       <span className="block text-sm">File Name</span>
                       <span className="block text-xs font-normal text-muted-foreground/70">
                         {copiedFiles.length} files · {formatBytes(totalSizeBytes)} · {sourceLabel}
@@ -1628,7 +1628,7 @@ export function AnalysisSection({ requestId, files, projectId, sourceType }: Ana
 
                   {/* Button sub-row: per-column analyze/stop controls */}
                   <tr className="border-b bg-muted/20">
-                     <td className="sticky left-0 z-10 bg-muted/20 px-4 py-1.5 border-r min-w-[320px]">
+                     <td className="sticky left-0 z-10 bg-muted/20 px-4 py-1.5 border-r min-w-[180px] max-w-[320px] w-auto">
                        <Button size="sm" variant="outline" className="h-6 text-xs gap-1" onClick={handleDownloadZip}>
                          <Download className="w-3 h-3" />
                          Download ZIP
@@ -1686,7 +1686,7 @@ export function AnalysisSection({ requestId, files, projectId, sourceType }: Ana
                   {copiedFiles.map((file) => (
                     <tr key={file.id} className="border-b hover:bg-muted/30 transition-colors">
                       {/* File name (sticky) */}
-                      <td className="sticky left-0 z-10 bg-card hover:bg-muted/30 px-4 py-2 border-r min-w-[320px]">
+                      <td className="sticky left-0 z-10 bg-card hover:bg-muted/30 px-4 py-2 border-r min-w-[180px] max-w-[320px] w-auto">
                         <button
                           className="text-sm font-medium truncate block max-w-[300px] text-primary hover:underline text-left"
                           onClick={() => setPreviewFile(file)}
