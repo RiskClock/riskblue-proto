@@ -1,41 +1,53 @@
 
 
-# Fix File Name Column Width, Add Bounding Boxes to RawResultModal, Unify Zoom
+# Clickable AWP Acronyms, AI Model Selector, and Analysis Status Updates
 
-## 1. File Name column: content-hugging width
+## 1. Clickable AWP acronyms in analysis grid headers
 
 **File: `src/components/analysis/AnalysisSection.tsx`**
 
-Replace the fixed `min-w-[320px]` on the sticky file name column with a content-hugging approach:
-- Set `min-w-[180px] max-w-[320px] w-auto` on all three sticky `<th>`/`<td>` elements (header, sub-header, body rows)
-- The column will shrink to fit the longest file name but never exceed 320px or go below 180px
-- Keep the `truncate` on the file name text with `max-w-[300px]`
+In the header row (around line 1656-1666), the `<span>` showing `getPrefix(prompt.awp_class_name)` is currently a plain text tooltip trigger. Change it to an `<a>` tag that opens `prompt.drive_file_url` in a new tab. Keep the tooltip for the full class name. If `drive_file_url` is null, keep it as non-clickable text.
 
-## 2. Bounding boxes in RawResultModal
+The `AWPPrompt` interface already has `drive_file_url`. The `awp_class_prompts` query already fetches `*` which includes it.
 
-The `RawResultModal` currently renders the PDF as raw canvases with no detection overlays. Refactor it to:
+## 2. AI model selector dropdown
 
-- After loading the PDF, call `findBBoxInTextLayer()` (already defined in the same file) for each room tag parsed from `resultText` using `parseRoomTagsFromResult()`
-- Store all found bboxes as an array of `PDFBBox` objects
-- When drawing canvases, overlay red translucent rectangles for each bbox on the appropriate page canvas (same style as InstanceDetailModal: `rgba(239, 68, 68, 0.15)` fill, `rgba(239, 68, 68, 0.9)` stroke)
-- This requires keeping the `pdfViewport` per page to do coordinate conversion via `convertToViewportRectangle`
+**File: `src/components/analysis/AnalysisSection.tsx`**
 
-The approach: instead of rendering canvases at scale 2 and appending them raw, render at scale 4 (matching InstanceDetailModal), draw bboxes directly onto each canvas after rendering, then append them.
+- Add a `<Select>` dropdown to the header bar, positioned before the "Analyze All" button (line ~1626-1637).
+- Label it "Selected AI model:" with a dropdown of available models. The list:
+  - `OpenAI / gpt-5` 
+  - `OpenAI / gpt-5-mini` (current default)
+  - `OpenAI / gpt-5-nano`
+  - `Google / gemini-2.5-pro`
+  - `Google / gemini-2.5-flash`
+  - `Google / gemini-2.5-flash-lite`
+- Persist selection in `localStorage` key `analysis-ai-model` with default `gpt-5-mini`.
+- Disable the dropdown when `anyAnalyzing` is true.
+- Pass the selected model to `handleAnalyze`, which forwards it in the request body to `analyze-drawings`.
 
-## 3. Unified zoom logic
+**File: `supabase/functions/analyze-drawings/index.ts`**
 
-Currently there are 4 separate zoom implementations with different max/min/step values:
-- `LocationDetailsModal`: max 3, step 0.25
-- `InstanceDetailModal`: max 4, step 0.25
-- `RawResultModal`: max 4, step 0.25
-- `FilePreviewModal`: max 4, step 0.25
+- Accept optional `model` parameter from the request body (line ~253).
+- Default to `"gpt-5-mini"` if not provided.
+- Use it in `callResponsesApi` (line ~158) instead of hardcoded `"gpt-5-mini"`.
 
-Standardize all to: **min 0.25, max 8, step 0.25** with center-preserving scroll. The `InstanceDetailModal` already has the best implementation (center-preserving with `requestAnimationFrame`). Apply the same pattern to `RawResultModal`, `FilePreviewModal`, and `LocationDetailsModal` (which currently caps at 3x).
+## 3. Update analysis_requests status to "processing" during analysis
+
+**File: `src/components/analysis/AnalysisSection.tsx`**
+
+- In `handleAnalyze` (line ~1333), after `setAnalyzingClasses`, update the DB: `await supabase.from("analysis_requests").update({ status: "processing" }).eq("id", requestId)`.
+- In the `finally` block (line ~1469), after removing from `analyzingClasses`, check if `analyzingClasses` is now empty (no other classes still running). If so, update status back to `"complete"` (or keep as `"processing"` if other classes are still going — check `analyzingClasses.size`).
+
+**File: `src/pages/InternalAnalysisQueue.tsx`**
+
+- The existing `statusLabels` already maps `processing` → `"Analyzing"`. Update the label to `"Analysis in Progress"` for better clarity per the request.
 
 ## Files Changed
 
 | File | Change |
 |---|---|
-| `src/components/analysis/AnalysisSection.tsx` | File name column width (3 elements), RawResultModal bounding boxes, unified zoom constants across RawResultModal/FilePreviewModal/InstanceDetailModal |
-| `src/components/wizard/LocationDetailsModal.tsx` | Increase max zoom from 3 to 8 |
+| `src/components/analysis/AnalysisSection.tsx` | Clickable acronym links, AI model selector dropdown with localStorage persistence, update analysis_requests.status on start/finish |
+| `supabase/functions/analyze-drawings/index.ts` | Accept and use `model` parameter |
+| `src/pages/InternalAnalysisQueue.tsx` | Change "Analyzing" label to "Analysis in Progress" |
 
