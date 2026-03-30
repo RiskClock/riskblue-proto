@@ -919,11 +919,11 @@ function FilePreviewModal({ file, onClose }: FilePreviewModalProps) {
 
   const handleZoomIn = () => {
     const scroll = scrollRef.current;
-    if (!scroll) { setZoom(z => Math.min(4, z + 0.25)); return; }
+    if (!scroll) { setZoom(z => Math.min(8, z + 0.25)); return; }
     const cx = scroll.scrollWidth > 0 ? (scroll.scrollLeft + scroll.clientWidth / 2) / scroll.scrollWidth : 0.5;
     const cy = scroll.scrollHeight > 0 ? (scroll.scrollTop + scroll.clientHeight / 2) / scroll.scrollHeight : 0.5;
     setZoom(prev => {
-      const next = Math.min(4, prev + 0.25);
+      const next = Math.min(8, prev + 0.25);
       requestAnimationFrame(() => {
         scroll.scrollLeft = cx * scroll.scrollWidth - scroll.clientWidth / 2;
         scroll.scrollTop = cy * scroll.scrollHeight - scroll.clientHeight / 2;
@@ -959,7 +959,7 @@ function FilePreviewModal({ file, onClose }: FilePreviewModalProps) {
                 <ZoomOut className="w-4 h-4" />
               </Button>
               <span className="text-sm min-w-[3rem] text-center tabular-nums">{Math.round(zoom * 100)}%</span>
-              <Button variant="outline" size="icon" className="h-8 w-8" onClick={handleZoomIn} disabled={zoom >= 4 || loading}>
+              <Button variant="outline" size="icon" className="h-8 w-8" onClick={handleZoomIn} disabled={zoom >= 8 || loading}>
                 <ZoomIn className="w-4 h-4" />
               </Button>
             </div>
