@@ -570,13 +570,13 @@ function InstanceDetailModal({
   // Center-preserving zoom handlers — exact copy from LocationDetailsModal
   const handleZoomIn = () => {
     const container = containerRef.current;
-    if (!container) { setZoom(z => Math.min(4, z + 0.25)); return; }
+    if (!container) { setZoom(z => Math.min(8, z + 0.25)); return; }
     const scrollCenterX = container.scrollWidth > 0
       ? (container.scrollLeft + container.clientWidth / 2) / container.scrollWidth : 0.5;
     const scrollCenterY = container.scrollHeight > 0
       ? (container.scrollTop + container.clientHeight / 2) / container.scrollHeight : 0.5;
     setZoom(prevZoom => {
-      const newZoom = Math.min(4, prevZoom + 0.25);
+      const newZoom = Math.min(8, prevZoom + 0.25);
       requestAnimationFrame(() => {
         container.scrollLeft = scrollCenterX * container.scrollWidth - container.clientWidth / 2;
         container.scrollTop = scrollCenterY * container.scrollHeight - container.clientHeight / 2;
@@ -587,13 +587,13 @@ function InstanceDetailModal({
 
   const handleZoomOut = () => {
     const container = containerRef.current;
-    if (!container) { setZoom(z => Math.max(0.5, z - 0.25)); return; }
+    if (!container) { setZoom(z => Math.max(0.25, z - 0.25)); return; }
     const scrollCenterX = container.scrollWidth > 0
       ? (container.scrollLeft + container.clientWidth / 2) / container.scrollWidth : 0.5;
     const scrollCenterY = container.scrollHeight > 0
       ? (container.scrollTop + container.clientHeight / 2) / container.scrollHeight : 0.5;
     setZoom(prevZoom => {
-      const newZoom = Math.max(0.5, prevZoom - 0.25);
+      const newZoom = Math.max(0.25, prevZoom - 0.25);
       requestAnimationFrame(() => {
         container.scrollLeft = scrollCenterX * container.scrollWidth - container.clientWidth / 2;
         container.scrollTop = scrollCenterY * container.scrollHeight - container.clientHeight / 2;
@@ -659,11 +659,11 @@ function InstanceDetailModal({
             <div className="h-12 flex-shrink-0 flex items-center justify-between px-4 border-b bg-background">
               <span className="text-sm text-muted-foreground">Drawing Preview</span>
               <div className="flex items-center gap-2">
-                <Button variant="outline" size="icon" className="h-8 w-8" onClick={handleZoomOut} disabled={zoom <= 0.5}>
+                <Button variant="outline" size="icon" className="h-8 w-8" onClick={handleZoomOut} disabled={zoom <= 0.25}>
                   <ZoomOut className="w-4 h-4" />
                 </Button>
                 <span className="text-sm min-w-[3rem] text-center tabular-nums">{Math.round(zoom * 100)}%</span>
-                <Button variant="outline" size="icon" className="h-8 w-8" onClick={handleZoomIn} disabled={zoom >= 4}>
+                <Button variant="outline" size="icon" className="h-8 w-8" onClick={handleZoomIn} disabled={zoom >= 8}>
                   <ZoomIn className="w-4 h-4" />
                 </Button>
               </div>
@@ -717,10 +717,11 @@ function RawResultModal({ fileName, awpClassName, resultText, instanceCount, sou
   const [pdfLoading, setPdfLoading] = useState(false);
   const [pdfError, setPdfError] = useState<string | null>(null);
   const [zoom, setZoom] = useState(1);
+  const [bboxCount, setBboxCount] = useState(0);
   const pdfContainerRef = useRef<HTMLDivElement>(null);
   const pdfScrollRef = useRef<HTMLDivElement>(null);
 
-  // Load PDF from storage
+  // Load PDF from storage and draw bounding boxes
   useEffect(() => {
     const storagePath = sourceFile?.storage_path;
     if (!storagePath) { setPdfError("Drawing not available"); return; }
@@ -729,6 +730,7 @@ function RawResultModal({ fileName, awpClassName, resultText, instanceCount, sou
     setPdfError(null);
     setPages([]);
     setZoom(1);
+    setBboxCount(0);
 
     (async () => {
       try {
@@ -740,17 +742,55 @@ function RawResultModal({ fileName, awpClassName, resultText, instanceCount, sou
         if (cancelled) return;
         const pdf = await pdfjsLib.getDocument({ data: ab }).promise;
         if (cancelled) return;
+
+        // Parse room tags from AI result text
+        const roomTags = resultText ? parseRoomTagsFromResult(resultText) : [];
+        console.log(`[RawResultModal] Found ${roomTags.length} room tags to locate:`, roomTags.map(t => t.tag));
+
+        // Find all bboxes
+        const bboxes: PDFBBox[] = [];
+        for (const { tag, pageNum } of roomTags) {
+          const bbox = await findBBoxInTextLayer(pdf, tag, pageNum);
+          if (bbox) bboxes.push(bbox);
+          if (cancelled) return;
+        }
+        console.log(`[RawResultModal] Found ${bboxes.length} bounding boxes`);
+        setBboxCount(bboxes.length);
+
+        // Render pages with bbox overlays
         const maxPages = Math.min(pdf.numPages, 20);
         const canvases: HTMLCanvasElement[] = [];
         for (let i = 1; i <= maxPages; i++) {
           const page = await pdf.getPage(i);
-          const viewport = page.getViewport({ scale: 2 });
+          const scale = 4; // high-res for bbox precision
+          const viewport = page.getViewport({ scale });
           const canvas = document.createElement("canvas");
           canvas.width = viewport.width;
           canvas.height = viewport.height;
           const ctx = canvas.getContext("2d")!;
           await page.render({ canvasContext: ctx, viewport, canvas } as any).promise;
           if (cancelled) return;
+
+          // Draw bounding boxes for this page
+          const pageBboxes = bboxes.filter(b => b.pageNum === i);
+          for (const bbox of pageBboxes) {
+            // Convert PDF user-space coords to canvas pixels
+            const rect = viewport.convertToViewportRectangle([bbox.x1, bbox.y1, bbox.x2, bbox.y2]);
+            const [vx1, vy1, vx2, vy2] = rect;
+            const x = Math.min(vx1, vx2);
+            const y = Math.min(vy1, vy2);
+            const w = Math.abs(vx2 - vx1);
+            const h = Math.abs(vy2 - vy1);
+
+            // Fill
+            ctx.fillStyle = "rgba(239, 68, 68, 0.15)";
+            ctx.fillRect(x, y, w, h);
+            // Stroke
+            ctx.strokeStyle = "rgba(239, 68, 68, 0.9)";
+            ctx.lineWidth = 3;
+            ctx.strokeRect(x, y, w, h);
+          }
+
           canvases.push(canvas);
         }
         setPages(canvases);
@@ -761,7 +801,7 @@ function RawResultModal({ fileName, awpClassName, resultText, instanceCount, sou
       }
     })();
     return () => { cancelled = true; };
-  }, [sourceFile?.storage_path]);
+  }, [sourceFile?.storage_path, resultText]);
 
   // Mount canvases into container
   useEffect(() => {
@@ -779,11 +819,11 @@ function RawResultModal({ fileName, awpClassName, resultText, instanceCount, sou
 
   const handleZoom = (delta: number) => {
     const scroll = pdfScrollRef.current;
-    if (!scroll) { setZoom(z => Math.min(4, Math.max(0.25, z + delta))); return; }
+    if (!scroll) { setZoom(z => Math.min(8, Math.max(0.25, z + delta))); return; }
     const cx = scroll.scrollWidth > 0 ? (scroll.scrollLeft + scroll.clientWidth / 2) / scroll.scrollWidth : 0.5;
     const cy = scroll.scrollHeight > 0 ? (scroll.scrollTop + scroll.clientHeight / 2) / scroll.scrollHeight : 0.5;
     setZoom(prev => {
-      const next = Math.min(4, Math.max(0.25, prev + delta));
+      const next = Math.min(8, Math.max(0.25, prev + delta));
       requestAnimationFrame(() => {
         scroll.scrollLeft = cx * scroll.scrollWidth - scroll.clientWidth / 2;
         scroll.scrollTop = cy * scroll.scrollHeight - scroll.clientHeight / 2;
@@ -799,6 +839,7 @@ function RawResultModal({ fileName, awpClassName, resultText, instanceCount, sou
           <DialogTitle className="font-mono text-sm truncate">{fileName}</DialogTitle>
           <p className="text-xs text-muted-foreground">
             {awpClassName} — {instanceCount} instance{instanceCount !== 1 ? "s" : ""} detected
+            {bboxCount > 0 && ` · ${bboxCount} highlighted on drawing`}
           </p>
         </DialogHeader>
         <div className="flex flex-1 gap-3 min-h-0 overflow-hidden">
@@ -811,7 +852,7 @@ function RawResultModal({ fileName, awpClassName, resultText, instanceCount, sou
                   <ZoomOut className="w-3.5 h-3.5" />
                 </Button>
                 <span className="text-xs w-10 text-center">{Math.round(zoom * 100)}%</span>
-                <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => handleZoom(0.25)} disabled={zoom >= 4}>
+                <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => handleZoom(0.25)} disabled={zoom >= 8}>
                   <ZoomIn className="w-3.5 h-3.5" />
                 </Button>
               </div>
@@ -919,11 +960,11 @@ function FilePreviewModal({ file, onClose }: FilePreviewModalProps) {
 
   const handleZoomIn = () => {
     const scroll = scrollRef.current;
-    if (!scroll) { setZoom(z => Math.min(4, z + 0.25)); return; }
+    if (!scroll) { setZoom(z => Math.min(8, z + 0.25)); return; }
     const cx = scroll.scrollWidth > 0 ? (scroll.scrollLeft + scroll.clientWidth / 2) / scroll.scrollWidth : 0.5;
     const cy = scroll.scrollHeight > 0 ? (scroll.scrollTop + scroll.clientHeight / 2) / scroll.scrollHeight : 0.5;
     setZoom(prev => {
-      const next = Math.min(4, prev + 0.25);
+      const next = Math.min(8, prev + 0.25);
       requestAnimationFrame(() => {
         scroll.scrollLeft = cx * scroll.scrollWidth - scroll.clientWidth / 2;
         scroll.scrollTop = cy * scroll.scrollHeight - scroll.clientHeight / 2;
@@ -959,7 +1000,7 @@ function FilePreviewModal({ file, onClose }: FilePreviewModalProps) {
                 <ZoomOut className="w-4 h-4" />
               </Button>
               <span className="text-sm min-w-[3rem] text-center tabular-nums">{Math.round(zoom * 100)}%</span>
-              <Button variant="outline" size="icon" className="h-8 w-8" onClick={handleZoomIn} disabled={zoom >= 4 || loading}>
+              <Button variant="outline" size="icon" className="h-8 w-8" onClick={handleZoomIn} disabled={zoom >= 8 || loading}>
                 <ZoomIn className="w-4 h-4" />
               </Button>
             </div>
@@ -1606,7 +1647,7 @@ export function AnalysisSection({ requestId, files, projectId, sourceType }: Ana
                 <thead>
                   {/* Header row: file info columns + class abbreviations */}
                   <tr className="border-b">
-                    <th className="sticky left-0 z-10 bg-card px-4 py-2 text-left font-medium text-muted-foreground min-w-[320px] border-r">
+                    <th className="sticky left-0 z-10 bg-card px-4 py-2 text-left font-medium text-muted-foreground min-w-[180px] max-w-[320px] w-auto border-r">
                       <span className="block text-sm">File Name</span>
                       <span className="block text-xs font-normal text-muted-foreground/70">
                         {copiedFiles.length} files · {formatBytes(totalSizeBytes)} · {sourceLabel}
@@ -1628,7 +1669,7 @@ export function AnalysisSection({ requestId, files, projectId, sourceType }: Ana
 
                   {/* Button sub-row: per-column analyze/stop controls */}
                   <tr className="border-b bg-muted/20">
-                     <td className="sticky left-0 z-10 bg-muted/20 px-4 py-1.5 border-r min-w-[320px]">
+                     <td className="sticky left-0 z-10 bg-muted/20 px-4 py-1.5 border-r min-w-[180px] max-w-[320px] w-auto">
                        <Button size="sm" variant="outline" className="h-6 text-xs gap-1" onClick={handleDownloadZip}>
                          <Download className="w-3 h-3" />
                          Download ZIP
@@ -1686,7 +1727,7 @@ export function AnalysisSection({ requestId, files, projectId, sourceType }: Ana
                   {copiedFiles.map((file) => (
                     <tr key={file.id} className="border-b hover:bg-muted/30 transition-colors">
                       {/* File name (sticky) */}
-                      <td className="sticky left-0 z-10 bg-card hover:bg-muted/30 px-4 py-2 border-r min-w-[320px]">
+                      <td className="sticky left-0 z-10 bg-card hover:bg-muted/30 px-4 py-2 border-r min-w-[180px] max-w-[320px] w-auto">
                         <button
                           className="text-sm font-medium truncate block max-w-[300px] text-primary hover:underline text-left"
                           onClick={() => setPreviewFile(file)}
