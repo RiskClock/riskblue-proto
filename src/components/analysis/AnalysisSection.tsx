@@ -779,11 +779,11 @@ function RawResultModal({ fileName, awpClassName, resultText, instanceCount, sou
 
   const handleZoom = (delta: number) => {
     const scroll = pdfScrollRef.current;
-    if (!scroll) { setZoom(z => Math.min(4, Math.max(0.25, z + delta))); return; }
+    if (!scroll) { setZoom(z => Math.min(8, Math.max(0.25, z + delta))); return; }
     const cx = scroll.scrollWidth > 0 ? (scroll.scrollLeft + scroll.clientWidth / 2) / scroll.scrollWidth : 0.5;
     const cy = scroll.scrollHeight > 0 ? (scroll.scrollTop + scroll.clientHeight / 2) / scroll.scrollHeight : 0.5;
     setZoom(prev => {
-      const next = Math.min(4, Math.max(0.25, prev + delta));
+      const next = Math.min(8, Math.max(0.25, prev + delta));
       requestAnimationFrame(() => {
         scroll.scrollLeft = cx * scroll.scrollWidth - scroll.clientWidth / 2;
         scroll.scrollTop = cy * scroll.scrollHeight - scroll.clientHeight / 2;
@@ -811,7 +811,7 @@ function RawResultModal({ fileName, awpClassName, resultText, instanceCount, sou
                   <ZoomOut className="w-3.5 h-3.5" />
                 </Button>
                 <span className="text-xs w-10 text-center">{Math.round(zoom * 100)}%</span>
-                <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => handleZoom(0.25)} disabled={zoom >= 4}>
+                <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => handleZoom(0.25)} disabled={zoom >= 8}>
                   <ZoomIn className="w-3.5 h-3.5" />
                 </Button>
               </div>
