@@ -118,10 +118,10 @@ const AcceptInvite = () => {
       return;
     }
 
-    if (password.length < 6) {
+    if (password.length < 8) {
       toast({
         title: "Error",
-        description: "Password must be at least 6 characters",
+        description: "Password must be at least 8 characters",
         variant: "destructive",
       });
       return;

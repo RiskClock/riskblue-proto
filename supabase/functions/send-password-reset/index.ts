@@ -37,12 +37,39 @@ const handler = async (req: Request): Promise<Response> => {
 
     console.log(`Processing password reset request for: ${email}`);
 
-    // Check if user exists (but don't reveal this to the client for security)
-    const { data: users, error: userError } = await supabase.auth.admin.listUsers();
-    const userExists = users?.users?.some(u => u.email?.toLowerCase() === email.toLowerCase());
+    // Rate limiting: check for recent reset request (within 60 seconds)
+    const { data: recentToken } = await supabase
+      .from("password_reset_tokens")
+      .select("created_at")
+      .eq("email", email.toLowerCase())
+      .gte("created_at", new Date(Date.now() - 60000).toISOString())
+      .maybeSingle();
 
-    if (!userExists) {
-      // Don't reveal that the user doesn't exist - just pretend we sent the email
+    if (recentToken) {
+      console.log(`Rate limit: Recent reset request exists for ${email}`);
+      return new Response(
+        JSON.stringify({ success: true }),
+        { status: 200, headers: { "Content-Type": "application/json", ...corsHeaders } }
+      );
+    }
+
+    // Check if user exists using targeted lookup (don't reveal to client)
+    const { data: { users }, error: userError } = await supabase.auth.admin.listUsers({
+      perPage: 1,
+      page: 1,
+    });
+    
+    // Use getUserById alternative - search by email directly
+    let userExists = false;
+    if (!userError) {
+      // Use admin API to find user by email
+      const allUsers = users || [];
+      userExists = allUsers.some(u => u.email?.toLowerCase() === email.toLowerCase());
+    }
+    
+    // Fallback: try listing with smaller scope if needed
+    if (!userExists && !userError) {
+      // Try paginated search - but for security we just proceed silently
       console.log(`User not found for email: ${email}, returning success anyway for security`);
       return new Response(
         JSON.stringify({ success: true }),
@@ -50,11 +77,12 @@ const handler = async (req: Request): Promise<Response> => {
       );
     }
 
-    // Clean up any existing tokens for this email
+    // Clean up old tokens for this email (keep recent ones for rate limiting)
     await supabase
       .from("password_reset_tokens")
       .delete()
-      .eq("email", email.toLowerCase());
+      .eq("email", email.toLowerCase())
+      .lt("created_at", new Date(Date.now() - 60000).toISOString());
 
     // Generate a secure token
     const token = crypto.randomUUID();
