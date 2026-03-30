@@ -65,7 +65,7 @@ const statusLabels: Record<string, string> = {
   pending: "Importing Drawings",
   copying: "Importing Drawings",
   copied: "Ready for Analysis",
-  processing: "Analyzing",
+  processing: "Analysis in Progress",
   complete: "Analysis Complete",
   failed: "Failed",
 };

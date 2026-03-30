@@ -149,13 +149,14 @@ async function callResponsesApi(params: {
   fileRecord: Record<string, unknown>;
   effectiveMime: string;
   cacheHit: boolean;
+  model?: string;
 }): Promise<{ resultText: string } | { httpStatus: number; errText: string; parsedError: Record<string, unknown> | null }> {
-  const { openaiApiKey, openaiFileId, promptContent, fileRecord, effectiveMime, cacheHit } = params;
+  const { openaiApiKey, openaiFileId, promptContent, fileRecord, effectiveMime, cacheHit, model } = params;
 
-  console.log(`[analyze-drawings] Responses API call: file_id=${openaiFileId}, name=${fileRecord.name}, effectiveMime=${effectiveMime}, cacheHit=${cacheHit}`);
+  console.log(`[analyze-drawings] Responses API call: file_id=${openaiFileId}, name=${fileRecord.name}, effectiveMime=${effectiveMime}, cacheHit=${cacheHit}, model=${model}`);
 
   const responsesPayload = {
-    model: "gpt-5-mini",
+    model: model || "gpt-5-mini",
     instructions: promptContent,
     input: [
       {
@@ -250,7 +251,7 @@ serve(async (req) => {
       });
     }
 
-    const { analysisRequestId, fileId, awpClassName, promptContent } = await req.json();
+    const { analysisRequestId, fileId, awpClassName, promptContent, model } = await req.json();
     if (!analysisRequestId || !fileId || !awpClassName || !promptContent) {
       return new Response(JSON.stringify({ error: "Missing required fields" }), {
         status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -380,6 +381,7 @@ serve(async (req) => {
       fileRecord,
       effectiveMime,
       cacheHit: usedCacheHit,
+      model: model || undefined,
     });
 
     // Handle Responses API HTTP errors
@@ -454,6 +456,7 @@ serve(async (req) => {
         fileRecord,
         effectiveMime,
         cacheHit: false,
+        model: model || undefined,
       });
 
       if ("httpStatus" in retryResult) {
