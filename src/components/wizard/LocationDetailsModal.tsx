@@ -272,7 +272,7 @@ export const LocationDetailsModal = ({
   const handleZoomIn = () => {
     const container = containerRef.current;
     if (!container) {
-      setZoom(z => Math.min(3, z + 0.25));
+      setZoom(z => Math.min(8, z + 0.25));
       return;
     }
     
@@ -284,7 +284,7 @@ export const LocationDetailsModal = ({
       : 0.5;
     
     setZoom(prevZoom => {
-      const newZoom = Math.min(3, prevZoom + 0.25);
+      const newZoom = Math.min(8, prevZoom + 0.25);
       
       requestAnimationFrame(() => {
         const newScrollWidth = container.scrollWidth;
@@ -300,7 +300,7 @@ export const LocationDetailsModal = ({
   const handleZoomOut = () => {
     const container = containerRef.current;
     if (!container) {
-      setZoom(z => Math.max(0.5, z - 0.25));
+      setZoom(z => Math.max(0.25, z - 0.25));
       return;
     }
     
@@ -312,7 +312,7 @@ export const LocationDetailsModal = ({
       : 0.5;
     
     setZoom(prevZoom => {
-      const newZoom = Math.max(0.5, prevZoom - 0.25);
+      const newZoom = Math.max(0.25, prevZoom - 0.25);
       
       requestAnimationFrame(() => {
         const newScrollWidth = container.scrollWidth;
