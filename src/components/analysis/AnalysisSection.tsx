@@ -1361,6 +1361,9 @@ export function AnalysisSection({ requestId, files, projectId, sourceType }: Ana
     setAnalyzingClasses((prev) => new Set([...prev, className]));
     setClassFileStatuses((prev) => ({ ...prev, [className]: {} }));
 
+    // Mark analysis request as processing in DB
+    await supabase.from("analysis_requests").update({ status: "processing" }).eq("id", requestId);
+
     let aborted = false;
 
     try {
