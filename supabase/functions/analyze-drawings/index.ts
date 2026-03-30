@@ -150,12 +150,12 @@ async function callResponsesApi(params: {
   effectiveMime: string;
   cacheHit: boolean;
 }): Promise<{ resultText: string } | { httpStatus: number; errText: string; parsedError: Record<string, unknown> | null }> {
-  const { openaiApiKey, openaiFileId, promptContent, fileRecord, effectiveMime, cacheHit } = params;
+  const { openaiApiKey, openaiFileId, promptContent, fileRecord, effectiveMime, cacheHit, model } = params;
 
-  console.log(`[analyze-drawings] Responses API call: file_id=${openaiFileId}, name=${fileRecord.name}, effectiveMime=${effectiveMime}, cacheHit=${cacheHit}`);
+  console.log(`[analyze-drawings] Responses API call: file_id=${openaiFileId}, name=${fileRecord.name}, effectiveMime=${effectiveMime}, cacheHit=${cacheHit}, model=${model}`);
 
   const responsesPayload = {
-    model: "gpt-5-mini",
+    model: model || "gpt-5-mini",
     instructions: promptContent,
     input: [
       {

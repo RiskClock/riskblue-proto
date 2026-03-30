@@ -1679,9 +1679,20 @@ export function AnalysisSection({ requestId, files, projectId, sourceType }: Ana
                       <th key={prompt.id} className="w-14 px-2 py-2 text-center font-medium text-muted-foreground">
                         <Tooltip>
                           <TooltipTrigger asChild>
-                            <span className="cursor-default font-mono text-xs">
-                              {getPrefix(prompt.awp_class_name)}
-                            </span>
+                            {prompt.drive_file_url ? (
+                              <a
+                                href={prompt.drive_file_url}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="font-mono text-xs text-primary underline underline-offset-2 hover:text-primary/80"
+                              >
+                                {getPrefix(prompt.awp_class_name)}
+                              </a>
+                            ) : (
+                              <span className="cursor-default font-mono text-xs">
+                                {getPrefix(prompt.awp_class_name)}
+                              </span>
+                            )}
                           </TooltipTrigger>
                           <TooltipContent>{prompt.awp_class_name}</TooltipContent>
                         </Tooltip>
