@@ -70,9 +70,12 @@ const handler = async (req: Request): Promise<Response> => {
       );
     }
 
-    // Find the user by email
-    const { data: users, error: userError } = await supabase.auth.admin.listUsers();
-    const user = users?.users?.find(u => u.email?.toLowerCase() === tokenRecord.email.toLowerCase());
+    // Find the user by email using targeted lookup
+    const { data: { users }, error: userError } = await supabase.auth.admin.listUsers({
+      perPage: 50,
+      page: 1,
+    });
+    const user = users?.find(u => u.email?.toLowerCase() === tokenRecord.email.toLowerCase());
 
     if (!user) {
       console.error("User not found for email:", tokenRecord.email);
