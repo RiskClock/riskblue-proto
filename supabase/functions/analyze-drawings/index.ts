@@ -456,6 +456,7 @@ serve(async (req) => {
         fileRecord,
         effectiveMime,
         cacheHit: false,
+        model: model || undefined,
       });
 
       if ("httpStatus" in retryResult) {

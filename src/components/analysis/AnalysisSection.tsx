@@ -1418,6 +1418,7 @@ export function AnalysisSection({ requestId, files, projectId, sourceType }: Ana
                 fileId: file.id,
                 awpClassName: className,
                 promptContent,
+                model: selectedModel,
               }),
             }
           );
