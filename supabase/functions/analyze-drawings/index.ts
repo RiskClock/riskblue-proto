@@ -381,6 +381,7 @@ serve(async (req) => {
       fileRecord,
       effectiveMime,
       cacheHit: usedCacheHit,
+      model: model || undefined,
     });
 
     // Handle Responses API HTTP errors
