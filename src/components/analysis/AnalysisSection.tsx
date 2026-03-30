@@ -717,10 +717,11 @@ function RawResultModal({ fileName, awpClassName, resultText, instanceCount, sou
   const [pdfLoading, setPdfLoading] = useState(false);
   const [pdfError, setPdfError] = useState<string | null>(null);
   const [zoom, setZoom] = useState(1);
+  const [bboxCount, setBboxCount] = useState(0);
   const pdfContainerRef = useRef<HTMLDivElement>(null);
   const pdfScrollRef = useRef<HTMLDivElement>(null);
 
-  // Load PDF from storage
+  // Load PDF from storage and draw bounding boxes
   useEffect(() => {
     const storagePath = sourceFile?.storage_path;
     if (!storagePath) { setPdfError("Drawing not available"); return; }
@@ -729,6 +730,7 @@ function RawResultModal({ fileName, awpClassName, resultText, instanceCount, sou
     setPdfError(null);
     setPages([]);
     setZoom(1);
+    setBboxCount(0);
 
     (async () => {
       try {
@@ -740,17 +742,55 @@ function RawResultModal({ fileName, awpClassName, resultText, instanceCount, sou
         if (cancelled) return;
         const pdf = await pdfjsLib.getDocument({ data: ab }).promise;
         if (cancelled) return;
+
+        // Parse room tags from AI result text
+        const roomTags = resultText ? parseRoomTagsFromResult(resultText) : [];
+        console.log(`[RawResultModal] Found ${roomTags.length} room tags to locate:`, roomTags.map(t => t.tag));
+
+        // Find all bboxes
+        const bboxes: PDFBBox[] = [];
+        for (const { tag, pageNum } of roomTags) {
+          const bbox = await findBBoxInTextLayer(pdf, tag, pageNum);
+          if (bbox) bboxes.push(bbox);
+          if (cancelled) return;
+        }
+        console.log(`[RawResultModal] Found ${bboxes.length} bounding boxes`);
+        setBboxCount(bboxes.length);
+
+        // Render pages with bbox overlays
         const maxPages = Math.min(pdf.numPages, 20);
         const canvases: HTMLCanvasElement[] = [];
         for (let i = 1; i <= maxPages; i++) {
           const page = await pdf.getPage(i);
-          const viewport = page.getViewport({ scale: 2 });
+          const scale = 4; // high-res for bbox precision
+          const viewport = page.getViewport({ scale });
           const canvas = document.createElement("canvas");
           canvas.width = viewport.width;
           canvas.height = viewport.height;
           const ctx = canvas.getContext("2d")!;
           await page.render({ canvasContext: ctx, viewport, canvas } as any).promise;
           if (cancelled) return;
+
+          // Draw bounding boxes for this page
+          const pageBboxes = bboxes.filter(b => b.pageNum === i);
+          for (const bbox of pageBboxes) {
+            // Convert PDF user-space coords to canvas pixels
+            const rect = viewport.convertToViewportRectangle([bbox.x1, bbox.y1, bbox.x2, bbox.y2]);
+            const [vx1, vy1, vx2, vy2] = rect;
+            const x = Math.min(vx1, vx2);
+            const y = Math.min(vy1, vy2);
+            const w = Math.abs(vx2 - vx1);
+            const h = Math.abs(vy2 - vy1);
+
+            // Fill
+            ctx.fillStyle = "rgba(239, 68, 68, 0.15)";
+            ctx.fillRect(x, y, w, h);
+            // Stroke
+            ctx.strokeStyle = "rgba(239, 68, 68, 0.9)";
+            ctx.lineWidth = 3;
+            ctx.strokeRect(x, y, w, h);
+          }
+
           canvases.push(canvas);
         }
         setPages(canvases);
@@ -761,7 +801,7 @@ function RawResultModal({ fileName, awpClassName, resultText, instanceCount, sou
       }
     })();
     return () => { cancelled = true; };
-  }, [sourceFile?.storage_path]);
+  }, [sourceFile?.storage_path, resultText]);
 
   // Mount canvases into container
   useEffect(() => {
@@ -799,6 +839,7 @@ function RawResultModal({ fileName, awpClassName, resultText, instanceCount, sou
           <DialogTitle className="font-mono text-sm truncate">{fileName}</DialogTitle>
           <p className="text-xs text-muted-foreground">
             {awpClassName} — {instanceCount} instance{instanceCount !== 1 ? "s" : ""} detected
+            {bboxCount > 0 && ` · ${bboxCount} highlighted on drawing`}
           </p>
         </DialogHeader>
         <div className="flex flex-1 gap-3 min-h-0 overflow-hidden">
