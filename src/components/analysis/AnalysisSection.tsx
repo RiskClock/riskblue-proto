@@ -570,13 +570,13 @@ function InstanceDetailModal({
   // Center-preserving zoom handlers — exact copy from LocationDetailsModal
   const handleZoomIn = () => {
     const container = containerRef.current;
-    if (!container) { setZoom(z => Math.min(4, z + 0.25)); return; }
+    if (!container) { setZoom(z => Math.min(8, z + 0.25)); return; }
     const scrollCenterX = container.scrollWidth > 0
       ? (container.scrollLeft + container.clientWidth / 2) / container.scrollWidth : 0.5;
     const scrollCenterY = container.scrollHeight > 0
       ? (container.scrollTop + container.clientHeight / 2) / container.scrollHeight : 0.5;
     setZoom(prevZoom => {
-      const newZoom = Math.min(4, prevZoom + 0.25);
+      const newZoom = Math.min(8, prevZoom + 0.25);
       requestAnimationFrame(() => {
         container.scrollLeft = scrollCenterX * container.scrollWidth - container.clientWidth / 2;
         container.scrollTop = scrollCenterY * container.scrollHeight - container.clientHeight / 2;
@@ -587,13 +587,13 @@ function InstanceDetailModal({
 
   const handleZoomOut = () => {
     const container = containerRef.current;
-    if (!container) { setZoom(z => Math.max(0.5, z - 0.25)); return; }
+    if (!container) { setZoom(z => Math.max(0.25, z - 0.25)); return; }
     const scrollCenterX = container.scrollWidth > 0
       ? (container.scrollLeft + container.clientWidth / 2) / container.scrollWidth : 0.5;
     const scrollCenterY = container.scrollHeight > 0
       ? (container.scrollTop + container.clientHeight / 2) / container.scrollHeight : 0.5;
     setZoom(prevZoom => {
-      const newZoom = Math.max(0.5, prevZoom - 0.25);
+      const newZoom = Math.max(0.25, prevZoom - 0.25);
       requestAnimationFrame(() => {
         container.scrollLeft = scrollCenterX * container.scrollWidth - container.clientWidth / 2;
         container.scrollTop = scrollCenterY * container.scrollHeight - container.clientHeight / 2;
@@ -659,11 +659,11 @@ function InstanceDetailModal({
             <div className="h-12 flex-shrink-0 flex items-center justify-between px-4 border-b bg-background">
               <span className="text-sm text-muted-foreground">Drawing Preview</span>
               <div className="flex items-center gap-2">
-                <Button variant="outline" size="icon" className="h-8 w-8" onClick={handleZoomOut} disabled={zoom <= 0.5}>
+                <Button variant="outline" size="icon" className="h-8 w-8" onClick={handleZoomOut} disabled={zoom <= 0.25}>
                   <ZoomOut className="w-4 h-4" />
                 </Button>
                 <span className="text-sm min-w-[3rem] text-center tabular-nums">{Math.round(zoom * 100)}%</span>
-                <Button variant="outline" size="icon" className="h-8 w-8" onClick={handleZoomIn} disabled={zoom >= 4}>
+                <Button variant="outline" size="icon" className="h-8 w-8" onClick={handleZoomIn} disabled={zoom >= 8}>
                   <ZoomIn className="w-4 h-4" />
                 </Button>
               </div>
