@@ -149,6 +149,7 @@ async function callResponsesApi(params: {
   fileRecord: Record<string, unknown>;
   effectiveMime: string;
   cacheHit: boolean;
+  model?: string;
 }): Promise<{ resultText: string } | { httpStatus: number; errText: string; parsedError: Record<string, unknown> | null }> {
   const { openaiApiKey, openaiFileId, promptContent, fileRecord, effectiveMime, cacheHit, model } = params;
 
