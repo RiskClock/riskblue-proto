@@ -47,6 +47,7 @@ export type Database = {
           copy_status: string
           created_at: string
           drive_file_id: string
+          extracted_text: string | null
           id: string
           mime_type: string
           name: string
@@ -63,6 +64,7 @@ export type Database = {
           copy_status?: string
           created_at?: string
           drive_file_id: string
+          extracted_text?: string | null
           id?: string
           mime_type: string
           name: string
@@ -79,6 +81,7 @@ export type Database = {
           copy_status?: string
           created_at?: string
           drive_file_id?: string
+          extracted_text?: string | null
           id?: string
           mime_type?: string
           name?: string
@@ -200,6 +203,60 @@ export type Database = {
           },
           {
             foreignKeyName: "analysis_results_file_id_fkey"
+            columns: ["file_id"]
+            isOneToOne: false
+            referencedRelation: "analysis_request_files"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      analysis_triage_results: {
+        Row: {
+          analysis_request_id: string
+          awp_class_name: string
+          created_at: string
+          error_message: string | null
+          file_id: string
+          id: string
+          reason: string | null
+          score: number | null
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          analysis_request_id: string
+          awp_class_name: string
+          created_at?: string
+          error_message?: string | null
+          file_id: string
+          id?: string
+          reason?: string | null
+          score?: number | null
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          analysis_request_id?: string
+          awp_class_name?: string
+          created_at?: string
+          error_message?: string | null
+          file_id?: string
+          id?: string
+          reason?: string | null
+          score?: number | null
+          status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "analysis_triage_results_analysis_request_id_fkey"
+            columns: ["analysis_request_id"]
+            isOneToOne: false
+            referencedRelation: "analysis_requests"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "analysis_triage_results_file_id_fkey"
             columns: ["file_id"]
             isOneToOne: false
             referencedRelation: "analysis_request_files"

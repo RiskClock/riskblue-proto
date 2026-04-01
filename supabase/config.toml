@@ -84,5 +84,8 @@ verify_jwt = false
 [functions.storage-image-proxy]
 verify_jwt = false
 
+[functions.triage-drawings]
+verify_jwt = false
+
 [functions.applied-epic-api]
 verify_jwt = false

@@ -76,6 +76,15 @@ interface AnalysisResult {
   error_message: string | null;
 }
 
+interface TriageResult {
+  file_id: string;
+  awp_class_name: string;
+  status: string;
+  score: number | null;
+  reason: string | null;
+  error_message: string | null;
+}
+
 interface ParsedInstance {
   id: string;
   name: string;
@@ -1152,6 +1161,15 @@ export function AnalysisSection({ requestId, files, projectId, sourceType }: Ana
     sourceFile?: AnalysisFile;
   } | null>(null);
 
+  // ---- Triage state ----
+  const [triageResults, setTriageResults] = useState<Map<string, TriageResult>>(new Map());
+  const [triageRunning, setTriageRunning] = useState(false);
+  const [triageTokens, setTriageTokens] = useState(0);
+  const triageQueueRef = useRef<Array<{ file: AnalysisFile; prompt: AWPPrompt }>>([]);
+  const triageTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const inFlightCountRef = useRef(0);
+  const MAX_CONCURRENT_TRIAGE = 2;
+
   // ---- Unchanged state ----
   const [summarizedInstances, setSummarizedInstances] = useState<Record<string, SummarizedInstance[]>>({});
   const [summarizing, setSummarizing] = useState<Record<string, boolean>>({});
@@ -1189,6 +1207,29 @@ export function AnalysisSection({ requestId, files, projectId, sourceType }: Ana
       return data as AnalysisResult[];
     },
   });
+
+  // Fetch existing triage results
+  const { data: triageData } = useQuery({
+    queryKey: ["triage-results", requestId],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("analysis_triage_results")
+        .select("file_id, awp_class_name, status, score, reason, error_message")
+        .eq("analysis_request_id", requestId);
+      if (error) throw error;
+      return data as TriageResult[];
+    },
+  });
+
+  // Hydrate triage results into map
+  useEffect(() => {
+    if (!triageData) return;
+    const map = new Map<string, TriageResult>();
+    for (const r of triageData) {
+      map.set(`${r.file_id}_${r.awp_class_name}`, r);
+    }
+    setTriageResults(map);
+  }, [triageData]);
 
   const { data: savedSummaryData, refetch: refetchSummary } = useQuery({
     queryKey: ["analysis-request-summary", requestId],
@@ -1488,6 +1529,158 @@ export function AnalysisSection({ requestId, files, projectId, sourceType }: Ana
     sortedPrompts.forEach((p) => handleAnalyze(p));
   };
 
+  // ---- Triage All with concurrency guard ----
+
+  const executeTriage = async (file: AnalysisFile, prompt: AWPPrompt) => {
+    const key = `${file.id}_${prompt.awp_class_name}`;
+    // Mark as processing locally
+    setTriageResults((prev) => {
+      const next = new Map(prev);
+      next.set(key, { file_id: file.id, awp_class_name: prompt.awp_class_name, status: "processing", score: null, reason: null, error_message: null });
+      return next;
+    });
+
+    inFlightCountRef.current++;
+    try {
+      const { data: sessionData } = await supabase.auth.getSession();
+      const token = sessionData.session?.access_token;
+
+      const response = await fetch(
+        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/triage-drawings`,
+        {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${token}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            analysisRequestId: requestId,
+            fileId: file.id,
+            awpClassName: prompt.awp_class_name,
+            assetType: prompt.category,
+            drawingName: file.name,
+          }),
+        }
+      );
+
+      if (response.ok) {
+        const data = await response.json();
+        setTriageResults((prev) => {
+          const next = new Map(prev);
+          next.set(key, {
+            file_id: file.id,
+            awp_class_name: prompt.awp_class_name,
+            status: "complete",
+            score: data.score ?? 0,
+            reason: data.reason ?? "",
+            error_message: null,
+          });
+          return next;
+        });
+        if (data.usage?.total_tokens) {
+          setTriageTokens((prev) => prev + data.usage.total_tokens);
+        }
+      } else {
+        setTriageResults((prev) => {
+          const next = new Map(prev);
+          next.set(key, { file_id: file.id, awp_class_name: prompt.awp_class_name, status: "failed", score: null, reason: null, error_message: "Triage failed" });
+          return next;
+        });
+      }
+    } catch (e) {
+      setTriageResults((prev) => {
+        const next = new Map(prev);
+        next.set(key, { file_id: file.id, awp_class_name: prompt.awp_class_name, status: "failed", score: null, reason: null, error_message: String(e) });
+        return next;
+      });
+    } finally {
+      inFlightCountRef.current--;
+      // Check if queue empty and no in-flight → stop
+      if (triageQueueRef.current.length === 0 && inFlightCountRef.current <= 0) {
+        if (triageTimerRef.current) {
+          clearInterval(triageTimerRef.current);
+          triageTimerRef.current = null;
+        }
+        setTriageRunning(false);
+        // Refresh triage data from DB
+        queryClient.invalidateQueries({ queryKey: ["triage-results", requestId] });
+      }
+    }
+  };
+
+  const handleTriageAll = () => {
+    // Build queue: column-major (for each prompt, for each file), skip cells with pass-2 results
+    const queue: Array<{ file: AnalysisFile; prompt: AWPPrompt }> = [];
+    for (const prompt of sortedPrompts) {
+      for (const file of copiedFiles) {
+        // Skip if already has pass-2 result
+        const hasPass2 = results?.some(
+          (r) => r.file_id === file.id && r.awp_class_name === prompt.awp_class_name && r.status === "complete"
+        );
+        if (hasPass2) continue;
+        queue.push({ file, prompt });
+      }
+    }
+
+    if (queue.length === 0) {
+      toast({ title: "Nothing to triage", description: "All cells already have analysis results." });
+      return;
+    }
+
+    triageQueueRef.current = queue;
+    setTriageTokens(0);
+    setTriageRunning(true);
+    inFlightCountRef.current = 0;
+
+    // Start scheduler: every 1 second, launch up to MAX_CONCURRENT
+    triageTimerRef.current = setInterval(() => {
+      while (
+        inFlightCountRef.current < MAX_CONCURRENT_TRIAGE &&
+        triageQueueRef.current.length > 0
+      ) {
+        const item = triageQueueRef.current.shift()!;
+        executeTriage(item.file, item.prompt);
+      }
+
+      // If queue empty and nothing in flight, stop
+      if (triageQueueRef.current.length === 0 && inFlightCountRef.current <= 0) {
+        if (triageTimerRef.current) {
+          clearInterval(triageTimerRef.current);
+          triageTimerRef.current = null;
+        }
+        setTriageRunning(false);
+      }
+    }, 1000);
+
+    // Immediately fire first batch
+    while (
+      inFlightCountRef.current < MAX_CONCURRENT_TRIAGE &&
+      triageQueueRef.current.length > 0
+    ) {
+      const item = triageQueueRef.current.shift()!;
+      executeTriage(item.file, item.prompt);
+    }
+  };
+
+  const handleStopTriage = () => {
+    triageQueueRef.current = [];
+    if (triageTimerRef.current) {
+      clearInterval(triageTimerRef.current);
+      triageTimerRef.current = null;
+    }
+    // Don't set triageRunning to false immediately — let in-flight finish
+    if (inFlightCountRef.current <= 0) {
+      setTriageRunning(false);
+    }
+  };
+
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => {
+      if (triageTimerRef.current) clearInterval(triageTimerRef.current);
+    };
+  }, []);
+
   const handleDownloadZip = async () => {
     try {
       const { data: sessionData } = await supabase.auth.getSession();
@@ -1653,10 +1846,35 @@ export function AnalysisSection({ requestId, files, projectId, sourceType }: Ana
                   <option value="gemini-2.5-flash-lite">Google / gemini-2.5-flash-lite</option>
                 </select>
               </div>
+              {(triageRunning || triageTokens > 0) && (
+                <span className="text-xs text-muted-foreground tabular-nums">
+                  {triageTokens.toLocaleString()} tokens
+                </span>
+              )}
+              {triageRunning ? (
+                <Button
+                  size="sm"
+                  variant="destructive"
+                  onClick={handleStopTriage}
+                >
+                  <Square className="w-4 h-4 mr-2" />
+                  Stop Triage
+                </Button>
+              ) : (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={handleTriageAll}
+                  disabled={anyAnalyzing || copiedFiles.length === 0}
+                >
+                  <Sparkles className="w-4 h-4 mr-2" />
+                  Triage All
+                </Button>
+              )}
               <Button
                 size="sm"
                 onClick={handleAnalyzeAll}
-                disabled={anyAnalyzing || copiedFiles.length === 0}
+                disabled={anyAnalyzing || triageRunning || copiedFiles.length === 0}
               >
                 {anyAnalyzing ? (
                   <Loader2 className="w-4 h-4 mr-2 animate-spin" />
@@ -1862,7 +2080,52 @@ export function AnalysisSection({ requestId, files, projectId, sourceType }: Ana
                           );
                         }
 
-                        // null — not yet analyzed
+                        // null — not yet analyzed; check for triage result
+                        const triageKey = `${file.id}_${prompt.awp_class_name}`;
+                        const triage = triageResults.get(triageKey);
+
+                        if (triage?.status === "processing") {
+                          return (
+                            <td key={prompt.id} className="w-14 px-2 py-2 text-center">
+                              <Loader2 className="w-3 h-3 animate-spin text-muted-foreground mx-auto" />
+                            </td>
+                          );
+                        }
+
+                        if (triage?.status === "complete" && triage.score !== null) {
+                          return (
+                            <td
+                              key={prompt.id}
+                              className="w-14 px-2 py-2 text-center"
+                              style={{ backgroundColor: `rgba(34, 197, 94, ${triage.score / 100})` }}
+                            >
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <span className="text-xs font-medium cursor-default" style={{ color: triage.score > 50 ? "white" : undefined }}>
+                                    {triage.score}
+                                  </span>
+                                </TooltipTrigger>
+                                <TooltipContent>{triage.score}% — {triage.reason || "No reason"}</TooltipContent>
+                              </Tooltip>
+                            </td>
+                          );
+                        }
+
+                        if (triage?.status === "failed") {
+                          return (
+                            <td key={prompt.id} className="w-14 px-2 py-2 text-center">
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <span>
+                                    <AlertTriangle className="w-3.5 h-3.5 text-yellow-500 mx-auto" />
+                                  </span>
+                                </TooltipTrigger>
+                                <TooltipContent>Triage failed</TooltipContent>
+                              </Tooltip>
+                            </td>
+                          );
+                        }
+
                         return <td key={prompt.id} className="w-14 px-2 py-2" />;
                       })}
                     </tr>
