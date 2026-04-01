@@ -1,59 +1,55 @@
 
 
-# Fix Triage: pdf-parse Import Crash, Show Extraction Progress, Clear Previous Results
-
-## Root Cause
-
-The `pdf-parse` library imported via `https://esm.sh/pdf-parse@1.1.1` crashes on boot because it tries to `readFileSync('./test/data/05-versions-space.pdf')` as a self-test during import. This is a well-known issue with `pdf-parse`. Every invocation of the edge function fails with `UncaughtException` before any request handling code runs.
+# File List Extraction Status, Stop Button Fix, and Triage Icon Change
 
 ## Changes
 
-### 1. Fix pdf-parse import in edge function
-
-**File: `supabase/functions/triage-drawings/index.ts`**
-
-Replace:
-```typescript
-import pdf from "https://esm.sh/pdf-parse@1.1.1";
-```
-With:
-```typescript
-import { Buffer } from "node:buffer";
-import pdfParse from "npm:pdf-parse@1.1.1/lib/pdf-parse.js";
-```
-
-The `/lib/pdf-parse.js` path bypasses the test-file-loading entry point. Also update all call sites to wrap `Uint8Array` in `Buffer.from()` since `pdf-parse` expects a Node Buffer:
-```typescript
-const data = await pdfParse(Buffer.from(arrayBuffer));
-extractedText = data.text || "";
-```
-
-### 2. Show which files are being extracted (per-file status)
+### 1. Track per-file extraction status in the file list rows
 
 **File: `src/components/analysis/AnalysisSection.tsx`**
 
-Add state to track which file names have been extracted vs are in-progress:
-- Add `extractedFileIds` state (`Set<string>`) updated as each extract call completes
-- In the status line during extract phase, show the file name currently being processed: e.g. "Extracting text: 3/12 files — A2.01-LOWER-LEVEL-Rev.18.pdf"
-- Track `currentExtractFileName` in state, set it when `executeTriageItem` starts an extract call
+Add state:
+- `extractingFileIds: Set<string>` — files currently being extracted
+- `extractedFileIds: Set<string>` — files that finished extraction
 
-### 3. Clear previous triage results on re-click
+Update `executeTriageItem`:
+- On extract start: add file ID to `extractingFileIds`
+- On extract complete: remove from `extractingFileIds`, add to `extractedFileIds`
 
-**File: `src/components/analysis/AnalysisSection.tsx`**
+In the file name `<td>` (line ~2073-2080), after the file name button, conditionally render:
+- If file ID is in `extractingFileIds`: show a `<Loader2>` spinner
+- If file ID is in `extractedFileIds`: show a `<Badge>` "Processed" with a `<Tooltip>` whose content is the file's `extracted_text` (truncated to ~500 chars). The extracted text needs to be fetched — after extraction completes, store the text length from the response; for the tooltip, re-query `analysis_request_files` to get `extracted_text`, or store it in a local map during extraction.
 
-At the top of `handleTriageAll`, before building queues:
-- Clear local triage results: `setTriageResults(new Map())`
-- Delete existing DB triage results for this request: call `supabase.from("analysis_triage_results").delete().eq("analysis_request_id", requestId)`
-- Clear cached `extracted_text` on files: call `supabase.from("analysis_request_files").update({ extracted_text: null }).eq("analysis_request_id", requestId)` so extraction re-runs fresh
-- Invalidate the triage-results query cache
-- Re-fetch `copiedFiles` to get fresh `extracted_text` values (or simply treat all files as needing extraction after the clear)
+To avoid an extra query, store extracted text in a local `Map<string, string>` (`extractedTexts`) — populate it by refetching the file's `extracted_text` after extraction, or by returning it from the edge function response.
 
-After clearing, all files will need extraction again (Phase 1 runs for all files), then Phase 2 scores all cells.
+### 2. Remove per-file name from top status line
+
+Line ~1927-1929: change the extract phase status from:
+```
+Extracting text: X/Y files — fileName
+```
+to:
+```
+Extracting text: X/Y files
+```
+
+Remove `currentExtractFileName` state entirely (replaced by per-row indicators).
+
+### 3. Fix Stop button — immediate UI response
+
+**Current bug**: `handleStopTriage` clears the queue and timer, but only sets `triageRunning = false` if `inFlightCountRef.current <= 0`. The in-flight requests continue, and the UI stays in "running" state until they finish.
+
+**Fix**: Always set `triageRunning = false` and `triagePhase = null` immediately in `handleStopTriage`. The in-flight requests will still complete (their `finally` block runs), but since `triageRunning` is already false, the UI reflects the stopped state immediately. Remove the conditional check on `inFlightCountRef.current` for setting these states.
+
+Also in the `finally` block of `executeTriageItem` (line ~1632-1636): remove the cleanup that sets `triageRunning(false)` — it should only happen from `handleStopTriage` or `onComplete`. This prevents a race where a finishing in-flight request re-triggers state changes after stop.
+
+### 4. Change Triage All icon
+
+Line ~1953: replace `<Sparkles>` with `<Filter>` (from lucide-react) — a funnel icon that better represents filtering/triaging. Import `Filter` at the top.
 
 ## Files Changed
 
 | File | Change |
 |---|---|
-| `supabase/functions/triage-drawings/index.ts` | Fix `pdf-parse` import to use `npm:pdf-parse@1.1.1/lib/pdf-parse.js` with `Buffer` |
-| `src/components/analysis/AnalysisSection.tsx` | Clear previous triage results + extracted text on re-click; show current file name during extraction |
+| `src/components/analysis/AnalysisSection.tsx` | All four changes: per-file extraction badges with tooltip, remove file name from top status, fix stop button immediacy, change triage icon to Filter |
 
