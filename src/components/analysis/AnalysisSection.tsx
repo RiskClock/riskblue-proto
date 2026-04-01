@@ -2224,9 +2224,7 @@ export function AnalysisSection({ requestId, files, projectId, sourceType }: Ana
                             >
                               <Tooltip>
                                 <TooltipTrigger asChild>
-                                  <span className="text-xs font-medium cursor-default" style={{ color: triage.score > 50 ? "white" : undefined }}>
-                                    {triage.score}
-                                  </span>
+                                  <span className="block w-full h-full cursor-default">&nbsp;</span>
                                 </TooltipTrigger>
                                 <TooltipContent>{triage.score}% — {triage.reason || "No reason"}</TooltipContent>
                               </Tooltip>
