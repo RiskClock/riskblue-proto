@@ -44,7 +44,7 @@ Deno.serve(async (req) => {
     }
 
     const body = await req.json();
-    const { analysisRequestId, fileId, awpClassName, assetType, drawingName, action } = body;
+    const { analysisRequestId, fileId, awpClassName, assetType, drawingName, action, promptContent } = body;
 
     if (!fileId) {
       return new Response(JSON.stringify({ error: "Missing fileId" }), {
@@ -178,7 +178,27 @@ Deno.serve(async (req) => {
     // Build triage prompt
     const fileName = fileRecord.name as string;
     const displayName = drawingName || fileName;
-    const triagePrompt = `You are helping triage construction drawing files based on whether a critical asset or water system might be present in the file for deeper analysis.
+
+    let triagePrompt: string;
+    if (promptContent) {
+      // Use the AWP-specific prompt doc with file context appended
+      triagePrompt = `${promptContent}
+
+---
+
+Drawing file name:
+${displayName}
+
+Quick text extracted from the PDF:
+${(extractedText || "(no text extracted)").slice(0, 4000)}
+
+Based on the above, estimate how likely this drawing file contains evidence of: ${awpClassName}
+
+Return ONLY valid JSON in this exact format:
+{"score": 0, "reason": "short explanation under 20 words"}`;
+    } else {
+      // Fallback: hardcoded triage prompt
+      triagePrompt = `You are helping triage construction drawing files based on whether a critical asset or water system might be present in the file for deeper analysis.
 
 Estimate how likely this drawing file is to contain evidence of: ${awpClassName}
 
@@ -197,6 +217,7 @@ Scoring guidance:
 
 Return ONLY valid JSON in this exact format:
 {"score": 0, "reason": "short explanation under 20 words"}`;
+    }
 
     const triageResponse = await fetch("https://api.openai.com/v1/responses", {
       method: "POST",
