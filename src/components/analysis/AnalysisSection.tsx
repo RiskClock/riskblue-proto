@@ -1701,11 +1701,11 @@ export function AnalysisSection({ requestId, files, projectId, sourceType }: Ana
     setTriageRunning(true);
     inFlightCountRef.current = 0;
 
-    if (filesNeedingExtraction.length > 0) {
-      // Phase 1: Extract text
+    if (allFiles.length > 0) {
+      // Phase 1: Extract text for all files (we cleared cached text above)
       setTriagePhase("extract");
-      setTriageProgress({ done: 0, total: filesNeedingExtraction.length });
-      triageQueueRef.current = filesNeedingExtraction.map((f) => ({ file: f, action: "extract" as const }));
+      setTriageProgress({ done: 0, total: allFiles.length });
+      triageQueueRef.current = allFiles.map((f) => ({ file: f, action: "extract" as const }));
 
       startTriageScheduler(() => {
         // Phase 1 done → start Phase 2
@@ -1724,8 +1724,8 @@ export function AnalysisSection({ requestId, files, projectId, sourceType }: Ana
           setTriagePhase(null);
         }
       });
-    } else {
-      // Skip Phase 1, go straight to Phase 2
+    } else if (scoreQueue.length > 0) {
+      // No files but have score queue (shouldn't happen normally)
       setTriagePhase("score");
       setTriageProgress({ done: 0, total: scoreQueue.length });
       triageQueueRef.current = scoreQueue;
