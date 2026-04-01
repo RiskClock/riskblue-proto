@@ -1676,7 +1676,9 @@ export function AnalysisSection({ requestId, files, projectId, sourceType }: Ana
     // Clear previous triage results
     setTriageResults(new Map());
     setTriageTokens(0);
-    setCurrentExtractFileName(null);
+    setExtractingFileIds(new Set());
+    setExtractedFileIds(new Set());
+    setExtractedTexts(new Map());
 
     // Delete existing DB triage results and clear cached extracted_text
     await Promise.all([
