@@ -56,6 +56,7 @@ interface AnalysisFile {
   storage_path: string | null;
   copy_status: string;
   size_bytes?: number | null;
+  extracted_text?: string | null;
 }
 
 interface AWPPrompt {
