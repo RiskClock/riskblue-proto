@@ -104,7 +104,7 @@ Deno.serve(async (req) => {
       let extractedText = "";
       try {
         const arrayBuffer = await fileData.arrayBuffer();
-        const parsed = await pdf(new Uint8Array(arrayBuffer));
+        const parsed = await pdfParse(Buffer.from(arrayBuffer));
         extractedText = parsed.text || "";
       } catch (e) {
         console.error(`[triage] pdf-parse failed for file ${fileId}:`, e);
