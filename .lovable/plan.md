@@ -1,87 +1,59 @@
 
 
-# Fix Triage: Local PDF Extraction, New Prompt, and Extract-First Strategy
+# Fix Triage: pdf-parse Import Crash, Show Extraction Progress, Clear Previous Results
 
-## Summary
+## Root Cause
 
-Three changes to `triage-drawings`:
-1. Replace OpenAI file upload + text extraction with local `pdf-parse` library
-2. Replace the triage prompt with the user-provided version
-3. Add a separate "extract text only" mode so the frontend can pre-extract all files before scoring
+The `pdf-parse` library imported via `https://esm.sh/pdf-parse@1.1.1` crashes on boot because it tries to `readFileSync('./test/data/05-versions-space.pdf')` as a self-test during import. This is a well-known issue with `pdf-parse`. Every invocation of the edge function fails with `UncaughtException` before any request handling code runs.
 
-The frontend will run triage in **two phases**: first extract text for all unique files, then score each file×class pair (text already cached, so scoring calls are fast).
+## Changes
 
-## 1. Edge Function: `triage-drawings/index.ts`
+### 1. Fix pdf-parse import in edge function
 
-### Remove OpenAI file upload + extraction (lines 112-188)
-Replace with local extraction using `pdf-parse` via esm.sh:
+**File: `supabase/functions/triage-drawings/index.ts`**
 
+Replace:
 ```typescript
 import pdf from "https://esm.sh/pdf-parse@1.1.1";
-// ...
-const arrayBuffer = await fileData.arrayBuffer();
-const parsed = await pdf(new Uint8Array(arrayBuffer));
-extractedText = parsed.text || "";
+```
+With:
+```typescript
+import { Buffer } from "node:buffer";
+import pdfParse from "npm:pdf-parse@1.1.1/lib/pdf-parse.js";
 ```
 
-If `pdf-parse` throws (corrupt PDF), catch and set `extractedText = ""`.
-
-### Add `action` parameter to support extract-only mode
-The function accepts an optional `action` field:
-- `action: "extract"` — downloads PDF, extracts text locally, caches in DB, returns `{ status: "extracted", fileId, textLength }`. No OpenAI call.
-- `action: "triage"` (default) — existing scoring flow, but uses cached `extracted_text` (skips download if already cached). Single OpenAI Responses API call.
-
-### Replace triage prompt (lines 193-209)
-Use the user-provided prompt exactly:
-
-```
-You are helping triage construction drawing files based on whether a critical
-asset or water system might be present in the file for deeper analysis.
-
-Estimate how likely this drawing file is to contain evidence of: {assetType}
-
-Drawing file name:
-{drawingName}
-
-Quick text extracted from the PDF:
-{extractedText}
-
-Scoring guidance:
-- Use filename and extracted text only
-- Be conservative
-- High scores require direct clues
-- Low scores should be used if the file appears to belong to another discipline or system
-- If the evidence is weak or ambiguous, return a middling score rather than a high score
-
-Return ONLY valid JSON in this exact format:
-{"score": 0, "reason": "short explanation under 20 words"}
+The `/lib/pdf-parse.js` path bypasses the test-file-loading entry point. Also update all call sites to wrap `Uint8Array` in `Buffer.from()` since `pdf-parse` expects a Node Buffer:
+```typescript
+const data = await pdfParse(Buffer.from(arrayBuffer));
+extractedText = data.text || "";
 ```
 
-Variables: `{assetType}` = `awpClassName`, `{drawingName}` = `drawingName || fileName`, `{extractedText}` = first 4000 chars.
+### 2. Show which files are being extracted (per-file status)
 
-## 2. Frontend: `AnalysisSection.tsx`
+**File: `src/components/analysis/AnalysisSection.tsx`**
 
-### Two-phase triage in `handleTriageAll`
+Add state to track which file names have been extracted vs are in-progress:
+- Add `extractedFileIds` state (`Set<string>`) updated as each extract call completes
+- In the status line during extract phase, show the file name currently being processed: e.g. "Extracting text: 3/12 files — A2.01-LOWER-LEVEL-Rev.18.pdf"
+- Track `currentExtractFileName` in state, set it when `executeTriageItem` starts an extract call
 
-**Phase 1 — Extract text for all files** (concurrency-guarded, same scheduler pattern):
-- Build a list of unique files that don't yet have `extracted_text` cached
-- Queue extract-only calls (`action: "extract"`) with the same concurrency guard (max 2 in-flight, 1s interval)
-- No token counter increment during extraction (no OpenAI calls)
-- Show a status indicator: "Extracting text: 3/12 files..."
+### 3. Clear previous triage results on re-click
 
-**Phase 2 — Score each file×class pair** (starts after all extractions complete):
-- Queue triage scoring calls (`action: "triage"`) — same concurrency guard
-- These are fast since text is already cached server-side; only the OpenAI scoring call happens
-- Token counter increments as before
-- Show status: "Triaging: 5/48 cells..."
+**File: `src/components/analysis/AnalysisSection.tsx`**
 
-### How to detect cached text
-The `copiedFiles` query already fetches `analysis_request_files`. Add `extracted_text` to the select. Files where `extracted_text` is not null skip Phase 1.
+At the top of `handleTriageAll`, before building queues:
+- Clear local triage results: `setTriageResults(new Map())`
+- Delete existing DB triage results for this request: call `supabase.from("analysis_triage_results").delete().eq("analysis_request_id", requestId)`
+- Clear cached `extracted_text` on files: call `supabase.from("analysis_request_files").update({ extracted_text: null }).eq("analysis_request_id", requestId)` so extraction re-runs fresh
+- Invalidate the triage-results query cache
+- Re-fetch `copiedFiles` to get fresh `extracted_text` values (or simply treat all files as needing extraction after the clear)
+
+After clearing, all files will need extraction again (Phase 1 runs for all files), then Phase 2 scores all cells.
 
 ## Files Changed
 
 | File | Change |
 |---|---|
-| `supabase/functions/triage-drawings/index.ts` | Remove OpenAI file upload; add `pdf-parse` local extraction; add `action: "extract"` mode; replace prompt |
-| `src/components/analysis/AnalysisSection.tsx` | Two-phase triage: extract-first, then score; phase status indicators |
+| `supabase/functions/triage-drawings/index.ts` | Fix `pdf-parse` import to use `npm:pdf-parse@1.1.1/lib/pdf-parse.js` with `Buffer` |
+| `src/components/analysis/AnalysisSection.tsx` | Clear previous triage results + extracted text on re-click; show current file name during extraction |
 
