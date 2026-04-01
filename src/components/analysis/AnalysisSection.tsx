@@ -29,7 +29,7 @@ import {
   Square,
   XCircle,
   ExternalLink,
-  Sparkles,
+  Filter,
   PlusCircle,
   Eye,
   RotateCcw,
