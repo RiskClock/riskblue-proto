@@ -162,7 +162,7 @@ Deno.serve(async (req) => {
         if (fileData) {
           try {
             const arrayBuffer = await fileData.arrayBuffer();
-            const parsed = await pdf(new Uint8Array(arrayBuffer));
+            const parsed = await pdfParse(Buffer.from(arrayBuffer));
             extractedText = parsed.text || "";
           } catch {
             extractedText = "";
