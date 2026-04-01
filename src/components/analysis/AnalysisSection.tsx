@@ -1747,14 +1747,24 @@ export function AnalysisSection({ requestId, files, projectId, sourceType }: Ana
     }
   };
 
+  const [triageStopping, setTriageStopping] = useState(false);
+
   const handleStopTriage = () => {
     triageQueueRef.current = [];
     if (triageTimerRef.current) {
       clearInterval(triageTimerRef.current);
       triageTimerRef.current = null;
     }
-    setTriageRunning(false);
-    setTriagePhase(null);
+    setTriageStopping(true);
+    // Poll until in-flight requests finish
+    const pollId = setInterval(() => {
+      if (inFlightCountRef.current <= 0) {
+        clearInterval(pollId);
+        setTriageRunning(false);
+        setTriagePhase(null);
+        setTriageStopping(false);
+      }
+    }, 200);
   };
 
   // Cleanup on unmount
