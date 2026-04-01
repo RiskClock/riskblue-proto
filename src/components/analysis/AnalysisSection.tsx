@@ -1753,10 +1753,8 @@ export function AnalysisSection({ requestId, files, projectId, sourceType }: Ana
       clearInterval(triageTimerRef.current);
       triageTimerRef.current = null;
     }
-    if (inFlightCountRef.current <= 0) {
-      setTriageRunning(false);
-      setTriagePhase(null);
-    }
+    setTriageRunning(false);
+    setTriagePhase(null);
   };
 
   // Cleanup on unmount
