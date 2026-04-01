@@ -2254,7 +2254,7 @@ export function AnalysisSection({ requestId, files, projectId, sourceType }: Ana
         ================================================================ */}
         <div className="bg-card border rounded-lg overflow-hidden">
           <div className="px-4 py-3 border-b flex items-center gap-2">
-            <Sparkles className="w-4 h-4 text-primary" />
+            <Filter className="w-4 h-4 text-primary" />
             <h2 className="text-base font-semibold">Analysis Summary</h2>
           </div>
 
