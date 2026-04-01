@@ -29,7 +29,7 @@ import {
   Square,
   XCircle,
   ExternalLink,
-  Sparkles,
+  Filter,
   PlusCircle,
   Eye,
   RotateCcw,
@@ -1168,7 +1168,9 @@ export function AnalysisSection({ requestId, files, projectId, sourceType }: Ana
   const [triageTokens, setTriageTokens] = useState(0);
   const [triagePhase, setTriagePhase] = useState<"extract" | "score" | null>(null);
   const [triageProgress, setTriageProgress] = useState<{ done: number; total: number }>({ done: 0, total: 0 });
-  const [currentExtractFileName, setCurrentExtractFileName] = useState<string | null>(null);
+  const [extractingFileIds, setExtractingFileIds] = useState<Set<string>>(new Set());
+  const [extractedFileIds, setExtractedFileIds] = useState<Set<string>>(new Set());
+  const [extractedTexts, setExtractedTexts] = useState<Map<string, string>>(new Map());
   const triageQueueRef = useRef<Array<{ file: AnalysisFile; prompt?: AWPPrompt; action: "extract" | "triage" }>>([]);
   const triageTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const inFlightCountRef = useRef(0);
@@ -1543,7 +1545,7 @@ export function AnalysisSection({ requestId, files, projectId, sourceType }: Ana
 
       if (item.action === "extract") {
         // Phase 1: extract text only
-        setCurrentExtractFileName(item.file.name);
+        setExtractingFileIds((prev) => { const next = new Set(prev); next.add(item.file.id); return next; });
         const response = await fetch(
           `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/triage-drawings`,
           {
@@ -1559,8 +1561,18 @@ export function AnalysisSection({ requestId, files, projectId, sourceType }: Ana
         if (response.ok) {
           const data = await response.json();
           console.log(`[triage] Extracted text for ${item.file.name}: ${data.textLength} chars`);
+          // Fetch extracted text for tooltip
+          const { data: fileRow } = await supabase
+            .from("analysis_request_files")
+            .select("extracted_text")
+            .eq("id", item.file.id)
+            .single();
+          if (fileRow?.extracted_text) {
+            setExtractedTexts((prev) => { const next = new Map(prev); next.set(item.file.id, fileRow.extracted_text as string); return next; });
+          }
         }
-        setCurrentExtractFileName(null);
+        setExtractingFileIds((prev) => { const next = new Set(prev); next.delete(item.file.id); return next; });
+        setExtractedFileIds((prev) => { const next = new Set(prev); next.add(item.file.id); return next; });
       } else {
         // Phase 2: triage scoring
         const prompt = item.prompt!;
@@ -1629,11 +1641,6 @@ export function AnalysisSection({ requestId, files, projectId, sourceType }: Ana
     } finally {
       inFlightCountRef.current--;
       setTriageProgress((prev) => ({ ...prev, done: prev.done + 1 }));
-      // If queue was cleared (stop) and no more in-flight, clean up
-      if (triageQueueRef.current.length === 0 && inFlightCountRef.current <= 0 && !triageTimerRef.current) {
-        setTriageRunning(false);
-        setTriagePhase(null);
-      }
     }
   };
 
@@ -1669,7 +1676,9 @@ export function AnalysisSection({ requestId, files, projectId, sourceType }: Ana
     // Clear previous triage results
     setTriageResults(new Map());
     setTriageTokens(0);
-    setCurrentExtractFileName(null);
+    setExtractingFileIds(new Set());
+    setExtractedFileIds(new Set());
+    setExtractedTexts(new Map());
 
     // Delete existing DB triage results and clear cached extracted_text
     await Promise.all([
@@ -1744,10 +1753,8 @@ export function AnalysisSection({ requestId, files, projectId, sourceType }: Ana
       clearInterval(triageTimerRef.current);
       triageTimerRef.current = null;
     }
-    if (inFlightCountRef.current <= 0) {
-      setTriageRunning(false);
-      setTriagePhase(null);
-    }
+    setTriageRunning(false);
+    setTriagePhase(null);
   };
 
   // Cleanup on unmount
@@ -1925,7 +1932,7 @@ export function AnalysisSection({ requestId, files, projectId, sourceType }: Ana
               {triageRunning && triagePhase && (
                 <span className="text-xs text-muted-foreground tabular-nums">
                   {triagePhase === "extract"
-                    ? `Extracting text: ${triageProgress.done}/${triageProgress.total} files${currentExtractFileName ? ` — ${currentExtractFileName}` : ""}`
+                    ? `Extracting text: ${triageProgress.done}/${triageProgress.total} files`
                     : `Triaging: ${triageProgress.done}/${triageProgress.total} cells`}
                 </span>
               )}
@@ -1950,7 +1957,7 @@ export function AnalysisSection({ requestId, files, projectId, sourceType }: Ana
                   onClick={handleTriageAll}
                   disabled={anyAnalyzing || copiedFiles.length === 0}
                 >
-                  <Sparkles className="w-4 h-4 mr-2" />
+                  <Filter className="w-4 h-4 mr-2" />
                   Triage All
                 </Button>
               )}
@@ -2071,12 +2078,35 @@ export function AnalysisSection({ requestId, files, projectId, sourceType }: Ana
                     <tr key={file.id} className="border-b hover:bg-muted/30 transition-colors">
                       {/* File name (sticky) */}
                       <td className="sticky left-0 z-10 bg-card hover:bg-muted/30 px-4 py-2 border-r min-w-[180px] max-w-[320px] w-auto">
-                        <button
-                          className="text-sm font-medium truncate block max-w-[300px] text-primary hover:underline text-left"
-                          onClick={() => setPreviewFile(file)}
-                        >
-                          {file.name}
-                        </button>
+                        <div className="flex items-center gap-2">
+                          <button
+                            className="text-sm font-medium truncate block max-w-[260px] text-primary hover:underline text-left"
+                            onClick={() => setPreviewFile(file)}
+                          >
+                            {file.name}
+                          </button>
+                          {extractingFileIds.has(file.id) && (
+                            <Loader2 className="w-3 h-3 animate-spin text-muted-foreground flex-shrink-0" />
+                          )}
+                          {extractedFileIds.has(file.id) && !extractingFileIds.has(file.id) && (
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <span className="inline-flex items-center rounded-full border border-emerald-300 bg-emerald-100 px-1.5 py-0.5 text-[10px] font-medium text-emerald-800 flex-shrink-0 cursor-default">
+                                  Processed
+                                </span>
+                              </TooltipTrigger>
+                              <TooltipContent side="right" className="max-w-[400px] max-h-[300px] overflow-auto">
+                                <pre className="text-xs whitespace-pre-wrap">
+                                  {extractedTexts.get(file.id)
+                                    ? (extractedTexts.get(file.id)!.length > 500
+                                        ? extractedTexts.get(file.id)!.slice(0, 500) + "…"
+                                        : extractedTexts.get(file.id))
+                                    : "(no text extracted)"}
+                                </pre>
+                              </TooltipContent>
+                            </Tooltip>
+                          )}
+                        </div>
                       </td>
 
 
@@ -2224,7 +2254,7 @@ export function AnalysisSection({ requestId, files, projectId, sourceType }: Ana
         ================================================================ */}
         <div className="bg-card border rounded-lg overflow-hidden">
           <div className="px-4 py-3 border-b flex items-center gap-2">
-            <Sparkles className="w-4 h-4 text-primary" />
+            <Filter className="w-4 h-4 text-primary" />
             <h2 className="text-base font-semibold">Analysis Summary</h2>
           </div>
 
