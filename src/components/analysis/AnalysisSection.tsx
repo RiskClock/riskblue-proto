@@ -1956,9 +1956,14 @@ export function AnalysisSection({ requestId, files, projectId, sourceType }: Ana
                   size="sm"
                   variant="destructive"
                   onClick={handleStopTriage}
+                  disabled={triageStopping}
                 >
-                  <Square className="w-4 h-4 mr-2" />
-                  Stop Triage
+                  {triageStopping ? (
+                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  ) : (
+                    <Square className="w-4 h-4 mr-2" />
+                  )}
+                  {triageStopping ? "Stopping…" : "Stop Triage"}
                 </Button>
               ) : (
                 <Button
