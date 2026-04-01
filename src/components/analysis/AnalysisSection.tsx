@@ -2080,7 +2080,52 @@ export function AnalysisSection({ requestId, files, projectId, sourceType }: Ana
                           );
                         }
 
-                        // null — not yet analyzed
+                        // null — not yet analyzed; check for triage result
+                        const triageKey = `${file.id}_${prompt.awp_class_name}`;
+                        const triage = triageResults.get(triageKey);
+
+                        if (triage?.status === "processing") {
+                          return (
+                            <td key={prompt.id} className="w-14 px-2 py-2 text-center">
+                              <Loader2 className="w-3 h-3 animate-spin text-muted-foreground mx-auto" />
+                            </td>
+                          );
+                        }
+
+                        if (triage?.status === "complete" && triage.score !== null) {
+                          return (
+                            <td
+                              key={prompt.id}
+                              className="w-14 px-2 py-2 text-center"
+                              style={{ backgroundColor: `rgba(34, 197, 94, ${triage.score / 100})` }}
+                            >
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <span className="text-xs font-medium cursor-default" style={{ color: triage.score > 50 ? "white" : undefined }}>
+                                    {triage.score}
+                                  </span>
+                                </TooltipTrigger>
+                                <TooltipContent>{triage.score}% — {triage.reason || "No reason"}</TooltipContent>
+                              </Tooltip>
+                            </td>
+                          );
+                        }
+
+                        if (triage?.status === "failed") {
+                          return (
+                            <td key={prompt.id} className="w-14 px-2 py-2 text-center">
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <span>
+                                    <AlertTriangle className="w-3.5 h-3.5 text-yellow-500 mx-auto" />
+                                  </span>
+                                </TooltipTrigger>
+                                <TooltipContent>Triage failed</TooltipContent>
+                              </Tooltip>
+                            </td>
+                          );
+                        }
+
                         return <td key={prompt.id} className="w-14 px-2 py-2" />;
                       })}
                     </tr>
