@@ -1529,6 +1529,158 @@ export function AnalysisSection({ requestId, files, projectId, sourceType }: Ana
     sortedPrompts.forEach((p) => handleAnalyze(p));
   };
 
+  // ---- Triage All with concurrency guard ----
+
+  const executeTriage = async (file: AnalysisFile, prompt: AWPPrompt) => {
+    const key = `${file.id}_${prompt.awp_class_name}`;
+    // Mark as processing locally
+    setTriageResults((prev) => {
+      const next = new Map(prev);
+      next.set(key, { file_id: file.id, awp_class_name: prompt.awp_class_name, status: "processing", score: null, reason: null, error_message: null });
+      return next;
+    });
+
+    inFlightCountRef.current++;
+    try {
+      const { data: sessionData } = await supabase.auth.getSession();
+      const token = sessionData.session?.access_token;
+
+      const response = await fetch(
+        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/triage-drawings`,
+        {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${token}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            analysisRequestId: requestId,
+            fileId: file.id,
+            awpClassName: prompt.awp_class_name,
+            assetType: prompt.category,
+            drawingName: file.name,
+          }),
+        }
+      );
+
+      if (response.ok) {
+        const data = await response.json();
+        setTriageResults((prev) => {
+          const next = new Map(prev);
+          next.set(key, {
+            file_id: file.id,
+            awp_class_name: prompt.awp_class_name,
+            status: "complete",
+            score: data.score ?? 0,
+            reason: data.reason ?? "",
+            error_message: null,
+          });
+          return next;
+        });
+        if (data.usage?.total_tokens) {
+          setTriageTokens((prev) => prev + data.usage.total_tokens);
+        }
+      } else {
+        setTriageResults((prev) => {
+          const next = new Map(prev);
+          next.set(key, { file_id: file.id, awp_class_name: prompt.awp_class_name, status: "failed", score: null, reason: null, error_message: "Triage failed" });
+          return next;
+        });
+      }
+    } catch (e) {
+      setTriageResults((prev) => {
+        const next = new Map(prev);
+        next.set(key, { file_id: file.id, awp_class_name: prompt.awp_class_name, status: "failed", score: null, reason: null, error_message: String(e) });
+        return next;
+      });
+    } finally {
+      inFlightCountRef.current--;
+      // Check if queue empty and no in-flight → stop
+      if (triageQueueRef.current.length === 0 && inFlightCountRef.current <= 0) {
+        if (triageTimerRef.current) {
+          clearInterval(triageTimerRef.current);
+          triageTimerRef.current = null;
+        }
+        setTriageRunning(false);
+        // Refresh triage data from DB
+        queryClient.invalidateQueries({ queryKey: ["triage-results", requestId] });
+      }
+    }
+  };
+
+  const handleTriageAll = () => {
+    // Build queue: column-major (for each prompt, for each file), skip cells with pass-2 results
+    const queue: Array<{ file: AnalysisFile; prompt: AWPPrompt }> = [];
+    for (const prompt of sortedPrompts) {
+      for (const file of copiedFiles) {
+        // Skip if already has pass-2 result
+        const hasPass2 = results?.some(
+          (r) => r.file_id === file.id && r.awp_class_name === prompt.awp_class_name && r.status === "complete"
+        );
+        if (hasPass2) continue;
+        queue.push({ file, prompt });
+      }
+    }
+
+    if (queue.length === 0) {
+      toast({ title: "Nothing to triage", description: "All cells already have analysis results." });
+      return;
+    }
+
+    triageQueueRef.current = queue;
+    setTriageTokens(0);
+    setTriageRunning(true);
+    inFlightCountRef.current = 0;
+
+    // Start scheduler: every 1 second, launch up to MAX_CONCURRENT
+    triageTimerRef.current = setInterval(() => {
+      while (
+        inFlightCountRef.current < MAX_CONCURRENT_TRIAGE &&
+        triageQueueRef.current.length > 0
+      ) {
+        const item = triageQueueRef.current.shift()!;
+        executeTriage(item.file, item.prompt);
+      }
+
+      // If queue empty and nothing in flight, stop
+      if (triageQueueRef.current.length === 0 && inFlightCountRef.current <= 0) {
+        if (triageTimerRef.current) {
+          clearInterval(triageTimerRef.current);
+          triageTimerRef.current = null;
+        }
+        setTriageRunning(false);
+      }
+    }, 1000);
+
+    // Immediately fire first batch
+    while (
+      inFlightCountRef.current < MAX_CONCURRENT_TRIAGE &&
+      triageQueueRef.current.length > 0
+    ) {
+      const item = triageQueueRef.current.shift()!;
+      executeTriage(item.file, item.prompt);
+    }
+  };
+
+  const handleStopTriage = () => {
+    triageQueueRef.current = [];
+    if (triageTimerRef.current) {
+      clearInterval(triageTimerRef.current);
+      triageTimerRef.current = null;
+    }
+    // Don't set triageRunning to false immediately — let in-flight finish
+    if (inFlightCountRef.current <= 0) {
+      setTriageRunning(false);
+    }
+  };
+
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => {
+      if (triageTimerRef.current) clearInterval(triageTimerRef.current);
+    };
+  }, []);
+
   const handleDownloadZip = async () => {
     try {
       const { data: sessionData } = await supabase.auth.getSession();
