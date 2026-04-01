@@ -2078,12 +2078,35 @@ export function AnalysisSection({ requestId, files, projectId, sourceType }: Ana
                     <tr key={file.id} className="border-b hover:bg-muted/30 transition-colors">
                       {/* File name (sticky) */}
                       <td className="sticky left-0 z-10 bg-card hover:bg-muted/30 px-4 py-2 border-r min-w-[180px] max-w-[320px] w-auto">
-                        <button
-                          className="text-sm font-medium truncate block max-w-[300px] text-primary hover:underline text-left"
-                          onClick={() => setPreviewFile(file)}
-                        >
-                          {file.name}
-                        </button>
+                        <div className="flex items-center gap-2">
+                          <button
+                            className="text-sm font-medium truncate block max-w-[260px] text-primary hover:underline text-left"
+                            onClick={() => setPreviewFile(file)}
+                          >
+                            {file.name}
+                          </button>
+                          {extractingFileIds.has(file.id) && (
+                            <Loader2 className="w-3 h-3 animate-spin text-muted-foreground flex-shrink-0" />
+                          )}
+                          {extractedFileIds.has(file.id) && !extractingFileIds.has(file.id) && (
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <span className="inline-flex items-center rounded-full border border-emerald-300 bg-emerald-100 px-1.5 py-0.5 text-[10px] font-medium text-emerald-800 flex-shrink-0 cursor-default">
+                                  Processed
+                                </span>
+                              </TooltipTrigger>
+                              <TooltipContent side="right" className="max-w-[400px] max-h-[300px] overflow-auto">
+                                <pre className="text-xs whitespace-pre-wrap">
+                                  {extractedTexts.get(file.id)
+                                    ? (extractedTexts.get(file.id)!.length > 500
+                                        ? extractedTexts.get(file.id)!.slice(0, 500) + "…"
+                                        : extractedTexts.get(file.id))
+                                    : "(no text extracted)"}
+                                </pre>
+                              </TooltipContent>
+                            </Tooltip>
+                          )}
+                        </div>
                       </td>
 
 
