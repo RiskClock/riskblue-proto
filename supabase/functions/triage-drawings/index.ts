@@ -1,5 +1,6 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import pdf from "https://esm.sh/pdf-parse@1.1.1";
+import { Buffer } from "node:buffer";
+import pdfParse from "npm:pdf-parse@1.1.1/lib/pdf-parse.js";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
