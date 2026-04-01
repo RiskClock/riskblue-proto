@@ -1662,7 +1662,7 @@ export function AnalysisSection({ requestId, files, projectId, sourceType }: Ana
     const filesNeedingExtraction = copiedFiles.filter((f) => f.extracted_text === null || f.extracted_text === undefined);
 
     // Phase 2 queue: all file×class pairs without pass-2 results
-    const scoreQueue: Array<{ file: AnalysisFile; prompt: AWPPrompt; action: "triage" as const }> = [];
+    const scoreQueue: Array<{ file: AnalysisFile; prompt: AWPPrompt; action: "extract" | "triage" }> = [];
     for (const prompt of sortedPrompts) {
       for (const file of copiedFiles) {
         const hasPass2 = results?.some(
