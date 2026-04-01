@@ -66,6 +66,7 @@ interface AWPPrompt {
   drive_file_id: string | null;
   drive_file_name: string | null;
   drive_file_url: string | null;
+  prompt_content: string | null;
 }
 
 interface AnalysisResult {
