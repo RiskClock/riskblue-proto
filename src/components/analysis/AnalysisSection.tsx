@@ -1903,6 +1903,13 @@ export function AnalysisSection({ requestId, files, projectId, sourceType }: Ana
                   <option value="gemini-2.5-flash-lite">Google / gemini-2.5-flash-lite</option>
                 </select>
               </div>
+              {triageRunning && triagePhase && (
+                <span className="text-xs text-muted-foreground tabular-nums">
+                  {triagePhase === "extract"
+                    ? `Extracting text: ${triageProgress.done}/${triageProgress.total} files`
+                    : `Triaging: ${triageProgress.done}/${triageProgress.total} cells`}
+                </span>
+              )}
               {(triageRunning || triageTokens > 0) && (
                 <span className="text-xs text-muted-foreground tabular-nums">
                   {triageTokens.toLocaleString()} tokens
