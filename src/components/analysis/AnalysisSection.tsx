@@ -1534,124 +1534,116 @@ export function AnalysisSection({ requestId, files, projectId, sourceType }: Ana
 
   // ---- Triage All with concurrency guard ----
 
-  const executeTriage = async (file: AnalysisFile, prompt: AWPPrompt) => {
-    const key = `${file.id}_${prompt.awp_class_name}`;
-    // Mark as processing locally
-    setTriageResults((prev) => {
-      const next = new Map(prev);
-      next.set(key, { file_id: file.id, awp_class_name: prompt.awp_class_name, status: "processing", score: null, reason: null, error_message: null });
-      return next;
-    });
-
+  const executeTriageItem = async (item: { file: AnalysisFile; prompt?: AWPPrompt; action: "extract" | "triage" }) => {
     inFlightCountRef.current++;
     try {
       const { data: sessionData } = await supabase.auth.getSession();
       const token = sessionData.session?.access_token;
 
-      const response = await fetch(
-        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/triage-drawings`,
-        {
-          method: "POST",
-          headers: {
-            Authorization: `Bearer ${token}`,
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            analysisRequestId: requestId,
-            fileId: file.id,
-            awpClassName: prompt.awp_class_name,
-            assetType: prompt.category,
-            drawingName: file.name,
-          }),
-        }
-      );
-
-      if (response.ok) {
-        const data = await response.json();
-        setTriageResults((prev) => {
-          const next = new Map(prev);
-          next.set(key, {
-            file_id: file.id,
-            awp_class_name: prompt.awp_class_name,
-            status: "complete",
-            score: data.score ?? 0,
-            reason: data.reason ?? "",
-            error_message: null,
-          });
-          return next;
-        });
-        if (data.usage?.total_tokens) {
-          setTriageTokens((prev) => prev + data.usage.total_tokens);
+      if (item.action === "extract") {
+        // Phase 1: extract text only
+        const response = await fetch(
+          `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/triage-drawings`,
+          {
+            method: "POST",
+            headers: {
+              Authorization: `Bearer ${token}`,
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({ fileId: item.file.id, action: "extract" }),
+          }
+        );
+        // We don't track tokens for extraction (no AI call)
+        if (response.ok) {
+          const data = await response.json();
+          console.log(`[triage] Extracted text for ${item.file.name}: ${data.textLength} chars`);
         }
       } else {
+        // Phase 2: triage scoring
+        const prompt = item.prompt!;
+        const key = `${item.file.id}_${prompt.awp_class_name}`;
+
+        // Mark as processing locally
         setTriageResults((prev) => {
           const next = new Map(prev);
-          next.set(key, { file_id: file.id, awp_class_name: prompt.awp_class_name, status: "failed", score: null, reason: null, error_message: "Triage failed" });
+          next.set(key, { file_id: item.file.id, awp_class_name: prompt.awp_class_name, status: "processing", score: null, reason: null, error_message: null });
+          return next;
+        });
+
+        const response = await fetch(
+          `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/triage-drawings`,
+          {
+            method: "POST",
+            headers: {
+              Authorization: `Bearer ${token}`,
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+              analysisRequestId: requestId,
+              fileId: item.file.id,
+              awpClassName: prompt.awp_class_name,
+              assetType: prompt.category,
+              drawingName: item.file.name,
+              action: "triage",
+            }),
+          }
+        );
+
+        if (response.ok) {
+          const data = await response.json();
+          setTriageResults((prev) => {
+            const next = new Map(prev);
+            next.set(key, {
+              file_id: item.file.id,
+              awp_class_name: prompt.awp_class_name,
+              status: "complete",
+              score: data.score ?? 0,
+              reason: data.reason ?? "",
+              error_message: null,
+            });
+            return next;
+          });
+          if (data.usage?.total_tokens) {
+            setTriageTokens((prev) => prev + data.usage.total_tokens);
+          }
+        } else {
+          setTriageResults((prev) => {
+            const next = new Map(prev);
+            next.set(key, { file_id: item.file.id, awp_class_name: prompt.awp_class_name, status: "failed", score: null, reason: null, error_message: "Triage failed" });
+            return next;
+          });
+        }
+      }
+    } catch (e) {
+      if (item.action === "triage" && item.prompt) {
+        const key = `${item.file.id}_${item.prompt.awp_class_name}`;
+        setTriageResults((prev) => {
+          const next = new Map(prev);
+          next.set(key, { file_id: item.file.id, awp_class_name: item.prompt!.awp_class_name, status: "failed", score: null, reason: null, error_message: String(e) });
           return next;
         });
       }
-    } catch (e) {
-      setTriageResults((prev) => {
-        const next = new Map(prev);
-        next.set(key, { file_id: file.id, awp_class_name: prompt.awp_class_name, status: "failed", score: null, reason: null, error_message: String(e) });
-        return next;
-      });
     } finally {
       inFlightCountRef.current--;
-      // Check if queue empty and no in-flight → stop
-      if (triageQueueRef.current.length === 0 && inFlightCountRef.current <= 0) {
-        if (triageTimerRef.current) {
-          clearInterval(triageTimerRef.current);
-          triageTimerRef.current = null;
-        }
-        setTriageRunning(false);
-        // Refresh triage data from DB
-        queryClient.invalidateQueries({ queryKey: ["triage-results", requestId] });
-      }
+      setTriageProgress((prev) => ({ ...prev, done: prev.done + 1 }));
     }
   };
 
-  const handleTriageAll = () => {
-    // Build queue: column-major (for each prompt, for each file), skip cells with pass-2 results
-    const queue: Array<{ file: AnalysisFile; prompt: AWPPrompt }> = [];
-    for (const prompt of sortedPrompts) {
-      for (const file of copiedFiles) {
-        // Skip if already has pass-2 result
-        const hasPass2 = results?.some(
-          (r) => r.file_id === file.id && r.awp_class_name === prompt.awp_class_name && r.status === "complete"
-        );
-        if (hasPass2) continue;
-        queue.push({ file, prompt });
-      }
-    }
-
-    if (queue.length === 0) {
-      toast({ title: "Nothing to triage", description: "All cells already have analysis results." });
-      return;
-    }
-
-    triageQueueRef.current = queue;
-    setTriageTokens(0);
-    setTriageRunning(true);
-    inFlightCountRef.current = 0;
-
-    // Start scheduler: every 1 second, launch up to MAX_CONCURRENT
+  const startTriageScheduler = (onComplete: () => void) => {
     triageTimerRef.current = setInterval(() => {
       while (
         inFlightCountRef.current < MAX_CONCURRENT_TRIAGE &&
         triageQueueRef.current.length > 0
       ) {
         const item = triageQueueRef.current.shift()!;
-        executeTriage(item.file, item.prompt);
+        executeTriageItem(item);
       }
-
-      // If queue empty and nothing in flight, stop
       if (triageQueueRef.current.length === 0 && inFlightCountRef.current <= 0) {
         if (triageTimerRef.current) {
           clearInterval(triageTimerRef.current);
           triageTimerRef.current = null;
         }
-        setTriageRunning(false);
+        onComplete();
       }
     }, 1000);
 
@@ -1661,7 +1653,69 @@ export function AnalysisSection({ requestId, files, projectId, sourceType }: Ana
       triageQueueRef.current.length > 0
     ) {
       const item = triageQueueRef.current.shift()!;
-      executeTriage(item.file, item.prompt);
+      executeTriageItem(item);
+    }
+  };
+
+  const handleTriageAll = () => {
+    // Phase 1: Identify files needing text extraction
+    const filesNeedingExtraction = copiedFiles.filter((f) => f.extracted_text === null || f.extracted_text === undefined);
+
+    // Phase 2 queue: all file×class pairs without pass-2 results
+    const scoreQueue: Array<{ file: AnalysisFile; prompt: AWPPrompt; action: "triage" as const }> = [];
+    for (const prompt of sortedPrompts) {
+      for (const file of copiedFiles) {
+        const hasPass2 = results?.some(
+          (r) => r.file_id === file.id && r.awp_class_name === prompt.awp_class_name && r.status === "complete"
+        );
+        if (hasPass2) continue;
+        scoreQueue.push({ file, prompt, action: "triage" });
+      }
+    }
+
+    if (filesNeedingExtraction.length === 0 && scoreQueue.length === 0) {
+      toast({ title: "Nothing to triage", description: "All cells already have analysis results." });
+      return;
+    }
+
+    setTriageTokens(0);
+    setTriageRunning(true);
+    inFlightCountRef.current = 0;
+
+    if (filesNeedingExtraction.length > 0) {
+      // Phase 1: Extract text
+      setTriagePhase("extract");
+      setTriageProgress({ done: 0, total: filesNeedingExtraction.length });
+      triageQueueRef.current = filesNeedingExtraction.map((f) => ({ file: f, action: "extract" as const }));
+
+      startTriageScheduler(() => {
+        // Phase 1 done → start Phase 2
+        if (scoreQueue.length > 0) {
+          setTriagePhase("score");
+          setTriageProgress({ done: 0, total: scoreQueue.length });
+          triageQueueRef.current = scoreQueue;
+          inFlightCountRef.current = 0;
+          startTriageScheduler(() => {
+            setTriageRunning(false);
+            setTriagePhase(null);
+            queryClient.invalidateQueries({ queryKey: ["triage-results", requestId] });
+          });
+        } else {
+          setTriageRunning(false);
+          setTriagePhase(null);
+        }
+      });
+    } else {
+      // Skip Phase 1, go straight to Phase 2
+      setTriagePhase("score");
+      setTriageProgress({ done: 0, total: scoreQueue.length });
+      triageQueueRef.current = scoreQueue;
+
+      startTriageScheduler(() => {
+        setTriageRunning(false);
+        setTriagePhase(null);
+        queryClient.invalidateQueries({ queryKey: ["triage-results", requestId] });
+      });
     }
   };
 
@@ -1671,9 +1725,9 @@ export function AnalysisSection({ requestId, files, projectId, sourceType }: Ana
       clearInterval(triageTimerRef.current);
       triageTimerRef.current = null;
     }
-    // Don't set triageRunning to false immediately — let in-flight finish
     if (inFlightCountRef.current <= 0) {
       setTriageRunning(false);
+      setTriagePhase(null);
     }
   };
 
