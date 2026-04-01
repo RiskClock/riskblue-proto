@@ -1957,7 +1957,7 @@ export function AnalysisSection({ requestId, files, projectId, sourceType }: Ana
                   onClick={handleTriageAll}
                   disabled={anyAnalyzing || copiedFiles.length === 0}
                 >
-                  <Sparkles className="w-4 h-4 mr-2" />
+                  <Filter className="w-4 h-4 mr-2" />
                   Triage All
                 </Button>
               )}
