@@ -1,59 +1,87 @@
 
 
-# Pass-1 Triage: Token Counter + Concurrency Guard
+# Fix Triage: Local PDF Extraction, New Prompt, and Extract-First Strategy
 
-## Updated Scope
+## Summary
 
-Token usage tracking and concurrency guard apply to the **Triage All** button (pass-1), not the pass-2 per-column analysis.
+Three changes to `triage-drawings`:
+1. Replace OpenAI file upload + text extraction with local `pdf-parse` library
+2. Replace the triage prompt with the user-provided version
+3. Add a separate "extract text only" mode so the frontend can pre-extract all files before scoring
 
-## 1. Database Migration
+The frontend will run triage in **two phases**: first extract text for all unique files, then score each file×class pair (text already cached, so scoring calls are fast).
 
-**New table: `analysis_triage_results`**
-- `id` uuid PK, `analysis_request_id` uuid, `file_id` uuid, `awp_class_name` text, `status` text DEFAULT 'queued', `score` integer (0-100), `reason` text, `error_message` text, `created_at`/`updated_at` timestamptz
-- UNIQUE on (analysis_request_id, file_id, awp_class_name)
-- RLS: internal users full access, project owners SELECT
+## 1. Edge Function: `triage-drawings/index.ts`
 
-**Alter `analysis_request_files`**: add nullable `extracted_text text` column.
+### Remove OpenAI file upload + extraction (lines 112-188)
+Replace with local extraction using `pdf-parse` via esm.sh:
 
-## 2. New Edge Function: `triage-drawings`
+```typescript
+import pdf from "https://esm.sh/pdf-parse@1.1.1";
+// ...
+const arrayBuffer = await fileData.arrayBuffer();
+const parsed = await pdf(new Uint8Array(arrayBuffer));
+extractedText = parsed.text || "";
+```
 
-- Auth: internal user only (`@riskclock.com`)
-- Input: `{ analysisRequestId, fileId, awpClassName, assetType, drawingName }`
-- Flow:
-  1. Check `extracted_text` on file record; if null, download PDF from storage, extract text via `pdfjs-dist`, cache in DB
-  2. Upsert triage result as `processing`
-  3. Call OpenAI `gpt-5-nano` with triage prompt (filename + extracted text → score 0-100 + reason)
-  4. **Return `usage` object** (`input_tokens`, `output_tokens`, `total_tokens`) from OpenAI response alongside `score`, `reason`, `status`
-- Config: add `[functions.triage-drawings] verify_jwt = false`
+If `pdf-parse` throws (corrupt PDF), catch and set `extractedText = ""`.
 
-## 3. Frontend: `AnalysisSection.tsx`
+### Add `action` parameter to support extract-only mode
+The function accepts an optional `action` field:
+- `action: "extract"` — downloads PDF, extracts text locally, caches in DB, returns `{ status: "extracted", fileId, textLength }`. No OpenAI call.
+- `action: "triage"` (default) — existing scoring flow, but uses cached `extracted_text` (skips download if already cached). Single OpenAI Responses API call.
 
-### Triage All with concurrency guard
-- **Queue**: `triageQueueRef` holds ordered `{ file, prompt }` pairs (column-major, skip cells with pass-2 results)
-- **Scheduler**: 1-second `setInterval`. Each tick: if `inFlightCountRef.current < 2` and queue not empty, shift next item, increment inFlight, call `triage-drawings`
-- **Completion**: each request decrements `inFlightCountRef` in its `finally` block. When queue empty and inFlight === 0, clear interval
-- **Stop**: clears queue, clears interval. In-flight requests finish naturally and render their results
+### Replace triage prompt (lines 193-209)
+Use the user-provided prompt exactly:
 
-### Token counter
-- `triageTokens` state, reset to 0 on Triage All start
-- Each completed triage response adds `data.usage?.total_tokens` to running total
-- Display next to Triage All button: `"1,234 tokens"` in muted text, visible while triaging or after completion
+```
+You are helping triage construction drawing files based on whether a critical
+asset or water system might be present in the file for deeper analysis.
 
-### Cell rendering
-- Pass-2 result exists → current behavior (count, clickable)
-- Triage processing → spinner
-- Triage complete → green tint at `rgba(34,197,94, score/100)`, tooltip `"{score}% — {reason}"`
-- Triage failed → warning icon
+Estimate how likely this drawing file is to contain evidence of: {assetType}
 
-### Existing pass-2 buttons unchanged
-- Per-column Analyze/Stop buttons and model selector continue to work as before, unaffected by triage
+Drawing file name:
+{drawingName}
+
+Quick text extracted from the PDF:
+{extractedText}
+
+Scoring guidance:
+- Use filename and extracted text only
+- Be conservative
+- High scores require direct clues
+- Low scores should be used if the file appears to belong to another discipline or system
+- If the evidence is weak or ambiguous, return a middling score rather than a high score
+
+Return ONLY valid JSON in this exact format:
+{"score": 0, "reason": "short explanation under 20 words"}
+```
+
+Variables: `{assetType}` = `awpClassName`, `{drawingName}` = `drawingName || fileName`, `{extractedText}` = first 4000 chars.
+
+## 2. Frontend: `AnalysisSection.tsx`
+
+### Two-phase triage in `handleTriageAll`
+
+**Phase 1 — Extract text for all files** (concurrency-guarded, same scheduler pattern):
+- Build a list of unique files that don't yet have `extracted_text` cached
+- Queue extract-only calls (`action: "extract"`) with the same concurrency guard (max 2 in-flight, 1s interval)
+- No token counter increment during extraction (no OpenAI calls)
+- Show a status indicator: "Extracting text: 3/12 files..."
+
+**Phase 2 — Score each file×class pair** (starts after all extractions complete):
+- Queue triage scoring calls (`action: "triage"`) — same concurrency guard
+- These are fast since text is already cached server-side; only the OpenAI scoring call happens
+- Token counter increments as before
+- Show status: "Triaging: 5/48 cells..."
+
+### How to detect cached text
+The `copiedFiles` query already fetches `analysis_request_files`. Add `extracted_text` to the select. Files where `extracted_text` is not null skip Phase 1.
 
 ## Files Changed
 
 | File | Change |
 |---|---|
-| Migration SQL | Create `analysis_triage_results`; add `extracted_text` to `analysis_request_files` |
-| `supabase/functions/triage-drawings/index.ts` | New function: text extraction, OpenAI triage call, return usage |
-| `supabase/config.toml` | Add triage-drawings config block |
-| `src/components/analysis/AnalysisSection.tsx` | Triage All button with concurrency-guarded queue, token counter, triage cell rendering |
+| `supabase/functions/triage-drawings/index.ts` | Remove OpenAI file upload; add `pdf-parse` local extraction; add `action: "extract"` mode; replace prompt |
+| `src/components/analysis/AnalysisSection.tsx` | Two-phase triage: extract-first, then score; phase status indicators |
 
