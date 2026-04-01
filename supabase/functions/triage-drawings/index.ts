@@ -1,5 +1,6 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import pdf from "https://esm.sh/pdf-parse@1.1.1";
+import { Buffer } from "node:buffer";
+import pdfParse from "npm:pdf-parse@1.1.1/lib/pdf-parse.js";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -103,7 +104,7 @@ Deno.serve(async (req) => {
       let extractedText = "";
       try {
         const arrayBuffer = await fileData.arrayBuffer();
-        const parsed = await pdf(new Uint8Array(arrayBuffer));
+        const parsed = await pdfParse(Buffer.from(arrayBuffer));
         extractedText = parsed.text || "";
       } catch (e) {
         console.error(`[triage] pdf-parse failed for file ${fileId}:`, e);
@@ -161,7 +162,7 @@ Deno.serve(async (req) => {
         if (fileData) {
           try {
             const arrayBuffer = await fileData.arrayBuffer();
-            const parsed = await pdf(new Uint8Array(arrayBuffer));
+            const parsed = await pdfParse(Buffer.from(arrayBuffer));
             extractedText = parsed.text || "";
           } catch {
             extractedText = "";

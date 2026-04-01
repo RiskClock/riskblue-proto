@@ -1168,6 +1168,7 @@ export function AnalysisSection({ requestId, files, projectId, sourceType }: Ana
   const [triageTokens, setTriageTokens] = useState(0);
   const [triagePhase, setTriagePhase] = useState<"extract" | "score" | null>(null);
   const [triageProgress, setTriageProgress] = useState<{ done: number; total: number }>({ done: 0, total: 0 });
+  const [currentExtractFileName, setCurrentExtractFileName] = useState<string | null>(null);
   const triageQueueRef = useRef<Array<{ file: AnalysisFile; prompt?: AWPPrompt; action: "extract" | "triage" }>>([]);
   const triageTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const inFlightCountRef = useRef(0);
@@ -1542,6 +1543,7 @@ export function AnalysisSection({ requestId, files, projectId, sourceType }: Ana
 
       if (item.action === "extract") {
         // Phase 1: extract text only
+        setCurrentExtractFileName(item.file.name);
         const response = await fetch(
           `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/triage-drawings`,
           {
@@ -1558,6 +1560,7 @@ export function AnalysisSection({ requestId, files, projectId, sourceType }: Ana
           const data = await response.json();
           console.log(`[triage] Extracted text for ${item.file.name}: ${data.textLength} chars`);
         }
+        setCurrentExtractFileName(null);
       } else {
         // Phase 2: triage scoring
         const prompt = item.prompt!;
@@ -1662,9 +1665,21 @@ export function AnalysisSection({ requestId, files, projectId, sourceType }: Ana
     }
   };
 
-  const handleTriageAll = () => {
-    // Phase 1: Identify files needing text extraction
-    const filesNeedingExtraction = copiedFiles.filter((f) => f.extracted_text === null || f.extracted_text === undefined);
+  const handleTriageAll = async () => {
+    // Clear previous triage results
+    setTriageResults(new Map());
+    setTriageTokens(0);
+    setCurrentExtractFileName(null);
+
+    // Delete existing DB triage results and clear cached extracted_text
+    await Promise.all([
+      supabase.from("analysis_triage_results").delete().eq("analysis_request_id", requestId),
+      supabase.from("analysis_request_files").update({ extracted_text: null } as any).eq("analysis_request_id", requestId),
+    ]);
+    queryClient.invalidateQueries({ queryKey: ["triage-results", requestId] });
+
+    // After clearing, all files need extraction
+    const allFiles = copiedFiles;
 
     // Phase 2 queue: all file×class pairs without pass-2 results
     const scoreQueue: Array<{ file: AnalysisFile; prompt: AWPPrompt; action: "extract" | "triage" }> = [];
@@ -1678,20 +1693,19 @@ export function AnalysisSection({ requestId, files, projectId, sourceType }: Ana
       }
     }
 
-    if (filesNeedingExtraction.length === 0 && scoreQueue.length === 0) {
-      toast({ title: "Nothing to triage", description: "All cells already have analysis results." });
+    if (allFiles.length === 0 && scoreQueue.length === 0) {
+      toast({ title: "Nothing to triage", description: "No files available." });
       return;
     }
 
-    setTriageTokens(0);
     setTriageRunning(true);
     inFlightCountRef.current = 0;
 
-    if (filesNeedingExtraction.length > 0) {
-      // Phase 1: Extract text
+    if (allFiles.length > 0) {
+      // Phase 1: Extract text for all files (we cleared cached text above)
       setTriagePhase("extract");
-      setTriageProgress({ done: 0, total: filesNeedingExtraction.length });
-      triageQueueRef.current = filesNeedingExtraction.map((f) => ({ file: f, action: "extract" as const }));
+      setTriageProgress({ done: 0, total: allFiles.length });
+      triageQueueRef.current = allFiles.map((f) => ({ file: f, action: "extract" as const }));
 
       startTriageScheduler(() => {
         // Phase 1 done → start Phase 2
@@ -1710,8 +1724,8 @@ export function AnalysisSection({ requestId, files, projectId, sourceType }: Ana
           setTriagePhase(null);
         }
       });
-    } else {
-      // Skip Phase 1, go straight to Phase 2
+    } else if (scoreQueue.length > 0) {
+      // No files but have score queue (shouldn't happen normally)
       setTriagePhase("score");
       setTriageProgress({ done: 0, total: scoreQueue.length });
       triageQueueRef.current = scoreQueue;
@@ -1911,7 +1925,7 @@ export function AnalysisSection({ requestId, files, projectId, sourceType }: Ana
               {triageRunning && triagePhase && (
                 <span className="text-xs text-muted-foreground tabular-nums">
                   {triagePhase === "extract"
-                    ? `Extracting text: ${triageProgress.done}/${triageProgress.total} files`
+                    ? `Extracting text: ${triageProgress.done}/${triageProgress.total} files${currentExtractFileName ? ` — ${currentExtractFileName}` : ""}`
                     : `Triaging: ${triageProgress.done}/${triageProgress.total} cells`}
                 </span>
               )}
