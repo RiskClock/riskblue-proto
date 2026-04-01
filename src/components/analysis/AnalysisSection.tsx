@@ -1543,6 +1543,7 @@ export function AnalysisSection({ requestId, files, projectId, sourceType }: Ana
 
       if (item.action === "extract") {
         // Phase 1: extract text only
+        setCurrentExtractFileName(item.file.name);
         const response = await fetch(
           `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/triage-drawings`,
           {
@@ -1559,6 +1560,7 @@ export function AnalysisSection({ requestId, files, projectId, sourceType }: Ana
           const data = await response.json();
           console.log(`[triage] Extracted text for ${item.file.name}: ${data.textLength} chars`);
         }
+        setCurrentExtractFileName(null);
       } else {
         // Phase 2: triage scoring
         const prompt = item.prompt!;
