@@ -1545,7 +1545,7 @@ export function AnalysisSection({ requestId, files, projectId, sourceType }: Ana
 
       if (item.action === "extract") {
         // Phase 1: extract text only
-        setCurrentExtractFileName(item.file.name);
+        setExtractingFileIds((prev) => { const next = new Set(prev); next.add(item.file.id); return next; });
         const response = await fetch(
           `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/triage-drawings`,
           {
@@ -1561,8 +1561,18 @@ export function AnalysisSection({ requestId, files, projectId, sourceType }: Ana
         if (response.ok) {
           const data = await response.json();
           console.log(`[triage] Extracted text for ${item.file.name}: ${data.textLength} chars`);
+          // Fetch extracted text for tooltip
+          const { data: fileRow } = await supabase
+            .from("analysis_request_files")
+            .select("extracted_text")
+            .eq("id", item.file.id)
+            .single();
+          if (fileRow?.extracted_text) {
+            setExtractedTexts((prev) => { const next = new Map(prev); next.set(item.file.id, fileRow.extracted_text as string); return next; });
+          }
         }
-        setCurrentExtractFileName(null);
+        setExtractingFileIds((prev) => { const next = new Set(prev); next.delete(item.file.id); return next; });
+        setExtractedFileIds((prev) => { const next = new Set(prev); next.add(item.file.id); return next; });
       } else {
         // Phase 2: triage scoring
         const prompt = item.prompt!;
