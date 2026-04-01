@@ -1168,7 +1168,9 @@ export function AnalysisSection({ requestId, files, projectId, sourceType }: Ana
   const [triageTokens, setTriageTokens] = useState(0);
   const [triagePhase, setTriagePhase] = useState<"extract" | "score" | null>(null);
   const [triageProgress, setTriageProgress] = useState<{ done: number; total: number }>({ done: 0, total: 0 });
-  const [currentExtractFileName, setCurrentExtractFileName] = useState<string | null>(null);
+  const [extractingFileIds, setExtractingFileIds] = useState<Set<string>>(new Set());
+  const [extractedFileIds, setExtractedFileIds] = useState<Set<string>>(new Set());
+  const [extractedTexts, setExtractedTexts] = useState<Map<string, string>>(new Map());
   const triageQueueRef = useRef<Array<{ file: AnalysisFile; prompt?: AWPPrompt; action: "extract" | "triage" }>>([]);
   const triageTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const inFlightCountRef = useRef(0);
