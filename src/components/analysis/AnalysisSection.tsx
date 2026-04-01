@@ -1641,11 +1641,6 @@ export function AnalysisSection({ requestId, files, projectId, sourceType }: Ana
     } finally {
       inFlightCountRef.current--;
       setTriageProgress((prev) => ({ ...prev, done: prev.done + 1 }));
-      // If queue was cleared (stop) and no more in-flight, clean up
-      if (triageQueueRef.current.length === 0 && inFlightCountRef.current <= 0 && !triageTimerRef.current) {
-        setTriageRunning(false);
-        setTriagePhase(null);
-      }
     }
   };
 
