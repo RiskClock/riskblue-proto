@@ -1,4 +1,5 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import pdf from "https://esm.sh/pdf-parse@1.1.1";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -23,12 +24,6 @@ Deno.serve(async (req) => {
     const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const openaiApiKey = Deno.env.get("OPENAI_API_KEY")!;
 
-    if (!openaiApiKey) {
-      return new Response(JSON.stringify({ error: "OPENAI_API_KEY not configured" }), {
-        status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
-    }
-
     const supabase = createClient(supabaseUrl, supabaseAnonKey, {
       global: { headers: { Authorization: authHeader } },
     });
@@ -47,9 +42,11 @@ Deno.serve(async (req) => {
       });
     }
 
-    const { analysisRequestId, fileId, awpClassName, assetType, drawingName } = await req.json();
-    if (!analysisRequestId || !fileId || !awpClassName) {
-      return new Response(JSON.stringify({ error: "Missing required fields" }), {
+    const body = await req.json();
+    const { analysisRequestId, fileId, awpClassName, assetType, drawingName, action } = body;
+
+    if (!fileId) {
+      return new Response(JSON.stringify({ error: "Missing fileId" }), {
         status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
@@ -69,24 +66,22 @@ Deno.serve(async (req) => {
       });
     }
 
-    // Upsert triage result as processing
-    await adminSupabase.from("analysis_triage_results").upsert({
-      analysis_request_id: analysisRequestId,
-      file_id: fileId,
-      awp_class_name: awpClassName,
-      status: "processing",
-    }, { onConflict: "analysis_request_id,file_id,awp_class_name" });
+    // ========== ACTION: EXTRACT ==========
+    if (action === "extract") {
+      // Check if already cached
+      if (fileRecord.extracted_text !== null && fileRecord.extracted_text !== undefined) {
+        return new Response(JSON.stringify({
+          status: "extracted",
+          fileId,
+          textLength: (fileRecord.extracted_text as string).length,
+          cached: true,
+        }), {
+          status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
 
-    // Step 1: Get or extract text
-    let extractedText = fileRecord.extracted_text as string | null;
-
-    if (!extractedText) {
       const storagePath = fileRecord.storage_path as string | null;
       if (!storagePath) {
-        await adminSupabase.from("analysis_triage_results").update({
-          status: "failed",
-          error_message: "No storage path for file",
-        }).eq("file_id", fileId).eq("analysis_request_id", analysisRequestId).eq("awp_class_name", awpClassName);
         return new Response(JSON.stringify({ error: "No storage path" }), {
           status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
@@ -100,113 +95,107 @@ Deno.serve(async (req) => {
         .download(storagePath);
 
       if (downloadError || !fileData) {
-        await adminSupabase.from("analysis_triage_results").update({
-          status: "failed",
-          error_message: `Download failed: ${downloadError?.message}`,
-        }).eq("file_id", fileId).eq("analysis_request_id", analysisRequestId).eq("awp_class_name", awpClassName);
-        return new Response(JSON.stringify({ error: `Download failed` }), {
+        return new Response(JSON.stringify({ error: `Download failed: ${downloadError?.message}` }), {
           status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       }
 
-      // Extract text using OpenAI — send the PDF and ask for text extraction
-      // Since pdfjs-dist isn't reliably available in Deno edge functions,
-      // we use a simple approach: upload to OpenAI and ask for text extraction
-      const pdfBlob = new Blob([await fileData.arrayBuffer()], { type: "application/pdf" });
-      
-      const uploadForm = new FormData();
-      uploadForm.append("file", pdfBlob, fileRecord.name as string);
-      uploadForm.append("purpose", "assistants");
-
-      const uploadResponse = await fetch("https://api.openai.com/v1/files", {
-        method: "POST",
-        headers: { Authorization: `Bearer ${openaiApiKey}` },
-        body: uploadForm,
-      });
-
-      if (!uploadResponse.ok) {
-        const errText = await uploadResponse.text();
-        console.error(`[triage] OpenAI upload failed: ${errText}`);
-        await adminSupabase.from("analysis_triage_results").update({
-          status: "failed",
-          error_message: "Failed to upload file for text extraction",
-        }).eq("file_id", fileId).eq("analysis_request_id", analysisRequestId).eq("awp_class_name", awpClassName);
-        return new Response(JSON.stringify({ error: "Upload failed" }), {
-          status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
-        });
-      }
-
-      const uploadResult = await uploadResponse.json();
-      const openaiFileId = uploadResult.id as string;
-
-      // Extract text using Responses API with gpt-5-nano
-      const extractPayload = {
-        model: "gpt-5-nano",
-        input: [
-          {
-            type: "message",
-            role: "user",
-            content: [
-              { type: "input_file", file_id: openaiFileId },
-              { type: "input_text", text: "Extract ALL text content from this PDF document. Return only the raw text, preserving layout where possible. Do not summarize or interpret." },
-            ],
-          },
-        ],
-      };
-
-      const extractResponse = await fetch("https://api.openai.com/v1/responses", {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${openaiApiKey}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(extractPayload),
-      });
-
-      if (extractResponse.ok) {
-        const extractResult = await extractResponse.json();
+      let extractedText = "";
+      try {
+        const arrayBuffer = await fileData.arrayBuffer();
+        const parsed = await pdf(new Uint8Array(arrayBuffer));
+        extractedText = parsed.text || "";
+      } catch (e) {
+        console.error(`[triage] pdf-parse failed for file ${fileId}:`, e);
         extractedText = "";
-        if (extractResult.output) {
-          for (const item of extractResult.output) {
-            if (item.type === "message" && item.content) {
-              for (const content of item.content) {
-                if (content.type === "output_text") {
-                  extractedText += content.text;
-                }
-              }
-            }
-          }
-        }
       }
 
-      // Cache extracted text (even if empty, to avoid re-extraction)
-      if (extractedText !== null) {
-        await adminSupabase.from("analysis_request_files")
-          .update({ extracted_text: extractedText || "" })
-          .eq("id", fileId);
-        console.log(`[triage] Cached extracted text for file ${fileId} (${extractedText?.length || 0} chars)`);
-      }
+      // Cache in DB
+      await adminSupabase.from("analysis_request_files")
+        .update({ extracted_text: extractedText })
+        .eq("id", fileId);
+
+      console.log(`[triage] Extracted text for file ${fileId} (${extractedText.length} chars)`);
+
+      return new Response(JSON.stringify({
+        status: "extracted",
+        fileId,
+        textLength: extractedText.length,
+        cached: false,
+      }), {
+        status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
     }
 
-    // Step 2: Call OpenAI for triage scoring
+    // ========== ACTION: TRIAGE (default) ==========
+    if (!analysisRequestId || !awpClassName) {
+      return new Response(JSON.stringify({ error: "Missing analysisRequestId or awpClassName" }), {
+        status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    if (!openaiApiKey) {
+      return new Response(JSON.stringify({ error: "OPENAI_API_KEY not configured" }), {
+        status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    // Upsert triage result as processing
+    await adminSupabase.from("analysis_triage_results").upsert({
+      analysis_request_id: analysisRequestId,
+      file_id: fileId,
+      awp_class_name: awpClassName,
+      status: "processing",
+    }, { onConflict: "analysis_request_id,file_id,awp_class_name" });
+
+    // Get cached extracted text
+    let extractedText = fileRecord.extracted_text as string | null;
+
+    // If not cached, extract now (fallback — Phase 1 should have done this)
+    if (extractedText === null || extractedText === undefined) {
+      const storagePath = fileRecord.storage_path as string | null;
+      if (storagePath) {
+        const sourceType = (fileRecord as any).analysis_requests?.source_type;
+        const bucket = sourceType === "manual_upload" ? "uploaded-drawings" : "drive-analysis-files";
+        const { data: fileData } = await adminSupabase.storage.from(bucket).download(storagePath);
+        if (fileData) {
+          try {
+            const arrayBuffer = await fileData.arrayBuffer();
+            const parsed = await pdf(new Uint8Array(arrayBuffer));
+            extractedText = parsed.text || "";
+          } catch {
+            extractedText = "";
+          }
+          await adminSupabase.from("analysis_request_files")
+            .update({ extracted_text: extractedText })
+            .eq("id", fileId);
+        }
+      }
+      if (extractedText === null) extractedText = "";
+    }
+
+    // Build triage prompt
     const fileName = fileRecord.name as string;
-    const triagePrompt = `You are a construction drawing triage classifier. Given a drawing's filename and extracted text content, determine how likely the drawing contains evidence of the following asset/system type: "${awpClassName}"${assetType ? ` (category: ${assetType})` : ""}.
+    const displayName = drawingName || fileName;
+    const triagePrompt = `You are helping triage construction drawing files based on whether a critical asset or water system might be present in the file for deeper analysis.
 
-Score from 0-100:
-- 0-10: Very unlikely (completely unrelated drawing type)
-- 11-30: Unlikely but possible
-- 31-60: Moderate chance (some related keywords or systems mentioned)
-- 61-80: Likely (relevant systems/equipment appear in text)
-- 81-100: Very likely (clear evidence of this asset type in the drawing)
+Estimate how likely this drawing file is to contain evidence of: ${awpClassName}
 
-Drawing filename: "${drawingName || fileName}"
+Drawing file name:
+${displayName}
 
-Extracted text from drawing:
-"""
+Quick text extracted from the PDF:
 ${(extractedText || "(no text extracted)").slice(0, 4000)}
-"""
 
-Respond ONLY with valid JSON: {"score": <number 0-100>, "reason": "<one sentence explanation>"}`;
+Scoring guidance:
+- Use filename and extracted text only
+- Be conservative
+- High scores require direct clues
+- Low scores should be used if the file appears to belong to another discipline or system
+- If the evidence is weak or ambiguous, return a middling score rather than a high score
+
+Return ONLY valid JSON in this exact format:
+{"score": 0, "reason": "short explanation under 20 words"}`;
 
     const triageResponse = await fetch("https://api.openai.com/v1/responses", {
       method: "POST",
@@ -239,8 +228,6 @@ Respond ONLY with valid JSON: {"score": <number 0-100>, "reason": "<one sentence
     }
 
     const triageResult = await triageResponse.json();
-
-    // Extract usage
     const usage = triageResult.usage || {};
 
     // Extract response text
@@ -261,7 +248,6 @@ Respond ONLY with valid JSON: {"score": <number 0-100>, "reason": "<one sentence
     let score = 0;
     let reason = "";
     try {
-      // Try to extract JSON from the response (handle markdown code blocks)
       const jsonMatch = responseText.match(/\{[^}]+\}/);
       if (jsonMatch) {
         const parsed = JSON.parse(jsonMatch[0]);
