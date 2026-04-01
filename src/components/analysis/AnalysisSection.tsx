@@ -1932,7 +1932,7 @@ export function AnalysisSection({ requestId, files, projectId, sourceType }: Ana
               {triageRunning && triagePhase && (
                 <span className="text-xs text-muted-foreground tabular-nums">
                   {triagePhase === "extract"
-                    ? `Extracting text: ${triageProgress.done}/${triageProgress.total} files${currentExtractFileName ? ` — ${currentExtractFileName}` : ""}`
+                    ? `Extracting text: ${triageProgress.done}/${triageProgress.total} files`
                     : `Triaging: ${triageProgress.done}/${triageProgress.total} cells`}
                 </span>
               )}
