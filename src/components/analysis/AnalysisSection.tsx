@@ -2266,96 +2266,119 @@ export function AnalysisSection({ requestId, files, projectId, sourceType }: Ana
             Analysis Summary — Unified Single Card
         ================================================================ */}
         <div className="bg-card border rounded-lg overflow-hidden">
-          <div className="px-4 py-3 border-b flex items-center gap-2">
-            <Filter className="w-4 h-4 text-primary" />
-            <h2 className="text-base font-semibold">Analysis Summary</h2>
+          <div className="px-4 py-3 border-b flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Filter className="w-4 h-4 text-primary" />
+              <h2 className="text-base font-semibold">Analysis Summary</h2>
+            </div>
+            <div className="flex items-center gap-1">
+              <Button size="sm" variant={summaryGroupBy === "awp" ? "default" : "outline"} onClick={() => setSummaryGroupBy("awp")} className="h-7 text-xs">By AWP</Button>
+              <Button size="sm" variant={summaryGroupBy === "floor" ? "default" : "outline"} onClick={() => setSummaryGroupBy("floor")} className="h-7 text-xs">By Floor</Button>
+            </div>
           </div>
 
           <div className="divide-y">
-            {sortedPrompts.map((prompt) => {
-              const className = prompt.awp_class_name;
-              const prefix = getPrefix(className);
-              const isSummarizing = summarizing[className];
-              const summary = summarizedInstances[className];
-              const isAdding = addingToProject[className];
-              const isAdded = addedToProject[className];
+            {summaryGroupBy === "awp" ? (
+              sortedPrompts.map((prompt) => {
+                const cn2 = prompt.awp_class_name;
+                const prefix = getPrefix(cn2);
+                const isSummarizing = summarizing[cn2];
+                const summary = summarizedInstances[cn2];
+                const isAdding = addingToProject[cn2];
+                const isAdded = addedToProject[cn2];
 
-              return (
-                <div key={prompt.id}>
-                  {/* Sub-header */}
-                  <div className="px-4 py-2.5 flex items-center justify-between bg-muted/20">
-                    <div className="flex items-center gap-2">
-                      <span className="text-sm font-medium">{className}</span>
-                      <span className="text-xs text-muted-foreground font-mono">({prefix})</span>
-                      {isSummarizing && (
-                        <Loader2 className="w-3.5 h-3.5 animate-spin text-muted-foreground" />
+                return (
+                  <div key={prompt.id}>
+                    <div className="px-4 py-2.5 flex items-center justify-between bg-muted/20">
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm font-medium">{cn2}</span>
+                        <span className="text-xs text-muted-foreground font-mono">({prefix})</span>
+                        {isSummarizing && <Loader2 className="w-3.5 h-3.5 animate-spin text-muted-foreground" />}
+                      </div>
+                      {summary && summary.length > 0 && (
+                        <Button size="sm" variant={isAdded ? "outline" : "default"} onClick={() => handleAddToProject(cn2)} disabled={isAdding || isAdded}>
+                          {isAdding ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <PlusCircle className="w-4 h-4 mr-2" />}
+                          {isAdded ? "Added" : "Add to Project"}
+                        </Button>
                       )}
                     </div>
-
+                    {!summary && !isSummarizing && <div className="px-4 py-3 text-sm text-muted-foreground">— Not yet analyzed</div>}
+                    {isSummarizing && !summary && <div className="px-4 py-3 flex items-center gap-2 text-sm text-muted-foreground"><Loader2 className="w-4 h-4 animate-spin" />Summarizing…</div>}
+                    {summary && summary.length === 0 && <div className="px-4 py-3 text-sm text-muted-foreground">None identified</div>}
                     {summary && summary.length > 0 && (
-                      <Button
-                        size="sm"
-                        variant={isAdded ? "outline" : "default"}
-                        onClick={() => handleAddToProject(className)}
-                        disabled={isAdding || isAdded}
-                      >
-                        {isAdding ? (
-                          <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                        ) : (
-                          <PlusCircle className="w-4 h-4 mr-2" />
-                        )}
-                        {isAdded ? "Added" : "Add to Project"}
-                      </Button>
+                      <Table>
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead>Display ID</TableHead>
+                            <TableHead>Name</TableHead>
+                            <TableHead>Floor</TableHead>
+                            <TableHead className="text-right">Area (sqft)</TableHead>
+                            <TableHead className="w-10" />
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {summary.map((inst, idx) => (
+                            <TableRow key={idx}>
+                              <TableCell className="font-mono text-sm">{inst.id}</TableCell>
+                              <TableCell className="text-sm">{inst.name}</TableCell>
+                              <TableCell className="text-sm">{inst.floor}</TableCell>
+                              <TableCell className="text-sm text-right text-muted-foreground">{inst.area_sqft > 0 ? inst.area_sqft : "—"}</TableCell>
+                              <TableCell className="text-right py-1">
+                                <Button size="sm" variant="ghost" className="h-7 w-7 p-0" onClick={() => setSelectedInstance({ instance: inst, awpClassName: cn2 })}>
+                                  <Eye className="w-4 h-4" />
+                                </Button>
+                              </TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
                     )}
                   </div>
-
-                  {/* Content */}
-                  {!summary && !isSummarizing && (
-                    <div className="px-4 py-3 text-sm text-muted-foreground">
-                      — Not yet analyzed
+                );
+              })
+            ) : (
+              /* Group by Floor */
+              (() => {
+                const floorMap = new Map<string, Array<SummarizedInstance & { awpClassName: string }>>();
+                for (const prompt of sortedPrompts) {
+                  const cn2 = prompt.awp_class_name;
+                  const summary = summarizedInstances[cn2];
+                  if (!summary) continue;
+                  for (const inst of summary) {
+                    const floor = inst.floor || "Unknown";
+                    if (!floorMap.has(floor)) floorMap.set(floor, []);
+                    floorMap.get(floor)!.push({ ...inst, awpClassName: cn2 });
+                  }
+                }
+                const floors = Array.from(floorMap.keys()).sort();
+                if (floors.length === 0) {
+                  return <div className="px-4 py-3 text-sm text-muted-foreground">No summarized data yet.</div>;
+                }
+                return floors.map((floor) => (
+                  <div key={floor}>
+                    <div className="px-4 py-2.5 bg-muted/20">
+                      <span className="text-sm font-medium">{floor}</span>
+                      <span className="text-xs text-muted-foreground ml-2">({floorMap.get(floor)!.length} items)</span>
                     </div>
-                  )}
-
-                  {isSummarizing && !summary && (
-                    <div className="px-4 py-3 flex items-center gap-2 text-sm text-muted-foreground">
-                      <Loader2 className="w-4 h-4 animate-spin" />
-                      Summarizing…
-                    </div>
-                  )}
-
-                  {summary && summary.length === 0 && (
-                    <div className="px-4 py-3 text-sm text-muted-foreground">
-                      None identified
-                    </div>
-                  )}
-
-                  {summary && summary.length > 0 && (
                     <Table>
                       <TableHeader>
                         <TableRow>
                           <TableHead>Display ID</TableHead>
+                          <TableHead>Type</TableHead>
                           <TableHead>Name</TableHead>
-                          <TableHead>Floor</TableHead>
                           <TableHead className="text-right">Area (sqft)</TableHead>
                           <TableHead className="w-10" />
                         </TableRow>
                       </TableHeader>
                       <TableBody>
-                        {summary.map((inst, idx) => (
+                        {floorMap.get(floor)!.map((inst, idx) => (
                           <TableRow key={idx}>
                             <TableCell className="font-mono text-sm">{inst.id}</TableCell>
+                            <TableCell className="text-xs text-muted-foreground">{getPrefix(inst.awpClassName)}</TableCell>
                             <TableCell className="text-sm">{inst.name}</TableCell>
-                            <TableCell className="text-sm">{inst.floor}</TableCell>
-                            <TableCell className="text-sm text-right text-muted-foreground">
-                              {inst.area_sqft > 0 ? inst.area_sqft : "—"}
-                            </TableCell>
+                            <TableCell className="text-sm text-right text-muted-foreground">{inst.area_sqft > 0 ? inst.area_sqft : "—"}</TableCell>
                             <TableCell className="text-right py-1">
-                              <Button
-                                size="sm"
-                                variant="ghost"
-                                className="h-7 w-7 p-0"
-                                onClick={() => setSelectedInstance({ instance: inst, awpClassName: className })}
-                              >
+                              <Button size="sm" variant="ghost" className="h-7 w-7 p-0" onClick={() => setSelectedInstance({ instance: inst, awpClassName: inst.awpClassName })}>
                                 <Eye className="w-4 h-4" />
                               </Button>
                             </TableCell>
@@ -2363,10 +2386,10 @@ export function AnalysisSection({ requestId, files, projectId, sourceType }: Ana
                         ))}
                       </TableBody>
                     </Table>
-                  )}
-                </div>
-              );
-            })}
+                  </div>
+                ));
+              })()
+            )}
           </div>
         </div>
       </div>
