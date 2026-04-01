@@ -1601,6 +1601,7 @@ export function AnalysisSection({ requestId, files, projectId, sourceType }: Ana
               awpClassName: prompt.awp_class_name,
               assetType: prompt.category,
               drawingName: item.file.name,
+              promptContent: prompt.prompt_content || null,
               action: "triage",
             }),
           }
