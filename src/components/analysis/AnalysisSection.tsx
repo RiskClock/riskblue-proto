@@ -2101,18 +2101,18 @@ export function AnalysisSection({ requestId, files, projectId, sourceType }: Ana
                           {extractedFileIds.has(file.id) && !extractingFileIds.has(file.id) && (
                             <Tooltip>
                               <TooltipTrigger asChild>
-                                <span className="inline-flex items-center rounded-full border border-emerald-300 bg-emerald-100 px-1.5 py-0.5 text-[10px] font-medium text-emerald-800 flex-shrink-0 cursor-default">
+                                <span className="inline-flex items-center rounded-full border border-emerald-300 bg-emerald-100 px-1.5 py-px text-[10px] font-medium text-emerald-800 leading-tight flex-shrink-0 cursor-default">
                                   Processed
                                 </span>
                               </TooltipTrigger>
-                              <TooltipContent side="right" className="max-w-[400px] max-h-[300px] overflow-auto">
-                                <pre className="text-xs whitespace-pre-wrap">
+                              <TooltipContent side="right" className="max-w-[350px] max-h-[200px] overflow-auto p-2">
+                                <p className="text-xs whitespace-pre-wrap break-words">
                                   {extractedTexts.get(file.id)
                                     ? (extractedTexts.get(file.id)!.length > 500
                                         ? extractedTexts.get(file.id)!.slice(0, 500) + "…"
                                         : extractedTexts.get(file.id))
                                     : "(no text extracted)"}
-                                </pre>
+                                </p>
                               </TooltipContent>
                             </Tooltip>
                           )}
