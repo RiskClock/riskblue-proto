@@ -76,6 +76,15 @@ interface AnalysisResult {
   error_message: string | null;
 }
 
+interface TriageResult {
+  file_id: string;
+  awp_class_name: string;
+  status: string;
+  score: number | null;
+  reason: string | null;
+  error_message: string | null;
+}
+
 interface ParsedInstance {
   id: string;
   name: string;
