@@ -1665,9 +1665,21 @@ export function AnalysisSection({ requestId, files, projectId, sourceType }: Ana
     }
   };
 
-  const handleTriageAll = () => {
-    // Phase 1: Identify files needing text extraction
-    const filesNeedingExtraction = copiedFiles.filter((f) => f.extracted_text === null || f.extracted_text === undefined);
+  const handleTriageAll = async () => {
+    // Clear previous triage results
+    setTriageResults(new Map());
+    setTriageTokens(0);
+    setCurrentExtractFileName(null);
+
+    // Delete existing DB triage results and clear cached extracted_text
+    await Promise.all([
+      supabase.from("analysis_triage_results").delete().eq("analysis_request_id", requestId),
+      supabase.from("analysis_request_files").update({ extracted_text: null } as any).eq("analysis_request_id", requestId),
+    ]);
+    queryClient.invalidateQueries({ queryKey: ["triage-results", requestId] });
+
+    // After clearing, all files need extraction
+    const allFiles = copiedFiles;
 
     // Phase 2 queue: all file×class pairs without pass-2 results
     const scoreQueue: Array<{ file: AnalysisFile; prompt: AWPPrompt; action: "extract" | "triage" }> = [];
@@ -1681,12 +1693,11 @@ export function AnalysisSection({ requestId, files, projectId, sourceType }: Ana
       }
     }
 
-    if (filesNeedingExtraction.length === 0 && scoreQueue.length === 0) {
-      toast({ title: "Nothing to triage", description: "All cells already have analysis results." });
+    if (allFiles.length === 0 && scoreQueue.length === 0) {
+      toast({ title: "Nothing to triage", description: "No files available." });
       return;
     }
 
-    setTriageTokens(0);
     setTriageRunning(true);
     inFlightCountRef.current = 0;
 
