@@ -1846,10 +1846,35 @@ export function AnalysisSection({ requestId, files, projectId, sourceType }: Ana
                   <option value="gemini-2.5-flash-lite">Google / gemini-2.5-flash-lite</option>
                 </select>
               </div>
+              {(triageRunning || triageTokens > 0) && (
+                <span className="text-xs text-muted-foreground tabular-nums">
+                  {triageTokens.toLocaleString()} tokens
+                </span>
+              )}
+              {triageRunning ? (
+                <Button
+                  size="sm"
+                  variant="destructive"
+                  onClick={handleStopTriage}
+                >
+                  <Square className="w-4 h-4 mr-2" />
+                  Stop Triage
+                </Button>
+              ) : (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={handleTriageAll}
+                  disabled={anyAnalyzing || copiedFiles.length === 0}
+                >
+                  <Sparkles className="w-4 h-4 mr-2" />
+                  Triage All
+                </Button>
+              )}
               <Button
                 size="sm"
                 onClick={handleAnalyzeAll}
-                disabled={anyAnalyzing || copiedFiles.length === 0}
+                disabled={anyAnalyzing || triageRunning || copiedFiles.length === 0}
               >
                 {anyAnalyzing ? (
                   <Loader2 className="w-4 h-4 mr-2 animate-spin" />
