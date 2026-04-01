@@ -44,7 +44,7 @@ Deno.serve(async (req) => {
     }
 
     const body = await req.json();
-    const { analysisRequestId, fileId, awpClassName, assetType, drawingName, action } = body;
+    const { analysisRequestId, fileId, awpClassName, assetType, drawingName, action, promptContent } = body;
 
     if (!fileId) {
       return new Response(JSON.stringify({ error: "Missing fileId" }), {
