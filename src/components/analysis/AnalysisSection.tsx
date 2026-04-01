@@ -1208,6 +1208,29 @@ export function AnalysisSection({ requestId, files, projectId, sourceType }: Ana
     },
   });
 
+  // Fetch existing triage results
+  const { data: triageData } = useQuery({
+    queryKey: ["triage-results", requestId],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("analysis_triage_results")
+        .select("file_id, awp_class_name, status, score, reason, error_message")
+        .eq("analysis_request_id", requestId);
+      if (error) throw error;
+      return data as TriageResult[];
+    },
+  });
+
+  // Hydrate triage results into map
+  useEffect(() => {
+    if (!triageData) return;
+    const map = new Map<string, TriageResult>();
+    for (const r of triageData) {
+      map.set(`${r.file_id}_${r.awp_class_name}`, r);
+    }
+    setTriageResults(map);
+  }, [triageData]);
+
   const { data: savedSummaryData, refetch: refetchSummary } = useQuery({
     queryKey: ["analysis-request-summary", requestId],
     queryFn: async () => {
