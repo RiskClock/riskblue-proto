@@ -1648,7 +1648,13 @@ export function AnalysisSection({ requestId, files, projectId, sourceType }: Ana
             return next;
           });
           if (data.usage?.total_tokens) {
-            setTriageTokens((prev) => prev + data.usage.total_tokens);
+            const tokens = data.usage.total_tokens;
+            setTriageTokens((prev) => {
+              const newTotal = prev + tokens;
+              // Persist to DB
+              supabase.from("analysis_requests").update({ triage_tokens_used: newTotal } as any).eq("id", requestId);
+              return newTotal;
+            });
           }
         } else {
           setTriageResults((prev) => {
