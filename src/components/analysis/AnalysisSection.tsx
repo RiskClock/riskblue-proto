@@ -1176,7 +1176,7 @@ export function AnalysisSection({ requestId, files, projectId, sourceType }: Ana
   const triageQueueRef = useRef<Array<{ file: AnalysisFile; prompt?: AWPPrompt; action: "extract" | "triage" }>>([]);
   const triageTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const inFlightCountRef = useRef(0);
-  const MAX_CONCURRENT_TRIAGE = 2;
+  const MAX_CONCURRENT_TRIAGE = 5;
 
   // ---- Unchanged state ----
   const [summarizedInstances, setSummarizedInstances] = useState<Record<string, SummarizedInstance[]>>({});
