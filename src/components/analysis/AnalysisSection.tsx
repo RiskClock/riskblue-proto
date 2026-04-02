@@ -1153,7 +1153,8 @@ export function AnalysisSection({ requestId, files, projectId, sourceType }: Ana
   // ---- New state architecture ----
   const [analyzingClasses, setAnalyzingClasses] = useState<Set<string>>(new Set());
   const [classFileStatuses, setClassFileStatuses] = useState<Record<string, Record<string, string>>>({});
-  const [selectedModel, setSelectedModel] = useState<string>(() => localStorage.getItem("analysis-ai-model") || "gpt-5-mini");
+  const [triageModel, setTriageModel] = useState<string>("gpt-5-nano");
+  const [analyzeModel, setAnalyzeModel] = useState<string>("gpt-5-mini");
   const abortControllers = useRef<Record<string, AbortController>>({});
   const [rawResultModal, setRawResultModal] = useState<{
     fileName: string;
