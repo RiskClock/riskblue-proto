@@ -1629,6 +1629,7 @@ export function AnalysisSection({ requestId, files, projectId, sourceType }: Ana
               drawingName: item.file.name,
               promptContent: prompt.prompt_content || null,
               action: "triage",
+              model: triageModel,
             }),
           }
         );
