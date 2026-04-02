@@ -2096,9 +2096,9 @@ export function AnalysisSection({ requestId, files, projectId, sourceType }: Ana
                     <tr key={file.id} className="border-b hover:bg-muted/30 transition-colors">
                       {/* File name (sticky) */}
                       <td className="sticky left-0 z-10 bg-card hover:bg-muted/30 px-4 py-2 border-r min-w-[180px] max-w-[320px] w-auto">
-                        <div className="flex items-center gap-2">
+                        <div className="flex items-center gap-2 min-w-0">
                           <button
-                            className="text-sm font-medium truncate block max-w-[260px] text-primary hover:underline text-left"
+                            className="text-sm font-medium truncate flex-1 min-w-0 text-primary hover:underline text-left"
                             onClick={() => setPreviewFile(file)}
                           >
                             {file.name}
