@@ -2061,9 +2061,8 @@ export function AnalysisSection({ requestId, files, projectId, sourceType }: Ana
                   {/* Header row: file info columns + class abbreviations */}
                   <tr className="border-b">
                     <th className="sticky left-0 z-10 bg-card px-4 py-2 text-left font-medium text-muted-foreground min-w-[180px] max-w-[320px] w-auto border-r">
-                      <span className="block text-sm">File Name</span>
-                      <span className="block text-xs font-normal text-muted-foreground/70">
-                        {copiedFiles.length} files · {formatBytes(totalSizeBytes)} · {sourceLabel}
+                      <span className="block text-sm">
+                        Files ({copiedFiles.length} files | {formatBytes(totalSizeBytes)} | {sourceLabel})
                       </span>
                     </th>
                      {sortedPrompts.map((prompt) => (
