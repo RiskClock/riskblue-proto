@@ -1,26 +1,80 @@
 
 
-# Increase Triage Concurrency & Fix Filename Truncation
+# UI Overhaul: Persist Tokens, Dual Model Selectors, Text Fixes
 
-## 1. Increase concurrency limit from 2 to 5
+## Summary
 
-**File: `src/components/analysis/AnalysisSection.tsx`** (line 1179)
+Seven changes across the analysis detail page: persist triage token count in DB, add per-request model selectors for both triage and analyze, rename buttons, fix title/source text, and consolidate the file info line.
 
-Change `MAX_CONCURRENT_TRIAGE = 2` to `MAX_CONCURRENT_TRIAGE = 5`.
+## 1. Database Migration
 
-## 2. Fix filename truncation
+Add columns to `analysis_requests`:
+- `triage_tokens_used` integer DEFAULT 0
+- `triage_model` text DEFAULT 'gpt-5-nano'
+- `analyze_model` text DEFAULT 'gpt-5-mini'
 
-**File: `src/components/analysis/AnalysisSection.tsx`** (line 2098-2101)
+```sql
+ALTER TABLE public.analysis_requests
+  ADD COLUMN IF NOT EXISTS triage_tokens_used integer DEFAULT 0,
+  ADD COLUMN IF NOT EXISTS triage_model text DEFAULT 'gpt-5-nano',
+  ADD COLUMN IF NOT EXISTS analyze_model text DEFAULT 'gpt-5-mini';
+```
 
-The `<button>` at line 2101 has `max-w-[260px]` which artificially caps the filename width well before the column edge. The flex wrapper also needs `min-w-0` to allow proper shrinking.
+## 2. Frontend: `AnalysisSection.tsx`
 
-Changes:
-- Line 2099: Add `min-w-0` to the flex wrapper `<div>`
-- Line 2101: Remove `max-w-[260px]` from the button, replace with `flex-1 min-w-0 truncate` so it fills available column space and only truncates at the actual column boundary
+### 2a. Persist triage token count
+
+- Initialize `triageTokens` from a DB query on mount (fetch `triage_tokens_used` from `analysis_requests`).
+- After each triage scoring response with tokens, update DB: `UPDATE analysis_requests SET triage_tokens_used = triage_tokens_used + N WHERE id = requestId`.
+- On `handleTriageAll` (clear), reset DB column to 0.
+- Token count persists across refresh; cleared only on next triage run.
+
+### 2b. Dual model selectors with per-request persistence
+
+Replace the single `selectedModel` (localStorage-based) with two states:
+- `triageModel` — initialized from `analysis_requests.triage_model`, saved to DB on change
+- `analyzeModel` — initialized from `analysis_requests.analyze_model`, saved to DB on change
+
+**Model options for both dropdowns** (same list):
+- OpenAI: gpt-5, gpt-5-mini, gpt-5-nano
+- Google: gemini-2.5-pro, gemini-2.5-flash, gemini-2.5-flash-lite
+- Anthropic: claude-sonnet, claude-haiku
+
+Pass `triageModel` to `triage-drawings` edge function in the request body. Pass `analyzeModel` to `analyze-drawings` (replacing the current `selectedModel`).
+
+### 2c. Toolbar layout
+
+```
+Model: [triage dropdown] [Triage] | Model: [analyze dropdown] [Analyze]
+```
+
+- Rename "Triage All" → "Triage"
+- Rename "Analyze All" → "Analyze"
+- Add a visual `|` separator between the two groups
+- Token count and progress text appear between/after as before
+
+### 2d. Text fixes
+
+- Title: "Drawing Analysis" → "Drawing File Analysis"
+- `sourceLabel`: capitalize first letter of each word (e.g. "procore" → "Procore", "google drive" → "Google Drive")
+- File info: merge the two lines in the File Name header into one: `Files (23 files | 8.3MB | Procore)` — single `<span>` block
+
+## 3. Edge Functions
+
+### `triage-drawings/index.ts`
+
+- Accept `model` from request body
+- Use it in the OpenAI Responses API call instead of hardcoded `gpt-5-nano`
+
+### `analyze-drawings/index.ts`
+
+- Already accepts `model` — no change needed (it already uses `model || "gpt-5-mini"`)
 
 ## Files Changed
 
 | File | Change |
 |---|---|
-| `src/components/analysis/AnalysisSection.tsx` | `MAX_CONCURRENT_TRIAGE` 2→5; fix filename button classes |
+| Migration SQL | Add `triage_tokens_used`, `triage_model`, `analyze_model` columns |
+| `src/components/analysis/AnalysisSection.tsx` | Dual model selectors, persist tokens to DB, rename buttons, separator, text fixes |
+| `supabase/functions/triage-drawings/index.ts` | Accept and use `model` from request body |
 
