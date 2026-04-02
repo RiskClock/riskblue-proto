@@ -226,7 +226,7 @@ Return ONLY valid JSON in this exact format:
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        model: "gpt-5-nano",
+        model: model || "gpt-5-nano",
         input: [
           {
             type: "message",
