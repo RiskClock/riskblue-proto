@@ -1240,17 +1240,30 @@ export function AnalysisSection({ requestId, files, projectId, sourceType }: Ana
     setTriageResults(map);
   }, [triageData]);
 
-  const { data: savedSummaryData, refetch: refetchSummary } = useQuery({
-    queryKey: ["analysis-request-summary", requestId],
+  // Fetch persisted model selections and token count
+  const { data: requestMeta } = useQuery({
+    queryKey: ["analysis-request-meta", requestId],
     queryFn: async () => {
       const { data } = await supabase
         .from("analysis_requests")
-        .select("summary_data")
+        .select("summary_data, triage_tokens_used, triage_model, analyze_model")
         .eq("id", requestId)
         .single();
-      return (data?.summary_data as unknown as Record<string, SummarizedInstance[]>) || {};
+      return data;
     },
   });
+
+  // Initialize models and tokens from DB
+  useEffect(() => {
+    if (!requestMeta) return;
+    if (requestMeta.triage_model) setTriageModel(requestMeta.triage_model as string);
+    if (requestMeta.analyze_model) setAnalyzeModel(requestMeta.analyze_model as string);
+    if (requestMeta.triage_tokens_used) setTriageTokens(requestMeta.triage_tokens_used as number);
+  }, [requestMeta]);
+
+  const savedSummaryData = useMemo(() => {
+    return (requestMeta?.summary_data as unknown as Record<string, SummarizedInstance[]>) || {};
+  }, [requestMeta]);
 
   const { data: awpClasses } = useQuery({
     queryKey: ["awp-classes-all"],
