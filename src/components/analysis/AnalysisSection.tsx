@@ -1362,25 +1362,25 @@ export function AnalysisSection({ requestId, files, projectId, sourceType }: Ana
           .from("analysis_requests")
           .select("summary_data")
           .eq("id", requestId)
-          .single();
-        const existing = (req?.summary_data as unknown as Record<string, unknown>) || {};
-        await supabase
-          .from("analysis_requests")
-          .update({ summary_data: { ...existing, [awpClassName]: data.instances } as any })
-          .eq("id", requestId);
-        await refetchSummary();
-      }
-    } catch (e) {
-      console.error("Summarize failed:", e);
-      toast({
-        title: "Summarization Failed",
-        description: e instanceof Error ? e.message : "Unknown error",
-        variant: "destructive",
-      });
-    } finally {
-      setSummarizing((prev) => ({ ...prev, [awpClassName]: false }));
-    }
-  }, [requestId, toast, refetchSummary]);
+           .single();
+         const existing = (req?.summary_data as unknown as Record<string, unknown>) || {};
+         await supabase
+           .from("analysis_requests")
+           .update({ summary_data: { ...existing, [awpClassName]: data.instances } as any })
+           .eq("id", requestId);
+         queryClient.invalidateQueries({ queryKey: ["analysis-request-meta", requestId] });
+       }
+     } catch (e) {
+       console.error("Summarize failed:", e);
+       toast({
+         title: "Summarization Failed",
+         description: e instanceof Error ? e.message : "Unknown error",
+         variant: "destructive",
+       });
+     } finally {
+       setSummarizing((prev) => ({ ...prev, [awpClassName]: false }));
+     }
+   }, [requestId, toast, queryClient]);
 
   // Hydrate summarized instances from DB on mount (avoids re-calling the AI)
   useEffect(() => {
