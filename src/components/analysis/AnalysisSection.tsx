@@ -1946,19 +1946,16 @@ export function AnalysisSection({ requestId, files, projectId, sourceType }: Ana
         ================================================================ */}
         <div className="bg-card border rounded-lg overflow-hidden">
           <div className="px-4 py-3 border-b flex items-center justify-between">
-            <h2 className="text-base font-semibold">Drawing Analysis</h2>
+            <h2 className="text-base font-semibold">Drawing File Analysis</h2>
             <div className="flex items-center gap-3">
+              {/* Triage group */}
               <div className="flex items-center gap-2">
-                <label htmlFor="ai-model-select" className="text-xs text-muted-foreground whitespace-nowrap">AI model:</label>
+                <label className="text-xs text-muted-foreground whitespace-nowrap">Model:</label>
                 <select
-                  id="ai-model-select"
                   className="h-8 rounded-md border border-input bg-background px-2 text-xs focus:outline-none focus:ring-1 focus:ring-ring disabled:opacity-50"
-                  value={selectedModel}
-                  onChange={(e) => {
-                    setSelectedModel(e.target.value);
-                    localStorage.setItem("analysis-ai-model", e.target.value);
-                  }}
-                  disabled={anyAnalyzing}
+                  value={triageModel}
+                  onChange={(e) => updateTriageModel(e.target.value)}
+                  disabled={triageRunning}
                 >
                   <option value="gpt-5">OpenAI / gpt-5</option>
                   <option value="gpt-5-mini">OpenAI / gpt-5-mini</option>
@@ -1966,12 +1963,14 @@ export function AnalysisSection({ requestId, files, projectId, sourceType }: Ana
                   <option value="gemini-2.5-pro">Google / gemini-2.5-pro</option>
                   <option value="gemini-2.5-flash">Google / gemini-2.5-flash</option>
                   <option value="gemini-2.5-flash-lite">Google / gemini-2.5-flash-lite</option>
+                  <option value="claude-sonnet">Anthropic / claude-sonnet</option>
+                  <option value="claude-haiku">Anthropic / claude-haiku</option>
                 </select>
               </div>
               {triageRunning && triagePhase && (
                 <span className="text-xs text-muted-foreground tabular-nums">
                   {triagePhase === "extract"
-                    ? `Extracting text: ${triageProgress.done}/${triageProgress.total} files`
+                    ? `Extracting: ${triageProgress.done}/${triageProgress.total} files`
                     : `Triaging: ${triageProgress.done}/${triageProgress.total} cells`}
                 </span>
               )}
@@ -1992,7 +1991,7 @@ export function AnalysisSection({ requestId, files, projectId, sourceType }: Ana
                   ) : (
                     <Square className="w-4 h-4 mr-2" />
                   )}
-                  {triageStopping ? "Stopping…" : "Stop Triage"}
+                  {triageStopping ? "Stopping…" : "Stop"}
                 </Button>
               ) : (
                 <Button
@@ -2002,9 +2001,32 @@ export function AnalysisSection({ requestId, files, projectId, sourceType }: Ana
                   disabled={anyAnalyzing || copiedFiles.length === 0}
                 >
                   <Filter className="w-4 h-4 mr-2" />
-                  Triage All
+                  Triage
                 </Button>
               )}
+
+              {/* Separator */}
+              <div className="h-6 w-px bg-border" />
+
+              {/* Analyze group */}
+              <div className="flex items-center gap-2">
+                <label className="text-xs text-muted-foreground whitespace-nowrap">Model:</label>
+                <select
+                  className="h-8 rounded-md border border-input bg-background px-2 text-xs focus:outline-none focus:ring-1 focus:ring-ring disabled:opacity-50"
+                  value={analyzeModel}
+                  onChange={(e) => updateAnalyzeModel(e.target.value)}
+                  disabled={anyAnalyzing}
+                >
+                  <option value="gpt-5">OpenAI / gpt-5</option>
+                  <option value="gpt-5-mini">OpenAI / gpt-5-mini</option>
+                  <option value="gpt-5-nano">OpenAI / gpt-5-nano</option>
+                  <option value="gemini-2.5-pro">Google / gemini-2.5-pro</option>
+                  <option value="gemini-2.5-flash">Google / gemini-2.5-flash</option>
+                  <option value="gemini-2.5-flash-lite">Google / gemini-2.5-flash-lite</option>
+                  <option value="claude-sonnet">Anthropic / claude-sonnet</option>
+                  <option value="claude-haiku">Anthropic / claude-haiku</option>
+                </select>
+              </div>
               <Button
                 size="sm"
                 onClick={handleAnalyzeAll}
@@ -2015,7 +2037,7 @@ export function AnalysisSection({ requestId, files, projectId, sourceType }: Ana
                 ) : (
                   <Play className="w-4 h-4 mr-2" />
                 )}
-                Analyze All
+                Analyze
               </Button>
             </div>
           </div>
