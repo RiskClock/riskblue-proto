@@ -1153,7 +1153,8 @@ export function AnalysisSection({ requestId, files, projectId, sourceType }: Ana
   // ---- New state architecture ----
   const [analyzingClasses, setAnalyzingClasses] = useState<Set<string>>(new Set());
   const [classFileStatuses, setClassFileStatuses] = useState<Record<string, Record<string, string>>>({});
-  const [selectedModel, setSelectedModel] = useState<string>(() => localStorage.getItem("analysis-ai-model") || "gpt-5-mini");
+  const [triageModel, setTriageModel] = useState<string>("gpt-5-nano");
+  const [analyzeModel, setAnalyzeModel] = useState<string>("gpt-5-mini");
   const abortControllers = useRef<Record<string, AbortController>>({});
   const [rawResultModal, setRawResultModal] = useState<{
     fileName: string;
@@ -1239,17 +1240,30 @@ export function AnalysisSection({ requestId, files, projectId, sourceType }: Ana
     setTriageResults(map);
   }, [triageData]);
 
-  const { data: savedSummaryData, refetch: refetchSummary } = useQuery({
-    queryKey: ["analysis-request-summary", requestId],
+  // Fetch persisted model selections and token count
+  const { data: requestMeta } = useQuery({
+    queryKey: ["analysis-request-meta", requestId],
     queryFn: async () => {
       const { data } = await supabase
         .from("analysis_requests")
-        .select("summary_data")
+        .select("summary_data, triage_tokens_used, triage_model, analyze_model")
         .eq("id", requestId)
         .single();
-      return (data?.summary_data as unknown as Record<string, SummarizedInstance[]>) || {};
+      return data;
     },
   });
+
+  // Initialize models and tokens from DB
+  useEffect(() => {
+    if (!requestMeta) return;
+    if (requestMeta.triage_model) setTriageModel(requestMeta.triage_model as string);
+    if (requestMeta.analyze_model) setAnalyzeModel(requestMeta.analyze_model as string);
+    if (requestMeta.triage_tokens_used) setTriageTokens(requestMeta.triage_tokens_used as number);
+  }, [requestMeta]);
+
+  const savedSummaryData = useMemo(() => {
+    return (requestMeta?.summary_data as unknown as Record<string, SummarizedInstance[]>) || {};
+  }, [requestMeta]);
 
   const { data: awpClasses } = useQuery({
     queryKey: ["awp-classes-all"],
@@ -1316,7 +1330,19 @@ export function AnalysisSection({ requestId, files, projectId, sourceType }: Ana
 
   // File Name header metadata
   const totalSizeBytes = copiedFiles.reduce((sum, f) => sum + ((f as any).size_bytes || 0), 0);
-  const sourceLabel = (sourceType || "google_drive").replace(/_/g, " ");
+  const sourceLabel = (sourceType || "google_drive")
+    .replace(/_/g, " ")
+    .replace(/\b\w/g, (c: string) => c.toUpperCase());
+
+  // Model persistence helpers
+  const updateTriageModel = (model: string) => {
+    setTriageModel(model);
+    supabase.from("analysis_requests").update({ triage_model: model } as any).eq("id", requestId);
+  };
+  const updateAnalyzeModel = (model: string) => {
+    setAnalyzeModel(model);
+    supabase.from("analysis_requests").update({ analyze_model: model } as any).eq("id", requestId);
+  };
 
   // ---- Handlers ----
 
@@ -1348,25 +1374,25 @@ export function AnalysisSection({ requestId, files, projectId, sourceType }: Ana
           .from("analysis_requests")
           .select("summary_data")
           .eq("id", requestId)
-          .single();
-        const existing = (req?.summary_data as unknown as Record<string, unknown>) || {};
-        await supabase
-          .from("analysis_requests")
-          .update({ summary_data: { ...existing, [awpClassName]: data.instances } as any })
-          .eq("id", requestId);
-        await refetchSummary();
-      }
-    } catch (e) {
-      console.error("Summarize failed:", e);
-      toast({
-        title: "Summarization Failed",
-        description: e instanceof Error ? e.message : "Unknown error",
-        variant: "destructive",
-      });
-    } finally {
-      setSummarizing((prev) => ({ ...prev, [awpClassName]: false }));
-    }
-  }, [requestId, toast, refetchSummary]);
+           .single();
+         const existing = (req?.summary_data as unknown as Record<string, unknown>) || {};
+         await supabase
+           .from("analysis_requests")
+           .update({ summary_data: { ...existing, [awpClassName]: data.instances } as any })
+           .eq("id", requestId);
+         queryClient.invalidateQueries({ queryKey: ["analysis-request-meta", requestId] });
+       }
+     } catch (e) {
+       console.error("Summarize failed:", e);
+       toast({
+         title: "Summarization Failed",
+         description: e instanceof Error ? e.message : "Unknown error",
+         variant: "destructive",
+       });
+     } finally {
+       setSummarizing((prev) => ({ ...prev, [awpClassName]: false }));
+     }
+   }, [requestId, toast, queryClient]);
 
   // Hydrate summarized instances from DB on mount (avoids re-calling the AI)
   useEffect(() => {
@@ -1470,7 +1496,7 @@ export function AnalysisSection({ requestId, files, projectId, sourceType }: Ana
                 fileId: file.id,
                 awpClassName: className,
                 promptContent,
-                model: selectedModel,
+                model: analyzeModel,
               }),
             }
           );
@@ -1603,6 +1629,7 @@ export function AnalysisSection({ requestId, files, projectId, sourceType }: Ana
               drawingName: item.file.name,
               promptContent: prompt.prompt_content || null,
               action: "triage",
+              model: triageModel,
             }),
           }
         );
@@ -1622,7 +1649,13 @@ export function AnalysisSection({ requestId, files, projectId, sourceType }: Ana
             return next;
           });
           if (data.usage?.total_tokens) {
-            setTriageTokens((prev) => prev + data.usage.total_tokens);
+            const tokens = data.usage.total_tokens;
+            setTriageTokens((prev) => {
+              const newTotal = prev + tokens;
+              // Persist to DB
+              supabase.from("analysis_requests").update({ triage_tokens_used: newTotal } as any).eq("id", requestId);
+              return newTotal;
+            });
           }
         } else {
           setTriageResults((prev) => {
@@ -1683,10 +1716,11 @@ export function AnalysisSection({ requestId, files, projectId, sourceType }: Ana
     setExtractedFileIds(new Set());
     setExtractedTexts(new Map());
 
-    // Delete existing DB triage results and clear cached extracted_text
+    // Delete existing DB triage results, clear cached extracted_text, and reset token count
     await Promise.all([
       supabase.from("analysis_triage_results").delete().eq("analysis_request_id", requestId),
       supabase.from("analysis_request_files").update({ extracted_text: null } as any).eq("analysis_request_id", requestId),
+      supabase.from("analysis_requests").update({ triage_tokens_used: 0 } as any).eq("id", requestId),
     ]);
     queryClient.invalidateQueries({ queryKey: ["triage-results", requestId] });
 
@@ -1920,19 +1954,16 @@ export function AnalysisSection({ requestId, files, projectId, sourceType }: Ana
         ================================================================ */}
         <div className="bg-card border rounded-lg overflow-hidden">
           <div className="px-4 py-3 border-b flex items-center justify-between">
-            <h2 className="text-base font-semibold">Drawing Analysis</h2>
+            <h2 className="text-base font-semibold">Drawing File Analysis</h2>
             <div className="flex items-center gap-3">
+              {/* Triage group */}
               <div className="flex items-center gap-2">
-                <label htmlFor="ai-model-select" className="text-xs text-muted-foreground whitespace-nowrap">AI model:</label>
+                <label className="text-xs text-muted-foreground whitespace-nowrap">Model:</label>
                 <select
-                  id="ai-model-select"
                   className="h-8 rounded-md border border-input bg-background px-2 text-xs focus:outline-none focus:ring-1 focus:ring-ring disabled:opacity-50"
-                  value={selectedModel}
-                  onChange={(e) => {
-                    setSelectedModel(e.target.value);
-                    localStorage.setItem("analysis-ai-model", e.target.value);
-                  }}
-                  disabled={anyAnalyzing}
+                  value={triageModel}
+                  onChange={(e) => updateTriageModel(e.target.value)}
+                  disabled={triageRunning}
                 >
                   <option value="gpt-5">OpenAI / gpt-5</option>
                   <option value="gpt-5-mini">OpenAI / gpt-5-mini</option>
@@ -1940,12 +1971,14 @@ export function AnalysisSection({ requestId, files, projectId, sourceType }: Ana
                   <option value="gemini-2.5-pro">Google / gemini-2.5-pro</option>
                   <option value="gemini-2.5-flash">Google / gemini-2.5-flash</option>
                   <option value="gemini-2.5-flash-lite">Google / gemini-2.5-flash-lite</option>
+                  <option value="claude-sonnet">Anthropic / claude-sonnet</option>
+                  <option value="claude-haiku">Anthropic / claude-haiku</option>
                 </select>
               </div>
               {triageRunning && triagePhase && (
                 <span className="text-xs text-muted-foreground tabular-nums">
                   {triagePhase === "extract"
-                    ? `Extracting text: ${triageProgress.done}/${triageProgress.total} files`
+                    ? `Extracting: ${triageProgress.done}/${triageProgress.total} files`
                     : `Triaging: ${triageProgress.done}/${triageProgress.total} cells`}
                 </span>
               )}
@@ -1966,7 +1999,7 @@ export function AnalysisSection({ requestId, files, projectId, sourceType }: Ana
                   ) : (
                     <Square className="w-4 h-4 mr-2" />
                   )}
-                  {triageStopping ? "Stopping…" : "Stop Triage"}
+                  {triageStopping ? "Stopping…" : "Stop"}
                 </Button>
               ) : (
                 <Button
@@ -1976,9 +2009,32 @@ export function AnalysisSection({ requestId, files, projectId, sourceType }: Ana
                   disabled={anyAnalyzing || copiedFiles.length === 0}
                 >
                   <Filter className="w-4 h-4 mr-2" />
-                  Triage All
+                  Triage
                 </Button>
               )}
+
+              {/* Separator */}
+              <div className="h-6 w-px bg-border" />
+
+              {/* Analyze group */}
+              <div className="flex items-center gap-2">
+                <label className="text-xs text-muted-foreground whitespace-nowrap">Model:</label>
+                <select
+                  className="h-8 rounded-md border border-input bg-background px-2 text-xs focus:outline-none focus:ring-1 focus:ring-ring disabled:opacity-50"
+                  value={analyzeModel}
+                  onChange={(e) => updateAnalyzeModel(e.target.value)}
+                  disabled={anyAnalyzing}
+                >
+                  <option value="gpt-5">OpenAI / gpt-5</option>
+                  <option value="gpt-5-mini">OpenAI / gpt-5-mini</option>
+                  <option value="gpt-5-nano">OpenAI / gpt-5-nano</option>
+                  <option value="gemini-2.5-pro">Google / gemini-2.5-pro</option>
+                  <option value="gemini-2.5-flash">Google / gemini-2.5-flash</option>
+                  <option value="gemini-2.5-flash-lite">Google / gemini-2.5-flash-lite</option>
+                  <option value="claude-sonnet">Anthropic / claude-sonnet</option>
+                  <option value="claude-haiku">Anthropic / claude-haiku</option>
+                </select>
+              </div>
               <Button
                 size="sm"
                 onClick={handleAnalyzeAll}
@@ -1989,7 +2045,7 @@ export function AnalysisSection({ requestId, files, projectId, sourceType }: Ana
                 ) : (
                   <Play className="w-4 h-4 mr-2" />
                 )}
-                Analyze All
+                Analyze
               </Button>
             </div>
           </div>
@@ -2005,9 +2061,8 @@ export function AnalysisSection({ requestId, files, projectId, sourceType }: Ana
                   {/* Header row: file info columns + class abbreviations */}
                   <tr className="border-b">
                     <th className="sticky left-0 z-10 bg-card px-4 py-2 text-left font-medium text-muted-foreground min-w-[180px] max-w-[320px] w-auto border-r">
-                      <span className="block text-sm">File Name</span>
-                      <span className="block text-xs font-normal text-muted-foreground/70">
-                        {copiedFiles.length} files · {formatBytes(totalSizeBytes)} · {sourceLabel}
+                      <span className="block text-sm">
+                        Files ({copiedFiles.length} files | {formatBytes(totalSizeBytes)} | {sourceLabel})
                       </span>
                     </th>
                      {sortedPrompts.map((prompt) => (

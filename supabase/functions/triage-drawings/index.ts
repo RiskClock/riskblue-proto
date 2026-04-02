@@ -44,7 +44,7 @@ Deno.serve(async (req) => {
     }
 
     const body = await req.json();
-    const { analysisRequestId, fileId, awpClassName, assetType, drawingName, action, promptContent } = body;
+    const { analysisRequestId, fileId, awpClassName, assetType, drawingName, action, promptContent, model } = body;
 
     if (!fileId) {
       return new Response(JSON.stringify({ error: "Missing fileId" }), {
@@ -226,7 +226,7 @@ Return ONLY valid JSON in this exact format:
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        model: "gpt-5-nano",
+        model: model || "gpt-5-nano",
         input: [
           {
             type: "message",

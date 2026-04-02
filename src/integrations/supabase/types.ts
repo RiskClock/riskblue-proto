@@ -105,6 +105,7 @@ export type Database = {
       }
       analysis_requests: {
         Row: {
+          analyze_model: string | null
           created_at: string
           drive_folder_id: string | null
           error_message: string | null
@@ -116,10 +117,13 @@ export type Database = {
           storage_path: string | null
           summary_data: Json | null
           total_size_bytes: number | null
+          triage_model: string | null
+          triage_tokens_used: number | null
           updated_at: string
           user_id: string
         }
         Insert: {
+          analyze_model?: string | null
           created_at?: string
           drive_folder_id?: string | null
           error_message?: string | null
@@ -131,10 +135,13 @@ export type Database = {
           storage_path?: string | null
           summary_data?: Json | null
           total_size_bytes?: number | null
+          triage_model?: string | null
+          triage_tokens_used?: number | null
           updated_at?: string
           user_id: string
         }
         Update: {
+          analyze_model?: string | null
           created_at?: string
           drive_folder_id?: string | null
           error_message?: string | null
@@ -146,6 +153,8 @@ export type Database = {
           storage_path?: string | null
           summary_data?: Json | null
           total_size_bytes?: number | null
+          triage_model?: string | null
+          triage_tokens_used?: number | null
           updated_at?: string
           user_id?: string
         }
