@@ -1716,10 +1716,11 @@ export function AnalysisSection({ requestId, files, projectId, sourceType }: Ana
     setExtractedFileIds(new Set());
     setExtractedTexts(new Map());
 
-    // Delete existing DB triage results and clear cached extracted_text
+    // Delete existing DB triage results, clear cached extracted_text, and reset token count
     await Promise.all([
       supabase.from("analysis_triage_results").delete().eq("analysis_request_id", requestId),
       supabase.from("analysis_request_files").update({ extracted_text: null } as any).eq("analysis_request_id", requestId),
+      supabase.from("analysis_requests").update({ triage_tokens_used: 0 } as any).eq("id", requestId),
     ]);
     queryClient.invalidateQueries({ queryKey: ["triage-results", requestId] });
 
