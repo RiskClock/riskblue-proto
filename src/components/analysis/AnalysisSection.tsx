@@ -1330,7 +1330,19 @@ export function AnalysisSection({ requestId, files, projectId, sourceType }: Ana
 
   // File Name header metadata
   const totalSizeBytes = copiedFiles.reduce((sum, f) => sum + ((f as any).size_bytes || 0), 0);
-  const sourceLabel = (sourceType || "google_drive").replace(/_/g, " ");
+  const sourceLabel = (sourceType || "google_drive")
+    .replace(/_/g, " ")
+    .replace(/\b\w/g, (c: string) => c.toUpperCase());
+
+  // Model persistence helpers
+  const updateTriageModel = (model: string) => {
+    setTriageModel(model);
+    supabase.from("analysis_requests").update({ triage_model: model } as any).eq("id", requestId);
+  };
+  const updateAnalyzeModel = (model: string) => {
+    setAnalyzeModel(model);
+    supabase.from("analysis_requests").update({ analyze_model: model } as any).eq("id", requestId);
+  };
 
   // ---- Handlers ----
 
