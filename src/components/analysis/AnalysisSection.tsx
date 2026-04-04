@@ -1227,7 +1227,7 @@ export function AnalysisSection({ requestId, files, projectId, sourceType }: Ana
     queryFn: async () => {
       const { data, error } = await supabase
         .from("analysis_triage_results")
-        .select("file_id, awp_class_name, status, score, reason, error_message")
+        .select("file_id, awp_class_name, status, score, reason, error_message, instances")
         .eq("analysis_request_id", requestId);
       if (error) throw error;
       return data as TriageResult[];
