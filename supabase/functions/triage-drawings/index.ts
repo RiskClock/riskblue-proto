@@ -283,7 +283,7 @@ Return ONLY valid JSON in this exact format:
       status: "complete",
       score,
       reason,
-      instances,
+      instances: null,
       fileId,
       awpClassName,
       usage: {

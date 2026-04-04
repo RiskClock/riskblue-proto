@@ -2582,11 +2582,7 @@ export function AnalysisSection({ requestId, files, projectId, sourceType }: Ana
                 Extracted Text — {extractedTextFile.name}
               </DialogTitle>
             </DialogHeader>
-            <div className="flex-1 overflow-auto border rounded-md p-4 bg-muted/30">
-              <pre className="text-xs whitespace-pre-wrap break-words font-mono text-foreground">
-                {extractedTexts.get(extractedTextFile.id) || "(no text extracted)"}
-              </pre>
-            </div>
+            <ExtractedTextBody fileId={extractedTextFile.id} localText={extractedTexts.get(extractedTextFile.id)} />
           </DialogContent>
         </Dialog>
       )}
