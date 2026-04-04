@@ -180,13 +180,17 @@ Deno.serve(async (req) => {
     const displayName = drawingName || fileName;
 
     const promptDocSection = promptContent
-      ? `\nHere is the detailed analysis prompt for this asset type (use it to understand what counts as relevant evidence, and respect any EXCLUDE instructions):\n---\n${promptContent}\n---\n`
+      ? `\nReference analysis prompt for this asset type:\n---\n${promptContent}\n---\n`
+      : "";
+
+    const excludeWarning = promptContent
+      ? `\nIMPORTANT — EXCLUSION RULES: The reference prompt above may list items to EXCLUDE (e.g., "EXCLUDE electrical closets"). If an EXCLUDE instruction mentions a term and that term appears in the extracted text, it must NOT increase the score. Treat excluded items as if they do not exist in the file. Mentioning an excluded term in your reason as evidence is WRONG.\n`
       : "";
 
     const triagePrompt = `You are helping triage construction drawing files based on whether a critical asset or water system might be present in the file for deeper analysis.
 
 Estimate how likely this drawing file is to contain evidence of: ${awpClassName}
-${promptDocSection}
+${promptDocSection}${excludeWarning}
 Drawing file name:
 ${displayName}
 
@@ -199,10 +203,10 @@ Scoring guidance:
 - High scores require direct clues
 - Low scores should be used if the file appears to belong to another discipline or system
 - If the evidence is weak or ambiguous, return a middling score rather than a high score
-- If the analysis prompt says to EXCLUDE certain items, do NOT count them as evidence
+- Items listed under EXCLUDE in the reference prompt must NOT count as evidence — if they are the only match, score should be 0
 
 Return ONLY valid JSON in this exact format:
-{"score": 0, "reason": "short explanation under 20 words"}`;
+{"score": 0, "reason": "explanation under 100 words"}`;
 
     const triageResponse = await fetch("https://api.openai.com/v1/responses", {
       method: "POST",

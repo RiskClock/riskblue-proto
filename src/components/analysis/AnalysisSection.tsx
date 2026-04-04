@@ -2356,30 +2356,35 @@ export function AnalysisSection({ requestId, files, projectId, sourceType }: Ana
                           let cellClass = "w-14 px-2 py-2 text-center cursor-pointer transition-colors";
                           let overrideLabel = "";
 
+                          // Always show triage score background on the cell
+                          cellStyle = { backgroundColor: `rgba(34, 197, 94, ${triage.score / 100})` };
+
                           if (override === "exclude") {
-                            // Manually excluded — gray
-                            cellStyle = { backgroundColor: "rgba(156, 163, 175, 0.4)" };
                             overrideLabel = " (Manually excluded)";
                           } else if (override === "include") {
-                            // Manually included — opaque green inset
-                            cellClass += " border-2 border-green-500";
-                            cellStyle = { backgroundColor: "rgba(34, 197, 94, 0.3)" };
                             overrideLabel = " (Manually included)";
-                          } else {
-                            // Default triage color
-                            cellStyle = { backgroundColor: `rgba(34, 197, 94, ${triage.score / 100})` };
                           }
 
                           return (
                             <td
                               key={prompt.id}
-                              className={cellClass}
+                              className={`${cellClass} relative`}
                               style={cellStyle}
                               onClick={() => handleTriageCellClick(file.id, prompt.awp_class_name, triage.score!)}
                             >
+                              {override === "exclude" && (
+                                <div className="absolute inset-0 flex items-center justify-center p-[10%]">
+                                  <div className="w-full h-full rounded-sm bg-gray-400/80" />
+                                </div>
+                              )}
+                              {override === "include" && (
+                                <div className="absolute inset-0 flex items-center justify-center p-[10%]">
+                                  <div className="w-full h-full rounded-sm bg-green-500/90" />
+                                </div>
+                              )}
                               <Tooltip>
                                 <TooltipTrigger asChild>
-                                  <span className="block w-full h-full">&nbsp;</span>
+                                  <span className="block w-full h-full relative z-10">&nbsp;</span>
                                 </TooltipTrigger>
                                 <TooltipContent>{triage.score}% — {triage.reason || "No reason"}{overrideLabel}</TooltipContent>
                               </Tooltip>
