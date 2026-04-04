@@ -2404,14 +2404,13 @@ export function AnalysisSection({ requestId, files, projectId, sourceType }: Ana
                               <Tooltip>
                                 <TooltipTrigger asChild>
                                   <span className="block w-full h-full relative z-10 flex items-center justify-center">
-                                    {triage.instances != null && triage.instances > 0 && (
-                                      <span className="text-[10px] font-medium text-foreground/70">{triage.instances}</span>
-                                    )}
-                                    {(!triage.instances || triage.instances <= 0) && <span>&nbsp;</span>}
+                                    <span>&nbsp;</span>
                                   </span>
                                 </TooltipTrigger>
-                                <TooltipContent>
-                                  {triage.score}%{triage.instances != null && triage.instances > 0 ? ` — ${triage.instances} instance${triage.instances !== 1 ? 's' : ''}` : ''} — {triage.reason || "No reason"}{overrideLabel}
+                                <TooltipContent className="max-w-xs whitespace-pre-wrap text-left">
+                                  <div className="font-medium">{triage.score}%</div>
+                                  <div className="mt-1">{triage.reason || "No reason"}</div>
+                                  {overrideLabel && <div className="mt-1 text-muted-foreground">{overrideLabel}</div>}
                                 </TooltipContent>
                               </Tooltip>
                             </td>
