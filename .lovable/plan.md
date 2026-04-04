@@ -1,80 +1,59 @@
 
 
-# UI Overhaul: Persist Tokens, Dual Model Selectors, Text Fixes
+# Fix Triage Prompt: Don't Use Pass-2 Prompt Docs Directly
 
-## Summary
+## Root Cause
 
-Seven changes across the analysis detail page: persist triage token count in DB, add per-request model selectors for both triage and analyze, rename buttons, fix title/source text, and consolidate the file info line.
+Two bugs:
 
-## 1. Database Migration
+1. **Prompt docs are pass-2 analysis instructions, not triage instructions.** They contain detailed detection rules (e.g., "EXCLUDE electrical closets") that the AI misinterprets during triage. The model sees "electrical closet" mentioned in both the prompt doc and the extracted text, and scores it high — ignoring that the prompt doc says to *exclude* it.
 
-Add columns to `analysis_requests`:
-- `triage_tokens_used` integer DEFAULT 0
-- `triage_model` text DEFAULT 'gpt-5-nano'
-- `analyze_model` text DEFAULT 'gpt-5-mini'
+2. **Scoring guidance is missing when prompt docs are used.** The fallback prompt has calibration rules ("be conservative", "high scores require direct clues"), but the prompt-doc path omits all of them. Without calibration, scores are unreliable and inconsistent.
 
-```sql
-ALTER TABLE public.analysis_requests
-  ADD COLUMN IF NOT EXISTS triage_tokens_used integer DEFAULT 0,
-  ADD COLUMN IF NOT EXISTS triage_model text DEFAULT 'gpt-5-nano',
-  ADD COLUMN IF NOT EXISTS analyze_model text DEFAULT 'gpt-5-mini';
+## Fix
+
+**File: `supabase/functions/triage-drawings/index.ts`** (lines 182-198)
+
+When `promptContent` is provided, restructure the prompt to:
+1. Keep the hardcoded triage scoring guidance as the **primary instruction** (role, scoring rules, calibration)
+2. Include `promptContent` as **reference context** — clearly labeled as "the detailed analysis prompt for this asset type" so the model understands the scope of what matters
+3. Explicitly instruct: "Use the prompt document ONLY to understand what this asset type is and what evidence would be relevant. Respect any EXCLUDE instructions in it — if the prompt says to exclude something, that evidence should NOT increase the score."
+
+New prompt structure:
+```
+You are helping triage construction drawing files based on whether a critical
+asset or water system might be present in the file for deeper analysis.
+
+Estimate how likely this drawing file is to contain evidence of: {awpClassName}
+
+Here is the detailed analysis prompt for this asset type (use it to understand
+what counts as relevant evidence, and respect any EXCLUDE instructions):
+---
+{promptContent}
+---
+
+Drawing file name:
+{displayName}
+
+Quick text extracted from the PDF:
+{extractedText}
+
+Scoring guidance:
+- Use filename and extracted text only
+- Be conservative
+- High scores require direct clues
+- Low scores should be used if the file appears to belong to another discipline
+- If the evidence is weak or ambiguous, return a middling score
+- If the analysis prompt says to EXCLUDE certain items, do NOT count them as evidence
+
+Return ONLY valid JSON: {"score": 0, "reason": "short explanation under 20 words"}
 ```
 
-## 2. Frontend: `AnalysisSection.tsx`
-
-### 2a. Persist triage token count
-
-- Initialize `triageTokens` from a DB query on mount (fetch `triage_tokens_used` from `analysis_requests`).
-- After each triage scoring response with tokens, update DB: `UPDATE analysis_requests SET triage_tokens_used = triage_tokens_used + N WHERE id = requestId`.
-- On `handleTriageAll` (clear), reset DB column to 0.
-- Token count persists across refresh; cleared only on next triage run.
-
-### 2b. Dual model selectors with per-request persistence
-
-Replace the single `selectedModel` (localStorage-based) with two states:
-- `triageModel` — initialized from `analysis_requests.triage_model`, saved to DB on change
-- `analyzeModel` — initialized from `analysis_requests.analyze_model`, saved to DB on change
-
-**Model options for both dropdowns** (same list):
-- OpenAI: gpt-5, gpt-5-mini, gpt-5-nano
-- Google: gemini-2.5-pro, gemini-2.5-flash, gemini-2.5-flash-lite
-- Anthropic: claude-sonnet, claude-haiku
-
-Pass `triageModel` to `triage-drawings` edge function in the request body. Pass `analyzeModel` to `analyze-drawings` (replacing the current `selectedModel`).
-
-### 2c. Toolbar layout
-
-```
-Model: [triage dropdown] [Triage] | Model: [analyze dropdown] [Analyze]
-```
-
-- Rename "Triage All" → "Triage"
-- Rename "Analyze All" → "Analyze"
-- Add a visual `|` separator between the two groups
-- Token count and progress text appear between/after as before
-
-### 2d. Text fixes
-
-- Title: "Drawing Analysis" → "Drawing File Analysis"
-- `sourceLabel`: capitalize first letter of each word (e.g. "procore" → "Procore", "google drive" → "Google Drive")
-- File info: merge the two lines in the File Name header into one: `Files (23 files | 8.3MB | Procore)` — single `<span>` block
-
-## 3. Edge Functions
-
-### `triage-drawings/index.ts`
-
-- Accept `model` from request body
-- Use it in the OpenAI Responses API call instead of hardcoded `gpt-5-nano`
-
-### `analyze-drawings/index.ts`
-
-- Already accepts `model` — no change needed (it already uses `model || "gpt-5-mini"`)
+This ensures: (a) scoring guidance is always present, (b) prompt doc exclusions are respected, (c) the model treats the prompt doc as context not as instructions.
 
 ## Files Changed
 
 | File | Change |
 |---|---|
-| Migration SQL | Add `triage_tokens_used`, `triage_model`, `analyze_model` columns |
-| `src/components/analysis/AnalysisSection.tsx` | Dual model selectors, persist tokens to DB, rename buttons, separator, text fixes |
-| `supabase/functions/triage-drawings/index.ts` | Accept and use `model` from request body |
+| `supabase/functions/triage-drawings/index.ts` | Restructure prompt-doc path to wrap promptContent as reference context within the standard triage scoring template |
 
