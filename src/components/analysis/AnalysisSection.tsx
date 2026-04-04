@@ -2573,6 +2573,24 @@ export function AnalysisSection({ requestId, files, projectId, sourceType }: Ana
         />
       )}
 
+      {/* Extracted Text Modal */}
+      {extractedTextFile && (
+        <Dialog open={true} onOpenChange={() => setExtractedTextFile(null)}>
+          <DialogContent className="max-w-2xl max-h-[80vh] flex flex-col">
+            <DialogHeader>
+              <DialogTitle className="text-sm font-semibold truncate">
+                Extracted Text — {extractedTextFile.name}
+              </DialogTitle>
+            </DialogHeader>
+            <div className="flex-1 overflow-auto border rounded-md p-4 bg-muted/30">
+              <pre className="text-xs whitespace-pre-wrap break-words font-mono text-foreground">
+                {extractedTexts.get(extractedTextFile.id) || "(no text extracted)"}
+              </pre>
+            </div>
+          </DialogContent>
+        </Dialog>
+      )}
+
       {/* RawResultModal */}
       {rawResultModal && (
         <RawResultModal
