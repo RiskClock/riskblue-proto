@@ -1252,7 +1252,7 @@ export function AnalysisSection({ requestId, files, projectId, sourceType }: Ana
         .select("file_id, awp_class_name, override_type")
         .eq("analysis_request_id", requestId);
       if (error) throw error;
-      return data as Array<{ file_id: string; awp_class_name: string; override_type: string }>;
+      return (data as unknown as Array<{ file_id: string; awp_class_name: string; override_type: string }>);
     },
   });
 
