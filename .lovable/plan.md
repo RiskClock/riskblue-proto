@@ -1,57 +1,46 @@
 
 
-# Preserve Triage Background on Pass-2 Cells + Add Instance Count to Triage
+# Skip Processed Files, Remove Instance Count, Fix Tooltip, Investigate Score/Instance Disconnect
 
-## 1. Keep triage background color when pass-2 results are shown
+## 1. Skip already-extracted files during triage
 
-**File: `src/components/analysis/AnalysisSection.tsx`** (lines 2258-2335)
+**File: `src/components/analysis/AnalysisSection.tsx`** (lines 1775-1824)
 
-Currently, pass-2 result cells (count values, loading spinners, failed icons) render plain `<td>` without any background. The triage green background is only rendered in the triage-only branch (line 2360).
+In `handleTriageAll`, the current code clears ALL cached `extracted_text` and re-extracts every file. Instead:
 
-Fix: In every pass-2 cell rendering branch (loading at ~2258, failed at ~2268, count>0 at ~2288, count==0 at ~2314), look up the triage result for that cell and apply the same `backgroundColor: rgba(34, 197, 94, score/100)` style to the `<td>`.
+- Do NOT clear `extracted_text` from DB (remove line 1793)
+- Do NOT clear `extractedFileIds` or `extractedTexts` state (keep existing cache)
+- Before building the extraction queue, check which files already have `extracted_text` cached. Query: `supabase.from("analysis_request_files").select("id, extracted_text").eq("analysis_request_id", requestId).not("extracted_text", "is", null)`
+- Only queue files for extraction that are NOT in the already-extracted set
+- Pre-populate `extractedFileIds` with the already-extracted file IDs so badges show immediately
+- If all files are already extracted, skip Phase 1 entirely and go straight to Phase 2 scoring
 
-Add a helper lookup before the rendering branches:
-```typescript
-const triageForBg = triageResults.get(`${file.id}_${className}`);
-const triageBgStyle = triageForBg?.status === 'complete' && triageForBg.score !== null
-  ? { backgroundColor: `rgba(34, 197, 94, ${triageForBg.score / 100})` }
-  : {};
-```
+## 2. Remove instance count from triage prompt
 
-Then apply `style={triageBgStyle}` to all four pass-2 `<td>` elements.
+**File: `supabase/functions/triage-drawings/index.ts`** (lines 207-210)
 
-## 2. Add estimated instance count to triage output
+- Remove the `"instances"` guidance line (line 207)
+- Change JSON format to: `{"score": 0, "reason": "explanation under 100 words"}`
+- Remove `instances` parsing (line 269) — set `instances = null` always
+- Remove `instances` from the DB update (line 281) — or just leave it as null
 
-### Edge function: `supabase/functions/triage-drawings/index.ts`
+## 3. Multi-line tooltip for triage reason
 
-Update the triage prompt (line 208-209) to request `instances` in the JSON output:
-```
-Return ONLY valid JSON in this exact format:
-{"score": 0, "reason": "explanation under 100 words", "instances": 0}
-```
+**File: `src/components/analysis/AnalysisSection.tsx`** (lines 2402-2404)
 
-Add guidance: `"instances" is your best estimate of how many distinct instances of the asset type exist in this file based on the text. Use 0 if unsure.`
+The tooltip content is a single line. Wrap the reason text so long reasons display readably:
 
-Parse `instances` from the response (line 264-266) alongside score and reason. Save it to the DB in the update call (line 274).
+- Change `<TooltipContent>` to include `className="max-w-xs whitespace-pre-wrap"`
+- Format the content as separate lines: score on first line, reason on second line, override on third
 
-### Database migration
+## 4. Score/Instance disconnect investigation
 
-Add `instances` column to `analysis_triage_results`:
-```sql
-ALTER TABLE analysis_triage_results ADD COLUMN IF NOT EXISTS instances integer DEFAULT NULL;
-```
-
-### Frontend: `src/components/analysis/AnalysisSection.tsx`
-
-- Add `instances` to `TriageResult` interface (line 81-88)
-- Show the instance count as small text in the triage cell (inside the tooltip trigger span) when `instances > 0`
-- Include it in the tooltip: `"85% — 3 instances — reason text"`
+The disconnect (1 instance estimated but 0% score) happens because the model returns `instances` and `score` independently — it can detect a term that triggers an instance count but then correctly score 0% because of EXCLUDE rules or irrelevance. Since we're removing instance estimation from the triage prompt (change #2), this issue is resolved. The `instances` column remains in DB for future use but won't be populated during triage.
 
 ## Files Changed
 
 | File | Change |
 |---|---|
-| Migration SQL | Add `instances` column to `analysis_triage_results` |
-| `supabase/functions/triage-drawings/index.ts` | Add `instances` to prompt template and parse/save it |
-| `src/components/analysis/AnalysisSection.tsx` | Preserve triage background on pass-2 cells; show instance count in triage cells |
+| `src/components/analysis/AnalysisSection.tsx` | Skip extraction for processed files; multi-line tooltip |
+| `supabase/functions/triage-drawings/index.ts` | Remove instance count from prompt and parsing |
 
