@@ -2258,9 +2258,15 @@ export function AnalysisSection({ requestId, files, projectId, sourceType }: Ana
                         const val = countForCell(file.id, prompt.awp_class_name);
                         const className = prompt.awp_class_name;
 
+                        // Helper: look up triage background for pass-2 cells
+                        const triageForBg = triageResults.get(`${file.id}_${className}`);
+                        const triageBgStyle: React.CSSProperties = triageForBg?.status === 'complete' && triageForBg.score !== null
+                          ? { backgroundColor: `rgba(34, 197, 94, ${triageForBg.score / 100})` }
+                          : {};
+
                         if (val === "loading") {
                           return (
-                            <td key={prompt.id} className="w-14 px-2 py-2 text-center">
+                            <td key={prompt.id} className="w-14 px-2 py-2 text-center" style={triageBgStyle}>
                               <Loader2 className="w-3 h-3 animate-spin text-muted-foreground mx-auto" />
                             </td>
                           );
@@ -2268,7 +2274,7 @@ export function AnalysisSection({ requestId, files, projectId, sourceType }: Ana
 
                         if (val === "failed") {
                           return (
-                            <td key={prompt.id} className="w-14 px-2 py-2 text-center">
+                            <td key={prompt.id} className="w-14 px-2 py-2 text-center" style={triageBgStyle}>
                               <Tooltip>
                                 <TooltipTrigger asChild>
                                   <span>
@@ -2287,7 +2293,7 @@ export function AnalysisSection({ requestId, files, projectId, sourceType }: Ana
                             (r) => r.file_id === file.id && r.awp_class_name === className && r.status === "complete" && r.result_text
                           );
                           return (
-                            <td key={prompt.id} className="w-14 px-2 py-2 text-center">
+                            <td key={prompt.id} className="w-14 px-2 py-2 text-center" style={triageBgStyle}>
                               <button
                                 className="text-xs font-semibold text-primary hover:underline"
                                 onClick={() => {
@@ -2313,7 +2319,7 @@ export function AnalysisSection({ requestId, files, projectId, sourceType }: Ana
                             (r) => r.file_id === file.id && r.awp_class_name === className && r.status === "complete" && r.result_text
                           );
                           return (
-                            <td key={prompt.id} className="w-14 px-2 py-2 text-center">
+                            <td key={prompt.id} className="w-14 px-2 py-2 text-center" style={triageBgStyle}>
                               {result0?.result_text ? (
                                 <button
                                   className="text-xs text-muted-foreground hover:text-foreground hover:underline cursor-pointer"
