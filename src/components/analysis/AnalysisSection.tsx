@@ -1193,6 +1193,7 @@ export function AnalysisSection({ requestId, files, projectId, sourceType }: Ana
     awpClassName: string;
   } | null>(null);
   const [previewFile, setPreviewFile] = useState<AnalysisFile | null>(null);
+  const [extractedTextFile, setExtractedTextFile] = useState<AnalysisFile | null>(null);
 
   // ---- Queries ----
   const { data: prompts, isLoading: promptsLoading } = useQuery({
@@ -2243,22 +2244,12 @@ export function AnalysisSection({ requestId, files, projectId, sourceType }: Ana
                             <Loader2 className="w-3 h-3 animate-spin text-muted-foreground flex-shrink-0" />
                           )}
                           {extractedFileIds.has(file.id) && !extractingFileIds.has(file.id) && (
-                            <Tooltip>
-                              <TooltipTrigger asChild>
-                                <span className="inline-flex items-center rounded-full border border-emerald-300 bg-emerald-100 px-1.5 py-px text-[10px] font-medium text-emerald-800 leading-tight flex-shrink-0 cursor-default">
-                                  Processed
-                                </span>
-                              </TooltipTrigger>
-                              <TooltipContent side="right" className="max-w-[350px] max-h-[200px] overflow-auto p-2">
-                                <p className="text-xs whitespace-pre-wrap break-words">
-                                  {extractedTexts.get(file.id)
-                                    ? (extractedTexts.get(file.id)!.length > 500
-                                        ? extractedTexts.get(file.id)!.slice(0, 500) + "…"
-                                        : extractedTexts.get(file.id))
-                                    : "(no text extracted)"}
-                                </p>
-                              </TooltipContent>
-                            </Tooltip>
+                            <button
+                              className="inline-flex items-center rounded-full border border-emerald-300 bg-emerald-100 px-1.5 py-px text-[10px] font-medium text-emerald-800 leading-tight flex-shrink-0 cursor-pointer hover:bg-emerald-200 transition-colors"
+                              onClick={() => setExtractedTextFile(file)}
+                            >
+                              Processed
+                            </button>
                           )}
                         </div>
                       </td>
@@ -2580,6 +2571,24 @@ export function AnalysisSection({ requestId, files, projectId, sourceType }: Ana
           file={previewFile}
           onClose={() => setPreviewFile(null)}
         />
+      )}
+
+      {/* Extracted Text Modal */}
+      {extractedTextFile && (
+        <Dialog open={true} onOpenChange={() => setExtractedTextFile(null)}>
+          <DialogContent className="max-w-2xl max-h-[80vh] flex flex-col">
+            <DialogHeader>
+              <DialogTitle className="text-sm font-semibold truncate">
+                Extracted Text — {extractedTextFile.name}
+              </DialogTitle>
+            </DialogHeader>
+            <div className="flex-1 overflow-auto border rounded-md p-4 bg-muted/30">
+              <pre className="text-xs whitespace-pre-wrap break-words font-mono text-foreground">
+                {extractedTexts.get(extractedTextFile.id) || "(no text extracted)"}
+              </pre>
+            </div>
+          </DialogContent>
+        </Dialog>
       )}
 
       {/* RawResultModal */}
