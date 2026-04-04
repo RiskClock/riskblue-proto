@@ -1243,6 +1243,51 @@ export function AnalysisSection({ requestId, files, projectId, sourceType }: Ana
     setTriageResults(map);
   }, [triageData]);
 
+  // Fetch triage overrides from DB
+  const { data: overridesData } = useQuery({
+    queryKey: ["triage-overrides", requestId],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("analysis_triage_overrides" as any)
+        .select("file_id, awp_class_name, override_type")
+        .eq("analysis_request_id", requestId);
+      if (error) throw error;
+      return data as Array<{ file_id: string; awp_class_name: string; override_type: string }>;
+    },
+  });
+
+  // Hydrate overrides into map
+  useEffect(() => {
+    if (!overridesData) return;
+    const map = new Map<string, "include" | "exclude">();
+    for (const r of overridesData) {
+      map.set(`${r.file_id}_${r.awp_class_name}`, r.override_type as "include" | "exclude");
+    }
+    setTriageOverrides(map);
+  }, [overridesData]);
+
+  // Toggle triage override (3-state: default → override → back to default)
+  const handleTriageCellClick = async (fileId: string, awpClassName: string, score: number) => {
+    const key = `${fileId}_${awpClassName}`;
+    const currentOverride = triageOverrides.get(key);
+
+    if (currentOverride) {
+      // Has override → remove it (back to default)
+      setTriageOverrides((prev) => { const next = new Map(prev); next.delete(key); return next; });
+      await supabase.from("analysis_triage_overrides" as any).delete().eq("analysis_request_id", requestId).eq("file_id", fileId).eq("awp_class_name", awpClassName);
+    } else {
+      // No override → toggle based on auto state
+      const newType = score >= 80 ? "exclude" : "include";
+      setTriageOverrides((prev) => { const next = new Map(prev); next.set(key, newType as "include" | "exclude"); return next; });
+      await supabase.from("analysis_triage_overrides" as any).upsert({
+        analysis_request_id: requestId,
+        file_id: fileId,
+        awp_class_name: awpClassName,
+        override_type: newType,
+      } as any, { onConflict: "analysis_request_id,file_id,awp_class_name" });
+    }
+  };
+
   // Fetch persisted model selections and token count
   const { data: requestMeta } = useQuery({
     queryKey: ["analysis-request-meta", requestId],
