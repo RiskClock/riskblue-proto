@@ -179,29 +179,14 @@ Deno.serve(async (req) => {
     const fileName = fileRecord.name as string;
     const displayName = drawingName || fileName;
 
-    let triagePrompt: string;
-    if (promptContent) {
-      // Use the AWP-specific prompt doc with file context appended
-      triagePrompt = `${promptContent}
+    const promptDocSection = promptContent
+      ? `\nHere is the detailed analysis prompt for this asset type (use it to understand what counts as relevant evidence, and respect any EXCLUDE instructions):\n---\n${promptContent}\n---\n`
+      : "";
 
----
-
-Drawing file name:
-${displayName}
-
-Quick text extracted from the PDF:
-${(extractedText || "(no text extracted)").slice(0, 4000)}
-
-Based on the above, estimate how likely this drawing file contains evidence of: ${awpClassName}
-
-Return ONLY valid JSON in this exact format:
-{"score": 0, "reason": "short explanation under 20 words"}`;
-    } else {
-      // Fallback: hardcoded triage prompt
-      triagePrompt = `You are helping triage construction drawing files based on whether a critical asset or water system might be present in the file for deeper analysis.
+    const triagePrompt = `You are helping triage construction drawing files based on whether a critical asset or water system might be present in the file for deeper analysis.
 
 Estimate how likely this drawing file is to contain evidence of: ${awpClassName}
-
+${promptDocSection}
 Drawing file name:
 ${displayName}
 
@@ -214,10 +199,10 @@ Scoring guidance:
 - High scores require direct clues
 - Low scores should be used if the file appears to belong to another discipline or system
 - If the evidence is weak or ambiguous, return a middling score rather than a high score
+- If the analysis prompt says to EXCLUDE certain items, do NOT count them as evidence
 
 Return ONLY valid JSON in this exact format:
 {"score": 0, "reason": "short explanation under 20 words"}`;
-    }
 
     const triageResponse = await fetch("https://api.openai.com/v1/responses", {
       method: "POST",
