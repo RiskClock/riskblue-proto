@@ -258,14 +258,12 @@ Return ONLY valid JSON in this exact format:
     // Parse JSON response
     let score = 0;
     let reason = "";
-    let instances: number | null = null;
     try {
       const jsonMatch = responseText.match(/\{[^}]+\}/);
       if (jsonMatch) {
         const parsed = JSON.parse(jsonMatch[0]);
         score = Math.max(0, Math.min(100, parseInt(parsed.score, 10) || 0));
         reason = parsed.reason || "";
-        instances = parsed.instances !== undefined ? (parseInt(parsed.instances, 10) || 0) : null;
       }
     } catch (e) {
       console.error(`[triage] Failed to parse triage response: ${responseText}`);
