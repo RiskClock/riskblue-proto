@@ -1764,25 +1764,31 @@ export function AnalysisSection({ requestId, files, projectId, sourceType }: Ana
     setExtractedFileIds(new Set());
     setExtractedTexts(new Map());
 
-    // Delete existing DB triage results, clear cached extracted_text, and reset token count
+    // Clear pass-2 results and overrides
+    setSummarizedInstances({});
+    setAddedToProject({});
+    setTriageOverrides(new Map());
+
+    // Delete existing DB triage results, pass-2 results, overrides, clear cached extracted_text, and reset token count + summary_data
     await Promise.all([
       supabase.from("analysis_triage_results").delete().eq("analysis_request_id", requestId),
+      supabase.from("analysis_results").delete().eq("analysis_request_id", requestId),
+      supabase.from("analysis_triage_overrides" as any).delete().eq("analysis_request_id", requestId),
       supabase.from("analysis_request_files").update({ extracted_text: null } as any).eq("analysis_request_id", requestId),
-      supabase.from("analysis_requests").update({ triage_tokens_used: 0 } as any).eq("id", requestId),
+      supabase.from("analysis_requests").update({ triage_tokens_used: 0, summary_data: {} } as any).eq("id", requestId),
     ]);
     queryClient.invalidateQueries({ queryKey: ["triage-results", requestId] });
+    queryClient.invalidateQueries({ queryKey: ["analysis-results", requestId] });
+    queryClient.invalidateQueries({ queryKey: ["triage-overrides", requestId] });
+    queryClient.invalidateQueries({ queryKey: ["analysis-request-meta", requestId] });
 
     // After clearing, all files need extraction
     const allFiles = copiedFiles;
 
-    // Phase 2 queue: all file×class pairs without pass-2 results
+    // Phase 2 queue: all file×class pairs
     const scoreQueue: Array<{ file: AnalysisFile; prompt: AWPPrompt; action: "extract" | "triage" }> = [];
     for (const prompt of sortedPrompts) {
       for (const file of copiedFiles) {
-        const hasPass2 = results?.some(
-          (r) => r.file_id === file.id && r.awp_class_name === prompt.awp_class_name && r.status === "complete"
-        );
-        if (hasPass2) continue;
         scoreQueue.push({ file, prompt, action: "triage" });
       }
     }
