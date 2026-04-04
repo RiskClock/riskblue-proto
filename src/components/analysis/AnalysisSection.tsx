@@ -2333,17 +2333,41 @@ export function AnalysisSection({ requestId, files, projectId, sourceType }: Ana
                         }
 
                         if (triage?.status === "complete" && triage.score !== null) {
+                          const overrideKey = `${file.id}_${prompt.awp_class_name}`;
+                          const override = triageOverrides.get(overrideKey);
+                          const autoIncluded = triage.score >= 80;
+
+                          // Determine visual style based on override state
+                          let cellStyle: React.CSSProperties = {};
+                          let cellClass = "w-14 px-2 py-2 text-center cursor-pointer transition-colors";
+                          let overrideLabel = "";
+
+                          if (override === "exclude") {
+                            // Manually excluded — gray
+                            cellStyle = { backgroundColor: "rgba(156, 163, 175, 0.4)" };
+                            overrideLabel = " (Manually excluded)";
+                          } else if (override === "include") {
+                            // Manually included — opaque green inset
+                            cellClass += " border-2 border-green-500";
+                            cellStyle = { backgroundColor: "rgba(34, 197, 94, 0.3)" };
+                            overrideLabel = " (Manually included)";
+                          } else {
+                            // Default triage color
+                            cellStyle = { backgroundColor: `rgba(34, 197, 94, ${triage.score / 100})` };
+                          }
+
                           return (
                             <td
                               key={prompt.id}
-                              className="w-14 px-2 py-2 text-center"
-                              style={{ backgroundColor: `rgba(34, 197, 94, ${triage.score / 100})` }}
+                              className={cellClass}
+                              style={cellStyle}
+                              onClick={() => handleTriageCellClick(file.id, prompt.awp_class_name, triage.score!)}
                             >
                               <Tooltip>
                                 <TooltipTrigger asChild>
-                                  <span className="block w-full h-full cursor-default">&nbsp;</span>
+                                  <span className="block w-full h-full">&nbsp;</span>
                                 </TooltipTrigger>
-                                <TooltipContent>{triage.score}% — {triage.reason || "No reason"}</TooltipContent>
+                                <TooltipContent>{triage.score}% — {triage.reason || "No reason"}{overrideLabel}</TooltipContent>
                               </Tooltip>
                             </td>
                           );
