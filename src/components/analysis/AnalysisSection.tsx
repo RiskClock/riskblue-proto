@@ -1589,7 +1589,7 @@ export function AnalysisSection({ requestId, files, projectId, sourceType }: Ana
       }
 
       if (!aborted) {
-        toast({ title: "Analysis Complete", description: `Finished analyzing ${copiedFiles.length} files.` });
+        toast({ title: "Analysis Complete", description: `Finished analyzing ${effectiveFiles.length} files.` });
       }
 
       await queryClient.invalidateQueries({ queryKey: ["analysis-results", requestId] });
