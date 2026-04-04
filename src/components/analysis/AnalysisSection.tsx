@@ -1176,6 +1176,9 @@ export function AnalysisSection({ requestId, files, projectId, sourceType }: Ana
   const [extractedTexts, setExtractedTexts] = useState<Map<string, string>>(new Map());
   const triageQueueRef = useRef<Array<{ file: AnalysisFile; prompt?: AWPPrompt; action: "extract" | "triage" }>>([]);
   const triageTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  // ---- Manual triage overrides ----
+  const [triageOverrides, setTriageOverrides] = useState<Map<string, "include" | "exclude">>(new Map());
   const inFlightCountRef = useRef(0);
   const MAX_CONCURRENT_TRIAGE = 5;
 
@@ -1239,6 +1242,51 @@ export function AnalysisSection({ requestId, files, projectId, sourceType }: Ana
     }
     setTriageResults(map);
   }, [triageData]);
+
+  // Fetch triage overrides from DB
+  const { data: overridesData } = useQuery({
+    queryKey: ["triage-overrides", requestId],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("analysis_triage_overrides" as any)
+        .select("file_id, awp_class_name, override_type")
+        .eq("analysis_request_id", requestId);
+      if (error) throw error;
+      return (data as unknown as Array<{ file_id: string; awp_class_name: string; override_type: string }>);
+    },
+  });
+
+  // Hydrate overrides into map
+  useEffect(() => {
+    if (!overridesData) return;
+    const map = new Map<string, "include" | "exclude">();
+    for (const r of overridesData) {
+      map.set(`${r.file_id}_${r.awp_class_name}`, r.override_type as "include" | "exclude");
+    }
+    setTriageOverrides(map);
+  }, [overridesData]);
+
+  // Toggle triage override (3-state: default → override → back to default)
+  const handleTriageCellClick = async (fileId: string, awpClassName: string, score: number) => {
+    const key = `${fileId}_${awpClassName}`;
+    const currentOverride = triageOverrides.get(key);
+
+    if (currentOverride) {
+      // Has override → remove it (back to default)
+      setTriageOverrides((prev) => { const next = new Map(prev); next.delete(key); return next; });
+      await supabase.from("analysis_triage_overrides" as any).delete().eq("analysis_request_id", requestId).eq("file_id", fileId).eq("awp_class_name", awpClassName);
+    } else {
+      // No override → toggle based on auto state
+      const newType = score >= 80 ? "exclude" : "include";
+      setTriageOverrides((prev) => { const next = new Map(prev); next.set(key, newType as "include" | "exclude"); return next; });
+      await supabase.from("analysis_triage_overrides" as any).upsert({
+        analysis_request_id: requestId,
+        file_id: fileId,
+        awp_class_name: awpClassName,
+        override_type: newType,
+      } as any, { onConflict: "analysis_request_id,file_id,awp_class_name" });
+    }
+  };
 
   // Fetch persisted model selections and token count
   const { data: requestMeta } = useQuery({
@@ -1473,7 +1521,21 @@ export function AnalysisSection({ requestId, files, projectId, sourceType }: Ana
         throw new Error("Could not retrieve prompt content from the linked document");
       }
 
-      for (const file of copiedFiles) {
+      // Filter to effectively-included files based on triage + overrides
+      const effectiveFiles = copiedFiles.filter(file => {
+        const key = `${file.id}_${className}`;
+        const triage = triageResults.get(key);
+        const override = triageOverrides.get(key);
+
+        if (override === 'exclude') return false;
+        if (override === 'include') return true;
+        if (triage?.status === 'complete' && triage.score !== null && triage.score >= 80) return true;
+        // If no triage data exists, include by default (backwards compat)
+        if (!triage || triage.status !== 'complete') return true;
+        return false;
+      });
+
+      for (const file of effectiveFiles) {
         if (controller.signal.aborted) { aborted = true; break; }
 
         setClassFileStatuses((prev) => ({
@@ -1527,7 +1589,7 @@ export function AnalysisSection({ requestId, files, projectId, sourceType }: Ana
       }
 
       if (!aborted) {
-        toast({ title: "Analysis Complete", description: `Finished analyzing ${copiedFiles.length} files.` });
+        toast({ title: "Analysis Complete", description: `Finished analyzing ${effectiveFiles.length} files.` });
       }
 
       await queryClient.invalidateQueries({ queryKey: ["analysis-results", requestId] });
@@ -1716,25 +1778,31 @@ export function AnalysisSection({ requestId, files, projectId, sourceType }: Ana
     setExtractedFileIds(new Set());
     setExtractedTexts(new Map());
 
-    // Delete existing DB triage results, clear cached extracted_text, and reset token count
+    // Clear pass-2 results and overrides
+    setSummarizedInstances({});
+    setAddedToProject({});
+    setTriageOverrides(new Map());
+
+    // Delete existing DB triage results, pass-2 results, overrides, clear cached extracted_text, and reset token count + summary_data
     await Promise.all([
       supabase.from("analysis_triage_results").delete().eq("analysis_request_id", requestId),
+      supabase.from("analysis_results").delete().eq("analysis_request_id", requestId),
+      supabase.from("analysis_triage_overrides" as any).delete().eq("analysis_request_id", requestId),
       supabase.from("analysis_request_files").update({ extracted_text: null } as any).eq("analysis_request_id", requestId),
-      supabase.from("analysis_requests").update({ triage_tokens_used: 0 } as any).eq("id", requestId),
+      supabase.from("analysis_requests").update({ triage_tokens_used: 0, summary_data: {} } as any).eq("id", requestId),
     ]);
     queryClient.invalidateQueries({ queryKey: ["triage-results", requestId] });
+    queryClient.invalidateQueries({ queryKey: ["analysis-results", requestId] });
+    queryClient.invalidateQueries({ queryKey: ["triage-overrides", requestId] });
+    queryClient.invalidateQueries({ queryKey: ["analysis-request-meta", requestId] });
 
     // After clearing, all files need extraction
     const allFiles = copiedFiles;
 
-    // Phase 2 queue: all file×class pairs without pass-2 results
+    // Phase 2 queue: all file×class pairs
     const scoreQueue: Array<{ file: AnalysisFile; prompt: AWPPrompt; action: "extract" | "triage" }> = [];
     for (const prompt of sortedPrompts) {
       for (const file of copiedFiles) {
-        const hasPass2 = results?.some(
-          (r) => r.file_id === file.id && r.awp_class_name === prompt.awp_class_name && r.status === "complete"
-        );
-        if (hasPass2) continue;
         scoreQueue.push({ file, prompt, action: "triage" });
       }
     }
@@ -2279,17 +2347,41 @@ export function AnalysisSection({ requestId, files, projectId, sourceType }: Ana
                         }
 
                         if (triage?.status === "complete" && triage.score !== null) {
+                          const overrideKey = `${file.id}_${prompt.awp_class_name}`;
+                          const override = triageOverrides.get(overrideKey);
+                          const autoIncluded = triage.score >= 80;
+
+                          // Determine visual style based on override state
+                          let cellStyle: React.CSSProperties = {};
+                          let cellClass = "w-14 px-2 py-2 text-center cursor-pointer transition-colors";
+                          let overrideLabel = "";
+
+                          if (override === "exclude") {
+                            // Manually excluded — gray
+                            cellStyle = { backgroundColor: "rgba(156, 163, 175, 0.4)" };
+                            overrideLabel = " (Manually excluded)";
+                          } else if (override === "include") {
+                            // Manually included — opaque green inset
+                            cellClass += " border-2 border-green-500";
+                            cellStyle = { backgroundColor: "rgba(34, 197, 94, 0.3)" };
+                            overrideLabel = " (Manually included)";
+                          } else {
+                            // Default triage color
+                            cellStyle = { backgroundColor: `rgba(34, 197, 94, ${triage.score / 100})` };
+                          }
+
                           return (
                             <td
                               key={prompt.id}
-                              className="w-14 px-2 py-2 text-center"
-                              style={{ backgroundColor: `rgba(34, 197, 94, ${triage.score / 100})` }}
+                              className={cellClass}
+                              style={cellStyle}
+                              onClick={() => handleTriageCellClick(file.id, prompt.awp_class_name, triage.score!)}
                             >
                               <Tooltip>
                                 <TooltipTrigger asChild>
-                                  <span className="block w-full h-full cursor-default">&nbsp;</span>
+                                  <span className="block w-full h-full">&nbsp;</span>
                                 </TooltipTrigger>
-                                <TooltipContent>{triage.score}% — {triage.reason || "No reason"}</TooltipContent>
+                                <TooltipContent>{triage.score}% — {triage.reason || "No reason"}{overrideLabel}</TooltipContent>
                               </Tooltip>
                             </td>
                           );
