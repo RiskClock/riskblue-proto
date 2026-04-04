@@ -1,0 +1,1 @@
+ALTER TABLE analysis_triage_results ADD COLUMN IF NOT EXISTS instances integer DEFAULT NULL;
