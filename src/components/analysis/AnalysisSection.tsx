@@ -1530,8 +1530,8 @@ export function AnalysisSection({ requestId, files, projectId, sourceType }: Ana
         if (override === 'exclude') return false;
         if (override === 'include') return true;
         if (triage?.status === 'complete' && triage.score !== null && triage.score >= 80) return true;
-        // If no triage data exists, include by default (backwards compat)
-        if (!triage || triage.status !== 'complete') return true;
+        // Skip untriaged files — pass-2 only runs on triaged cells
+        if (!triage || triage.status !== 'complete') return false;
         return false;
       });
 
