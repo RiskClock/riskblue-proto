@@ -1149,6 +1149,7 @@ function formatBytes(bytes: number | null | undefined): string {
 function ExtractedTextBody({ fileId, localText }: { fileId: string; localText?: string }) {
   const [text, setText] = useState<string | null>(localText ?? null);
   const [loading, setLoading] = useState(!localText);
+  const [copied, setCopied] = useState(false);
 
   useEffect(() => {
     if (localText) { setText(localText); setLoading(false); return; }
@@ -1167,15 +1168,35 @@ function ExtractedTextBody({ fileId, localText }: { fileId: string; localText?: 
     return () => { cancelled = true; };
   }, [fileId, localText]);
 
+  const handleCopy = useCallback(() => {
+    if (!text) return;
+    navigator.clipboard.writeText(text).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    });
+  }, [text]);
+
   if (loading) {
     return <div className="flex-1 flex items-center justify-center p-8"><Loader2 className="w-5 h-5 animate-spin text-muted-foreground" /></div>;
   }
 
   return (
-    <div className="flex-1 overflow-auto border rounded-md p-4 bg-muted/30">
-      <pre className="text-xs whitespace-pre-wrap break-words font-mono text-foreground">
-        {text || "(no text extracted)"}
-      </pre>
+    <div className="flex-1 flex flex-col gap-2 min-h-0">
+      <div className="flex justify-end">
+        <button
+          onClick={handleCopy}
+          disabled={!text}
+          className="inline-flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors disabled:opacity-40"
+        >
+          {copied ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
+          {copied ? "Copied" : "Copy all"}
+        </button>
+      </div>
+      <div className="flex-1 overflow-auto border rounded-md p-4 bg-muted/30">
+        <pre className="text-xs whitespace-pre-wrap break-words font-mono text-foreground">
+          {text || "(no text extracted)"}
+        </pre>
+      </div>
     </div>
   );
 }
