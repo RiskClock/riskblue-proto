@@ -275,7 +275,6 @@ Return ONLY valid JSON in this exact format:
       status: "complete",
       score,
       reason,
-      instances,
     }).eq("file_id", fileId).eq("analysis_request_id", analysisRequestId).eq("awp_class_name", awpClassName);
 
     console.log(`[triage] Complete: file=${fileName}, class=${awpClassName}, score=${score}, reason=${reason}`);
