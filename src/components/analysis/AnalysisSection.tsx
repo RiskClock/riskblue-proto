@@ -85,6 +85,7 @@ interface TriageResult {
   score: number | null;
   reason: string | null;
   error_message: string | null;
+  instances: number | null;
 }
 
 interface ParsedInstance {
