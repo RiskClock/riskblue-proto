@@ -1701,14 +1701,15 @@ export function AnalysisSection({ requestId, files, projectId, sourceType }: Ana
           const data = await response.json();
           setTriageResults((prev) => {
             const next = new Map(prev);
-            next.set(key, {
-              file_id: item.file.id,
-              awp_class_name: prompt.awp_class_name,
-              status: "complete",
-              score: data.score ?? 0,
-              reason: data.reason ?? "",
-              error_message: null,
-            });
+             next.set(key, {
+               file_id: item.file.id,
+               awp_class_name: prompt.awp_class_name,
+               status: "complete",
+               score: data.score ?? 0,
+               reason: data.reason ?? "",
+               error_message: null,
+               instances: data.instances ?? null,
+             });
             return next;
           });
           if (data.usage?.total_tokens) {
