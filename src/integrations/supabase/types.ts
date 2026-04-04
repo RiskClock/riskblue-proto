@@ -219,6 +219,48 @@ export type Database = {
           },
         ]
       }
+      analysis_triage_overrides: {
+        Row: {
+          analysis_request_id: string
+          awp_class_name: string
+          created_at: string | null
+          file_id: string
+          id: string
+          override_type: string
+        }
+        Insert: {
+          analysis_request_id: string
+          awp_class_name: string
+          created_at?: string | null
+          file_id: string
+          id?: string
+          override_type: string
+        }
+        Update: {
+          analysis_request_id?: string
+          awp_class_name?: string
+          created_at?: string | null
+          file_id?: string
+          id?: string
+          override_type?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "analysis_triage_overrides_analysis_request_id_fkey"
+            columns: ["analysis_request_id"]
+            isOneToOne: false
+            referencedRelation: "analysis_requests"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "analysis_triage_overrides_file_id_fkey"
+            columns: ["file_id"]
+            isOneToOne: false
+            referencedRelation: "analysis_request_files"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       analysis_triage_results: {
         Row: {
           analysis_request_id: string
