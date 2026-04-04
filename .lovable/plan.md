@@ -1,55 +1,39 @@
 
 
-# Consolidated: Override Visuals + EXCLUDE Prompt Fix + Reason Expansion + Pass-2 Triaged-Only Filter
+# Fix: resolve-drive-doc Should Auto-Refresh Expired Google Drive Tokens
 
-Three approved but unimplemented changes, consolidated into one plan.
+## Root Cause
 
-## 1. Override cell visuals — centered 80%-size inset boxes
+The `resolve-drive-doc` edge function decrypts the stored Google Drive access token and uses it directly. It never checks `token_expiry` and never attempts a refresh when the token is expired (Google access tokens expire after ~1 hour). The refresh logic exists in `google-drive-oauth?action=refresh` but `resolve-drive-doc` doesn't call it.
 
-**File: `src/components/analysis/AnalysisSection.tsx`** (lines 2354-2387)
+When the token expires, every call to resolve prompt documents (for triage or analysis) fails with Google's 401 "invalid authentication credentials" error.
 
-Replace current override styling. The `<td>` always shows the triage score background. Inside, render a centered inner box at 80% size:
+## Fix
 
-- **Manually excluded**: Inner `div` with `w-[80%] h-[80%] rounded-sm bg-gray-400/80`, centered via flexbox
-- **Manually included**: Inner `div` with `w-[80%] h-[80%] rounded-sm bg-green-500/90`, centered via flexbox
-- The `<td>` gets `flex items-center justify-center` and always retains the score-based background color
+**File: `supabase/functions/resolve-drive-doc/index.ts`**
 
-## 2. Strengthen EXCLUDE instruction in triage prompt
+Add auto-refresh capability directly inside `resolve-drive-doc`:
 
-**File: `supabase/functions/triage-drawings/index.ts`** (lines 182-205)
+1. After fetching the token record, also select `token_expiry`, `refresh_token`, `encrypted_refresh_token`, and `is_encrypted`
+2. Check if `token_expiry < now()` (expired)
+3. If expired, decrypt the refresh token and call Google's `https://oauth2.googleapis.com/token` with `grant_type=refresh_token` using `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET` env vars
+4. Store the new encrypted access token and updated expiry back to `user_drive_tokens`
+5. Use the fresh access token for the Google Drive API call
+6. Additionally, if the Google Drive API call returns 401 even with a non-expired token (clock skew), retry once with a refresh
 
-Add an explicit EXCLUDE warning after the prompt doc section:
+This mirrors the pattern described in the memory note `google-drive-token-auto-refresh`.
 
-```
-IMPORTANT: The analysis prompt may list items to EXCLUDE. If any EXCLUDE 
-instruction mentions a term (e.g., "EXCLUDE electrical closets"), and 
-that term appears in the extracted text, it must NOT increase the score. 
-Treat excluded items as if they do not exist in the file.
-```
+### Key additions to the function:
 
-## 3. Expand reason word limit from 20 to 100
-
-**File: `supabase/functions/triage-drawings/index.ts`** (line 205)
-
-Change `"short explanation under 20 words"` to `"explanation under 100 words"`.
-
-## 4. Pass-2 only runs on triaged cells
-
-**File: `src/components/analysis/AnalysisSection.tsx`** (line 1534)
-
-Change:
-```typescript
-if (!triage || triage.status !== 'complete') return true;  // backwards compat
-```
-To:
-```typescript
-if (!triage || triage.status !== 'complete') return false;  // skip untriaged files
-```
+- Add `encryptToken` utility (copy from google-drive-oauth)
+- Read `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` from env
+- New `refreshAccessToken()` helper that: decrypts refresh token → calls Google token endpoint → encrypts and stores new access token → returns fresh token
+- Before calling Google Drive API: check expiry, refresh if needed
+- After a 401 from Google Drive API: attempt one refresh and retry
 
 ## Files Changed
 
 | File | Change |
 |---|---|
-| `src/components/analysis/AnalysisSection.tsx` | Override inset box visuals; pass-2 skip untriaged files |
-| `supabase/functions/triage-drawings/index.ts` | Strengthen EXCLUDE instruction; expand reason to 100 words |
+| `supabase/functions/resolve-drive-doc/index.ts` | Add token expiry check, auto-refresh with retry on 401 |
 
