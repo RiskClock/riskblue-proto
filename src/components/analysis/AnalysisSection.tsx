@@ -2394,7 +2394,9 @@ export function AnalysisSection({ requestId, files, projectId, sourceType }: Ana
                                 <TooltipTrigger asChild>
                                   <span className="block w-full h-full relative z-10">&nbsp;</span>
                                 </TooltipTrigger>
-                                <TooltipContent>{triage.score}% — {triage.reason || "No reason"}{overrideLabel}</TooltipContent>
+                                <TooltipContent>
+                                  {triage.score}%{triage.instances != null && triage.instances > 0 ? ` — ${triage.instances} instance${triage.instances !== 1 ? 's' : ''}` : ''} — {triage.reason || "No reason"}{overrideLabel}
+                                </TooltipContent>
                               </Tooltip>
                             </td>
                           );
