@@ -1672,7 +1672,7 @@ export function AnalysisSection({ requestId, files, projectId, sourceType }: Ana
         // Mark as processing locally
         setTriageResults((prev) => {
           const next = new Map(prev);
-          next.set(key, { file_id: item.file.id, awp_class_name: prompt.awp_class_name, status: "processing", score: null, reason: null, error_message: null });
+          next.set(key, { file_id: item.file.id, awp_class_name: prompt.awp_class_name, status: "processing", score: null, reason: null, error_message: null, instances: null });
           return next;
         });
 
