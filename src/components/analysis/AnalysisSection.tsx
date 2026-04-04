@@ -1521,7 +1521,21 @@ export function AnalysisSection({ requestId, files, projectId, sourceType }: Ana
         throw new Error("Could not retrieve prompt content from the linked document");
       }
 
-      for (const file of copiedFiles) {
+      // Filter to effectively-included files based on triage + overrides
+      const effectiveFiles = copiedFiles.filter(file => {
+        const key = `${file.id}_${className}`;
+        const triage = triageResults.get(key);
+        const override = triageOverrides.get(key);
+
+        if (override === 'exclude') return false;
+        if (override === 'include') return true;
+        if (triage?.status === 'complete' && triage.score !== null && triage.score >= 80) return true;
+        // If no triage data exists, include by default (backwards compat)
+        if (!triage || triage.status !== 'complete') return true;
+        return false;
+      });
+
+      for (const file of effectiveFiles) {
         if (controller.signal.aborted) { aborted = true; break; }
 
         setClassFileStatuses((prev) => ({
