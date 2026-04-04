@@ -287,6 +287,7 @@ Return ONLY valid JSON in this exact format:
       status: "complete",
       score,
       reason,
+      instances,
       fileId,
       awpClassName,
       usage: {
