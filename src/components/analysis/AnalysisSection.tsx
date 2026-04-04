@@ -1776,21 +1776,18 @@ export function AnalysisSection({ requestId, files, projectId, sourceType }: Ana
     // Clear previous triage results
     setTriageResults(new Map());
     setTriageTokens(0);
-    setExtractingFileIds(new Set());
-    setExtractedFileIds(new Set());
-    setExtractedTexts(new Map());
 
     // Clear pass-2 results and overrides
     setSummarizedInstances({});
     setAddedToProject({});
     setTriageOverrides(new Map());
 
-    // Delete existing DB triage results, pass-2 results, overrides, clear cached extracted_text, and reset token count + summary_data
+    // Delete existing DB triage results, pass-2 results, overrides, and reset token count + summary_data
+    // Do NOT clear extracted_text — reuse cached extractions
     await Promise.all([
       supabase.from("analysis_triage_results").delete().eq("analysis_request_id", requestId),
       supabase.from("analysis_results").delete().eq("analysis_request_id", requestId),
       supabase.from("analysis_triage_overrides" as any).delete().eq("analysis_request_id", requestId),
-      supabase.from("analysis_request_files").update({ extracted_text: null } as any).eq("analysis_request_id", requestId),
       supabase.from("analysis_requests").update({ triage_tokens_used: 0, summary_data: {} } as any).eq("id", requestId),
     ]);
     queryClient.invalidateQueries({ queryKey: ["triage-results", requestId] });
@@ -1798,8 +1795,22 @@ export function AnalysisSection({ requestId, files, projectId, sourceType }: Ana
     queryClient.invalidateQueries({ queryKey: ["triage-overrides", requestId] });
     queryClient.invalidateQueries({ queryKey: ["analysis-request-meta", requestId] });
 
-    // After clearing, all files need extraction
-    const allFiles = copiedFiles;
+    // Check which files already have extracted_text cached
+    const { data: cachedFiles } = await supabase
+      .from("analysis_request_files")
+      .select("id, extracted_text")
+      .eq("analysis_request_id", requestId)
+      .not("extracted_text", "is", null);
+
+    const alreadyExtractedIds = new Set((cachedFiles || []).map((f: any) => f.id));
+
+    // Pre-populate extracted state for cached files
+    setExtractedFileIds(alreadyExtractedIds);
+    setExtractingFileIds(new Set());
+    // Keep extractedTexts state as-is if populated; for cached files we don't need local text
+
+    // Files that still need extraction
+    const filesToExtract = copiedFiles.filter((f) => !alreadyExtractedIds.has(f.id));
 
     // Phase 2 queue: all file×class pairs
     const scoreQueue: Array<{ file: AnalysisFile; prompt: AWPPrompt; action: "extract" | "triage" }> = [];
@@ -1809,7 +1820,7 @@ export function AnalysisSection({ requestId, files, projectId, sourceType }: Ana
       }
     }
 
-    if (allFiles.length === 0 && scoreQueue.length === 0) {
+    if (filesToExtract.length === 0 && scoreQueue.length === 0) {
       toast({ title: "Nothing to triage", description: "No files available." });
       return;
     }
@@ -1817,11 +1828,11 @@ export function AnalysisSection({ requestId, files, projectId, sourceType }: Ana
     setTriageRunning(true);
     inFlightCountRef.current = 0;
 
-    if (allFiles.length > 0) {
-      // Phase 1: Extract text for all files (we cleared cached text above)
+    if (filesToExtract.length > 0) {
+      // Phase 1: Extract text only for files without cached extraction
       setTriagePhase("extract");
-      setTriageProgress({ done: 0, total: allFiles.length });
-      triageQueueRef.current = allFiles.map((f) => ({ file: f, action: "extract" as const }));
+      setTriageProgress({ done: 0, total: filesToExtract.length });
+      triageQueueRef.current = filesToExtract.map((f) => ({ file: f, action: "extract" as const }));
 
       startTriageScheduler(() => {
         // Phase 1 done → start Phase 2
@@ -2393,14 +2404,13 @@ export function AnalysisSection({ requestId, files, projectId, sourceType }: Ana
                               <Tooltip>
                                 <TooltipTrigger asChild>
                                   <span className="block w-full h-full relative z-10 flex items-center justify-center">
-                                    {triage.instances != null && triage.instances > 0 && (
-                                      <span className="text-[10px] font-medium text-foreground/70">{triage.instances}</span>
-                                    )}
-                                    {(!triage.instances || triage.instances <= 0) && <span>&nbsp;</span>}
+                                    <span>&nbsp;</span>
                                   </span>
                                 </TooltipTrigger>
-                                <TooltipContent>
-                                  {triage.score}%{triage.instances != null && triage.instances > 0 ? ` — ${triage.instances} instance${triage.instances !== 1 ? 's' : ''}` : ''} — {triage.reason || "No reason"}{overrideLabel}
+                                <TooltipContent className="max-w-xs whitespace-pre-wrap text-left">
+                                  <div className="font-medium">{triage.score}%</div>
+                                  <div className="mt-1">{triage.reason || "No reason"}</div>
+                                  {overrideLabel && <div className="mt-1 text-muted-foreground">{overrideLabel}</div>}
                                 </TooltipContent>
                               </Tooltip>
                             </td>

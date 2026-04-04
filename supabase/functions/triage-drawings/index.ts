@@ -204,10 +204,9 @@ Scoring guidance:
 - Low scores should be used if the file appears to belong to another discipline or system
 - If the evidence is weak or ambiguous, return a middling score rather than a high score
 - Items listed under EXCLUDE in the reference prompt must NOT count as evidence — if they are the only match, score should be 0
-- "instances" is your best estimate of how many distinct instances of the asset type exist in this file based on the text. Use 0 if unsure.
 
 Return ONLY valid JSON in this exact format:
-{"score": 0, "reason": "explanation under 100 words", "instances": 0}`;
+{"score": 0, "reason": "explanation under 100 words"}`;
 
     const triageResponse = await fetch("https://api.openai.com/v1/responses", {
       method: "POST",
@@ -259,14 +258,12 @@ Return ONLY valid JSON in this exact format:
     // Parse JSON response
     let score = 0;
     let reason = "";
-    let instances: number | null = null;
     try {
       const jsonMatch = responseText.match(/\{[^}]+\}/);
       if (jsonMatch) {
         const parsed = JSON.parse(jsonMatch[0]);
         score = Math.max(0, Math.min(100, parseInt(parsed.score, 10) || 0));
         reason = parsed.reason || "";
-        instances = parsed.instances !== undefined ? (parseInt(parsed.instances, 10) || 0) : null;
       }
     } catch (e) {
       console.error(`[triage] Failed to parse triage response: ${responseText}`);
@@ -278,7 +275,6 @@ Return ONLY valid JSON in this exact format:
       status: "complete",
       score,
       reason,
-      instances,
     }).eq("file_id", fileId).eq("analysis_request_id", analysisRequestId).eq("awp_class_name", awpClassName);
 
     console.log(`[triage] Complete: file=${fileName}, class=${awpClassName}, score=${score}, reason=${reason}`);
