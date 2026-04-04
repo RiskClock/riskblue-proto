@@ -1144,6 +1144,43 @@ function formatBytes(bytes: number | null | undefined): string {
 }
 
 // ---------------------------------------------------------------------------
+// ExtractedTextBody — fetches from DB if not available locally
+// ---------------------------------------------------------------------------
+function ExtractedTextBody({ fileId, localText }: { fileId: string; localText?: string }) {
+  const [text, setText] = useState<string | null>(localText ?? null);
+  const [loading, setLoading] = useState(!localText);
+
+  useEffect(() => {
+    if (localText) { setText(localText); setLoading(false); return; }
+    let cancelled = false;
+    (async () => {
+      const { data } = await supabase
+        .from("analysis_request_files")
+        .select("extracted_text")
+        .eq("id", fileId)
+        .single();
+      if (!cancelled) {
+        setText((data?.extracted_text as string) || null);
+        setLoading(false);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [fileId, localText]);
+
+  if (loading) {
+    return <div className="flex-1 flex items-center justify-center p-8"><Loader2 className="w-5 h-5 animate-spin text-muted-foreground" /></div>;
+  }
+
+  return (
+    <div className="flex-1 overflow-auto border rounded-md p-4 bg-muted/30">
+      <pre className="text-xs whitespace-pre-wrap break-words font-mono text-foreground">
+        {text || "(no text extracted)"}
+      </pre>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
 // AnalysisSection
 // ---------------------------------------------------------------------------
 
@@ -2582,11 +2619,7 @@ export function AnalysisSection({ requestId, files, projectId, sourceType }: Ana
                 Extracted Text — {extractedTextFile.name}
               </DialogTitle>
             </DialogHeader>
-            <div className="flex-1 overflow-auto border rounded-md p-4 bg-muted/30">
-              <pre className="text-xs whitespace-pre-wrap break-words font-mono text-foreground">
-                {extractedTexts.get(extractedTextFile.id) || "(no text extracted)"}
-              </pre>
-            </div>
+            <ExtractedTextBody fileId={extractedTextFile.id} localText={extractedTexts.get(extractedTextFile.id)} />
           </DialogContent>
         </Dialog>
       )}
