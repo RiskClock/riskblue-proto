@@ -37,6 +37,8 @@ import {
   Download,
   ZoomIn,
   ZoomOut,
+  Copy,
+  Check,
 } from "lucide-react";
 import * as pdfjsLib from "pdfjs-dist";
 
