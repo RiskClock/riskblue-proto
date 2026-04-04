@@ -269,6 +269,7 @@ export type Database = {
           error_message: string | null
           file_id: string
           id: string
+          instances: number | null
           reason: string | null
           score: number | null
           status: string
@@ -281,6 +282,7 @@ export type Database = {
           error_message?: string | null
           file_id: string
           id?: string
+          instances?: number | null
           reason?: string | null
           score?: number | null
           status?: string
@@ -293,6 +295,7 @@ export type Database = {
           error_message?: string | null
           file_id?: string
           id?: string
+          instances?: number | null
           reason?: string | null
           score?: number | null
           status?: string
