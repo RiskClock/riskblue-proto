@@ -1734,7 +1734,7 @@ export function AnalysisSection({ requestId, files, projectId, sourceType }: Ana
         const key = `${item.file.id}_${item.prompt.awp_class_name}`;
         setTriageResults((prev) => {
           const next = new Map(prev);
-          next.set(key, { file_id: item.file.id, awp_class_name: item.prompt!.awp_class_name, status: "failed", score: null, reason: null, error_message: String(e) });
+          next.set(key, { file_id: item.file.id, awp_class_name: item.prompt!.awp_class_name, status: "failed", score: null, reason: null, error_message: String(e), instances: null });
           return next;
         });
       }
