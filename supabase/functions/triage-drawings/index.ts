@@ -204,10 +204,9 @@ Scoring guidance:
 - Low scores should be used if the file appears to belong to another discipline or system
 - If the evidence is weak or ambiguous, return a middling score rather than a high score
 - Items listed under EXCLUDE in the reference prompt must NOT count as evidence — if they are the only match, score should be 0
-- "instances" is your best estimate of how many distinct instances of the asset type exist in this file based on the text. Use 0 if unsure.
 
 Return ONLY valid JSON in this exact format:
-{"score": 0, "reason": "explanation under 100 words", "instances": 0}`;
+{"score": 0, "reason": "explanation under 100 words"}`;
 
     const triageResponse = await fetch("https://api.openai.com/v1/responses", {
       method: "POST",
