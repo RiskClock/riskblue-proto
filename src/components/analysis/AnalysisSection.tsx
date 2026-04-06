@@ -70,6 +70,7 @@ interface AWPPrompt {
   drive_file_name: string | null;
   drive_file_url: string | null;
   prompt_content: string | null;
+  triage_prompt_content: string | null;
 }
 
 interface AnalysisResult {
@@ -1802,7 +1803,7 @@ export function AnalysisSection({ requestId, files, projectId, sourceType }: Ana
               awpClassName: prompt.awp_class_name,
               assetType: prompt.category,
               drawingName: item.file.name,
-              promptContent: prompt.prompt_content || null,
+              promptContent: prompt.triage_prompt_content || prompt.prompt_content || null,
               action: "triage",
               model: triageModel,
             }),
