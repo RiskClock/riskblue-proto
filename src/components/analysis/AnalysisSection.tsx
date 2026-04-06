@@ -1857,7 +1857,88 @@ export function AnalysisSection({ requestId, files, projectId, sourceType }: Ana
     }
   };
 
+  // ---- Extract Context handler ----
+  const handleExtractAll = async () => {
+    // Clear all extracted_text in DB
+    await supabase
+      .from("analysis_request_files")
+      .update({ extracted_text: null } as any)
+      .eq("analysis_request_id", requestId);
+
+    // Clear local state
+    setExtractedFileIds(new Set());
+    setExtractingFileIds(new Set());
+    setExtractedTexts(new Map());
+
+    if (copiedFiles.length === 0) {
+      toast({ title: "No files", description: "No files available for extraction." });
+      return;
+    }
+
+    setExtractRunning(true);
+    setExtractStopping(false);
+    setExtractProgress({ done: 0, total: copiedFiles.length });
+    inFlightCountRef.current = 0;
+
+    extractQueueRef.current = copiedFiles.map((f) => ({ file: f, action: "extract" as const }));
+
+    const runExtractScheduler = () => {
+      extractTimerRef.current = setInterval(() => {
+        while (
+          inFlightCountRef.current < MAX_CONCURRENT_TRIAGE &&
+          extractQueueRef.current.length > 0
+        ) {
+          const item = extractQueueRef.current.shift()!;
+          executeTriageItem(item);
+        }
+        if (extractQueueRef.current.length === 0 && inFlightCountRef.current <= 0) {
+          if (extractTimerRef.current) {
+            clearInterval(extractTimerRef.current);
+            extractTimerRef.current = null;
+          }
+          setExtractRunning(false);
+        }
+      }, 1000);
+
+      // Immediately fire first batch
+      while (
+        inFlightCountRef.current < MAX_CONCURRENT_TRIAGE &&
+        extractQueueRef.current.length > 0
+      ) {
+        const item = extractQueueRef.current.shift()!;
+        executeTriageItem(item);
+      }
+    };
+
+    // Use a separate progress tracker for extraction
+    setTriageProgress({ done: 0, total: copiedFiles.length });
+    runExtractScheduler();
+  };
+
+  const handleStopExtract = () => {
+    extractQueueRef.current = [];
+    if (extractTimerRef.current) {
+      clearInterval(extractTimerRef.current);
+      extractTimerRef.current = null;
+    }
+    setExtractStopping(true);
+    const pollId = setInterval(() => {
+      if (inFlightCountRef.current <= 0) {
+        clearInterval(pollId);
+        setExtractRunning(false);
+        setExtractStopping(false);
+      }
+    }, 200);
+  };
+
   const handleTriageAll = async () => {
+    // Check that we have processed files
+    const processedFiles = copiedFiles.filter((f) => extractedFileIds.has(f.id));
+    if (processedFiles.length === 0) {
+      toast({ title: "No processed files", description: "Run Extract Context first.", variant: "destructive" });
+      return;
+    }
+
     // Clear previous triage results
     setTriageResults(new Map());
     setTriageTokens(0);
@@ -1868,7 +1949,6 @@ export function AnalysisSection({ requestId, files, projectId, sourceType }: Ana
     setTriageOverrides(new Map());
 
     // Delete existing DB triage results, pass-2 results, overrides, and reset token count + summary_data
-    // Do NOT clear extracted_text — reuse cached extractions
     await Promise.all([
       supabase.from("analysis_triage_results").delete().eq("analysis_request_id", requestId),
       supabase.from("analysis_results").delete().eq("analysis_request_id", requestId),
@@ -1880,74 +1960,30 @@ export function AnalysisSection({ requestId, files, projectId, sourceType }: Ana
     queryClient.invalidateQueries({ queryKey: ["triage-overrides", requestId] });
     queryClient.invalidateQueries({ queryKey: ["analysis-request-meta", requestId] });
 
-    // Check which files already have extracted_text cached
-    const { data: cachedFiles } = await supabase
-      .from("analysis_request_files")
-      .select("id, extracted_text")
-      .eq("analysis_request_id", requestId)
-      .not("extracted_text", "is", null);
-
-    const alreadyExtractedIds = new Set((cachedFiles || []).map((f: any) => f.id));
-
-    // Pre-populate extracted state for cached files
-    setExtractedFileIds(alreadyExtractedIds);
-    setExtractingFileIds(new Set());
-    // Keep extractedTexts state as-is if populated; for cached files we don't need local text
-
-    // Files that still need extraction
-    const filesToExtract = copiedFiles.filter((f) => !alreadyExtractedIds.has(f.id));
-
-    // Phase 2 queue: all file×class pairs
+    // Build score queue: only for processed files
     const scoreQueue: Array<{ file: AnalysisFile; prompt: AWPPrompt; action: "extract" | "triage" }> = [];
     for (const prompt of sortedPrompts) {
-      for (const file of copiedFiles) {
+      for (const file of processedFiles) {
         scoreQueue.push({ file, prompt, action: "triage" });
       }
     }
 
-    if (filesToExtract.length === 0 && scoreQueue.length === 0) {
+    if (scoreQueue.length === 0) {
       toast({ title: "Nothing to triage", description: "No files available." });
       return;
     }
 
     setTriageRunning(true);
     inFlightCountRef.current = 0;
+    setTriagePhase("score");
+    setTriageProgress({ done: 0, total: scoreQueue.length });
+    triageQueueRef.current = scoreQueue;
 
-    if (filesToExtract.length > 0) {
-      // Phase 1: Extract text only for files without cached extraction
-      setTriagePhase("extract");
-      setTriageProgress({ done: 0, total: filesToExtract.length });
-      triageQueueRef.current = filesToExtract.map((f) => ({ file: f, action: "extract" as const }));
-
-      startTriageScheduler(() => {
-        // Phase 1 done → start Phase 2
-        if (scoreQueue.length > 0) {
-          setTriagePhase("score");
-          setTriageProgress({ done: 0, total: scoreQueue.length });
-          triageQueueRef.current = scoreQueue;
-          inFlightCountRef.current = 0;
-          startTriageScheduler(() => {
-            setTriageRunning(false);
-            setTriagePhase(null);
-            queryClient.invalidateQueries({ queryKey: ["triage-results", requestId] });
-          });
-        } else {
-          setTriageRunning(false);
-          setTriagePhase(null);
-        }
-      });
-    } else if (scoreQueue.length > 0) {
-      // No files but have score queue (shouldn't happen normally)
-      setTriagePhase("score");
-      setTriageProgress({ done: 0, total: scoreQueue.length });
-      triageQueueRef.current = scoreQueue;
-
-      startTriageScheduler(() => {
-        setTriageRunning(false);
-        setTriagePhase(null);
-        queryClient.invalidateQueries({ queryKey: ["triage-results", requestId] });
-      });
-    }
+    startTriageScheduler(() => {
+      setTriageRunning(false);
+      setTriagePhase(null);
+      queryClient.invalidateQueries({ queryKey: ["triage-results", requestId] });
+    });
   };
 
   const [triageStopping, setTriageStopping] = useState(false);
@@ -1959,7 +1995,6 @@ export function AnalysisSection({ requestId, files, projectId, sourceType }: Ana
       triageTimerRef.current = null;
     }
     setTriageStopping(true);
-    // Poll until in-flight requests finish
     const pollId = setInterval(() => {
       if (inFlightCountRef.current <= 0) {
         clearInterval(pollId);
