@@ -1381,6 +1381,10 @@ export function AnalysisSection({ requestId, files, projectId, sourceType }: Ana
     if (requestMeta.triage_model) setTriageModel(requestMeta.triage_model as string);
     if (requestMeta.analyze_model) setAnalyzeModel(requestMeta.analyze_model as string);
     if (requestMeta.triage_tokens_used) setTriageTokens(requestMeta.triage_tokens_used as number);
+    const disabled = (requestMeta as any).disabled_awp_classes as string[] | null;
+    if (disabled && disabled.length > 0) {
+      setDisabledColumns(new Set(disabled));
+    }
   }, [requestMeta]);
 
   // Load extracted file IDs on mount so "Processed" badges appear immediately
