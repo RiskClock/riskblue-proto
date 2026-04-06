@@ -1289,6 +1289,21 @@ export function AnalysisSection({ requestId, files, projectId, sourceType }: Ana
     },
   });
 
+  // Fetch project characteristics for filtering AWP columns
+  const { data: projectInfo } = useQuery({
+    queryKey: ["project-info-for-analysis", projectId],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("projects")
+        .select("project_type, project_data")
+        .eq("id", projectId)
+        .single();
+      if (error) throw error;
+      return data as { project_type: string | null; project_data: Record<string, any> | null };
+    },
+    enabled: !!projectId,
+  });
+
   const { data: results } = useQuery({
     queryKey: ["analysis-results", requestId],
     queryFn: async () => {
