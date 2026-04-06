@@ -2348,7 +2348,7 @@ export function AnalysisSection({ requestId, files, projectId, sourceType }: Ana
                   onClick={handleExtractAll}
                   disabled={triageRunning || anyAnalyzing || copiedFiles.length === 0}
                 >
-                  <ClipboardList className="w-4 h-4 mr-2" />
+                  <FileSearch className="w-4 h-4 mr-2" />
                   Extract Context
                 </Button>
               )}
