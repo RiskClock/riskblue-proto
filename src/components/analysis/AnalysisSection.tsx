@@ -1234,6 +1234,7 @@ export function AnalysisSection({ requestId, files, projectId, sourceType }: Ana
   // ---- Triage state ----
   const [triageResults, setTriageResults] = useState<Map<string, TriageResult>>(new Map());
   const [triageRunning, setTriageRunning] = useState(false);
+  const [triagingClasses, setTriagingClasses] = useState<Set<string>>(new Set());
   const [triageTokens, setTriageTokens] = useState(0);
   const [triagePhase, setTriagePhase] = useState<"extract" | "score" | null>(null);
   const [summaryGroupBy, setSummaryGroupBy] = useState<"awp" | "floor">("awp");
@@ -2079,6 +2080,7 @@ export function AnalysisSection({ requestId, files, projectId, sourceType }: Ana
     }
 
     setTriageRunning(true);
+    setTriagingClasses((prev) => new Set(prev).add(className));
     inFlightCountRef.current = 0;
     setTriagePhase("score");
     setTriageProgress({ done: 0, total: scoreQueue.length });
@@ -2086,6 +2088,7 @@ export function AnalysisSection({ requestId, files, projectId, sourceType }: Ana
 
     startTriageScheduler(() => {
       queryClient.invalidateQueries({ queryKey: ["triage-results", requestId] });
+      setTriagingClasses((prev) => { const next = new Set(prev); next.delete(className); return next; });
       setTriageRunning(false);
       setTriagePhase(null);
     });
@@ -2134,7 +2137,9 @@ export function AnalysisSection({ requestId, files, projectId, sourceType }: Ana
       return;
     }
 
+    const allClassNames = new Set(enabledPrompts.map((p) => p.awp_class_name));
     setTriageRunning(true);
+    setTriagingClasses(allClassNames);
     inFlightCountRef.current = 0;
     setTriagePhase("score");
     setTriageProgress({ done: 0, total: scoreQueue.length });
@@ -2142,6 +2147,7 @@ export function AnalysisSection({ requestId, files, projectId, sourceType }: Ana
 
     startTriageScheduler(() => {
       queryClient.invalidateQueries({ queryKey: ["triage-results", requestId] });
+      setTriagingClasses(new Set());
       setTriageRunning(false);
       setTriagePhase(null);
     });
@@ -2514,7 +2520,7 @@ export function AnalysisSection({ requestId, files, projectId, sourceType }: Ana
 
                         return (
                           <td key={prompt.id} className={`w-14 px-2 py-1.5 text-center ${isDisabled ? 'opacity-30' : ''}`}>
-                            {triageRunning && !isDisabled ? (
+                            {triagingClasses.has(className) && !isDisabled ? (
                               <div className="flex items-center justify-center">
                                 <Loader2 className="w-3 h-3 animate-spin text-muted-foreground" />
                               </div>
