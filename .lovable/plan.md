@@ -1,44 +1,43 @@
 
 
-# Fix: Respect Column Disable During In-Progress Triage
+# Fix: Triage Prompt Staleness Detection via Drive Webhooks
 
 ## Problem
 
-The user unchecks a column **after** triage has already started. The queue was built at the start and items for that column are already queued. Toggling the checkbox only updates local state — it doesn't remove items from the in-flight queue.
+The `drive-webhook` function only checks `drive_file_id` (default prompt) when flagging staleness. It never checks `triage_drive_file_id`, so triage prompt updates are never detected. Also, watch channels are set up via `watch-drive-doc` but there's no mechanism to register watches for triage files.
 
-## Fix
+## Changes
 
-**File: `src/components/analysis/AnalysisSection.tsx`**
+### 1. Update `drive-webhook` to also check triage files
 
-### 1. Add a `disabledColumnsRef` synced with state
+**File: `supabase/functions/drive-webhook/index.ts`**
 
-```typescript
-const disabledColumnsRef = useRef<Set<string>>(new Set());
-
-useEffect(() => {
-  disabledColumnsRef.current = disabledColumns;
-}, [disabledColumns]);
-```
-
-### 2. Check the ref inside `startTriageScheduler` before dispatching each item
-
-In the scheduler loop (line ~1862-1868 and ~1879-1885), after shifting an item from the queue, check if its column is now disabled. If so, skip it instead of calling `executeTriageItem`:
+After the existing update on `drive_file_id` → `is_stale`, add a second update:
 
 ```typescript
-const item = triageQueueRef.current.shift()!;
-if (disabledColumnsRef.current.has(item.prompt.awp_class_name)) continue; // skip disabled
-executeTriageItem(item);
+// Also flag triage prompts as stale
+await adminSupabase
+  .from("awp_class_prompts")
+  .update({ triage_is_stale: true })
+  .eq("triage_drive_file_id", channel.drive_file_id);
 ```
 
-This way, even though the queue was built before the user unchecked the column, each item is checked against the live disabled state right before execution.
+This way, a single webhook for a file ID will flag whichever column (default or triage) references it.
 
-### 3. Same check in `handleAnalyzeAll`
+### 2. Set up watch channel when linking a triage prompt
 
-Use `disabledColumnsRef.current` instead of `disabledColumns` closure to ensure the latest state is read.
+**File: `src/pages/Configuration.tsx`**
+
+In `handleLinkTriagePrompt`, after resolving and saving the triage drive file, call `watch-drive-doc` with the `triage_drive_file_id` — same as what's done (or should be done) for default prompts. This ensures Google sends change notifications for the triage file.
+
+### 3. Workaround for immediate check (Pull Latest always visible)
+
+Since watch channels expire after 7 days and aren't renewed, add a "Pull Latest" button that is **always visible** (not just when `is_stale` is true) for both prompt columns. This lets users manually refresh content at any time. The "Updated" badge still appears when the webhook fires, but users aren't blocked from pulling without it.
 
 ## Files Changed
 
 | File | Change |
 |---|---|
-| `src/components/analysis/AnalysisSection.tsx` | Add `disabledColumnsRef`, check it before dispatching each queued triage/analyze item |
+| `supabase/functions/drive-webhook/index.ts` | Also flag `triage_is_stale` when file matches `triage_drive_file_id` |
+| `src/pages/Configuration.tsx` | Call `watch-drive-doc` when linking triage prompts; show "Pull Latest" button always (not just when stale) |
 
