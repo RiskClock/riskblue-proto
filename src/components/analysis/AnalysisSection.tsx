@@ -72,6 +72,8 @@ interface AWPPrompt {
   drive_file_url: string | null;
   prompt_content: string | null;
   triage_prompt_content: string | null;
+  detection_method: string;
+  condition_rule: Record<string, any> | null;
 }
 
 interface AnalysisResult {
