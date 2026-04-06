@@ -1966,6 +1966,73 @@ export function AnalysisSection({ requestId, files, projectId, sourceType }: Ana
     }, 200);
   };
 
+  const handleTriageClass = async (prompt: AWPPrompt) => {
+    const processedFiles = copiedFiles.filter((f) => extractedFileIds.has(f.id));
+    if (processedFiles.length === 0) {
+      toast({ title: "No processed files", description: "Run Extract Context first.", variant: "destructive" });
+      return;
+    }
+
+    const className = prompt.awp_class_name;
+
+    // Clear previous triage results for this class only
+    setTriageResults((prev) => {
+      const next = new Map(prev);
+      for (const [key] of next) {
+        if (key.endsWith(`_${className}`)) next.delete(key);
+      }
+      return next;
+    });
+
+    // Clear pass-2 results for this class
+    setSummarizedInstances((prev) => { const n = { ...prev }; delete n[className]; return n; });
+    setAddedToProject((prev) => { const n = { ...prev }; delete n[className]; return n; });
+
+    // Clear overrides for this class
+    setTriageOverrides((prev) => {
+      const next = new Map(prev);
+      for (const [key] of next) {
+        if (key.endsWith(`_${className}`)) next.delete(key);
+      }
+      return next;
+    });
+
+    // Delete existing DB triage/analysis results for this class
+    await Promise.all([
+      supabase.from("analysis_triage_results").delete().eq("analysis_request_id", requestId).eq("awp_class_name", className),
+      supabase.from("analysis_results").delete().eq("analysis_request_id", requestId).eq("awp_class_name", className),
+      supabase.from("analysis_triage_overrides" as any).delete().eq("analysis_request_id", requestId).eq("awp_class_name", className),
+    ]);
+
+    // Clear summary_data for this class
+    const { data: req } = await supabase.from("analysis_requests").select("summary_data").eq("id", requestId).single();
+    const existingSum = (req?.summary_data as unknown as Record<string, unknown>) || {};
+    delete existingSum[className];
+    await supabase.from("analysis_requests").update({ summary_data: existingSum as any }).eq("id", requestId);
+
+    queryClient.invalidateQueries({ queryKey: ["triage-results", requestId] });
+    queryClient.invalidateQueries({ queryKey: ["analysis-results", requestId] });
+    queryClient.invalidateQueries({ queryKey: ["triage-overrides", requestId] });
+
+    // Build queue for this class only
+    const scoreQueue: Array<{ file: AnalysisFile; prompt: AWPPrompt; action: "extract" | "triage" }> = [];
+    for (const file of processedFiles) {
+      scoreQueue.push({ file, prompt, action: "triage" });
+    }
+
+    setTriageRunning(true);
+    inFlightCountRef.current = 0;
+    setTriagePhase("score");
+    setTriageProgress({ done: 0, total: scoreQueue.length });
+    triageQueueRef.current = scoreQueue;
+
+    startTriageScheduler(() => {
+      setTriageRunning(false);
+      setTriagePhase(null);
+      queryClient.invalidateQueries({ queryKey: ["triage-results", requestId] });
+    });
+  };
+
   const handleTriageAll = async () => {
     // Check that we have processed files
     const processedFiles = copiedFiles.filter((f) => extractedFileIds.has(f.id));
@@ -2384,46 +2451,37 @@ export function AnalysisSection({ requestId, files, projectId, sourceType }: Ana
                     
                      {sortedPrompts.map((prompt) => {
                        const className = prompt.awp_class_name;
-                       const isAnalyzing = analyzingClasses.has(className);
-                       const hasResults = (results?.some((r) => r.awp_class_name === className)) || false;
-                       const isDisabled = disabledColumns.has(className);
+                        const isDisabled = disabledColumns.has(className);
+                        const hasTriageResults = copiedFiles.some((f) => triageResults.has(`${f.id}_${className}`));
 
-                       return (
-                         <td key={prompt.id} className={`w-14 px-2 py-1.5 text-center ${isDisabled ? 'opacity-30' : ''}`}>
-                           {isAnalyzing ? (
-                             <div className="flex items-center justify-center gap-1">
-                               <Loader2 className="w-3 h-3 animate-spin text-muted-foreground" />
-                               <Button
-                                 size="icon"
-                                 variant="destructive"
-                                 className="h-6 w-6"
-                                 onClick={() => handleStop(className)}
-                               >
-                                 <Square className="w-3 h-3" />
-                               </Button>
-                             </div>
-                           ) : (
-                             <Tooltip>
-                               <TooltipTrigger asChild>
-                                 <Button
-                                   size="icon"
-                                   variant="ghost"
-                                   className="h-6 w-6"
-                                   disabled={copiedFiles.length === 0 || isDisabled}
-                                   onClick={() => handleAnalyze(prompt)}
-                                 >
-                                   {hasResults ? (
-                                     <RotateCcw className="w-3 h-3" />
-                                   ) : (
-                                     <Play className="w-3 h-3" />
-                                   )}
-                                 </Button>
-                               </TooltipTrigger>
-                               <TooltipContent>
-                                 {isDisabled ? `${className} is disabled` : hasResults ? `Re-analyze ${className}` : `Analyze ${className}`}
-                               </TooltipContent>
-                             </Tooltip>
-                           )}
+                        return (
+                          <td key={prompt.id} className={`w-14 px-2 py-1.5 text-center ${isDisabled ? 'opacity-30' : ''}`}>
+                            {triageRunning && !isDisabled ? (
+                              <div className="flex items-center justify-center">
+                                <Loader2 className="w-3 h-3 animate-spin text-muted-foreground" />
+                              </div>
+                            ) : (
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <Button
+                                    size="icon"
+                                    variant="ghost"
+                                    className="h-6 w-6"
+                                    disabled={copiedFiles.length === 0 || isDisabled || triageRunning}
+                                    onClick={() => handleTriageClass(prompt)}
+                                  >
+                                    {hasTriageResults ? (
+                                      <RotateCcw className="w-3 h-3" />
+                                    ) : (
+                                      <Play className="w-3 h-3" />
+                                    )}
+                                  </Button>
+                                </TooltipTrigger>
+                                <TooltipContent>
+                                  {isDisabled ? `${className} is disabled` : hasTriageResults ? `Re-triage ${className}` : `Triage ${className}`}
+                                </TooltipContent>
+                              </Tooltip>
+                            )}
                          </td>
                        );
                      })}
