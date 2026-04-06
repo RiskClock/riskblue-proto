@@ -40,6 +40,7 @@ import {
   Copy,
   Check,
 } from "lucide-react";
+import { Checkbox } from "@/components/ui/checkbox";
 import * as pdfjsLib from "pdfjs-dist";
 
 // Configure PDF.js worker (idempotent — safe to call multiple times)
