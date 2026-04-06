@@ -2378,9 +2378,10 @@ export function AnalysisSection({ requestId, files, projectId, sourceType }: Ana
                        const className = prompt.awp_class_name;
                        const isAnalyzing = analyzingClasses.has(className);
                        const hasResults = (results?.some((r) => r.awp_class_name === className)) || false;
+                       const isDisabled = disabledColumns.has(className);
 
                        return (
-                         <td key={prompt.id} className="w-14 px-2 py-1.5 text-center">
+                         <td key={prompt.id} className={`w-14 px-2 py-1.5 text-center ${isDisabled ? 'opacity-30' : ''}`}>
                            {isAnalyzing ? (
                              <div className="flex items-center justify-center gap-1">
                                <Loader2 className="w-3 h-3 animate-spin text-muted-foreground" />
@@ -2400,7 +2401,7 @@ export function AnalysisSection({ requestId, files, projectId, sourceType }: Ana
                                    size="icon"
                                    variant="ghost"
                                    className="h-6 w-6"
-                                   disabled={copiedFiles.length === 0}
+                                   disabled={copiedFiles.length === 0 || isDisabled}
                                    onClick={() => handleAnalyze(prompt)}
                                  >
                                    {hasResults ? (
@@ -2411,7 +2412,7 @@ export function AnalysisSection({ requestId, files, projectId, sourceType }: Ana
                                  </Button>
                                </TooltipTrigger>
                                <TooltipContent>
-                                 {hasResults ? `Re-analyze ${className}` : `Analyze ${className}`}
+                                 {isDisabled ? `${className} is disabled` : hasResults ? `Re-analyze ${className}` : `Analyze ${className}`}
                                </TooltipContent>
                              </Tooltip>
                            )}
