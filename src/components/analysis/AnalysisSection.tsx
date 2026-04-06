@@ -1378,6 +1378,23 @@ export function AnalysisSection({ requestId, files, projectId, sourceType }: Ana
     if (requestMeta.triage_tokens_used) setTriageTokens(requestMeta.triage_tokens_used as number);
   }, [requestMeta]);
 
+  // Load extracted file IDs on mount so "Processed" badges appear immediately
+  useEffect(() => {
+    if (!requestId || copiedFiles.length === 0) return;
+    let cancelled = false;
+    (async () => {
+      const { data } = await supabase
+        .from("analysis_request_files")
+        .select("id")
+        .eq("analysis_request_id", requestId)
+        .not("extracted_text", "is", null);
+      if (!cancelled && data) {
+        setExtractedFileIds(new Set(data.map((f: any) => f.id)));
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [requestId, files.length]);
+
   const savedSummaryData = useMemo(() => {
     return (requestMeta?.summary_data as unknown as Record<string, SummarizedInstance[]>) || {};
   }, [requestMeta]);
