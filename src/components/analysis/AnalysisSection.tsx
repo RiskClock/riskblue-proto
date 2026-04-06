@@ -2084,9 +2084,9 @@ export function AnalysisSection({ requestId, files, projectId, sourceType }: Ana
     triageQueueRef.current = scoreQueue;
 
     startTriageScheduler(() => {
+      queryClient.invalidateQueries({ queryKey: ["triage-results", requestId] });
       setTriageRunning(false);
       setTriagePhase(null);
-      queryClient.invalidateQueries({ queryKey: ["triage-results", requestId] });
     });
   };
 
@@ -2140,9 +2140,9 @@ export function AnalysisSection({ requestId, files, projectId, sourceType }: Ana
     triageQueueRef.current = scoreQueue;
 
     startTriageScheduler(() => {
+      queryClient.invalidateQueries({ queryKey: ["triage-results", requestId] });
       setTriageRunning(false);
       setTriagePhase(null);
-      queryClient.invalidateQueries({ queryKey: ["triage-results", requestId] });
     });
   };
 
