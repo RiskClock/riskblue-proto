@@ -1989,7 +1989,8 @@ export function AnalysisSection({ requestId, files, projectId, sourceType }: Ana
 
     // Build score queue: only for processed files
     const scoreQueue: Array<{ file: AnalysisFile; prompt: AWPPrompt; action: "extract" | "triage" }> = [];
-    for (const prompt of sortedPrompts) {
+    const enabledPrompts = sortedPrompts.filter((p) => !disabledColumns.has(p.awp_class_name));
+    for (const prompt of enabledPrompts) {
       for (const file of processedFiles) {
         scoreQueue.push({ file, prompt, action: "triage" });
       }
@@ -2329,29 +2330,39 @@ export function AnalysisSection({ requestId, files, projectId, sourceType }: Ana
                         Files ({copiedFiles.length} files | {formatBytes(totalSizeBytes)} | {sourceLabel})
                       </span>
                     </th>
-                     {sortedPrompts.map((prompt) => (
-                      <th key={prompt.id} className="w-14 px-2 py-2 text-center font-medium text-muted-foreground">
-                        <Tooltip>
-                          <TooltipTrigger asChild>
-                            {prompt.drive_file_url ? (
-                              <a
-                                href={prompt.drive_file_url}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="font-mono text-xs text-primary underline underline-offset-2 hover:text-primary/80"
-                              >
-                                {getPrefix(prompt.awp_class_name)}
-                              </a>
-                            ) : (
-                              <span className="cursor-default font-mono text-xs">
-                                {getPrefix(prompt.awp_class_name)}
-                              </span>
-                            )}
-                          </TooltipTrigger>
-                          <TooltipContent>{prompt.awp_class_name}</TooltipContent>
-                        </Tooltip>
+                     {sortedPrompts.map((prompt) => {
+                      const isDisabled = disabledColumns.has(prompt.awp_class_name);
+                      return (
+                      <th key={prompt.id} className={`w-14 px-2 py-2 text-center font-medium text-muted-foreground ${isDisabled ? 'opacity-30' : ''}`}>
+                        <div className="flex flex-col items-center gap-1">
+                          <Checkbox
+                            checked={!isDisabled}
+                            onCheckedChange={() => toggleColumnDisabled(prompt.awp_class_name)}
+                            className="h-3.5 w-3.5"
+                          />
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              {prompt.drive_file_url ? (
+                                <a
+                                  href={prompt.drive_file_url}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="font-mono text-xs text-primary underline underline-offset-2 hover:text-primary/80"
+                                >
+                                  {getPrefix(prompt.awp_class_name)}
+                                </a>
+                              ) : (
+                                <span className="cursor-default font-mono text-xs">
+                                  {getPrefix(prompt.awp_class_name)}
+                                </span>
+                              )}
+                            </TooltipTrigger>
+                            <TooltipContent>{prompt.awp_class_name}</TooltipContent>
+                          </Tooltip>
+                        </div>
                       </th>
-                    ))}
+                      );
+                    })}
                   </tr>
 
                   {/* Button sub-row: per-column analyze/stop controls */}
