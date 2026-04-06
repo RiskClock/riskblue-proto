@@ -2009,6 +2009,7 @@ export function AnalysisSection({ requestId, files, projectId, sourceType }: Ana
   useEffect(() => {
     return () => {
       if (triageTimerRef.current) clearInterval(triageTimerRef.current);
+      if (extractTimerRef.current) clearInterval(extractTimerRef.current);
     };
   }, []);
 
