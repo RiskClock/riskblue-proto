@@ -1263,6 +1263,9 @@ export function AnalysisSection({ requestId, files, projectId, sourceType }: Ana
   const [previewFile, setPreviewFile] = useState<AnalysisFile | null>(null);
   const [extractedTextFile, setExtractedTextFile] = useState<AnalysisFile | null>(null);
 
+  // ---- Column enable/disable state ----
+  const [disabledColumns, setDisabledColumns] = useState<Set<string>>(new Set());
+
   // ---- Queries ----
   const { data: prompts, isLoading: promptsLoading } = useQuery({
     queryKey: ["awp-prompts-linked"],
@@ -1365,7 +1368,7 @@ export function AnalysisSection({ requestId, files, projectId, sourceType }: Ana
     queryFn: async () => {
       const { data } = await supabase
         .from("analysis_requests")
-        .select("summary_data, triage_tokens_used, triage_model, analyze_model")
+        .select("summary_data, triage_tokens_used, triage_model, analyze_model, disabled_awp_classes")
         .eq("id", requestId)
         .single();
       return data;
