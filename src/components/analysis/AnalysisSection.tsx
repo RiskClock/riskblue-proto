@@ -1300,17 +1300,18 @@ export function AnalysisSection({ requestId, files, projectId, sourceType }: Ana
       if (error) throw error;
       return data as TriageResult[];
     },
+    refetchOnWindowFocus: false,
   });
 
   // Hydrate triage results into map
   useEffect(() => {
-    if (!triageData) return;
+    if (!triageData || triageRunning) return;
     const map = new Map<string, TriageResult>();
     for (const r of triageData) {
       map.set(`${r.file_id}_${r.awp_class_name}`, r);
     }
     setTriageResults(map);
-  }, [triageData]);
+  }, [triageData, triageRunning]);
 
   // Fetch triage overrides from DB
   const { data: overridesData } = useQuery({
