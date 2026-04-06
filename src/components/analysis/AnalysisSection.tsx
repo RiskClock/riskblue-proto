@@ -2559,7 +2559,7 @@ export function AnalysisSection({ requestId, files, projectId, sourceType }: Ana
 
                           // Determine visual style based on override state
                           let cellStyle: React.CSSProperties = {};
-                          let cellClass = "w-14 px-2 py-2 text-center cursor-pointer transition-colors";
+                          let cellClass = `w-14 px-2 py-2 text-center cursor-pointer transition-colors${disabledCls}`;
                           let overrideLabel = "";
 
                           // Always show triage score background on the cell
