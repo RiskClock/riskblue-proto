@@ -1,43 +1,68 @@
 
 
-# Fix: Triage Prompt Staleness Detection via Drive Webhooks
+# Investigation: Triage Prompt Exclusion Instructions Being Ignored
 
-## Problem
+## Root Cause
 
-The `drive-webhook` function only checks `drive_file_id` (default prompt) when flagging staleness. It never checks `triage_drive_file_id`, so triage prompt updates are never detected. Also, watch channels are set up via `watch-drive-doc` but there's no mechanism to register watches for triage files.
+Two bugs are compounding:
 
-## Changes
-
-### 1. Update `drive-webhook` to also check triage files
-
-**File: `supabase/functions/drive-webhook/index.ts`**
-
-After the existing update on `drive_file_id` → `is_stale`, add a second update:
-
+### Bug 1: Score Scale Mismatch
+The triage prompt document likely instructs the model to return scores on a **0-1 scale** (the appended JSON template asks for `"score":0,"confidence":0`). But the parser on line 268 does:
 ```typescript
-// Also flag triage prompts as stale
-await adminSupabase
-  .from("awp_class_prompts")
-  .update({ triage_is_stale: true })
-  .eq("triage_drive_file_id", channel.drive_file_id);
+score = Math.max(0, Math.min(100, parseInt(parsed.score, 10) || 0));
+```
+`parseInt(0.9)` → `0`. So scores like `0.9` (high) become `0`, and the system may be displaying wrong results. If the doc instructs 0-100, this works — but the mismatch between the doc's expected format and the parser's assumed format is a problem.
+
+### Bug 2: Regex Can't Parse Nested JSON
+The regex `\{[^}]+\}` cannot match JSON containing nested arrays like `"evidence":["item1"]` because `}` appears inside. This means if the model returns the requested format with evidence, parsing fails entirely and score defaults to 0 with reason "Could not parse AI response."
+
+### Bug 3 (Core Issue): No System-Level Reinforcement
+When `promptContent` is provided, it's sent as a single user message. The model sees:
+1. The prompt doc (which says exclude ELEC CLOSET)
+2. The file name and extracted text (which contains "ELEC CLOSET SWC-702")
+3. A bare JSON format instruction
+
+The model interprets the extracted text as **evidence** of the target asset and scores high. The exclusion instruction in the prompt doc gets lost in the noise because there's no system message reinforcing "respect exclusion rules in the prompt."
+
+## Fix
+
+**File: `supabase/functions/triage-drawings/index.ts`**
+
+### 1. Fix JSON parsing regex
+Replace `\{[^}]+\}` with a proper JSON extraction that handles nested structures:
+```typescript
+const jsonMatch = responseText.match(/\{[\s\S]*\}/);
 ```
 
-This way, a single webhook for a file ID will flag whichever column (default or triage) references it.
+### 2. Handle both 0-1 and 0-100 score scales
+After parsing the score, detect if it's on a 0-1 scale and convert:
+```typescript
+let rawScore = parseFloat(parsed.score) || 0;
+if (rawScore > 0 && rawScore <= 1) rawScore = Math.round(rawScore * 100);
+score = Math.max(0, Math.min(100, Math.round(rawScore)));
+```
 
-### 2. Set up watch channel when linking a triage prompt
+### 3. Add a system-level instruction to reinforce prompt rules
+Split the triage call into system + user messages. The system message reinforces that the prompt doc's rules (including exclusions) must be strictly followed:
 
-**File: `src/pages/Configuration.tsx`**
-
-In `handleLinkTriagePrompt`, after resolving and saving the triage drive file, call `watch-drive-doc` with the `triage_drive_file_id` — same as what's done (or should be done) for default prompts. This ensures Google sends change notifications for the triage file.
-
-### 3. Workaround for immediate check (Pull Latest always visible)
-
-Since watch channels expire after 7 days and aren't renewed, add a "Pull Latest" button that is **always visible** (not just when `is_stale` is true) for both prompt columns. This lets users manually refresh content at any time. The "Updated" badge still appears when the webhook fires, but users aren't blocked from pulling without it.
+```typescript
+input: [
+  {
+    type: "message",
+    role: "system",
+    content: [{ type: "input_text", text: "You are a construction drawing triage assistant. Follow ALL instructions in the user's prompt precisely, including any exclusion rules. If the prompt says to exclude certain items, do NOT count them as evidence." }],
+  },
+  {
+    type: "message",
+    role: "user",
+    content: [{ type: "input_text", text: triagePrompt }],
+  },
+],
+```
 
 ## Files Changed
 
 | File | Change |
 |---|---|
-| `supabase/functions/drive-webhook/index.ts` | Also flag `triage_is_stale` when file matches `triage_drive_file_id` |
-| `src/pages/Configuration.tsx` | Call `watch-drive-doc` when linking triage prompts; show "Pull Latest" button always (not just when stale) |
+| `supabase/functions/triage-drawings/index.ts` | Fix JSON regex, handle 0-1 score scale, add system message reinforcing exclusion rules |
 
