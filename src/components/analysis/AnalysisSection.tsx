@@ -29,7 +29,7 @@ import {
   Square,
   XCircle,
   ExternalLink,
-  Filter,
+  ScanLine,
   PlusCircle,
   Eye,
   RotateCcw,
@@ -39,6 +39,7 @@ import {
   ZoomOut,
   Copy,
   Check,
+  Search,
 } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
 import * as pdfjsLib from "pdfjs-dist";
@@ -2348,7 +2349,7 @@ export function AnalysisSection({ requestId, files, projectId, sourceType }: Ana
                   onClick={handleTriageAll}
                   disabled={anyAnalyzing || extractRunning || copiedFiles.length === 0}
                 >
-                  <Filter className="w-4 h-4 mr-2" />
+                  <ScanLine className="w-4 h-4 mr-2" />
                   Triage
                 </Button>
               )}
@@ -2383,7 +2384,7 @@ export function AnalysisSection({ requestId, files, projectId, sourceType }: Ana
                 {anyAnalyzing ? (
                   <Loader2 className="w-4 h-4 mr-2 animate-spin" />
                 ) : (
-                  <Play className="w-4 h-4 mr-2" />
+                  <Search className="w-4 h-4 mr-2" />
                 )}
                 Analyze
               </Button>
@@ -2473,7 +2474,7 @@ export function AnalysisSection({ requestId, files, projectId, sourceType }: Ana
                                     {hasTriageResults ? (
                                       <RotateCcw className="w-3 h-3" />
                                     ) : (
-                                      <Play className="w-3 h-3" />
+                                      <ScanLine className="w-3 h-3" />
                                     )}
                                   </Button>
                                 </TooltipTrigger>
