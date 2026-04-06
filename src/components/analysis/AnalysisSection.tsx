@@ -1266,6 +1266,11 @@ export function AnalysisSection({ requestId, files, projectId, sourceType }: Ana
 
   // ---- Column enable/disable state ----
   const [disabledColumns, setDisabledColumns] = useState<Set<string>>(new Set());
+  const disabledColumnsRef = useRef<Set<string>>(new Set());
+
+  useEffect(() => {
+    disabledColumnsRef.current = disabledColumns;
+  }, [disabledColumns]);
 
   // ---- Queries ----
   const { data: prompts, isLoading: promptsLoading } = useQuery({
@@ -1736,7 +1741,7 @@ export function AnalysisSection({ requestId, files, projectId, sourceType }: Ana
   };
 
   const handleAnalyzeAll = () => {
-    sortedPrompts.filter((p) => !disabledColumns.has(p.awp_class_name)).forEach((p) => handleAnalyze(p));
+    sortedPrompts.filter((p) => !disabledColumnsRef.current.has(p.awp_class_name)).forEach((p) => handleAnalyze(p));
   };
 
   // ---- Triage All with concurrency guard ----
@@ -1864,6 +1869,7 @@ export function AnalysisSection({ requestId, files, projectId, sourceType }: Ana
         triageQueueRef.current.length > 0
       ) {
         const item = triageQueueRef.current.shift()!;
+        if (disabledColumnsRef.current.has(item.prompt.awp_class_name)) continue;
         executeTriageItem(item);
       }
       if (triageQueueRef.current.length === 0 && inFlightCountRef.current <= 0) {
@@ -1881,6 +1887,7 @@ export function AnalysisSection({ requestId, files, projectId, sourceType }: Ana
       triageQueueRef.current.length > 0
     ) {
       const item = triageQueueRef.current.shift()!;
+      if (disabledColumnsRef.current.has(item.prompt.awp_class_name)) continue;
       executeTriageItem(item);
     }
   };
