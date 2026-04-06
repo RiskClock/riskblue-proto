@@ -2702,7 +2702,7 @@ export function AnalysisSection({ requestId, files, projectId, sourceType }: Ana
         <div className="bg-card border rounded-lg overflow-hidden">
           <div className="px-4 py-3 border-b flex items-center justify-between">
             <div className="flex items-center gap-2">
-              <Filter className="w-4 h-4 text-primary" />
+              <ScanLine className="w-4 h-4 text-primary" />
               <h2 className="text-base font-semibold">Analysis Summary</h2>
             </div>
             <div className="flex items-center gap-1">
