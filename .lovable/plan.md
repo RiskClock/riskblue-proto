@@ -1,68 +1,38 @@
 
 
-# Investigation: Triage Prompt Exclusion Instructions Being Ignored
+# Fix: Pull Latest Never Fetches or Stores Prompt Content
 
 ## Root Cause
 
-Two bugs are compounding:
+Two bugs in `Configuration.tsx`:
 
-### Bug 1: Score Scale Mismatch
-The triage prompt document likely instructs the model to return scores on a **0-1 scale** (the appended JSON template asks for `"score":0,"confidence":0`). But the parser on line 268 does:
-```typescript
-score = Math.max(0, Math.min(100, parseInt(parsed.score, 10) || 0));
-```
-`parseInt(0.9)` → `0`. So scores like `0.9` (high) become `0`, and the system may be displaying wrong results. If the doc instructs 0-100, this works — but the mismatch between the doc's expected format and the parser's assumed format is a problem.
+1. **Content never requested**: `handlePullLatest` and `handlePullTriageLatest` call `resolve-drive-doc` with `{ fileUrl: ... }` but never pass `exportContent: true`. The edge function only exports the Google Doc text when that flag is set (line 271 of `resolve-drive-doc/index.ts`).
 
-### Bug 2: Regex Can't Parse Nested JSON
-The regex `\{[^}]+\}` cannot match JSON containing nested arrays like `"evidence":["item1"]` because `}` appears inside. This means if the model returns the requested format with evidence, parsing fails entirely and score defaults to 0 with reason "Could not parse AI response."
+2. **Content never stored**: Even if content were returned, the DB update only saves metadata (`drive_file_modified_at`, `drive_file_name`, `is_stale`, `content_updated_at`) — it never writes to `prompt_content` or `triage_prompt_content`.
 
-### Bug 3 (Core Issue): No System-Level Reinforcement
-When `promptContent` is provided, it's sent as a single user message. The model sees:
-1. The prompt doc (which says exclude ELEC CLOSET)
-2. The file name and extracted text (which contains "ELEC CLOSET SWC-702")
-3. A bare JSON format instruction
-
-The model interprets the extracted text as **evidence** of the target asset and scores high. The exclusion instruction in the prompt doc gets lost in the noise because there's no system message reinforcing "respect exclusion rules in the prompt."
+This means every AWP class has `prompt_content = null` and `triage_prompt_content = null` in the database. During triage, `promptContent` resolves to `null`, so the fallback generic template is always used instead of the actual prompt document.
 
 ## Fix
 
-**File: `supabase/functions/triage-drawings/index.ts`**
+**File: `src/pages/Configuration.tsx`**
 
-### 1. Fix JSON parsing regex
-Replace `\{[^}]+\}` with a proper JSON extraction that handles nested structures:
-```typescript
-const jsonMatch = responseText.match(/\{[\s\S]*\}/);
-```
+### 1. `handlePullLatest` (line ~258)
+- Pass `exportContent: true` in the request body
+- Save `data.content` to `prompt_content` in the DB update
 
-### 2. Handle both 0-1 and 0-100 score scales
-After parsing the score, detect if it's on a 0-1 scale and convert:
-```typescript
-let rawScore = parseFloat(parsed.score) || 0;
-if (rawScore > 0 && rawScore <= 1) rawScore = Math.round(rawScore * 100);
-score = Math.max(0, Math.min(100, Math.round(rawScore)));
-```
+### 2. `handlePullTriageLatest` (line ~332)
+- Pass `exportContent: true` in the request body
+- Save `data.content` to `triage_prompt_content` in the DB update
 
-### 3. Add a system-level instruction to reinforce prompt rules
-Split the triage call into system + user messages. The system message reinforces that the prompt doc's rules (including exclusions) must be strictly followed:
+### 3. Initial link handlers (`handleLinkPrompt` and `handleLinkTriagePrompt`)
+- Also pass `exportContent: true` so content is fetched on first link
+- Save content to `prompt_content` / `triage_prompt_content` respectively
 
-```typescript
-input: [
-  {
-    type: "message",
-    role: "system",
-    content: [{ type: "input_text", text: "You are a construction drawing triage assistant. Follow ALL instructions in the user's prompt precisely, including any exclusion rules. If the prompt says to exclude certain items, do NOT count them as evidence." }],
-  },
-  {
-    type: "message",
-    role: "user",
-    content: [{ type: "input_text", text: triagePrompt }],
-  },
-],
-```
+No edge function changes needed — `resolve-drive-doc` already supports `exportContent: true`.
 
 ## Files Changed
 
 | File | Change |
 |---|---|
-| `supabase/functions/triage-drawings/index.ts` | Fix JSON regex, handle 0-1 score scale, add system message reinforcing exclusion rules |
+| `src/pages/Configuration.tsx` | Pass `exportContent: true` and store returned content in `prompt_content` / `triage_prompt_content` for all pull and link operations |
 
