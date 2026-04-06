@@ -8,8 +8,8 @@ import { Badge } from "@/components/ui/badge";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Input } from "@/components/ui/input";
 import { AppHeader } from "@/components/AppHeader";
@@ -42,6 +42,13 @@ interface PromptInfo {
   is_stale: boolean;
   prompt_content: string | null;
   content_updated_at: string | null;
+  triage_drive_file_id: string | null;
+  triage_drive_file_name: string | null;
+  triage_drive_file_url: string | null;
+  triage_drive_file_modified_at: string | null;
+  triage_is_stale: boolean;
+  triage_prompt_content: string | null;
+  triage_content_updated_at: string | null;
 }
 
 export default function Configuration() {
@@ -58,6 +65,15 @@ export default function Configuration() {
   const [promptUrls, setPromptUrls] = useState<Map<string, string>>(new Map());
   const [resolvingPrompt, setResolvingPrompt] = useState<string | null>(null);
   const [pullingLatest, setPullingLatest] = useState<string | null>(null);
+
+  // Triage prompt state
+  const [linkingTriagePrompt, setLinkingTriagePrompt] = useState<string | null>(null);
+  const [triagePromptUrls, setTriagePromptUrls] = useState<Map<string, string>>(new Map());
+  const [resolvingTriagePrompt, setResolvingTriagePrompt] = useState<string | null>(null);
+  const [pullingTriageLatest, setPullingTriageLatest] = useState<string | null>(null);
+
+  // Control edit modal state
+  const [editingControlsAwp, setEditingControlsAwp] = useState<AWPItem | null>(null);
 
   const isInternalUser = user?.email?.endsWith("@riskclock.com");
 
@@ -78,7 +94,6 @@ export default function Configuration() {
 
   const { data: controls = [], isLoading: controlsLoading } = useMitigationControls();
 
-  // Fetch prompts
   const { data: prompts = [], refetch: refetchPrompts } = useQuery({
     queryKey: ["awp-class-prompts"],
     queryFn: async (): Promise<PromptInfo[]> => {
@@ -176,6 +191,7 @@ export default function Configuration() {
       }
       setPendingChanges(new Map());
       setShowSaveDialog(false);
+      setEditingControlsAwp(null);
       refetchAWPs();
       queryClient.invalidateQueries({ queryKey: ["awp-options"] });
     } catch (error: any) {
@@ -187,7 +203,7 @@ export default function Configuration() {
 
   const handleRevert = () => { setPendingChanges(new Map()); setShowRevertDialog(false); };
 
-  // Link a Google Drive doc prompt
+  // Link a Google Drive doc prompt (default)
   const handleLinkPrompt = async (awpName: string, category: string) => {
     const url = promptUrls.get(awpName);
     if (!url?.trim()) return;
@@ -199,7 +215,6 @@ export default function Configuration() {
       if (error) throw error;
       if (data?.error) throw new Error(data.error);
 
-      // Upsert prompt record
       const existing = promptsByName.get(awpName);
       if (existing) {
         await supabase.from("awp_class_prompts").update({
@@ -208,7 +223,7 @@ export default function Configuration() {
           drive_file_url: url,
           drive_file_modified_at: data.modifiedTime,
           is_stale: false,
-        }).eq("id", existing.id);
+        } as any).eq("id", existing.id);
       } else {
         await supabase.from("awp_class_prompts").insert({
           awp_class_name: awpName,
@@ -217,10 +232,9 @@ export default function Configuration() {
           drive_file_name: data.fileName,
           drive_file_url: url,
           drive_file_modified_at: data.modifiedTime,
-        });
+        } as any);
       }
 
-      // Set up watch notifications (best effort)
       try {
         await supabase.functions.invoke("watch-drive-doc", { body: { fileId: data.fileId } });
       } catch (e) {
@@ -238,7 +252,6 @@ export default function Configuration() {
     }
   };
 
-  // Pull latest content for a stale prompt
   const handlePullLatest = async (prompt: PromptInfo) => {
     setPullingLatest(prompt.awp_class_name);
     try {
@@ -253,7 +266,7 @@ export default function Configuration() {
         drive_file_name: data.fileName,
         is_stale: false,
         content_updated_at: new Date().toISOString(),
-      }).eq("id", prompt.id);
+      } as any).eq("id", prompt.id);
 
       toast({ title: "Prompt updated", description: `Latest metadata pulled for "${data.fileName}"` });
       refetchPrompts();
@@ -261,6 +274,80 @@ export default function Configuration() {
       toast({ title: "Pull failed", description: error.message, variant: "destructive" });
     } finally {
       setPullingLatest(null);
+    }
+  };
+
+  // Link a Google Drive doc for triaging prompt
+  const handleLinkTriagePrompt = async (awpName: string, category: string) => {
+    const url = triagePromptUrls.get(awpName);
+    if (!url?.trim()) return;
+    setResolvingTriagePrompt(awpName);
+    try {
+      const { data, error } = await supabase.functions.invoke("resolve-drive-doc", {
+        body: { fileUrl: url },
+      });
+      if (error) throw error;
+      if (data?.error) throw new Error(data.error);
+
+      const existing = promptsByName.get(awpName);
+      if (existing) {
+        await supabase.from("awp_class_prompts").update({
+          triage_drive_file_id: data.fileId,
+          triage_drive_file_name: data.fileName,
+          triage_drive_file_url: url,
+          triage_drive_file_modified_at: data.modifiedTime,
+          triage_is_stale: false,
+        } as any).eq("id", existing.id);
+      } else {
+        await supabase.from("awp_class_prompts").insert({
+          awp_class_name: awpName,
+          category,
+          triage_drive_file_id: data.fileId,
+          triage_drive_file_name: data.fileName,
+          triage_drive_file_url: url,
+          triage_drive_file_modified_at: data.modifiedTime,
+        } as any);
+      }
+
+      try {
+        await supabase.functions.invoke("watch-drive-doc", { body: { fileId: data.fileId } });
+      } catch (e) {
+        console.warn("Watch setup failed (non-critical):", e);
+      }
+
+      toast({ title: "Triage prompt linked", description: `"${data.fileName}" linked to ${awpName}` });
+      setLinkingTriagePrompt(null);
+      setTriagePromptUrls(prev => { const next = new Map(prev); next.delete(awpName); return next; });
+      refetchPrompts();
+    } catch (error: any) {
+      toast({ title: "Failed to link triage prompt", description: error.message, variant: "destructive" });
+    } finally {
+      setResolvingTriagePrompt(null);
+    }
+  };
+
+  const handlePullTriageLatest = async (prompt: PromptInfo) => {
+    setPullingTriageLatest(prompt.awp_class_name);
+    try {
+      const { data, error } = await supabase.functions.invoke("resolve-drive-doc", {
+        body: { fileUrl: prompt.triage_drive_file_id },
+      });
+      if (error) throw error;
+      if (data?.error) throw new Error(data.error);
+
+      await supabase.from("awp_class_prompts").update({
+        triage_drive_file_modified_at: data.modifiedTime,
+        triage_drive_file_name: data.fileName,
+        triage_is_stale: false,
+        triage_content_updated_at: new Date().toISOString(),
+      } as any).eq("id", prompt.id);
+
+      toast({ title: "Triage prompt updated", description: `Latest metadata pulled for "${data.fileName}"` });
+      refetchPrompts();
+    } catch (error: any) {
+      toast({ title: "Pull failed", description: error.message, variant: "destructive" });
+    } finally {
+      setPullingTriageLatest(null);
     }
   };
 
@@ -293,24 +380,15 @@ export default function Configuration() {
     if (prompt?.drive_file_id && !isEditing) {
       return (
         <div className="flex items-center gap-2 flex-wrap">
-          <a
-            href={prompt.drive_file_url || `https://docs.google.com/document/d/${prompt.drive_file_id}`}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="text-sm text-primary hover:underline flex items-center gap-1"
-          >
-            {prompt.drive_file_name || "Linked Doc"}
-            <ExternalLink className="w-3 h-3" />
+          <a href={prompt.drive_file_url || `https://docs.google.com/document/d/${prompt.drive_file_id}`} target="_blank" rel="noopener noreferrer" className="text-sm text-primary hover:underline flex items-center gap-1">
+            {prompt.drive_file_name || "Linked Doc"}<ExternalLink className="w-3 h-3" />
           </a>
           {prompt.drive_file_modified_at && (
-            <span className="text-xs text-muted-foreground">
-              {format(new Date(prompt.drive_file_modified_at), "MMM d, yyyy")}
-            </span>
+            <span className="text-xs text-muted-foreground">{format(new Date(prompt.drive_file_modified_at), "MMM d, yyyy")}</span>
           )}
           {prompt.is_stale && (
             <Badge variant="outline" className="text-xs bg-amber-50 text-amber-700 border-amber-300">
-              <AlertTriangle className="w-3 h-3 mr-1" />
-              Updated
+              <AlertTriangle className="w-3 h-3 mr-1" />Updated
             </Badge>
           )}
           {prompt.is_stale && (
@@ -318,36 +396,59 @@ export default function Configuration() {
               {isPulling ? <Loader2 className="w-3 h-3 animate-spin" /> : "Pull Latest"}
             </Button>
           )}
-          <Button variant="ghost" size="sm" className="h-6 text-xs" onClick={() => setLinkingPrompt(awp.name)}>
-            Change
-          </Button>
+          <Button variant="ghost" size="sm" className="h-6 text-xs" onClick={() => setLinkingPrompt(awp.name)}>Change</Button>
         </div>
       );
     }
 
     return (
       <div className="flex items-center gap-2">
-        <Input
-          placeholder="Paste Google Drive doc URL..."
-          className="h-7 text-xs max-w-[280px]"
-          value={promptUrls.get(awp.name) || ""}
-          onChange={(e) => setPromptUrls(prev => { const next = new Map(prev); next.set(awp.name, e.target.value); return next; })}
-        />
-        <Button
-          variant="outline"
-          size="sm"
-          className="h-7 text-xs"
-          disabled={!promptUrls.get(awp.name)?.trim() || isResolving}
-          onClick={() => handleLinkPrompt(awp.name, awp.category)}
-        >
-          {isResolving ? <Loader2 className="w-3 h-3 animate-spin" /> : <Link2 className="w-3 h-3 mr-1" />}
-          Link
+        <Input placeholder="Paste Google Drive doc URL..." className="h-7 text-xs max-w-[280px]" value={promptUrls.get(awp.name) || ""} onChange={(e) => setPromptUrls(prev => { const next = new Map(prev); next.set(awp.name, e.target.value); return next; })} />
+        <Button variant="outline" size="sm" className="h-7 text-xs" disabled={!promptUrls.get(awp.name)?.trim() || isResolving} onClick={() => handleLinkPrompt(awp.name, awp.category)}>
+          {isResolving ? <Loader2 className="w-3 h-3 animate-spin" /> : <Link2 className="w-3 h-3 mr-1" />}Link
         </Button>
-        {isEditing && (
-          <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={() => setLinkingPrompt(null)}>
-            Cancel
-          </Button>
-        )}
+        {isEditing && <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={() => setLinkingPrompt(null)}>Cancel</Button>}
+      </div>
+    );
+  };
+
+  const renderTriagePromptCell = (awp: AWPItem) => {
+    const prompt = promptsByName.get(awp.name);
+    const isEditing = linkingTriagePrompt === awp.name;
+    const isResolving = resolvingTriagePrompt === awp.name;
+    const isPulling = pullingTriageLatest === awp.name;
+
+    if (prompt?.triage_drive_file_id && !isEditing) {
+      return (
+        <div className="flex items-center gap-2 flex-wrap">
+          <a href={prompt.triage_drive_file_url || `https://docs.google.com/document/d/${prompt.triage_drive_file_id}`} target="_blank" rel="noopener noreferrer" className="text-sm text-primary hover:underline flex items-center gap-1">
+            {prompt.triage_drive_file_name || "Linked Doc"}<ExternalLink className="w-3 h-3" />
+          </a>
+          {prompt.triage_drive_file_modified_at && (
+            <span className="text-xs text-muted-foreground">{format(new Date(prompt.triage_drive_file_modified_at), "MMM d, yyyy")}</span>
+          )}
+          {prompt.triage_is_stale && (
+            <Badge variant="outline" className="text-xs bg-amber-50 text-amber-700 border-amber-300">
+              <AlertTriangle className="w-3 h-3 mr-1" />Updated
+            </Badge>
+          )}
+          {prompt.triage_is_stale && (
+            <Button variant="outline" size="sm" className="h-6 text-xs" onClick={() => handlePullTriageLatest(prompt)} disabled={isPulling}>
+              {isPulling ? <Loader2 className="w-3 h-3 animate-spin" /> : "Pull Latest"}
+            </Button>
+          )}
+          <Button variant="ghost" size="sm" className="h-6 text-xs" onClick={() => setLinkingTriagePrompt(awp.name)}>Change</Button>
+        </div>
+      );
+    }
+
+    return (
+      <div className="flex items-center gap-2">
+        <Input placeholder="Paste Google Drive doc URL..." className="h-7 text-xs max-w-[280px]" value={triagePromptUrls.get(awp.name) || ""} onChange={(e) => setTriagePromptUrls(prev => { const next = new Map(prev); next.set(awp.name, e.target.value); return next; })} />
+        <Button variant="outline" size="sm" className="h-7 text-xs" disabled={!triagePromptUrls.get(awp.name)?.trim() || isResolving} onClick={() => handleLinkTriagePrompt(awp.name, awp.category)}>
+          {isResolving ? <Loader2 className="w-3 h-3 animate-spin" /> : <Link2 className="w-3 h-3 mr-1" />}Link
+        </Button>
+        {isEditing && <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={() => setLinkingTriagePrompt(null)}>Cancel</Button>}
       </div>
     );
   };
@@ -380,34 +481,48 @@ export default function Configuration() {
               <TableHeader>
                 <TableRow>
                   <TableHead className="w-[180px]">AWP Class</TableHead>
-                  <TableHead>Default Mitigation Controls</TableHead>
+                  <TableHead className="w-[180px]">Default Mitigation Controls</TableHead>
+                  <TableHead className="w-[350px]">Triaging Prompt</TableHead>
                   <TableHead className="w-[350px]">Default Prompt</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 <TableRow className="bg-muted/50 hover:bg-muted/50">
-                  <TableCell colSpan={3} className="font-semibold text-sm py-2">Critical Assets</TableCell>
+                  <TableCell colSpan={4} className="font-semibold text-sm py-2">Critical Assets</TableCell>
                 </TableRow>
                 {groupedAWPs.critical_assets.map((awp) => (
-                  <AWPRow key={awp.id} awp={awp} controls={controls} currentIds={getCurrentControlIds(awp)} hasChanges={hasAWPChanges(awp)} pendingChange={pendingChanges.get(awp.id)} onAddControl={handleAddControl} onRemoveControl={handleRemoveControl} promptCell={renderPromptCell(awp)} />
+                  <AWPRow key={awp.id} awp={awp} controls={controls} currentIds={getCurrentControlIds(awp)} hasChanges={hasAWPChanges(awp)} onEditControls={() => setEditingControlsAwp(awp)} triagePromptCell={renderTriagePromptCell(awp)} promptCell={renderPromptCell(awp)} />
                 ))}
                 <TableRow className="bg-muted/50 hover:bg-muted/50">
-                  <TableCell colSpan={3} className="font-semibold text-sm py-2">Water Systems</TableCell>
+                  <TableCell colSpan={4} className="font-semibold text-sm py-2">Water Systems</TableCell>
                 </TableRow>
                 {groupedAWPs.water_systems.map((awp) => (
-                  <AWPRow key={awp.id} awp={awp} controls={controls} currentIds={getCurrentControlIds(awp)} hasChanges={hasAWPChanges(awp)} pendingChange={pendingChanges.get(awp.id)} onAddControl={handleAddControl} onRemoveControl={handleRemoveControl} promptCell={renderPromptCell(awp)} />
+                  <AWPRow key={awp.id} awp={awp} controls={controls} currentIds={getCurrentControlIds(awp)} hasChanges={hasAWPChanges(awp)} onEditControls={() => setEditingControlsAwp(awp)} triagePromptCell={renderTriagePromptCell(awp)} promptCell={renderPromptCell(awp)} />
                 ))}
                 <TableRow className="bg-muted/50 hover:bg-muted/50">
-                  <TableCell colSpan={3} className="font-semibold text-sm py-2">Processes</TableCell>
+                  <TableCell colSpan={4} className="font-semibold text-sm py-2">Processes</TableCell>
                 </TableRow>
                 {groupedAWPs.processes.map((awp) => (
-                  <AWPRow key={awp.id} awp={awp} controls={controls} currentIds={getCurrentControlIds(awp)} hasChanges={hasAWPChanges(awp)} pendingChange={pendingChanges.get(awp.id)} onAddControl={handleAddControl} onRemoveControl={handleRemoveControl} promptCell={renderPromptCell(awp)} />
+                  <AWPRow key={awp.id} awp={awp} controls={controls} currentIds={getCurrentControlIds(awp)} hasChanges={hasAWPChanges(awp)} onEditControls={() => setEditingControlsAwp(awp)} triagePromptCell={renderTriagePromptCell(awp)} promptCell={renderPromptCell(awp)} />
                 ))}
               </TableBody>
             </Table>
           </div>
         )}
       </main>
+
+      {/* Control Edit Modal */}
+      {editingControlsAwp && (
+        <ControlEditModal
+          awp={editingControlsAwp}
+          controls={controls}
+          currentIds={getCurrentControlIds(editingControlsAwp)}
+          pendingChange={pendingChanges.get(editingControlsAwp.id)}
+          onAddControl={handleAddControl}
+          onRemoveControl={handleRemoveControl}
+          onClose={() => setEditingControlsAwp(null)}
+        />
+      )}
 
       <AlertDialog open={showSaveDialog} onOpenChange={setShowSaveDialog}>
         <AlertDialogContent className="max-w-2xl max-h-[85vh] flex flex-col">
@@ -445,8 +560,6 @@ export default function Configuration() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-
-      
     </div>
   );
 }
@@ -457,33 +570,63 @@ interface AWPRowProps {
   controls: { id: string; name: string; category: string }[];
   currentIds: string[];
   hasChanges: boolean;
-  pendingChange?: PendingChange;
-  onAddControl: (awp: AWPItem, controlId: string) => void;
-  onRemoveControl: (awp: AWPItem, controlId: string) => void;
+  onEditControls: () => void;
+  triagePromptCell: React.ReactNode;
   promptCell: React.ReactNode;
 }
 
-function AWPRow({ awp, controls, currentIds, hasChanges, pendingChange, onAddControl, onRemoveControl, promptCell }: AWPRowProps) {
+function AWPRow({ awp, controls, currentIds, hasChanges, onEditControls, triagePromptCell, promptCell }: AWPRowProps) {
+  const count = currentIds.length;
   return (
     <TableRow className={hasChanges ? "bg-yellow-50/50" : ""}>
       <TableCell className="font-medium py-2">{awp.name}</TableCell>
       <TableCell className="py-2">
-        <div className="flex flex-wrap gap-1.5 items-center">
-          {currentIds.map((controlId) => {
-            const controlName = getControlNameById(controls, controlId);
-            const isNew = pendingChange && !pendingChange.original.includes(controlId);
-            return (
-              <Badge key={controlId} variant="secondary" className={`flex items-center gap-1 text-xs ${isNew ? "border-green-500 bg-green-50" : ""}`}>
-                {controlName || controlId}
-                <button onClick={() => onRemoveControl(awp, controlId)} className="ml-0.5 hover:text-destructive"><X className="h-3 w-3" /></button>
-              </Badge>
-            );
-          })}
-          <AddControlPopover awp={awp} controls={controls} currentIds={currentIds} onAdd={onAddControl} />
+        <div className="flex items-center gap-2">
+          <span className="text-sm text-muted-foreground">{count} control{count !== 1 ? "s" : ""}</span>
+          <Button variant="outline" size="sm" className="h-6 text-xs" onClick={onEditControls}>Edit</Button>
         </div>
       </TableCell>
+      <TableCell className="py-2">{triagePromptCell}</TableCell>
       <TableCell className="py-2">{promptCell}</TableCell>
     </TableRow>
+  );
+}
+
+// Control Edit Modal
+interface ControlEditModalProps {
+  awp: AWPItem;
+  controls: { id: string; name: string; category: string }[];
+  currentIds: string[];
+  pendingChange?: PendingChange;
+  onAddControl: (awp: AWPItem, controlId: string) => void;
+  onRemoveControl: (awp: AWPItem, controlId: string) => void;
+  onClose: () => void;
+}
+
+function ControlEditModal({ awp, controls, currentIds, pendingChange, onAddControl, onRemoveControl, onClose }: ControlEditModalProps) {
+  return (
+    <Dialog open onOpenChange={(open) => { if (!open) onClose(); }}>
+      <DialogContent className="max-w-lg">
+        <DialogHeader>
+          <DialogTitle>Edit Controls — {awp.name}</DialogTitle>
+        </DialogHeader>
+        <div className="space-y-4">
+          <div className="flex flex-wrap gap-1.5">
+            {currentIds.map((controlId) => {
+              const controlName = getControlNameById(controls, controlId);
+              const isNew = pendingChange && !pendingChange.original.includes(controlId);
+              return (
+                <Badge key={controlId} variant="secondary" className={`flex items-center gap-1 text-xs ${isNew ? "border-green-500 bg-green-50" : ""}`}>
+                  {controlName || controlId}
+                  <button onClick={() => onRemoveControl(awp, controlId)} className="ml-0.5 hover:text-destructive"><X className="h-3 w-3" /></button>
+                </Badge>
+              );
+            })}
+          </div>
+          <AddControlPopover awp={awp} controls={controls} currentIds={currentIds} onAdd={onAddControl} />
+        </div>
+      </DialogContent>
+    </Dialog>
   );
 }
 
@@ -501,7 +644,7 @@ function AddControlPopover({ awp, controls, currentIds, onAdd }: AddControlPopov
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
-        <Button variant="outline" size="sm" className="h-6 px-1.5"><Plus className="h-3 w-3" /></Button>
+        <Button variant="outline" size="sm" className="h-7"><Plus className="h-3 w-3 mr-1" />Add Control</Button>
       </PopoverTrigger>
       <PopoverContent className="w-80 p-0" align="start">
         <Command>
