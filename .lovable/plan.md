@@ -1,65 +1,61 @@
 
 
-# Add Column Enable/Disable Checkboxes for AWP Classes
+# Configuration Page: Controls Summary + Triaging Prompt Column + Use Triage Prompt in Triage
 
 ## Summary
 
-Add a checkbox in front of each AWP class name in the header row. Unchecking a column disables it from triage and analysis: the entire column is greyed out and the play button is disabled. Selection state is persisted in the DB and all columns are enabled by default.
+Three changes: (1) collapse the controls column to show "X controls" summary + "Edit" button opening a modal, (2) add a new "Triaging Prompt" column with Google Drive link management (mirroring "Default Prompt"), (3) during triage in AnalysisSection, use the triaging prompt content instead of the default prompt content.
 
 ## Database Migration
 
-Add a `disabled_awp_classes` column (text array) to `analysis_requests` to persist which columns are disabled:
+Add triaging prompt columns to `awp_class_prompts`:
 
 ```sql
-ALTER TABLE public.analysis_requests
-ADD COLUMN disabled_awp_classes text[] NOT NULL DEFAULT '{}';
+ALTER TABLE public.awp_class_prompts
+  ADD COLUMN triage_drive_file_id text,
+  ADD COLUMN triage_drive_file_name text,
+  ADD COLUMN triage_drive_file_url text,
+  ADD COLUMN triage_drive_file_modified_at timestamptz,
+  ADD COLUMN triage_is_stale boolean NOT NULL DEFAULT false,
+  ADD COLUMN triage_prompt_content text,
+  ADD COLUMN triage_content_updated_at timestamptz;
 ```
+
+## Changes to `src/pages/Configuration.tsx`
+
+### Controls column — "X controls" + Edit modal
+
+- Replace the inline badge list in `AWPRow` with text: `"N controls"` (e.g. "5 controls", "0 controls")
+- Add an "Edit" button next to the text
+- New `ControlEditModal` component (Dialog): shows current controls as removable Badge pills (same X-button styling as current inline badges) + the `AddControlPopover` for adding new ones
+- Modal has a close button; changes still tracked via existing `pendingChanges` mechanism
+
+### New "Triaging Prompt" column
+
+- Extend `PromptInfo` interface with `triage_*` fields
+- Add state: `linkingTriagePrompt`, `triagePromptUrls`, `resolvingTriagePrompt`, `pullingTriageLatest`
+- New `renderTriagePromptCell(awp)` — mirrors `renderPromptCell` but reads/writes `triage_drive_file_*` fields
+- `handleLinkTriagePrompt` / `handlePullTriageLatest` — mirrors existing prompt link/pull logic but targets `triage_*` columns
+- Table header: AWP Class | Default Mitigation Controls | Triaging Prompt | Default Prompt
+- Category separator rows: `colSpan={4}`
 
 ## Changes to `src/components/analysis/AnalysisSection.tsx`
 
-### State and persistence
+### Use triaging prompt during triage
 
-- New state: `disabledColumns: Set<string>` initialized from `requestMeta?.disabled_awp_classes` on mount
-- On toggle: flip membership in the set, persist to DB via `supabase.from("analysis_requests").update({ disabled_awp_classes: [...set] })`
-- All columns enabled by default (empty set = all enabled)
+Change prompt content resolution to prefer triage-specific content:
 
-### Header row (line ~2306)
+```typescript
+promptContent: prompt.triage_prompt_content || prompt.prompt_content || null,
+```
 
-- Add a `Checkbox` (from `@/components/ui/checkbox`) before the prefix abbreviation in each `<th>`
-- Checked = enabled (default), unchecked = disabled
-- When unchecked, add `opacity-30` to the entire `<th>`
-
-### Button sub-row (line ~2340)
-
-- When column is disabled: add `opacity-30` to `<td>`, set the Play/RotateCcw button to `disabled={true}`
-- When analyzing is active on that column, stop button still works
-
-### Data cells (line ~2415)
-
-- When column is disabled: add `opacity-30 pointer-events-none` to the `<td>` so cells appear greyed out and clicks (manual overrides) are blocked
-
-### Triage handler (`handleTriageAll`, line ~1966)
-
-- Filter `sortedPrompts` to exclude disabled columns when building the score queue:
-  ```typescript
-  const enabledPrompts = sortedPrompts.filter(p => !disabledColumns.has(p.awp_class_name));
-  ```
-
-### Analyze handler (`handleAnalyzeAll`, line ~1711)
-
-- Filter to enabled prompts only:
-  ```typescript
-  sortedPrompts.filter(p => !disabledColumns.has(p.awp_class_name)).forEach(p => handleAnalyze(p));
-  ```
-
-### Per-column analyze (`handleAnalyze`, line ~1544)
-
-- No change needed — the button is already disabled so user can't trigger it
+Ensure `triage_prompt_content` is included in the prompts query select.
 
 ## Files Changed
 
 | File | Change |
 |---|---|
-| Migration SQL | Add `disabled_awp_classes` column to `analysis_requests` |
-| `src/components/analysis/AnalysisSection.tsx` | Add checkbox toggle per column, grey out disabled columns, filter triage/analyze to enabled columns only |
+| Migration SQL | Add `triage_*` columns to `awp_class_prompts` |
+| `src/pages/Configuration.tsx` | "N controls" summary + Edit modal; Triaging Prompt column with link/pull/change UI |
+| `src/components/analysis/AnalysisSection.tsx` | Use `triage_prompt_content` over `prompt_content` during triage |
 
