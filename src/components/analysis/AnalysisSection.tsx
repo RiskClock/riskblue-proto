@@ -1716,8 +1716,26 @@ export function AnalysisSection({ requestId, files, projectId, sourceType }: Ana
     }
   };
 
+  const toggleColumnDisabled = async (awpClassName: string) => {
+    setDisabledColumns((prev) => {
+      const next = new Set(prev);
+      if (next.has(awpClassName)) {
+        next.delete(awpClassName);
+      } else {
+        next.add(awpClassName);
+      }
+      // Persist to DB
+      supabase
+        .from("analysis_requests")
+        .update({ disabled_awp_classes: [...next] } as any)
+        .eq("id", requestId)
+        .then();
+      return next;
+    });
+  };
+
   const handleAnalyzeAll = () => {
-    sortedPrompts.forEach((p) => handleAnalyze(p));
+    sortedPrompts.filter((p) => !disabledColumns.has(p.awp_class_name)).forEach((p) => handleAnalyze(p));
   };
 
   // ---- Triage All with concurrency guard ----
