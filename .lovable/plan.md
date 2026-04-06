@@ -1,38 +1,64 @@
 
 
-# Fix: Pull Latest Never Fetches or Stores Prompt Content
+# Filter AWP Columns by Detection Method and Project Characteristics
 
-## Root Cause
+## Summary
 
-Two bugs in `Configuration.tsx`:
+Some AWP classes are always present or conditionally present based on project characteristics — they don't need drawing analysis. These should be excluded from the analysis queue columns. Additionally, "Suite" should only appear for Residential/Mixed Use projects.
 
-1. **Content never requested**: `handlePullLatest` and `handlePullTriageLatest` call `resolve-drive-doc` with `{ fileUrl: ... }` but never pass `exportContent: true`. The edge function only exports the Google Doc text when that flag is set (line 271 of `resolve-drive-doc/index.ts`).
+## AWP Classification
 
-2. **Content never stored**: Even if content were returned, the DB update only saves metadata (`drive_file_modified_at`, `drive_file_name`, `is_stale`, `content_updated_at`) — it never writes to `prompt_content` or `triage_prompt_content`.
+| AWP Class | Detection | Rule |
+|---|---|---|
+| Facade, Envelope, Exterior, and Roofing | Always present | Exclude from analysis queue |
+| Mass Timber and Millwork | Conditional on structural type containing "mass-timber" | Exclude from analysis queue |
+| Suite | Conditional on project type being "residential" or "mixed-use" | Exclude from analysis queue |
+| All others | Drawing-based | Keep in analysis queue |
 
-This means every AWP class has `prompt_content = null` and `triage_prompt_content = null` in the database. During triage, `promptContent` resolves to `null`, so the fallback generic template is always used instead of the actual prompt document.
+## Database Migration
 
-## Fix
+Add a column `detection_method` to `awp_class_prompts`:
 
-**File: `src/pages/Configuration.tsx`**
+```sql
+ALTER TABLE awp_class_prompts
+  ADD COLUMN detection_method text NOT NULL DEFAULT 'drawing'
+  CHECK (detection_method IN ('drawing', 'always', 'conditional'));
 
-### 1. `handlePullLatest` (line ~258)
-- Pass `exportContent: true` in the request body
-- Save `data.content` to `prompt_content` in the DB update
+ALTER TABLE awp_class_prompts
+  ADD COLUMN condition_rule jsonb DEFAULT NULL;
+```
 
-### 2. `handlePullTriageLatest` (line ~332)
-- Pass `exportContent: true` in the request body
-- Save `data.content` to `triage_prompt_content` in the DB update
+Then populate:
 
-### 3. Initial link handlers (`handleLinkPrompt` and `handleLinkTriagePrompt`)
-- Also pass `exportContent: true` so content is fetched on first link
-- Save content to `prompt_content` / `triage_prompt_content` respectively
+```sql
+UPDATE awp_class_prompts SET detection_method = 'always'
+  WHERE awp_class_name = 'Facade, Envelope, Exterior, and Roofing';
 
-No edge function changes needed — `resolve-drive-doc` already supports `exportContent: true`.
+UPDATE awp_class_prompts SET detection_method = 'conditional',
+  condition_rule = '{"field": "structural_types", "contains": "mass-timber"}'
+  WHERE awp_class_name = 'Mass Timber and Millwork';
+
+UPDATE awp_class_prompts SET detection_method = 'conditional',
+  condition_rule = '{"field": "project_type", "in": ["residential", "mixed-use"]}'
+  WHERE awp_class_name = 'Suite';
+```
+
+## Frontend Changes
+
+**File: `src/components/analysis/AnalysisSection.tsx`**
+
+1. **Fetch project characteristics**: Query the `projects` table using `projectId` to get `project_type` and `project_data->'structural_types'`.
+
+2. **Update prompts query**: Include `detection_method` and `condition_rule` in the `AWPPrompt` interface and the select query (remove the `.not("drive_file_id", "is", null)` filter so all prompts load, or keep it and add the new columns).
+
+3. **Filter function**: Create a helper `isDrawingDetectable(prompt, projectData)` that returns `false` for `always` and for `conditional` prompts whose rule is not met (e.g., Suite when project is institutional). Only prompts returning `true` appear as columns.
+
+4. **Apply filter**: Replace `sortedPrompts` usage in the table rendering with `sortedPrompts.filter(p => isDrawingDetectable(p, project))`. Also apply this filter in `handleTriageAll` and `handleAnalyzeAll`.
 
 ## Files Changed
 
 | File | Change |
 |---|---|
-| `src/pages/Configuration.tsx` | Pass `exportContent: true` and store returned content in `prompt_content` / `triage_prompt_content` for all pull and link operations |
+| Migration SQL | Add `detection_method` and `condition_rule` columns to `awp_class_prompts`; set values for 3 classes |
+| `src/components/analysis/AnalysisSection.tsx` | Fetch project data, filter columns by detection method and project characteristics |
 
