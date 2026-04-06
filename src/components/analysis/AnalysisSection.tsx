@@ -2158,6 +2158,41 @@ export function AnalysisSection({ requestId, files, projectId, sourceType }: Ana
           <div className="px-4 py-3 border-b flex items-center justify-between">
             <h2 className="text-base font-semibold">Drawing File Analysis</h2>
             <div className="flex items-center gap-3">
+              {/* Extract Context group */}
+              {extractRunning ? (
+                <div className="flex items-center gap-2">
+                  <span className="text-xs text-muted-foreground tabular-nums">
+                    Extracting: {triageProgress.done}/{triageProgress.total} files
+                  </span>
+                  <Button
+                    size="sm"
+                    variant="destructive"
+                    onClick={handleStopExtract}
+                    disabled={extractStopping}
+                  >
+                    {extractStopping ? (
+                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                    ) : (
+                      <Square className="w-4 h-4 mr-2" />
+                    )}
+                    {extractStopping ? "Stopping…" : "Stop"}
+                  </Button>
+                </div>
+              ) : (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={handleExtractAll}
+                  disabled={triageRunning || anyAnalyzing || copiedFiles.length === 0}
+                >
+                  <Play className="w-4 h-4 mr-2" />
+                  Extract Context
+                </Button>
+              )}
+
+              {/* Separator */}
+              <div className="h-6 w-px bg-border" />
+
               {/* Triage group */}
               <div className="flex items-center gap-2">
                 <label className="text-xs text-muted-foreground whitespace-nowrap">Model:</label>
@@ -2179,9 +2214,7 @@ export function AnalysisSection({ requestId, files, projectId, sourceType }: Ana
               </div>
               {triageRunning && triagePhase && (
                 <span className="text-xs text-muted-foreground tabular-nums">
-                  {triagePhase === "extract"
-                    ? `Extracting: ${triageProgress.done}/${triageProgress.total} files`
-                    : `Triaging: ${triageProgress.done}/${triageProgress.total} cells`}
+                  Triaging: {triageProgress.done}/{triageProgress.total} cells
                 </span>
               )}
               {(triageRunning || triageTokens > 0) && (
@@ -2208,7 +2241,7 @@ export function AnalysisSection({ requestId, files, projectId, sourceType }: Ana
                   size="sm"
                   variant="outline"
                   onClick={handleTriageAll}
-                  disabled={anyAnalyzing || copiedFiles.length === 0}
+                  disabled={anyAnalyzing || extractRunning || copiedFiles.length === 0}
                 >
                   <Filter className="w-4 h-4 mr-2" />
                   Triage
@@ -2240,7 +2273,7 @@ export function AnalysisSection({ requestId, files, projectId, sourceType }: Ana
               <Button
                 size="sm"
                 onClick={handleAnalyzeAll}
-                disabled={anyAnalyzing || triageRunning || copiedFiles.length === 0}
+                disabled={anyAnalyzing || triageRunning || extractRunning || copiedFiles.length === 0}
               >
                 {anyAnalyzing ? (
                   <Loader2 className="w-4 h-4 mr-2 animate-spin" />
