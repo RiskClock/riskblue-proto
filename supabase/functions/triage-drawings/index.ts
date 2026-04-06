@@ -179,23 +179,27 @@ Deno.serve(async (req) => {
     const fileName = fileRecord.name as string;
     const displayName = drawingName || fileName;
 
-    const promptDocSection = promptContent
-      ? `\nReference analysis prompt for this asset type:\n---\n${promptContent}\n---\n`
-      : "";
+    let triagePrompt: string;
 
-    const excludeWarning = promptContent
-      ? `\nIMPORTANT — EXCLUSION RULES: The reference prompt above may list items to EXCLUDE (e.g., "EXCLUDE electrical closets"). If an EXCLUDE instruction mentions a term and that term appears in the extracted text, it must NOT increase the score. Treat excluded items as if they do not exist in the file. Mentioning an excluded term in your reason as evidence is WRONG.\n`
-      : "";
+    if (promptContent) {
+      triagePrompt = `${promptContent}
 
-    const triagePrompt = `You are helping triage construction drawing files based on whether a critical asset or water system might be present in the file for deeper analysis.
+Drawing file name: ${displayName}
+
+Extracted text from PDF:
+${(extractedText || "(no text extracted)").slice(0, 10000)}
+
+Return ONLY valid JSON: {"score":0,"confidence":0,"reason":"","evidence":[]}`;
+    } else {
+      triagePrompt = `You are helping triage construction drawing files based on whether a critical asset or water system might be present in the file for deeper analysis.
 
 Estimate how likely this drawing file is to contain evidence of: ${awpClassName}
-${promptDocSection}${excludeWarning}
+
 Drawing file name:
 ${displayName}
 
 Quick text extracted from the PDF:
-${(extractedText || "(no text extracted)").slice(0, 4000)}
+${(extractedText || "(no text extracted)").slice(0, 10000)}
 
 Scoring guidance:
 - Use filename and extracted text only
@@ -203,10 +207,9 @@ Scoring guidance:
 - High scores require direct clues
 - Low scores should be used if the file appears to belong to another discipline or system
 - If the evidence is weak or ambiguous, return a middling score rather than a high score
-- Items listed under EXCLUDE in the reference prompt must NOT count as evidence — if they are the only match, score should be 0
 
-Return ONLY valid JSON in this exact format:
-{"score": 0, "reason": "explanation under 100 words"}`;
+Return ONLY valid JSON: {"score": 0, "reason": "explanation under 100 words"}`;
+    }
 
     const triageResponse = await fetch("https://api.openai.com/v1/responses", {
       method: "POST",
