@@ -1,0 +1,1 @@
+ALTER TABLE public.analysis_requests ADD COLUMN disabled_awp_classes text[] NOT NULL DEFAULT '{}';

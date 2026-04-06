@@ -107,6 +107,7 @@ export type Database = {
         Row: {
           analyze_model: string | null
           created_at: string
+          disabled_awp_classes: string[]
           drive_folder_id: string | null
           error_message: string | null
           file_count: number | null
@@ -125,6 +126,7 @@ export type Database = {
         Insert: {
           analyze_model?: string | null
           created_at?: string
+          disabled_awp_classes?: string[]
           drive_folder_id?: string | null
           error_message?: string | null
           file_count?: number | null
@@ -143,6 +145,7 @@ export type Database = {
         Update: {
           analyze_model?: string | null
           created_at?: string
+          disabled_awp_classes?: string[]
           drive_folder_id?: string | null
           error_message?: string | null
           file_count?: number | null
