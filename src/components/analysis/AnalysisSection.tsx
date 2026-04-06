@@ -1243,6 +1243,13 @@ export function AnalysisSection({ requestId, files, projectId, sourceType }: Ana
   const inFlightCountRef = useRef(0);
   const MAX_CONCURRENT_TRIAGE = 5;
 
+  // ---- Extract Context state ----
+  const [extractRunning, setExtractRunning] = useState(false);
+  const [extractStopping, setExtractStopping] = useState(false);
+  const [extractProgress, setExtractProgress] = useState<{ done: number; total: number }>({ done: 0, total: 0 });
+  const extractQueueRef = useRef<Array<{ file: AnalysisFile; action: "extract" }>>([]);
+  const extractTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
   // ---- Unchanged state ----
   const [summarizedInstances, setSummarizedInstances] = useState<Record<string, SummarizedInstance[]>>({});
   const [summarizing, setSummarizing] = useState<Record<string, boolean>>({});
