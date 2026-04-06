@@ -222,6 +222,11 @@ Return ONLY valid JSON: {"score": 0, "reason": "explanation under 100 words"}`;
         input: [
           {
             type: "message",
+            role: "system",
+            content: [{ type: "input_text", text: "You are a construction drawing triage assistant. Follow ALL instructions in the user's prompt precisely, including any exclusion rules. If the prompt says to exclude certain items, do NOT count them as evidence. Score strictly based on what the prompt asks for." }],
+          },
+          {
+            type: "message",
             role: "user",
             content: [{ type: "input_text", text: triagePrompt }],
           },
@@ -262,10 +267,12 @@ Return ONLY valid JSON: {"score": 0, "reason": "explanation under 100 words"}`;
     let score = 0;
     let reason = "";
     try {
-      const jsonMatch = responseText.match(/\{[^}]+\}/);
+      const jsonMatch = responseText.match(/\{[\s\S]*\}/);
       if (jsonMatch) {
         const parsed = JSON.parse(jsonMatch[0]);
-        score = Math.max(0, Math.min(100, parseInt(parsed.score, 10) || 0));
+        let rawScore = parseFloat(parsed.score) || 0;
+        if (rawScore > 0 && rawScore <= 1) rawScore = Math.round(rawScore * 100);
+        score = Math.max(0, Math.min(100, Math.round(rawScore)));
         reason = parsed.reason || "";
       }
     } catch (e) {
