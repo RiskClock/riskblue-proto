@@ -2454,6 +2454,7 @@ export function AnalysisSection({ requestId, files, projectId, sourceType }: Ana
                         const val = countForCell(file.id, prompt.awp_class_name);
                         const className = prompt.awp_class_name;
                         const isColDisabled = disabledColumns.has(className);
+                        const disabledCls = isColDisabled ? ' opacity-30 pointer-events-none' : '';
 
                         // Helper: look up triage background for pass-2 cells
                         const triageForBg = triageResults.get(`${file.id}_${className}`);
