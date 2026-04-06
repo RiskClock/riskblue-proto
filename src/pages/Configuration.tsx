@@ -210,7 +210,7 @@ export default function Configuration() {
     setResolvingPrompt(awpName);
     try {
       const { data, error } = await supabase.functions.invoke("resolve-drive-doc", {
-        body: { fileUrl: url },
+        body: { fileUrl: url, exportContent: true },
       });
       if (error) throw error;
       if (data?.error) throw new Error(data.error);
@@ -223,6 +223,8 @@ export default function Configuration() {
           drive_file_url: url,
           drive_file_modified_at: data.modifiedTime,
           is_stale: false,
+          prompt_content: data.content || null,
+          content_updated_at: new Date().toISOString(),
         } as any).eq("id", existing.id);
       } else {
         await supabase.from("awp_class_prompts").insert({
@@ -232,6 +234,8 @@ export default function Configuration() {
           drive_file_name: data.fileName,
           drive_file_url: url,
           drive_file_modified_at: data.modifiedTime,
+          prompt_content: data.content || null,
+          content_updated_at: new Date().toISOString(),
         } as any);
       }
 
@@ -256,7 +260,7 @@ export default function Configuration() {
     setPullingLatest(prompt.awp_class_name);
     try {
       const { data, error } = await supabase.functions.invoke("resolve-drive-doc", {
-        body: { fileUrl: prompt.drive_file_id },
+        body: { fileUrl: prompt.drive_file_id, exportContent: true },
       });
       if (error) throw error;
       if (data?.error) throw new Error(data.error);
@@ -266,6 +270,7 @@ export default function Configuration() {
         drive_file_name: data.fileName,
         is_stale: false,
         content_updated_at: new Date().toISOString(),
+        prompt_content: data.content || null,
       } as any).eq("id", prompt.id);
 
       toast({ title: "Prompt updated", description: `Latest metadata pulled for "${data.fileName}"` });
@@ -284,7 +289,7 @@ export default function Configuration() {
     setResolvingTriagePrompt(awpName);
     try {
       const { data, error } = await supabase.functions.invoke("resolve-drive-doc", {
-        body: { fileUrl: url },
+        body: { fileUrl: url, exportContent: true },
       });
       if (error) throw error;
       if (data?.error) throw new Error(data.error);
@@ -297,6 +302,8 @@ export default function Configuration() {
           triage_drive_file_url: url,
           triage_drive_file_modified_at: data.modifiedTime,
           triage_is_stale: false,
+          triage_prompt_content: data.content || null,
+          triage_content_updated_at: new Date().toISOString(),
         } as any).eq("id", existing.id);
       } else {
         await supabase.from("awp_class_prompts").insert({
@@ -306,6 +313,8 @@ export default function Configuration() {
           triage_drive_file_name: data.fileName,
           triage_drive_file_url: url,
           triage_drive_file_modified_at: data.modifiedTime,
+          triage_prompt_content: data.content || null,
+          triage_content_updated_at: new Date().toISOString(),
         } as any);
       }
 
@@ -330,7 +339,7 @@ export default function Configuration() {
     setPullingTriageLatest(prompt.awp_class_name);
     try {
       const { data, error } = await supabase.functions.invoke("resolve-drive-doc", {
-        body: { fileUrl: prompt.triage_drive_file_id },
+        body: { fileUrl: prompt.triage_drive_file_id, exportContent: true },
       });
       if (error) throw error;
       if (data?.error) throw new Error(data.error);
@@ -340,6 +349,7 @@ export default function Configuration() {
         triage_drive_file_name: data.fileName,
         triage_is_stale: false,
         triage_content_updated_at: new Date().toISOString(),
+        triage_prompt_content: data.content || null,
       } as any).eq("id", prompt.id);
 
       toast({ title: "Triage prompt updated", description: `Latest metadata pulled for "${data.fileName}"` });
