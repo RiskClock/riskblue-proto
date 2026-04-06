@@ -40,6 +40,7 @@ import {
   Copy,
   Check,
   Search,
+  FileSearch,
 } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
 import * as pdfjsLib from "pdfjs-dist";
