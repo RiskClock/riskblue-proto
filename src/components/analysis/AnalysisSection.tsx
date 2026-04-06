@@ -40,6 +40,7 @@ import {
   Copy,
   Check,
 } from "lucide-react";
+import { Checkbox } from "@/components/ui/checkbox";
 import * as pdfjsLib from "pdfjs-dist";
 
 // Configure PDF.js worker (idempotent — safe to call multiple times)
@@ -1262,6 +1263,9 @@ export function AnalysisSection({ requestId, files, projectId, sourceType }: Ana
   const [previewFile, setPreviewFile] = useState<AnalysisFile | null>(null);
   const [extractedTextFile, setExtractedTextFile] = useState<AnalysisFile | null>(null);
 
+  // ---- Column enable/disable state ----
+  const [disabledColumns, setDisabledColumns] = useState<Set<string>>(new Set());
+
   // ---- Queries ----
   const { data: prompts, isLoading: promptsLoading } = useQuery({
     queryKey: ["awp-prompts-linked"],
@@ -1364,7 +1368,7 @@ export function AnalysisSection({ requestId, files, projectId, sourceType }: Ana
     queryFn: async () => {
       const { data } = await supabase
         .from("analysis_requests")
-        .select("summary_data, triage_tokens_used, triage_model, analyze_model")
+        .select("summary_data, triage_tokens_used, triage_model, analyze_model, disabled_awp_classes")
         .eq("id", requestId)
         .single();
       return data;
@@ -1377,6 +1381,10 @@ export function AnalysisSection({ requestId, files, projectId, sourceType }: Ana
     if (requestMeta.triage_model) setTriageModel(requestMeta.triage_model as string);
     if (requestMeta.analyze_model) setAnalyzeModel(requestMeta.analyze_model as string);
     if (requestMeta.triage_tokens_used) setTriageTokens(requestMeta.triage_tokens_used as number);
+    const disabled = (requestMeta as any).disabled_awp_classes as string[] | null;
+    if (disabled && disabled.length > 0) {
+      setDisabledColumns(new Set(disabled));
+    }
   }, [requestMeta]);
 
   // Load extracted file IDs on mount so "Processed" badges appear immediately
@@ -1708,8 +1716,26 @@ export function AnalysisSection({ requestId, files, projectId, sourceType }: Ana
     }
   };
 
+  const toggleColumnDisabled = async (awpClassName: string) => {
+    setDisabledColumns((prev) => {
+      const next = new Set(prev);
+      if (next.has(awpClassName)) {
+        next.delete(awpClassName);
+      } else {
+        next.add(awpClassName);
+      }
+      // Persist to DB
+      supabase
+        .from("analysis_requests")
+        .update({ disabled_awp_classes: [...next] } as any)
+        .eq("id", requestId)
+        .then();
+      return next;
+    });
+  };
+
   const handleAnalyzeAll = () => {
-    sortedPrompts.forEach((p) => handleAnalyze(p));
+    sortedPrompts.filter((p) => !disabledColumns.has(p.awp_class_name)).forEach((p) => handleAnalyze(p));
   };
 
   // ---- Triage All with concurrency guard ----
@@ -1963,7 +1989,8 @@ export function AnalysisSection({ requestId, files, projectId, sourceType }: Ana
 
     // Build score queue: only for processed files
     const scoreQueue: Array<{ file: AnalysisFile; prompt: AWPPrompt; action: "extract" | "triage" }> = [];
-    for (const prompt of sortedPrompts) {
+    const enabledPrompts = sortedPrompts.filter((p) => !disabledColumns.has(p.awp_class_name));
+    for (const prompt of enabledPrompts) {
       for (const file of processedFiles) {
         scoreQueue.push({ file, prompt, action: "triage" });
       }
@@ -2303,29 +2330,39 @@ export function AnalysisSection({ requestId, files, projectId, sourceType }: Ana
                         Files ({copiedFiles.length} files | {formatBytes(totalSizeBytes)} | {sourceLabel})
                       </span>
                     </th>
-                     {sortedPrompts.map((prompt) => (
-                      <th key={prompt.id} className="w-14 px-2 py-2 text-center font-medium text-muted-foreground">
-                        <Tooltip>
-                          <TooltipTrigger asChild>
-                            {prompt.drive_file_url ? (
-                              <a
-                                href={prompt.drive_file_url}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="font-mono text-xs text-primary underline underline-offset-2 hover:text-primary/80"
-                              >
-                                {getPrefix(prompt.awp_class_name)}
-                              </a>
-                            ) : (
-                              <span className="cursor-default font-mono text-xs">
-                                {getPrefix(prompt.awp_class_name)}
-                              </span>
-                            )}
-                          </TooltipTrigger>
-                          <TooltipContent>{prompt.awp_class_name}</TooltipContent>
-                        </Tooltip>
+                     {sortedPrompts.map((prompt) => {
+                      const isDisabled = disabledColumns.has(prompt.awp_class_name);
+                      return (
+                      <th key={prompt.id} className={`w-14 px-2 py-2 text-center font-medium text-muted-foreground ${isDisabled ? 'opacity-30' : ''}`}>
+                        <div className="flex flex-col items-center gap-1">
+                          <Checkbox
+                            checked={!isDisabled}
+                            onCheckedChange={() => toggleColumnDisabled(prompt.awp_class_name)}
+                            className="h-3.5 w-3.5"
+                          />
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              {prompt.drive_file_url ? (
+                                <a
+                                  href={prompt.drive_file_url}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="font-mono text-xs text-primary underline underline-offset-2 hover:text-primary/80"
+                                >
+                                  {getPrefix(prompt.awp_class_name)}
+                                </a>
+                              ) : (
+                                <span className="cursor-default font-mono text-xs">
+                                  {getPrefix(prompt.awp_class_name)}
+                                </span>
+                              )}
+                            </TooltipTrigger>
+                            <TooltipContent>{prompt.awp_class_name}</TooltipContent>
+                          </Tooltip>
+                        </div>
                       </th>
-                    ))}
+                      );
+                    })}
                   </tr>
 
                   {/* Button sub-row: per-column analyze/stop controls */}
@@ -2341,9 +2378,10 @@ export function AnalysisSection({ requestId, files, projectId, sourceType }: Ana
                        const className = prompt.awp_class_name;
                        const isAnalyzing = analyzingClasses.has(className);
                        const hasResults = (results?.some((r) => r.awp_class_name === className)) || false;
+                       const isDisabled = disabledColumns.has(className);
 
                        return (
-                         <td key={prompt.id} className="w-14 px-2 py-1.5 text-center">
+                         <td key={prompt.id} className={`w-14 px-2 py-1.5 text-center ${isDisabled ? 'opacity-30' : ''}`}>
                            {isAnalyzing ? (
                              <div className="flex items-center justify-center gap-1">
                                <Loader2 className="w-3 h-3 animate-spin text-muted-foreground" />
@@ -2363,7 +2401,7 @@ export function AnalysisSection({ requestId, files, projectId, sourceType }: Ana
                                    size="icon"
                                    variant="ghost"
                                    className="h-6 w-6"
-                                   disabled={copiedFiles.length === 0}
+                                   disabled={copiedFiles.length === 0 || isDisabled}
                                    onClick={() => handleAnalyze(prompt)}
                                  >
                                    {hasResults ? (
@@ -2374,7 +2412,7 @@ export function AnalysisSection({ requestId, files, projectId, sourceType }: Ana
                                  </Button>
                                </TooltipTrigger>
                                <TooltipContent>
-                                 {hasResults ? `Re-analyze ${className}` : `Analyze ${className}`}
+                                 {isDisabled ? `${className} is disabled` : hasResults ? `Re-analyze ${className}` : `Analyze ${className}`}
                                </TooltipContent>
                              </Tooltip>
                            )}
@@ -2415,6 +2453,8 @@ export function AnalysisSection({ requestId, files, projectId, sourceType }: Ana
                        {sortedPrompts.map((prompt) => {
                         const val = countForCell(file.id, prompt.awp_class_name);
                         const className = prompt.awp_class_name;
+                        const isColDisabled = disabledColumns.has(className);
+                        const disabledCls = isColDisabled ? ' opacity-30 pointer-events-none' : '';
 
                         // Helper: look up triage background for pass-2 cells
                         const triageForBg = triageResults.get(`${file.id}_${className}`);
@@ -2424,7 +2464,7 @@ export function AnalysisSection({ requestId, files, projectId, sourceType }: Ana
 
                         if (val === "loading") {
                           return (
-                            <td key={prompt.id} className="w-14 px-2 py-2 text-center" style={triageBgStyle}>
+                            <td key={prompt.id} className={`w-14 px-2 py-2 text-center${disabledCls}`} style={triageBgStyle}>
                               <Loader2 className="w-3 h-3 animate-spin text-muted-foreground mx-auto" />
                             </td>
                           );
@@ -2432,7 +2472,7 @@ export function AnalysisSection({ requestId, files, projectId, sourceType }: Ana
 
                         if (val === "failed") {
                           return (
-                            <td key={prompt.id} className="w-14 px-2 py-2 text-center" style={triageBgStyle}>
+                            <td key={prompt.id} className={`w-14 px-2 py-2 text-center${disabledCls}`} style={triageBgStyle}>
                               <Tooltip>
                                 <TooltipTrigger asChild>
                                   <span>
@@ -2451,7 +2491,7 @@ export function AnalysisSection({ requestId, files, projectId, sourceType }: Ana
                             (r) => r.file_id === file.id && r.awp_class_name === className && r.status === "complete" && r.result_text
                           );
                           return (
-                            <td key={prompt.id} className="w-14 px-2 py-2 text-center" style={triageBgStyle}>
+                            <td key={prompt.id} className={`w-14 px-2 py-2 text-center${disabledCls}`} style={triageBgStyle}>
                               <button
                                 className="text-xs font-semibold text-primary hover:underline"
                                 onClick={() => {
@@ -2477,7 +2517,7 @@ export function AnalysisSection({ requestId, files, projectId, sourceType }: Ana
                             (r) => r.file_id === file.id && r.awp_class_name === className && r.status === "complete" && r.result_text
                           );
                           return (
-                            <td key={prompt.id} className="w-14 px-2 py-2 text-center" style={triageBgStyle}>
+                            <td key={prompt.id} className={`w-14 px-2 py-2 text-center${disabledCls}`} style={triageBgStyle}>
                               {result0?.result_text ? (
                                 <button
                                   className="text-xs text-muted-foreground hover:text-foreground hover:underline cursor-pointer"
@@ -2506,7 +2546,7 @@ export function AnalysisSection({ requestId, files, projectId, sourceType }: Ana
 
                         if (triage?.status === "processing") {
                           return (
-                            <td key={prompt.id} className="w-14 px-2 py-2 text-center">
+                            <td key={prompt.id} className={`w-14 px-2 py-2 text-center${disabledCls}`}>
                               <Loader2 className="w-3 h-3 animate-spin text-muted-foreground mx-auto" />
                             </td>
                           );
@@ -2519,7 +2559,7 @@ export function AnalysisSection({ requestId, files, projectId, sourceType }: Ana
 
                           // Determine visual style based on override state
                           let cellStyle: React.CSSProperties = {};
-                          let cellClass = "w-14 px-2 py-2 text-center cursor-pointer transition-colors";
+                          let cellClass = `w-14 px-2 py-2 text-center cursor-pointer transition-colors${disabledCls}`;
                           let overrideLabel = "";
 
                           // Always show triage score background on the cell
@@ -2566,7 +2606,7 @@ export function AnalysisSection({ requestId, files, projectId, sourceType }: Ana
 
                         if (triage?.status === "failed") {
                           return (
-                            <td key={prompt.id} className="w-14 px-2 py-2 text-center">
+                            <td key={prompt.id} className={`w-14 px-2 py-2 text-center${disabledCls}`}>
                               <Tooltip>
                                 <TooltipTrigger asChild>
                                   <span>
