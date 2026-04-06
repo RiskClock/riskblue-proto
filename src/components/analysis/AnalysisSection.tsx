@@ -2546,7 +2546,7 @@ export function AnalysisSection({ requestId, files, projectId, sourceType }: Ana
 
                         if (triage?.status === "processing") {
                           return (
-                            <td key={prompt.id} className="w-14 px-2 py-2 text-center">
+                            <td key={prompt.id} className={`w-14 px-2 py-2 text-center${disabledCls}`}>
                               <Loader2 className="w-3 h-3 animate-spin text-muted-foreground mx-auto" />
                             </td>
                           );
@@ -2606,7 +2606,7 @@ export function AnalysisSection({ requestId, files, projectId, sourceType }: Ana
 
                         if (triage?.status === "failed") {
                           return (
-                            <td key={prompt.id} className="w-14 px-2 py-2 text-center">
+                            <td key={prompt.id} className={`w-14 px-2 py-2 text-center${disabledCls}`}>
                               <Tooltip>
                                 <TooltipTrigger asChild>
                                   <span>
