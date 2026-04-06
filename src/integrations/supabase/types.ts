@@ -364,8 +364,10 @@ export type Database = {
         Row: {
           awp_class_name: string
           category: string
+          condition_rule: Json | null
           content_updated_at: string | null
           created_at: string
+          detection_method: string
           drive_file_id: string | null
           drive_file_modified_at: string | null
           drive_file_name: string | null
@@ -385,8 +387,10 @@ export type Database = {
         Insert: {
           awp_class_name: string
           category: string
+          condition_rule?: Json | null
           content_updated_at?: string | null
           created_at?: string
+          detection_method?: string
           drive_file_id?: string | null
           drive_file_modified_at?: string | null
           drive_file_name?: string | null
@@ -406,8 +410,10 @@ export type Database = {
         Update: {
           awp_class_name?: string
           category?: string
+          condition_rule?: Json | null
           content_updated_at?: string | null
           created_at?: string
+          detection_method?: string
           drive_file_id?: string | null
           drive_file_modified_at?: string | null
           drive_file_name?: string | null
