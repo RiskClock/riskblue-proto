@@ -1795,26 +1795,33 @@ export function AnalysisSection({ requestId, files, projectId, sourceType }: Ana
           return next;
         });
 
-        const response = await fetch(
-          `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/triage-drawings`,
-          {
-            method: "POST",
-            headers: {
-              Authorization: `Bearer ${token}`,
-              "Content-Type": "application/json",
-            },
-            body: JSON.stringify({
-              analysisRequestId: requestId,
-              fileId: item.file.id,
-              awpClassName: prompt.awp_class_name,
-              assetType: prompt.category,
-              drawingName: item.file.name,
-              promptContent: prompt.triage_prompt_content || prompt.prompt_content || null,
-              action: "triage",
-              model: triageModel,
-            }),
-          }
-        );
+        const triageBody = JSON.stringify({
+          analysisRequestId: requestId,
+          fileId: item.file.id,
+          awpClassName: prompt.awp_class_name,
+          assetType: prompt.category,
+          drawingName: item.file.name,
+          promptContent: prompt.triage_prompt_content || prompt.prompt_content || null,
+          action: "triage",
+          model: triageModel,
+        });
+        let response: Response | null = null;
+        for (let attempt = 0; attempt < 3; attempt++) {
+          response = await fetch(
+            `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/triage-drawings`,
+            {
+              method: "POST",
+              headers: {
+                Authorization: `Bearer ${token}`,
+                "Content-Type": "application/json",
+              },
+              body: triageBody,
+            }
+          );
+          if (response.status !== 503) break;
+          console.warn(`[triage] 503 on attempt ${attempt + 1} for ${item.file.name}/${prompt.awp_class_name}, retrying...`);
+          await new Promise((r) => setTimeout(r, 1000 * (attempt + 1)));
+        }
 
         if (response.ok) {
           const data = await response.json();
