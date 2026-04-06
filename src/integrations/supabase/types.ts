@@ -373,6 +373,13 @@ export type Database = {
           id: string
           is_stale: boolean
           prompt_content: string | null
+          triage_content_updated_at: string | null
+          triage_drive_file_id: string | null
+          triage_drive_file_modified_at: string | null
+          triage_drive_file_name: string | null
+          triage_drive_file_url: string | null
+          triage_is_stale: boolean
+          triage_prompt_content: string | null
           updated_at: string
         }
         Insert: {
@@ -387,6 +394,13 @@ export type Database = {
           id?: string
           is_stale?: boolean
           prompt_content?: string | null
+          triage_content_updated_at?: string | null
+          triage_drive_file_id?: string | null
+          triage_drive_file_modified_at?: string | null
+          triage_drive_file_name?: string | null
+          triage_drive_file_url?: string | null
+          triage_is_stale?: boolean
+          triage_prompt_content?: string | null
           updated_at?: string
         }
         Update: {
@@ -401,6 +415,13 @@ export type Database = {
           id?: string
           is_stale?: boolean
           prompt_content?: string | null
+          triage_content_updated_at?: string | null
+          triage_drive_file_id?: string | null
+          triage_drive_file_modified_at?: string | null
+          triage_drive_file_name?: string | null
+          triage_drive_file_url?: string | null
+          triage_is_stale?: boolean
+          triage_prompt_content?: string | null
           updated_at?: string
         }
         Relationships: []
