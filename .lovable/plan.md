@@ -1,46 +1,64 @@
 
 
-# Skip Processed Files, Remove Instance Count, Fix Tooltip, Investigate Score/Instance Disconnect
+# Separate "Extract Context" Step from Triage
 
-## 1. Skip already-extracted files during triage
+## Summary
 
-**File: `src/components/analysis/AnalysisSection.tsx`** (lines 1775-1824)
+Decouple file text extraction from triage scoring into its own button and workflow. Add an "Extract Context" button before the triage model selector. Triage only operates on files that have the "Processed" badge. Extracted status is persisted in DB and loaded on page mount.
 
-In `handleTriageAll`, the current code clears ALL cached `extracted_text` and re-extracts every file. Instead:
+## Changes
 
-- Do NOT clear `extracted_text` from DB (remove line 1793)
-- Do NOT clear `extractedFileIds` or `extractedTexts` state (keep existing cache)
-- Before building the extraction queue, check which files already have `extracted_text` cached. Query: `supabase.from("analysis_request_files").select("id, extracted_text").eq("analysis_request_id", requestId).not("extracted_text", "is", null)`
-- Only queue files for extraction that are NOT in the already-extracted set
-- Pre-populate `extractedFileIds` with the already-extracted file IDs so badges show immediately
-- If all files are already extracted, skip Phase 1 entirely and go straight to Phase 2 scoring
+### 1. Load extracted file status on mount
 
-## 2. Remove instance count from triage prompt
+**File: `src/components/analysis/AnalysisSection.tsx`**
 
-**File: `supabase/functions/triage-drawings/index.ts`** (lines 207-210)
+Add a `useEffect` that queries `analysis_request_files` for files with non-null `extracted_text` on component mount, and populates `extractedFileIds` so "Processed" badges appear immediately on page load.
 
-- Remove the `"instances"` guidance line (line 207)
-- Change JSON format to: `{"score": 0, "reason": "explanation under 100 words"}`
-- Remove `instances` parsing (line 269) — set `instances = null` always
-- Remove `instances` from the DB update (line 281) — or just leave it as null
+### 2. Add "Extract Context" button and state
 
-## 3. Multi-line tooltip for triage reason
+**File: `src/components/analysis/AnalysisSection.tsx`**
 
-**File: `src/components/analysis/AnalysisSection.tsx`** (lines 2402-2404)
+Add state: `extractRunning`, `extractStopping`, `extractProgress`.
 
-The tooltip content is a single line. Wrap the reason text so long reasons display readably:
+Add a new `handleExtractAll` function that:
+- Clears all `extracted_text` in DB for this request (`UPDATE analysis_request_files SET extracted_text = NULL`)
+- Clears `extractedFileIds` and `extractedTexts` state
+- Queues ALL `copiedFiles` for extraction using the existing concurrency scheduler
+- Shows progress: "Extracting: N/M files"
+- On completion, repopulates `extractedFileIds`
 
-- Change `<TooltipContent>` to include `className="max-w-xs whitespace-pre-wrap"`
-- Format the content as separate lines: score on first line, reason on second line, override on third
+Add a "Stop" button for extraction (similar to triage stop).
 
-## 4. Score/Instance disconnect investigation
+### 3. UI layout update
 
-The disconnect (1 instance estimated but 0% score) happens because the model returns `instances` and `score` independently — it can detect a term that triggers an instance count but then correctly score 0% because of EXCLUDE rules or irrelevance. Since we're removing instance estimation from the triage prompt (change #2), this issue is resolved. The `instances` column remains in DB for future use but won't be populated during triage.
+**File: `src/components/analysis/AnalysisSection.tsx`** (toolbar area, lines 2098-2192)
+
+New sequence:
+```
+[Extract Context button] | Model: [dropdown] [Triage button] | Model: [dropdown] [Analyze button]
+```
+
+- "Extract Context" button with a `Play` icon, disabled when extraction or triage or analyze is running
+- When extracting, show Stop button and progress text
+- Separator `|` between Extract and Triage groups
+
+### 4. Modify triage to skip extraction
+
+**File: `src/components/analysis/AnalysisSection.tsx`** (handleTriageAll, lines 1836-1926)
+
+Remove Phase 1 (extraction) from `handleTriageAll` entirely:
+- Remove the `filesToExtract` logic, the Phase 1 scheduler call, and the extract queue
+- Only build the score queue, but filter to files that have `extractedFileIds` (processed badge)
+- If no files are processed, show a toast: "No processed files. Run Extract Context first."
+- Go straight to scoring phase
+
+### 5. Separate extraction scheduler
+
+Reuse the existing `executeTriageItem` for `action: "extract"` items, but the new `handleExtractAll` builds its own queue and uses the same `startTriageScheduler` / concurrency pattern. Since extraction and triage share the same inflight counter and timer, ensure they don't conflict by disabling Triage while extracting.
 
 ## Files Changed
 
 | File | Change |
 |---|---|
-| `src/components/analysis/AnalysisSection.tsx` | Skip extraction for processed files; multi-line tooltip |
-| `supabase/functions/triage-drawings/index.ts` | Remove instance count from prompt and parsing |
+| `src/components/analysis/AnalysisSection.tsx` | Add Extract Context button, load processed status on mount, remove extraction from triage, filter triage to processed files only |
 
