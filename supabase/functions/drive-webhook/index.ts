@@ -38,7 +38,7 @@ serve(async (req) => {
       return new Response("Unknown channel", { status: 404 });
     }
 
-    // Flag the corresponding prompt as stale
+    // Flag the corresponding default prompt as stale
     const { error: updateError } = await adminSupabase
       .from("awp_class_prompts")
       .update({ is_stale: true })
@@ -47,7 +47,19 @@ serve(async (req) => {
     if (updateError) {
       console.error("Failed to flag prompt as stale:", updateError);
     } else {
-      console.log(`Flagged prompts for file ${channel.drive_file_id} as stale`);
+      console.log(`Flagged default prompts for file ${channel.drive_file_id} as stale`);
+    }
+
+    // Also flag triage prompts as stale if the file matches
+    const { error: triageUpdateError } = await adminSupabase
+      .from("awp_class_prompts")
+      .update({ triage_is_stale: true })
+      .eq("triage_drive_file_id", channel.drive_file_id);
+
+    if (triageUpdateError) {
+      console.error("Failed to flag triage prompt as stale:", triageUpdateError);
+    } else {
+      console.log(`Flagged triage prompts for file ${channel.drive_file_id} as stale`);
     }
 
     return new Response("OK", { status: 200 });

@@ -391,11 +391,9 @@ export default function Configuration() {
               <AlertTriangle className="w-3 h-3 mr-1" />Updated
             </Badge>
           )}
-          {prompt.is_stale && (
-            <Button variant="outline" size="sm" className="h-6 text-xs" onClick={() => handlePullLatest(prompt)} disabled={isPulling}>
-              {isPulling ? <Loader2 className="w-3 h-3 animate-spin" /> : "Pull Latest"}
-            </Button>
-          )}
+          <Button variant="outline" size="sm" className="h-6 text-xs" onClick={() => handlePullLatest(prompt)} disabled={isPulling}>
+            {isPulling ? <Loader2 className="w-3 h-3 animate-spin" /> : "Pull Latest"}
+          </Button>
           <Button variant="ghost" size="sm" className="h-6 text-xs" onClick={() => setLinkingPrompt(awp.name)}>Change</Button>
         </div>
       );
@@ -432,11 +430,9 @@ export default function Configuration() {
               <AlertTriangle className="w-3 h-3 mr-1" />Updated
             </Badge>
           )}
-          {prompt.triage_is_stale && (
-            <Button variant="outline" size="sm" className="h-6 text-xs" onClick={() => handlePullTriageLatest(prompt)} disabled={isPulling}>
-              {isPulling ? <Loader2 className="w-3 h-3 animate-spin" /> : "Pull Latest"}
-            </Button>
-          )}
+          <Button variant="outline" size="sm" className="h-6 text-xs" onClick={() => handlePullTriageLatest(prompt)} disabled={isPulling}>
+            {isPulling ? <Loader2 className="w-3 h-3 animate-spin" /> : "Pull Latest"}
+          </Button>
           <Button variant="ghost" size="sm" className="h-6 text-xs" onClick={() => setLinkingTriagePrompt(awp.name)}>Change</Button>
         </div>
       );
