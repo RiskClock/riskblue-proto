@@ -1481,15 +1481,41 @@ export function AnalysisSection({ requestId, files, projectId, sourceType }: Ana
     [awpOrderData]
   );
 
-  // Sorted prompts to match Configuration page order
+  // Helper: check if an AWP class should appear in the analysis queue
+  const isDrawingDetectable = useCallback((prompt: AWPPrompt): boolean => {
+    if (prompt.detection_method === 'always') return false;
+    if (prompt.detection_method === 'conditional') {
+      const rule = prompt.condition_rule;
+      if (!rule) return false;
+      const field = rule.field as string;
+      if (rule.contains) {
+        // Check if project's structural_types array contains the value
+        const structuralTypes = projectInfo?.project_data?.structural_types as string[] | undefined;
+        return Array.isArray(structuralTypes) && structuralTypes.some(
+          (t: string) => t.toLowerCase().includes(rule.contains.toLowerCase())
+        );
+      }
+      if (rule.in) {
+        // Check if project_type is in the allowed list
+        const projectType = field === 'project_type' ? projectInfo?.project_type : null;
+        return projectType ? (rule.in as string[]).includes(projectType.toLowerCase()) : false;
+      }
+      return false;
+    }
+    return true; // 'drawing' detection method
+  }, [projectInfo]);
+
+  // Sorted prompts to match Configuration page order — filtered to drawing-detectable only
   const sortedPrompts = useMemo(() => {
     if (!prompts) return [];
-    return [...prompts].sort((a, b) => {
-      const oa = globalOrderMap[a.awp_class_name] ?? 9999;
-      const ob = globalOrderMap[b.awp_class_name] ?? 9999;
-      return oa - ob;
-    });
-  }, [prompts, globalOrderMap]);
+    return [...prompts]
+      .filter(p => isDrawingDetectable(p))
+      .sort((a, b) => {
+        const oa = globalOrderMap[a.awp_class_name] ?? 9999;
+        const ob = globalOrderMap[b.awp_class_name] ?? 9999;
+        return oa - ob;
+      });
+  }, [prompts, globalOrderMap, isDrawingDetectable]);
 
   // Helper to get the best prefix for a class name
   const getPrefix = (className: string) =>
