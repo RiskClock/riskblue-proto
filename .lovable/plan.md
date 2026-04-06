@@ -1,32 +1,38 @@
 
 
-# Fix: Triage Results Flash When Last Item Finishes
+# Fix: Only Show Triage Spinner on the Active Column
 
 ## Problem
 
-When the triage scheduler completes, the callback runs `setTriageRunning(false)` **before** `queryClient.invalidateQueries(...)`. This unblocks the hydration effect (line 1336: `if (!triageData || triageRunning) return`), which immediately fires with stale cached data — producing an empty or outdated map. Then the invalidation triggers a refetch, and fresh data hydrates again. The result is a visible flash where all cells go white then repopulate.
-
-The stop handler already has the correct order (invalidate first, then set running false). The scheduler completion callbacks do not.
+`triageRunning` is a single boolean. When triaging a single class (e.g., Mechanical Room), all non-disabled column headers show spinners because line 2517 checks `triageRunning && !isDisabled`.
 
 ## Fix
 
 **File: `src/components/analysis/AnalysisSection.tsx`**
 
-In every `startTriageScheduler` completion callback (there are two — one in `handleTriageClass` around line 2086 and one in `handleTriageAll` around line 2142), swap the order so `invalidateQueries` runs first:
+1. Add state to track which class names are actively being triaged:
+   ```typescript
+   const [triagingClasses, setTriagingClasses] = useState<Set<string>>(new Set());
+   ```
 
-```typescript
-startTriageScheduler(() => {
-  queryClient.invalidateQueries({ queryKey: ["triage-results", requestId] });
-  setTriageRunning(false);
-  setTriagePhase(null);
-});
-```
+2. In `handleTriageClass`, add the specific class name to `triagingClasses` when starting, remove it on completion.
 
-This matches the pattern already used in `handleStopTriage` (line 2161-2163) and ensures fresh data is queued for fetch before the hydration guard is lowered.
+3. In `handleTriageAll`, add all queued class names to `triagingClasses`, remove each as it completes (or clear all on finish).
+
+4. Update the header row spinner condition (line 2517) from:
+   ```typescript
+   triageRunning && !isDisabled
+   ```
+   to:
+   ```typescript
+   triagingClasses.has(className) && !isDisabled
+   ```
+
+5. Keep the existing `triageRunning` boolean for disabling other buttons (Extract, Analyze, model dropdown) — it still serves as a global "any triage in progress" flag.
 
 ## Files Changed
 
 | File | Change |
 |---|---|
-| `src/components/analysis/AnalysisSection.tsx` | Swap order in 2 scheduler completion callbacks: invalidate before setting triageRunning to false |
+| `src/components/analysis/AnalysisSection.tsx` | Add `triagingClasses` state; populate it in triage handlers; use it for per-column spinner rendering |
 
