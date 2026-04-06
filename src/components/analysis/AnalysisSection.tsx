@@ -1999,6 +1999,8 @@ export function AnalysisSection({ requestId, files, projectId, sourceType }: Ana
     const pollId = setInterval(() => {
       if (inFlightCountRef.current <= 0) {
         clearInterval(pollId);
+        // Invalidate FIRST so fresh data is fetched before hydration fires
+        queryClient.invalidateQueries({ queryKey: ["triage-results", requestId] });
         setTriageRunning(false);
         setTriagePhase(null);
         setTriageStopping(false);
