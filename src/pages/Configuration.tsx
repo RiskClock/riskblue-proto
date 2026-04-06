@@ -479,7 +479,7 @@ export default function Configuration() {
                   <TableHead className="w-[180px]">AWP Class</TableHead>
                   <TableHead className="w-[180px]">Default Mitigation Controls</TableHead>
                   <TableHead className="w-[350px]">Triaging Prompt</TableHead>
-                  <TableHead className="w-[350px]">Default Prompt</TableHead>
+                  <TableHead className="w-[350px]">Full Prompt</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
