@@ -1863,6 +1863,13 @@ export function AnalysisSection({ requestId, files, projectId, sourceType }: Ana
       }));
 
       if (analyzeResponse.ok) {
+        const data = await analyzeResponse.json();
+        // Track tokens
+        if (data.usage?.total_tokens) {
+          analyzeTokensRef.current += data.usage.total_tokens;
+          setAnalyzeTokens(analyzeTokensRef.current);
+          supabase.from("analysis_requests").update({ analyze_tokens_used: analyzeTokensRef.current } as any).eq("id", requestId);
+        }
         await queryClient.invalidateQueries({ queryKey: ["analysis-results", requestId] });
       } else {
         const err = await analyzeResponse.json().catch(() => ({}));
