@@ -2009,7 +2009,7 @@ export function AnalysisSection({ requestId, files, projectId, sourceType }: Ana
     fileId: string;
     openaiFileId: string;
     awpClassName: string;
-    promptContent: string;
+    prompt: AWPPrompt;
     fileName: string;
   }>>([]);
   const analyzeV2TimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
