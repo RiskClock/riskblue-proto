@@ -620,23 +620,41 @@ function InstanceDetailModal({
     ctx.drawImage(pageImage, 0, 0, w, h);
 
     if (rawCoords && pdfViewport && offscreenSize) {
-      // Convert PDF user-space (pts, origin bottom-left) → offscreen canvas pixels.
-      console.log(`[BBox] drawing: rawCoords=`, rawCoords);
-      const viewportRect = pdfViewport.convertToViewportRectangle([
-        rawCoords.x1, rawCoords.y1, rawCoords.x2, rawCoords.y2,
-      ]);
-      const [vx1, vy1, vx2, vy2] = viewportRect;
-      // Normalize to [0..1] using offscreen canvas size, then map to display canvas
-      const nx1 = Math.min(vx1, vx2) / offscreenSize.w;
-      const ny1 = Math.min(vy1, vy2) / offscreenSize.h;
-      const nx2 = Math.max(vx1, vx2) / offscreenSize.w;
-      const ny2 = Math.max(vy1, vy2) / offscreenSize.h;
-      // Compute center and radius for circle overlay
-      const cx = ((nx1 + nx2) / 2) * w;
-      const cy = ((ny1 + ny2) / 2) * h;
-      const bw = (nx2 - nx1) * w;
-      const bh = (ny2 - ny1) * h;
-      const radius = Math.max(bw, bh) / 2 + 20; // add padding
+      const isAiMode = !!(window as any).__aiBBoxMode;
+      console.log(`[BBox] drawing: rawCoords=`, rawCoords, `isAiMode=`, isAiMode);
+
+      let cx: number, cy: number, radius: number;
+
+      if (isAiMode) {
+        // AI pixel coordinates — map directly to display canvas
+        // AI coords are in the same pixel space as offscreenSize (scale 4)
+        const ncx = ((rawCoords.x1 + rawCoords.x2) / 2) / offscreenSize.w;
+        const ncy = ((rawCoords.y1 + rawCoords.y2) / 2) / offscreenSize.h;
+        const nbw = Math.abs(rawCoords.x2 - rawCoords.x1) / offscreenSize.w;
+        const nbh = Math.abs(rawCoords.y2 - rawCoords.y1) / offscreenSize.h;
+        cx = ncx * w;
+        cy = ncy * h;
+        const bw = nbw * w;
+        const bh = nbh * h;
+        radius = Math.max(bw, bh) / 2 + 20;
+        radius = Math.max(radius, 15);
+      } else {
+        // PDF user-space (pts, origin bottom-left) → offscreen canvas pixels
+        const viewportRect = pdfViewport.convertToViewportRectangle([
+          rawCoords.x1, rawCoords.y1, rawCoords.x2, rawCoords.y2,
+        ]);
+        const [vx1, vy1, vx2, vy2] = viewportRect;
+        const nx1 = Math.min(vx1, vx2) / offscreenSize.w;
+        const ny1 = Math.min(vy1, vy2) / offscreenSize.h;
+        const nx2 = Math.max(vx1, vx2) / offscreenSize.w;
+        const ny2 = Math.max(vy1, vy2) / offscreenSize.h;
+        cx = ((nx1 + nx2) / 2) * w;
+        cy = ((ny1 + ny2) / 2) * h;
+        const bw = (nx2 - nx1) * w;
+        const bh = (ny2 - ny1) * h;
+        radius = Math.max(bw, bh) / 2 + 20;
+      }
+
       ctx.beginPath();
       ctx.arc(cx, cy, radius, 0, Math.PI * 2);
       ctx.fillStyle = "rgba(239, 68, 68, 0.12)";
