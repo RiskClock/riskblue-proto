@@ -661,7 +661,7 @@ function InstanceDetailModal({
       ctx.lineWidth = 2.5;
       ctx.stroke();
     }
-  }, [pageImage, baseDimensions, zoom, rawCoords, pdfViewport, offscreenSize]);
+  }, [pageImage, baseDimensions, zoom, rawCoords, pdfViewport, offscreenSize, isAiBBoxMode]);
 
   // Step 4: Auto fit-selection — fires once per modal open when all data is ready
   useEffect(() => {
