@@ -455,30 +455,31 @@ function InstanceDetailModal({
         const ab = await blob.arrayBuffer();
         if (cancelled) return;
 
-        // Determine the primary tag to search for — exact room code takes priority.
-        // We parse the AI result for any tag that exactly matches instance.id,
-        // then fall back to instance.id itself (which is the room code e.g. "SWC-B04").
-        const aiTags = resultText ? parseRoomTagsFromResult(resultText) : [];
-        const instanceTag = aiTags.find(
-          (t) => t.tag === instance.id
-        ) ?? aiTags.find(
-          (t) => t.tag.toUpperCase() === instance.id.toUpperCase()
-        ) ?? aiTags[0];
-
-        // Primary tag: use the exact tag string from AI result if available,
-        // otherwise fall back to instance.id (e.g. "SWC-B04").
-        const primaryTag = instanceTag?.tag ?? instance.id;
-        const hintPage = instanceTag?.pageNum;
+        // Build search candidates: parse all overlay rows from the AI result,
+        // find the row whose candidates include instance.id, then use all its
+        // candidates.  Fall back to instance.id if nothing matches.
+        const overlayRows = resultText ? parseOverlayCandidates(resultText) : [];
+        const matchingRow = overlayRows.find((r) =>
+          r.candidates.some((c) => c.toUpperCase() === instance.id.toUpperCase())
+        ) ?? overlayRows.find((r) =>
+          r.candidates.some((c) => c.toUpperCase().includes(instance.id.toUpperCase()))
+        );
+        const searchCandidates = matchingRow?.candidates ?? [instance.id];
+        const hintPage = matchingRow?.pageNum;
 
         console.log(`[BBox] opening: instance.id=${instance.id} instance.name=${instance.name}`);
-        console.log(`[BBox] primaryTag="${primaryTag}" hintPage=${hintPage}`);
-        console.log(`[BBox] aiTags from result=`, aiTags);
+        console.log(`[BBox] searchCandidates=`, searchCandidates, `hintPage=${hintPage}`);
 
         const pdf = await pdfjsLib.getDocument({ data: ab }).promise;
         if (cancelled) return;
 
-        // Deterministic bbox: exact match in PDF text layer — no substring/partial fallback
-        const textBBox = await findBBoxInTextLayer(pdf, primaryTag, hintPage);
+        // Try each candidate until one matches in the PDF text layer
+        let textBBox: PDFBBox | null = null;
+        for (const candidate of searchCandidates) {
+          textBBox = await findBBoxInTextLayer(pdf, candidate, hintPage);
+          if (textBBox) break;
+          if (cancelled) return;
+        }
         if (cancelled) return;
 
         console.log(`[BBox] text layer result=`, textBBox);
