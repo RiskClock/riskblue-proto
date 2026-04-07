@@ -1439,6 +1439,7 @@ export function AnalysisSection({ requestId, files, projectId, sourceType }: Ana
   const analyzeTokensRef = useRef(0);
   const [uploadingFileIds, setUploadingFileIds] = useState<Set<string>>(new Set());
   const [analyzeV2Running, setAnalyzeV2Running] = useState(false);
+  const analyzeRunSyncRef = useRef<"idle" | "starting" | "running" | "stopping">("idle");
   const [triagePhase, setTriagePhase] = useState<"extract" | "score" | null>(null);
   const [summaryGroupBy, setSummaryGroupBy] = useState<"awp" | "floor">("awp");
   const [triageProgress, setTriageProgress] = useState<{ done: number; total: number }>({ done: 0, total: 0 });
@@ -1629,15 +1630,37 @@ export function AnalysisSection({ requestId, files, projectId, sourceType }: Ana
   useEffect(() => {
     if (!requestMeta) return;
     const dbStatus = (requestMeta as any).status as string;
+
     if (!hydratedProcessing) {
       if (dbStatus === "processing") {
+        analyzeRunSyncRef.current = "running";
         setAnalyzeV2Running(true);
+      } else if (dbStatus === "complete") {
+        analyzeRunSyncRef.current = "idle";
       }
       setHydratedProcessing(true);
-    } else if (analyzeV2Running && dbStatus === "complete") {
-      // The analysis finished (possibly in another tab / after navigation)
-      setAnalyzeV2Running(false);
-      setAnalyzingClasses(new Set());
+      return;
+    }
+
+    if (dbStatus === "processing") {
+      analyzeRunSyncRef.current = "running";
+      if (!analyzeV2Running) {
+        setAnalyzeV2Running(true);
+      }
+      return;
+    }
+
+    if (dbStatus === "complete") {
+      if (analyzeRunSyncRef.current === "starting") {
+        return;
+      }
+
+      analyzeRunSyncRef.current = "idle";
+      if (analyzeV2Running) {
+        setAnalyzeV2Running(false);
+        setAnalyzingClasses(new Set());
+        setClassFileStatuses({});
+      }
     }
   }, [requestMeta, hydratedProcessing, analyzeV2Running]);
 
@@ -2081,6 +2104,7 @@ export function AnalysisSection({ requestId, files, projectId, sourceType }: Ana
 
     // Mark all enabled classes as analyzing
     const allClassNames = enabledPrompts.map((p) => p.awp_class_name);
+    analyzeRunSyncRef.current = "starting";
     setAnalyzingClasses(new Set(allClassNames));
     setAnalyzeV2Running(true);
     setClassFileStatuses({});
@@ -2089,6 +2113,7 @@ export function AnalysisSection({ requestId, files, projectId, sourceType }: Ana
 
     // Mark request as processing
     await supabase.from("analysis_requests").update({ status: "processing" }).eq("id", requestId);
+    await queryClient.invalidateQueries({ queryKey: ["analysis-request-meta", requestId] });
 
     // Clear existing analysis results and summaries for enabled classes
     await Promise.all(
@@ -2203,6 +2228,7 @@ export function AnalysisSection({ requestId, files, projectId, sourceType }: Ana
 
       if (totalItems === 0) {
         toast({ title: "Analysis Complete", description: "All eligible files processed." });
+        analyzeRunSyncRef.current = "idle";
         setAnalyzeV2Running(false);
         setAnalyzingClasses(new Set());
         await supabase.from("analysis_requests").update({ status: "complete" }).eq("id", requestId);
@@ -2380,6 +2406,7 @@ export function AnalysisSection({ requestId, files, projectId, sourceType }: Ana
             }
             (async () => {
               await queryClient.invalidateQueries({ queryKey: ["analysis-results", requestId] });
+              analyzeRunSyncRef.current = "idle";
               setAnalyzeV2Running(false);
               setAnalyzingClasses(new Set());
               await supabase.from("analysis_requests").update({ status: "complete" }).eq("id", requestId);
@@ -2407,12 +2434,14 @@ export function AnalysisSection({ requestId, files, projectId, sourceType }: Ana
         description: error instanceof Error ? error.message : "Unknown error",
         variant: "destructive",
       });
+      analyzeRunSyncRef.current = "idle";
       setAnalyzeV2Running(false);
       setAnalyzingClasses(new Set());
     }
   };
 
   const handleStopAnalyzeV2 = () => {
+    analyzeRunSyncRef.current = "stopping";
     analyzeV2QueueRef.current = [];
     if (analyzeV2TimerRef.current) {
       clearInterval(analyzeV2TimerRef.current);
@@ -2423,6 +2452,7 @@ export function AnalysisSection({ requestId, files, projectId, sourceType }: Ana
       if (analyzeV2InFlightRef.current <= 0) {
         clearInterval(pollId);
         queryClient.invalidateQueries({ queryKey: ["analysis-results", requestId] });
+        analyzeRunSyncRef.current = "idle";
         setAnalyzeV2Running(false);
         setAnalyzeV2Stopping(false);
         setAnalyzingClasses(new Set());
