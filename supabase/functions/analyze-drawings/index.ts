@@ -170,42 +170,57 @@ async function callResponsesApi(params: {
     ],
   };
 
-  const responsesResponse = await fetch("https://api.openai.com/v1/responses", {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${openaiApiKey}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify(responsesPayload),
-  });
+  const MAX_RETRIES = 2;
+  for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+    const responsesResponse = await fetch("https://api.openai.com/v1/responses", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${openaiApiKey}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(responsesPayload),
+    });
 
-  if (!responsesResponse.ok) {
-    const httpStatus = responsesResponse.status;
-    const errText = await responsesResponse.text();
-    let parsedError: Record<string, unknown> | null = null;
-    try { parsedError = JSON.parse(errText); } catch { /* not JSON */ }
-    return { httpStatus, errText, parsedError };
-  }
+    if (!responsesResponse.ok) {
+      const httpStatus = responsesResponse.status;
+      const errText = await responsesResponse.text();
+      let parsedError: Record<string, unknown> | null = null;
+      try { parsedError = JSON.parse(errText); } catch { /* not JSON */ }
 
-  const responsesResult = await responsesResponse.json();
+      // Retry on transient 5xx errors
+      if (httpStatus >= 500 && attempt < MAX_RETRIES) {
+        const backoffMs = Math.pow(2, attempt) * 1000; // 1s, 2s
+        console.warn(`[analyze-drawings] Transient ${httpStatus} error on attempt ${attempt + 1}, retrying in ${backoffMs}ms...`);
+        await new Promise(resolve => setTimeout(resolve, backoffMs));
+        continue;
+      }
 
-  let resultText = "";
-  if (responsesResult.output) {
-    for (const item of responsesResult.output) {
-      if (item.type === "message" && item.content) {
-        for (const content of item.content) {
-          if (content.type === "output_text") {
-            resultText += content.text;
+      return { httpStatus, errText, parsedError };
+    }
+
+    const responsesResult = await responsesResponse.json();
+
+    let resultText = "";
+    if (responsesResult.output) {
+      for (const item of responsesResult.output) {
+        if (item.type === "message" && item.content) {
+          for (const content of item.content) {
+            if (content.type === "output_text") {
+              resultText += content.text;
+            }
           }
         }
       }
     }
+
+    // Extract token usage if available
+    const usage = responsesResult.usage || null;
+
+    return { resultText, usage };
   }
 
-  // Extract token usage if available
-  const usage = responsesResult.usage || null;
-
-  return { resultText, usage };
+  // Should not reach here, but satisfy TypeScript
+  return { httpStatus: 500, errText: "Max retries exceeded", parsedError: null };
 }
 
 // ---------------------------------------------------------------------------
