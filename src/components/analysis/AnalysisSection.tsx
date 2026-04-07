@@ -2062,7 +2062,6 @@ export function AnalysisSection({ requestId, files, projectId, sourceType }: Ana
             console.error(`[V2] Upload+analyze failed for ${file.name}/${firstClass}:`, err.error);
             // Skip remaining classes for this file since we have no file_id
             continue;
-            continue;
           }
 
           // Queue remaining classes for this file
