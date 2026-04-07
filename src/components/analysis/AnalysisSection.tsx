@@ -347,6 +347,22 @@ async function findBBoxInTextLayer(
       }
     }
 
+    // --- Pass 2.5: substring matching for long labels ---
+    if (!matchedItem && normTag.length > 15) {
+      let bestLen = 0;
+      for (const item of items) {
+        const normItem = normalizeText(item.str);
+        if (normItem.length < 4) continue;
+        if (normTag.includes(normItem) && normItem.length > bestLen) {
+          bestLen = normItem.length;
+          matchedItem = item;
+        }
+      }
+      if (matchedItem) {
+        console.log(`[BBox] substring match for "${primaryTag}" using "${matchedItem.str}" on page ${pageNum}`);
+      }
+    }
+
     if (!matchedItem) continue; // try next page
 
     console.log(`[BBox] exact match "${primaryTag}" on page ${pageNum}:`, {
