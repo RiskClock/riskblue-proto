@@ -1,28 +1,39 @@
 
 
-# Fix Upload Indicator, Token Position, and 520 Retry
+# Draw Red Circles Instead of Bounding Boxes in RawResultModal
 
-## Issues
+## Summary
 
-### 1. Upload indicator never appears
-The upload indicator only shows when the first analysis call for a file triggers a fresh upload to OpenAI. However, if the file already has a cached `openai_file_id` (from a previous run), the upload path is skipped entirely (lines 1995-2001), so `uploadingFileIds` is never populated. Even on first runs, the indicator is set and cleared within the same synchronous `handleAnalyzeAllV2` loop iteration, which may not give React enough time to render between the `set` and `delete`.
+Replace the rectangular bounding box overlays in the `RawResultModal` with red circles. Each circle is centered on the detected tag's location in the PDF text layer, with a radius derived from the bounding box dimensions plus padding.
 
-**Fix**: Move the upload indicator to wrap ALL file processing (not just the upload branch). Show "Uploading" when a file lacks a cached ID, or show a different indicator (e.g., "Preparing") when cached. Also ensure the indicator persists visibly by not clearing it until the first analysis call for that file completes.
+## Changes
 
-### 2. Token tracker position
-Currently the analyze section orders elements as: Model dropdown → Progress/Stop → Tokens. The triage section orders: Progress → Info/Tokens → Stop/Triage button. The user wants the analyze token display to appear **before** the "Analyzing: x/y instances" text, matching triage.
+**File: `src/components/analysis/AnalysisSection.tsx`** — lines 798-816
 
-**Fix**: Reorder the analyze toolbar so token info/live count appears immediately after the model dropdown, before the progress text and Stop/Analyze buttons.
+Replace the rectangle drawing code inside the page-rendering loop with circle drawing:
 
-### 3. OpenAI 520 error — no retry
-The `analyze-drawings` edge function treats ALL non-OK HTTP responses from the Responses API as fatal failures. A 520 is a transient Cloudflare error that would likely succeed on retry.
+1. Compute center point from the viewport-converted rectangle coordinates
+2. Calculate radius as `max(width, height) / 2 + 20` (same approach used in the other viewer)
+3. Draw a red translucent filled circle (`rgba(239, 68, 68, 0.15)`) with a red stroke (`rgba(239, 68, 68, 0.9)`)
 
-**Fix**: Add retry logic in the edge function's `callResponsesApi` function for 5xx status codes (up to 2 retries with exponential backoff). This prevents transient OpenAI/Cloudflare errors from failing the entire cell.
+```text
+Current (rect):
+  ctx.fillRect(x, y, w, h)
+  ctx.strokeRect(x, y, w, h)
+
+New (circle):
+  cx = x + w/2
+  cy = y + h/2
+  radius = max(w, h) / 2 + 80  (scaled for high-res canvas at scale=4)
+  ctx.arc(cx, cy, radius, 0, 2π)
+  ctx.fill() + ctx.stroke()
+```
+
+No other files affected. The `findBBoxInTextLayer` function and `parseRoomTagsFromResult` remain unchanged — only the rendering step changes from rect to circle.
 
 ## Files Changed
 
 | File | Change |
 |---|---|
-| `src/components/analysis/AnalysisSection.tsx` | Fix upload indicator to show during the upload+first-analyze call; reorder token display before progress text in the analyze toolbar |
-| `supabase/functions/analyze-drawings/index.ts` | Add retry loop (max 2 retries, exponential backoff) around `callResponsesApi` for 5xx HTTP errors |
+| `src/components/analysis/AnalysisSection.tsx` | Replace `fillRect`/`strokeRect` with `arc` circle drawing in the RawResultModal page render loop (~lines 800-816) |
 
