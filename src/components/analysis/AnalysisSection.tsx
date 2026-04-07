@@ -146,6 +146,7 @@ function parseRoomTagsFromResult(
 interface OverlayRow {
   candidates: string[];   // ordered by search priority
   pageNum: number;
+  aiBBox?: { x1: number; y1: number; x2: number; y2: number };
 }
 
 /**
@@ -178,6 +179,7 @@ function parseOverlayCandidates(resultText: string): OverlayRow[] {
 
     const headers = lines[headerIdx].split("|").map((c) => c.trim().toLowerCase());
     const pageCol = headers.findIndex((h) => h.includes("page") || h.includes("sheet"));
+    const bboxCol = headers.findIndex((h) => h.includes("bounding box") || h.includes("bbox") || h.includes("coordinates"));
 
     // Build candidate column indices in priority order
     const candidateColIndices: number[] = [];
@@ -219,8 +221,23 @@ function parseOverlayCandidates(resultText: string): OverlayRow[] {
         const pv = parseInt(cells[pageCol] || "1", 10);
         if (!isNaN(pv) && pv > 0) pageNum = pv;
       }
+      // Parse AI bounding box if column exists
+      let aiBBox: OverlayRow["aiBBox"] = undefined;
+      if (bboxCol !== -1) {
+        const bboxStr = cells[bboxCol] || "";
+        // Match patterns like (1848, 2665) → (1975, 2681) or (1848, 2665) -> (1975, 2681)
+        const bboxMatch = bboxStr.match(/\(?\s*(\d+)[,\s]+(\d+)\s*\)?\s*(?:→|->|—|–)\s*\(?\s*(\d+)[,\s]+(\d+)\s*\)?/);
+        if (bboxMatch) {
+          aiBBox = {
+            x1: parseInt(bboxMatch[1], 10),
+            y1: parseInt(bboxMatch[2], 10),
+            x2: parseInt(bboxMatch[3], 10),
+            y2: parseInt(bboxMatch[4], 10),
+          };
+        }
+      }
       if (candidates.length > 0) {
-        rows.push({ candidates, pageNum });
+        rows.push({ candidates, pageNum, aiBBox });
       }
     }
     return rows;
@@ -440,6 +457,7 @@ function InstanceDetailModal({
   const [zoom, setZoom] = useState(1);
   const [baseDimensions, setBaseDimensions] = useState<{ width: number; height: number } | null>(null);
   const [rawCoords, setRawCoords] = useState<{ x1: number; y1: number; x2: number; y2: number } | null>(null);
+  const [isAiBBoxMode, setIsAiBBoxMode] = useState(false);
   const [isLoadingPdf, setIsLoadingPdf] = useState(false);
   const [pdfError, setPdfError] = useState<string | null>(null);
   const [pdfViewport, setPdfViewport] = useState<pdfjsLib.PageViewport | null>(null);
@@ -482,23 +500,31 @@ function InstanceDetailModal({
         );
         const searchCandidates = matchingRow?.candidates ?? [instance.id];
         const hintPage = matchingRow?.pageNum;
+        const matchedAiBBox = matchingRow?.aiBBox;
 
         console.log(`[BBox] opening: instance.id=${instance.id} instance.name=${instance.name}`);
-        console.log(`[BBox] searchCandidates=`, searchCandidates, `hintPage=${hintPage}`);
+        console.log(`[BBox] searchCandidates=`, searchCandidates, `hintPage=${hintPage}`, `aiBBox=`, matchedAiBBox);
 
         const pdf = await pdfjsLib.getDocument({ data: ab }).promise;
         if (cancelled) return;
 
-        // Try each candidate until one matches in the PDF text layer
+        // Prefer AI bounding box coordinates; fall back to text-layer search
         let textBBox: PDFBBox | null = null;
-        for (const candidate of searchCandidates) {
-          textBBox = await findBBoxInTextLayer(pdf, candidate, hintPage);
-          if (textBBox) break;
-          if (cancelled) return;
+        let useAiBBox = false;
+        if (matchedAiBBox) {
+          useAiBBox = true;
+          console.log(`[BBox] Using AI bounding box:`, matchedAiBBox);
+        } else {
+          // Try each candidate until one matches in the PDF text layer
+          for (const candidate of searchCandidates) {
+            textBBox = await findBBoxInTextLayer(pdf, candidate, hintPage);
+            if (textBBox) break;
+            if (cancelled) return;
+          }
         }
         if (cancelled) return;
 
-        console.log(`[BBox] text layer result=`, textBBox);
+        console.log(`[BBox] text layer result=`, textBBox, `useAiBBox=`, useAiBBox);
         if (textBBox) {
           setRawCoords({ x1: textBBox.x1, y1: textBBox.y1, x2: textBBox.x2, y2: textBBox.y2 });
         }
@@ -517,6 +543,23 @@ function InstanceDetailModal({
         const ctx = offscreen.getContext("2d")!;
         await page.render({ canvasContext: ctx, viewport, canvas: offscreen } as any).promise;
         if (cancelled) return;
+
+        // If using AI bbox, store as rawCoords in a special way
+        // We'll convert AI pixel coords to PDF viewport coords for consistent rendering
+        if (useAiBBox && matchedAiBBox) {
+          // AI coords are in the same pixel space as the rendered image (scale 4)
+          // Store them directly as viewport pixel coords (not PDF user-space)
+          // We set rawCoords to a sentinel and handle in the draw step
+          setRawCoords({
+            x1: matchedAiBBox.x1,
+            y1: matchedAiBBox.y1,
+            x2: matchedAiBBox.x2,
+            y2: matchedAiBBox.y2,
+          });
+          setIsAiBBoxMode(true);
+        } else {
+          setIsAiBBoxMode(false);
+        }
 
         // Convert to HTMLImageElement
         const img = new Image();
@@ -577,23 +620,39 @@ function InstanceDetailModal({
     ctx.drawImage(pageImage, 0, 0, w, h);
 
     if (rawCoords && pdfViewport && offscreenSize) {
-      // Convert PDF user-space (pts, origin bottom-left) → offscreen canvas pixels.
-      console.log(`[BBox] drawing: rawCoords=`, rawCoords);
-      const viewportRect = pdfViewport.convertToViewportRectangle([
-        rawCoords.x1, rawCoords.y1, rawCoords.x2, rawCoords.y2,
-      ]);
-      const [vx1, vy1, vx2, vy2] = viewportRect;
-      // Normalize to [0..1] using offscreen canvas size, then map to display canvas
-      const nx1 = Math.min(vx1, vx2) / offscreenSize.w;
-      const ny1 = Math.min(vy1, vy2) / offscreenSize.h;
-      const nx2 = Math.max(vx1, vx2) / offscreenSize.w;
-      const ny2 = Math.max(vy1, vy2) / offscreenSize.h;
-      // Compute center and radius for circle overlay
-      const cx = ((nx1 + nx2) / 2) * w;
-      const cy = ((ny1 + ny2) / 2) * h;
-      const bw = (nx2 - nx1) * w;
-      const bh = (ny2 - ny1) * h;
-      const radius = Math.max(bw, bh) / 2 + 20; // add padding
+      console.log(`[BBox] drawing: rawCoords=`, rawCoords, `isAiBBoxMode=`, isAiBBoxMode);
+      let cx: number, cy: number, radius: number;
+
+      if (isAiBBoxMode) {
+        // AI pixel coordinates — map directly to display canvas
+        // AI coords are in the same pixel space as offscreenSize (scale 4)
+        const ncx = ((rawCoords.x1 + rawCoords.x2) / 2) / offscreenSize.w;
+        const ncy = ((rawCoords.y1 + rawCoords.y2) / 2) / offscreenSize.h;
+        const nbw = Math.abs(rawCoords.x2 - rawCoords.x1) / offscreenSize.w;
+        const nbh = Math.abs(rawCoords.y2 - rawCoords.y1) / offscreenSize.h;
+        cx = ncx * w;
+        cy = ncy * h;
+        const bw = nbw * w;
+        const bh = nbh * h;
+        radius = Math.max(bw, bh) / 2 + 20;
+        radius = Math.max(radius, 15);
+      } else {
+        // PDF user-space (pts, origin bottom-left) → offscreen canvas pixels
+        const viewportRect = pdfViewport.convertToViewportRectangle([
+          rawCoords.x1, rawCoords.y1, rawCoords.x2, rawCoords.y2,
+        ]);
+        const [vx1, vy1, vx2, vy2] = viewportRect;
+        const nx1 = Math.min(vx1, vx2) / offscreenSize.w;
+        const ny1 = Math.min(vy1, vy2) / offscreenSize.h;
+        const nx2 = Math.max(vx1, vx2) / offscreenSize.w;
+        const ny2 = Math.max(vy1, vy2) / offscreenSize.h;
+        cx = ((nx1 + nx2) / 2) * w;
+        cy = ((ny1 + ny2) / 2) * h;
+        const bw = (nx2 - nx1) * w;
+        const bh = (ny2 - ny1) * h;
+        radius = Math.max(bw, bh) / 2 + 20;
+      }
+
       ctx.beginPath();
       ctx.arc(cx, cy, radius, 0, Math.PI * 2);
       ctx.fillStyle = "rgba(239, 68, 68, 0.12)";
@@ -602,7 +661,7 @@ function InstanceDetailModal({
       ctx.lineWidth = 2.5;
       ctx.stroke();
     }
-  }, [pageImage, baseDimensions, zoom, rawCoords, pdfViewport, offscreenSize]);
+  }, [pageImage, baseDimensions, zoom, rawCoords, pdfViewport, offscreenSize, isAiBBoxMode]);
 
   // Step 4: Auto fit-selection — fires once per modal open when all data is ready
   useEffect(() => {
@@ -612,24 +671,37 @@ function InstanceDetailModal({
     const container = containerRef.current;
     if (!container) return;
 
-    // Convert PDF user-space → offscreen canvas pixels
-    const [vx1, vy1, vx2, vy2] = pdfViewport.convertToViewportRectangle([
-      rawCoords.x1, rawCoords.y1, rawCoords.x2, rawCoords.y2,
-    ]);
+    let bx: number, by: number, radius: number;
 
-    // Normalise to [0..1] and map to base canvas pixels (zoom = 1)
-    const nx1 = Math.min(vx1, vx2) / offscreenSize.w;
-    const ny1 = Math.min(vy1, vy2) / offscreenSize.h;
-    const nx2 = Math.max(vx1, vx2) / offscreenSize.w;
-    const ny2 = Math.max(vy1, vy2) / offscreenSize.h;
+    if (isAiBBoxMode) {
+      // AI pixel coordinates — map directly
+      const ncx = ((rawCoords.x1 + rawCoords.x2) / 2) / offscreenSize.w;
+      const ncy = ((rawCoords.y1 + rawCoords.y2) / 2) / offscreenSize.h;
+      const nbw = Math.abs(rawCoords.x2 - rawCoords.x1) / offscreenSize.w;
+      const nbh = Math.abs(rawCoords.y2 - rawCoords.y1) / offscreenSize.h;
+      const bw = nbw * baseDimensions.width;
+      const bh = nbh * baseDimensions.height;
+      radius = Math.max(bw, bh) / 2 + 20;
+      radius = Math.max(radius, 15);
+      bx = ncx * baseDimensions.width - radius;
+      by = ncy * baseDimensions.height - radius;
+    } else {
+      // Convert PDF user-space → offscreen canvas pixels
+      const [vx1, vy1, vx2, vy2] = pdfViewport.convertToViewportRectangle([
+        rawCoords.x1, rawCoords.y1, rawCoords.x2, rawCoords.y2,
+      ]);
+      const nx1 = Math.min(vx1, vx2) / offscreenSize.w;
+      const ny1 = Math.min(vy1, vy2) / offscreenSize.h;
+      const nx2 = Math.max(vx1, vx2) / offscreenSize.w;
+      const ny2 = Math.max(vy1, vy2) / offscreenSize.h;
+      const bw = (nx2 - nx1) * baseDimensions.width;
+      const bh = (ny2 - ny1) * baseDimensions.height;
+      radius = Math.max(bw, bh) / 2 + 20;
+      bx = ((nx1 + nx2) / 2) * baseDimensions.width - radius;
+      by = ((ny1 + ny2) / 2) * baseDimensions.height - radius;
+    }
 
-    const bw = (nx2 - nx1) * baseDimensions.width;
-    const bh = (ny2 - ny1) * baseDimensions.height;
-    const radius = Math.max(bw, bh) / 2 + 20;
     const diameter = radius * 2;
-    const bx = ((nx1 + nx2) / 2) * baseDimensions.width - radius;
-    const by = ((ny1 + ny2) / 2) * baseDimensions.height - radius;
-
     // Safeguard: skip zero-size region
     if (diameter <= 2) return;
 
@@ -846,23 +918,42 @@ function RawResultModal({ fileName, awpClassName, resultText, instanceCount, sou
 
         // Parse overlay candidates from AI result text (multi-candidate per row)
         const overlayRows = resultText ? parseOverlayCandidates(resultText) : [];
-        console.log(`[RawResultModal] Found ${overlayRows.length} overlay rows:`, overlayRows.map(r => r.candidates));
+        console.log(`[RawResultModal] Found ${overlayRows.length} overlay rows:`, overlayRows.map(r => ({ candidates: r.candidates, aiBBox: r.aiBBox })));
 
-        // Find bboxes — try each candidate per row until one matches
-        const bboxes: PDFBBox[] = [];
-        for (const { candidates, pageNum } of overlayRows) {
-          let found = false;
-          for (const candidate of candidates) {
-            const bbox = await findBBoxInTextLayer(pdf, candidate, pageNum);
-            if (bbox) { bboxes.push(bbox); found = true; break; }
-            if (cancelled) return;
+        // Build circle data: prefer AI bounding box, fall back to text-layer search
+        interface CircleData { cx: number; cy: number; radius: number; pageNum: number; source: "ai" | "text" }
+        const circles: CircleData[] = [];
+        for (const row of overlayRows) {
+          if (row.aiBBox) {
+            // AI bbox is in pixel coordinates of the image sent to OpenAI
+            const { x1, y1, x2, y2 } = row.aiBBox;
+            circles.push({
+              cx: (x1 + x2) / 2,
+              cy: (y1 + y2) / 2,
+              radius: Math.max(Math.abs(x2 - x1), Math.abs(y2 - y1)) / 2 + 30,
+              pageNum: row.pageNum,
+              source: "ai",
+            });
+          } else {
+            // Fall back to text-layer search
+            let found = false;
+            for (const candidate of row.candidates) {
+              const bbox = await findBBoxInTextLayer(pdf, candidate, row.pageNum);
+              if (bbox) {
+                circles.push({ cx: 0, cy: 0, radius: 0, pageNum: bbox.pageNum ?? row.pageNum, source: "text", ...bbox } as any);
+                // We'll convert text-layer bboxes during rendering
+                found = true;
+                break;
+              }
+              if (cancelled) return;
+            }
+            if (!found) console.log(`[RawResultModal] No match for candidates:`, row.candidates);
           }
-          if (!found) console.log(`[RawResultModal] No match for candidates:`, candidates);
         }
-        console.log(`[RawResultModal] Found ${bboxes.length} bounding boxes`);
-        setBboxCount(bboxes.length);
+        console.log(`[RawResultModal] Found ${circles.length} circle locations`);
+        setBboxCount(circles.length);
 
-        // Render pages with bbox overlays
+        // Render pages with circle overlays
         const maxPages = Math.min(pdf.numPages, 20);
         const canvases: HTMLCanvasElement[] = [];
         for (let i = 1; i <= maxPages; i++) {
@@ -876,21 +967,36 @@ function RawResultModal({ fileName, awpClassName, resultText, instanceCount, sou
           await page.render({ canvasContext: ctx, viewport, canvas } as any).promise;
           if (cancelled) return;
 
-          // Draw bounding boxes for this page
-          const pageBboxes = bboxes.filter(b => b.pageNum === i);
-          for (const bbox of pageBboxes) {
-            // Convert PDF user-space coords to canvas pixels
-            const rect = viewport.convertToViewportRectangle([bbox.x1, bbox.y1, bbox.x2, bbox.y2]);
-            const [vx1, vy1, vx2, vy2] = rect;
-            const x = Math.min(vx1, vx2);
-            const y = Math.min(vy1, vy2);
-            const w = Math.abs(vx2 - vx1);
-            const h = Math.abs(vy2 - vy1);
+          // AI image dimensions: the image sent to OpenAI is the PDF page rendered at scale 4
+          const aiImageW = viewport.width;
+          const aiImageH = viewport.height;
 
-            // Circle overlay
-            const cx = x + w / 2;
-            const cy = y + h / 2;
-            const radius = Math.max(w, h) / 2 + 80;
+          // Draw circles for this page
+          const pageCircles = circles.filter(c => c.pageNum === i);
+          for (const circle of pageCircles) {
+            let cx: number, cy: number, radius: number;
+            if (circle.source === "ai") {
+              // AI coordinates are in the original image pixel space
+              // Scale from AI image to canvas (both are scale=4, so 1:1 mapping)
+              cx = (circle.cx / aiImageW) * viewport.width;
+              cy = (circle.cy / aiImageH) * viewport.height;
+              radius = (circle.radius / Math.max(aiImageW, aiImageH)) * Math.max(viewport.width, viewport.height);
+              // Ensure minimum radius
+              radius = Math.max(radius, 40);
+            } else {
+              // Text-layer fallback: circle has bbox coords stored
+              const bbox = circle as any;
+              const rect = viewport.convertToViewportRectangle([bbox.x1, bbox.y1, bbox.x2, bbox.y2]);
+              const [vx1, vy1, vx2, vy2] = rect;
+              const x = Math.min(vx1, vx2);
+              const y = Math.min(vy1, vy2);
+              const w = Math.abs(vx2 - vx1);
+              const h = Math.abs(vy2 - vy1);
+              cx = x + w / 2;
+              cy = y + h / 2;
+              radius = Math.max(w, h) / 2 + 80;
+            }
+
             ctx.beginPath();
             ctx.arc(cx, cy, radius, 0, Math.PI * 2);
             ctx.fillStyle = "rgba(239, 68, 68, 0.15)";
