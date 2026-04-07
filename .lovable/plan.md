@@ -1,49 +1,93 @@
 
+Investigated the Procore dialog and the screenshot. The bug is not just scroll overflow.
 
-# Use AI-Provided Bounding Box Coordinates for Circle Placement
+## What’s actually wrong
 
-## Problem
+There are two layout problems:
 
-The current circle placement relies entirely on searching the PDF text layer for matching strings. For long labels or substring matches, the found text item may not be centered on the actual detection. Meanwhile, the AI response already includes a **"Bounding Box"** column with pixel coordinates like `(1848, 2665) → (1975, 2681)` — these point directly to where the AI detected the component, but the code ignores them.
+1. The dialog is still too narrow for this content
+   - `src/components/wizard/ProcoreConnectionDialog.tsx` uses `DialogContent className="max-w-md"`.
+   - That width is too small for:
+     - long project names + address
+     - nested folder indentation
+     - the right-side Select/Selected action
 
-## Solution
+2. The tree row layout does not reserve/shrink space correctly
+   - In `src/components/wizard/ProcoreFolderTree.tsx`, each row is:
+     - icon/button area
+     - folder name span with `truncate flex-1`
+     - Select button
+   - In flex layouts, truncation usually also needs `min-w-0` on the flexible text region or wrapper.
+   - Without that, the text block can refuse to shrink properly, which causes the action button to get pushed/clipped even if the container scrolls.
 
-Parse the AI-provided bounding box coordinates from the result table and use them as the **primary** circle placement method. Fall back to text-layer search only when coordinates aren't available or parseable.
+## Implementation plan
 
-### File: `src/components/analysis/AnalysisSection.tsx`
+### 1. Widen the Procore connection dialog
+File: `src/components/wizard/ProcoreConnectionDialog.tsx`
 
-**1. Extend `OverlayRow` interface** to include optional AI bbox:
+- Change the dialog from `max-w-md` to a wider responsive width, such as:
+  - `max-w-2xl w-[min(92vw,56rem)]`
+- This gives enough room for:
+  - two-line project labels
+  - nested folder rows
+  - right-aligned Select button
+
+### 2. Fix row sizing in the folder tree
+File: `src/components/wizard/ProcoreFolderTree.tsx`
+
+- Make each folder row use a layout that can shrink safely:
+  - add `w-full` to the row
+  - wrap the folder icon + label in a `min-w-0 flex-1 flex items-center ...`
+  - add `min-w-0` to the text container/span
+- Keep the Select button as `shrink-0` so it remains fully visible.
+
+Recommended structure:
+```text
+[row]
+  [toggle]
+  [content min-w-0 flex-1]
+    [folder icon]
+    [label truncate]
+  [select button shrink-0]
 ```
-interface OverlayRow {
-  candidates: string[];
-  pageNum: number;
-  aiBBox?: { x1: number; y1: number; x2: number; y2: number };
-}
+
+### 3. Preserve horizontal scrolling as a fallback
+File: `src/components/wizard/ProcoreConnectionDialog.tsx`
+
+- Keep the folder container scrollable with `overflow-auto`.
+- Add `min-w-0` safeguards around parent wrappers if needed so the tree respects the dialog width instead of overflowing unpredictably.
+
+### 4. Improve the project dropdown label wrapping
+File: `src/components/wizard/ProcoreConnectionDialog.tsx`
+
+- The selected project trigger is also visually cramped in the screenshot.
+- Keep the dropdown content as-is, but make sure the trigger/value presentation does not force awkward overflow.
+- If needed, simplify the selected trigger text to project name only while keeping address in the dropdown list.
+
+## Expected result
+
+After these changes:
+- the Select button will remain fully visible
+- nested folder rows will truncate correctly instead of pushing content out
+- the dialog will better fit Procore project/folder content
+- horizontal scrolling will only be a fallback, not the primary fix
+
+## Files to update
+
+- `src/components/wizard/ProcoreConnectionDialog.tsx`
+- `src/components/wizard/ProcoreFolderTree.tsx`
+
+## Technical details
+
+Root cause summary:
+```text
+Current issue =
+  narrow modal width
+  + recursive indentation
+  + flex child missing min-w-0
+  + fixed-size action button on the right
+
+Result:
+  row cannot shrink correctly
+  -> action button gets clipped/pushed outside visible area
 ```
-
-**2. Update `parseOverlayCandidates`** (~line 180):
-- Detect a "bounding box" column in headers
-- Parse coordinate patterns like `(1848, 2665) → (1975, 2681)` or `(1848, 2665) -> (1975, 2681)` from each row
-- Store parsed coordinates in `aiBBox` field
-
-**3. Update `RawResultModal` rendering** (~line 846-900):
-- When an `OverlayRow` has `aiBBox`, convert AI pixel coordinates to canvas coordinates directly (scale from AI image dimensions to the rendered canvas size)
-- Use `aiBBox` center as circle center, derive radius from bbox dimensions + padding
-- Only fall back to `findBBoxInTextLayer` when `aiBBox` is missing
-
-**4. Update `InstanceDetailModal` rendering** (~line 475-600):
-- Same logic: prefer `aiBBox` coordinates over text-layer search
-- Compute circle center from AI bbox center point
-
-**5. AI coordinate → canvas coordinate mapping**:
-- The AI bounding box coordinates are in the original image pixel space (the image sent to OpenAI)
-- The PDF page is rendered at a known scale; we need to map AI coords → PDF user-space → viewport → canvas
-- Since both AI and our renderer see the same page image, the mapping is: `canvasX = (aiBBox.x / aiImageWidth) * canvasWidth`
-- The AI image dimensions can be inferred from the PDF page dimensions at the rendering scale used during upload
-
-## Files Changed
-
-| File | Change |
-|---|---|
-| `src/components/analysis/AnalysisSection.tsx` | Parse bounding box column from AI result table; use AI coordinates as primary circle placement; fall back to text-layer search when unavailable |
-
