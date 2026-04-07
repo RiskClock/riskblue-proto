@@ -1381,7 +1381,7 @@ export function AnalysisSection({ requestId, files, projectId, sourceType }: Ana
       await supabase.from("analysis_triage_overrides" as any).delete().eq("analysis_request_id", requestId).eq("file_id", fileId).eq("awp_class_name", awpClassName);
     } else {
       // No override → toggle based on auto state
-      const newType = score >= 80 ? "exclude" : "include";
+      const newType = score >= 50 ? "exclude" : "include";
       setTriageOverrides((prev) => { const next = new Map(prev); next.set(key, newType as "include" | "exclude"); return next; });
       await supabase.from("analysis_triage_overrides" as any).upsert({
         analysis_request_id: requestId,
@@ -1685,7 +1685,7 @@ export function AnalysisSection({ requestId, files, projectId, sourceType }: Ana
 
         if (override === 'exclude') return false;
         if (override === 'include') return true;
-        if (triage?.status === 'complete' && triage.score !== null && triage.score >= 80) return true;
+        if (triage?.status === 'complete' && triage.score !== null && triage.score >= 50) return true;
         // Skip untriaged files — pass-2 only runs on triaged cells
         if (!triage || triage.status !== 'complete') return false;
         return false;
@@ -3176,12 +3176,12 @@ export function AnalysisSection({ requestId, files, projectId, sourceType }: Ana
                             >
                               {override === "exclude" && (
                                 <div className="absolute inset-0 flex items-center justify-center p-[10%]">
-                                  <div className="w-full h-full rounded-sm bg-gray-400/80" />
+                                  <div className="w-full h-full bg-white/90" />
                                 </div>
                               )}
                               {override === "include" && (
                                 <div className="absolute inset-0 flex items-center justify-center p-[10%]">
-                                  <div className="w-full h-full rounded-sm bg-green-500/90" />
+                                  <div className="w-full h-full bg-green-500/90" />
                                 </div>
                               )}
                               <Tooltip>
