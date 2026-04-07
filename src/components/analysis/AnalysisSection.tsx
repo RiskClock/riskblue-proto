@@ -611,13 +611,13 @@ function InstanceDetailModal({
 
   const handleZoomOut = () => {
     const container = containerRef.current;
-    if (!container) { setZoom(z => Math.max(0.25, z - 0.25)); return; }
+    if (!container) { setZoom(z => Math.max(1, z - 0.25)); return; }
     const scrollCenterX = container.scrollWidth > 0
       ? (container.scrollLeft + container.clientWidth / 2) / container.scrollWidth : 0.5;
     const scrollCenterY = container.scrollHeight > 0
       ? (container.scrollTop + container.clientHeight / 2) / container.scrollHeight : 0.5;
     setZoom(prevZoom => {
-      const newZoom = Math.max(0.25, prevZoom - 0.25);
+      const newZoom = Math.max(1, prevZoom - 0.25);
       requestAnimationFrame(() => {
         container.scrollLeft = scrollCenterX * container.scrollWidth - container.clientWidth / 2;
         container.scrollTop = scrollCenterY * container.scrollHeight - container.clientHeight / 2;
@@ -625,6 +625,8 @@ function InstanceDetailModal({
       return newZoom;
     });
   };
+
+  const instanceMapNav = useMapNavigation({ zoom, setZoom, minZoom: 1, maxZoom: 8, containerRef });
 
   return (
     <Dialog open onOpenChange={(open) => { if (!open) onClose(); }}>
@@ -683,7 +685,7 @@ function InstanceDetailModal({
             <div className="h-12 flex-shrink-0 flex items-center justify-between px-4 border-b bg-background">
               <span className="text-sm text-muted-foreground">Drawing Preview</span>
               <div className="flex items-center gap-2">
-                <Button variant="outline" size="icon" className="h-8 w-8" onClick={handleZoomOut} disabled={zoom <= 0.25}>
+                <Button variant="outline" size="icon" className="h-8 w-8" onClick={handleZoomOut} disabled={zoom <= 1}>
                   <ZoomOut className="w-4 h-4" />
                 </Button>
                 <span className="text-sm min-w-[3rem] text-center tabular-nums">{Math.round(zoom * 100)}%</span>
@@ -697,6 +699,8 @@ function InstanceDetailModal({
             <div
               ref={containerRef}
               className="flex-1 min-h-0 overflow-auto bg-muted/30 m-4 border rounded-lg p-4"
+              style={instanceMapNav.containerStyle}
+              {...instanceMapNav.handlers}
             >
               {!sourceFile?.storage_path ? (
                 <div className="flex items-center justify-center h-full">
