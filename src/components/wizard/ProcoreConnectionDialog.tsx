@@ -415,7 +415,7 @@ export const ProcoreConnectionDialog = ({
                       Loading folders...
                     </div>
                   ) : folders.length > 0 ? (
-                    <div className="border rounded-md p-2 max-h-60 overflow-y-auto">
+                    <div className="border rounded-md p-2 max-h-60 overflow-auto">
                       <ProcoreFolderTree
                         folders={folders}
                         loadSubfolder={async (folderId) => {
