@@ -14,7 +14,7 @@ export function useMapNavigation({
   setZoom,
   minZoom = 1,
   maxZoom = 8,
-  zoomStep = 0.25,
+  zoomStep = 0.1,
   containerRef,
 }: MapNavigationOptions) {
   const dragRef = useRef({
@@ -25,8 +25,64 @@ export function useMapNavigation({
     scrollTop: 0,
   });
   const touchRef = useRef({ lastDist: 0 });
-  const isDraggingState = useRef(false); // for cursor style without re-render
+  const wheelAccum = useRef(0);
+  const wheelTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const animFrameRef = useRef<number | null>(null);
 
+  // Smooth animated zoom to a target level, keeping a point anchored
+  const animateZoomTo = useCallback(
+    (targetZoom: number, clientX: number, clientY: number) => {
+      const container = containerRef.current;
+      if (!container) {
+        setZoom(targetZoom);
+        return;
+      }
+
+      const rect = container.getBoundingClientRect();
+      const pointX = clientX - rect.left;
+      const pointY = clientY - rect.top;
+
+      // Cancel any ongoing animation
+      if (animFrameRef.current) cancelAnimationFrame(animFrameRef.current);
+
+      const startZoom = zoom;
+      const startTime = performance.now();
+      const duration = 250; // ms
+
+      const animate = (now: number) => {
+        const elapsed = now - startTime;
+        const t = Math.min(1, elapsed / duration);
+        // ease-out cubic
+        const eased = 1 - Math.pow(1 - t, 3);
+        const currentZoom = startZoom + (targetZoom - startZoom) * eased;
+
+        // Compute anchor fraction before zoom change
+        const fracX = container.scrollWidth > 0
+          ? (container.scrollLeft + pointX) / container.scrollWidth : 0.5;
+        const fracY = container.scrollHeight > 0
+          ? (container.scrollTop + pointY) / container.scrollHeight : 0.5;
+
+        setZoom(currentZoom);
+
+        requestAnimationFrame(() => {
+          if (!container) return;
+          container.scrollLeft = fracX * container.scrollWidth - pointX;
+          container.scrollTop = fracY * container.scrollHeight - pointY;
+        });
+
+        if (t < 1) {
+          animFrameRef.current = requestAnimationFrame(animate);
+        } else {
+          animFrameRef.current = null;
+        }
+      };
+
+      animFrameRef.current = requestAnimationFrame(animate);
+    },
+    [containerRef, setZoom, zoom]
+  );
+
+  // Instant zoom at a cursor point (used for scroll wheel)
   const zoomAtPoint = useCallback(
     (delta: number, clientX: number, clientY: number) => {
       const container = containerRef.current;
@@ -35,23 +91,22 @@ export function useMapNavigation({
         return;
       }
       const rect = container.getBoundingClientRect();
-      const fracX =
-        container.scrollWidth > 0
-          ? (container.scrollLeft + (clientX - rect.left)) / container.scrollWidth
-          : 0.5;
-      const fracY =
-        container.scrollHeight > 0
-          ? (container.scrollTop + (clientY - rect.top)) / container.scrollHeight
-          : 0.5;
+      const pointX = clientX - rect.left;
+      const pointY = clientY - rect.top;
+
+      // Compute the content-space coordinate under the cursor
+      const contentX = container.scrollLeft + pointX;
+      const contentY = container.scrollTop + pointY;
 
       setZoom((prev) => {
         const next = Math.min(maxZoom, Math.max(minZoom, prev + delta));
+        const scale = next / prev;
+
         requestAnimationFrame(() => {
           if (!container) return;
-          container.scrollLeft =
-            fracX * container.scrollWidth - (clientX - rect.left);
-          container.scrollTop =
-            fracY * container.scrollHeight - (clientY - rect.top);
+          // After zoom, the same content point should remain under the cursor
+          container.scrollLeft = contentX * scale - pointX;
+          container.scrollTop = contentY * scale - pointY;
         });
         return next;
       });
@@ -62,11 +117,16 @@ export function useMapNavigation({
   const onWheel = useCallback(
     (e: React.WheelEvent<HTMLDivElement>) => {
       e.preventDefault();
-      const delta = e.ctrlKey
-        ? -e.deltaY * 0.01 // trackpad pinch
-        : e.deltaY < 0
-        ? zoomStep
-        : -zoomStep;
+
+      let delta: number;
+      if (e.ctrlKey) {
+        // Trackpad pinch — use small continuous delta
+        delta = -e.deltaY * 0.005;
+      } else {
+        // Mouse wheel — normalize to small steps for smoothness
+        delta = e.deltaY < 0 ? zoomStep : -zoomStep;
+      }
+
       zoomAtPoint(delta, e.clientX, e.clientY);
     },
     [zoomAtPoint, zoomStep]
@@ -75,18 +135,18 @@ export function useMapNavigation({
   const onDoubleClick = useCallback(
     (e: React.MouseEvent<HTMLDivElement>) => {
       e.preventDefault();
-      zoomAtPoint(0.5, e.clientX, e.clientY);
+      // Animated zoom in by 0.75x on double-click
+      const target = Math.min(maxZoom, zoom + 0.75);
+      animateZoomTo(target, e.clientX, e.clientY);
     },
-    [zoomAtPoint]
+    [animateZoomTo, maxZoom, zoom]
   );
 
   const onMouseDown = useCallback(
     (e: React.MouseEvent<HTMLDivElement>) => {
-      // Only pan with left button
       if (e.button !== 0) return;
       const container = containerRef.current;
       if (!container) return;
-      isDraggingState.current = true;
       container.style.cursor = "grabbing";
       dragRef.current = {
         isDragging: true,
@@ -115,7 +175,6 @@ export function useMapNavigation({
 
   const stopDrag = useCallback(() => {
     dragRef.current.isDragging = false;
-    isDraggingState.current = false;
     const container = containerRef.current;
     if (container) container.style.cursor = "grab";
   }, [containerRef]);
@@ -151,7 +210,7 @@ export function useMapNavigation({
         const dx = e.touches[0].clientX - e.touches[1].clientX;
         const dy = e.touches[0].clientY - e.touches[1].clientY;
         const dist = Math.hypot(dx, dy);
-        const delta = (dist - touchRef.current.lastDist) * 0.01;
+        const delta = (dist - touchRef.current.lastDist) * 0.005;
         touchRef.current.lastDist = dist;
         const midX = (e.touches[0].clientX + e.touches[1].clientX) / 2;
         const midY = (e.touches[0].clientY + e.touches[1].clientY) / 2;
