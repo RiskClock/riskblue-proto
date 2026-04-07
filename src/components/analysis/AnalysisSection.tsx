@@ -1438,6 +1438,7 @@ export function AnalysisSection({ requestId, files, projectId, sourceType }: Ana
   const [analyzeTokens, setAnalyzeTokens] = useState(0);
   const analyzeTokensRef = useRef(0);
   const [uploadingFileIds, setUploadingFileIds] = useState<Set<string>>(new Set());
+  const [analyzeV2Running, setAnalyzeV2Running] = useState(false);
   const [triagePhase, setTriagePhase] = useState<"extract" | "score" | null>(null);
   const [summaryGroupBy, setSummaryGroupBy] = useState<"awp" | "floor">("awp");
   const [triageProgress, setTriageProgress] = useState<{ done: number; total: number }>({ done: 0, total: 0 });
@@ -1519,6 +1520,7 @@ export function AnalysisSection({ requestId, files, projectId, sourceType }: Ana
       if (error) throw error;
       return data as AnalysisResult[];
     },
+    refetchInterval: analyzeV2Running ? 5000 : false,
   });
 
   // Fetch existing triage results
@@ -1596,11 +1598,12 @@ export function AnalysisSection({ requestId, files, projectId, sourceType }: Ana
     queryFn: async () => {
       const { data } = await supabase
         .from("analysis_requests")
-        .select("summary_data, triage_tokens_used, triage_model, analyze_model, disabled_awp_classes")
+        .select("status, summary_data, triage_tokens_used, triage_model, analyze_model, disabled_awp_classes")
         .eq("id", requestId)
         .single();
       return data;
     },
+    refetchInterval: analyzeV2Running ? 5000 : false,
   });
 
   // Initialize models and tokens from DB
@@ -1619,6 +1622,24 @@ export function AnalysisSection({ requestId, files, projectId, sourceType }: Ana
       setDisabledColumns(new Set(disabled));
     }
   }, [requestMeta]);
+
+  // Hydrate analyzeV2Running from DB status on mount/navigation
+  // Also auto-clear when DB status transitions to complete while we're showing "running"
+  const [hydratedProcessing, setHydratedProcessing] = useState(false);
+  useEffect(() => {
+    if (!requestMeta) return;
+    const dbStatus = (requestMeta as any).status as string;
+    if (!hydratedProcessing) {
+      if (dbStatus === "processing") {
+        setAnalyzeV2Running(true);
+      }
+      setHydratedProcessing(true);
+    } else if (analyzeV2Running && dbStatus === "complete") {
+      // The analysis finished (possibly in another tab / after navigation)
+      setAnalyzeV2Running(false);
+      setAnalyzingClasses(new Set());
+    }
+  }, [requestMeta, hydratedProcessing, analyzeV2Running]);
 
   // Load extracted file IDs on mount so "Processed" badges appear immediately
   useEffect(() => {
@@ -2014,7 +2035,7 @@ export function AnalysisSection({ requestId, files, projectId, sourceType }: Ana
   }>>([]);
   const analyzeV2TimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const analyzeV2InFlightRef = useRef(0);
-  const [analyzeV2Running, setAnalyzeV2Running] = useState(false);
+  // analyzeV2Running is declared earlier near other state
   const [analyzeV2Progress, setAnalyzeV2Progress] = useState({ done: 0, total: 0 });
   const [analyzeV2Stopping, setAnalyzeV2Stopping] = useState(false);
 
@@ -2916,6 +2937,7 @@ export function AnalysisSection({ requestId, files, projectId, sourceType }: Ana
     // Fall back to DB results
     const result = results?.find((r) => r.file_id === fileId && r.awp_class_name === className);
     if (!result) return null;
+    if (result.status === "pending" && analyzeV2Running) return "loading";
     if (result.status === "failed") return "failed";
     if (result.status === "complete" && result.result_text) {
       const parsed = parseResultText(result.result_text);
