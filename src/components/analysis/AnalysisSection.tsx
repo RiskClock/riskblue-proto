@@ -3338,14 +3338,14 @@ export function AnalysisSection({ requestId, files, projectId, sourceType }: Ana
                       <span className="text-sm font-medium">{floor}</span>
                       <span className="text-xs text-muted-foreground ml-2">({floorMap.get(floor)!.length} items)</span>
                     </div>
-                    <Table>
+                    <Table className="table-fixed w-full">
                       <TableHeader>
                         <TableRow>
-                          <TableHead>Display ID</TableHead>
-                          <TableHead>Type</TableHead>
-                          <TableHead>Name</TableHead>
-                          <TableHead className="text-right">Area (sqft)</TableHead>
-                          <TableHead className="w-10" />
+                          <TableHead className="w-[25%]">Display ID</TableHead>
+                          <TableHead className="w-[15%]">Type</TableHead>
+                          <TableHead className="w-[30%]">Name</TableHead>
+                          <TableHead className="w-[20%] text-right">Area (sqft)</TableHead>
+                          <TableHead className="w-[10%]" />
                         </TableRow>
                       </TableHeader>
                       <TableBody>
