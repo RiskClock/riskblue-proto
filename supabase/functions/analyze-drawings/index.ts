@@ -150,7 +150,7 @@ async function callResponsesApi(params: {
   effectiveMime: string;
   cacheHit: boolean;
   model?: string;
-}): Promise<{ resultText: string } | { httpStatus: number; errText: string; parsedError: Record<string, unknown> | null }> {
+}): Promise<{ resultText: string; usage: Record<string, number> | null } | { httpStatus: number; errText: string; parsedError: Record<string, unknown> | null }> {
   const { openaiApiKey, openaiFileId, promptContent, fileRecord, effectiveMime, cacheHit, model } = params;
 
   console.log(`[analyze-drawings] Responses API call: file_id=${openaiFileId}, name=${fileRecord.name}, effectiveMime=${effectiveMime}, cacheHit=${cacheHit}, model=${model}`);
