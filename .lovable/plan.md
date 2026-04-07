@@ -1,39 +1,58 @@
 
 
-# Draw Red Circles Instead of Bounding Boxes in RawResultModal
+# Google Maps-Style Navigation + Zoom-Out Floor for Drawing Viewers
 
 ## Summary
 
-Replace the rectangular bounding box overlays in the `RawResultModal` with red circles. Each circle is centered on the detected tag's location in the PDF text layer, with a radius derived from the bounding box dimensions plus padding.
+Add scroll-to-zoom, double-click-to-zoom, pinch-to-zoom, click-drag-to-pan, and enforce a minimum zoom of 1.0 (fit-to-container) across all drawing viewer components.
 
-## Changes
+## Interactions
 
-**File: `src/components/analysis/AnalysisSection.tsx`** — lines 798-816
+| Gesture | Behavior |
+|---|---|
+| Scroll wheel | Zoom in/out centered on cursor |
+| Double-click | Zoom in 0.5x centered on click |
+| Click + drag | Pan (grab/grabbing cursor) |
+| Pinch (trackpad/touch) | Zoom centered on midpoint |
+| Zoom out limit | Clamped at 1.0 (document fills container) |
 
-Replace the rectangle drawing code inside the page-rendering loop with circle drawing:
+## Implementation
 
-1. Compute center point from the viewport-converted rectangle coordinates
-2. Calculate radius as `max(width, height) / 2 + 20` (same approach used in the other viewer)
-3. Draw a red translucent filled circle (`rgba(239, 68, 68, 0.15)`) with a red stroke (`rgba(239, 68, 68, 0.9)`)
+### Shared approach (all three viewers)
 
-```text
-Current (rect):
-  ctx.fillRect(x, y, w, h)
-  ctx.strokeRect(x, y, w, h)
+Add to each scrollable container div: `onWheel`, `onDoubleClick`, `onMouseDown/Move/Up/Leave`, `onTouchStart/Move/End`.
 
-New (circle):
-  cx = x + w/2
-  cy = y + h/2
-  radius = max(w, h) / 2 + 80  (scaled for high-res canvas at scale=4)
-  ctx.arc(cx, cy, radius, 0, 2π)
-  ctx.fill() + ctx.stroke()
-```
+- **dragRef** (`useRef`) tracks `isDragging`, `startX`, `startY`, `scrollLeft`, `scrollTop` — no re-renders during drag.
+- **onWheel**: `preventDefault()`, detect `ctrlKey` for trackpad pinch. Compute cursor fraction of content, apply ±0.25 zoom, reposition scroll to keep point stable. Clamp min 1.0, max 8.
+- **onDoubleClick**: +0.5 zoom centered on click point, clamped to max.
+- **Mouse drag**: Set scroll position based on delta from start.
+- **Touch**: Two-finger distance change → zoom delta; single finger → pan.
+- All zoom-out paths use `Math.max(1, ...)` instead of current 0.25/0.5.
 
-No other files affected. The `findBBoxInTextLayer` function and `parseRoomTagsFromResult` remain unchanged — only the rendering step changes from rect to circle.
+### File: `src/components/analysis/AnalysisSection.tsx`
+
+**InstanceDetailModal** (~line 612-697):
+- Add dragRef, event handlers to container div
+- Change `Math.max(0.25, ...)` → `Math.max(1, ...)` in handleZoomOut
+
+**RawResultModal** (~line 848-888):
+- Add dragRef, event handlers to pdfScrollRef container
+- Change `Math.max(0.25, ...)` → `Math.max(1, ...)` in handleZoom
+
+**FilePreviewModal** (~line 1004-1017):
+- Add dragRef, event handlers to container div
+- Change `Math.max(0.25, ...)` → `Math.max(1, ...)` in handleZoomOut
+- Update zoom-out button disabled check to `zoom <= 1`
+
+### File: `src/components/wizard/FileViewerModal.tsx`
+
+- Add dragRef, event handlers to container div (~line 259)
+- Change `Math.max(0.5, ...)` → `Math.max(1, ...)` in handleZoomOut
 
 ## Files Changed
 
 | File | Change |
 |---|---|
-| `src/components/analysis/AnalysisSection.tsx` | Replace `fillRect`/`strokeRect` with `arc` circle drawing in the RawResultModal page render loop (~lines 800-816) |
+| `src/components/analysis/AnalysisSection.tsx` | Add map-style nav handlers + zoom floor of 1.0 to InstanceDetailModal, RawResultModal, FilePreviewModal |
+| `src/components/wizard/FileViewerModal.tsx` | Add map-style nav handlers + zoom floor of 1.0 |
 
