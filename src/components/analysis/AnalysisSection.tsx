@@ -550,13 +550,15 @@ function InstanceDetailModal({
     const nx2 = Math.max(vx1, vx2) / offscreenSize.w;
     const ny2 = Math.max(vy1, vy2) / offscreenSize.h;
 
-    const bx = nx1 * baseDimensions.width;
-    const by = ny1 * baseDimensions.height;
     const bw = (nx2 - nx1) * baseDimensions.width;
     const bh = (ny2 - ny1) * baseDimensions.height;
+    const radius = Math.max(bw, bh) / 2 + 20;
+    const diameter = radius * 2;
+    const bx = ((nx1 + nx2) / 2) * baseDimensions.width - radius;
+    const by = ((ny1 + ny2) / 2) * baseDimensions.height - radius;
 
-    // Safeguard 1: skip zero-size bbox
-    if (bw <= 1 || bh <= 1) return;
+    // Safeguard: skip zero-size region
+    if (diameter <= 2) return;
 
     // Compute fit zoom (20% padding, clamped 1.0–4.0)
     const PADDING = 0.20;
