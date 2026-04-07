@@ -1665,16 +1665,66 @@ export function AnalysisSection({ requestId, files, projectId, sourceType }: Ana
     }
   }, [requestMeta, hydratedProcessing, analyzeV2Running]);
 
+  // Load extracted file IDs on mount so "Processed" badges appear immediately
+  useEffect(() => {
+    if (!requestId || copiedFiles.length === 0) return;
+    let cancelled = false;
+    (async () => {
+      const { data } = await supabase
+        .from("analysis_request_files")
+        .select("id")
+        .eq("analysis_request_id", requestId)
+        .not("extracted_text", "is", null);
+      if (!cancelled && data) {
+        setExtractedFileIds(new Set(data.map((f: any) => f.id)));
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [requestId, files.length]);
+
+  const savedSummaryData = useMemo(() => {
+    return (requestMeta?.summary_data as unknown as Record<string, SummarizedInstance[]>) || {};
+  }, [requestMeta]);
+
+  const { data: awpClasses } = useQuery({
+    queryKey: ["awp-classes-all"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("awp_classes")
+        .select("id, name, category, id_prefix");
+      if (error) throw error;
+      return data;
+    },
+  });
+
+  // ---- Source-of-truth AWP order + prefix from source tables ----
+  const { data: awpOrderData } = useQuery({
+    queryKey: ["awp-source-order"],
+    queryFn: async () => {
+      const [a, w, p] = await Promise.all([
+        supabase.from("critical_assets").select("name, id_prefix, display_order").eq("is_active", true).order("display_order"),
+        supabase.from("water_systems").select("name, id_prefix, display_order").eq("is_active", true).order("display_order"),
+        supabase.from("processes").select("name, id_prefix, display_order").eq("is_active", true).order("display_order"),
+      ]);
+      return [
+        ...(a.data || []).map((x, i) => ({ name: x.name, id_prefix: x.id_prefix, globalOrder: i })),
+        ...(w.data || []).map((x, i) => ({ name: x.name, id_prefix: x.id_prefix, globalOrder: 1000 + i })),
+        ...(p.data || []).map((x, i) => ({ name: x.name, id_prefix: x.id_prefix, globalOrder: 2000 + i })),
+      ];
+    },
+    staleTime: 1000 * 60 * 30,
+  });
+
+  const copiedFiles = files.filter((f) => f.copy_status === "copied" && f.storage_path);
+
   // Auto-resume: when we hydrate as "processing" but have no active scheduler,
   // rebuild the work queue from incomplete cells and restart.
   useEffect(() => {
     if (!analyzeV2Running) return;
     if (hasTriggeredResumeRef.current) return;
-    // Only resume if there's no active scheduler (i.e. we just navigated back)
     if (analyzeV2TimerRef.current !== null) return;
     if (analyzeV2InFlightRef.current > 0) return;
     if (analyzeV2QueueRef.current.length > 0) return;
-    // Need data to be loaded
     if (!prompts || prompts.length === 0) return;
     if (copiedFiles.length === 0) return;
     if (!results) return;
@@ -1682,7 +1732,6 @@ export function AnalysisSection({ requestId, files, projectId, sourceType }: Ana
     hasTriggeredResumeRef.current = true;
     console.log("[V2] Auto-resuming analysis from incomplete state");
 
-    // Rebuild work queue from cells without completed results
     (async () => {
       try {
         const enabledPrompts = sortedPrompts.filter(
@@ -1699,16 +1748,12 @@ export function AnalysisSection({ requestId, files, projectId, sourceType }: Ana
         const promptByClass = new Map<string, AWPPrompt>();
         for (const p of enabledPrompts) promptByClass.set(p.awp_class_name, p);
 
-        // Find completed cells from DB
         const completedCells = new Set<string>();
         for (const r of results) {
           if (r.status === "complete" || r.status === "failed") {
             completedCells.add(`${r.file_id}_${r.awp_class_name}`);
           }
         }
-
-        const { data: sessionData } = await supabase.auth.getSession();
-        const token = sessionData.session?.access_token;
 
         interface WorkItem {
           fileId: string;
@@ -1726,7 +1771,6 @@ export function AnalysisSection({ requestId, files, projectId, sourceType }: Ana
             const key = `${file.id}_${prompt.awp_class_name}`;
             const override = triageOverrides.get(key);
             const triage = triageResults.get(key);
-
             if (override === "exclude") continue;
             if (override === "include") { eligibleClasses.push(prompt.awp_class_name); continue; }
             if (triage?.status === "complete" && triage.score !== null && triage.score >= 50) {
@@ -1734,7 +1778,6 @@ export function AnalysisSection({ requestId, files, projectId, sourceType }: Ana
             }
           }
 
-          // Check for cached openai file ID
           let cachedOpenaiFileId: string | null = null;
           const { data: fileRow } = await supabase
             .from("analysis_request_files")
@@ -1754,8 +1797,7 @@ export function AnalysisSection({ requestId, files, projectId, sourceType }: Ana
           const hasCache = !!cachedOpenaiFileId;
           let firstUncachedQueued = false;
           for (const cn of eligibleClasses) {
-            const cellKey = `${file.id}_${cn}`;
-            if (completedCells.has(cellKey)) continue; // already done
+            if (completedCells.has(`${file.id}_${cn}`)) continue;
             const prompt = promptByClass.get(cn);
             if (!prompt) continue;
             const needsUpload = !hasCache && !firstUncachedQueued;
@@ -1774,13 +1816,10 @@ export function AnalysisSection({ requestId, files, projectId, sourceType }: Ana
         }
 
         console.log(`[V2] Resuming with ${workQueue.length} incomplete cells`);
-
-        // Set up classes being analyzed
         const resumeClasses = new Set(workQueue.map((w) => w.awpClassName));
         setAnalyzingClasses(resumeClasses);
         analyzeRunSyncRef.current = "running";
 
-        // Re-use the same executeItem pattern
         const executeItem = async (item: WorkItem) => {
           analyzeV2InFlightRef.current++;
           try {
@@ -1888,7 +1927,6 @@ export function AnalysisSection({ requestId, files, projectId, sourceType }: Ana
           }
         };
 
-        // Start the resumed scheduler
         analyzeV2QueueRef.current = workQueue;
         analyzeV2InFlightRef.current = 0;
         setAnalyzeV2Progress({ done: 0, total: workQueue.length });
@@ -1912,7 +1950,6 @@ export function AnalysisSection({ requestId, files, projectId, sourceType }: Ana
           }
         }, 1000);
 
-        // Immediately fire first batch
         while (analyzeV2InFlightRef.current < MAX_CONCURRENT_ANALYZE && analyzeV2QueueRef.current.length > 0) {
           const item = analyzeV2QueueRef.current.shift()!;
           executeItem(item as any);
@@ -1925,58 +1962,6 @@ export function AnalysisSection({ requestId, files, projectId, sourceType }: Ana
       }
     })();
   }, [analyzeV2Running, prompts, copiedFiles, results]);
-
-  // Load extracted file IDs on mount so "Processed" badges appear immediately
-  useEffect(() => {
-    if (!requestId || copiedFiles.length === 0) return;
-    let cancelled = false;
-    (async () => {
-      const { data } = await supabase
-        .from("analysis_request_files")
-        .select("id")
-        .eq("analysis_request_id", requestId)
-        .not("extracted_text", "is", null);
-      if (!cancelled && data) {
-        setExtractedFileIds(new Set(data.map((f: any) => f.id)));
-      }
-    })();
-    return () => { cancelled = true; };
-  }, [requestId, files.length]);
-
-  const savedSummaryData = useMemo(() => {
-    return (requestMeta?.summary_data as unknown as Record<string, SummarizedInstance[]>) || {};
-  }, [requestMeta]);
-
-  const { data: awpClasses } = useQuery({
-    queryKey: ["awp-classes-all"],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from("awp_classes")
-        .select("id, name, category, id_prefix");
-      if (error) throw error;
-      return data;
-    },
-  });
-
-  // ---- Source-of-truth AWP order + prefix from source tables ----
-  const { data: awpOrderData } = useQuery({
-    queryKey: ["awp-source-order"],
-    queryFn: async () => {
-      const [a, w, p] = await Promise.all([
-        supabase.from("critical_assets").select("name, id_prefix, display_order").eq("is_active", true).order("display_order"),
-        supabase.from("water_systems").select("name, id_prefix, display_order").eq("is_active", true).order("display_order"),
-        supabase.from("processes").select("name, id_prefix, display_order").eq("is_active", true).order("display_order"),
-      ]);
-      return [
-        ...(a.data || []).map((x, i) => ({ name: x.name, id_prefix: x.id_prefix, globalOrder: i })),
-        ...(w.data || []).map((x, i) => ({ name: x.name, id_prefix: x.id_prefix, globalOrder: 1000 + i })),
-        ...(p.data || []).map((x, i) => ({ name: x.name, id_prefix: x.id_prefix, globalOrder: 2000 + i })),
-      ];
-    },
-    staleTime: 1000 * 60 * 30,
-  });
-
-  const copiedFiles = files.filter((f) => f.copy_status === "copied" && f.storage_path);
 
   // id_prefix lookup from awp_classes (fallback)
   const idPrefixMap = useMemo(
