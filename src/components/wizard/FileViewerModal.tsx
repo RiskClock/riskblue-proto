@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from "react";
+import { useMapNavigation } from "@/hooks/useMapNavigation";
 import {
   Dialog,
   DialogContent,
@@ -312,7 +313,7 @@ export const FileViewerModal = ({
   
   const handleZoomOut = () => {
     setZoom(prev => {
-      const newZoom = Math.max(prev - 0.25, 0.5);
+      const newZoom = Math.max(1, prev - 0.25);
       console.log("Zoom out:", prev, "->", newZoom);
       return newZoom;
     });
