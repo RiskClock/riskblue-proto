@@ -251,7 +251,7 @@ serve(async (req) => {
       });
     }
 
-    const { analysisRequestId, fileId, awpClassName, promptContent, model } = await req.json();
+    const { analysisRequestId, fileId, awpClassName, promptContent, model, openaiFileId: suppliedOpenaiFileId } = await req.json();
     if (!analysisRequestId || !fileId || !awpClassName || !promptContent) {
       return new Response(JSON.stringify({ error: "Missing required fields" }), {
         status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
