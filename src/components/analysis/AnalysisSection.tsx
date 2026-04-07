@@ -149,7 +149,7 @@ function parseRoomTagsFromResult(
 
     const headers = lines[headerIdx].split("|").map((c) => c.trim().toLowerCase());
     const idCol = headers.findIndex((h) =>
-      h.includes("generated room") || h.includes("room code") || h.includes("code") || h === "id"
+      h.includes("generated room") || h.includes("room code") || h.includes("room identifier") || h.includes("code") || h === "id"
     );
     const pageCol = headers.findIndex((h) => h.includes("page") || h.includes("sheet"));
     if (idCol === -1) return [];
