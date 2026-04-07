@@ -1,48 +1,28 @@
 
 
-# Fix Analysis V2: 6 Issues
+# Fix Upload Indicator, Token Position, and 520 Retry
 
-## 1. White text on green background cells
-Instance count text in analyzed cells uses `text-primary` (blue) which is hard to read on dark green. Change to white.
+## Issues
 
-**File**: `AnalysisSection.tsx` — line ~3033, change `text-primary` to `text-white` for the instance count button in cells with triage background.
+### 1. Upload indicator never appears
+The upload indicator only shows when the first analysis call for a file triggers a fresh upload to OpenAI. However, if the file already has a cached `openai_file_id` (from a previous run), the upload path is skipped entirely (lines 1995-2001), so `uploadingFileIds` is never populated. Even on first runs, the indicator is set and cleared within the same synchronous `handleAnalyzeAllV2` loop iteration, which may not give React enough time to render between the `set` and `delete`.
 
-## 2. Increase instance count font size
-Bump `text-xs` to `text-sm` on the instance count buttons (lines ~3033 and ~3060).
+**Fix**: Move the upload indicator to wrap ALL file processing (not just the upload branch). Show "Uploading" when a file lacks a cached ID, or show a different indicator (e.g., "Preparing") when cached. Also ensure the indicator persists visibly by not clearing it until the first analysis call for that file completes.
 
-## 3. Change "cells" to "instances" in progress text
-**File**: `AnalysisSection.tsx` — line ~2815, change `cells` to `instances` in the `Analyzing: x/y cells` text. Also line ~2744 for triage.
+### 2. Token tracker position
+Currently the analyze section orders elements as: Model dropdown → Progress/Stop → Tokens. The triage section orders: Progress → Info/Tokens → Stop/Triage button. The user wants the analyze token display to appear **before** the "Analyzing: x/y instances" text, matching triage.
 
-## 4. Track and display analyze token usage
-- **DB migration**: Add `analyze_tokens_used` integer column to `analysis_requests` (default 0).
-- **Edge function** (`analyze-drawings`): Extract `responsesResult.usage` from the OpenAI response and include `usage` in the returned JSON.
-- **Client** (`AnalysisSection.tsx`):
-  - Add `analyzeTokens` state, hydrate from DB on mount.
-  - Reset to 0 when V2 starts.
-  - Accumulate tokens from each successful `executeAnalyzeV2Item` response.
-  - Persist to DB after each accumulation.
-  - Show live count while running, info icon with tooltip when complete (same pattern as triage tokens).
+**Fix**: Reorder the analyze toolbar so token info/live count appears immediately after the model dropdown, before the progress text and Stop/Analyze buttons.
 
-## 5. Visual indicator for file upload during analysis
-When a file is being uploaded to OpenAI (the first class call without `openaiFileId`), show a visual indicator on that file's row.
-- Add `uploadingFileIds` state (`Set<string>`).
-- Set it before the upload call in `handleAnalyzeAllV2` (line ~1998), clear after response.
-- In the file name column (line ~2974 area), show a small upload icon/spinner when `uploadingFileIds.has(file.id)`.
+### 3. OpenAI 520 error — no retry
+The `analyze-drawings` edge function treats ALL non-OK HTTP responses from the Responses API as fatal failures. A 520 is a transient Cloudflare error that would likely succeed on retry.
 
-## 6. Fix analysis summary not populating
-**Root cause**: `summarize-analysis` edge function uses `supabase.auth.getClaims()` which doesn't exist in the Supabase JS client. It should use `supabase.auth.getUser()` instead (same pattern as `analyze-drawings`).
-
-**Also**: The summarize calls fire from inside the `setInterval` completion callback. The results may not be available yet because `invalidateQueries` is async. Add `await` before the invalidation, then call summarize.
-
-**File**: `supabase/functions/summarize-analysis/index.ts` — Replace `getClaims` with `getUser` for auth check.
-**File**: `AnalysisSection.tsx` — In the V2 scheduler completion (line ~2096), await the invalidation, then trigger summarize calls.
+**Fix**: Add retry logic in the edge function's `callResponsesApi` function for 5xx status codes (up to 2 retries with exponential backoff). This prevents transient OpenAI/Cloudflare errors from failing the entire cell.
 
 ## Files Changed
 
 | File | Change |
 |---|---|
-| Migration SQL | Add `analyze_tokens_used` column to `analysis_requests` |
-| `supabase/functions/analyze-drawings/index.ts` | Return `usage` from OpenAI response |
-| `supabase/functions/summarize-analysis/index.ts` | Replace `getClaims` with `getUser` |
-| `src/components/analysis/AnalysisSection.tsx` | White text + larger font for counts; "instances" label; token tracking; upload indicator; fix summarize timing |
+| `src/components/analysis/AnalysisSection.tsx` | Fix upload indicator to show during the upload+first-analyze call; reorder token display before progress text in the analyze toolbar |
+| `supabase/functions/analyze-drawings/index.ts` | Add retry loop (max 2 retries, exponential backoff) around `callResponsesApi` for 5xx HTTP errors |
 
