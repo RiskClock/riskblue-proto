@@ -132,13 +132,41 @@ interface AnalysisSectionProps {
 function parseRoomTagsFromResult(
   resultText: string
 ): Array<{ tag: string; pageNum: number }> {
+  const rows = parseOverlayCandidates(resultText);
+  // Return the first candidate per row as the primary tag (backward compat)
+  return rows
+    .filter((r) => r.candidates.length > 0)
+    .map((r) => ({ tag: r.candidates[0], pageNum: r.pageNum }));
+}
+
+// ---------------------------------------------------------------------------
+// Multi-candidate overlay parser — returns all searchable strings per row
+// ---------------------------------------------------------------------------
+
+interface OverlayRow {
+  candidates: string[];   // ordered by search priority
+  pageNum: number;
+}
+
+/**
+ * Parse the AI result markdown table and return multiple search candidates
+ * per row.  Priority order for candidate columns:
+ *   1. drawing label / label
+ *   2. generated room code / room code
+ *   3. code / identifier / tag
+ *   4. first data column (fallback)
+ *
+ * Each non-empty value from these columns becomes a candidate the caller
+ * can try against the PDF text layer.
+ */
+function parseOverlayCandidates(resultText: string): OverlayRow[] {
   try {
     const lines = resultText.split("\n").filter((l) => l.includes("|"));
     if (lines.length < 2) return [];
 
     // Find header row
     let headerIdx = -1;
-    const HEADER_KW = ["room code", "generated room", "code", "id", "label", "name", "component", "type", "identifier", "tag"];
+    const HEADER_KW = ["room code", "generated room", "code", "id", "label", "name", "component", "type", "identifier", "tag", "drawing"];
     for (let i = 0; i < lines.length; i++) {
       const low = lines[i].toLowerCase();
       if (HEADER_KW.some((k) => low.includes(k)) && (lines[i].match(/\|/g) || []).length >= 2) {
@@ -149,31 +177,53 @@ function parseRoomTagsFromResult(
     if (headerIdx === -1) return [];
 
     const headers = lines[headerIdx].split("|").map((c) => c.trim().toLowerCase());
-    let idCol = headers.findIndex((h) =>
-      h.includes("generated room") || h.includes("room code") || h.includes("room identifier") || h.includes("component type") || h.includes("component") || h.includes("identifier") || h.includes("code") || h === "id"
-    );
     const pageCol = headers.findIndex((h) => h.includes("page") || h.includes("sheet"));
-    if (idCol === -1) {
-      // Fallback: use first non-empty column (index 1, since index 0 is empty before first |)
-      idCol = headers.length > 1 ? 1 : -1;
+
+    // Build candidate column indices in priority order
+    const candidateColIndices: number[] = [];
+    const colPriority: Array<(h: string) => boolean> = [
+      (h) => h.includes("drawing label") || h.includes("drawing code"),
+      (h) => (h.includes("label") && !h.includes("page")) || h.includes("room code") || h.includes("generated room") || h.includes("room identifier"),
+      (h) => h.includes("code") || h.includes("identifier") || h.includes("tag"),
+      (h) => h.includes("component type") || h.includes("component"),
+      (h) => h === "name" || h.includes("name"),
+    ];
+
+    for (const matcher of colPriority) {
+      for (let ci = 0; ci < headers.length; ci++) {
+        if (matcher(headers[ci]) && !candidateColIndices.includes(ci) && ci !== pageCol) {
+          candidateColIndices.push(ci);
+        }
+      }
     }
-    if (idCol === -1) return [];
+
+    // Fallback: if nothing matched, use first data column (index 1)
+    if (candidateColIndices.length === 0 && headers.length > 1) {
+      candidateColIndices.push(1);
+    }
 
     const dataLines = lines.slice(headerIdx + 1).filter((l) => !l.match(/^[\s|:-]+$/));
-    const tags: Array<{ tag: string; pageNum: number }> = [];
+    const rows: OverlayRow[] = [];
 
     for (const line of dataLines) {
       const cells = line.split("|").map((c) => c.trim());
-      const tag = cells[idCol];
-      if (!tag || tag === "-" || tag.toLowerCase().includes("none") || tag.toLowerCase().includes("no instance")) continue;
+      const candidates: string[] = [];
+      for (const ci of candidateColIndices) {
+        const val = cells[ci];
+        if (val && val !== "-" && !val.toLowerCase().includes("none") && !val.toLowerCase().includes("no instance") && val.length > 1) {
+          candidates.push(val);
+        }
+      }
       let pageNum = 1;
       if (pageCol !== -1) {
         const pv = parseInt(cells[pageCol] || "1", 10);
         if (!isNaN(pv) && pv > 0) pageNum = pv;
       }
-      tags.push({ tag, pageNum });
+      if (candidates.length > 0) {
+        rows.push({ candidates, pageNum });
+      }
     }
-    return tags;
+    return rows;
   } catch {
     return [];
   }
@@ -198,6 +248,7 @@ function normalizeText(s: string): string {
     .trim()
     .toLowerCase()
     .replace(/[\u2010\u2011\u2012\u2013\u2014\u2015\uFE58\uFE63\uFF0D]/g, "-") // normalize dashes
+    .replace(/[\u00D8\u00F8\u2205\u2300]/g, "o") // diameter symbols Ø ø ∅ ⌀ → o
     .replace(/\s+/g, " ");
 }
 
