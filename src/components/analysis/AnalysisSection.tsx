@@ -2026,13 +2026,7 @@ export function AnalysisSection({ requestId, files, projectId, sourceType }: Ana
   // Analyze V2: File-first workflow with concurrency pool
   // ---------------------------------------------------------------------------
 
-  const analyzeV2QueueRef = useRef<Array<{
-    fileId: string;
-    openaiFileId: string;
-    awpClassName: string;
-    prompt: AWPPrompt;
-    fileName: string;
-  }>>([]);
+  const analyzeV2QueueRef = useRef<Array<any>>([]);
   const analyzeV2TimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const analyzeV2InFlightRef = useRef(0);
   // analyzeV2Running is declared earlier near other state
