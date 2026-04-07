@@ -1624,14 +1624,22 @@ export function AnalysisSection({ requestId, files, projectId, sourceType }: Ana
   }, [requestMeta]);
 
   // Hydrate analyzeV2Running from DB status on mount/navigation
+  // Also auto-clear when DB status transitions to complete while we're showing "running"
   const [hydratedProcessing, setHydratedProcessing] = useState(false);
   useEffect(() => {
-    if (!requestMeta || hydratedProcessing) return;
-    if ((requestMeta as any).status === "processing" && !analyzeV2Running) {
-      setAnalyzeV2Running(true);
+    if (!requestMeta) return;
+    const dbStatus = (requestMeta as any).status as string;
+    if (!hydratedProcessing) {
+      if (dbStatus === "processing") {
+        setAnalyzeV2Running(true);
+      }
+      setHydratedProcessing(true);
+    } else if (analyzeV2Running && dbStatus === "complete") {
+      // The analysis finished (possibly in another tab / after navigation)
+      setAnalyzeV2Running(false);
+      setAnalyzingClasses(new Set());
     }
-    setHydratedProcessing(true);
-  }, [requestMeta]);
+  }, [requestMeta, hydratedProcessing, analyzeV2Running]);
 
   // Load extracted file IDs on mount so "Processed" badges appear immediately
   useEffect(() => {
