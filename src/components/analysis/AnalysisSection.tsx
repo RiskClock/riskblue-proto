@@ -3002,7 +3002,20 @@ export function AnalysisSection({ requestId, files, projectId, sourceType }: Ana
                           >
                             {file.name}
                           </button>
-                          {extractingFileIds.has(file.id) && (
+                           {extractingFileIds.has(file.id) && (
+                             <Loader2 className="w-3 h-3 animate-spin text-muted-foreground flex-shrink-0" />
+                           )}
+                           {uploadingFileIds.has(file.id) && !extractingFileIds.has(file.id) && (
+                             <Tooltip>
+                               <TooltipTrigger asChild>
+                                 <span className="inline-flex items-center gap-1 text-[10px] text-muted-foreground flex-shrink-0">
+                                   <Loader2 className="w-3 h-3 animate-spin" />
+                                   Uploading
+                                 </span>
+                               </TooltipTrigger>
+                               <TooltipContent>Uploading file to analysis service</TooltipContent>
+                             </Tooltip>
+                           )}
                             <Loader2 className="w-3 h-3 animate-spin text-muted-foreground flex-shrink-0" />
                           )}
                           {extractedFileIds.has(file.id) && !extractingFileIds.has(file.id) && (
