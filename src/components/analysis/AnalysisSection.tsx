@@ -2012,6 +2012,9 @@ export function AnalysisSection({ requestId, files, projectId, sourceType }: Ana
             [firstClass]: { ...(prev[firstClass] || {}), [file.id]: "processing" },
           }));
 
+          // Show upload indicator for this file
+          setUploadingFileIds((prev) => { const n = new Set(prev); n.add(file.id); return n; });
+
           const uploadResponse = await fetch(
             `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/analyze-drawings`,
             {
@@ -2030,9 +2033,18 @@ export function AnalysisSection({ requestId, files, projectId, sourceType }: Ana
             }
           );
 
+          // Clear upload indicator
+          setUploadingFileIds((prev) => { const n = new Set(prev); n.delete(file.id); return n; });
+
           if (uploadResponse.ok) {
             const data = await uploadResponse.json();
             cachedOpenaiFileId = data.openaiFileId || null;
+            // Track tokens from the upload+analyze call
+            if (data.usage?.total_tokens) {
+              analyzeTokensRef.current += data.usage.total_tokens;
+              setAnalyzeTokens(analyzeTokensRef.current);
+              supabase.from("analysis_requests").update({ analyze_tokens_used: analyzeTokensRef.current } as any).eq("id", requestId);
+            }
             setClassFileStatuses((prev) => ({
               ...prev,
               [firstClass]: { ...(prev[firstClass] || {}), [file.id]: "complete" },
