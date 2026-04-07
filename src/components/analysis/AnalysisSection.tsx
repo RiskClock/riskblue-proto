@@ -1847,32 +1847,36 @@ export function AnalysisSection({ requestId, files, projectId, sourceType }: Ana
       const { data: sessionData } = await supabase.auth.getSession();
       const token = sessionData.session?.access_token;
 
-      const resolveResponse = await fetch(
-        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/resolve-drive-doc`,
-        {
-          method: "POST",
-          signal: controller.signal,
-          headers: {
-            Authorization: `Bearer ${token}`,
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            fileUrl: prompt.drive_file_id,
-            exportContent: true,
-          }),
-        }
-      );
-
-      if (!resolveResponse.ok) {
-        const err = await resolveResponse.json();
-        throw new Error(err.error || "Failed to fetch prompt content");
-      }
-
-      const resolveResult = await resolveResponse.json();
-      const promptContent = resolveResult.content;
-
+      // Use cached prompt_content first, fall back to live Drive fetch
+      let promptContent = prompt.prompt_content || null;
       if (!promptContent) {
-        throw new Error("Could not retrieve prompt content from the linked document");
+        const resolveResponse = await fetch(
+          `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/resolve-drive-doc`,
+          {
+            method: "POST",
+            signal: controller.signal,
+            headers: {
+              Authorization: `Bearer ${token}`,
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+              fileUrl: prompt.drive_file_id,
+              exportContent: true,
+            }),
+          }
+        );
+
+        if (!resolveResponse.ok) {
+          const err = await resolveResponse.json();
+          throw new Error(err.error || "Failed to fetch prompt content");
+        }
+
+        const resolveResult = await resolveResponse.json();
+        promptContent = resolveResult.content;
+
+        if (!promptContent) {
+          throw new Error("Could not retrieve prompt content from the linked document");
+        }
       }
 
       // Filter to effectively-included files based on triage + overrides
@@ -2132,10 +2136,22 @@ export function AnalysisSection({ requestId, files, projectId, sourceType }: Ana
       const { data: sessionData } = await supabase.auth.getSession();
       const token = sessionData.session?.access_token;
 
-      // Step 1: Pre-fetch prompt content for each enabled class
+      // Step 1: Build prompt content map — prefer cached prompt_content, fall back to live Drive fetch
       const promptContents = new Map<string, string>();
+      const skippedClasses: string[] = [];
       await Promise.all(
         enabledPrompts.map(async (prompt) => {
+          // Use cached prompt_content from awp_class_prompts table first
+          if (prompt.prompt_content) {
+            promptContents.set(prompt.awp_class_name, prompt.prompt_content);
+            return;
+          }
+          // Fall back to live Drive fetch only if cached content is missing
+          if (!prompt.drive_file_id) {
+            console.warn(`[V2] No cached prompt_content and no drive_file_id for ${prompt.awp_class_name}`);
+            skippedClasses.push(prompt.awp_class_name);
+            return;
+          }
           try {
             const resolveResponse = await fetch(
               `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/resolve-drive-doc`,
@@ -2150,13 +2166,26 @@ export function AnalysisSection({ requestId, files, projectId, sourceType }: Ana
             );
             if (resolveResponse.ok) {
               const data = await resolveResponse.json();
-              if (data.content) promptContents.set(prompt.awp_class_name, data.content);
+              if (data.content) {
+                promptContents.set(prompt.awp_class_name, data.content);
+              } else {
+                console.warn(`[V2] Drive fetch returned no content for ${prompt.awp_class_name}`);
+                skippedClasses.push(prompt.awp_class_name);
+              }
+            } else {
+              console.warn(`[V2] Drive fetch failed for ${prompt.awp_class_name}: ${resolveResponse.status}`);
+              skippedClasses.push(prompt.awp_class_name);
             }
           } catch (e) {
             console.error(`[V2] Failed to fetch prompt for ${prompt.awp_class_name}:`, e);
+            skippedClasses.push(prompt.awp_class_name);
           }
         })
       );
+      if (skippedClasses.length > 0) {
+        toast({ title: "Missing Prompts", description: `Skipped classes with no prompt content: ${skippedClasses.join(", ")}`, variant: "destructive" });
+        console.warn(`[V2] Skipped classes due to missing prompt content: ${skippedClasses.join(", ")}`);
+      }
 
       // Step 2: For each file, upload once then queue all eligible class calls
       const workQueue: typeof analyzeV2QueueRef.current = [];
