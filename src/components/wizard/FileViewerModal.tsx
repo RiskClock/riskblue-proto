@@ -59,6 +59,7 @@ export const FileViewerModal = ({
   const [originalSize, setOriginalSize] = useState<{ width: number; height: number } | null>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
+  const fileViewerMapNav = useMapNavigation({ zoom, setZoom, minZoom: 1, maxZoom: 8, containerRef });
 
   // Filter detections for this file (show all if no fileName specified)
   const fileDetections = detections;
