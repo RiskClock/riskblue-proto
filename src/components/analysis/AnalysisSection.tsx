@@ -563,14 +563,14 @@ function InstanceDetailModal({
     // Compute fit zoom (20% padding, clamped 1.0–4.0)
     const PADDING = 0.20;
     const fitScale = Math.min(
-      container.clientWidth  / (bw * (1 + PADDING)),
-      container.clientHeight / (bh * (1 + PADDING)),
+      container.clientWidth  / (diameter * (1 + PADDING)),
+      container.clientHeight / (diameter * (1 + PADDING)),
     );
     const targetZoom = Math.min(4.0, Math.max(1.0, fitScale));
 
-    // bbox center in zoomed-canvas pixels (captured in closure for double-RAF)
-    const cx = (bx + bw / 2) * targetZoom;
-    const cy = (by + bh / 2) * targetZoom;
+    // circle center in zoomed-canvas pixels
+    const cx = (bx + radius) * targetZoom;
+    const cy = (by + radius) * targetZoom;
 
     // Mark as done before applying (prevents any re-entry)
     didAutoFitRef.current = true;
