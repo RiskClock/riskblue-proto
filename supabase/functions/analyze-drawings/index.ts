@@ -251,7 +251,7 @@ serve(async (req) => {
       });
     }
 
-    const { analysisRequestId, fileId, awpClassName, promptContent, model } = await req.json();
+    const { analysisRequestId, fileId, awpClassName, promptContent, model, openaiFileId: suppliedOpenaiFileId } = await req.json();
     if (!analysisRequestId || !fileId || !awpClassName || !promptContent) {
       return new Response(JSON.stringify({ error: "Missing required fields" }), {
         status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -337,7 +337,12 @@ serve(async (req) => {
     let openaiFileId: string;
     let usedCacheHit: boolean;
 
-    if (shouldReuseFile(fileRecord) && !mimeWasCorrected) {
+    if (suppliedOpenaiFileId) {
+      // Client supplied a pre-uploaded file_id — skip upload entirely
+      openaiFileId = suppliedOpenaiFileId;
+      usedCacheHit = true;
+      console.log(`[analyze-drawings] Using client-supplied openaiFileId=${openaiFileId} for file ${fileId}`);
+    } else if (shouldReuseFile(fileRecord) && !mimeWasCorrected) {
       openaiFileId = fileRecord.openai_file_id as string;
       usedCacheHit = true;
       console.log(`[analyze-drawings] Cache hit for file ${fileId}: reusing OpenAI file_id=${openaiFileId}, uploadedAt=${fileRecord.openai_file_uploaded_at}, expiresAt=${fileRecord.openai_file_expires_at}`);
@@ -490,6 +495,7 @@ serve(async (req) => {
       resultText,
       fileId,
       fileName: fileRecord.name,
+      openaiFileId,
     }), {
       status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
