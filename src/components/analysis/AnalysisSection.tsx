@@ -41,6 +41,7 @@ import {
   Check,
   Search,
   FileSearch,
+  Info,
 } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
 import * as pdfjsLib from "pdfjs-dist";
@@ -2386,7 +2387,19 @@ export function AnalysisSection({ requestId, files, projectId, sourceType }: Ana
                   Triaging: {triageProgress.done}/{triageProgress.total} cells
                 </span>
               )}
-              {(triageRunning || triageTokens > 0) && (
+              {!triageRunning && triageTokens > 0 && (
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <span className="inline-flex items-center cursor-default">
+                      <Info className="w-4 h-4 text-muted-foreground" />
+                    </span>
+                  </TooltipTrigger>
+                  <TooltipContent side="bottom">
+                    <p className="text-xs tabular-nums">Last triage used {triageTokens.toLocaleString()} tokens</p>
+                  </TooltipContent>
+                </Tooltip>
+              )}
+              {triageRunning && triageTokens > 0 && (
                 <span className="text-xs text-muted-foreground tabular-nums">
                   {triageTokens.toLocaleString()} tokens
                 </span>
