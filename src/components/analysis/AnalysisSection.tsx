@@ -556,10 +556,9 @@ function InstanceDetailModal({
             x2: matchedAiBBox.x2,
             y2: matchedAiBBox.y2,
           });
-          // Mark that these are AI pixel coords, not PDF user-space
-          (window as any).__aiBBoxMode = true;
+          setIsAiBBoxMode(true);
         } else {
-          (window as any).__aiBBoxMode = false;
+          setIsAiBBoxMode(false);
         }
 
         // Convert to HTMLImageElement
