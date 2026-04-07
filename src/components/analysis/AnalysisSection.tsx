@@ -1596,7 +1596,7 @@ export function AnalysisSection({ requestId, files, projectId, sourceType }: Ana
     queryFn: async () => {
       const { data } = await supabase
         .from("analysis_requests")
-        .select("summary_data, triage_tokens_used, triage_model, analyze_model, disabled_awp_classes")
+        .select("status, summary_data, triage_tokens_used, triage_model, analyze_model, disabled_awp_classes")
         .eq("id", requestId)
         .single();
       return data;
