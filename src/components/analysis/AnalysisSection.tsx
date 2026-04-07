@@ -2928,6 +2928,7 @@ export function AnalysisSection({ requestId, files, projectId, sourceType }: Ana
     // Fall back to DB results
     const result = results?.find((r) => r.file_id === fileId && r.awp_class_name === className);
     if (!result) return null;
+    if (result.status === "pending" && analyzeV2Running) return "loading";
     if (result.status === "failed") return "failed";
     if (result.status === "complete" && result.result_text) {
       const parsed = parseResultText(result.result_text);
