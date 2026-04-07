@@ -1519,6 +1519,7 @@ export function AnalysisSection({ requestId, files, projectId, sourceType }: Ana
       if (error) throw error;
       return data as AnalysisResult[];
     },
+    refetchInterval: analyzeV2Running ? 5000 : false,
   });
 
   // Fetch existing triage results
