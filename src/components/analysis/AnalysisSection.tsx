@@ -621,11 +621,9 @@ function InstanceDetailModal({
 
     if (rawCoords && pdfViewport && offscreenSize) {
       console.log(`[BBox] drawing: rawCoords=`, rawCoords, `isAiBBoxMode=`, isAiBBoxMode);
-      console.log(`[BBox] drawing: rawCoords=`, rawCoords, `isAiMode=`, isAiMode);
-
       let cx: number, cy: number, radius: number;
 
-      if (isAiMode) {
+      if (isAiBBoxMode) {
         // AI pixel coordinates — map directly to display canvas
         // AI coords are in the same pixel space as offscreenSize (scale 4)
         const ncx = ((rawCoords.x1 + rawCoords.x2) / 2) / offscreenSize.w;
@@ -674,9 +672,8 @@ function InstanceDetailModal({
     if (!container) return;
 
     let bx: number, by: number, radius: number;
-    let bx: number, by: number, radius: number;
 
-    if (isAiMode) {
+    if (isAiBBoxMode) {
       // AI pixel coordinates — map directly
       const ncx = ((rawCoords.x1 + rawCoords.x2) / 2) / offscreenSize.w;
       const ncy = ((rawCoords.y1 + rawCoords.y2) / 2) / offscreenSize.h;
