@@ -499,23 +499,31 @@ function InstanceDetailModal({
         );
         const searchCandidates = matchingRow?.candidates ?? [instance.id];
         const hintPage = matchingRow?.pageNum;
+        const matchedAiBBox = matchingRow?.aiBBox;
 
         console.log(`[BBox] opening: instance.id=${instance.id} instance.name=${instance.name}`);
-        console.log(`[BBox] searchCandidates=`, searchCandidates, `hintPage=${hintPage}`);
+        console.log(`[BBox] searchCandidates=`, searchCandidates, `hintPage=${hintPage}`, `aiBBox=`, matchedAiBBox);
 
         const pdf = await pdfjsLib.getDocument({ data: ab }).promise;
         if (cancelled) return;
 
-        // Try each candidate until one matches in the PDF text layer
+        // Prefer AI bounding box coordinates; fall back to text-layer search
         let textBBox: PDFBBox | null = null;
-        for (const candidate of searchCandidates) {
-          textBBox = await findBBoxInTextLayer(pdf, candidate, hintPage);
-          if (textBBox) break;
-          if (cancelled) return;
+        let useAiBBox = false;
+        if (matchedAiBBox) {
+          useAiBBox = true;
+          console.log(`[BBox] Using AI bounding box:`, matchedAiBBox);
+        } else {
+          // Try each candidate until one matches in the PDF text layer
+          for (const candidate of searchCandidates) {
+            textBBox = await findBBoxInTextLayer(pdf, candidate, hintPage);
+            if (textBBox) break;
+            if (cancelled) return;
+          }
         }
         if (cancelled) return;
 
-        console.log(`[BBox] text layer result=`, textBBox);
+        console.log(`[BBox] text layer result=`, textBBox, `useAiBBox=`, useAiBBox);
         if (textBBox) {
           setRawCoords({ x1: textBBox.x1, y1: textBBox.y1, x2: textBBox.x2, y2: textBBox.y2 });
         }
@@ -534,6 +542,24 @@ function InstanceDetailModal({
         const ctx = offscreen.getContext("2d")!;
         await page.render({ canvasContext: ctx, viewport, canvas: offscreen } as any).promise;
         if (cancelled) return;
+
+        // If using AI bbox, store as rawCoords in a special way
+        // We'll convert AI pixel coords to PDF viewport coords for consistent rendering
+        if (useAiBBox && matchedAiBBox) {
+          // AI coords are in the same pixel space as the rendered image (scale 4)
+          // Store them directly as viewport pixel coords (not PDF user-space)
+          // We set rawCoords to a sentinel and handle in the draw step
+          setRawCoords({
+            x1: matchedAiBBox.x1,
+            y1: matchedAiBBox.y1,
+            x2: matchedAiBBox.x2,
+            y2: matchedAiBBox.y2,
+          });
+          // Mark that these are AI pixel coords, not PDF user-space
+          (window as any).__aiBBoxMode = true;
+        } else {
+          (window as any).__aiBBoxMode = false;
+        }
 
         // Convert to HTMLImageElement
         const img = new Image();
