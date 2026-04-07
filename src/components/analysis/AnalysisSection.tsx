@@ -1907,6 +1907,8 @@ export function AnalysisSection({ requestId, files, projectId, sourceType }: Ana
     setAnalyzingClasses(new Set(allClassNames));
     setAnalyzeV2Running(true);
     setClassFileStatuses({});
+    setAnalyzeTokens(0);
+    analyzeTokensRef.current = 0;
 
     // Mark request as processing
     await supabase.from("analysis_requests").update({ status: "processing" }).eq("id", requestId);
