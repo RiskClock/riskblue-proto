@@ -806,13 +806,17 @@ function RawResultModal({ fileName, awpClassName, resultText, instanceCount, sou
             const w = Math.abs(vx2 - vx1);
             const h = Math.abs(vy2 - vy1);
 
-            // Fill
+            // Circle overlay
+            const cx = x + w / 2;
+            const cy = y + h / 2;
+            const radius = Math.max(w, h) / 2 + 80;
+            ctx.beginPath();
+            ctx.arc(cx, cy, radius, 0, Math.PI * 2);
             ctx.fillStyle = "rgba(239, 68, 68, 0.15)";
-            ctx.fillRect(x, y, w, h);
-            // Stroke
+            ctx.fill();
             ctx.strokeStyle = "rgba(239, 68, 68, 0.9)";
             ctx.lineWidth = 3;
-            ctx.strokeRect(x, y, w, h);
+            ctx.stroke();
           }
 
           canvases.push(canvas);
