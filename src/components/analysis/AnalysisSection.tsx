@@ -2889,6 +2889,23 @@ export function AnalysisSection({ requestId, files, projectId, sourceType }: Ana
                   </Tooltip>
                 </div>
               )}
+              {analyzeV2Running && analyzeTokens > 0 && (
+                <span className="text-xs text-muted-foreground tabular-nums">
+                  {analyzeTokens.toLocaleString()} tokens
+                </span>
+              )}
+              {!analyzeV2Running && analyzeTokens > 0 && (
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <span className="inline-flex items-center cursor-default">
+                      <Info className="w-4 h-4 text-muted-foreground" />
+                    </span>
+                  </TooltipTrigger>
+                  <TooltipContent side="bottom">
+                    <p className="text-xs tabular-nums">Last analysis used {analyzeTokens.toLocaleString()} tokens</p>
+                  </TooltipContent>
+                </Tooltip>
+              )}
             </div>
           </div>
 
