@@ -827,16 +827,20 @@ function RawResultModal({ fileName, awpClassName, resultText, instanceCount, sou
         const pdf = await pdfjsLib.getDocument({ data: ab }).promise;
         if (cancelled) return;
 
-        // Parse room tags from AI result text
-        const roomTags = resultText ? parseRoomTagsFromResult(resultText) : [];
-        console.log(`[RawResultModal] Found ${roomTags.length} room tags to locate:`, roomTags.map(t => t.tag));
+        // Parse overlay candidates from AI result text (multi-candidate per row)
+        const overlayRows = resultText ? parseOverlayCandidates(resultText) : [];
+        console.log(`[RawResultModal] Found ${overlayRows.length} overlay rows:`, overlayRows.map(r => r.candidates));
 
-        // Find all bboxes
+        // Find bboxes — try each candidate per row until one matches
         const bboxes: PDFBBox[] = [];
-        for (const { tag, pageNum } of roomTags) {
-          const bbox = await findBBoxInTextLayer(pdf, tag, pageNum);
-          if (bbox) bboxes.push(bbox);
-          if (cancelled) return;
+        for (const { candidates, pageNum } of overlayRows) {
+          let found = false;
+          for (const candidate of candidates) {
+            const bbox = await findBBoxInTextLayer(pdf, candidate, pageNum);
+            if (bbox) { bboxes.push(bbox); found = true; break; }
+            if (cancelled) return;
+          }
+          if (!found) console.log(`[RawResultModal] No match for candidates:`, candidates);
         }
         console.log(`[RawResultModal] Found ${bboxes.length} bounding boxes`);
         setBboxCount(bboxes.length);
