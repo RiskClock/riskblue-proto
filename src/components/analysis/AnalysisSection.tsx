@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from "react";
+import { useMapNavigation } from "@/hooks/useMapNavigation";
 import { supabase } from "@/integrations/supabase/client";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
@@ -611,13 +612,13 @@ function InstanceDetailModal({
 
   const handleZoomOut = () => {
     const container = containerRef.current;
-    if (!container) { setZoom(z => Math.max(0.25, z - 0.25)); return; }
+    if (!container) { setZoom(z => Math.max(1, z - 0.25)); return; }
     const scrollCenterX = container.scrollWidth > 0
       ? (container.scrollLeft + container.clientWidth / 2) / container.scrollWidth : 0.5;
     const scrollCenterY = container.scrollHeight > 0
       ? (container.scrollTop + container.clientHeight / 2) / container.scrollHeight : 0.5;
     setZoom(prevZoom => {
-      const newZoom = Math.max(0.25, prevZoom - 0.25);
+      const newZoom = Math.max(1, prevZoom - 0.25);
       requestAnimationFrame(() => {
         container.scrollLeft = scrollCenterX * container.scrollWidth - container.clientWidth / 2;
         container.scrollTop = scrollCenterY * container.scrollHeight - container.clientHeight / 2;
@@ -625,6 +626,8 @@ function InstanceDetailModal({
       return newZoom;
     });
   };
+
+  const instanceMapNav = useMapNavigation({ zoom, setZoom, minZoom: 1, maxZoom: 8, containerRef });
 
   return (
     <Dialog open onOpenChange={(open) => { if (!open) onClose(); }}>
@@ -683,7 +686,7 @@ function InstanceDetailModal({
             <div className="h-12 flex-shrink-0 flex items-center justify-between px-4 border-b bg-background">
               <span className="text-sm text-muted-foreground">Drawing Preview</span>
               <div className="flex items-center gap-2">
-                <Button variant="outline" size="icon" className="h-8 w-8" onClick={handleZoomOut} disabled={zoom <= 0.25}>
+                <Button variant="outline" size="icon" className="h-8 w-8" onClick={handleZoomOut} disabled={zoom <= 1}>
                   <ZoomOut className="w-4 h-4" />
                 </Button>
                 <span className="text-sm min-w-[3rem] text-center tabular-nums">{Math.round(zoom * 100)}%</span>
@@ -697,6 +700,8 @@ function InstanceDetailModal({
             <div
               ref={containerRef}
               className="flex-1 min-h-0 overflow-auto bg-muted/30 m-4 border rounded-lg p-4"
+              style={instanceMapNav.containerStyle}
+              {...instanceMapNav.handlers}
             >
               {!sourceFile?.storage_path ? (
                 <div className="flex items-center justify-center h-full">
@@ -847,11 +852,11 @@ function RawResultModal({ fileName, awpClassName, resultText, instanceCount, sou
 
   const handleZoom = (delta: number) => {
     const scroll = pdfScrollRef.current;
-    if (!scroll) { setZoom(z => Math.min(8, Math.max(0.25, z + delta))); return; }
+    if (!scroll) { setZoom(z => Math.min(8, Math.max(1, z + delta))); return; }
     const cx = scroll.scrollWidth > 0 ? (scroll.scrollLeft + scroll.clientWidth / 2) / scroll.scrollWidth : 0.5;
     const cy = scroll.scrollHeight > 0 ? (scroll.scrollTop + scroll.clientHeight / 2) / scroll.scrollHeight : 0.5;
     setZoom(prev => {
-      const next = Math.min(8, Math.max(0.25, prev + delta));
+      const next = Math.min(8, Math.max(1, prev + delta));
       requestAnimationFrame(() => {
         scroll.scrollLeft = cx * scroll.scrollWidth - scroll.clientWidth / 2;
         scroll.scrollTop = cy * scroll.scrollHeight - scroll.clientHeight / 2;
@@ -859,6 +864,8 @@ function RawResultModal({ fileName, awpClassName, resultText, instanceCount, sou
       return next;
     });
   };
+
+  const rawMapNav = useMapNavigation({ zoom, setZoom, minZoom: 1, maxZoom: 8, containerRef: pdfScrollRef });
 
   return (
     <Dialog open onOpenChange={(open) => { if (!open) onClose(); }}>
@@ -876,7 +883,7 @@ function RawResultModal({ fileName, awpClassName, resultText, instanceCount, sou
             <div className="h-10 flex-shrink-0 flex items-center justify-between px-3 border-b bg-background">
               <span className="text-xs text-muted-foreground truncate">Drawing Preview</span>
               <div className="flex items-center gap-1">
-                <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => handleZoom(-0.25)} disabled={zoom <= 0.25}>
+                <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => handleZoom(-0.25)} disabled={zoom <= 1}>
                   <ZoomOut className="w-3.5 h-3.5" />
                 </Button>
                 <span className="text-xs w-10 text-center">{Math.round(zoom * 100)}%</span>
@@ -885,7 +892,7 @@ function RawResultModal({ fileName, awpClassName, resultText, instanceCount, sou
                 </Button>
               </div>
             </div>
-            <div ref={pdfScrollRef} className="flex-1 overflow-auto p-2">
+            <div ref={pdfScrollRef} className="flex-1 overflow-auto p-2" style={rawMapNav.containerStyle} {...rawMapNav.handlers}>
               {pdfLoading ? (
                 <div className="flex items-center justify-center h-full">
                   <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
@@ -1003,11 +1010,11 @@ function FilePreviewModal({ file, onClose }: FilePreviewModalProps) {
 
   const handleZoomOut = () => {
     const scroll = scrollRef.current;
-    if (!scroll) { setZoom(z => Math.max(0.25, z - 0.25)); return; }
+    if (!scroll) { setZoom(z => Math.max(1, z - 0.25)); return; }
     const cx = scroll.scrollWidth > 0 ? (scroll.scrollLeft + scroll.clientWidth / 2) / scroll.scrollWidth : 0.5;
     const cy = scroll.scrollHeight > 0 ? (scroll.scrollTop + scroll.clientHeight / 2) / scroll.scrollHeight : 0.5;
     setZoom(prev => {
-      const next = Math.max(0.25, prev - 0.25);
+      const next = Math.max(1, prev - 0.25);
       requestAnimationFrame(() => {
         scroll.scrollLeft = cx * scroll.scrollWidth - scroll.clientWidth / 2;
         scroll.scrollTop = cy * scroll.scrollHeight - scroll.clientHeight / 2;
@@ -1015,6 +1022,8 @@ function FilePreviewModal({ file, onClose }: FilePreviewModalProps) {
       return next;
     });
   };
+
+  const filePreviewMapNav = useMapNavigation({ zoom, setZoom, minZoom: 1, maxZoom: 8, containerRef: scrollRef });
 
   return (
     <Dialog open onOpenChange={(open) => { if (!open) onClose(); }}>
@@ -1024,7 +1033,7 @@ function FilePreviewModal({ file, onClose }: FilePreviewModalProps) {
           <div className="flex items-center justify-between gap-4">
             <DialogTitle className="truncate text-sm font-mono flex-1 min-w-0">{file.name}</DialogTitle>
             <div className="flex items-center gap-2 flex-shrink-0">
-              <Button variant="outline" size="icon" className="h-8 w-8" onClick={handleZoomOut} disabled={zoom <= 0.25 || loading}>
+              <Button variant="outline" size="icon" className="h-8 w-8" onClick={handleZoomOut} disabled={zoom <= 1 || loading}>
                 <ZoomOut className="w-4 h-4" />
               </Button>
               <span className="text-sm min-w-[3rem] text-center tabular-nums">{Math.round(zoom * 100)}%</span>
@@ -1036,7 +1045,7 @@ function FilePreviewModal({ file, onClose }: FilePreviewModalProps) {
         </DialogHeader>
 
         {/* Scrollable body */}
-        <div ref={scrollRef} className="flex-1 overflow-auto bg-muted/20">
+        <div ref={scrollRef} className="flex-1 overflow-auto bg-muted/20" style={filePreviewMapNav.containerStyle} {...filePreviewMapNav.handlers}>
           {loading && (
             <div className="flex items-center justify-center py-12">
               <Loader2 className="w-6 h-6 animate-spin mr-2" />

@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from "react";
+import { useMapNavigation } from "@/hooks/useMapNavigation";
 import {
   Dialog,
   DialogContent,
@@ -58,6 +59,7 @@ export const FileViewerModal = ({
   const [originalSize, setOriginalSize] = useState<{ width: number; height: number } | null>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
+  const fileViewerMapNav = useMapNavigation({ zoom, setZoom, minZoom: 1, maxZoom: 8, containerRef });
 
   // Filter detections for this file (show all if no fileName specified)
   const fileDetections = detections;
@@ -312,7 +314,7 @@ export const FileViewerModal = ({
   
   const handleZoomOut = () => {
     setZoom(prev => {
-      const newZoom = Math.max(prev - 0.25, 0.5);
+      const newZoom = Math.max(1, prev - 0.25);
       console.log("Zoom out:", prev, "->", newZoom);
       return newZoom;
     });
@@ -368,6 +370,8 @@ export const FileViewerModal = ({
           <div 
             ref={containerRef}
             className="flex-1 border rounded-lg overflow-auto bg-muted/30 p-4"
+            style={fileViewerMapNav.containerStyle}
+            {...fileViewerMapNav.handlers}
           >
             {loading ? (
               <div className="flex items-center justify-center h-full">
