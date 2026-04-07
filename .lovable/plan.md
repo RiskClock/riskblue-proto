@@ -1,76 +1,102 @@
 
-# Fix skipped follow-up AWP analysis after file upload
+# Fix skipped follow-up AWP analysis by resolving prompts per analyzed cell
 
 ## What I found
 
-This does not look like a file-upload reuse problem in the analysis function itself.
+The current V2 flow still has multiple skip paths in `src/components/analysis/AnalysisSection.tsx`:
 
-- `supabase/functions/analyze-drawings/index.ts` correctly accepts a client-supplied `openaiFileId` and reuses it for later class analyses.
-- The bulk workflow in `src/components/analysis/AnalysisSection.tsx` is supposed to:
-  1. analyze the first eligible class for a file,
-  2. capture the returned `openaiFileId`,
-  3. queue the remaining eligible classes with that file ID.
+- `handleAnalyzeAllV2()` still prebuilds a shared `promptContents` map up front.
+- If a prompt is missing during that preload, later cells are never queued.
+- The row upload step still picks `eligibleClasses[0]` blindly, and if that prompt is unavailable it `continue`s the whole row.
+- After the first class succeeds, remaining classes are still silently dropped by:
+  - `if (!content || !cachedOpenaiFileId) continue;`
+  - `if (!content) continue;`
 
-The likely failure is in how prompt content is loaded before queueing:
+So the file upload reuse path is fine, but queue construction is still skipping follow-up cells before they ever hit `analyze-drawings`.
 
-- `handleAnalyzeAllV2()` re-fetches every full prompt live through `resolve-drive-doc`
-- later queued classes are only added if `promptContents.get(cn)` exists
-- if that live prompt fetch is missing/fails for a class, the code silently `continue`s, so the class is skipped
-- this matches the symptom: first eligible cell runs, later eligible cells in the same row never get queued
+## Revised implementation
 
-This also fits the logs pattern: the backend shows first upload/analyze calls per file, but not the expected follow-up reused-file analyses.
-
-## Implementation plan
-
-### 1. Stop depending on live Drive fetch for analysis prompts
+### 1. Stop preloading one shared prompt map for the whole batch
 File: `src/components/analysis/AnalysisSection.tsx`
 
-Use the already-loaded prompt content from `awp_class_prompts.prompt_content` as the primary source for analysis.
+Replace the upfront `promptContents` preload in `handleAnalyzeAllV2()` with per-cell prompt resolution.
 
-- Build the analysis prompt map from `enabledPrompts`
-- Prefer `prompt.prompt_content`
-- Only fall back to `resolve-drive-doc` if cached content is missing
-- Do not silently skip classes just because live doc resolution failed
+New rule:
+- when a class/file is actually about to be analyzed, resolve that class’s prompt then
+- allow Google Drive polling for each analyzed cell
+- keep cached `prompt_content` as a fallback/helper, not the gating mechanism for the whole batch
 
-### 2. Queue all eligible follow-up classes deterministically
+## 2. Pick the first analyzable class per row, not just the first eligible class
 File: `src/components/analysis/AnalysisSection.tsx`
 
-In `handleAnalyzeAllV2()`:
+For each file:
+- compute eligible classes from triage/overrides
+- iterate in order until you find the first class whose prompt can actually be resolved
+- use that class for the initial upload + first analyze call
+- if one eligible class has a bad/missing prompt, do not skip the rest of the row
 
-- keep the first eligible class as the upload + first analysis call
-- after success, always queue every remaining eligible class that has usable prompt content
-- track skipped classes explicitly instead of silent `continue`
-
-### 3. Surface missing-prompt skips instead of pretending analysis finished
+## 3. Queue every remaining eligible class with prompt metadata, not pre-resolved content
 File: `src/components/analysis/AnalysisSection.tsx`
 
-If a class cannot be analyzed because its prompt content is unavailable:
+Change the work queue items to store enough info to resolve the prompt later, e.g.:
+- `awpClassName`
+- `drive_file_id`
+- `prompt_content`
 
-- mark that class/file status as failed or skipped
-- show a toast summary listing skipped classes/files
-- prevent the “Analysis Complete” path from looking successful when items were dropped before queueing
+Then in `executeAnalyzeV2Item()`:
+- resolve prompt content for that specific item
+- call `analyze-drawings` with the reused `openaiFileId`
+- if prompt resolution fails, mark that exact cell failed/skipped instead of dropping it silently
 
-### 4. Apply the same prompt-loading fix to single-class analysis
+## 4. Remove silent `continue` paths for follow-up classes
 File: `src/components/analysis/AnalysisSection.tsx`
 
-`handleAnalyze()` currently has the same live `resolve-drive-doc` dependency.
+Replace row/class skips with explicit handling:
+- set `classFileStatuses[class][file] = "failed"` (or skipped equivalent)
+- log which file/class could not be resolved
+- show a toast summary only for cells that genuinely could not run
 
-Update it to use cached `prompt_content` first, with the same fallback behavior, so single-class analysis and bulk analysis behave consistently.
+This will make skipped follow-up cells visible instead of disappearing from the queue.
+
+## 5. Widen the V2 prompt eligibility guard
+File: `src/components/analysis/AnalysisSection.tsx`
+
+Update:
+- `enabledPrompts` filter should not require only `drive_file_id`
+- accept prompts that have either:
+  - `drive_file_id`, or
+  - cached `prompt_content`
+
+This keeps V2 aligned with `handleAnalyze()` and avoids excluding valid classes before analysis starts.
 
 ## Expected result
 
-After the first file upload/analysis call returns an `openaiFileId`, every other eligible AWP class in that row should actually be sent for analysis using that same uploaded file ID, instead of being silently skipped.
+After a file is uploaded once:
+- the first runnable AWP class analyzes normally
+- every other eligible class in that same row is then attempted using the same uploaded file ID
+- prompt lookup happens per analyzed cell
+- only truly broken cells fail, instead of the rest of the row being skipped
 
 ## Files to update
 
 - `src/components/analysis/AnalysisSection.tsx`
 
-## Technical note
+## Technical notes
 
-The backend reuse flow is already correct:
+Current skip points to remove:
 ```text
-client first call -> analyze-drawings uploads file -> returns openaiFileId
-subsequent calls -> analyze-drawings receives supplied openaiFileId -> skips upload
+enabledPrompts.filter(... && p.drive_file_id)
+if (!pc) continue
+if (!content || !cachedOpenaiFileId) continue
+if (!content) continue
 ```
 
-The bug is most likely in the frontend queue construction, specifically prompt-content resolution and silent queue omission, not in the file-ID reuse logic itself.
+Target behavior:
+```text
+row eligible classes
+-> find first class with resolvable prompt
+-> upload/analyze once
+-> queue remaining eligible classes
+-> each queued cell resolves its own prompt just-in-time
+-> call analyze-drawings with reused openaiFileId
+```
