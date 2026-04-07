@@ -138,7 +138,7 @@ function parseRoomTagsFromResult(
 
     // Find header row
     let headerIdx = -1;
-    const HEADER_KW = ["room code", "generated room", "code", "id", "label", "name"];
+    const HEADER_KW = ["room code", "generated room", "code", "id", "label", "name", "component", "type", "identifier", "tag"];
     for (let i = 0; i < lines.length; i++) {
       const low = lines[i].toLowerCase();
       if (HEADER_KW.some((k) => low.includes(k)) && (lines[i].match(/\|/g) || []).length >= 2) {
@@ -149,10 +149,14 @@ function parseRoomTagsFromResult(
     if (headerIdx === -1) return [];
 
     const headers = lines[headerIdx].split("|").map((c) => c.trim().toLowerCase());
-    const idCol = headers.findIndex((h) =>
-      h.includes("generated room") || h.includes("room code") || h.includes("room identifier") || h.includes("code") || h === "id"
+    let idCol = headers.findIndex((h) =>
+      h.includes("generated room") || h.includes("room code") || h.includes("room identifier") || h.includes("component type") || h.includes("component") || h.includes("identifier") || h.includes("code") || h === "id"
     );
     const pageCol = headers.findIndex((h) => h.includes("page") || h.includes("sheet"));
+    if (idCol === -1) {
+      // Fallback: use first non-empty column (index 1, since index 0 is empty before first |)
+      idCol = headers.length > 1 ? 1 : -1;
+    }
     if (idCol === -1) return [];
 
     const dataLines = lines.slice(headerIdx + 1).filter((l) => !l.match(/^[\s|:-]+$/));
