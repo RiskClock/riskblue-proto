@@ -2536,6 +2536,7 @@ export function AnalysisSection({ requestId, files, projectId, sourceType }: Ana
     return () => {
       if (triageTimerRef.current) clearInterval(triageTimerRef.current);
       if (extractTimerRef.current) clearInterval(extractTimerRef.current);
+      if (analyzeV2TimerRef.current) clearInterval(analyzeV2TimerRef.current);
     };
   }, []);
 
