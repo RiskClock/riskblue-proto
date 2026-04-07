@@ -505,28 +505,29 @@ function InstanceDetailModal({
 
     if (rawCoords && pdfViewport && offscreenSize) {
       // Convert PDF user-space (pts, origin bottom-left) → offscreen canvas pixels.
-      // convertToViewportRectangle handles Y-axis flip and scale in one step.
       console.log(`[BBox] drawing: rawCoords=`, rawCoords);
-      console.log(`[BBox] pdfViewport scale=${pdfViewport.scale}, width=${pdfViewport.width}, height=${pdfViewport.height}`);
       const viewportRect = pdfViewport.convertToViewportRectangle([
         rawCoords.x1, rawCoords.y1, rawCoords.x2, rawCoords.y2,
       ]);
-      console.log(`[BBox] convertToViewportRectangle output=`, viewportRect);
       const [vx1, vy1, vx2, vy2] = viewportRect;
       // Normalize to [0..1] using offscreen canvas size, then map to display canvas
       const nx1 = Math.min(vx1, vx2) / offscreenSize.w;
       const ny1 = Math.min(vy1, vy2) / offscreenSize.h;
       const nx2 = Math.max(vx1, vx2) / offscreenSize.w;
       const ny2 = Math.max(vy1, vy2) / offscreenSize.h;
-      const bx = nx1 * w;
-      const by = ny1 * h;
+      // Compute center and radius for circle overlay
+      const cx = ((nx1 + nx2) / 2) * w;
+      const cy = ((ny1 + ny2) / 2) * h;
       const bw = (nx2 - nx1) * w;
       const bh = (ny2 - ny1) * h;
-      ctx.fillStyle = "rgba(239, 68, 68, 0.15)";
-      ctx.fillRect(bx, by, bw, bh);
+      const radius = Math.max(bw, bh) / 2 + 20; // add padding
+      ctx.beginPath();
+      ctx.arc(cx, cy, radius, 0, Math.PI * 2);
+      ctx.fillStyle = "rgba(239, 68, 68, 0.12)";
+      ctx.fill();
       ctx.strokeStyle = "rgba(239, 68, 68, 0.9)";
       ctx.lineWidth = 2.5;
-      ctx.strokeRect(bx, by, bw, bh);
+      ctx.stroke();
     }
   }, [pageImage, baseDimensions, zoom, rawCoords, pdfViewport, offscreenSize]);
 
@@ -3274,14 +3275,14 @@ export function AnalysisSection({ requestId, files, projectId, sourceType }: Ana
                     {isSummarizing && !summary && <div className="px-4 py-3 flex items-center gap-2 text-sm text-muted-foreground"><Loader2 className="w-4 h-4 animate-spin" />Summarizing…</div>}
                     {summary && summary.length === 0 && <div className="px-4 py-3 text-sm text-muted-foreground">None identified</div>}
                     {summary && summary.length > 0 && (
-                      <Table>
+                      <Table className="table-fixed w-full">
                         <TableHeader>
                           <TableRow>
-                            <TableHead>Display ID</TableHead>
-                            <TableHead>Name</TableHead>
-                            <TableHead>Floor</TableHead>
-                            <TableHead className="text-right">Area (sqft)</TableHead>
-                            <TableHead className="w-10" />
+                            <TableHead className="w-[25%]">Display ID</TableHead>
+                            <TableHead className="w-[30%]">Name</TableHead>
+                            <TableHead className="w-[20%]">Floor</TableHead>
+                            <TableHead className="w-[15%] text-right">Area (sqft)</TableHead>
+                            <TableHead className="w-[10%]" />
                           </TableRow>
                         </TableHeader>
                         <TableBody>
@@ -3318,7 +3319,16 @@ export function AnalysisSection({ requestId, files, projectId, sourceType }: Ana
                     floorMap.get(floor)!.push({ ...inst, awpClassName: cn2 });
                   }
                 }
-                const floors = Array.from(floorMap.keys()).sort();
+                const floors = Array.from(floorMap.keys()).sort((a, b) => {
+                  // Extract numeric floor number for natural sorting (lowest to highest)
+                  const numA = a.match(/(\d+)/);
+                  const numB = b.match(/(\d+)/);
+                  if (numA && numB) return parseInt(numA[1]) - parseInt(numB[1]);
+                  // "Ground" / "Basement" etc. sort before numbered floors
+                  if (numA) return 1;
+                  if (numB) return -1;
+                  return a.localeCompare(b);
+                });
                 if (floors.length === 0) {
                   return <div className="px-4 py-3 text-sm text-muted-foreground">No summarized data yet.</div>;
                 }
