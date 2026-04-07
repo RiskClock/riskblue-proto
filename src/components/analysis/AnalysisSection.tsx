@@ -620,7 +620,7 @@ function InstanceDetailModal({
     ctx.drawImage(pageImage, 0, 0, w, h);
 
     if (rawCoords && pdfViewport && offscreenSize) {
-      const isAiMode = !!(window as any).__aiBBoxMode;
+      console.log(`[BBox] drawing: rawCoords=`, rawCoords, `isAiBBoxMode=`, isAiBBoxMode);
       console.log(`[BBox] drawing: rawCoords=`, rawCoords, `isAiMode=`, isAiMode);
 
       let cx: number, cy: number, radius: number;
@@ -673,7 +673,7 @@ function InstanceDetailModal({
     const container = containerRef.current;
     if (!container) return;
 
-    const isAiMode = !!(window as any).__aiBBoxMode;
+    let bx: number, by: number, radius: number;
     let bx: number, by: number, radius: number;
 
     if (isAiMode) {
