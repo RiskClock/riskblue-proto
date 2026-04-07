@@ -132,13 +132,41 @@ interface AnalysisSectionProps {
 function parseRoomTagsFromResult(
   resultText: string
 ): Array<{ tag: string; pageNum: number }> {
+  const rows = parseOverlayCandidates(resultText);
+  // Return the first candidate per row as the primary tag (backward compat)
+  return rows
+    .filter((r) => r.candidates.length > 0)
+    .map((r) => ({ tag: r.candidates[0], pageNum: r.pageNum }));
+}
+
+// ---------------------------------------------------------------------------
+// Multi-candidate overlay parser — returns all searchable strings per row
+// ---------------------------------------------------------------------------
+
+interface OverlayRow {
+  candidates: string[];   // ordered by search priority
+  pageNum: number;
+}
+
+/**
+ * Parse the AI result markdown table and return multiple search candidates
+ * per row.  Priority order for candidate columns:
+ *   1. drawing label / label
+ *   2. generated room code / room code
+ *   3. code / identifier / tag
+ *   4. first data column (fallback)
+ *
+ * Each non-empty value from these columns becomes a candidate the caller
+ * can try against the PDF text layer.
+ */
+function parseOverlayCandidates(resultText: string): OverlayRow[] {
   try {
     const lines = resultText.split("\n").filter((l) => l.includes("|"));
     if (lines.length < 2) return [];
 
     // Find header row
     let headerIdx = -1;
-    const HEADER_KW = ["room code", "generated room", "code", "id", "label", "name", "component", "type", "identifier", "tag"];
+    const HEADER_KW = ["room code", "generated room", "code", "id", "label", "name", "component", "type", "identifier", "tag", "drawing"];
     for (let i = 0; i < lines.length; i++) {
       const low = lines[i].toLowerCase();
       if (HEADER_KW.some((k) => low.includes(k)) && (lines[i].match(/\|/g) || []).length >= 2) {
@@ -149,31 +177,53 @@ function parseRoomTagsFromResult(
     if (headerIdx === -1) return [];
 
     const headers = lines[headerIdx].split("|").map((c) => c.trim().toLowerCase());
-    let idCol = headers.findIndex((h) =>
-      h.includes("generated room") || h.includes("room code") || h.includes("room identifier") || h.includes("component type") || h.includes("component") || h.includes("identifier") || h.includes("code") || h === "id"
-    );
     const pageCol = headers.findIndex((h) => h.includes("page") || h.includes("sheet"));
-    if (idCol === -1) {
-      // Fallback: use first non-empty column (index 1, since index 0 is empty before first |)
-      idCol = headers.length > 1 ? 1 : -1;
+
+    // Build candidate column indices in priority order
+    const candidateColIndices: number[] = [];
+    const colPriority: Array<(h: string) => boolean> = [
+      (h) => h.includes("drawing label") || h.includes("drawing code"),
+      (h) => (h.includes("label") && !h.includes("page")) || h.includes("room code") || h.includes("generated room") || h.includes("room identifier"),
+      (h) => h.includes("code") || h.includes("identifier") || h.includes("tag"),
+      (h) => h.includes("component type") || h.includes("component"),
+      (h) => h === "name" || h.includes("name"),
+    ];
+
+    for (const matcher of colPriority) {
+      for (let ci = 0; ci < headers.length; ci++) {
+        if (matcher(headers[ci]) && !candidateColIndices.includes(ci) && ci !== pageCol) {
+          candidateColIndices.push(ci);
+        }
+      }
     }
-    if (idCol === -1) return [];
+
+    // Fallback: if nothing matched, use first data column (index 1)
+    if (candidateColIndices.length === 0 && headers.length > 1) {
+      candidateColIndices.push(1);
+    }
 
     const dataLines = lines.slice(headerIdx + 1).filter((l) => !l.match(/^[\s|:-]+$/));
-    const tags: Array<{ tag: string; pageNum: number }> = [];
+    const rows: OverlayRow[] = [];
 
     for (const line of dataLines) {
       const cells = line.split("|").map((c) => c.trim());
-      const tag = cells[idCol];
-      if (!tag || tag === "-" || tag.toLowerCase().includes("none") || tag.toLowerCase().includes("no instance")) continue;
+      const candidates: string[] = [];
+      for (const ci of candidateColIndices) {
+        const val = cells[ci];
+        if (val && val !== "-" && !val.toLowerCase().includes("none") && !val.toLowerCase().includes("no instance") && val.length > 1) {
+          candidates.push(val);
+        }
+      }
       let pageNum = 1;
       if (pageCol !== -1) {
         const pv = parseInt(cells[pageCol] || "1", 10);
         if (!isNaN(pv) && pv > 0) pageNum = pv;
       }
-      tags.push({ tag, pageNum });
+      if (candidates.length > 0) {
+        rows.push({ candidates, pageNum });
+      }
     }
-    return tags;
+    return rows;
   } catch {
     return [];
   }
@@ -198,6 +248,7 @@ function normalizeText(s: string): string {
     .trim()
     .toLowerCase()
     .replace(/[\u2010\u2011\u2012\u2013\u2014\u2015\uFE58\uFE63\uFF0D]/g, "-") // normalize dashes
+    .replace(/[\u00D8\u00F8\u2205\u2300]/g, "o") // diameter symbols Ø ø ∅ ⌀ → o
     .replace(/\s+/g, " ");
 }
 
@@ -404,30 +455,31 @@ function InstanceDetailModal({
         const ab = await blob.arrayBuffer();
         if (cancelled) return;
 
-        // Determine the primary tag to search for — exact room code takes priority.
-        // We parse the AI result for any tag that exactly matches instance.id,
-        // then fall back to instance.id itself (which is the room code e.g. "SWC-B04").
-        const aiTags = resultText ? parseRoomTagsFromResult(resultText) : [];
-        const instanceTag = aiTags.find(
-          (t) => t.tag === instance.id
-        ) ?? aiTags.find(
-          (t) => t.tag.toUpperCase() === instance.id.toUpperCase()
-        ) ?? aiTags[0];
-
-        // Primary tag: use the exact tag string from AI result if available,
-        // otherwise fall back to instance.id (e.g. "SWC-B04").
-        const primaryTag = instanceTag?.tag ?? instance.id;
-        const hintPage = instanceTag?.pageNum;
+        // Build search candidates: parse all overlay rows from the AI result,
+        // find the row whose candidates include instance.id, then use all its
+        // candidates.  Fall back to instance.id if nothing matches.
+        const overlayRows = resultText ? parseOverlayCandidates(resultText) : [];
+        const matchingRow = overlayRows.find((r) =>
+          r.candidates.some((c) => c.toUpperCase() === instance.id.toUpperCase())
+        ) ?? overlayRows.find((r) =>
+          r.candidates.some((c) => c.toUpperCase().includes(instance.id.toUpperCase()))
+        );
+        const searchCandidates = matchingRow?.candidates ?? [instance.id];
+        const hintPage = matchingRow?.pageNum;
 
         console.log(`[BBox] opening: instance.id=${instance.id} instance.name=${instance.name}`);
-        console.log(`[BBox] primaryTag="${primaryTag}" hintPage=${hintPage}`);
-        console.log(`[BBox] aiTags from result=`, aiTags);
+        console.log(`[BBox] searchCandidates=`, searchCandidates, `hintPage=${hintPage}`);
 
         const pdf = await pdfjsLib.getDocument({ data: ab }).promise;
         if (cancelled) return;
 
-        // Deterministic bbox: exact match in PDF text layer — no substring/partial fallback
-        const textBBox = await findBBoxInTextLayer(pdf, primaryTag, hintPage);
+        // Try each candidate until one matches in the PDF text layer
+        let textBBox: PDFBBox | null = null;
+        for (const candidate of searchCandidates) {
+          textBBox = await findBBoxInTextLayer(pdf, candidate, hintPage);
+          if (textBBox) break;
+          if (cancelled) return;
+        }
         if (cancelled) return;
 
         console.log(`[BBox] text layer result=`, textBBox);
@@ -776,16 +828,20 @@ function RawResultModal({ fileName, awpClassName, resultText, instanceCount, sou
         const pdf = await pdfjsLib.getDocument({ data: ab }).promise;
         if (cancelled) return;
 
-        // Parse room tags from AI result text
-        const roomTags = resultText ? parseRoomTagsFromResult(resultText) : [];
-        console.log(`[RawResultModal] Found ${roomTags.length} room tags to locate:`, roomTags.map(t => t.tag));
+        // Parse overlay candidates from AI result text (multi-candidate per row)
+        const overlayRows = resultText ? parseOverlayCandidates(resultText) : [];
+        console.log(`[RawResultModal] Found ${overlayRows.length} overlay rows:`, overlayRows.map(r => r.candidates));
 
-        // Find all bboxes
+        // Find bboxes — try each candidate per row until one matches
         const bboxes: PDFBBox[] = [];
-        for (const { tag, pageNum } of roomTags) {
-          const bbox = await findBBoxInTextLayer(pdf, tag, pageNum);
-          if (bbox) bboxes.push(bbox);
-          if (cancelled) return;
+        for (const { candidates, pageNum } of overlayRows) {
+          let found = false;
+          for (const candidate of candidates) {
+            const bbox = await findBBoxInTextLayer(pdf, candidate, pageNum);
+            if (bbox) { bboxes.push(bbox); found = true; break; }
+            if (cancelled) return;
+          }
+          if (!found) console.log(`[RawResultModal] No match for candidates:`, candidates);
         }
         console.log(`[RawResultModal] Found ${bboxes.length} bounding boxes`);
         setBboxCount(bboxes.length);
