@@ -495,6 +495,7 @@ serve(async (req) => {
       resultText,
       fileId,
       fileName: fileRecord.name,
+      openaiFileId,
     }), {
       status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
