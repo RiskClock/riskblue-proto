@@ -1237,6 +1237,9 @@ export function AnalysisSection({ requestId, files, projectId, sourceType }: Ana
   const [triageRunning, setTriageRunning] = useState(false);
   const [triagingClasses, setTriagingClasses] = useState<Set<string>>(new Set());
   const [triageTokens, setTriageTokens] = useState(0);
+  const [analyzeTokens, setAnalyzeTokens] = useState(0);
+  const analyzeTokensRef = useRef(0);
+  const [uploadingFileIds, setUploadingFileIds] = useState<Set<string>>(new Set());
   const [triagePhase, setTriagePhase] = useState<"extract" | "score" | null>(null);
   const [summaryGroupBy, setSummaryGroupBy] = useState<"awp" | "floor">("awp");
   const [triageProgress, setTriageProgress] = useState<{ done: number; total: number }>({ done: 0, total: 0 });
