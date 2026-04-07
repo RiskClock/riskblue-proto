@@ -3016,8 +3016,6 @@ export function AnalysisSection({ requestId, files, projectId, sourceType }: Ana
                                <TooltipContent>Uploading file to analysis service</TooltipContent>
                              </Tooltip>
                            )}
-                            <Loader2 className="w-3 h-3 animate-spin text-muted-foreground flex-shrink-0" />
-                          )}
                           {extractedFileIds.has(file.id) && !extractingFileIds.has(file.id) && (
                             <button
                               className="inline-flex items-center rounded-full border border-emerald-300 bg-emerald-100 px-1.5 py-px text-[10px] font-medium text-emerald-800 leading-tight flex-shrink-0 cursor-pointer hover:bg-emerald-200 transition-colors"
