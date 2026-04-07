@@ -1620,6 +1620,16 @@ export function AnalysisSection({ requestId, files, projectId, sourceType }: Ana
     }
   }, [requestMeta]);
 
+  // Hydrate analyzeV2Running from DB status on mount/navigation
+  const [hydratedProcessing, setHydratedProcessing] = useState(false);
+  useEffect(() => {
+    if (!requestMeta || hydratedProcessing) return;
+    if ((requestMeta as any).status === "processing" && !analyzeV2Running) {
+      setAnalyzeV2Running(true);
+    }
+    setHydratedProcessing(true);
+  }, [requestMeta]);
+
   // Load extracted file IDs on mount so "Processed" badges appear immediately
   useEffect(() => {
     if (!requestId || copiedFiles.length === 0) return;
