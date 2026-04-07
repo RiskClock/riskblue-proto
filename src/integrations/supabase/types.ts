@@ -106,6 +106,7 @@ export type Database = {
       analysis_requests: {
         Row: {
           analyze_model: string | null
+          analyze_tokens_used: number | null
           created_at: string
           disabled_awp_classes: string[]
           drive_folder_id: string | null
@@ -125,6 +126,7 @@ export type Database = {
         }
         Insert: {
           analyze_model?: string | null
+          analyze_tokens_used?: number | null
           created_at?: string
           disabled_awp_classes?: string[]
           drive_folder_id?: string | null
@@ -144,6 +146,7 @@ export type Database = {
         }
         Update: {
           analyze_model?: string | null
+          analyze_tokens_used?: number | null
           created_at?: string
           disabled_awp_classes?: string[]
           drive_folder_id?: string | null
