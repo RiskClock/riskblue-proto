@@ -1603,6 +1603,7 @@ export function AnalysisSection({ requestId, files, projectId, sourceType }: Ana
         .single();
       return data;
     },
+    refetchInterval: analyzeV2Running ? 5000 : false,
   });
 
   // Initialize models and tokens from DB
