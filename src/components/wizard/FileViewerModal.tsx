@@ -370,6 +370,8 @@ export const FileViewerModal = ({
           <div 
             ref={containerRef}
             className="flex-1 border rounded-lg overflow-auto bg-muted/30 p-4"
+            style={fileViewerMapNav.containerStyle}
+            {...fileViewerMapNav.handlers}
           >
             {loading ? (
               <div className="flex items-center justify-center h-full">
