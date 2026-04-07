@@ -2090,8 +2090,10 @@ export function AnalysisSection({ requestId, files, projectId, sourceType }: Ana
               fileName: file.name,
             });
           }
+          }
+          // Clear preparing indicator for cached path
+          setUploadingFileIds((prev) => { const n = new Set(prev); n.delete(file.id); return n; });
         }
-      }
 
       if (workQueue.length === 0) {
         toast({ title: "Analysis Complete", description: "All eligible files processed." });
