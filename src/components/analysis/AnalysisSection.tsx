@@ -2202,11 +2202,15 @@ export function AnalysisSection({ requestId, files, projectId, sourceType }: Ana
       const { data: sessionData } = await supabase.auth.getSession();
       const token = sessionData.session?.access_token;
 
-      // For each file, upload once then queue all eligible class calls
-      const workQueue: { fileId: string; openaiFileId: string; awpClassName: string; prompt: AWPPrompt; fileName: string }[] = [];
+      // Build per-file eligible class lists and check cached openai file IDs
+      interface FileGroup {
+        file: typeof processedFiles[0];
+        eligibleClasses: string[];
+        cachedOpenaiFileId: string | null;
+      }
+      const fileGroups: FileGroup[] = [];
 
       for (const file of processedFiles) {
-        // Determine which classes are eligible for this file (triage >= 50% or manual include)
         const eligibleClasses: string[] = [];
         for (const prompt of enabledPrompts) {
           const key = `${file.id}_${prompt.awp_class_name}`;
@@ -2219,12 +2223,9 @@ export function AnalysisSection({ requestId, files, projectId, sourceType }: Ana
             eligibleClasses.push(prompt.awp_class_name);
           }
         }
-
         if (eligibleClasses.length === 0) continue;
 
-        // Check if we already have a cached openai_file_id for this file
         let cachedOpenaiFileId: string | null = null;
-
         const { data: fileRow } = await supabase
           .from("analysis_request_files")
           .select("openai_file_id, openai_file_uploaded_at, openai_file_expires_at, openai_file_status")
@@ -2239,57 +2240,115 @@ export function AnalysisSection({ requestId, files, projectId, sourceType }: Ana
           }
         }
 
-        setUploadingFileIds((prev) => { const n = new Set(prev); n.add(file.id); return n; });
+        fileGroups.push({ file, eligibleClasses, cachedOpenaiFileId });
+      }
 
-        if (!cachedOpenaiFileId) {
-          // Upload via the first eligible class whose prompt can be resolved
-          let firstClassUsed: string | null = null;
-          let firstClassIndex = -1;
+      if (fileGroups.length === 0) {
+        toast({ title: "No eligible files", description: "No files meet the triage threshold." });
+        setAnalyzeV2Running(false);
+        setAnalyzingClasses(new Set());
+        await supabase.from("analysis_requests").update({ status: "complete" }).eq("id", requestId);
+        return;
+      }
 
-          for (let i = 0; i < eligibleClasses.length; i++) {
-            const cn = eligibleClasses[i];
-            const prompt = promptByClass.get(cn);
-            if (!prompt) continue;
+      // Track per-file openai IDs as they get resolved
+      const fileOpenaiIds = new Map<string, string>();
+      for (const g of fileGroups) {
+        if (g.cachedOpenaiFileId) fileOpenaiIds.set(g.file.id, g.cachedOpenaiFileId);
+      }
 
-            const pc = await resolvePromptContent(prompt, token ?? undefined);
-            if (!pc) {
-              console.warn(`[V2] Could not resolve prompt for ${cn} on file ${file.name}, trying next class`);
-              setClassFileStatuses((prev) => ({
-                ...prev,
-                [cn]: { ...(prev[cn] || {}), [file.id]: "failed" },
-              }));
-              continue;
-            }
+      // Build work queue: horizontal-first (all classes for file1, then file2, etc.)
+      // Items that need upload go first in their file group
+      interface WorkItem {
+        fileId: string;
+        awpClassName: string;
+        prompt: AWPPrompt;
+        fileName: string;
+        needsUpload: boolean; // true for the first class of a file that has no cached ID
+      }
+      const workQueue: WorkItem[] = [];
+      let totalItems = 0;
 
-            // Found a resolvable prompt — use this class for the upload call
+      for (const group of fileGroups) {
+        const hasCache = !!group.cachedOpenaiFileId;
+        for (let i = 0; i < group.eligibleClasses.length; i++) {
+          const cn = group.eligibleClasses[i];
+          const prompt = promptByClass.get(cn);
+          if (!prompt) continue;
+          workQueue.push({
+            fileId: group.file.id,
+            awpClassName: cn,
+            prompt,
+            fileName: group.file.name,
+            needsUpload: !hasCache && i === 0, // first class of uncached file triggers upload
+          });
+          totalItems++;
+        }
+      }
+
+      if (totalItems === 0) {
+        toast({ title: "Analysis Complete", description: "All eligible files processed." });
+        setAnalyzeV2Running(false);
+        setAnalyzingClasses(new Set());
+        await supabase.from("analysis_requests").update({ status: "complete" }).eq("id", requestId);
+        for (const cn of allClassNames) { handleSummarize(cn); }
+        return;
+      }
+
+      // Execution function for each work item
+      const executeItem = async (item: WorkItem) => {
+        analyzeV2InFlightRef.current++;
+        try {
+          const { data: sd } = await supabase.auth.getSession();
+          const tk = sd.session?.access_token;
+
+          setClassFileStatuses((prev) => ({
+            ...prev,
+            [item.awpClassName]: { ...(prev[item.awpClassName] || {}), [item.fileId]: "processing" },
+          }));
+
+          // Resolve prompt content JIT
+          const promptContent = await resolvePromptContent(item.prompt, tk ?? undefined);
+          if (!promptContent) {
+            console.warn(`[V2] No prompt for ${item.awpClassName}, marking failed`);
             setClassFileStatuses((prev) => ({
               ...prev,
-              [cn]: { ...(prev[cn] || {}), [file.id]: "processing" },
+              [item.awpClassName]: { ...(prev[item.awpClassName] || {}), [item.fileId]: "failed" },
             }));
+            return;
+          }
+
+          // Get or wait for the openai file ID
+          let openaiFileId = fileOpenaiIds.get(item.fileId) || null;
+
+          if (!openaiFileId && item.needsUpload) {
+            // This item is responsible for uploading the file
+            setUploadingFileIds((prev) => { const n = new Set(prev); n.add(item.fileId); return n; });
 
             const uploadResponse = await fetch(
               `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/analyze-drawings`,
               {
                 method: "POST",
                 headers: {
-                  Authorization: `Bearer ${token}`,
+                  Authorization: `Bearer ${tk}`,
                   "Content-Type": "application/json",
                 },
                 body: JSON.stringify({
                   analysisRequestId: requestId,
-                  fileId: file.id,
-                  awpClassName: cn,
-                  promptContent: pc,
+                  fileId: item.fileId,
+                  awpClassName: item.awpClassName,
+                  promptContent,
                   model: analyzeModel,
                 }),
               }
             );
 
-            setUploadingFileIds((prev) => { const n = new Set(prev); n.delete(file.id); return n; });
+            setUploadingFileIds((prev) => { const n = new Set(prev); n.delete(item.fileId); return n; });
 
             if (uploadResponse.ok) {
               const data = await uploadResponse.json();
-              cachedOpenaiFileId = data.openaiFileId || null;
+              openaiFileId = data.openaiFileId || null;
+              if (openaiFileId) fileOpenaiIds.set(item.fileId, openaiFileId);
               if (data.usage?.total_tokens) {
                 analyzeTokensRef.current += data.usage.total_tokens;
                 setAnalyzeTokens(analyzeTokensRef.current);
@@ -2297,75 +2356,98 @@ export function AnalysisSection({ requestId, files, projectId, sourceType }: Ana
               }
               setClassFileStatuses((prev) => ({
                 ...prev,
-                [cn]: { ...(prev[cn] || {}), [file.id]: "complete" },
+                [item.awpClassName]: { ...(prev[item.awpClassName] || {}), [item.fileId]: "complete" },
               }));
               await queryClient.invalidateQueries({ queryKey: ["analysis-results", requestId] });
-              firstClassUsed = cn;
-              firstClassIndex = i;
-              break;
             } else {
+              const err = await uploadResponse.json().catch(() => ({}));
+              console.error(`[V2] Upload+analyze failed for ${item.fileName}/${item.awpClassName}:`, err.error);
               setClassFileStatuses((prev) => ({
                 ...prev,
-                [cn]: { ...(prev[cn] || {}), [file.id]: "failed" },
+                [item.awpClassName]: { ...(prev[item.awpClassName] || {}), [item.fileId]: "failed" },
               }));
-              const err = await uploadResponse.json().catch(() => ({}));
-              console.error(`[V2] Upload+analyze failed for ${file.name}/${cn}:`, err.error);
-              // No file_id — skip remaining classes for this file
-              break;
+              // Mark remaining items for this file as failed since we have no file ID
+              analyzeV2QueueRef.current = analyzeV2QueueRef.current.map((qi) =>
+                qi.fileId === item.fileId ? { ...qi, needsUpload: false } : qi
+              );
+            }
+            return;
+          }
+
+          if (!openaiFileId) {
+            // Wait briefly for the upload item to finish (poll the map)
+            for (let attempt = 0; attempt < 120; attempt++) {
+              openaiFileId = fileOpenaiIds.get(item.fileId) || null;
+              if (openaiFileId) break;
+              await new Promise((r) => setTimeout(r, 1000));
             }
           }
 
-          if (!cachedOpenaiFileId) {
-            setUploadingFileIds((prev) => { const n = new Set(prev); n.delete(file.id); return n; });
-            continue;
+          if (!openaiFileId) {
+            console.warn(`[V2] No openaiFileId available for ${item.fileName}/${item.awpClassName}`);
+            setClassFileStatuses((prev) => ({
+              ...prev,
+              [item.awpClassName]: { ...(prev[item.awpClassName] || {}), [item.fileId]: "failed" },
+            }));
+            return;
           }
 
-          // Queue all remaining eligible classes (skip the one already analyzed)
-          for (let i = 0; i < eligibleClasses.length; i++) {
-            if (i === firstClassIndex) continue;
-            const cn = eligibleClasses[i];
-            const prompt = promptByClass.get(cn);
-            if (!prompt) continue;
-            workQueue.push({
-              fileId: file.id,
-              openaiFileId: cachedOpenaiFileId,
-              awpClassName: cn,
-              prompt,
-              fileName: file.name,
-            });
+          // Standard analyze call with existing file ID
+          const analyzeResponse = await fetch(
+            `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/analyze-drawings`,
+            {
+              method: "POST",
+              headers: {
+                Authorization: `Bearer ${tk}`,
+                "Content-Type": "application/json",
+              },
+              body: JSON.stringify({
+                analysisRequestId: requestId,
+                fileId: item.fileId,
+                awpClassName: item.awpClassName,
+                promptContent,
+                model: analyzeModel,
+                openaiFileId,
+              }),
+            }
+          );
+
+          setClassFileStatuses((prev) => ({
+            ...prev,
+            [item.awpClassName]: {
+              ...(prev[item.awpClassName] || {}),
+              [item.fileId]: analyzeResponse.ok ? "complete" : "failed",
+            },
+          }));
+
+          if (analyzeResponse.ok) {
+            const data = await analyzeResponse.json();
+            if (data.usage?.total_tokens) {
+              analyzeTokensRef.current += data.usage.total_tokens;
+              setAnalyzeTokens(analyzeTokensRef.current);
+              supabase.from("analysis_requests").update({ analyze_tokens_used: analyzeTokensRef.current } as any).eq("id", requestId);
+            }
+            await queryClient.invalidateQueries({ queryKey: ["analysis-results", requestId] });
+          } else {
+            const err = await analyzeResponse.json().catch(() => ({}));
+            console.error(`[V2] Failed ${item.fileName}/${item.awpClassName}:`, err.error);
           }
-        } else {
-          // We have a cached file_id — queue all eligible classes
-          for (const cn of eligibleClasses) {
-            const prompt = promptByClass.get(cn);
-            if (!prompt) continue;
-            workQueue.push({
-              fileId: file.id,
-              openaiFileId: cachedOpenaiFileId,
-              awpClassName: cn,
-              prompt,
-              fileName: file.name,
-            });
-          }
-          setUploadingFileIds((prev) => { const n = new Set(prev); n.delete(file.id); return n; });
+        } catch (e) {
+          setClassFileStatuses((prev) => ({
+            ...prev,
+            [item.awpClassName]: { ...(prev[item.awpClassName] || {}), [item.fileId]: "failed" },
+          }));
+          console.error(`[V2] Error ${item.fileName}/${item.awpClassName}:`, e);
+        } finally {
+          analyzeV2InFlightRef.current--;
+          setAnalyzeV2Progress((prev) => ({ ...prev, done: prev.done + 1 }));
         }
-      }
+      };
 
-      if (workQueue.length === 0) {
-        toast({ title: "Analysis Complete", description: "All eligible files processed." });
-        setAnalyzeV2Running(false);
-        setAnalyzingClasses(new Set());
-        await supabase.from("analysis_requests").update({ status: "complete" }).eq("id", requestId);
-        for (const cn of allClassNames) {
-          handleSummarize(cn);
-        }
-        return;
-      }
-
-      // Execute work queue with concurrency pool
-      analyzeV2QueueRef.current = workQueue;
+      // Start scheduler
+      analyzeV2QueueRef.current = workQueue as any;
       analyzeV2InFlightRef.current = 0;
-      setAnalyzeV2Progress({ done: 0, total: workQueue.length });
+      setAnalyzeV2Progress({ done: 0, total: totalItems });
 
       const startV2Scheduler = () => {
         analyzeV2TimerRef.current = setInterval(() => {
@@ -2374,7 +2456,7 @@ export function AnalysisSection({ requestId, files, projectId, sourceType }: Ana
             analyzeV2QueueRef.current.length > 0
           ) {
             const item = analyzeV2QueueRef.current.shift()!;
-            executeAnalyzeV2Item(item);
+            executeItem(item as any);
           }
           if (analyzeV2QueueRef.current.length === 0 && analyzeV2InFlightRef.current <= 0) {
             if (analyzeV2TimerRef.current) {
@@ -2387,19 +2469,18 @@ export function AnalysisSection({ requestId, files, projectId, sourceType }: Ana
               setAnalyzingClasses(new Set());
               await supabase.from("analysis_requests").update({ status: "complete" }).eq("id", requestId);
               toast({ title: "Analysis Complete", description: "All files analyzed." });
-              for (const cn of allClassNames) {
-                handleSummarize(cn);
-              }
+              for (const cn of allClassNames) { handleSummarize(cn); }
             })();
           }
         }, 1000);
 
+        // Immediately fire first batch
         while (
           analyzeV2InFlightRef.current < MAX_CONCURRENT_ANALYZE &&
           analyzeV2QueueRef.current.length > 0
         ) {
           const item = analyzeV2QueueRef.current.shift()!;
-          executeAnalyzeV2Item(item);
+          executeItem(item as any);
         }
       };
 
