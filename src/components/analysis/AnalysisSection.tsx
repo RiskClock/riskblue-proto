@@ -2963,14 +2963,14 @@ export function AnalysisSection({ requestId, files, projectId, sourceType }: Ana
                   onChange={(e) => updateTriageModel(e.target.value)}
                   disabled={triageRunning}
                 >
-                  <option value="gpt-5">OpenAI / gpt-5</option>
-                  <option value="gpt-5-mini">OpenAI / gpt-5-mini</option>
-                  <option value="gpt-5-nano">OpenAI / gpt-5-nano</option>
-                  <option value="gemini-2.5-pro">Google / gemini-2.5-pro</option>
-                  <option value="gemini-2.5-flash">Google / gemini-2.5-flash</option>
-                  <option value="gemini-2.5-flash-lite">Google / gemini-2.5-flash-lite</option>
-                  <option value="claude-sonnet">Anthropic / claude-sonnet</option>
-                  <option value="claude-haiku">Anthropic / claude-haiku</option>
+                  <option value="gpt-5">RiskClock Engine / OpenAI gpt-5</option>
+                  <option value="gpt-5-mini">RiskClock Engine / OpenAI gpt-5-mini</option>
+                  <option value="gpt-5-nano">RiskClock Engine / OpenAI gpt-5-nano</option>
+                  <option value="gemini-2.5-pro">RiskClock Engine / Google gemini-2.5-pro</option>
+                  <option value="gemini-2.5-flash">RiskClock Engine / Google gemini-2.5-flash</option>
+                  <option value="gemini-2.5-flash-lite">RiskClock Engine / Google gemini-2.5-flash-lite</option>
+                  <option value="claude-sonnet">RiskClock Engine / Anthropic claude-sonnet</option>
+                  <option value="claude-haiku">RiskClock Engine / Anthropic claude-haiku</option>
                 </select>
               </div>
               {triageRunning && triagePhase && (
@@ -3033,14 +3033,14 @@ export function AnalysisSection({ requestId, files, projectId, sourceType }: Ana
                   onChange={(e) => updateAnalyzeModel(e.target.value)}
                   disabled={anyAnalyzing}
                 >
-                  <option value="gpt-5">OpenAI / gpt-5</option>
-                  <option value="gpt-5-mini">OpenAI / gpt-5-mini</option>
-                  <option value="gpt-5-nano">OpenAI / gpt-5-nano</option>
-                  <option value="gemini-2.5-pro">Google / gemini-2.5-pro</option>
-                  <option value="gemini-2.5-flash">Google / gemini-2.5-flash</option>
-                  <option value="gemini-2.5-flash-lite">Google / gemini-2.5-flash-lite</option>
-                  <option value="claude-sonnet">Anthropic / claude-sonnet</option>
-                  <option value="claude-haiku">Anthropic / claude-haiku</option>
+                  <option value="gpt-5">RiskClock Engine / OpenAI gpt-5</option>
+                  <option value="gpt-5-mini">RiskClock Engine / OpenAI gpt-5-mini</option>
+                  <option value="gpt-5-nano">RiskClock Engine / OpenAI gpt-5-nano</option>
+                  <option value="gemini-2.5-pro">RiskClock Engine / Google gemini-2.5-pro</option>
+                  <option value="gemini-2.5-flash">RiskClock Engine / Google gemini-2.5-flash</option>
+                  <option value="gemini-2.5-flash-lite">RiskClock Engine / Google gemini-2.5-flash-lite</option>
+                  <option value="claude-sonnet">RiskClock Engine / Anthropic claude-sonnet</option>
+                  <option value="claude-haiku">RiskClock Engine / Anthropic claude-haiku</option>
                 </select>
               </div>
               {analyzeV2Running && analyzeTokens > 0 && (
