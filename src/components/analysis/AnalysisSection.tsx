@@ -1010,11 +1010,11 @@ function FilePreviewModal({ file, onClose }: FilePreviewModalProps) {
 
   const handleZoomOut = () => {
     const scroll = scrollRef.current;
-    if (!scroll) { setZoom(z => Math.max(0.25, z - 0.25)); return; }
+    if (!scroll) { setZoom(z => Math.max(1, z - 0.25)); return; }
     const cx = scroll.scrollWidth > 0 ? (scroll.scrollLeft + scroll.clientWidth / 2) / scroll.scrollWidth : 0.5;
     const cy = scroll.scrollHeight > 0 ? (scroll.scrollTop + scroll.clientHeight / 2) / scroll.scrollHeight : 0.5;
     setZoom(prev => {
-      const next = Math.max(0.25, prev - 0.25);
+      const next = Math.max(1, prev - 0.25);
       requestAnimationFrame(() => {
         scroll.scrollLeft = cx * scroll.scrollWidth - scroll.clientWidth / 2;
         scroll.scrollTop = cy * scroll.scrollHeight - scroll.clientHeight / 2;
@@ -1022,6 +1022,8 @@ function FilePreviewModal({ file, onClose }: FilePreviewModalProps) {
       return next;
     });
   };
+
+  const filePreviewMapNav = useMapNavigation({ zoom, setZoom, minZoom: 1, maxZoom: 8, containerRef: scrollRef });
 
   return (
     <Dialog open onOpenChange={(open) => { if (!open) onClose(); }}>
@@ -1031,7 +1033,7 @@ function FilePreviewModal({ file, onClose }: FilePreviewModalProps) {
           <div className="flex items-center justify-between gap-4">
             <DialogTitle className="truncate text-sm font-mono flex-1 min-w-0">{file.name}</DialogTitle>
             <div className="flex items-center gap-2 flex-shrink-0">
-              <Button variant="outline" size="icon" className="h-8 w-8" onClick={handleZoomOut} disabled={zoom <= 0.25 || loading}>
+              <Button variant="outline" size="icon" className="h-8 w-8" onClick={handleZoomOut} disabled={zoom <= 1 || loading}>
                 <ZoomOut className="w-4 h-4" />
               </Button>
               <span className="text-sm min-w-[3rem] text-center tabular-nums">{Math.round(zoom * 100)}%</span>
@@ -1043,7 +1045,7 @@ function FilePreviewModal({ file, onClose }: FilePreviewModalProps) {
         </DialogHeader>
 
         {/* Scrollable body */}
-        <div ref={scrollRef} className="flex-1 overflow-auto bg-muted/20">
+        <div ref={scrollRef} className="flex-1 overflow-auto bg-muted/20" style={filePreviewMapNav.containerStyle} {...filePreviewMapNav.handlers}>
           {loading && (
             <div className="flex items-center justify-center py-12">
               <Loader2 className="w-6 h-6 animate-spin mr-2" />
