@@ -33,16 +33,14 @@ serve(async (req) => {
       global: { headers: { Authorization: authHeader } },
     });
 
-    const { data: claims, error: claimsError } = await supabase.auth.getClaims(
-      authHeader.replace("Bearer ", "")
-    );
-    if (claimsError || !claims?.claims) {
+    const { data: { user }, error: userError } = await supabase.auth.getUser();
+    if (userError || !user) {
       return new Response(JSON.stringify({ error: "Unauthorized" }), {
         status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
-    const email = claims.claims.email as string;
+    const email = user.email;
     const isInternal = email?.toLowerCase().endsWith("@riskclock.com") ?? false;
     if (!isInternal) {
       return new Response(JSON.stringify({ error: "Access denied" }), {

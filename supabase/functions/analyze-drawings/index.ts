@@ -202,7 +202,10 @@ async function callResponsesApi(params: {
     }
   }
 
-  return { resultText };
+  // Extract token usage if available
+  const usage = responsesResult.usage || null;
+
+  return { resultText, usage };
 }
 
 // ---------------------------------------------------------------------------
@@ -481,7 +484,7 @@ serve(async (req) => {
       console.log(`[analyze-drawings] Retry succeeded for file ${fileId} (${fileRecord.name})`);
     }
 
-    const { resultText } = apiResult as { resultText: string };
+    const { resultText, usage } = apiResult as { resultText: string; usage: Record<string, number> | null };
 
     // Store result
     await adminSupabase.from("analysis_results")
@@ -496,6 +499,7 @@ serve(async (req) => {
       fileId,
       fileName: fileRecord.name,
       openaiFileId,
+      usage,
     }), {
       status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
