@@ -863,23 +863,42 @@ function RawResultModal({ fileName, awpClassName, resultText, instanceCount, sou
 
         // Parse overlay candidates from AI result text (multi-candidate per row)
         const overlayRows = resultText ? parseOverlayCandidates(resultText) : [];
-        console.log(`[RawResultModal] Found ${overlayRows.length} overlay rows:`, overlayRows.map(r => r.candidates));
+        console.log(`[RawResultModal] Found ${overlayRows.length} overlay rows:`, overlayRows.map(r => ({ candidates: r.candidates, aiBBox: r.aiBBox })));
 
-        // Find bboxes — try each candidate per row until one matches
-        const bboxes: PDFBBox[] = [];
-        for (const { candidates, pageNum } of overlayRows) {
-          let found = false;
-          for (const candidate of candidates) {
-            const bbox = await findBBoxInTextLayer(pdf, candidate, pageNum);
-            if (bbox) { bboxes.push(bbox); found = true; break; }
-            if (cancelled) return;
+        // Build circle data: prefer AI bounding box, fall back to text-layer search
+        interface CircleData { cx: number; cy: number; radius: number; pageNum: number; source: "ai" | "text" }
+        const circles: CircleData[] = [];
+        for (const row of overlayRows) {
+          if (row.aiBBox) {
+            // AI bbox is in pixel coordinates of the image sent to OpenAI
+            const { x1, y1, x2, y2 } = row.aiBBox;
+            circles.push({
+              cx: (x1 + x2) / 2,
+              cy: (y1 + y2) / 2,
+              radius: Math.max(Math.abs(x2 - x1), Math.abs(y2 - y1)) / 2 + 30,
+              pageNum: row.pageNum,
+              source: "ai",
+            });
+          } else {
+            // Fall back to text-layer search
+            let found = false;
+            for (const candidate of row.candidates) {
+              const bbox = await findBBoxInTextLayer(pdf, candidate, row.pageNum);
+              if (bbox) {
+                circles.push({ cx: 0, cy: 0, radius: 0, pageNum: bbox.pageNum ?? row.pageNum, source: "text", ...bbox } as any);
+                // We'll convert text-layer bboxes during rendering
+                found = true;
+                break;
+              }
+              if (cancelled) return;
+            }
+            if (!found) console.log(`[RawResultModal] No match for candidates:`, row.candidates);
           }
-          if (!found) console.log(`[RawResultModal] No match for candidates:`, candidates);
         }
-        console.log(`[RawResultModal] Found ${bboxes.length} bounding boxes`);
-        setBboxCount(bboxes.length);
+        console.log(`[RawResultModal] Found ${circles.length} circle locations`);
+        setBboxCount(circles.length);
 
-        // Render pages with bbox overlays
+        // Render pages with circle overlays
         const maxPages = Math.min(pdf.numPages, 20);
         const canvases: HTMLCanvasElement[] = [];
         for (let i = 1; i <= maxPages; i++) {
@@ -893,21 +912,36 @@ function RawResultModal({ fileName, awpClassName, resultText, instanceCount, sou
           await page.render({ canvasContext: ctx, viewport, canvas } as any).promise;
           if (cancelled) return;
 
-          // Draw bounding boxes for this page
-          const pageBboxes = bboxes.filter(b => b.pageNum === i);
-          for (const bbox of pageBboxes) {
-            // Convert PDF user-space coords to canvas pixels
-            const rect = viewport.convertToViewportRectangle([bbox.x1, bbox.y1, bbox.x2, bbox.y2]);
-            const [vx1, vy1, vx2, vy2] = rect;
-            const x = Math.min(vx1, vx2);
-            const y = Math.min(vy1, vy2);
-            const w = Math.abs(vx2 - vx1);
-            const h = Math.abs(vy2 - vy1);
+          // AI image dimensions: the image sent to OpenAI is the PDF page rendered at scale 4
+          const aiImageW = viewport.width;
+          const aiImageH = viewport.height;
 
-            // Circle overlay
-            const cx = x + w / 2;
-            const cy = y + h / 2;
-            const radius = Math.max(w, h) / 2 + 80;
+          // Draw circles for this page
+          const pageCircles = circles.filter(c => c.pageNum === i);
+          for (const circle of pageCircles) {
+            let cx: number, cy: number, radius: number;
+            if (circle.source === "ai") {
+              // AI coordinates are in the original image pixel space
+              // Scale from AI image to canvas (both are scale=4, so 1:1 mapping)
+              cx = (circle.cx / aiImageW) * viewport.width;
+              cy = (circle.cy / aiImageH) * viewport.height;
+              radius = (circle.radius / Math.max(aiImageW, aiImageH)) * Math.max(viewport.width, viewport.height);
+              // Ensure minimum radius
+              radius = Math.max(radius, 40);
+            } else {
+              // Text-layer fallback: circle has bbox coords stored
+              const bbox = circle as any;
+              const rect = viewport.convertToViewportRectangle([bbox.x1, bbox.y1, bbox.x2, bbox.y2]);
+              const [vx1, vy1, vx2, vy2] = rect;
+              const x = Math.min(vx1, vx2);
+              const y = Math.min(vy1, vy2);
+              const w = Math.abs(vx2 - vx1);
+              const h = Math.abs(vy2 - vy1);
+              cx = x + w / 2;
+              cy = y + h / 2;
+              radius = Math.max(w, h) / 2 + 80;
+            }
+
             ctx.beginPath();
             ctx.arc(cx, cy, radius, 0, Math.PI * 2);
             ctx.fillStyle = "rgba(239, 68, 68, 0.15)";
