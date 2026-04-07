@@ -2020,11 +2020,39 @@ export function AnalysisSection({ requestId, files, projectId, sourceType }: Ana
 
   const MAX_CONCURRENT_ANALYZE = 5;
 
+  // Resolve prompt content for a single AWP class just-in-time
+  const resolvePromptContent = async (prompt: AWPPrompt, token: string | undefined): Promise<string | null> => {
+    // 1. Use cached prompt_content first
+    if (prompt.prompt_content) return prompt.prompt_content;
+    // 2. Fall back to live Drive fetch
+    if (!prompt.drive_file_id) return null;
+    try {
+      const res = await fetch(
+        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/resolve-drive-doc`,
+        {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${token}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ fileUrl: prompt.drive_file_id, exportContent: true }),
+        }
+      );
+      if (res.ok) {
+        const data = await res.json();
+        return data.content || null;
+      }
+    } catch (e) {
+      console.error(`[V2] Drive fetch failed for ${prompt.awp_class_name}:`, e);
+    }
+    return null;
+  };
+
   const executeAnalyzeV2Item = async (item: {
     fileId: string;
     openaiFileId: string;
     awpClassName: string;
-    promptContent: string;
+    prompt: AWPPrompt;
     fileName: string;
   }) => {
     analyzeV2InFlightRef.current++;
@@ -2036,6 +2064,17 @@ export function AnalysisSection({ requestId, files, projectId, sourceType }: Ana
         ...prev,
         [item.awpClassName]: { ...(prev[item.awpClassName] || {}), [item.fileId]: "processing" },
       }));
+
+      // Resolve prompt content just-in-time for this cell
+      const promptContent = await resolvePromptContent(item.prompt, token ?? undefined);
+      if (!promptContent) {
+        console.warn(`[V2] No prompt content resolvable for ${item.awpClassName}, marking failed`);
+        setClassFileStatuses((prev) => ({
+          ...prev,
+          [item.awpClassName]: { ...(prev[item.awpClassName] || {}), [item.fileId]: "failed" },
+        }));
+        return;
+      }
 
       const analyzeResponse = await fetch(
         `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/analyze-drawings`,
@@ -2049,7 +2088,7 @@ export function AnalysisSection({ requestId, files, projectId, sourceType }: Ana
             analysisRequestId: requestId,
             fileId: item.fileId,
             awpClassName: item.awpClassName,
-            promptContent: item.promptContent,
+            promptContent,
             model: analyzeModel,
             openaiFileId: item.openaiFileId,
           }),
