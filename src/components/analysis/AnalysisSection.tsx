@@ -146,6 +146,7 @@ function parseRoomTagsFromResult(
 interface OverlayRow {
   candidates: string[];   // ordered by search priority
   pageNum: number;
+  aiBBox?: { x1: number; y1: number; x2: number; y2: number };
 }
 
 /**
@@ -178,6 +179,7 @@ function parseOverlayCandidates(resultText: string): OverlayRow[] {
 
     const headers = lines[headerIdx].split("|").map((c) => c.trim().toLowerCase());
     const pageCol = headers.findIndex((h) => h.includes("page") || h.includes("sheet"));
+    const bboxCol = headers.findIndex((h) => h.includes("bounding box") || h.includes("bbox") || h.includes("coordinates"));
 
     // Build candidate column indices in priority order
     const candidateColIndices: number[] = [];
