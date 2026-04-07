@@ -2121,16 +2121,18 @@ export function AnalysisSection({ requestId, files, projectId, sourceType }: Ana
               clearInterval(analyzeV2TimerRef.current);
               analyzeV2TimerRef.current = null;
             }
-            // All done
-            queryClient.invalidateQueries({ queryKey: ["analysis-results", requestId] });
-            setAnalyzeV2Running(false);
-            setAnalyzingClasses(new Set());
-            supabase.from("analysis_requests").update({ status: "complete" }).eq("id", requestId);
-            toast({ title: "Analysis Complete", description: "All files analyzed." });
-            // Trigger summarize for each class
-            for (const cn of allClassNames) {
-              handleSummarize(cn);
-            }
+            // All done — invalidate first, then summarize
+            (async () => {
+              await queryClient.invalidateQueries({ queryKey: ["analysis-results", requestId] });
+              setAnalyzeV2Running(false);
+              setAnalyzingClasses(new Set());
+              await supabase.from("analysis_requests").update({ status: "complete" }).eq("id", requestId);
+              toast({ title: "Analysis Complete", description: "All files analyzed." });
+              // Trigger summarize for each class
+              for (const cn of allClassNames) {
+                handleSummarize(cn);
+              }
+            })();
           }
         }, 1000);
 
