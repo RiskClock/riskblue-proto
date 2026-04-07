@@ -1,58 +1,26 @@
 
 
-# Google Maps-Style Navigation + Zoom-Out Floor for Drawing Viewers
+# Fix Circle Detection for Non-Room-Tag Responses (e.g. DCW)
 
-## Summary
+## Problem
 
-Add scroll-to-zoom, double-click-to-zoom, pinch-to-zoom, click-drag-to-pan, and enforce a minimum zoom of 1.0 (fit-to-container) across all drawing viewer components.
+The `parseRoomTagsFromResult` function only recognizes column headers containing keywords like "room code", "generated room", "room identifier", "code", or "id". The DCW response uses "Component Type" as its first column with values like "Pre-Booster", "Post-Booster", "Zone Entry" — none of which match these patterns, so zero tags are returned and no circles are drawn.
 
-## Interactions
+## Solution
 
-| Gesture | Behavior |
-|---|---|
-| Scroll wheel | Zoom in/out centered on cursor |
-| Double-click | Zoom in 0.5x centered on click |
-| Click + drag | Pan (grab/grabbing cursor) |
-| Pinch (trackpad/touch) | Zoom centered on midpoint |
-| Zoom out limit | Clamped at 1.0 (document fills container) |
-
-## Implementation
-
-### Shared approach (all three viewers)
-
-Add to each scrollable container div: `onWheel`, `onDoubleClick`, `onMouseDown/Move/Up/Leave`, `onTouchStart/Move/End`.
-
-- **dragRef** (`useRef`) tracks `isDragging`, `startX`, `startY`, `scrollLeft`, `scrollTop` — no re-renders during drag.
-- **onWheel**: `preventDefault()`, detect `ctrlKey` for trackpad pinch. Compute cursor fraction of content, apply ±0.25 zoom, reposition scroll to keep point stable. Clamp min 1.0, max 8.
-- **onDoubleClick**: +0.5 zoom centered on click point, clamped to max.
-- **Mouse drag**: Set scroll position based on delta from start.
-- **Touch**: Two-finger distance change → zoom delta; single finger → pan.
-- All zoom-out paths use `Math.max(1, ...)` instead of current 0.25/0.5.
+Expand the header detection and ID column detection to recognize additional column name patterns commonly used in AI responses.
 
 ### File: `src/components/analysis/AnalysisSection.tsx`
 
-**InstanceDetailModal** (~line 612-697):
-- Add dragRef, event handlers to container div
-- Change `Math.max(0.25, ...)` → `Math.max(1, ...)` in handleZoomOut
+**Line 141 — HEADER_KW array**: Add `"component"`, `"type"`, `"identifier"`, `"tag"` to the keyword list so the header row is detected.
 
-**RawResultModal** (~line 848-888):
-- Add dragRef, event handlers to pdfScrollRef container
-- Change `Math.max(0.25, ...)` → `Math.max(1, ...)` in handleZoom
+**Line 152 — idCol finder**: Add `h.includes("component type")` and `h.includes("component")` and `h.includes("identifier")` as additional matchers. If no specific match is found, fall back to using the first non-empty column (index 1, since index 0 is the empty string before the first `|`).
 
-**FilePreviewModal** (~line 1004-1017):
-- Add dragRef, event handlers to container div
-- Change `Math.max(0.25, ...)` → `Math.max(1, ...)` in handleZoomOut
-- Update zoom-out button disabled check to `zoom <= 1`
+**Fallback strategy**: If `idCol` is still -1 after all keyword checks, use the first data column (index 1) as the tag source. This ensures that even with unexpected column headers, the first column values are used for text-layer search.
 
-### File: `src/components/wizard/FileViewerModal.tsx`
-
-- Add dragRef, event handlers to container div (~line 259)
-- Change `Math.max(0.5, ...)` → `Math.max(1, ...)` in handleZoomOut
-
-## Files Changed
+## Scope
 
 | File | Change |
 |---|---|
-| `src/components/analysis/AnalysisSection.tsx` | Add map-style nav handlers + zoom floor of 1.0 to InstanceDetailModal, RawResultModal, FilePreviewModal |
-| `src/components/wizard/FileViewerModal.tsx` | Add map-style nav handlers + zoom floor of 1.0 |
+| `src/components/analysis/AnalysisSection.tsx` | Expand `HEADER_KW` and `idCol` matching in `parseRoomTagsFromResult` (~lines 141-156) |
 
