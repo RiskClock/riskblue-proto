@@ -1237,6 +1237,9 @@ export function AnalysisSection({ requestId, files, projectId, sourceType }: Ana
   const [triageRunning, setTriageRunning] = useState(false);
   const [triagingClasses, setTriagingClasses] = useState<Set<string>>(new Set());
   const [triageTokens, setTriageTokens] = useState(0);
+  const [analyzeTokens, setAnalyzeTokens] = useState(0);
+  const analyzeTokensRef = useRef(0);
+  const [uploadingFileIds, setUploadingFileIds] = useState<Set<string>>(new Set());
   const [triagePhase, setTriagePhase] = useState<"extract" | "score" | null>(null);
   const [summaryGroupBy, setSummaryGroupBy] = useState<"awp" | "floor">("awp");
   const [triageProgress, setTriageProgress] = useState<{ done: number; total: number }>({ done: 0, total: 0 });
@@ -1408,6 +1411,11 @@ export function AnalysisSection({ requestId, files, projectId, sourceType }: Ana
     if (requestMeta.triage_model) setTriageModel(requestMeta.triage_model as string);
     if (requestMeta.analyze_model) setAnalyzeModel(requestMeta.analyze_model as string);
     if (requestMeta.triage_tokens_used) setTriageTokens(requestMeta.triage_tokens_used as number);
+    if ((requestMeta as any).analyze_tokens_used) {
+      const at = (requestMeta as any).analyze_tokens_used as number;
+      setAnalyzeTokens(at);
+      analyzeTokensRef.current = at;
+    }
     const disabled = (requestMeta as any).disabled_awp_classes as string[] | null;
     if (disabled && disabled.length > 0) {
       setDisabledColumns(new Set(disabled));
@@ -1855,6 +1863,13 @@ export function AnalysisSection({ requestId, files, projectId, sourceType }: Ana
       }));
 
       if (analyzeResponse.ok) {
+        const data = await analyzeResponse.json();
+        // Track tokens
+        if (data.usage?.total_tokens) {
+          analyzeTokensRef.current += data.usage.total_tokens;
+          setAnalyzeTokens(analyzeTokensRef.current);
+          supabase.from("analysis_requests").update({ analyze_tokens_used: analyzeTokensRef.current } as any).eq("id", requestId);
+        }
         await queryClient.invalidateQueries({ queryKey: ["analysis-results", requestId] });
       } else {
         const err = await analyzeResponse.json().catch(() => ({}));
@@ -1892,6 +1907,8 @@ export function AnalysisSection({ requestId, files, projectId, sourceType }: Ana
     setAnalyzingClasses(new Set(allClassNames));
     setAnalyzeV2Running(true);
     setClassFileStatuses({});
+    setAnalyzeTokens(0);
+    analyzeTokensRef.current = 0;
 
     // Mark request as processing
     await supabase.from("analysis_requests").update({ status: "processing" }).eq("id", requestId);
@@ -1995,6 +2012,9 @@ export function AnalysisSection({ requestId, files, projectId, sourceType }: Ana
             [firstClass]: { ...(prev[firstClass] || {}), [file.id]: "processing" },
           }));
 
+          // Show upload indicator for this file
+          setUploadingFileIds((prev) => { const n = new Set(prev); n.add(file.id); return n; });
+
           const uploadResponse = await fetch(
             `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/analyze-drawings`,
             {
@@ -2013,9 +2033,18 @@ export function AnalysisSection({ requestId, files, projectId, sourceType }: Ana
             }
           );
 
+          // Clear upload indicator
+          setUploadingFileIds((prev) => { const n = new Set(prev); n.delete(file.id); return n; });
+
           if (uploadResponse.ok) {
             const data = await uploadResponse.json();
             cachedOpenaiFileId = data.openaiFileId || null;
+            // Track tokens from the upload+analyze call
+            if (data.usage?.total_tokens) {
+              analyzeTokensRef.current += data.usage.total_tokens;
+              setAnalyzeTokens(analyzeTokensRef.current);
+              supabase.from("analysis_requests").update({ analyze_tokens_used: analyzeTokensRef.current } as any).eq("id", requestId);
+            }
             setClassFileStatuses((prev) => ({
               ...prev,
               [firstClass]: { ...(prev[firstClass] || {}), [file.id]: "complete" },
@@ -2092,16 +2121,18 @@ export function AnalysisSection({ requestId, files, projectId, sourceType }: Ana
               clearInterval(analyzeV2TimerRef.current);
               analyzeV2TimerRef.current = null;
             }
-            // All done
-            queryClient.invalidateQueries({ queryKey: ["analysis-results", requestId] });
-            setAnalyzeV2Running(false);
-            setAnalyzingClasses(new Set());
-            supabase.from("analysis_requests").update({ status: "complete" }).eq("id", requestId);
-            toast({ title: "Analysis Complete", description: "All files analyzed." });
-            // Trigger summarize for each class
-            for (const cn of allClassNames) {
-              handleSummarize(cn);
-            }
+            // All done — invalidate first, then summarize
+            (async () => {
+              await queryClient.invalidateQueries({ queryKey: ["analysis-results", requestId] });
+              setAnalyzeV2Running(false);
+              setAnalyzingClasses(new Set());
+              await supabase.from("analysis_requests").update({ status: "complete" }).eq("id", requestId);
+              toast({ title: "Analysis Complete", description: "All files analyzed." });
+              // Trigger summarize for each class
+              for (const cn of allClassNames) {
+                handleSummarize(cn);
+              }
+            })();
           }
         }, 1000);
 
@@ -2741,7 +2772,7 @@ export function AnalysisSection({ requestId, files, projectId, sourceType }: Ana
               </div>
               {triageRunning && triagePhase && (
                 <span className="text-xs text-muted-foreground tabular-nums">
-                  Triaging: {triageProgress.done}/{triageProgress.total} cells
+                  Triaging: {triageProgress.done}/{triageProgress.total} instances
                 </span>
               )}
               {!triageRunning && triageTokens > 0 && (
@@ -2812,7 +2843,7 @@ export function AnalysisSection({ requestId, files, projectId, sourceType }: Ana
               {analyzeV2Running ? (
                 <div className="flex items-center gap-2">
                   <span className="text-xs text-muted-foreground tabular-nums">
-                    Analyzing: {analyzeV2Progress.done}/{analyzeV2Progress.total} cells
+                    Analyzing: {analyzeV2Progress.done}/{analyzeV2Progress.total} instances
                   </span>
                   <Button
                     size="sm"
@@ -2857,6 +2888,23 @@ export function AnalysisSection({ requestId, files, projectId, sourceType }: Ana
                     <TooltipContent>Legacy Analyze (class-by-class)</TooltipContent>
                   </Tooltip>
                 </div>
+              )}
+              {analyzeV2Running && analyzeTokens > 0 && (
+                <span className="text-xs text-muted-foreground tabular-nums">
+                  {analyzeTokens.toLocaleString()} tokens
+                </span>
+              )}
+              {!analyzeV2Running && analyzeTokens > 0 && (
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <span className="inline-flex items-center cursor-default">
+                      <Info className="w-4 h-4 text-muted-foreground" />
+                    </span>
+                  </TooltipTrigger>
+                  <TooltipContent side="bottom">
+                    <p className="text-xs tabular-nums">Last analysis used {analyzeTokens.toLocaleString()} tokens</p>
+                  </TooltipContent>
+                </Tooltip>
               )}
             </div>
           </div>
@@ -2971,9 +3019,20 @@ export function AnalysisSection({ requestId, files, projectId, sourceType }: Ana
                           >
                             {file.name}
                           </button>
-                          {extractingFileIds.has(file.id) && (
-                            <Loader2 className="w-3 h-3 animate-spin text-muted-foreground flex-shrink-0" />
-                          )}
+                           {extractingFileIds.has(file.id) && (
+                             <Loader2 className="w-3 h-3 animate-spin text-muted-foreground flex-shrink-0" />
+                           )}
+                           {uploadingFileIds.has(file.id) && !extractingFileIds.has(file.id) && (
+                             <Tooltip>
+                               <TooltipTrigger asChild>
+                                 <span className="inline-flex items-center gap-1 text-[10px] text-muted-foreground flex-shrink-0">
+                                   <Loader2 className="w-3 h-3 animate-spin" />
+                                   Uploading
+                                 </span>
+                               </TooltipTrigger>
+                               <TooltipContent>Uploading file to analysis service</TooltipContent>
+                             </Tooltip>
+                           )}
                           {extractedFileIds.has(file.id) && !extractingFileIds.has(file.id) && (
                             <button
                               className="inline-flex items-center rounded-full border border-emerald-300 bg-emerald-100 px-1.5 py-px text-[10px] font-medium text-emerald-800 leading-tight flex-shrink-0 cursor-pointer hover:bg-emerald-200 transition-colors"
@@ -3030,7 +3089,7 @@ export function AnalysisSection({ requestId, files, projectId, sourceType }: Ana
                           return (
                             <td key={prompt.id} className={`w-14 px-2 py-2 text-center${disabledCls}`} style={triageBgStyle}>
                               <button
-                                className="text-xs font-semibold text-primary hover:underline"
+                                className="text-sm font-semibold text-white hover:underline"
                                 onClick={() => {
                                   if (result?.result_text) {
                                     setRawResultModal({
@@ -3057,7 +3116,7 @@ export function AnalysisSection({ requestId, files, projectId, sourceType }: Ana
                             <td key={prompt.id} className={`w-14 px-2 py-2 text-center${disabledCls}`} style={triageBgStyle}>
                               {result0?.result_text ? (
                                 <button
-                                  className="text-xs text-muted-foreground hover:text-foreground hover:underline cursor-pointer"
+                                  className="text-sm text-muted-foreground hover:text-foreground hover:underline cursor-pointer"
                                   onClick={() => {
                                     setRawResultModal({
                                       fileName: file.name,
@@ -3071,7 +3130,7 @@ export function AnalysisSection({ requestId, files, projectId, sourceType }: Ana
                                   0
                                 </button>
                               ) : (
-                                <span className="text-xs text-muted-foreground">0</span>
+                                <span className="text-sm text-muted-foreground">0</span>
                               )}
                             </td>
                           );

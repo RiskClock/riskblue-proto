@@ -1,0 +1,1 @@
+ALTER TABLE public.analysis_requests ADD COLUMN IF NOT EXISTS analyze_tokens_used integer DEFAULT 0;
