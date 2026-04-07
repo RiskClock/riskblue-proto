@@ -1450,7 +1450,7 @@ export function AnalysisSection({ requestId, files, projectId, sourceType }: Ana
   // ---- Manual triage overrides ----
   const [triageOverrides, setTriageOverrides] = useState<Map<string, "include" | "exclude">>(new Map());
   const inFlightCountRef = useRef(0);
-  const MAX_CONCURRENT_TRIAGE = 5;
+  const MAX_CONCURRENT_TRIAGE = 10;
 
   // ---- Extract Context state ----
   const [extractRunning, setExtractRunning] = useState(false);
