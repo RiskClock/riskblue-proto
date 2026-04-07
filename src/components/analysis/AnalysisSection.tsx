@@ -704,6 +704,7 @@ function InstanceDetailModal({
       by = ((ny1 + ny2) / 2) * baseDimensions.height - radius;
     }
 
+    const diameter = radius * 2;
     // Safeguard: skip zero-size region
     if (diameter <= 2) return;
 
