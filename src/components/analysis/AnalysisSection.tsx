@@ -2808,18 +2808,55 @@ export function AnalysisSection({ requestId, files, projectId, sourceType }: Ana
                   <option value="claude-haiku">Anthropic / claude-haiku</option>
                 </select>
               </div>
-              <Button
-                size="sm"
-                onClick={handleAnalyzeAll}
-                disabled={anyAnalyzing || triageRunning || extractRunning || copiedFiles.length === 0}
-              >
-                {anyAnalyzing ? (
-                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                ) : (
-                  <Search className="w-4 h-4 mr-2" />
-                )}
-                Analyze
-              </Button>
+              {analyzeV2Running ? (
+                <div className="flex items-center gap-2">
+                  <span className="text-xs text-muted-foreground tabular-nums">
+                    Analyzing: {analyzeV2Progress.done}/{analyzeV2Progress.total} cells
+                  </span>
+                  <Button
+                    size="sm"
+                    variant="destructive"
+                    onClick={handleStopAnalyzeV2}
+                    disabled={analyzeV2Stopping}
+                  >
+                    {analyzeV2Stopping ? (
+                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                    ) : (
+                      <Square className="w-4 h-4 mr-2" />
+                    )}
+                    {analyzeV2Stopping ? "Stopping…" : "Stop"}
+                  </Button>
+                </div>
+              ) : (
+                <div className="flex items-center gap-1">
+                  <Button
+                    size="sm"
+                    onClick={handleAnalyzeAllV2}
+                    disabled={anyAnalyzing || triageRunning || extractRunning || copiedFiles.length === 0}
+                  >
+                    {anyAnalyzing ? (
+                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                    ) : (
+                      <Search className="w-4 h-4 mr-2" />
+                    )}
+                    Analyze
+                  </Button>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button
+                        size="icon"
+                        variant="ghost"
+                        className="h-8 w-8"
+                        onClick={handleAnalyzeAll}
+                        disabled={anyAnalyzing || triageRunning || extractRunning || copiedFiles.length === 0}
+                      >
+                        <Search className="w-3.5 h-3.5" />
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent>Legacy Analyze (class-by-class)</TooltipContent>
+                  </Tooltip>
+                </div>
+              )}
             </div>
           </div>
 
