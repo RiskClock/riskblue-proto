@@ -221,8 +221,23 @@ function parseOverlayCandidates(resultText: string): OverlayRow[] {
         const pv = parseInt(cells[pageCol] || "1", 10);
         if (!isNaN(pv) && pv > 0) pageNum = pv;
       }
+      // Parse AI bounding box if column exists
+      let aiBBox: OverlayRow["aiBBox"] = undefined;
+      if (bboxCol !== -1) {
+        const bboxStr = cells[bboxCol] || "";
+        // Match patterns like (1848, 2665) → (1975, 2681) or (1848, 2665) -> (1975, 2681)
+        const bboxMatch = bboxStr.match(/\(?\s*(\d+)[,\s]+(\d+)\s*\)?\s*(?:→|->|—|–)\s*\(?\s*(\d+)[,\s]+(\d+)\s*\)?/);
+        if (bboxMatch) {
+          aiBBox = {
+            x1: parseInt(bboxMatch[1], 10),
+            y1: parseInt(bboxMatch[2], 10),
+            x2: parseInt(bboxMatch[3], 10),
+            y2: parseInt(bboxMatch[4], 10),
+          };
+        }
+      }
       if (candidates.length > 0) {
-        rows.push({ candidates, pageNum });
+        rows.push({ candidates, pageNum, aiBBox });
       }
     }
     return rows;
