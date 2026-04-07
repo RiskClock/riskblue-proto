@@ -673,23 +673,36 @@ function InstanceDetailModal({
     const container = containerRef.current;
     if (!container) return;
 
-    // Convert PDF user-space → offscreen canvas pixels
-    const [vx1, vy1, vx2, vy2] = pdfViewport.convertToViewportRectangle([
-      rawCoords.x1, rawCoords.y1, rawCoords.x2, rawCoords.y2,
-    ]);
+    const isAiMode = !!(window as any).__aiBBoxMode;
+    let bx: number, by: number, radius: number;
 
-    // Normalise to [0..1] and map to base canvas pixels (zoom = 1)
-    const nx1 = Math.min(vx1, vx2) / offscreenSize.w;
-    const ny1 = Math.min(vy1, vy2) / offscreenSize.h;
-    const nx2 = Math.max(vx1, vx2) / offscreenSize.w;
-    const ny2 = Math.max(vy1, vy2) / offscreenSize.h;
-
-    const bw = (nx2 - nx1) * baseDimensions.width;
-    const bh = (ny2 - ny1) * baseDimensions.height;
-    const radius = Math.max(bw, bh) / 2 + 20;
-    const diameter = radius * 2;
-    const bx = ((nx1 + nx2) / 2) * baseDimensions.width - radius;
-    const by = ((ny1 + ny2) / 2) * baseDimensions.height - radius;
+    if (isAiMode) {
+      // AI pixel coordinates — map directly
+      const ncx = ((rawCoords.x1 + rawCoords.x2) / 2) / offscreenSize.w;
+      const ncy = ((rawCoords.y1 + rawCoords.y2) / 2) / offscreenSize.h;
+      const nbw = Math.abs(rawCoords.x2 - rawCoords.x1) / offscreenSize.w;
+      const nbh = Math.abs(rawCoords.y2 - rawCoords.y1) / offscreenSize.h;
+      const bw = nbw * baseDimensions.width;
+      const bh = nbh * baseDimensions.height;
+      radius = Math.max(bw, bh) / 2 + 20;
+      radius = Math.max(radius, 15);
+      bx = ncx * baseDimensions.width - radius;
+      by = ncy * baseDimensions.height - radius;
+    } else {
+      // Convert PDF user-space → offscreen canvas pixels
+      const [vx1, vy1, vx2, vy2] = pdfViewport.convertToViewportRectangle([
+        rawCoords.x1, rawCoords.y1, rawCoords.x2, rawCoords.y2,
+      ]);
+      const nx1 = Math.min(vx1, vx2) / offscreenSize.w;
+      const ny1 = Math.min(vy1, vy2) / offscreenSize.h;
+      const nx2 = Math.max(vx1, vx2) / offscreenSize.w;
+      const ny2 = Math.max(vy1, vy2) / offscreenSize.h;
+      const bw = (nx2 - nx1) * baseDimensions.width;
+      const bh = (ny2 - ny1) * baseDimensions.height;
+      radius = Math.max(bw, bh) / 2 + 20;
+      bx = ((nx1 + nx2) / 2) * baseDimensions.width - radius;
+      by = ((ny1 + ny2) / 2) * baseDimensions.height - radius;
+    }
 
     // Safeguard: skip zero-size region
     if (diameter <= 2) return;
