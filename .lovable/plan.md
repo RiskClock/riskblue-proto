@@ -1,67 +1,48 @@
 
 
-# New File-First Analyze Workflow (V2)
+# Fix Analysis V2: 6 Issues
 
-## Summary
+## 1. White text on green background cells
+Instance count text in analyzed cells uses `text-primary` (blue) which is hard to read on dark green. Change to white.
 
-Add a new "Analyze V2" workflow that iterates **file-by-file** instead of class-by-class. For each processed file, it uploads once to OpenAI, then fires analysis calls for all eligible AWP classes using that same `file_id`. The original analyze function is preserved behind a smaller icon-only button.
+**File**: `AnalysisSection.tsx` — line ~3033, change `text-primary` to `text-white` for the instance count button in cells with triage background.
 
-## UI Changes (AnalysisSection.tsx)
+## 2. Increase instance count font size
+Bump `text-xs` to `text-sm` on the instance count buttons (lines ~3033 and ~3060).
 
-1. **Original "Analyze" button** — triggers the new `handleAnalyzeAllV2` workflow (file-first, 5 concurrent calls).
-2. **New small icon-only button** (magnifying glass, no text) — placed immediately after, triggers the old `handleAnalyzeAll` (class-first, preserved as fallback).
+## 3. Change "cells" to "instances" in progress text
+**File**: `AnalysisSection.tsx` — line ~2815, change `cells` to `instances` in the `Analyzing: x/y cells` text. Also line ~2744 for triage.
 
-## New Analyze Workflow: `handleAnalyzeAllV2`
+## 4. Track and display analyze token usage
+- **DB migration**: Add `analyze_tokens_used` integer column to `analysis_requests` (default 0).
+- **Edge function** (`analyze-drawings`): Extract `responsesResult.usage` from the OpenAI response and include `usage` in the returned JSON.
+- **Client** (`AnalysisSection.tsx`):
+  - Add `analyzeTokens` state, hydrate from DB on mount.
+  - Reset to 0 when V2 starts.
+  - Accumulate tokens from each successful `executeAnalyzeV2Item` response.
+  - Persist to DB after each accumulation.
+  - Show live count while running, info icon with tooltip when complete (same pattern as triage tokens).
 
-### Flow
+## 5. Visual indicator for file upload during analysis
+When a file is being uploaded to OpenAI (the first class call without `openaiFileId`), show a visual indicator on that file's row.
+- Add `uploadingFileIds` state (`Set<string>`).
+- Set it before the upload call in `handleAnalyzeAllV2` (line ~1998), clear after response.
+- In the file name column (line ~2974 area), show a small upload icon/spinner when `uploadingFileIds.has(file.id)`.
 
-```text
-1. Collect all enabled AWP classes (filter by !disabled, detection_method=drawing)
-2. Collect all "processed" files (extractedFileIds)
-3. For each file:
-   a. Determine eligible AWP classes (triage score >= 50% OR manual include)
-   b. If no eligible classes, skip file
-   c. Ensure file has an OpenAI file_id (reuse cached or call edge function to upload)
-   d. For each eligible class, queue a Responses API call
-4. Execute queued calls with concurrency=5
-5. Store results in analysis_results (same as today)
-6. After all calls for a class finish, trigger summarize
-```
+## 6. Fix analysis summary not populating
+**Root cause**: `summarize-analysis` edge function uses `supabase.auth.getClaims()` which doesn't exist in the Supabase JS client. It should use `supabase.auth.getUser()` instead (same pattern as `analyze-drawings`).
 
-### Triage filter (per user preference)
-- Include cells where triage score >= 50% OR override = 'include'
-- Exclude cells where override = 'exclude'
-- Skip untriaged cells
+**Also**: The summarize calls fire from inside the `setInterval` completion callback. The results may not be available yet because `invalidateQueries` is async. Add `await` before the invalidation, then call summarize.
 
-### Concurrency
-- Max 5 in-flight calls at a time across all files/classes
-- Queue structure: array of `{ fileId, openaiFileId, awpClassName, promptContent }` work items
-- Process queue with a pool of 5 workers
-
-### Prompt fetching
-- Fetch each class's prompt content per-class (via `resolve-drive-doc` with `exportContent: true`), same as current approach, but pre-fetch all needed prompts before starting the queue
-
-### Edge function modification
-- Add an optional `openaiFileId` parameter to `analyze-drawings`
-- When provided, skip the upload step entirely and use the supplied `openaiFileId` directly for the Responses API call
-- All existing caching, raster-fallback, and retry logic still applies when `openaiFileId` is NOT provided
-
-### File upload strategy
-- Before queuing calls for a file, check if the file already has a cached `openai_file_id` in the DB (via `shouldReuseFile` logic on the client side using the already-fetched `analysis_request_files` data)
-- If not cached, call `analyze-drawings` once for that file (first class) WITHOUT `openaiFileId` — it will upload and cache it. Extract the returned `openaiFileId` from the edge function response (needs a small addition to the response payload)
-- Subsequent classes for the same file pass the cached `openaiFileId`
-
-**Simpler approach**: Add a new lightweight edge function or endpoint that just uploads the file to OpenAI and returns the `file_id`. Then all Responses API calls use the pre-uploaded `file_id`.
-
-Actually — cleaner: modify `analyze-drawings` to accept optional `openaiFileId`. When provided, skip upload entirely. The client orchestrates: for each file, the first call lets the edge function upload normally; subsequent calls for the same file pass the `openaiFileId` from the first call's response.
-
-### Response payload change
-- `analyze-drawings` already returns `{ status, resultText, fileId, fileName }` — add `openaiFileId` to the response so the client can reuse it for subsequent calls on the same file.
+**File**: `supabase/functions/summarize-analysis/index.ts` — Replace `getClaims` with `getUser` for auth check.
+**File**: `AnalysisSection.tsx` — In the V2 scheduler completion (line ~2096), await the invalidation, then trigger summarize calls.
 
 ## Files Changed
 
 | File | Change |
 |---|---|
-| `supabase/functions/analyze-drawings/index.ts` | Accept optional `openaiFileId` param; skip upload when provided; include `openaiFileId` in response |
-| `src/components/analysis/AnalysisSection.tsx` | Add `handleAnalyzeAllV2` (file-first, concurrency=5, 50% threshold); rewire main Analyze button to V2; add small icon-only button for legacy `handleAnalyzeAll` |
+| Migration SQL | Add `analyze_tokens_used` column to `analysis_requests` |
+| `supabase/functions/analyze-drawings/index.ts` | Return `usage` from OpenAI response |
+| `supabase/functions/summarize-analysis/index.ts` | Replace `getClaims` with `getUser` |
+| `src/components/analysis/AnalysisSection.tsx` | White text + larger font for counts; "instances" label; token tracking; upload indicator; fix summarize timing |
 
