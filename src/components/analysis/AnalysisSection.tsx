@@ -1411,6 +1411,11 @@ export function AnalysisSection({ requestId, files, projectId, sourceType }: Ana
     if (requestMeta.triage_model) setTriageModel(requestMeta.triage_model as string);
     if (requestMeta.analyze_model) setAnalyzeModel(requestMeta.analyze_model as string);
     if (requestMeta.triage_tokens_used) setTriageTokens(requestMeta.triage_tokens_used as number);
+    if ((requestMeta as any).analyze_tokens_used) {
+      const at = (requestMeta as any).analyze_tokens_used as number;
+      setAnalyzeTokens(at);
+      analyzeTokensRef.current = at;
+    }
     const disabled = (requestMeta as any).disabled_awp_classes as string[] | null;
     if (disabled && disabled.length > 0) {
       setDisabledColumns(new Set(disabled));
@@ -2744,7 +2749,7 @@ export function AnalysisSection({ requestId, files, projectId, sourceType }: Ana
               </div>
               {triageRunning && triagePhase && (
                 <span className="text-xs text-muted-foreground tabular-nums">
-                  Triaging: {triageProgress.done}/{triageProgress.total} cells
+                  Triaging: {triageProgress.done}/{triageProgress.total} instances
                 </span>
               )}
               {!triageRunning && triageTokens > 0 && (
@@ -2815,7 +2820,7 @@ export function AnalysisSection({ requestId, files, projectId, sourceType }: Ana
               {analyzeV2Running ? (
                 <div className="flex items-center gap-2">
                   <span className="text-xs text-muted-foreground tabular-nums">
-                    Analyzing: {analyzeV2Progress.done}/{analyzeV2Progress.total} cells
+                    Analyzing: {analyzeV2Progress.done}/{analyzeV2Progress.total} instances
                   </span>
                   <Button
                     size="sm"
@@ -3033,7 +3038,7 @@ export function AnalysisSection({ requestId, files, projectId, sourceType }: Ana
                           return (
                             <td key={prompt.id} className={`w-14 px-2 py-2 text-center${disabledCls}`} style={triageBgStyle}>
                               <button
-                                className="text-xs font-semibold text-primary hover:underline"
+                                className="text-sm font-semibold text-white hover:underline"
                                 onClick={() => {
                                   if (result?.result_text) {
                                     setRawResultModal({
@@ -3060,7 +3065,7 @@ export function AnalysisSection({ requestId, files, projectId, sourceType }: Ana
                             <td key={prompt.id} className={`w-14 px-2 py-2 text-center${disabledCls}`} style={triageBgStyle}>
                               {result0?.result_text ? (
                                 <button
-                                  className="text-xs text-muted-foreground hover:text-foreground hover:underline cursor-pointer"
+                                  className="text-sm text-muted-foreground hover:text-foreground hover:underline cursor-pointer"
                                   onClick={() => {
                                     setRawResultModal({
                                       fileName: file.name,
@@ -3074,7 +3079,7 @@ export function AnalysisSection({ requestId, files, projectId, sourceType }: Ana
                                   0
                                 </button>
                               ) : (
-                                <span className="text-xs text-muted-foreground">0</span>
+                                <span className="text-sm text-muted-foreground">0</span>
                               )}
                             </td>
                           );
