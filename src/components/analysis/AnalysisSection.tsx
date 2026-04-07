@@ -2001,19 +2001,22 @@ export function AnalysisSection({ requestId, files, projectId, sourceType }: Ana
           }
         }
 
+        // Show upload/preparing indicator for this file
+        setUploadingFileIds((prev) => { const n = new Set(prev); n.add(file.id); return n; });
+
         if (!cachedOpenaiFileId) {
           // Upload via the first eligible class call (without supplying openaiFileId)
           const firstClass = eligibleClasses[0];
           const pc = promptContents.get(firstClass);
-          if (!pc) continue;
+          if (!pc) {
+            setUploadingFileIds((prev) => { const n = new Set(prev); n.delete(file.id); return n; });
+            continue;
+          }
 
           setClassFileStatuses((prev) => ({
             ...prev,
             [firstClass]: { ...(prev[firstClass] || {}), [file.id]: "processing" },
           }));
-
-          // Show upload indicator for this file
-          setUploadingFileIds((prev) => { const n = new Set(prev); n.add(file.id); return n; });
 
           const uploadResponse = await fetch(
             `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/analyze-drawings`,
@@ -2033,7 +2036,7 @@ export function AnalysisSection({ requestId, files, projectId, sourceType }: Ana
             }
           );
 
-          // Clear upload indicator
+          // Clear upload indicator after first call completes
           setUploadingFileIds((prev) => { const n = new Set(prev); n.delete(file.id); return n; });
 
           if (uploadResponse.ok) {
@@ -2087,8 +2090,10 @@ export function AnalysisSection({ requestId, files, projectId, sourceType }: Ana
               fileName: file.name,
             });
           }
+          }
+          // Clear preparing indicator for cached path
+          setUploadingFileIds((prev) => { const n = new Set(prev); n.delete(file.id); return n; });
         }
-      }
 
       if (workQueue.length === 0) {
         toast({ title: "Analysis Complete", description: "All eligible files processed." });
@@ -2840,6 +2845,23 @@ export function AnalysisSection({ requestId, files, projectId, sourceType }: Ana
                   <option value="claude-haiku">Anthropic / claude-haiku</option>
                 </select>
               </div>
+              {analyzeV2Running && analyzeTokens > 0 && (
+                <span className="text-xs text-muted-foreground tabular-nums">
+                  {analyzeTokens.toLocaleString()} tokens
+                </span>
+              )}
+              {!analyzeV2Running && analyzeTokens > 0 && (
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <span className="inline-flex items-center cursor-default">
+                      <Info className="w-4 h-4 text-muted-foreground" />
+                    </span>
+                  </TooltipTrigger>
+                  <TooltipContent side="bottom">
+                    <p className="text-xs tabular-nums">Last analysis used {analyzeTokens.toLocaleString()} tokens</p>
+                  </TooltipContent>
+                </Tooltip>
+              )}
               {analyzeV2Running ? (
                 <div className="flex items-center gap-2">
                   <span className="text-xs text-muted-foreground tabular-nums">
@@ -2888,23 +2910,6 @@ export function AnalysisSection({ requestId, files, projectId, sourceType }: Ana
                     <TooltipContent>Legacy Analyze (class-by-class)</TooltipContent>
                   </Tooltip>
                 </div>
-              )}
-              {analyzeV2Running && analyzeTokens > 0 && (
-                <span className="text-xs text-muted-foreground tabular-nums">
-                  {analyzeTokens.toLocaleString()} tokens
-                </span>
-              )}
-              {!analyzeV2Running && analyzeTokens > 0 && (
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <span className="inline-flex items-center cursor-default">
-                      <Info className="w-4 h-4 text-muted-foreground" />
-                    </span>
-                  </TooltipTrigger>
-                  <TooltipContent side="bottom">
-                    <p className="text-xs tabular-nums">Last analysis used {analyzeTokens.toLocaleString()} tokens</p>
-                  </TooltipContent>
-                </Tooltip>
               )}
             </div>
           </div>
