@@ -91,7 +91,7 @@ export const ProcoreFolderTree = ({
           <div key={folder.id}>
             <div
               className={cn(
-                "flex items-center gap-1.5 py-1 px-2 rounded cursor-pointer text-sm hover:bg-muted/50 transition-colors",
+                "flex items-center gap-1.5 py-1 px-2 rounded cursor-pointer text-sm hover:bg-muted/50 transition-colors w-full min-w-0",
                 isSelected && "bg-primary/10 ring-1 ring-primary/30"
               )}
               style={{ paddingLeft: `${depth * 16 + 8}px` }}
@@ -112,19 +112,21 @@ export const ProcoreFolderTree = ({
                   />
                 )}
               </button>
-              <FolderOpen className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
-              <span
-                className={cn("truncate flex-1", selectable && "cursor-pointer")}
-                onClick={() => (selectable ? handleSelect(folder) : handleToggle(folder))}
-              >
-                {folder.name}
-              </span>
+              <div className="flex items-center gap-1.5 min-w-0 flex-1">
+                <FolderOpen className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
+                <span
+                  className={cn("truncate min-w-0", selectable && "cursor-pointer")}
+                  onClick={() => (selectable ? handleSelect(folder) : handleToggle(folder))}
+                >
+                  {folder.name}
+                </span>
+              </div>
               {selectable && (
                 <button
                   type="button"
                   onClick={() => handleSelect(folder)}
                   className={cn(
-                    "text-xs px-1.5 py-0.5 rounded shrink-0",
+                    "text-xs px-1.5 py-0.5 rounded shrink-0 ml-1",
                     isSelected
                       ? "bg-primary text-primary-foreground"
                       : "text-muted-foreground hover:bg-muted"

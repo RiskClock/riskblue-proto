@@ -307,7 +307,7 @@ export const ProcoreConnectionDialog = ({
 
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="max-w-md">
+      <DialogContent className="max-w-2xl w-[min(92vw,42rem)]">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <img src={procoreIcon} alt="Procore" className="w-5 h-5" />
