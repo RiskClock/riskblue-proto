@@ -457,6 +457,7 @@ function InstanceDetailModal({
   const [zoom, setZoom] = useState(1);
   const [baseDimensions, setBaseDimensions] = useState<{ width: number; height: number } | null>(null);
   const [rawCoords, setRawCoords] = useState<{ x1: number; y1: number; x2: number; y2: number } | null>(null);
+  const [isAiBBoxMode, setIsAiBBoxMode] = useState(false);
   const [isLoadingPdf, setIsLoadingPdf] = useState(false);
   const [pdfError, setPdfError] = useState<string | null>(null);
   const [pdfViewport, setPdfViewport] = useState<pdfjsLib.PageViewport | null>(null);
