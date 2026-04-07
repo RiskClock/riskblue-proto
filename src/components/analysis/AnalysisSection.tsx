@@ -1809,7 +1809,7 @@ export function AnalysisSection({ requestId, files, projectId, sourceType }: Ana
   }, [savedSummaryData]);
 
   const handleAnalyze = async (prompt: AWPPrompt) => {
-    if (!prompt.drive_file_id || copiedFiles.length === 0) return;
+    if ((!prompt.drive_file_id && !prompt.prompt_content) || copiedFiles.length === 0) return;
     const className = prompt.awp_class_name;
 
     // Clear existing values for this class before re-analyzing
