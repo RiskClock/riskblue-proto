@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from "react";
+import { useMapNavigation } from "@/hooks/useMapNavigation";
 import { supabase } from "@/integrations/supabase/client";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
@@ -851,11 +852,11 @@ function RawResultModal({ fileName, awpClassName, resultText, instanceCount, sou
 
   const handleZoom = (delta: number) => {
     const scroll = pdfScrollRef.current;
-    if (!scroll) { setZoom(z => Math.min(8, Math.max(0.25, z + delta))); return; }
+    if (!scroll) { setZoom(z => Math.min(8, Math.max(1, z + delta))); return; }
     const cx = scroll.scrollWidth > 0 ? (scroll.scrollLeft + scroll.clientWidth / 2) / scroll.scrollWidth : 0.5;
     const cy = scroll.scrollHeight > 0 ? (scroll.scrollTop + scroll.clientHeight / 2) / scroll.scrollHeight : 0.5;
     setZoom(prev => {
-      const next = Math.min(8, Math.max(0.25, prev + delta));
+      const next = Math.min(8, Math.max(1, prev + delta));
       requestAnimationFrame(() => {
         scroll.scrollLeft = cx * scroll.scrollWidth - scroll.clientWidth / 2;
         scroll.scrollTop = cy * scroll.scrollHeight - scroll.clientHeight / 2;
@@ -863,6 +864,8 @@ function RawResultModal({ fileName, awpClassName, resultText, instanceCount, sou
       return next;
     });
   };
+
+  const rawMapNav = useMapNavigation({ zoom, setZoom, minZoom: 1, maxZoom: 8, containerRef: pdfScrollRef });
 
   return (
     <Dialog open onOpenChange={(open) => { if (!open) onClose(); }}>
@@ -880,7 +883,7 @@ function RawResultModal({ fileName, awpClassName, resultText, instanceCount, sou
             <div className="h-10 flex-shrink-0 flex items-center justify-between px-3 border-b bg-background">
               <span className="text-xs text-muted-foreground truncate">Drawing Preview</span>
               <div className="flex items-center gap-1">
-                <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => handleZoom(-0.25)} disabled={zoom <= 0.25}>
+                <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => handleZoom(-0.25)} disabled={zoom <= 1}>
                   <ZoomOut className="w-3.5 h-3.5" />
                 </Button>
                 <span className="text-xs w-10 text-center">{Math.round(zoom * 100)}%</span>
@@ -889,7 +892,7 @@ function RawResultModal({ fileName, awpClassName, resultText, instanceCount, sou
                 </Button>
               </div>
             </div>
-            <div ref={pdfScrollRef} className="flex-1 overflow-auto p-2">
+            <div ref={pdfScrollRef} className="flex-1 overflow-auto p-2" style={rawMapNav.containerStyle} {...rawMapNav.handlers}>
               {pdfLoading ? (
                 <div className="flex items-center justify-center h-full">
                   <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
