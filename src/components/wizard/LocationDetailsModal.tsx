@@ -58,7 +58,7 @@ export const LocationDetailsModal = ({
 
   // Load file when modal opens - single consolidated effect
   useEffect(() => {
-    if (isOpen && showDrawingViewer && drawingUrl) {
+    if (isOpen && showDrawingViewer) {
       // Reset state and load fresh
       setPageImages([]);
       setOriginalSize(null);
@@ -67,7 +67,13 @@ export const LocationDetailsModal = ({
       setCurrentPage(1);
       setLoading(true);
       
-      loadStaticImage(drawingUrl);
+      if (isAnalysisSource && analysisStoragePath) {
+        loadAnalysisSourceFile(analysisStoragePath);
+      } else if (drawingUrl) {
+        loadStaticImage(drawingUrl);
+      } else {
+        setLoading(false);
+      }
     } else if (!isOpen) {
       // Cleanup on close
       setPageImages([]);
@@ -75,7 +81,7 @@ export const LocationDetailsModal = ({
       setLoading(false);
       setError(null);
     }
-  }, [isOpen, showDrawingViewer, location, drawingUrl]);
+  }, [isOpen, showDrawingViewer, location, drawingUrl, isAnalysisSource, analysisStoragePath]);
 
   // Resolve a drawing URL: convert storage paths or legacy public URLs to signed URLs
   const resolveDrawingUrl = async (url: string): Promise<string> => {
