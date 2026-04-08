@@ -3283,9 +3283,10 @@ export function AnalysisSection({ requestId, files, projectId, sourceType }: Ana
           additionalParameters.pipeDiameterInches = parseFloat((inst.pipe_diameter_mm / 25.4).toFixed(1));
         }
 
-        // Find matching analysis result to get source file info
+        // Find matching analysis result to get source file info and bounding box
         let fileName: string | null = null;
         let drawingUrl: string | null = null;
+        let coordinates: number[] | null = null;
         // Try to match instance to a result file by checking result_text for the instance id
         for (const ar of analysisResults) {
           if (ar.result_text && ar.result_text.includes(inst.id)) {
@@ -3293,6 +3294,22 @@ export function AnalysisSection({ requestId, files, projectId, sourceType }: Ana
             if (fileInfo) {
               fileName = fileInfo.fileName;
               drawingUrl = fileInfo.storagePath;
+            }
+            // Parse bounding box from the row containing this instance id
+            const lines = ar.result_text.split("\n").filter((l) => l.includes("|"));
+            for (const line of lines) {
+              if (line.includes(inst.id)) {
+                const bboxMatch = line.match(/\(?\s*(\d+)[,\s]+(\d+)\s*\)?\s*(?:→|->|—|–)\s*\(?\s*(\d+)[,\s]+(\d+)\s*\)?/);
+                if (bboxMatch) {
+                  coordinates = [
+                    parseInt(bboxMatch[1], 10),
+                    parseInt(bboxMatch[2], 10),
+                    parseInt(bboxMatch[3], 10),
+                    parseInt(bboxMatch[4], 10),
+                  ];
+                }
+                break;
+              }
             }
             break;
           }
@@ -3317,6 +3334,7 @@ export function AnalysisSection({ requestId, files, projectId, sourceType }: Ana
           additional_parameters: Object.keys(additionalParameters).length > 0 ? additionalParameters : null,
           file_name: fileName,
           drawing_url: drawingUrl,
+          coordinates: coordinates,
         };
       });
 
@@ -3327,6 +3345,7 @@ export function AnalysisSection({ requestId, files, projectId, sourceType }: Ana
       toast({
         title: "Added to Project",
         description: `${rows.length} ${awpClassName} instances added to the project.`,
+        duration: 3000,
       });
     } catch (e) {
       toast({
