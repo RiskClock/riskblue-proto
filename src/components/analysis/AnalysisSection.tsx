@@ -43,7 +43,7 @@ import {
   Search,
   FileSearch,
   Info,
-  Trash2,
+  
 } from "lucide-react";
 import { Separator } from "@/components/ui/separator";
 import {
@@ -3487,7 +3487,7 @@ export function AnalysisSection({ requestId, files, projectId, sourceType }: Ana
                          variant="outline"
                          disabled={anyAnalyzing || triageRunning || extractRunning || copiedFiles.length === 0}
                        >
-                         <Trash2 className="w-4 h-4 mr-2" />
+                         
                          Clear
                        </Button>
                      </DropdownMenuTrigger>
