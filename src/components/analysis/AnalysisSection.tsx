@@ -3150,6 +3150,7 @@ export function AnalysisSection({ requestId, files, projectId, sourceType }: Ana
           file_name: fileName,
           drawing_url: drawingUrl,
           coordinates: coordinates,
+          drawing_code: inst.id || null,
         };
       });
 
