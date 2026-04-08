@@ -3503,7 +3503,7 @@ export function AnalysisSection({ requestId, files, projectId, sourceType }: Ana
                          queryClient.invalidateQueries({ queryKey: ["analysis-triage-results", requestId] });
                          queryClient.invalidateQueries({ queryKey: ["analysis-results", requestId] });
                          queryClient.invalidateQueries({ queryKey: ["requestMeta", requestId] });
-                         toast.success("Triage and analysis results cleared");
+                         toast({ title: "Triage and analysis results cleared" });
                        }}>
                          Clear Triage Results
                        </DropdownMenuItem>
@@ -3515,7 +3515,7 @@ export function AnalysisSection({ requestId, files, projectId, sourceType }: Ana
                          await supabase.from("analysis_requests").update({ summary_data: {} }).eq("id", requestId);
                          queryClient.invalidateQueries({ queryKey: ["analysis-results", requestId] });
                          queryClient.invalidateQueries({ queryKey: ["requestMeta", requestId] });
-                         toast.success("Analysis results cleared");
+                         toast({ title: "Analysis results cleared" });
                        }}>
                          Clear Analyze Results
                        </DropdownMenuItem>
