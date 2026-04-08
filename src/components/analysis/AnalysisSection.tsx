@@ -3517,7 +3517,7 @@ export function AnalysisSection({ requestId, files, projectId, sourceType }: Ana
                          queryClient.invalidateQueries({ queryKey: ["requestMeta", requestId] });
                          toast({ title: "Analysis results cleared" });
                        }}>
-                         Clear Analyze Results
+                         Clear Analysis Results
                        </DropdownMenuItem>
                      </DropdownMenuContent>
                    </DropdownMenu>
