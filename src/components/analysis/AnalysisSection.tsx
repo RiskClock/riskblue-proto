@@ -31,6 +31,7 @@ import {
   XCircle,
   ExternalLink,
   ScanLine,
+  FileText,
   PlusCircle,
   Eye,
   RotateCcw,
@@ -1474,6 +1475,8 @@ export function AnalysisSection({ requestId, files, projectId, sourceType }: Ana
   const [summarizing, setSummarizing] = useState<Record<string, boolean>>({});
   const [addingToProject, setAddingToProject] = useState<Record<string, boolean>>({});
   const [addedToProject, setAddedToProject] = useState<Record<string, boolean>>({});
+  const [summaryRunning, setSummaryRunning] = useState(false);
+  const summaryAbortRef = useRef(false);
   const [selectedInstance, setSelectedInstance] = useState<{
     instance: SummarizedInstance;
     awpClassName: string;
@@ -1977,7 +1980,7 @@ export function AnalysisSection({ requestId, files, projectId, sourceType }: Ana
               setAnalyzingClasses(new Set());
               await supabase.from("analysis_requests").update({ status: "complete" }).eq("id", requestId);
               toast({ title: "Analysis Complete", description: "All files analyzed." });
-              for (const p of enabledPrompts) { handleSummarize(p.awp_class_name); }
+              // Auto-summarize removed — user triggers manually
             })();
             return;
           }
@@ -2117,6 +2120,31 @@ export function AnalysisSection({ requestId, files, projectId, sourceType }: Ana
        setSummarizing((prev) => ({ ...prev, [awpClassName]: false }));
      }
    }, [requestId, toast, queryClient]);
+
+  const handleSummarizeAll = useCallback(async () => {
+    if (summaryRunning) {
+      summaryAbortRef.current = true;
+      setSummaryRunning(false);
+      return;
+    }
+    setSummarizedInstances({});
+    setAddedToProject({});
+    summaryAbortRef.current = false;
+    setSummaryRunning(true);
+    try {
+      for (const prompt of sortedPrompts) {
+        if (summaryAbortRef.current) break;
+        // Only summarize classes that have at least one complete result
+        const hasResults = results?.some(
+          (r) => r.awp_class_name === prompt.awp_class_name && r.status === "complete"
+        );
+        if (!hasResults) continue;
+        await handleSummarize(prompt.awp_class_name);
+      }
+    } finally {
+      setSummaryRunning(false);
+    }
+  }, [sortedPrompts, results, handleSummarize]);
 
   // Hydrate summarized instances from DB on mount (avoids re-calling the AI)
   useEffect(() => {
@@ -2275,7 +2303,7 @@ export function AnalysisSection({ requestId, files, projectId, sourceType }: Ana
       await queryClient.invalidateQueries({ queryKey: ["analysis-results", requestId] });
 
       if (!aborted) {
-        handleSummarize(className);
+        // Auto-summarize removed — user triggers manually
       }
     } catch (error) {
       if ((error as Error).name === "AbortError") {
@@ -2513,7 +2541,7 @@ export function AnalysisSection({ requestId, files, projectId, sourceType }: Ana
         setAnalyzeV2Running(false);
         setAnalyzingClasses(new Set());
         await supabase.from("analysis_requests").update({ status: "complete" }).eq("id", requestId);
-        for (const cn of allClassNames) { handleSummarize(cn); }
+        // Auto-summarize removed — user triggers manually
         return;
       }
 
@@ -2713,7 +2741,7 @@ export function AnalysisSection({ requestId, files, projectId, sourceType }: Ana
               setAnalyzingClasses(new Set());
               await supabase.from("analysis_requests").update({ status: "complete" }).eq("id", requestId);
               toast({ title: "Analysis Complete", description: "All files analyzed." });
-              for (const cn of allClassNames) { handleSummarize(cn); }
+              // Auto-summarize removed — user triggers manually
             })();
             return;
           }
@@ -3848,8 +3876,26 @@ export function AnalysisSection({ requestId, files, projectId, sourceType }: Ana
         <div className="bg-card border rounded-lg overflow-hidden">
           <div className="px-4 py-3 border-b flex items-center justify-between">
             <div className="flex items-center gap-2">
-              <ScanLine className="w-4 h-4 text-primary" />
+              <FileText className="w-4 h-4 text-primary" />
               <h2 className="text-base font-semibold">Analysis Summary</h2>
+              <Button
+                size="sm"
+                variant={summaryRunning ? "destructive" : "outline"}
+                className="h-7 text-xs ml-2"
+                onClick={handleSummarizeAll}
+              >
+                {summaryRunning ? (
+                  <>
+                    <Square className="w-3 h-3 mr-1" />
+                    Stop
+                  </>
+                ) : (
+                  <>
+                    <Play className="w-3 h-3 mr-1" />
+                    Summarize Analysis Results
+                  </>
+                )}
+              </Button>
             </div>
             <div className="flex items-center gap-1">
               <Button size="sm" variant={summaryGroupBy === "awp" ? "default" : "outline"} onClick={() => setSummaryGroupBy("awp")} className="h-7 text-xs">By AWP</Button>
