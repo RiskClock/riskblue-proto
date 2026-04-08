@@ -1599,7 +1599,7 @@ export function AnalysisSection({ requestId, files, projectId, sourceType }: Ana
     queryFn: async () => {
       const { data } = await supabase
         .from("analysis_requests")
-        .select("status, summary_data, triage_tokens_used, triage_model, analyze_model, disabled_awp_classes")
+        .select("status, summary_data, triage_tokens_used, analyze_tokens_used, triage_model, analyze_model, disabled_awp_classes")
         .eq("id", requestId)
         .single();
       return data;
@@ -1638,6 +1638,10 @@ export function AnalysisSection({ requestId, files, projectId, sourceType }: Ana
         setAnalyzeV2Running(true);
       } else if (dbStatus === "complete") {
         analyzeRunSyncRef.current = "idle";
+        setAnalyzeV2Running(false);
+        setAnalyzeV2Stopping(false);
+        setAnalyzingClasses(new Set());
+        setClassFileStatuses({});
       }
       setHydratedProcessing(true);
       return;
@@ -1657,11 +1661,10 @@ export function AnalysisSection({ requestId, files, projectId, sourceType }: Ana
       }
 
       analyzeRunSyncRef.current = "idle";
-      if (analyzeV2Running) {
-        setAnalyzeV2Running(false);
-        setAnalyzingClasses(new Set());
-        setClassFileStatuses({});
-      }
+      setAnalyzeV2Running(false);
+      setAnalyzeV2Stopping(false);
+      setAnalyzingClasses(new Set());
+      setClassFileStatuses({});
     }
   }, [requestMeta, hydratedProcessing, analyzeV2Running]);
 
