@@ -1820,8 +1820,8 @@ export function AnalysisSection({ requestId, files, projectId, sourceType }: Ana
         setAnalyzingClasses(resumeClasses);
         analyzeRunSyncRef.current = "running";
 
+        // NOTE: inFlight is incremented BEFORE calling executeItem (at dequeue site)
         const executeItem = async (item: WorkItem) => {
-          analyzeV2InFlightRef.current++;
           try {
             const { data: sd } = await supabase.auth.getSession();
             const tk = sd.session?.access_token;
@@ -1929,15 +1929,27 @@ export function AnalysisSection({ requestId, files, projectId, sourceType }: Ana
 
         analyzeV2QueueRef.current = workQueue;
         analyzeV2InFlightRef.current = 0;
+        completionFiredRef.current = false;
         setAnalyzeV2Progress({ done: 0, total: workQueue.length });
 
-        analyzeV2TimerRef.current = setInterval(() => {
-          while (analyzeV2InFlightRef.current < MAX_CONCURRENT_ANALYZE && analyzeV2QueueRef.current.length > 0) {
-            const item = analyzeV2QueueRef.current.shift()!;
+        const dequeueItems = () => {
+          const queue = analyzeV2QueueRef.current;
+          while (analyzeV2InFlightRef.current < MAX_CONCURRENT_ANALYZE && queue.length > 0) {
+            const firstFileId = queue[0].fileId;
+            const idx = queue.findIndex((q: any) => q.fileId === firstFileId);
+            if (idx === -1) break;
+            const item = queue[idx];
+            analyzeV2InFlightRef.current++;
+            queue.splice(idx, 1);
             executeItem(item as any);
           }
+        };
+
+        analyzeV2TimerRef.current = setInterval(() => {
           if (analyzeV2QueueRef.current.length === 0 && analyzeV2InFlightRef.current <= 0) {
             if (analyzeV2TimerRef.current) { clearInterval(analyzeV2TimerRef.current); analyzeV2TimerRef.current = null; }
+            if (completionFiredRef.current) return;
+            completionFiredRef.current = true;
             (async () => {
               await queryClient.invalidateQueries({ queryKey: ["analysis-results", requestId] });
               analyzeRunSyncRef.current = "idle";
@@ -1947,13 +1959,12 @@ export function AnalysisSection({ requestId, files, projectId, sourceType }: Ana
               toast({ title: "Analysis Complete", description: "All files analyzed." });
               for (const p of enabledPrompts) { handleSummarize(p.awp_class_name); }
             })();
+            return;
           }
+          dequeueItems();
         }, 1000);
 
-        while (analyzeV2InFlightRef.current < MAX_CONCURRENT_ANALYZE && analyzeV2QueueRef.current.length > 0) {
-          const item = analyzeV2QueueRef.current.shift()!;
-          executeItem(item as any);
-        }
+        dequeueItems();
       } catch (e) {
         console.error("[V2] Resume error:", e);
         analyzeRunSyncRef.current = "idle";
@@ -1961,7 +1972,7 @@ export function AnalysisSection({ requestId, files, projectId, sourceType }: Ana
         setAnalyzingClasses(new Set());
       }
     })();
-  }, [analyzeV2Running, prompts, copiedFiles, results]);
+  }, [analyzeV2Running, prompts, copiedFiles]);
 
   // id_prefix lookup from awp_classes (fallback)
   const idPrefixMap = useMemo(
