@@ -2299,6 +2299,7 @@ export function AnalysisSection({ requestId, files, projectId, sourceType }: Ana
   const analyzeV2QueueRef = useRef<Array<any>>([]);
   const analyzeV2TimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const analyzeV2InFlightRef = useRef(0);
+  const completionFiredRef = useRef(false);
   // analyzeV2Running is declared earlier near other state
   const [analyzeV2Progress, setAnalyzeV2Progress] = useState({ done: 0, total: 0 });
   const [analyzeV2Stopping, setAnalyzeV2Stopping] = useState(false);
