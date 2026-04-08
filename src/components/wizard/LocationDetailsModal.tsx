@@ -48,15 +48,17 @@ export const LocationDetailsModal = ({
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
 
-  // Priority: 1. Custom uploaded drawing, 2. Static mapped drawing (for any item with matching ID)
-  const customDrawingUrl = (location as any)?.drawingUrl || (location as any)?.drawing_url;
-  const staticDrawingUrl = location ? getDrawingImage(location.id) : null;
+  // Priority: 1. Analysis source file (from drive-analysis-files bucket), 2. Custom uploaded drawing, 3. Static mapped drawing
+  const analysisStoragePath = (location as any)?.drawing_url || (location as any)?.drawingUrl;
+  const isAnalysisSource = analysisStoragePath && !analysisStoragePath.startsWith('http') && !analysisStoragePath.startsWith('/');
+  const customDrawingUrl = isAnalysisSource ? null : ((location as any)?.drawingUrl || (location as any)?.drawing_url);
+  const staticDrawingUrl = (!isAnalysisSource && !customDrawingUrl && location) ? getDrawingImage(location.id) : null;
   const drawingUrl = customDrawingUrl || staticDrawingUrl;
-  const showDrawingViewer = !!drawingUrl;
+  const showDrawingViewer = !!drawingUrl || !!isAnalysisSource;
 
   // Load file when modal opens - single consolidated effect
   useEffect(() => {
-    if (isOpen && showDrawingViewer && drawingUrl) {
+    if (isOpen && showDrawingViewer) {
       // Reset state and load fresh
       setPageImages([]);
       setOriginalSize(null);
@@ -65,7 +67,13 @@ export const LocationDetailsModal = ({
       setCurrentPage(1);
       setLoading(true);
       
-      loadStaticImage(drawingUrl);
+      if (isAnalysisSource && analysisStoragePath) {
+        loadAnalysisSourceFile(analysisStoragePath);
+      } else if (drawingUrl) {
+        loadStaticImage(drawingUrl);
+      } else {
+        setLoading(false);
+      }
     } else if (!isOpen) {
       // Cleanup on close
       setPageImages([]);
@@ -73,7 +81,7 @@ export const LocationDetailsModal = ({
       setLoading(false);
       setError(null);
     }
-  }, [isOpen, showDrawingViewer, location, drawingUrl]);
+  }, [isOpen, showDrawingViewer, location, drawingUrl, isAnalysisSource, analysisStoragePath]);
 
   // Resolve a drawing URL: convert storage paths or legacy public URLs to signed URLs
   const resolveDrawingUrl = async (url: string): Promise<string> => {
@@ -92,6 +100,74 @@ export const LocationDetailsModal = ({
       .from('awp-drawings')
       .createSignedUrl(url, 3600);
     return data?.signedUrl || url;
+  };
+
+  // Load analysis source file from drive-analysis-files bucket (PDF rendering)
+  const loadAnalysisSourceFile = async (storagePath: string) => {
+    try {
+      const { data: signedData } = await supabase.storage
+        .from('drive-analysis-files')
+        .createSignedUrl(storagePath, 3600);
+      if (!signedData?.signedUrl) {
+        setError("Failed to get signed URL for analysis file");
+        setLoading(false);
+        return;
+      }
+
+      const response = await fetch(signedData.signedUrl);
+      if (!response.ok) throw new Error(`Failed to fetch file: ${response.status}`);
+      const blob = await response.blob();
+
+      const isPdf = storagePath.toLowerCase().endsWith('.pdf') || blob.type.includes('pdf');
+      if (isPdf) {
+        const arrayBuffer = await blob.arrayBuffer();
+        const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+        setTotalPages(pdf.numPages);
+
+        const images: HTMLImageElement[] = [];
+        for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
+          const page = await pdf.getPage(pageNum);
+          const scale = 4;
+          const viewport = page.getViewport({ scale });
+          const offscreenCanvas = document.createElement('canvas');
+          const ctx = offscreenCanvas.getContext('2d');
+          if (!ctx) continue;
+          offscreenCanvas.width = viewport.width;
+          offscreenCanvas.height = viewport.height;
+          await page.render({ canvasContext: ctx, viewport, canvas: offscreenCanvas }).promise;
+          const img = new Image();
+          img.src = offscreenCanvas.toDataURL('image/png');
+          await new Promise<void>((resolve) => { img.onload = () => resolve(); });
+          images.push(img);
+          if (pageNum === 1) {
+            setOriginalSize({ width: viewport.width / scale, height: viewport.height / scale });
+          }
+        }
+        setPageImages(images);
+        setLoading(false);
+      } else {
+        // Image file
+        const url = URL.createObjectURL(blob);
+        const img = new Image();
+        img.onload = () => {
+          setPageImages([img]);
+          setTotalPages(1);
+          setOriginalSize({ width: img.naturalWidth, height: img.naturalHeight });
+          setLoading(false);
+          URL.revokeObjectURL(url);
+        };
+        img.onerror = () => {
+          setError("Failed to load image");
+          setLoading(false);
+          URL.revokeObjectURL(url);
+        };
+        img.src = url;
+      }
+    } catch (err) {
+      console.error("Error loading analysis source file:", err);
+      setError(err instanceof Error ? err.message : "Failed to load file");
+      setLoading(false);
+    }
   };
 
   // Load static image from public folder or signed URL
