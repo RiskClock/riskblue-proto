@@ -146,14 +146,19 @@ export const LocationDetailsModal = ({
         useAi = true;
         console.log(`[LocationModal] Using stored AI coords:`, storedCoords);
       } else {
-        // Fallback: text-layer search using the item ID (e.g. "SWC-B04")
-        const searchId = loc.id || loc.areaName || loc.name;
-        if (searchId) {
-          console.log(`[LocationModal] No stored coords, searching text layer for "${searchId}"`);
-          textBBox = await findBBoxInTextLayer(pdf, searchId);
+        // Fallback: text-layer search using multiple candidates
+        const candidates: string[] = [];
+        if (loc.areaName) candidates.push(loc.areaName);
+        if ((loc as any).drawingCode) candidates.push((loc as any).drawingCode);
+        if (loc.id) candidates.push(loc.id);
+        if (loc.name) candidates.push(loc.name);
+        console.log(`[LocationModal] No stored coords, searching text layer with candidates:`, candidates);
+        for (const candidate of candidates) {
+          textBBox = await findBBoxInTextLayer(pdf, candidate);
           if (textBBox) {
-            console.log(`[LocationModal] Text-layer match found on page ${textBBox.pageNum}:`, textBBox);
+            console.log(`[LocationModal] Text-layer match found for "${candidate}" on page ${textBBox.pageNum}:`, textBBox);
             targetPage = textBBox.pageNum;
+            break;
           }
         }
       }
