@@ -1,102 +1,45 @@
 
-# Fix skipped follow-up AWP analysis by resolving prompts per analyzed cell
 
-## What I found
+# Fix Repeated "Analysis Complete" Toast, Ordering, and Concurrency Issues
 
-The current V2 flow still has multiple skip paths in `src/components/analysis/AnalysisSection.tsx`:
+## Problems Identified
 
-- `handleAnalyzeAllV2()` still prebuilds a shared `promptContents` map up front.
-- If a prompt is missing during that preload, later cells are never queued.
-- The row upload step still picks `eligibleClasses[0]` blindly, and if that prompt is unavailable it `continue`s the whole row.
-- After the first class succeeds, remaining classes are still silently dropped by:
-  - `if (!content || !cachedOpenaiFileId) continue;`
-  - `if (!content) continue;`
+### 1. Repeated "Analysis Complete" toast
+The scheduler's `setInterval` (line 1934/2641) checks completion every 1 second. When `queue.length === 0 && inFlight <= 0`, it fires the completion logic — but the completion callback is async (`await queryClient.invalidateQueries...`), so the interval fires again before `clearInterval` executes. The completion block runs multiple times.
 
-So the file upload reuse path is fine, but queue construction is still skipping follow-up cells before they ever hit `analyze-drawings`.
+Additionally, after completion sets status to `"complete"` and `analyzeV2Running` to false, the hydration `useEffect` (line 1631) detects the DB status change and re-triggers, and the auto-resume `useEffect` (line 1722) has `results` in its dependency array — every query invalidation changes `results`, potentially re-triggering resume logic.
 
-## Revised implementation
+### 2. Non-sequential processing (cells further down start early)
+The scheduler fires `executeItem` for up to 5 items immediately. With horizontal-first ordering, items are queued as: `[file1-classA, file1-classB, file2-classA, file2-classB, ...]`. The scheduler dequeues 5 at once — so if file1 has 2 classes and file2 has 2 classes, items from file3 start before file1 finishes. This is correct concurrency behavior, but the user expects strict row-by-row sequential execution (all of file1's classes complete before file2 starts).
 
-### 1. Stop preloading one shared prompt map for the whole batch
-File: `src/components/analysis/AnalysisSection.tsx`
+### 3. More than 5 concurrent analyses
+The `setInterval` runs every 1000ms and checks `analyzeV2InFlightRef.current < MAX_CONCURRENT_ANALYZE`. But the immediate-fire block at line 1953/2667 ALSO dequeues items. Both the immediate block and the first interval tick can run before any `executeItem` has incremented `inFlight` (since `executeItem` is async and increments on the first line of its body). This race condition allows more than 5 items to be dispatched.
 
-Replace the upfront `promptContents` preload in `handleAnalyzeAllV2()` with per-cell prompt resolution.
+## Fixes
 
-New rule:
-- when a class/file is actually about to be analyzed, resolve that class’s prompt then
-- allow Google Drive polling for each analyzed cell
-- keep cached `prompt_content` as a fallback/helper, not the gating mechanism for the whole batch
+### File: `src/components/analysis/AnalysisSection.tsx`
 
-## 2. Pick the first analyzable class per row, not just the first eligible class
-File: `src/components/analysis/AnalysisSection.tsx`
+**Fix 1 — Prevent repeated completion toast:**
+- Add a `completionFiredRef = useRef(false)` flag. Set it to `false` when starting analysis, check it in the scheduler's completion block. Only fire toast/status-update if `!completionFiredRef.current`, then set it `true`.
+- In the `setInterval` completion check, call `clearInterval` synchronously BEFORE the async block, and guard with the flag.
 
-For each file:
-- compute eligible classes from triage/overrides
-- iterate in order until you find the first class whose prompt can actually be resolved
-- use that class for the initial upload + first analyze call
-- if one eligible class has a bad/missing prompt, do not skip the rest of the row
+**Fix 2 — Enforce sequential (row-by-row) execution:**
+- Instead of dequeuing up to `MAX_CONCURRENT_ANALYZE` items freely from the flat queue, group work items by file. Only dequeue items from the current file group. Once all items for that file complete, move to the next file group.
+- Concurrency of 5 still applies within a single file's classes and across files (e.g., if file1 has 2 classes, 3 slots remain for file2's first 3 classes). But items for file N+1 should only start once file N's upload is resolved (not before).
 
-## 3. Queue every remaining eligible class with prompt metadata, not pre-resolved content
-File: `src/components/analysis/AnalysisSection.tsx`
+**Fix 3 — Fix concurrency race:**
+- Increment `analyzeV2InFlightRef.current` synchronously when dequeuing (in the scheduler loop), not inside the async `executeItem`. Decrement in the `finally` block as before. This prevents the interval and immediate-fire from over-dispatching.
 
-Change the work queue items to store enough info to resolve the prompt later, e.g.:
-- `awpClassName`
-- `drive_file_id`
-- `prompt_content`
+**Fix 4 — Prevent auto-resume re-triggering after normal completion:**
+- Reset `hasTriggeredResumeRef.current = false` only when starting a fresh run, not on every mount.
+- Remove `results` from the auto-resume `useEffect` dependency array (use a ref or one-time check instead) to prevent re-triggering when query data updates.
 
-Then in `executeAnalyzeV2Item()`:
-- resolve prompt content for that specific item
-- call `analyze-drawings` with the reused `openaiFileId`
-- if prompt resolution fails, mark that exact cell failed/skipped instead of dropping it silently
+## Summary of changes
 
-## 4. Remove silent `continue` paths for follow-up classes
-File: `src/components/analysis/AnalysisSection.tsx`
+| Issue | Root Cause | Fix |
+|---|---|---|
+| Repeated toast | Async completion in setInterval races with next tick | Sync clearInterval + completion guard ref |
+| Non-sequential rows | Flat queue dequeues across file boundaries | Group-aware dequeuing |
+| >5 concurrent | inFlight incremented async after dequeue | Increment inFlight synchronously at dequeue time |
+| Auto-resume re-fire | `results` in useEffect deps triggers re-run | Remove `results` dep, use ref-based check |
 
-Replace row/class skips with explicit handling:
-- set `classFileStatuses[class][file] = "failed"` (or skipped equivalent)
-- log which file/class could not be resolved
-- show a toast summary only for cells that genuinely could not run
-
-This will make skipped follow-up cells visible instead of disappearing from the queue.
-
-## 5. Widen the V2 prompt eligibility guard
-File: `src/components/analysis/AnalysisSection.tsx`
-
-Update:
-- `enabledPrompts` filter should not require only `drive_file_id`
-- accept prompts that have either:
-  - `drive_file_id`, or
-  - cached `prompt_content`
-
-This keeps V2 aligned with `handleAnalyze()` and avoids excluding valid classes before analysis starts.
-
-## Expected result
-
-After a file is uploaded once:
-- the first runnable AWP class analyzes normally
-- every other eligible class in that same row is then attempted using the same uploaded file ID
-- prompt lookup happens per analyzed cell
-- only truly broken cells fail, instead of the rest of the row being skipped
-
-## Files to update
-
-- `src/components/analysis/AnalysisSection.tsx`
-
-## Technical notes
-
-Current skip points to remove:
-```text
-enabledPrompts.filter(... && p.drive_file_id)
-if (!pc) continue
-if (!content || !cachedOpenaiFileId) continue
-if (!content) continue
-```
-
-Target behavior:
-```text
-row eligible classes
--> find first class with resolvable prompt
--> upload/analyze once
--> queue remaining eligible classes
--> each queued cell resolves its own prompt just-in-time
--> call analyze-drawings with reused openaiFileId
-```
