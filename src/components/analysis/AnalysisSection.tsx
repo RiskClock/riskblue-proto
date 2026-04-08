@@ -43,7 +43,15 @@ import {
   Search,
   FileSearch,
   Info,
+  Trash2,
 } from "lucide-react";
+import { Separator } from "@/components/ui/separator";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { Checkbox } from "@/components/ui/checkbox";
 import * as pdfjsLib from "pdfjs-dist";
 
@@ -3458,34 +3466,62 @@ export function AnalysisSection({ requestId, files, projectId, sourceType }: Ana
                   </Button>
                 </div>
               ) : (
-                <div className="flex items-center gap-1">
-                  <Button
-                    size="sm"
-                    onClick={handleAnalyzeAllV2}
-                    disabled={anyAnalyzing || triageRunning || extractRunning || copiedFiles.length === 0}
-                  >
-                    {anyAnalyzing ? (
-                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                    ) : (
-                      <Search className="w-4 h-4 mr-2" />
-                    )}
-                    Analyze
-                  </Button>
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <Button
-                        size="icon"
-                        variant="ghost"
-                        className="h-8 w-8"
-                        onClick={handleAnalyzeAll}
-                        disabled={anyAnalyzing || triageRunning || extractRunning || copiedFiles.length === 0}
-                      >
-                        <Search className="w-3.5 h-3.5" />
-                      </Button>
-                    </TooltipTrigger>
-                    <TooltipContent>Legacy Analyze (class-by-class)</TooltipContent>
-                  </Tooltip>
-                </div>
+                <div className="flex items-center gap-2">
+                   <Button
+                     size="sm"
+                     onClick={handleAnalyzeAllV2}
+                     disabled={anyAnalyzing || triageRunning || extractRunning || copiedFiles.length === 0}
+                   >
+                     {anyAnalyzing ? (
+                       <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                     ) : (
+                       <Search className="w-4 h-4 mr-2" />
+                     )}
+                     Analyze
+                   </Button>
+                   <Separator orientation="vertical" className="h-6" />
+                   <DropdownMenu>
+                     <DropdownMenuTrigger asChild>
+                       <Button
+                         size="sm"
+                         variant="outline"
+                         disabled={anyAnalyzing || triageRunning || extractRunning || copiedFiles.length === 0}
+                       >
+                         <Trash2 className="w-4 h-4 mr-2" />
+                         Clear
+                       </Button>
+                     </DropdownMenuTrigger>
+                     <DropdownMenuContent align="start">
+                       <DropdownMenuItem onClick={async () => {
+                         if (!requestId) return;
+                         // Clear triage results + overrides + analysis results
+                         await supabase.from("analysis_triage_results").delete().eq("analysis_request_id", requestId);
+                         await supabase.from("analysis_triage_overrides").delete().eq("analysis_request_id", requestId);
+                         await supabase.from("analysis_results").delete().eq("analysis_request_id", requestId);
+                         // Clear summary_data
+                         await supabase.from("analysis_requests").update({ summary_data: {} }).eq("id", requestId);
+                         queryClient.invalidateQueries({ queryKey: ["analysis-triage-results", requestId] });
+                         queryClient.invalidateQueries({ queryKey: ["analysis-results", requestId] });
+                         queryClient.invalidateQueries({ queryKey: ["requestMeta", requestId] });
+                         toast({ title: "Triage and analysis results cleared" });
+                       }}>
+                         Clear Triage Results
+                       </DropdownMenuItem>
+                       <DropdownMenuItem onClick={async () => {
+                         if (!requestId) return;
+                         // Clear analysis results only
+                         await supabase.from("analysis_results").delete().eq("analysis_request_id", requestId);
+                         // Clear summary_data
+                         await supabase.from("analysis_requests").update({ summary_data: {} }).eq("id", requestId);
+                         queryClient.invalidateQueries({ queryKey: ["analysis-results", requestId] });
+                         queryClient.invalidateQueries({ queryKey: ["requestMeta", requestId] });
+                         toast({ title: "Analysis results cleared" });
+                       }}>
+                         Clear Analyze Results
+                       </DropdownMenuItem>
+                     </DropdownMenuContent>
+                   </DropdownMenu>
+                 </div>
               )}
             </div>
           </div>
