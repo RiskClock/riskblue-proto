@@ -120,6 +120,7 @@ interface SummarizedInstance {
   floor: string;
   area_sqft: number;
   notes: string;
+  pipe_diameter_mm?: number;
 }
 
 interface AnalysisSectionProps {
@@ -3253,9 +3254,56 @@ export function AnalysisSection({ requestId, files, projectId, sourceType }: Ana
         defaultControlNames = controls?.map((c) => c.name) || [];
       }
 
+      // Fetch analysis result files for source file info
+      const analysisResults = results?.filter(
+        (r) => r.awp_class_name === awpClassName && r.status === "complete" && r.result_text
+      ) || [];
+      const fileIds = [...new Set(analysisResults.map((r) => r.file_id))];
+      let fileStoragePaths: Record<string, { storagePath: string; fileName: string }> = {};
+      if (fileIds.length > 0) {
+        const { data: fileRecords } = await supabase
+          .from("analysis_request_files")
+          .select("id, storage_path, name")
+          .in("id", fileIds);
+        for (const f of fileRecords || []) {
+          if (f.storage_path) {
+            fileStoragePaths[f.id] = { storagePath: f.storage_path, fileName: f.name };
+          }
+        }
+      }
+
       const rows = instances.map((inst, idx) => {
         const seqNum = existingCount + idx + 1;
         const itemId = `${idPrefix}${String(seqNum).padStart(3, "0")}`;
+
+        // Build additional_parameters with pipe diameter if available
+        const additionalParameters: Record<string, any> = {};
+        if (inst.pipe_diameter_mm && inst.pipe_diameter_mm > 0) {
+          additionalParameters.pipeDiameterMM = inst.pipe_diameter_mm;
+          additionalParameters.pipeDiameterInches = parseFloat((inst.pipe_diameter_mm / 25.4).toFixed(1));
+        }
+
+        // Find matching analysis result to get source file info
+        let fileName: string | null = null;
+        let drawingUrl: string | null = null;
+        // Try to match instance to a result file by checking result_text for the instance id
+        for (const ar of analysisResults) {
+          if (ar.result_text && ar.result_text.includes(inst.id)) {
+            const fileInfo = fileStoragePaths[ar.file_id];
+            if (fileInfo) {
+              fileName = fileInfo.fileName;
+              drawingUrl = fileInfo.storagePath;
+            }
+            break;
+          }
+        }
+        // Fallback: if only one file, use it
+        if (!drawingUrl && Object.keys(fileStoragePaths).length === 1) {
+          const only = Object.values(fileStoragePaths)[0];
+          fileName = only.fileName;
+          drawingUrl = only.storagePath;
+        }
+
         return {
           project_id: projectId,
           item_id: itemId,
@@ -3266,6 +3314,9 @@ export function AnalysisSection({ requestId, files, projectId, sourceType }: Ana
           area_sqft: inst.area_sqft || null,
           awp_class_id: awpClassId,
           controls: defaultControlNames.length > 0 ? defaultControlNames : null,
+          additional_parameters: Object.keys(additionalParameters).length > 0 ? additionalParameters : null,
+          file_name: fileName,
+          drawing_url: drawingUrl,
         };
       });
 
