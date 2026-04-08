@@ -3295,8 +3295,7 @@ export function AnalysisSection({ requestId, files, projectId, sourceType }: Ana
             Drawing Analysis Grid
         ================================================================ */}
         <div className="bg-card border rounded-lg overflow-hidden">
-          <div className="px-4 py-3 border-b flex items-center justify-between">
-            <h2 className="text-base font-semibold">Drawing File Analysis</h2>
+          <div className="px-4 py-3 border-b flex items-center gap-3">
             <div className="flex items-center gap-3">
               {/* Extract Context group */}
               {extractRunning ? (
