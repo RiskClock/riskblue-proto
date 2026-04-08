@@ -1,65 +1,48 @@
 
 
-# Fix: Use Correct ID Prefix When Adding Analysis Instances to Project
+# Fix Pipe Size & Drawing Preview for Analysis-Added Instances
 
-## Problem
+## Problem 1: Missing Pipe Diameter
+The `summarize-analysis` edge function's tool schema doesn't include a `pipe_diameter` field. The `SummarizedInstance` interface also lacks it. So when "Add to Project" inserts rows into `project_analysis_items`, no `additional_parameters` with pipe diameter is stored.
 
-`handleAddToProject` uses a fuzzy `awpClasses?.find()` lookup (lines 3215-3219) to resolve the `id_prefix`. If the AWP class name from the summarization doesn't exactly match the `awp_classes` table, the match fails and falls back to `"AWP"` — producing IDs like `AWP001` instead of `DCW001`. Since controls are assigned based on the source table match (which also uses exact name matching), they may also fail.
+## Problem 2: Hardcoded Drawing Preview
+When DCW/ERM instances are added to the project via analysis, their `item_id` values (e.g., `DCW001`) match entries in the static `drawingMapper.ts`. The `LocationDetailsModal` prioritizes `getDrawingImage(location.id)` which returns these hardcoded template PNGs instead of showing the actual analyzed PDF drawing with the red bounding box overlay.
 
-## Root Cause
+The fix: store the source drawing file reference and bounding box coordinates when adding to project, then use that in LocationDetailsModal to render the actual PDF with overlay — falling back to static drawings only when no source file is available.
 
-The `awpClassName` passed to `handleAddToProject` comes from the column header in the analysis grid (the prompt's `awp_class_name`), but the `awp_classes` table may store a slightly different name. The fuzzy `startsWith` matching is unreliable.
+## Changes
 
-## Fix
+### 1. Add `pipe_diameter_mm` to summarize-analysis tool schema
+**File: `supabase/functions/summarize-analysis/index.ts`**
+- Add `pipe_diameter_mm` (number) to the tool's properties schema, described as "Pipe diameter in millimeters if this is a water system instance, or 0 if not applicable"
+- This lets the AI extract pipe sizes from the analysis results
 
+### 2. Expand `SummarizedInstance` interface
 **File: `src/components/analysis/AnalysisSection.tsx`**
+- Add `pipe_diameter_mm?: number` and `source_file_id?: string` and `bounding_box?: string` to the interface
+- These will carry through from summarization to project insertion
 
-In `handleAddToProject`, replace the fuzzy `awpClasses?.find()` lookup with the already-available `sourcePrefixMap` and `awpOrderData`:
+### 3. Store pipe diameter and source file when adding to project
+**File: `src/components/analysis/AnalysisSection.tsx` → `handleAddToProject`**
+- Map `pipe_diameter_mm` to `additional_parameters: { pipeDiameterMM, pipeDiameterInches }` in the insert row
+- Store the analysis request's source file info in `drawing_url` or `file_name` so the detail modal can locate the actual PDF
 
-1. **ID prefix** — use `sourcePrefixMap[awpClassName]` first, then fall back to `idPrefixMap[awpClassName]`, then to the 3-letter fallback. Remove the fuzzy `awpClasses?.find()` block.
+### 4. Update LocationDetailsModal to prefer actual analyzed drawings
+**File: `src/components/wizard/LocationDetailsModal.tsx`**
+- When an item has a `file_name` pointing to an analysis source file (stored in `drive-analysis-files` bucket), download and render the PDF with bounding box overlay instead of falling back to the static `drawingMapper` image
+- Use the item's `coordinates` field (if stored) to show the red circle overlay
+- Only fall back to `getDrawingImage()` when no source PDF is available
 
-2. **Category** — derive from `awpOrderData` entry's `globalOrder` (0-999 = Asset, 1000-1999 = Water System, 2000+ = Process), or look up from prompts.
-
-3. **Default controls** — the source table query (`eq("name", awpClassName)`) should work since `awpClassName` comes from the same source tables. But add a fallback: also try matching from `awp_class_prompts` which links to the source table entry.
-
-### Concrete change
-
-Replace lines 3215-3224:
-```typescript
-const awpClass = awpClasses?.find(
-  (c) =>
-    c.name.toLowerCase() === awpClassName.toLowerCase() ||
-    c.name.toLowerCase().startsWith(awpClassName.toLowerCase()) ||
-    awpClassName.toLowerCase().startsWith(c.name.toLowerCase())
-);
-
-const idPrefix = awpClass?.id_prefix || "AWP";
-const awpClassId = awpClass?.id || null;
-const category = awpClass?.category || "Asset";
-```
-
-With:
-```typescript
-// Use source-of-truth prefix maps (built from critical_assets/water_systems/processes)
-const idPrefix = sourcePrefixMap[awpClassName] || idPrefixMap[awpClassName] || 
-  awpClassName.replace(/[^a-zA-Z]/g, "").substring(0, 3).toUpperCase();
-
-// Derive category from awpOrderData globalOrder
-const orderEntry = awpOrderData?.find(x => x.name === awpClassName);
-const category = orderEntry 
-  ? (orderEntry.globalOrder < 1000 ? "Asset" : orderEntry.globalOrder < 2000 ? "Water System" : "Process")
-  : "Asset";
-
-// Still try to get awpClassId for the DB record
-const awpClass = awpClasses?.find(c => c.name === awpClassName);
-const awpClassId = awpClass?.id || null;
-```
-
-This ensures "Domestic Cold Water" → prefix `DCW` (from the `water_systems` table), and the correct category is derived, which in turn ensures the right source table is queried for default controls.
+### 5. Pass source file + bounding box during "Add to Project"
+**File: `src/components/analysis/AnalysisSection.tsx` → `handleAddToProject`**
+- For each summarized instance, find the matching analysis result row to get `file_id` and bounding box from the result text
+- Store `file_name` (the storage path from `analysis_request_files`) and parsed bounding box coordinates in the `project_analysis_items` row
 
 ## Files to update
 
 | File | Change |
 |---|---|
-| `src/components/analysis/AnalysisSection.tsx` | Replace fuzzy awpClasses lookup in `handleAddToProject` with `sourcePrefixMap`/`idPrefixMap` |
+| `supabase/functions/summarize-analysis/index.ts` | Add `pipe_diameter_mm` to tool schema |
+| `src/components/analysis/AnalysisSection.tsx` | Expand `SummarizedInstance`, update `handleAddToProject` to store pipe diameter + source file info |
+| `src/components/wizard/LocationDetailsModal.tsx` | Prefer analysis source PDF with overlay over static `drawingMapper` images |
 
