@@ -2377,7 +2377,7 @@ export function AnalysisSection({ requestId, files, projectId, sourceType }: Ana
     const allClassNames = enabledPrompts.map((p) => p.awp_class_name);
     analyzeRunSyncRef.current = "starting";
     completionFiredRef.current = false;
-    hasTriggeredResumeRef.current = false;
+    hasTriggeredResumeRef.current = true;
     setAnalyzingClasses(new Set(allClassNames));
     setAnalyzeV2Running(true);
     setClassFileStatuses({});
