@@ -3212,16 +3212,19 @@ export function AnalysisSection({ requestId, files, projectId, sourceType }: Ana
 
     setAddingToProject((prev) => ({ ...prev, [awpClassName]: true }));
     try {
-      const awpClass = awpClasses?.find(
-        (c) =>
-          c.name.toLowerCase() === awpClassName.toLowerCase() ||
-          c.name.toLowerCase().startsWith(awpClassName.toLowerCase()) ||
-          awpClassName.toLowerCase().startsWith(c.name.toLowerCase())
-      );
+      // Use source-of-truth prefix maps (built from critical_assets/water_systems/processes)
+      const idPrefix = sourcePrefixMap[awpClassName] || idPrefixMap[awpClassName] ||
+        awpClassName.replace(/[^a-zA-Z]/g, "").substring(0, 3).toUpperCase();
 
-      const idPrefix = awpClass?.id_prefix || "AWP";
+      // Derive category from awpOrderData globalOrder
+      const orderEntry = (awpOrderData || []).find(x => x.name === awpClassName);
+      const category = orderEntry
+        ? (orderEntry.globalOrder < 1000 ? "Asset" : orderEntry.globalOrder < 2000 ? "Water System" : "Process")
+        : "Asset";
+
+      // Still try to get awpClassId for the DB record
+      const awpClass = awpClasses?.find(c => c.name === awpClassName);
       const awpClassId = awpClass?.id || null;
-      const category = awpClass?.category || "Asset";
 
       const { data: existingItems } = await supabase
         .from("project_analysis_items")
