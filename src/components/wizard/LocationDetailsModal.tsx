@@ -102,6 +102,74 @@ export const LocationDetailsModal = ({
     return data?.signedUrl || url;
   };
 
+  // Load analysis source file from drive-analysis-files bucket (PDF rendering)
+  const loadAnalysisSourceFile = async (storagePath: string) => {
+    try {
+      const { data: signedData } = await supabase.storage
+        .from('drive-analysis-files')
+        .createSignedUrl(storagePath, 3600);
+      if (!signedData?.signedUrl) {
+        setError("Failed to get signed URL for analysis file");
+        setLoading(false);
+        return;
+      }
+
+      const response = await fetch(signedData.signedUrl);
+      if (!response.ok) throw new Error(`Failed to fetch file: ${response.status}`);
+      const blob = await response.blob();
+
+      const isPdf = storagePath.toLowerCase().endsWith('.pdf') || blob.type.includes('pdf');
+      if (isPdf) {
+        const arrayBuffer = await blob.arrayBuffer();
+        const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+        setTotalPages(pdf.numPages);
+
+        const images: HTMLImageElement[] = [];
+        for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
+          const page = await pdf.getPage(pageNum);
+          const scale = 4;
+          const viewport = page.getViewport({ scale });
+          const offscreenCanvas = document.createElement('canvas');
+          const ctx = offscreenCanvas.getContext('2d');
+          if (!ctx) continue;
+          offscreenCanvas.width = viewport.width;
+          offscreenCanvas.height = viewport.height;
+          await page.render({ canvasContext: ctx, viewport, canvas: offscreenCanvas }).promise;
+          const img = new Image();
+          img.src = offscreenCanvas.toDataURL('image/png');
+          await new Promise<void>((resolve) => { img.onload = () => resolve(); });
+          images.push(img);
+          if (pageNum === 1) {
+            setOriginalSize({ width: viewport.width / scale, height: viewport.height / scale });
+          }
+        }
+        setPageImages(images);
+        setLoading(false);
+      } else {
+        // Image file
+        const url = URL.createObjectURL(blob);
+        const img = new Image();
+        img.onload = () => {
+          setPageImages([img]);
+          setTotalPages(1);
+          setOriginalSize({ width: img.naturalWidth, height: img.naturalHeight });
+          setLoading(false);
+          URL.revokeObjectURL(url);
+        };
+        img.onerror = () => {
+          setError("Failed to load image");
+          setLoading(false);
+          URL.revokeObjectURL(url);
+        };
+        img.src = url;
+      }
+    } catch (err) {
+      console.error("Error loading analysis source file:", err);
+      setError(err instanceof Error ? err.message : "Failed to load file");
+      setLoading(false);
+    }
+  };
+
   // Load static image from public folder or signed URL
   const loadStaticImage = async (url: string) => {
     try {
