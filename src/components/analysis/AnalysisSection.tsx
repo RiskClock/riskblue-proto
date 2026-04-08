@@ -31,6 +31,7 @@ import {
   XCircle,
   ExternalLink,
   ScanLine,
+  FileText,
   PlusCircle,
   Eye,
   RotateCcw,
@@ -1474,6 +1475,8 @@ export function AnalysisSection({ requestId, files, projectId, sourceType }: Ana
   const [summarizing, setSummarizing] = useState<Record<string, boolean>>({});
   const [addingToProject, setAddingToProject] = useState<Record<string, boolean>>({});
   const [addedToProject, setAddedToProject] = useState<Record<string, boolean>>({});
+  const [summaryRunning, setSummaryRunning] = useState(false);
+  const summaryAbortRef = useRef(false);
   const [selectedInstance, setSelectedInstance] = useState<{
     instance: SummarizedInstance;
     awpClassName: string;
@@ -1977,7 +1980,7 @@ export function AnalysisSection({ requestId, files, projectId, sourceType }: Ana
               setAnalyzingClasses(new Set());
               await supabase.from("analysis_requests").update({ status: "complete" }).eq("id", requestId);
               toast({ title: "Analysis Complete", description: "All files analyzed." });
-              for (const p of enabledPrompts) { handleSummarize(p.awp_class_name); }
+              // Auto-summarize removed — user triggers manually
             })();
             return;
           }
@@ -2275,7 +2278,7 @@ export function AnalysisSection({ requestId, files, projectId, sourceType }: Ana
       await queryClient.invalidateQueries({ queryKey: ["analysis-results", requestId] });
 
       if (!aborted) {
-        handleSummarize(className);
+        // Auto-summarize removed — user triggers manually
       }
     } catch (error) {
       if ((error as Error).name === "AbortError") {
@@ -2513,7 +2516,7 @@ export function AnalysisSection({ requestId, files, projectId, sourceType }: Ana
         setAnalyzeV2Running(false);
         setAnalyzingClasses(new Set());
         await supabase.from("analysis_requests").update({ status: "complete" }).eq("id", requestId);
-        for (const cn of allClassNames) { handleSummarize(cn); }
+        // Auto-summarize removed — user triggers manually
         return;
       }
 
@@ -2713,7 +2716,7 @@ export function AnalysisSection({ requestId, files, projectId, sourceType }: Ana
               setAnalyzingClasses(new Set());
               await supabase.from("analysis_requests").update({ status: "complete" }).eq("id", requestId);
               toast({ title: "Analysis Complete", description: "All files analyzed." });
-              for (const cn of allClassNames) { handleSummarize(cn); }
+              // Auto-summarize removed — user triggers manually
             })();
             return;
           }
