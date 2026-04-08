@@ -322,7 +322,7 @@ export const LocationDetailsModal = ({
     setBaseDimensions({ width: baseWidth, height: baseHeight });
   }, [pageImages, currentPage, loading]); // Note: zoom NOT in dependencies
 
-  // Draw canvas at current zoom level
+  // Draw canvas at current zoom level with optional bounding box overlay
   useEffect(() => {
     if (!baseDimensions || loading) return;
     
@@ -342,7 +342,37 @@ export const LocationDetailsModal = ({
     ctx.imageSmoothingEnabled = true;
     ctx.imageSmoothingQuality = 'high';
     ctx.drawImage(img, 0, 0, displayWidth, displayHeight);
-  }, [baseDimensions, zoom, pageImages, currentPage, loading]);
+
+    // Draw red circle overlay if coordinates are available
+    const coords = location?.coordinates;
+    if (coords && coords.length === 4 && isAnalysisSource && originalSize) {
+      const [x1, y1, x2, y2] = coords;
+      // Coordinates are in A0 PDF point space — map to display space
+      const imgNatWidth = img.naturalWidth || img.width;
+      const imgNatHeight = img.naturalHeight || img.height;
+      const scaleX = displayWidth / (imgNatWidth > 0 ? imgNatWidth : A0_HORIZONTAL_WIDTH);
+      const scaleY = displayHeight / (imgNatHeight > 0 ? imgNatHeight : A0_HORIZONTAL_HEIGHT);
+      
+      // Map from A0 space to rendered image space
+      const mapX = (px: number) => (px / A0_HORIZONTAL_WIDTH) * imgNatWidth * scaleX;
+      const mapY = (py: number) => (py / A0_HORIZONTAL_HEIGHT) * imgNatHeight * scaleY;
+      
+      const cx = (mapX(x1) + mapX(x2)) / 2;
+      const cy = (mapY(y1) + mapY(y2)) / 2;
+      const rx = Math.abs(mapX(x2) - mapX(x1)) / 2;
+      const ry = Math.abs(mapY(y2) - mapY(y1)) / 2;
+      const radius = Math.max(rx, ry, 30 * zoom);
+
+      // Draw translucent red circle
+      ctx.beginPath();
+      ctx.arc(cx, cy, radius, 0, 2 * Math.PI);
+      ctx.fillStyle = "rgba(239, 68, 68, 0.15)";
+      ctx.fill();
+      ctx.strokeStyle = "rgba(239, 68, 68, 0.8)";
+      ctx.lineWidth = 3 * zoom;
+      ctx.stroke();
+    }
+  }, [baseDimensions, zoom, pageImages, currentPage, loading, location, isAnalysisSource, originalSize]);
 
   // Center-focused zoom handlers
   const handleZoomIn = () => {
