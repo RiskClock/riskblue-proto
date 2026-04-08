@@ -2121,6 +2121,31 @@ export function AnalysisSection({ requestId, files, projectId, sourceType }: Ana
      }
    }, [requestId, toast, queryClient]);
 
+  const handleSummarizeAll = useCallback(async () => {
+    if (summaryRunning) {
+      summaryAbortRef.current = true;
+      setSummaryRunning(false);
+      return;
+    }
+    setSummarizedInstances({});
+    setAddedToProject({});
+    summaryAbortRef.current = false;
+    setSummaryRunning(true);
+    try {
+      for (const prompt of sortedPrompts) {
+        if (summaryAbortRef.current) break;
+        // Only summarize classes that have at least one complete result
+        const hasResults = results?.some(
+          (r) => r.awp_class_name === prompt.awp_class_name && r.status === "complete"
+        );
+        if (!hasResults) continue;
+        await handleSummarize(prompt.awp_class_name);
+      }
+    } finally {
+      setSummaryRunning(false);
+    }
+  }, [sortedPrompts, results, handleSummarize]);
+
   // Hydrate summarized instances from DB on mount (avoids re-calling the AI)
   useEffect(() => {
     if (!savedSummaryData) return;
@@ -3851,8 +3876,26 @@ export function AnalysisSection({ requestId, files, projectId, sourceType }: Ana
         <div className="bg-card border rounded-lg overflow-hidden">
           <div className="px-4 py-3 border-b flex items-center justify-between">
             <div className="flex items-center gap-2">
-              <ScanLine className="w-4 h-4 text-primary" />
+              <FileText className="w-4 h-4 text-primary" />
               <h2 className="text-base font-semibold">Analysis Summary</h2>
+              <Button
+                size="sm"
+                variant={summaryRunning ? "destructive" : "outline"}
+                className="h-7 text-xs ml-2"
+                onClick={handleSummarizeAll}
+              >
+                {summaryRunning ? (
+                  <>
+                    <Square className="w-3 h-3 mr-1" />
+                    Stop
+                  </>
+                ) : (
+                  <>
+                    <Play className="w-3 h-3 mr-1" />
+                    Summarize Analysis Results
+                  </>
+                )}
+              </Button>
             </div>
             <div className="flex items-center gap-1">
               <Button size="sm" variant={summaryGroupBy === "awp" ? "default" : "outline"} onClick={() => setSummaryGroupBy("awp")} className="h-7 text-xs">By AWP</Button>
