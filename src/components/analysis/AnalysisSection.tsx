@@ -1820,8 +1820,8 @@ export function AnalysisSection({ requestId, files, projectId, sourceType }: Ana
         setAnalyzingClasses(resumeClasses);
         analyzeRunSyncRef.current = "running";
 
+        // NOTE: inFlight is incremented BEFORE calling executeItem (at dequeue site)
         const executeItem = async (item: WorkItem) => {
-          analyzeV2InFlightRef.current++;
           try {
             const { data: sd } = await supabase.auth.getSession();
             const tk = sd.session?.access_token;
@@ -1929,15 +1929,27 @@ export function AnalysisSection({ requestId, files, projectId, sourceType }: Ana
 
         analyzeV2QueueRef.current = workQueue;
         analyzeV2InFlightRef.current = 0;
+        completionFiredRef.current = false;
         setAnalyzeV2Progress({ done: 0, total: workQueue.length });
 
-        analyzeV2TimerRef.current = setInterval(() => {
-          while (analyzeV2InFlightRef.current < MAX_CONCURRENT_ANALYZE && analyzeV2QueueRef.current.length > 0) {
-            const item = analyzeV2QueueRef.current.shift()!;
+        const dequeueItems = () => {
+          const queue = analyzeV2QueueRef.current;
+          while (analyzeV2InFlightRef.current < MAX_CONCURRENT_ANALYZE && queue.length > 0) {
+            const firstFileId = queue[0].fileId;
+            const idx = queue.findIndex((q: any) => q.fileId === firstFileId);
+            if (idx === -1) break;
+            const item = queue[idx];
+            analyzeV2InFlightRef.current++;
+            queue.splice(idx, 1);
             executeItem(item as any);
           }
+        };
+
+        analyzeV2TimerRef.current = setInterval(() => {
           if (analyzeV2QueueRef.current.length === 0 && analyzeV2InFlightRef.current <= 0) {
             if (analyzeV2TimerRef.current) { clearInterval(analyzeV2TimerRef.current); analyzeV2TimerRef.current = null; }
+            if (completionFiredRef.current) return;
+            completionFiredRef.current = true;
             (async () => {
               await queryClient.invalidateQueries({ queryKey: ["analysis-results", requestId] });
               analyzeRunSyncRef.current = "idle";
@@ -1947,13 +1959,12 @@ export function AnalysisSection({ requestId, files, projectId, sourceType }: Ana
               toast({ title: "Analysis Complete", description: "All files analyzed." });
               for (const p of enabledPrompts) { handleSummarize(p.awp_class_name); }
             })();
+            return;
           }
+          dequeueItems();
         }, 1000);
 
-        while (analyzeV2InFlightRef.current < MAX_CONCURRENT_ANALYZE && analyzeV2QueueRef.current.length > 0) {
-          const item = analyzeV2QueueRef.current.shift()!;
-          executeItem(item as any);
-        }
+        dequeueItems();
       } catch (e) {
         console.error("[V2] Resume error:", e);
         analyzeRunSyncRef.current = "idle";
@@ -1961,7 +1972,7 @@ export function AnalysisSection({ requestId, files, projectId, sourceType }: Ana
         setAnalyzingClasses(new Set());
       }
     })();
-  }, [analyzeV2Running, prompts, copiedFiles, results]);
+  }, [analyzeV2Running, prompts, copiedFiles]);
 
   // id_prefix lookup from awp_classes (fallback)
   const idPrefixMap = useMemo(
@@ -2299,6 +2310,7 @@ export function AnalysisSection({ requestId, files, projectId, sourceType }: Ana
   const analyzeV2QueueRef = useRef<Array<any>>([]);
   const analyzeV2TimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const analyzeV2InFlightRef = useRef(0);
+  const completionFiredRef = useRef(false);
   // analyzeV2Running is declared earlier near other state
   const [analyzeV2Progress, setAnalyzeV2Progress] = useState({ done: 0, total: 0 });
   const [analyzeV2Stopping, setAnalyzeV2Stopping] = useState(false);
@@ -2352,6 +2364,8 @@ export function AnalysisSection({ requestId, files, projectId, sourceType }: Ana
     // Mark all enabled classes as analyzing
     const allClassNames = enabledPrompts.map((p) => p.awp_class_name);
     analyzeRunSyncRef.current = "starting";
+    completionFiredRef.current = false;
+    hasTriggeredResumeRef.current = false;
     setAnalyzingClasses(new Set(allClassNames));
     setAnalyzeV2Running(true);
     setClassFileStatuses({});
@@ -2484,8 +2498,8 @@ export function AnalysisSection({ requestId, files, projectId, sourceType }: Ana
       }
 
       // Execution function for each work item
+      // NOTE: inFlight is incremented BEFORE calling executeItem (at dequeue site)
       const executeItem = async (item: WorkItem) => {
-        analyzeV2InFlightRef.current++;
         try {
           const { data: sd } = await supabase.auth.getSession();
           const tk = sd.session?.access_token;
@@ -2637,20 +2651,38 @@ export function AnalysisSection({ requestId, files, projectId, sourceType }: Ana
       analyzeV2InFlightRef.current = 0;
       setAnalyzeV2Progress({ done: 0, total: totalItems });
 
+      // Group-aware dequeue: only dequeue items from the earliest file group
+      // that still has pending items, enforcing row-by-row sequential execution.
+      const dequeueItems = () => {
+        const queue = analyzeV2QueueRef.current;
+        while (analyzeV2InFlightRef.current < MAX_CONCURRENT_ANALYZE && queue.length > 0) {
+          // Find the first file group boundary
+          const firstFileId = queue[0].fileId;
+          // Only dequeue items belonging to this file group
+          const idx = queue.findIndex((q: any) => q.fileId === firstFileId);
+          if (idx === -1) break;
+          // Check: if this file's upload item is in-flight (needsUpload was true),
+          // only dequeue more items from this file once we have its openaiFileId
+          const item = queue[idx];
+          // Increment inFlight synchronously to prevent over-dispatch
+          analyzeV2InFlightRef.current++;
+          queue.splice(idx, 1);
+          executeItem(item as any);
+          // If we've exhausted this file group, the next iteration will pick the next file
+        }
+      };
+
       const startV2Scheduler = () => {
         analyzeV2TimerRef.current = setInterval(() => {
-          while (
-            analyzeV2InFlightRef.current < MAX_CONCURRENT_ANALYZE &&
-            analyzeV2QueueRef.current.length > 0
-          ) {
-            const item = analyzeV2QueueRef.current.shift()!;
-            executeItem(item as any);
-          }
+          // Check completion FIRST, guard with flag
           if (analyzeV2QueueRef.current.length === 0 && analyzeV2InFlightRef.current <= 0) {
+            // Clear interval synchronously BEFORE any async work
             if (analyzeV2TimerRef.current) {
               clearInterval(analyzeV2TimerRef.current);
               analyzeV2TimerRef.current = null;
             }
+            if (completionFiredRef.current) return;
+            completionFiredRef.current = true;
             (async () => {
               await queryClient.invalidateQueries({ queryKey: ["analysis-results", requestId] });
               analyzeRunSyncRef.current = "idle";
@@ -2660,17 +2692,13 @@ export function AnalysisSection({ requestId, files, projectId, sourceType }: Ana
               toast({ title: "Analysis Complete", description: "All files analyzed." });
               for (const cn of allClassNames) { handleSummarize(cn); }
             })();
+            return;
           }
+          dequeueItems();
         }, 1000);
 
         // Immediately fire first batch
-        while (
-          analyzeV2InFlightRef.current < MAX_CONCURRENT_ANALYZE &&
-          analyzeV2QueueRef.current.length > 0
-        ) {
-          const item = analyzeV2QueueRef.current.shift()!;
-          executeItem(item as any);
-        }
+        dequeueItems();
       };
 
       startV2Scheduler();
