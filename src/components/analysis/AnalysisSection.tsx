@@ -1937,9 +1937,18 @@ export function AnalysisSection({ requestId, files, projectId, sourceType }: Ana
 
         const dequeueItems = () => {
           const queue = analyzeV2QueueRef.current;
-          while (analyzeV2InFlightRef.current < MAX_CONCURRENT_ANALYZE && queue.length > 0) {
-            const firstFileId = queue[0].fileId;
-            const idx = queue.findIndex((q: any) => q.fileId === firstFileId);
+          const activeFileIds = new Set<string>();
+          Object.values(classFileStatuses).forEach((fileMap) => {
+            Object.entries(fileMap).forEach(([fileId, status]) => {
+              if (status === "processing") activeFileIds.add(fileId);
+            });
+          });
+
+          const currentFileId = activeFileIds.size > 0 ? Array.from(activeFileIds)[0] : queue[0]?.fileId;
+          if (!currentFileId) return;
+
+          while (analyzeV2InFlightRef.current < MAX_CONCURRENT_ANALYZE) {
+            const idx = queue.findIndex((q: any) => q.fileId === currentFileId);
             if (idx === -1) break;
             const item = queue[idx];
             analyzeV2InFlightRef.current++;
@@ -2658,20 +2667,23 @@ export function AnalysisSection({ requestId, files, projectId, sourceType }: Ana
       // that still has pending items, enforcing row-by-row sequential execution.
       const dequeueItems = () => {
         const queue = analyzeV2QueueRef.current;
-        while (analyzeV2InFlightRef.current < MAX_CONCURRENT_ANALYZE && queue.length > 0) {
-          // Find the first file group boundary
-          const firstFileId = queue[0].fileId;
-          // Only dequeue items belonging to this file group
-          const idx = queue.findIndex((q: any) => q.fileId === firstFileId);
+        const activeFileIds = new Set<string>();
+        Object.values(classFileStatuses).forEach((fileMap) => {
+          Object.entries(fileMap).forEach(([fileId, status]) => {
+            if (status === "processing") activeFileIds.add(fileId);
+          });
+        });
+
+        const currentFileId = activeFileIds.size > 0 ? Array.from(activeFileIds)[0] : queue[0]?.fileId;
+        if (!currentFileId) return;
+
+        while (analyzeV2InFlightRef.current < MAX_CONCURRENT_ANALYZE) {
+          const idx = queue.findIndex((q: any) => q.fileId === currentFileId);
           if (idx === -1) break;
-          // Check: if this file's upload item is in-flight (needsUpload was true),
-          // only dequeue more items from this file once we have its openaiFileId
           const item = queue[idx];
-          // Increment inFlight synchronously to prevent over-dispatch
           analyzeV2InFlightRef.current++;
           queue.splice(idx, 1);
           executeItem(item as any);
-          // If we've exhausted this file group, the next iteration will pick the next file
         }
       };
 
@@ -2720,13 +2732,20 @@ export function AnalysisSection({ requestId, files, projectId, sourceType }: Ana
 
   const handleStopAnalyzeV2 = () => {
     analyzeRunSyncRef.current = "stopping";
+    completionFiredRef.current = true;
     analyzeV2QueueRef.current = [];
     if (analyzeV2TimerRef.current) {
       clearInterval(analyzeV2TimerRef.current);
       analyzeV2TimerRef.current = null;
     }
     setAnalyzeV2Stopping(true);
+    const stopRunMarker = Date.now();
     const pollId = setInterval(() => {
+      const isSameStopCycle = analyzeRunSyncRef.current === "stopping";
+      if (!isSameStopCycle) {
+        clearInterval(pollId);
+        return;
+      }
       if (analyzeV2InFlightRef.current <= 0) {
         clearInterval(pollId);
         queryClient.invalidateQueries({ queryKey: ["analysis-results", requestId] });
@@ -2734,7 +2753,8 @@ export function AnalysisSection({ requestId, files, projectId, sourceType }: Ana
         setAnalyzeV2Running(false);
         setAnalyzeV2Stopping(false);
         setAnalyzingClasses(new Set());
-        supabase.from("analysis_requests").update({ status: "complete" }).eq("id", requestId);
+        setClassFileStatuses({});
+        void supabase.from("analysis_requests").update({ status: "complete" }).eq("id", requestId);
       }
     }, 200);
   };
@@ -3241,7 +3261,7 @@ export function AnalysisSection({ requestId, files, projectId, sourceType }: Ana
     // Fall back to DB results
     const result = results?.find((r) => r.file_id === fileId && r.awp_class_name === className);
     if (!result) return null;
-    if (result.status === "pending" && analyzeV2Running) return "loading";
+    if (result.status === "processing") return "loading";
     if (result.status === "failed") return "failed";
     if (result.status === "complete" && result.result_text) {
       const parsed = parseResultText(result.result_text);
