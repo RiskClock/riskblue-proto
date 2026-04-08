@@ -48,11 +48,13 @@ export const LocationDetailsModal = ({
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
 
-  // Priority: 1. Custom uploaded drawing, 2. Static mapped drawing (for any item with matching ID)
-  const customDrawingUrl = (location as any)?.drawingUrl || (location as any)?.drawing_url;
-  const staticDrawingUrl = location ? getDrawingImage(location.id) : null;
+  // Priority: 1. Analysis source file (from drive-analysis-files bucket), 2. Custom uploaded drawing, 3. Static mapped drawing
+  const analysisStoragePath = (location as any)?.drawing_url || (location as any)?.drawingUrl;
+  const isAnalysisSource = analysisStoragePath && !analysisStoragePath.startsWith('http') && !analysisStoragePath.startsWith('/');
+  const customDrawingUrl = isAnalysisSource ? null : ((location as any)?.drawingUrl || (location as any)?.drawing_url);
+  const staticDrawingUrl = (!isAnalysisSource && !customDrawingUrl && location) ? getDrawingImage(location.id) : null;
   const drawingUrl = customDrawingUrl || staticDrawingUrl;
-  const showDrawingViewer = !!drawingUrl;
+  const showDrawingViewer = !!drawingUrl || !!isAnalysisSource;
 
   // Load file when modal opens - single consolidated effect
   useEffect(() => {
