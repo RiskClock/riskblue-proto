@@ -250,8 +250,59 @@ export default function AnalysisRequestDetail() {
               </div>
             )}
 
+            {/* Importing Progress UI */}
+            {isImporting(request.status) && (
+              <div className="border rounded-lg p-6 space-y-4">
+                <div className="flex items-center gap-3">
+                  <Loader2 className="w-5 h-5 animate-spin text-primary" />
+                  <div>
+                    <h3 className="text-lg font-medium text-foreground">
+                      Importing Files{request.source_type === "google_drive" ? " from Google Drive" : request.source_type === "procore" ? " from Procore" : ""}
+                    </h3>
+                    <p className="text-sm text-muted-foreground">
+                      Files are being copied to the analysis workspace
+                    </p>
+                  </div>
+                </div>
+
+                {(() => {
+                  const total = files?.length || request.file_count || 0;
+                  const copied = files?.filter(f => f.copy_status === "copied").length || 0;
+                  const pct = total > 0 ? Math.round((copied / total) * 100) : 0;
+                  return (
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between text-sm text-muted-foreground">
+                        <span>{copied} of {total} files imported</span>
+                        <span>{pct}%</span>
+                      </div>
+                      <Progress value={pct} className="h-2" />
+                    </div>
+                  );
+                })()}
+
+                {files && files.length > 0 && (
+                  <div className="max-h-48 overflow-y-auto space-y-1 p-3 bg-muted/30 rounded-md">
+                    {files.map((file) => (
+                      <div key={file.id} className="text-sm flex items-center gap-2">
+                        {file.copy_status === "copied" ? (
+                          <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
+                        ) : file.copy_status === "pending" ? (
+                          <Circle className="w-3.5 h-3.5 text-muted-foreground/40 shrink-0" />
+                        ) : (
+                          <Loader2 className="w-3.5 h-3.5 animate-spin text-primary shrink-0" />
+                        )}
+                        <span className={`truncate ${file.copy_status === "copied" ? "text-foreground" : "text-muted-foreground"}`}>
+                          {file.name}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+
             {/* Analysis Section */}
-            {files && files.length > 0 && (
+            {files && files.length > 0 && !isImporting(request.status) && (
               <AnalysisSection
                 requestId={requestId!}
                 files={files}
