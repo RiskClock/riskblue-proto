@@ -5,11 +5,12 @@ import { supabase } from "@/integrations/supabase/client";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Progress } from "@/components/ui/progress";
 import { AppHeader } from "@/components/AppHeader";
 import { AnalysisSection } from "@/components/analysis/AnalysisSection";
 import { useHeapIdentify } from "@/hooks/useHeapIdentify";
 import { useToast } from "@/hooks/use-toast";
-import { ArrowLeft, Loader2, ShieldAlert, Upload, FileText } from "lucide-react";
+import { ArrowLeft, Loader2, ShieldAlert, Upload, FileText, CheckCircle2, Circle } from "lucide-react";
 import { format } from "date-fns";
 import { RepositoryConnectionDialog } from "@/components/wizard/RepositoryConnectionDialog";
 import { ProcoreConnectionDialog } from "@/components/wizard/ProcoreConnectionDialog";
@@ -62,6 +63,8 @@ export default function AnalysisRequestDetail() {
 
   const isInternal = user?.email?.toLowerCase().endsWith("@riskclock.com") ?? false;
 
+  const isImporting = (s?: string) => s === "pending" || s === "copying";
+
   const { data: request, isLoading: requestLoading } = useQuery({
     queryKey: ["analysis-request", requestId],
     queryFn: async () => {
@@ -81,6 +84,10 @@ export default function AnalysisRequestDetail() {
       return { ...data, user_email: "Unknown" };
     },
     enabled: isInternal && !!requestId,
+    refetchInterval: (query) => {
+      const status = query.state.data?.status;
+      return isImporting(status) ? 3000 : false;
+    },
   });
 
   const { data: files } = useQuery({
@@ -95,6 +102,7 @@ export default function AnalysisRequestDetail() {
       return data as AnalysisFile[];
     },
     enabled: isInternal && !!requestId,
+    refetchInterval: isImporting(request?.status) ? 3000 : false,
   });
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -242,8 +250,59 @@ export default function AnalysisRequestDetail() {
               </div>
             )}
 
+            {/* Importing Progress UI */}
+            {isImporting(request.status) && (
+              <div className="border rounded-lg p-6 space-y-4">
+                <div className="flex items-center gap-3">
+                  <Loader2 className="w-5 h-5 animate-spin text-primary" />
+                  <div>
+                    <h3 className="text-lg font-medium text-foreground">
+                      Importing Files{request.source_type === "google_drive" ? " from Google Drive" : request.source_type === "procore" ? " from Procore" : ""}
+                    </h3>
+                    <p className="text-sm text-muted-foreground">
+                      Files are being copied to the analysis workspace
+                    </p>
+                  </div>
+                </div>
+
+                {(() => {
+                  const total = files?.length || request.file_count || 0;
+                  const copied = files?.filter(f => f.copy_status === "copied").length || 0;
+                  const pct = total > 0 ? Math.round((copied / total) * 100) : 0;
+                  return (
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between text-sm text-muted-foreground">
+                        <span>{copied} of {total} files imported</span>
+                        <span>{pct}%</span>
+                      </div>
+                      <Progress value={pct} className="h-2" />
+                    </div>
+                  );
+                })()}
+
+                {files && files.length > 0 && (
+                  <div className="max-h-48 overflow-y-auto space-y-1 p-3 bg-muted/30 rounded-md">
+                    {files.map((file) => (
+                      <div key={file.id} className="text-sm flex items-center gap-2">
+                        {file.copy_status === "copied" ? (
+                          <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
+                        ) : file.copy_status === "pending" ? (
+                          <Circle className="w-3.5 h-3.5 text-muted-foreground/40 shrink-0" />
+                        ) : (
+                          <Loader2 className="w-3.5 h-3.5 animate-spin text-primary shrink-0" />
+                        )}
+                        <span className={`truncate ${file.copy_status === "copied" ? "text-foreground" : "text-muted-foreground"}`}>
+                          {file.name}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+
             {/* Analysis Section */}
-            {files && files.length > 0 && (
+            {files && files.length > 0 && !isImporting(request.status) && (
               <AnalysisSection
                 requestId={requestId!}
                 files={files}
