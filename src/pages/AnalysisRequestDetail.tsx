@@ -1,13 +1,15 @@
+import { useState, useRef } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { AppHeader } from "@/components/AppHeader";
 import { AnalysisSection } from "@/components/analysis/AnalysisSection";
 import { useHeapIdentify } from "@/hooks/useHeapIdentify";
-import { ArrowLeft, Loader2, ShieldAlert } from "lucide-react";
+import { useToast } from "@/hooks/use-toast";
+import { ArrowLeft, Loader2, ShieldAlert, Upload, HardDrive, Cloud, FileText } from "lucide-react";
 import { format } from "date-fns";
 
 interface AnalysisFile {
@@ -21,6 +23,7 @@ interface AnalysisFile {
 }
 
 const statusColors: Record<string, string> = {
+  awaiting_upload: "bg-gray-100 text-gray-800 border-gray-300",
   pending: "bg-blue-100 text-blue-800 border-blue-300",
   copying: "bg-blue-100 text-blue-800 border-blue-300",
   copied: "bg-amber-100 text-amber-800 border-amber-300",
@@ -31,6 +34,7 @@ const statusColors: Record<string, string> = {
 };
 
 const statusLabels: Record<string, string> = {
+  awaiting_upload: "Awaiting File Upload",
   pending: "Importing Files",
   copying: "Importing Files",
   copied: "Ready for Analysis",
@@ -44,7 +48,11 @@ export default function AnalysisRequestDetail() {
   const { requestId } = useParams<{ requestId: string }>();
   const { user } = useAuth();
   const navigate = useNavigate();
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
   useHeapIdentify();
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [uploading, setUploading] = useState(false);
 
   const isInternal = user?.email?.toLowerCase().endsWith("@riskclock.com") ?? false;
 
@@ -82,6 +90,57 @@ export default function AnalysisRequestDetail() {
     },
     enabled: isInternal && !!requestId,
   });
+
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const selectedFiles = e.target.files;
+    if (!selectedFiles?.length || !request || !requestId) return;
+    e.target.value = "";
+    setUploading(true);
+
+    try {
+      let totalBytes = 0;
+      for (const file of Array.from(selectedFiles)) {
+        const filePath = `${request.project_id}/${requestId}/${file.name}`;
+        const { error: uploadError } = await supabase.storage
+          .from("uploaded-drawings")
+          .upload(filePath, file);
+        if (uploadError) throw uploadError;
+        totalBytes += file.size;
+
+        await supabase.from("analysis_request_files").insert({
+          analysis_request_id: requestId,
+          drive_file_id: `manual_${Date.now()}_${file.name}`,
+          name: file.name,
+          mime_type: file.type || "application/octet-stream",
+          size_bytes: file.size,
+          relative_path: file.name,
+          storage_path: filePath,
+          copy_status: "copied",
+        });
+      }
+
+      await supabase
+        .from("analysis_requests")
+        .update({
+          status: "copied",
+          file_count: (request.file_count || 0) + selectedFiles.length,
+          total_size_bytes: (request.total_size_bytes || 0) + totalBytes,
+        })
+        .eq("id", requestId);
+
+      toast({ title: "Files Uploaded", description: `${selectedFiles.length} file(s) uploaded successfully.` });
+      queryClient.invalidateQueries({ queryKey: ["analysis-request", requestId] });
+      queryClient.invalidateQueries({ queryKey: ["analysis-files", requestId] });
+    } catch (error) {
+      toast({
+        title: "Upload Failed",
+        description: error instanceof Error ? error.message : "Failed to upload files",
+        variant: "destructive",
+      });
+    } finally {
+      setUploading(false);
+    }
+  };
 
   if (!isInternal) {
     return (
@@ -132,6 +191,43 @@ export default function AnalysisRequestDetail() {
               <div className="bg-destructive/10 border border-destructive/20 rounded-lg p-4">
                 <p className="text-sm font-medium text-destructive">Error</p>
                 <p className="text-sm text-destructive/80 mt-1">{request.error_message}</p>
+              </div>
+            )}
+
+            {/* Awaiting File Upload UI */}
+            {request.status === "awaiting_upload" && (!files || files.length === 0) && (
+              <div className="border-2 border-dashed border-muted-foreground/25 rounded-lg p-8 text-center space-y-4">
+                <FileText className="w-12 h-12 text-muted-foreground/50 mx-auto" />
+                <div>
+                  <h3 className="text-lg font-medium text-foreground">No files uploaded yet</h3>
+                  <p className="text-sm text-muted-foreground mt-1">Upload drawing files to begin analysis</p>
+                </div>
+                <div className="flex flex-wrap justify-center gap-2">
+                  <Button onClick={() => fileInputRef.current?.click()} disabled={uploading}>
+                    {uploading ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Upload className="w-4 h-4 mr-2" />}
+                    Upload from Computer
+                  </Button>
+                  <Button variant="outline" disabled title="Coming soon">
+                    <HardDrive className="w-4 h-4 mr-2" />
+                    Google Drive
+                  </Button>
+                  <Button variant="outline" disabled title="Coming soon">
+                    <HardDrive className="w-4 h-4 mr-2" />
+                    Procore
+                  </Button>
+                  <Button variant="outline" disabled title="Coming soon">
+                    <Cloud className="w-4 h-4 mr-2" />
+                    OneDrive
+                  </Button>
+                </div>
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept=".pdf,.png,.jpg,.jpeg,.dwg,.dxf"
+                  multiple
+                  className="hidden"
+                  onChange={handleFileUpload}
+                />
               </div>
             )}
 
