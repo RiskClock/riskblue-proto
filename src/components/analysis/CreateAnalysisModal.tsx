@@ -23,6 +23,8 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
+import { RepositoryConnectionDialog } from "@/components/wizard/RepositoryConnectionDialog";
+import { ProcoreConnectionDialog } from "@/components/wizard/ProcoreConnectionDialog";
 
 const LS_KEY = "analysis-queue-navigate-after-create";
 const ACCEPTED_TYPES = ".pdf,.png,.jpg,.jpeg,.dwg,.dxf";
@@ -49,6 +51,12 @@ export function CreateAnalysisModal({ open, onOpenChange, onCreated }: CreateAna
   });
   const [creating, setCreating] = useState(false);
 
+  // Cloud source dialog state
+  const [showDriveDialog, setShowDriveDialog] = useState(false);
+  const [showProcoreDialog, setShowProcoreDialog] = useState(false);
+  const [pendingProjectId, setPendingProjectId] = useState<string | null>(null);
+  const [pendingRequestId, setPendingRequestId] = useState<string | null>(null);
+
   // Reset form when dialog opens
   useEffect(() => {
     if (open) {
@@ -56,7 +64,8 @@ export function CreateAnalysisModal({ open, onOpenChange, onCreated }: CreateAna
       setStartDate(undefined);
       setEndDate(undefined);
       setFiles([]);
-      // Don't reset navigateAfter — it persists
+      setPendingProjectId(null);
+      setPendingRequestId(null);
       setTimeout(() => nameRef.current?.focus(), 100);
     }
   }, [open]);
@@ -70,7 +79,6 @@ export function CreateAnalysisModal({ open, onOpenChange, onCreated }: CreateAna
     if (e.target.files) {
       setFiles(prev => [...prev, ...Array.from(e.target.files!)]);
     }
-    // Reset so user can re-select the same file
     e.target.value = "";
   };
 
@@ -78,46 +86,120 @@ export function CreateAnalysisModal({ open, onOpenChange, onCreated }: CreateAna
     setFiles(prev => prev.filter((_, i) => i !== index));
   };
 
+  /** Create project + placeholder request if not yet created */
+  const ensureProjectAndRequest = async (): Promise<{ projectId: string; requestId: string }> => {
+    if (pendingProjectId && pendingRequestId) {
+      return { projectId: pendingProjectId, requestId: pendingRequestId };
+    }
+    if (!name.trim() || !user) throw new Error("Project name is required");
+
+    const { data: project, error: pErr } = await supabase
+      .from("projects")
+      .insert({
+        name: name.trim(),
+        user_id: user.id,
+        construction_start_date: startDate ? format(startDate, "yyyy-MM-dd") : null,
+        construction_end_date: endDate ? format(endDate, "yyyy-MM-dd") : null,
+      })
+      .select()
+      .single();
+    if (pErr) throw pErr;
+
+    const { data: req, error: rErr } = await supabase
+      .from("analysis_requests")
+      .insert({
+        project_id: project.id,
+        user_id: user.id,
+        source_type: "manual_upload",
+        status: "awaiting_upload",
+      })
+      .select()
+      .single();
+    if (rErr) throw rErr;
+
+    setPendingProjectId(project.id);
+    setPendingRequestId(req.id);
+    return { projectId: project.id, requestId: req.id };
+  };
+
+  const handleCloudSourceClick = async (source: "drive" | "procore") => {
+    if (!name.trim()) {
+      toast({ title: "Name Required", description: "Please enter a project name first.", variant: "destructive" });
+      return;
+    }
+    try {
+      setCreating(true);
+      await ensureProjectAndRequest();
+      if (source === "drive") setShowDriveDialog(true);
+      else setShowProcoreDialog(true);
+    } catch (error) {
+      const msg = (error as any)?.message || "Failed to create project";
+      toast({ title: "Error", description: msg, variant: "destructive" });
+    } finally {
+      setCreating(false);
+    }
+  };
+
+  const handleCloudAnalysisStarted = () => {
+    onOpenChange(false);
+    onCreated();
+    if (navigateAfter && pendingRequestId) {
+      navigate(`/internal/analysis-queue/${pendingRequestId}`);
+    }
+  };
+
   const handleCreate = async () => {
     if (!name.trim() || !user) return;
     setCreating(true);
 
     try {
-      // 1. Create project
-      const { data: project, error: projectError } = await supabase
-        .from("projects")
-        .insert({
-          name: name.trim(),
-          user_id: user.id,
-          construction_start_date: startDate ? format(startDate, "yyyy-MM-dd") : null,
-          construction_end_date: endDate ? format(endDate, "yyyy-MM-dd") : null,
-        })
-        .select()
-        .single();
+      // Reuse project if already created (e.g. user clicked Drive, cancelled, then Create)
+      let projectId = pendingProjectId;
+      if (!projectId) {
+        const { data: project, error: projectError } = await supabase
+          .from("projects")
+          .insert({
+            name: name.trim(),
+            user_id: user.id,
+            construction_start_date: startDate ? format(startDate, "yyyy-MM-dd") : null,
+            construction_end_date: endDate ? format(endDate, "yyyy-MM-dd") : null,
+          })
+          .select()
+          .single();
+        if (projectError) throw projectError;
+        projectId = project.id;
+      }
 
-      if (projectError) throw projectError;
-
-      // 2. Create analysis request
       const hasFiles = files.length > 0;
-      const { data: analysisRequest, error: arError } = await supabase
-        .from("analysis_requests")
-        .insert({
-          project_id: project.id,
-          user_id: user.id,
-          source_type: "manual_upload",
-          status: hasFiles ? "pending" : "awaiting_upload",
-          file_count: files.length,
-        })
-        .select()
-        .single();
+      let requestId = pendingRequestId;
 
-      if (arError) throw arError;
+      if (!requestId) {
+        const { data: analysisRequest, error: arError } = await supabase
+          .from("analysis_requests")
+          .insert({
+            project_id: projectId,
+            user_id: user.id,
+            source_type: "manual_upload",
+            status: hasFiles ? "pending" : "awaiting_upload",
+            file_count: files.length,
+          })
+          .select()
+          .single();
+        if (arError) throw arError;
+        requestId = analysisRequest.id;
+      } else if (hasFiles) {
+        const { error: updateErr } = await supabase
+          .from("analysis_requests")
+          .update({ status: "pending", file_count: files.length })
+          .eq("id", requestId);
+        if (updateErr) throw updateErr;
+      }
 
-      // 3. Upload files if any
+      // Upload files if any
       if (hasFiles) {
         let totalBytes = 0;
         for (const file of files) {
-          const filePath = `${project.id}/${analysisRequest.id}/${file.name}`;
+          const filePath = `${projectId}/${requestId}/${file.name}`;
           const { error: uploadError } = await supabase.storage
             .from("uploaded-drawings")
             .upload(filePath, file);
@@ -125,7 +207,7 @@ export function CreateAnalysisModal({ open, onOpenChange, onCreated }: CreateAna
           totalBytes += file.size;
 
           const { error: fileError } = await supabase.from("analysis_request_files").insert({
-            analysis_request_id: analysisRequest.id,
+            analysis_request_id: requestId,
             drive_file_id: `manual_${Date.now()}_${file.name}`,
             name: file.name,
             mime_type: file.type || "application/octet-stream",
@@ -140,7 +222,7 @@ export function CreateAnalysisModal({ open, onOpenChange, onCreated }: CreateAna
         await supabase
           .from("analysis_requests")
           .update({ status: "copied", total_size_bytes: totalBytes })
-          .eq("id", analysisRequest.id);
+          .eq("id", requestId);
       }
 
       toast({ title: "Analysis Created", description: `Project "${name.trim()}" created successfully.` });
@@ -148,7 +230,7 @@ export function CreateAnalysisModal({ open, onOpenChange, onCreated }: CreateAna
       onCreated();
 
       if (navigateAfter) {
-        navigate(`/internal/analysis-queue/${analysisRequest.id}`);
+        navigate(`/internal/analysis-queue/${requestId}`);
       }
     } catch (error) {
       const msg = (error as any)?.message || (error instanceof Error ? error.message : "Failed to create analysis");
@@ -169,136 +251,160 @@ export function CreateAnalysisModal({ open, onOpenChange, onCreated }: CreateAna
   };
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-lg">
-        <DialogHeader>
-          <DialogTitle>Create New Analysis</DialogTitle>
-        </DialogHeader>
+    <>
+      <Dialog open={open} onOpenChange={onOpenChange}>
+        <DialogContent className="sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Create New Analysis</DialogTitle>
+          </DialogHeader>
 
-        <div className="space-y-4 py-2">
-          {/* Project Name */}
-          <div className="space-y-2">
-            <Label htmlFor="project-name">Project Name</Label>
-            <Input
-              id="project-name"
-              ref={nameRef}
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              placeholder="Enter project name"
-              onKeyDown={(e) => { if (e.key === "Enter" && name.trim()) handleCreate(); }}
-            />
-          </div>
-
-          {/* Dates */}
-          <div className="grid grid-cols-2 gap-4">
+          <div className="space-y-4 py-2">
+            {/* Project Name */}
             <div className="space-y-2">
-              <Label>Start Date (optional)</Label>
-              <Popover>
-                <PopoverTrigger asChild>
-                  <Button
-                    variant="outline"
-                    className={cn("w-full justify-start text-left font-normal", !startDate && "text-muted-foreground")}
-                  >
-                    <CalendarIcon className="mr-2 h-4 w-4" />
-                    {startDate ? format(startDate, "PPP") : "Pick a date"}
-                  </Button>
-                </PopoverTrigger>
-                <PopoverContent className="w-auto p-0" align="start">
-                  <Calendar mode="single" selected={startDate} onSelect={setStartDate} initialFocus className="p-3 pointer-events-auto" />
-                </PopoverContent>
-              </Popover>
+              <Label htmlFor="project-name">Project Name</Label>
+              <Input
+                id="project-name"
+                ref={nameRef}
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                placeholder="Enter project name"
+                onKeyDown={(e) => { if (e.key === "Enter" && name.trim()) handleCreate(); }}
+              />
             </div>
-            <div className="space-y-2">
-              <Label>End Date (optional)</Label>
-              <Popover>
-                <PopoverTrigger asChild>
-                  <Button
-                    variant="outline"
-                    className={cn("w-full justify-start text-left font-normal", !endDate && "text-muted-foreground")}
-                  >
-                    <CalendarIcon className="mr-2 h-4 w-4" />
-                    {endDate ? format(endDate, "PPP") : "Pick a date"}
-                  </Button>
-                </PopoverTrigger>
-                <PopoverContent className="w-auto p-0" align="start">
-                  <Calendar mode="single" selected={endDate} onSelect={setEndDate} initialFocus className="p-3 pointer-events-auto" />
-                </PopoverContent>
-              </Popover>
-            </div>
-          </div>
 
-          {/* File Selection */}
-          <div className="space-y-2">
-            <Label>Select files to analyze (optional)</Label>
-            <div className="flex flex-wrap gap-2">
-              <Button variant="outline" size="sm" onClick={() => fileInputRef.current?.click()}>
-                <Upload className="w-4 h-4 mr-1" />
-                Upload from Computer
-              </Button>
-              <Button variant="outline" size="sm" disabled title="Coming soon">
-                <img src="/icons/icon_googledrive.png" className="w-4 h-4 mr-1" alt="Google Drive" />
-                Google Drive
-              </Button>
-              <Button variant="outline" size="sm" disabled title="Coming soon">
-                <img src="/icons/icon_procore.png" className="w-4 h-4 mr-1" alt="Procore" />
-                Procore
-              </Button>
-              <Button variant="outline" size="sm" disabled title="Coming soon">
-                <img src="/icons/icon_sharepoint.png" className="w-4 h-4 mr-1" alt="SharePoint" />
-                SharePoint (coming soon)
-              </Button>
-            </div>
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept={ACCEPTED_TYPES}
-              multiple
-              className="hidden"
-              onChange={handleFileSelect}
-            />
-
-            {/* File list */}
-            {files.length > 0 && (
-              <div className="border rounded-md p-2 space-y-1 max-h-40 overflow-y-auto">
-                {files.map((file, idx) => (
-                  <div key={idx} className="flex items-center justify-between text-sm px-2 py-1 bg-muted/50 rounded">
-                    <div className="flex items-center gap-2 min-w-0">
-                      <FileText className="w-3.5 h-3.5 shrink-0 text-muted-foreground" />
-                      <span className="truncate">{file.name}</span>
-                      <span className="text-muted-foreground text-xs shrink-0">{formatBytes(file.size)}</span>
-                    </div>
-                    <Button variant="ghost" size="sm" className="h-6 w-6 p-0" onClick={() => removeFile(idx)}>
-                      <X className="w-3.5 h-3.5" />
+            {/* Dates */}
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label>Start Date (optional)</Label>
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <Button
+                      variant="outline"
+                      className={cn("w-full justify-start text-left font-normal", !startDate && "text-muted-foreground")}
+                    >
+                      <CalendarIcon className="mr-2 h-4 w-4" />
+                      {startDate ? format(startDate, "PPP") : "Pick a date"}
                     </Button>
-                  </div>
-                ))}
+                  </PopoverTrigger>
+                  <PopoverContent className="w-auto p-0" align="start">
+                    <Calendar mode="single" selected={startDate} onSelect={setStartDate} initialFocus className="p-3 pointer-events-auto" />
+                  </PopoverContent>
+                </Popover>
               </div>
-            )}
+              <div className="space-y-2">
+                <Label>End Date (optional)</Label>
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <Button
+                      variant="outline"
+                      className={cn("w-full justify-start text-left font-normal", !endDate && "text-muted-foreground")}
+                    >
+                      <CalendarIcon className="mr-2 h-4 w-4" />
+                      {endDate ? format(endDate, "PPP") : "Pick a date"}
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-auto p-0" align="start">
+                    <Calendar mode="single" selected={endDate} onSelect={setEndDate} initialFocus className="p-3 pointer-events-auto" />
+                  </PopoverContent>
+                </Popover>
+              </div>
+            </div>
+
+            {/* File Selection */}
+            <div className="space-y-2">
+              <Label>Select files to analyze (optional)</Label>
+              <div className="flex flex-wrap gap-2">
+                <Button variant="outline" size="sm" onClick={() => fileInputRef.current?.click()}>
+                  <Upload className="w-4 h-4 mr-1" />
+                  Upload from Computer
+                </Button>
+                <Button variant="outline" size="sm" onClick={() => handleCloudSourceClick("drive")} disabled={creating}>
+                  <img src="/icons/icon_googledrive.png" className="w-4 h-4 mr-1" alt="Google Drive" />
+                  Google Drive
+                </Button>
+                <Button variant="outline" size="sm" onClick={() => handleCloudSourceClick("procore")} disabled={creating}>
+                  <img src="/icons/icon_procore.png" className="w-4 h-4 mr-1" alt="Procore" />
+                  Procore
+                </Button>
+                <Button variant="outline" size="sm" disabled title="Coming soon">
+                  <img src="/icons/icon_sharepoint.png" className="w-4 h-4 mr-1" alt="SharePoint" />
+                  SharePoint (coming soon)
+                </Button>
+              </div>
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept={ACCEPTED_TYPES}
+                multiple
+                className="hidden"
+                onChange={handleFileSelect}
+              />
+
+              {/* File list */}
+              {files.length > 0 && (
+                <div className="border rounded-md p-2 space-y-1 max-h-40 overflow-y-auto">
+                  {files.map((file, idx) => (
+                    <div key={idx} className="flex items-center justify-between text-sm px-2 py-1 bg-muted/50 rounded">
+                      <div className="flex items-center gap-2 min-w-0">
+                        <FileText className="w-3.5 h-3.5 shrink-0 text-muted-foreground" />
+                        <span className="truncate">{file.name}</span>
+                        <span className="text-muted-foreground text-xs shrink-0">{formatBytes(file.size)}</span>
+                      </div>
+                      <Button variant="ghost" size="sm" className="h-6 w-6 p-0" onClick={() => removeFile(idx)}>
+                        <X className="w-3.5 h-3.5" />
+                      </Button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Navigate checkbox */}
+            <div className="flex items-center space-x-2">
+              <Checkbox
+                id="navigate-after"
+                checked={navigateAfter}
+                onCheckedChange={(checked) => handleNavigateChange(!!checked)}
+              />
+              <Label htmlFor="navigate-after" className="text-sm font-normal cursor-pointer">
+                Go to analysis page after creation
+              </Label>
+            </div>
           </div>
 
-          {/* Navigate checkbox */}
-          <div className="flex items-center space-x-2">
-            <Checkbox
-              id="navigate-after"
-              checked={navigateAfter}
-              onCheckedChange={(checked) => handleNavigateChange(!!checked)}
-            />
-            <Label htmlFor="navigate-after" className="text-sm font-normal cursor-pointer">
-              Go to analysis page after creation
-            </Label>
-          </div>
-        </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => onOpenChange(false)} disabled={creating}>
+              Cancel
+            </Button>
+            <Button onClick={handleCreate} disabled={!name.trim() || creating}>
+              {creating && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
+              Create
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
-        <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)} disabled={creating}>
-            Cancel
-          </Button>
-          <Button onClick={handleCreate} disabled={!name.trim() || creating}>
-            {creating && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
-            Create
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+      {/* Cloud source dialogs - rendered outside the main Dialog to avoid nesting issues */}
+      {pendingProjectId && (
+        <>
+          <RepositoryConnectionDialog
+            isOpen={showDriveDialog}
+            onClose={() => setShowDriveDialog(false)}
+            projectId={pendingProjectId}
+            projectName={name.trim()}
+            analysisRequestId={pendingRequestId || undefined}
+            onAnalysisStarted={handleCloudAnalysisStarted}
+          />
+          <ProcoreConnectionDialog
+            isOpen={showProcoreDialog}
+            onClose={() => setShowProcoreDialog(false)}
+            projectId={pendingProjectId}
+            projectName={name.trim()}
+            analysisRequestId={pendingRequestId || undefined}
+            onAnalysisStarted={handleCloudAnalysisStarted}
+          />
+        </>
+      )}
+    </>
   );
 }
