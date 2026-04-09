@@ -1,68 +1,65 @@
 
 
-# Fix Procore Token Auto-Refresh & Prevent Concurrent Refreshes
+# Create New Analysis Modal & Awaiting File Upload Status
 
-## Problems Found
-
-1. **Client fires multiple concurrent refreshes**: Multiple components mount `useProcoreToken`, each calls `fetchToken`, each sees expired → each calls `refreshTokenInternal()`. With Procore's single-use refresh tokens, the second call invalidates everything.
-2. **Successful refresh returns null state**: When refresh succeeds, `setProcoreToken(prev => prev ? {...} : null)` returns `null` because `prev` is null at that point (token was expired, never set).
-3. **No proactive refresh**: Token only refreshes on mount — no timer to refresh before expiry during a session.
-4. **Edge function has no server-side concurrency guard**: Two simultaneous refresh requests read the same single-use refresh token.
+## Summary
+Add a "Create New Analysis" button to the analysis queue page that opens a modal for creating a new project + analysis request. Add an "Awaiting File Upload" status for requests created without files. Show file upload options on the detail page when no files exist.
 
 ## Changes
 
-### 1. Edge function: Add refresh locking (`supabase/functions/procore-oauth/index.ts`)
+### 1. New component: `CreateAnalysisModal.tsx`
 
-**In the refresh action (line 304+):**
-- Before reading the refresh token, use a Supabase `update` with a `refreshing_since` timestamp column as a simple lock
-- If `refreshing_since` is recent (< 30 seconds), return a "refresh in progress" response instead of attempting another refresh
-- On success, clear the lock and atomically persist both new access_token AND new refresh_token
-- On failure, clear the lock
+Create `src/components/analysis/CreateAnalysisModal.tsx` — a Dialog modal with:
+- **Project name** text field (auto-focused)
+- **Start/end dates** (optional) using Popover + Calendar date pickers
+- **File selection** (optional): "Select files to analyze" label with buttons for:
+  - "Upload from Computer" — opens native file picker (`.pdf,.png,.jpg,.jpeg,.dwg,.dxf`)
+  - "Google Drive" — placeholder/disabled for now (existing Drive flow is project-scoped)
+  - "Procore" — placeholder/disabled for now
+  - "OneDrive" — placeholder/disabled with "coming soon"
+  - Show list of selected files with remove option
+- **Checkbox**: "Go to analysis page after creation" (unchecked by default, state stored in `localStorage`)
+- **Create / Cancel** buttons
 
-This requires adding a `refreshing_since` column to `user_procore_tokens`.
+**On Create:**
+1. Insert a new `projects` row with name, optional dates, `user_id`
+2. Insert an `analysis_requests` row tied to the new project:
+   - If files were selected: `source_type = 'manual_upload'`, `status = 'pending'`
+   - If no files: `source_type = 'manual_upload'`, `status = 'awaiting_upload'`
+3. If files selected: upload to `uploaded-drawings` bucket, insert `analysis_request_files` rows, update status to `copied`
+4. Show loading spinner on the Create button during the process
+5. Refetch queue list, navigate to detail page if checkbox was checked
 
-### 2. Client hook: Add refresh mutex & fix state handling (`src/hooks/useProcoreToken.ts`)
+### 2. Update `InternalAnalysisQueue.tsx`
 
-- Add a `refreshingRef = useRef(false)` to prevent concurrent client-side refresh calls
-- In `refreshTokenInternal`, check and set this ref before proceeding
-- If a refresh returns `{ retry: true }` (lock held server-side), wait 2s and retry once
-- Fix the `setProcoreToken` after successful refresh to construct a full token object instead of relying on `prev`
-- Add a refresh timer: when token is set with an `expiresAt`, schedule a refresh 5 minutes before expiry
+- Add "Create New Analysis" button next to the Refresh button in the header
+- Add `awaiting_upload` to `statusColors` (gray/neutral) and `statusLabels` ("Awaiting File Upload")
+- Import and render `CreateAnalysisModal`
 
-### 3. Database migration
+### 3. Update `AnalysisRequestDetail.tsx`
 
-Add `refreshing_since` column to `user_procore_tokens`:
-```sql
-ALTER TABLE user_procore_tokens 
-ADD COLUMN IF NOT EXISTS refreshing_since timestamptz DEFAULT NULL;
-```
+- Add `awaiting_upload` to `statusColors` and `statusLabels`
+- When `request.status === 'awaiting_upload'` and no files exist, show a card with file upload options:
+  - "Upload from Computer" button (same upload flow as the modal)
+  - Google Drive / Procore / OneDrive buttons
+  - After upload completes, update status from `awaiting_upload` → `copied` and refetch
 
-## Technical Detail
+### 4. No DB migration needed
 
-```text
-Refresh flow (new):
+The `status` column on `analysis_requests` is a plain `text` field (not an enum), so `awaiting_upload` works without schema changes.
 
-Client A calls fetchToken → sees expired → calls refreshTokenInternal
-  → refreshingRef.current = true (client lock)
-  → POST /procore-oauth?action=refresh
-    → Edge fn: UPDATE user_procore_tokens SET refreshing_since=now() 
-               WHERE user_id=$1 AND (refreshing_since IS NULL OR refreshing_since < now()-30s)
-    → If 0 rows updated → return { retry: true, message: "Refresh in progress" }
-    → If 1 row updated → proceed with Procore refresh
-    → On success → UPDATE both access_token + refresh_token + clear refreshing_since
-    → On failure → clear refreshing_since, return error
-  → Client: set token state with full object (not prev-dependent)
-  → refreshingRef.current = false
+## Technical Notes
 
-Client B calls fetchToken concurrently → sees expired → calls refreshTokenInternal
-  → refreshingRef.current is true → skip, wait for result
-```
+- The modal uses `Dialog` from shadcn, `Calendar` wrapped in `Popover` for dates, `Checkbox` for the navigation preference
+- File upload reuses the same pattern from `ProjectWizard.tsx` lines 185-233 (upload to `uploaded-drawings` bucket, create `analysis_request_files` records)
+- The `localStorage` key for the navigation checkbox: `analysis-queue-navigate-after-create`
+- The `assign_project_owner_admin` trigger will auto-assign the creating user as project admin
 
-## Files to update
+## Files to create/update
 
 | File | Change |
 |---|---|
-| DB migration | Add `refreshing_since` column to `user_procore_tokens` |
-| `supabase/functions/procore-oauth/index.ts` | Add server-side refresh lock using `refreshing_since`; ensure both tokens are always persisted atomically |
-| `src/hooks/useProcoreToken.ts` | Add client-side refresh mutex via ref; fix post-refresh state; add proactive refresh timer before expiry |
+| `src/components/analysis/CreateAnalysisModal.tsx` | New modal component |
+| `src/pages/InternalAnalysisQueue.tsx` | Add Create button, import modal, add `awaiting_upload` status |
+| `src/pages/AnalysisRequestDetail.tsx` | Add `awaiting_upload` status, show upload UI when no files |
 
