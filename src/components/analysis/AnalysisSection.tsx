@@ -2968,7 +2968,6 @@ export function AnalysisSection({ requestId, files, projectId, sourceType }: Ana
       return;
     }
 
-    const allClassNames = new Set(enabledPrompts.map((p) => p.awp_class_name));
     setTriageRunning(true);
     setTriagingClasses(allClassNames);
     inFlightCountRef.current = 0;
@@ -2976,11 +2975,18 @@ export function AnalysisSection({ requestId, files, projectId, sourceType }: Ana
     setTriageProgress({ done: 0, total: scoreQueue.length });
     triageQueueRef.current = scoreQueue;
 
+    // Mark request as processing
+    await supabase.from("analysis_requests").update({ status: "processing" }).eq("id", requestId);
+    queryClient.invalidateQueries({ queryKey: ["analysis-request-meta", requestId] });
+
     startTriageScheduler(() => {
       queryClient.invalidateQueries({ queryKey: ["triage-results", requestId] });
       setTriagingClasses(new Set());
       setTriageRunning(false);
       setTriagePhase(null);
+      // Mark request as started (idle between phases)
+      supabase.from("analysis_requests").update({ status: "started" }).eq("id", requestId);
+      queryClient.invalidateQueries({ queryKey: ["analysis-request-meta", requestId] });
     });
   };
 
@@ -3001,6 +3007,9 @@ export function AnalysisSection({ requestId, files, projectId, sourceType }: Ana
         setTriageRunning(false);
         setTriagePhase(null);
         setTriageStopping(false);
+        // Mark request as started (stopped mid-phase)
+        supabase.from("analysis_requests").update({ status: "started" }).eq("id", requestId);
+        queryClient.invalidateQueries({ queryKey: ["analysis-request-meta", requestId] });
       }
     }, 200);
   };
