@@ -4,7 +4,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { format } from "date-fns";
-import { CalendarIcon, Upload, X, FileText, Loader2, HardDrive, Cloud } from "lucide-react";
+import { CalendarIcon, Upload, X, FileText, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
   Dialog,
@@ -236,16 +236,16 @@ export function CreateAnalysisModal({ open, onOpenChange, onCreated }: CreateAna
                 Upload from Computer
               </Button>
               <Button variant="outline" size="sm" disabled title="Coming soon">
-                <HardDrive className="w-4 h-4 mr-1" />
+                <img src="/icons/icon_googledrive.png" className="w-4 h-4 mr-1" alt="Google Drive" />
                 Google Drive
               </Button>
               <Button variant="outline" size="sm" disabled title="Coming soon">
-                <HardDrive className="w-4 h-4 mr-1" />
+                <img src="/icons/icon_procore.png" className="w-4 h-4 mr-1" alt="Procore" />
                 Procore
               </Button>
               <Button variant="outline" size="sm" disabled title="Coming soon">
-                <Cloud className="w-4 h-4 mr-1" />
-                OneDrive
+                <img src="/icons/icon_sharepoint.png" className="w-4 h-4 mr-1" alt="SharePoint" />
+                SharePoint (coming soon)
               </Button>
             </div>
             <input

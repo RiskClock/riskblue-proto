@@ -9,7 +9,7 @@ import { AppHeader } from "@/components/AppHeader";
 import { AnalysisSection } from "@/components/analysis/AnalysisSection";
 import { useHeapIdentify } from "@/hooks/useHeapIdentify";
 import { useToast } from "@/hooks/use-toast";
-import { ArrowLeft, Loader2, ShieldAlert, Upload, HardDrive, Cloud, FileText } from "lucide-react";
+import { ArrowLeft, Loader2, ShieldAlert, Upload, FileText } from "lucide-react";
 import { format } from "date-fns";
 
 interface AnalysisFile {
@@ -207,18 +207,18 @@ export default function AnalysisRequestDetail() {
                     {uploading ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Upload className="w-4 h-4 mr-2" />}
                     Upload from Computer
                   </Button>
-                  <Button variant="outline" disabled title="Coming soon">
-                    <HardDrive className="w-4 h-4 mr-2" />
-                    Google Drive
-                  </Button>
-                  <Button variant="outline" disabled title="Coming soon">
-                    <HardDrive className="w-4 h-4 mr-2" />
-                    Procore
-                  </Button>
-                  <Button variant="outline" disabled title="Coming soon">
-                    <Cloud className="w-4 h-4 mr-2" />
-                    OneDrive
-                  </Button>
+                   <Button variant="outline" disabled title="Coming soon">
+                     <img src="/icons/icon_googledrive.png" className="w-4 h-4 mr-2" alt="Google Drive" />
+                     Google Drive
+                   </Button>
+                   <Button variant="outline" disabled title="Coming soon">
+                     <img src="/icons/icon_procore.png" className="w-4 h-4 mr-2" alt="Procore" />
+                     Procore
+                   </Button>
+                   <Button variant="outline" disabled title="Coming soon">
+                     <img src="/icons/icon_sharepoint.png" className="w-4 h-4 mr-2" alt="SharePoint" />
+                     SharePoint (coming soon)
+                   </Button>
                 </div>
                 <input
                   ref={fileInputRef}
