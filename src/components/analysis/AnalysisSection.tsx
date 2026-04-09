@@ -2606,7 +2606,7 @@ export function AnalysisSection({ requestId, files, projectId, sourceType }: Ana
         setAnalyzeV2Stopping(false);
         setAnalyzingClasses(new Set());
         setClassFileStatuses({});
-        void supabase.from("analysis_requests").update({ status: "complete" }).eq("id", requestId);
+        void supabase.from("analysis_requests").update({ status: "started" }).eq("id", requestId);
       }
     }, 200);
   };
