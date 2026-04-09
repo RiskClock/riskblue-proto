@@ -310,13 +310,44 @@ serve(async (req) => {
 
       const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 
+      // === Server-side concurrency lock ===
+      // Atomically acquire lock: only succeed if no recent refresh is in progress
+      const { data: lockResult, error: lockError } = await supabase
+        .from("user_procore_tokens")
+        .update({ refreshing_since: new Date().toISOString() })
+        .eq("user_id", user.id)
+        .or("refreshing_since.is.null,refreshing_since.lt." + new Date(Date.now() - 30000).toISOString())
+        .select("id")
+        .maybeSingle();
+
+      if (lockError) {
+        console.error("[refresh] Lock query error:", lockError);
+        return new Response(JSON.stringify({ error: "Internal error" }),
+          { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+      }
+
+      if (!lockResult) {
+        // Another refresh is in progress (lock held < 30s ago)
+        console.log(`[refresh] Refresh already in progress for user: ${user.id}`);
+        return new Response(JSON.stringify({ retry: true, message: "Refresh in progress" }),
+          { status: 409, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+      }
+
+      // Helper to clear the lock
+      const clearLock = async () => {
+        await supabase.from("user_procore_tokens")
+          .update({ refreshing_since: null })
+          .eq("user_id", user.id);
+      };
+
       const { data: tokenData, error: fetchError } = await supabase
         .from("user_procore_tokens")
-        .select("refresh_token, encrypted_refresh_token, is_encrypted")
+        .select("refresh_token, encrypted_refresh_token, is_encrypted, procore_email, procore_company_id")
         .eq("user_id", user.id)
         .single();
 
       if (fetchError || !tokenData) {
+        await clearLock();
         return new Response(JSON.stringify({ error: "No refresh token found" }),
           { status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" } });
       }
@@ -327,6 +358,7 @@ serve(async (req) => {
       } else if (tokenData.refresh_token) {
         refreshToken = tokenData.refresh_token;
       } else {
+        await clearLock();
         return new Response(JSON.stringify({ error: "No refresh token available" }),
           { status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" } });
       }
@@ -346,6 +378,7 @@ serve(async (req) => {
 
       if (!refreshResponse.ok) {
         console.error(`[refresh] Token refresh failed for user: ${user.id}`, refreshData);
+        await clearLock();
 
         if (refreshData?.error === "invalid_grant") {
           console.log(`[refresh] invalid_grant — deleting dead token record for user: ${user.id}`);
@@ -366,9 +399,14 @@ serve(async (req) => {
         );
       }
 
+      // === Atomically persist BOTH tokens + clear lock ===
       const newExpiry = new Date(Date.now() + (refreshData.expires_in || 7200) * 1000).toISOString();
 
-      let updateData: any = { token_expiry: newExpiry, updated_at: new Date().toISOString() };
+      let updateData: any = {
+        token_expiry: newExpiry,
+        updated_at: new Date().toISOString(),
+        refreshing_since: null, // clear lock
+      };
 
       if (ENCRYPTION_KEY) {
         try {
@@ -384,9 +422,9 @@ serve(async (req) => {
         updateData.access_token = refreshData.access_token;
       }
 
-      // Procore may rotate refresh tokens
+      // ALWAYS store new refresh token (Procore single-use tokens)
       if (refreshData.refresh_token) {
-        console.log(`[refresh] Procore returned a new refresh_token for user: ${user.id} — storing rotated token`);
+        console.log(`[refresh] Storing rotated refresh_token for user: ${user.id}`);
         if (ENCRYPTION_KEY) {
           try {
             updateData.encrypted_refresh_token = await encryptToken(refreshData.refresh_token, ENCRYPTION_KEY);
@@ -398,14 +436,28 @@ serve(async (req) => {
           updateData.refresh_token = refreshData.refresh_token;
         }
       } else {
-        console.log(`[refresh] Procore did NOT return a new refresh_token for user: ${user.id}`);
+        console.warn(`[refresh] Procore did NOT return a new refresh_token for user: ${user.id}`);
       }
 
-      await supabase.from("user_procore_tokens").update(updateData).eq("user_id", user.id);
+      const { error: updateError } = await supabase
+        .from("user_procore_tokens")
+        .update(updateData)
+        .eq("user_id", user.id);
+
+      if (updateError) {
+        console.error(`[refresh] CRITICAL: Failed to persist refreshed tokens for user: ${user.id}`, updateError);
+        // Token was already consumed by Procore but we failed to save — user will need to re-auth
+        return new Response(
+          JSON.stringify({ error: "Failed to save refreshed tokens", needs_reauth: true }),
+          { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
 
       return new Response(JSON.stringify({
         access_token: refreshData.access_token,
         expires_at: newExpiry,
+        procore_email: tokenData.procore_email,
+        procore_company_id: tokenData.procore_company_id,
       }), { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
 

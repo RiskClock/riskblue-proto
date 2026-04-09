@@ -15,11 +15,32 @@ export function useProcoreToken() {
   const [needsReauth, setNeedsReauth] = useState(false);
   const popupRef = useRef<Window | null>(null);
   const messageHandlerRef = useRef<((event: MessageEvent) => void) | null>(null);
+  const refreshingRef = useRef(false);
+  const refreshTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const scheduleProactiveRefresh = useCallback((expiresAt: Date) => {
+    if (refreshTimerRef.current) clearTimeout(refreshTimerRef.current);
+    const msUntilExpiry = expiresAt.getTime() - Date.now();
+    // Refresh 5 minutes before expiry, but at least 10s from now
+    const refreshIn = Math.max(msUntilExpiry - 5 * 60 * 1000, 10_000);
+    console.log(`[useProcoreToken] Scheduling proactive refresh in ${Math.round(refreshIn / 1000)}s`);
+    refreshTimerRef.current = setTimeout(() => {
+      console.log("[useProcoreToken] Proactive refresh triggered");
+      refreshTokenInternal();
+    }, refreshIn);
+  }, []);
 
   const refreshTokenInternal = async (): Promise<boolean> => {
+    // Client-side mutex: prevent concurrent refresh calls
+    if (refreshingRef.current) {
+      console.log("[useProcoreToken] Refresh already in progress (client mutex), skipping");
+      return false;
+    }
+    refreshingRef.current = true;
+
     try {
       const { data: { session } } = await supabase.auth.getSession();
-      if (!session) return false;
+      if (!session) { refreshingRef.current = false; return false; }
 
       const functionUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/procore-oauth?action=refresh`;
       const response = await fetch(functionUrl, {
@@ -30,29 +51,47 @@ export function useProcoreToken() {
         },
       });
 
+      // Server returned 409 = another refresh is in progress (server lock)
+      if (response.status === 409) {
+        console.log("[useProcoreToken] Server says refresh in progress, retrying in 2s");
+        refreshingRef.current = false;
+        await new Promise(r => setTimeout(r, 2000));
+        return refreshTokenInternal(); // retry once (will re-acquire client mutex)
+      }
+
       const data = await response.json();
 
       if (!response.ok) {
         console.error("Procore token refresh error:", data);
-        // Edge function already deleted the DB record on invalid_grant
         if (data?.needs_reauth === true) {
           console.log("[useProcoreToken] Refresh failed with needs_reauth — prompting reconnect");
           setProcoreToken(null);
           setNeedsReauth(true);
         }
-        return false; // no recursive fetchToken call
+        refreshingRef.current = false;
+        return false;
       }
 
-      // Refresh succeeded — update state directly (no recursive fetchToken)
-      setProcoreToken((prev) => prev ? {
-        ...prev,
+      // Build full token object (not dependent on prev state)
+      const newToken: ProcoreToken = {
         accessToken: data.access_token,
+        procoreEmail: data.procore_email ?? null,
+        procoreCompanyId: data.procore_company_id ?? null,
         expiresAt: data.expires_at ? new Date(data.expires_at) : null,
-      } : null);
+      };
+      setProcoreToken(newToken);
       setNeedsReauth(false);
+
+      // Schedule next proactive refresh
+      if (newToken.expiresAt) {
+        scheduleProactiveRefresh(newToken.expiresAt);
+      }
+
+      refreshingRef.current = false;
       return true;
     } catch (err) {
       console.error("Error refreshing token:", err);
+      refreshingRef.current = false;
       return false;
     }
   };
@@ -61,7 +100,7 @@ export function useProcoreToken() {
     try {
       setLoading(true);
       setError(null);
-      setNeedsReauth(false); // reset on each fetch
+      setNeedsReauth(false);
 
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) { setProcoreToken(null); return; }
@@ -77,9 +116,8 @@ export function useProcoreToken() {
 
       if (!response.ok) {
         if (response.status === 404) {
-          // No token stored — user needs to connect for the first time (or token was deleted)
           setProcoreToken(null);
-          setNeedsReauth(true); // surface to UI; do NOT attempt refresh
+          setNeedsReauth(true);
           return;
         }
         const errorData = await response.json();
@@ -97,18 +135,23 @@ export function useProcoreToken() {
       }
 
       if (data.isExpired) {
-        // Try refresh once — result handled inside refreshTokenInternal
         const refreshed = await refreshTokenInternal();
         if (!refreshed) setProcoreToken(null);
         return;
       }
 
-      setProcoreToken({
+      const token: ProcoreToken = {
         accessToken: data.accessToken,
         procoreEmail: data.procoreEmail,
         procoreCompanyId: data.procoreCompanyId,
         expiresAt: data.expiresAt ? new Date(data.expiresAt) : null,
-      });
+      };
+      setProcoreToken(token);
+
+      // Schedule proactive refresh
+      if (token.expiresAt) {
+        scheduleProactiveRefresh(token.expiresAt);
+      }
     } catch (err) {
       console.error("Error in fetchToken:", err);
       setError(err instanceof Error ? err.message : "Unknown error");
@@ -127,6 +170,7 @@ export function useProcoreToken() {
     }
     setProcoreToken(null);
     setNeedsReauth(false);
+    if (refreshTimerRef.current) clearTimeout(refreshTimerRef.current);
   };
 
   const connectProcore = useCallback(async (projectPath: string): Promise<void> => {
@@ -224,6 +268,7 @@ export function useProcoreToken() {
       if (messageHandlerRef.current) {
         window.removeEventListener("message", messageHandlerRef.current);
       }
+      if (refreshTimerRef.current) clearTimeout(refreshTimerRef.current);
     };
   }, [fetchToken]);
 
