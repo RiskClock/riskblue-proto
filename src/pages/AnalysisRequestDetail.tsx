@@ -11,6 +11,8 @@ import { useHeapIdentify } from "@/hooks/useHeapIdentify";
 import { useToast } from "@/hooks/use-toast";
 import { ArrowLeft, Loader2, ShieldAlert, Upload, FileText } from "lucide-react";
 import { format } from "date-fns";
+import { RepositoryConnectionDialog } from "@/components/wizard/RepositoryConnectionDialog";
+import { ProcoreConnectionDialog } from "@/components/wizard/ProcoreConnectionDialog";
 
 interface AnalysisFile {
   id: string;
@@ -53,6 +55,10 @@ export default function AnalysisRequestDetail() {
   useHeapIdentify();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [uploading, setUploading] = useState(false);
+
+  // Cloud source dialog state
+  const [showDriveDialog, setShowDriveDialog] = useState(false);
+  const [showProcoreDialog, setShowProcoreDialog] = useState(false);
 
   const isInternal = user?.email?.toLowerCase().endsWith("@riskclock.com") ?? false;
 
@@ -142,6 +148,11 @@ export default function AnalysisRequestDetail() {
     }
   };
 
+  const handleCloudAnalysisStarted = () => {
+    queryClient.invalidateQueries({ queryKey: ["analysis-request", requestId] });
+    queryClient.invalidateQueries({ queryKey: ["analysis-files", requestId] });
+  };
+
   if (!isInternal) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
@@ -207,18 +218,18 @@ export default function AnalysisRequestDetail() {
                     {uploading ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Upload className="w-4 h-4 mr-2" />}
                     Upload from Computer
                   </Button>
-                   <Button variant="outline" disabled title="Coming soon">
-                     <img src="/icons/icon_googledrive.png" className="w-4 h-4 mr-2" alt="Google Drive" />
-                     Google Drive
-                   </Button>
-                   <Button variant="outline" disabled title="Coming soon">
-                     <img src="/icons/icon_procore.png" className="w-4 h-4 mr-2" alt="Procore" />
-                     Procore
-                   </Button>
-                   <Button variant="outline" disabled title="Coming soon">
-                     <img src="/icons/icon_sharepoint.png" className="w-4 h-4 mr-2" alt="SharePoint" />
-                     SharePoint (coming soon)
-                   </Button>
+                  <Button variant="outline" onClick={() => setShowDriveDialog(true)}>
+                    <img src="/icons/icon_googledrive.png" className="w-4 h-4 mr-2" alt="Google Drive" />
+                    Google Drive
+                  </Button>
+                  <Button variant="outline" onClick={() => setShowProcoreDialog(true)}>
+                    <img src="/icons/icon_procore.png" className="w-4 h-4 mr-2" alt="Procore" />
+                    Procore
+                  </Button>
+                  <Button variant="outline" disabled title="Coming soon">
+                    <img src="/icons/icon_sharepoint.png" className="w-4 h-4 mr-2" alt="SharePoint" />
+                    SharePoint (coming soon)
+                  </Button>
                 </div>
                 <input
                   ref={fileInputRef}
@@ -243,6 +254,28 @@ export default function AnalysisRequestDetail() {
           </div>
         )}
       </main>
+
+      {/* Cloud source dialogs */}
+      {request && (
+        <>
+          <RepositoryConnectionDialog
+            isOpen={showDriveDialog}
+            onClose={() => setShowDriveDialog(false)}
+            projectId={request.project_id}
+            projectName={request.project?.name}
+            analysisRequestId={requestId}
+            onAnalysisStarted={handleCloudAnalysisStarted}
+          />
+          <ProcoreConnectionDialog
+            isOpen={showProcoreDialog}
+            onClose={() => setShowProcoreDialog(false)}
+            projectId={request.project_id}
+            projectName={request.project?.name}
+            analysisRequestId={requestId}
+            onAnalysisStarted={handleCloudAnalysisStarted}
+          />
+        </>
+      )}
     </div>
   );
 }

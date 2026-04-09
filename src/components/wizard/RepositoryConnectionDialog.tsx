@@ -25,7 +25,8 @@ interface RepositoryConnectionDialogProps {
   projectName?: string;
   onFilesLoaded?: (files: DriveFileInfo[], accessToken: string) => void;
   onBeforeOAuthRedirect?: () => Promise<void>;
-  onAnalysisStarted?: () => void; // New callback when analysis is triggered
+  onAnalysisStarted?: () => void;
+  analysisRequestId?: string;
 }
 
 export const RepositoryConnectionDialog = ({
@@ -36,6 +37,7 @@ export const RepositoryConnectionDialog = ({
   onFilesLoaded,
   onBeforeOAuthRedirect,
   onAnalysisStarted,
+  analysisRequestId,
 }: RepositoryConnectionDialogProps) => {
   const { toast } = useToast();
   const { user } = useAuth();
@@ -123,21 +125,36 @@ export const RepositoryConnectionDialog = ({
         .update({ drive_folder_id: folderId.trim() })
         .eq("id", projectId);
 
-      // 3. Create analysis request record
-      const { data: analysisRequest, error: insertError } = await supabase
-        .from("analysis_requests")
-        .insert({
-          project_id: projectId,
-          user_id: user.id,
-          drive_folder_id: folderId.trim(),
-          status: "pending",
-          file_count: filesCount,
-        })
-        .select()
-        .single();
+      let requestId: string;
 
-      if (insertError) {
-        throw new Error(`Failed to create analysis request: ${insertError.message}`);
+      if (analysisRequestId) {
+        // Update existing analysis request
+        const { error: updateError } = await supabase
+          .from("analysis_requests")
+          .update({
+            drive_folder_id: folderId.trim(),
+            source_type: "google_drive",
+            status: "pending",
+            file_count: filesCount,
+          })
+          .eq("id", analysisRequestId);
+        if (updateError) throw new Error(updateError.message);
+        requestId = analysisRequestId;
+      } else {
+        // Create new analysis request
+        const { data: analysisRequest, error: insertError } = await supabase
+          .from("analysis_requests")
+          .insert({
+            project_id: projectId,
+            user_id: user.id,
+            drive_folder_id: folderId.trim(),
+            status: "pending",
+            file_count: filesCount,
+          })
+          .select()
+          .single();
+        if (insertError) throw new Error(`Failed to create analysis request: ${insertError.message}`);
+        requestId = analysisRequest.id;
       }
 
       // 4. Log the activity
@@ -148,13 +165,13 @@ export const RepositoryConnectionDialog = ({
         metadata: {
           folder_id: folderId.trim(),
           file_count: filesCount,
-          analysis_request_id: analysisRequest.id,
+          analysis_request_id: requestId,
         },
       });
 
       // 5. Trigger background file copy (fire and forget)
       supabase.functions.invoke("copy-drive-files", {
-        body: { analysisRequestId: analysisRequest.id },
+        body: { analysisRequestId: requestId },
       }).catch(err => console.error("Background copy trigger failed:", err));
 
       // 6. Show success message
