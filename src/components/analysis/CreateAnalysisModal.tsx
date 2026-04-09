@@ -124,7 +124,7 @@ export function CreateAnalysisModal({ open, onOpenChange, onCreated }: CreateAna
           if (uploadError) throw uploadError;
           totalBytes += file.size;
 
-          await supabase.from("analysis_request_files").insert({
+          const { error: fileError } = await supabase.from("analysis_request_files").insert({
             analysis_request_id: analysisRequest.id,
             drive_file_id: `manual_${Date.now()}_${file.name}`,
             name: file.name,
@@ -134,6 +134,7 @@ export function CreateAnalysisModal({ open, onOpenChange, onCreated }: CreateAna
             storage_path: filePath,
             copy_status: "copied",
           });
+          if (fileError) throw fileError;
         }
 
         await supabase
@@ -150,9 +151,10 @@ export function CreateAnalysisModal({ open, onOpenChange, onCreated }: CreateAna
         navigate(`/internal/analysis-queue/${analysisRequest.id}`);
       }
     } catch (error) {
+      const msg = (error as any)?.message || (error instanceof Error ? error.message : "Failed to create analysis");
       toast({
         title: "Creation Failed",
-        description: error instanceof Error ? error.message : "Failed to create analysis",
+        description: msg,
         variant: "destructive",
       });
     } finally {
