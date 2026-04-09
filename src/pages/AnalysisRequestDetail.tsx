@@ -1,13 +1,15 @@
+import { useState, useRef } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { AppHeader } from "@/components/AppHeader";
 import { AnalysisSection } from "@/components/analysis/AnalysisSection";
 import { useHeapIdentify } from "@/hooks/useHeapIdentify";
-import { ArrowLeft, Loader2, ShieldAlert } from "lucide-react";
+import { useToast } from "@/hooks/use-toast";
+import { ArrowLeft, Loader2, ShieldAlert, Upload, HardDrive, Cloud, FileText } from "lucide-react";
 import { format } from "date-fns";
 
 interface AnalysisFile {

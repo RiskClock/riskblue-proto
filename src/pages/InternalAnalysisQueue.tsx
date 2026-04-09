@@ -319,7 +319,11 @@ export default function InternalAnalysisQueue() {
         )}
       </main>
 
-      
+      <CreateAnalysisModal
+        open={createOpen}
+        onOpenChange={setCreateOpen}
+        onCreated={() => refetch()}
+      />
     </div>
   );
 }
