@@ -1,77 +1,68 @@
 
 
-# Add "Analysis Started" Status to Request Lifecycle
+# Fix Procore Token Auto-Refresh & Prevent Concurrent Refreshes
 
-## Summary
+## Problems Found
 
-Add a new DB status `started` between "Ready for Analysis" and "Analysis in Progress". Update all three phases (Extract, Triage, Analyze) to set `processing` when running and `started` when idle. Only set `complete` after the Analyze phase finishes.
-
-## Current vs. New Flow
-
-```text
-Current:  copied → processing → complete
-New:      copied → processing (extract running) → started (extract done)
-                 → processing (triage running)  → started (triage done)
-                 → processing (analyze running) → complete (analyze done)
-```
+1. **Client fires multiple concurrent refreshes**: Multiple components mount `useProcoreToken`, each calls `fetchToken`, each sees expired → each calls `refreshTokenInternal()`. With Procore's single-use refresh tokens, the second call invalidates everything.
+2. **Successful refresh returns null state**: When refresh succeeds, `setProcoreToken(prev => prev ? {...} : null)` returns `null` because `prev` is null at that point (token was expired, never set).
+3. **No proactive refresh**: Token only refreshes on mount — no timer to refresh before expiry during a session.
+4. **Edge function has no server-side concurrency guard**: Two simultaneous refresh requests read the same single-use refresh token.
 
 ## Changes
 
-### 1. Update status labels and colors (2 files)
+### 1. Edge function: Add refresh locking (`supabase/functions/procore-oauth/index.ts`)
 
-**`src/pages/InternalAnalysisQueue.tsx`** and **`src/pages/AnalysisRequestDetail.tsx`**:
+**In the refresh action (line 304+):**
+- Before reading the refresh token, use a Supabase `update` with a `refreshing_since` timestamp column as a simple lock
+- If `refreshing_since` is recent (< 30 seconds), return a "refresh in progress" response instead of attempting another refresh
+- On success, clear the lock and atomically persist both new access_token AND new refresh_token
+- On failure, clear the lock
 
-- Rename `pending`/`copying` label → "Importing Files"
-- Add `started` status: label "Analysis Started", color yellow/orange
-- Keep `processing` label as "Analysis in Progress"
+This requires adding a `refreshing_since` column to `user_procore_tokens`.
 
-```typescript
-const statusColors = {
-  pending: "bg-blue-100 text-blue-800 border-blue-300",
-  copying: "bg-blue-100 text-blue-800 border-blue-300",
-  copied: "bg-amber-100 text-amber-800 border-amber-300",
-  started: "bg-yellow-100 text-yellow-800 border-yellow-300",
-  processing: "bg-purple-100 text-purple-800 border-purple-300",
-  complete: "bg-emerald-100 text-emerald-800 border-emerald-300",
-  failed: "bg-red-100 text-red-800 border-red-300",
-};
+### 2. Client hook: Add refresh mutex & fix state handling (`src/hooks/useProcoreToken.ts`)
 
-const statusLabels = {
-  pending: "Importing Files",
-  copying: "Importing Files",
-  copied: "Ready for Analysis",
-  started: "Analysis Started",
-  processing: "Analysis in Progress",
-  complete: "Analysis Complete",
-  failed: "Failed",
-};
+- Add a `refreshingRef = useRef(false)` to prevent concurrent client-side refresh calls
+- In `refreshTokenInternal`, check and set this ref before proceeding
+- If a refresh returns `{ retry: true }` (lock held server-side), wait 2s and retry once
+- Fix the `setProcoreToken` after successful refresh to construct a full token object instead of relying on `prev`
+- Add a refresh timer: when token is set with an `expiresAt`, schedule a refresh 5 minutes before expiry
+
+### 3. Database migration
+
+Add `refreshing_since` column to `user_procore_tokens`:
+```sql
+ALTER TABLE user_procore_tokens 
+ADD COLUMN IF NOT EXISTS refreshing_since timestamptz DEFAULT NULL;
 ```
 
-### 2. Update phase transitions in `AnalysisSection.tsx`
+## Technical Detail
 
-**Extract Context** (`handleExtractAll`):
-- Set status to `processing` when extraction starts
-- Set status to `started` when extraction completes (in the scheduler completion callback)
+```text
+Refresh flow (new):
 
-**Triage** (`handleTriageAll`):
-- Set status to `processing` when triage starts
-- Set status to `started` when triage completes (in the `startTriageScheduler` callback)
+Client A calls fetchToken → sees expired → calls refreshTokenInternal
+  → refreshingRef.current = true (client lock)
+  → POST /procore-oauth?action=refresh
+    → Edge fn: UPDATE user_procore_tokens SET refreshing_since=now() 
+               WHERE user_id=$1 AND (refreshing_since IS NULL OR refreshing_since < now()-30s)
+    → If 0 rows updated → return { retry: true, message: "Refresh in progress" }
+    → If 1 row updated → proceed with Procore refresh
+    → On success → UPDATE both access_token + refresh_token + clear refreshing_since
+    → On failure → clear refreshing_since, return error
+  → Client: set token state with full object (not prev-dependent)
+  → refreshingRef.current = false
 
-**Analyze** (`handleAnalyzeAllV2`):
-- Keep setting `processing` when analyze starts (already does this)
-- Keep setting `complete` when analyze finishes (already does this)
-
-**Stop handlers**: When any phase is stopped, set status to `started` instead of `complete`.
-
-### 3. Auto-resume logic
-
-Update the auto-resume `useEffect` to also handle `started` status (treat it like `processing` for resume purposes, or leave it — the user can manually trigger next phase).
+Client B calls fetchToken concurrently → sees expired → calls refreshTokenInternal
+  → refreshingRef.current is true → skip, wait for result
+```
 
 ## Files to update
 
 | File | Change |
 |---|---|
-| `src/pages/InternalAnalysisQueue.tsx` | Add `started` to statusColors/statusLabels, rename labels |
-| `src/pages/AnalysisRequestDetail.tsx` | Add `started` to statusColors/statusLabels, rename labels |
-| `src/components/analysis/AnalysisSection.tsx` | Set `processing` on phase start, `started` on extract/triage completion and stops, keep `complete` only for analyze completion |
+| DB migration | Add `refreshing_since` column to `user_procore_tokens` |
+| `supabase/functions/procore-oauth/index.ts` | Add server-side refresh lock using `refreshing_since`; ensure both tokens are always persisted atomically |
+| `src/hooks/useProcoreToken.ts` | Add client-side refresh mutex via ref; fix post-refresh state; add proactive refresh timer before expiry |
 
