@@ -63,6 +63,8 @@ export default function AnalysisRequestDetail() {
 
   const isInternal = user?.email?.toLowerCase().endsWith("@riskclock.com") ?? false;
 
+  const isImporting = (s?: string) => s === "pending" || s === "copying";
+
   const { data: request, isLoading: requestLoading } = useQuery({
     queryKey: ["analysis-request", requestId],
     queryFn: async () => {
@@ -82,6 +84,10 @@ export default function AnalysisRequestDetail() {
       return { ...data, user_email: "Unknown" };
     },
     enabled: isInternal && !!requestId,
+    refetchInterval: (query) => {
+      const status = query.state.data?.status;
+      return isImporting(status) ? 3000 : false;
+    },
   });
 
   const { data: files } = useQuery({
