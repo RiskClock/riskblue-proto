@@ -2917,11 +2917,18 @@ export function AnalysisSection({ requestId, files, projectId, sourceType }: Ana
     setTriageProgress({ done: 0, total: scoreQueue.length });
     triageQueueRef.current = scoreQueue;
 
+    // Mark request as processing
+    await supabase.from("analysis_requests").update({ status: "processing" }).eq("id", requestId);
+    queryClient.invalidateQueries({ queryKey: ["analysis-request-meta", requestId] });
+
     startTriageScheduler(() => {
       queryClient.invalidateQueries({ queryKey: ["triage-results", requestId] });
       setTriagingClasses((prev) => { const next = new Set(prev); next.delete(className); return next; });
       setTriageRunning(false);
       setTriagePhase(null);
+      // Mark request as started (idle between phases)
+      supabase.from("analysis_requests").update({ status: "started" }).eq("id", requestId);
+      queryClient.invalidateQueries({ queryKey: ["analysis-request-meta", requestId] });
     });
   };
 
