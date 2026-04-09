@@ -102,6 +102,7 @@ export default function AnalysisRequestDetail() {
       return data as AnalysisFile[];
     },
     enabled: isInternal && !!requestId,
+    refetchInterval: isImporting(request?.status) ? 3000 : false,
   });
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
