@@ -55,6 +55,7 @@ interface AnalysisRequest {
 }
 
 const statusColors: Record<string, string> = {
+  awaiting_upload: "bg-gray-100 text-gray-800 border-gray-300",
   pending: "bg-blue-100 text-blue-800 border-blue-300",
   copying: "bg-blue-100 text-blue-800 border-blue-300",
   copied: "bg-amber-100 text-amber-800 border-amber-300",
@@ -65,6 +66,7 @@ const statusColors: Record<string, string> = {
 };
 
 const statusLabels: Record<string, string> = {
+  awaiting_upload: "Awaiting File Upload",
   pending: "Importing Files",
   copying: "Importing Files",
   copied: "Ready for Analysis",
@@ -89,6 +91,7 @@ export default function InternalAnalysisQueue() {
   useHeapIdentify();
   const [retrying, setRetrying] = useState<string | null>(null);
   const [deleting, setDeleting] = useState<string | null>(null);
+  const [createOpen, setCreateOpen] = useState(false);
 
   const isInternal = user?.email?.toLowerCase().endsWith("@riskclock.com") ?? false;
 
@@ -227,9 +230,14 @@ export default function InternalAnalysisQueue() {
             <h1 className="text-3xl font-bold text-foreground">Analysis Queue</h1>
             <p className="text-muted-foreground">Manage drawing analysis requests</p>
           </div>
-          <Button variant="outline" size="sm" onClick={() => refetch()}>
-            <RefreshCw className="w-4 h-4 mr-2" />Refresh
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button variant="outline" size="sm" onClick={() => refetch()}>
+              <RefreshCw className="w-4 h-4 mr-2" />Refresh
+            </Button>
+            <Button size="sm" onClick={() => setCreateOpen(true)}>
+              <Plus className="w-4 h-4 mr-2" />Create New Analysis
+            </Button>
+          </div>
         </div>
 
         {isLoading ? (
