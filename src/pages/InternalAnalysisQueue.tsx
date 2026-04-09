@@ -20,8 +20,10 @@ import {
   Settings,
   BarChart3,
   RotateCcw,
-  Trash2
+  Trash2,
+  Plus
 } from "lucide-react";
+import { CreateAnalysisModal } from "@/components/analysis/CreateAnalysisModal";
 import {
   AlertDialog,
   AlertDialogAction,
