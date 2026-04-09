@@ -1639,6 +1639,7 @@ export type Database = {
           procore_company_id: number | null
           procore_email: string | null
           refresh_token: string | null
+          refreshing_since: string | null
           token_expiry: string | null
           updated_at: string | null
           user_id: string
@@ -1653,6 +1654,7 @@ export type Database = {
           procore_company_id?: number | null
           procore_email?: string | null
           refresh_token?: string | null
+          refreshing_since?: string | null
           token_expiry?: string | null
           updated_at?: string | null
           user_id: string
@@ -1667,6 +1669,7 @@ export type Database = {
           procore_company_id?: number | null
           procore_email?: string | null
           refresh_token?: string | null
+          refreshing_since?: string | null
           token_expiry?: string | null
           updated_at?: string | null
           user_id?: string
