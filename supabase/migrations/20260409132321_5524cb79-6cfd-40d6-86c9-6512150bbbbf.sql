@@ -1,0 +1,2 @@
+ALTER TABLE public.analysis_requests DROP CONSTRAINT analysis_requests_status_check;
+ALTER TABLE public.analysis_requests ADD CONSTRAINT analysis_requests_status_check CHECK (status = ANY (ARRAY['pending','copying','copied','processing','complete','failed','awaiting_upload','started']::text[]));
