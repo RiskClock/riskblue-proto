@@ -24,16 +24,18 @@ const statusColors: Record<string, string> = {
   pending: "bg-blue-100 text-blue-800 border-blue-300",
   copying: "bg-blue-100 text-blue-800 border-blue-300",
   copied: "bg-amber-100 text-amber-800 border-amber-300",
+  started: "bg-yellow-100 text-yellow-800 border-yellow-300",
   processing: "bg-purple-100 text-purple-800 border-purple-300",
   complete: "bg-emerald-100 text-emerald-800 border-emerald-300",
   failed: "bg-red-100 text-red-800 border-red-300",
 };
 
 const statusLabels: Record<string, string> = {
-  pending: "Importing Drawings",
-  copying: "Importing Drawings",
+  pending: "Importing Files",
+  copying: "Importing Files",
   copied: "Ready for Analysis",
-  processing: "Analyzing",
+  started: "Analysis Started",
+  processing: "Analysis in Progress",
   complete: "Analysis Complete",
   failed: "Failed",
 };

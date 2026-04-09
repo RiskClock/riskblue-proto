@@ -2795,6 +2795,10 @@ export function AnalysisSection({ requestId, files, projectId, sourceType }: Ana
     setExtractProgress({ done: 0, total: copiedFiles.length });
     inFlightCountRef.current = 0;
 
+    // Mark request as processing
+    await supabase.from("analysis_requests").update({ status: "processing" }).eq("id", requestId);
+    queryClient.invalidateQueries({ queryKey: ["analysis-request-meta", requestId] });
+
     extractQueueRef.current = copiedFiles.map((f) => ({ file: f, action: "extract" as const }));
 
     const runExtractScheduler = () => {
@@ -2812,6 +2816,9 @@ export function AnalysisSection({ requestId, files, projectId, sourceType }: Ana
             extractTimerRef.current = null;
           }
           setExtractRunning(false);
+          // Mark request as started (idle between phases)
+          supabase.from("analysis_requests").update({ status: "started" }).eq("id", requestId);
+          queryClient.invalidateQueries({ queryKey: ["analysis-request-meta", requestId] });
         }
       }, 1000);
 
@@ -2842,6 +2849,9 @@ export function AnalysisSection({ requestId, files, projectId, sourceType }: Ana
         clearInterval(pollId);
         setExtractRunning(false);
         setExtractStopping(false);
+        // Mark request as started (stopped mid-phase)
+        supabase.from("analysis_requests").update({ status: "started" }).eq("id", requestId);
+        queryClient.invalidateQueries({ queryKey: ["analysis-request-meta", requestId] });
       }
     }, 200);
   };
