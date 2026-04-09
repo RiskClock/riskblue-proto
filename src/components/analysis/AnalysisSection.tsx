@@ -2968,6 +2968,7 @@ export function AnalysisSection({ requestId, files, projectId, sourceType }: Ana
       return;
     }
 
+    const allClassNames = new Set(enabledPrompts.map((p) => p.awp_class_name));
     setTriageRunning(true);
     setTriagingClasses(allClassNames);
     inFlightCountRef.current = 0;
