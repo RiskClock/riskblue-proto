@@ -35,6 +35,7 @@ interface ProcoreConnectionDialogProps {
   projectId: string;
   projectName?: string;
   onAnalysisStarted?: () => void;
+  analysisRequestId?: string;
 }
 
 export const ProcoreConnectionDialog = ({
@@ -43,6 +44,7 @@ export const ProcoreConnectionDialog = ({
   projectId,
   projectName,
   onAnalysisStarted,
+  analysisRequestId,
 }: ProcoreConnectionDialogProps) => {
   const { toast } = useToast();
   const { user } = useAuth();
@@ -222,20 +224,36 @@ export const ProcoreConnectionDialog = ({
         ? `procore:${selectedCompanyId}:${selectedProjectId}:${selectedFolderId}`
         : `procore:${selectedCompanyId}:${selectedProjectId}`;
 
-      // Create analysis request
-      const { data: analysisRequest, error: insertError } = await supabase
-        .from("analysis_requests")
-        .insert({
-          project_id: projectId,
-          user_id: user.id,
-          source_type: "procore",
-          status: "pending",
-          drive_folder_id: driveFolderId,
-        })
-        .select()
-        .single();
+      let requestId: string;
 
-      if (insertError) throw new Error(insertError.message);
+      if (analysisRequestId) {
+        // Update existing analysis request
+        const { error: updateError } = await supabase
+          .from("analysis_requests")
+          .update({
+            source_type: "procore",
+            status: "pending",
+            drive_folder_id: driveFolderId,
+          })
+          .eq("id", analysisRequestId);
+        if (updateError) throw new Error(updateError.message);
+        requestId = analysisRequestId;
+      } else {
+        // Create new analysis request
+        const { data: analysisRequest, error: insertError } = await supabase
+          .from("analysis_requests")
+          .insert({
+            project_id: projectId,
+            user_id: user.id,
+            source_type: "procore",
+            status: "pending",
+            drive_folder_id: driveFolderId,
+          })
+          .select()
+          .single();
+        if (insertError) throw new Error(insertError.message);
+        requestId = analysisRequest.id;
+      }
 
       // Trigger file copy
       const { data: { session } } = await supabase.auth.getSession();
@@ -247,7 +265,7 @@ export const ProcoreConnectionDialog = ({
             Authorization: `Bearer ${session.access_token}`,
             "Content-Type": "application/json",
           },
-          body: JSON.stringify({ analysisRequestId: analysisRequest.id }),
+          body: JSON.stringify({ analysisRequestId: requestId }),
         });
       }
 
@@ -262,7 +280,7 @@ export const ProcoreConnectionDialog = ({
           procore_project_name: selectedProject?.name,
           procore_folder_id: selectedFolderId || null,
           procore_folder_name: selectedFolderName || null,
-          analysis_request_id: analysisRequest.id,
+          analysis_request_id: requestId,
         },
       });
 
