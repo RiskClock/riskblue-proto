@@ -1,28 +1,59 @@
 
 
-# Use Proper Icons for Google Drive, Procore, and SharePoint
+# Add Import Progress UI for Pending/Copying Status
 
-## Changes
+## Problem
 
-### 1. Copy SharePoint logo to project
-Copy the uploaded `sharepoint.png` to `public/icons/icon_sharepoint.png` to match existing icon convention.
+When the request status is `pending` or `copying` (Importing Files), the detail page shows nothing because:
+- The "awaiting_upload" UI only renders when `status === "awaiting_upload"`
+- The AnalysisSection only renders when `files.length > 0`, but during early import there may be no file rows yet, or the query doesn't poll
 
-### 2. Update `CreateAnalysisModal.tsx`
-- Replace `HardDrive` icon for Google Drive with `<img src="/icons/icon_googledrive.png" className="w-4 h-4" />`
-- Replace `HardDrive` icon for Procore with `<img src="/icons/icon_procore.png" className="w-4 h-4" />`
-- Replace OneDrive button with SharePoint: `<img src="/icons/icon_sharepoint.png" className="w-4 h-4" />` + "SharePoint (coming soon)"
-- Remove unused `HardDrive` and `Cloud` imports from lucide-react
+## Plan
 
-### 3. Update `AnalysisRequestDetail.tsx`
-- Same icon replacements for all three buttons
-- OneDrive → SharePoint (coming soon)
-- Remove unused `HardDrive` and `Cloud` imports
+### 1. Add importing progress UI to `AnalysisRequestDetail.tsx`
+
+Show an inline importing section (not a modal) when `request.status` is `pending` or `copying`:
+
+- Animated spinner with "Importing Files" heading
+- Progress bar showing `copiedCount / totalCount` based on file rows with `copy_status === "copied"` vs total
+- List of files appearing as they're discovered, with per-file status indicators (spinner for pending, checkmark for copied)
+- Poll both the request and files queries every 3 seconds during import (`refetchInterval: 3000` on both queries when status is pending/copying)
+
+### 2. Enable polling during import
+
+Add `refetchInterval` to both the `analysis-request` and `analysis-files` queries, conditional on the request being in an importing state:
+
+```typescript
+refetchInterval: request?.status === "pending" || request?.status === "copying" ? 3000 : false,
+```
+
+For the files query, use a separate check since `request` may not be available yet — pass the status down or use a derived state.
+
+### 3. UI layout
+
+Render the import progress section between the header and the AnalysisSection:
+
+```text
+┌─────────────────────────────────────────┐
+│ ⟳ Importing Files from Google Drive     │
+│                                         │
+│ ████████░░░░░░░░  12 / 34 files copied  │
+│                                         │
+│ ✓ floor-plan-1.pdf                      │
+│ ✓ floor-plan-2.pdf                      │
+│ ⟳ mechanical-drawings.pdf              │
+│ ○ electrical-layout.pdf                 │
+│ ...                                     │
+└─────────────────────────────────────────┘
+```
+
+### 4. Transition
+
+When all files are copied (status changes to `copied`), the polling stops and the AnalysisSection renders automatically with the file list.
 
 ## Files to update
 
 | File | Change |
 |---|---|
-| `public/icons/icon_sharepoint.png` | Copy from uploaded file |
-| `src/components/analysis/CreateAnalysisModal.tsx` | Use img icons, rename OneDrive → SharePoint |
-| `src/pages/AnalysisRequestDetail.tsx` | Same icon and label changes |
+| `src/pages/AnalysisRequestDetail.tsx` | Add polling on queries during import; add importing progress UI section for `pending`/`copying` status |
 
