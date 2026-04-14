@@ -1428,7 +1428,7 @@ export function AnalysisSection({ requestId, files, projectId, sourceType, isWMS
     queryFn: async () => {
       const { data } = await supabase
         .from("analysis_requests")
-        .select("status, summary_data, triage_tokens_used, analyze_tokens_used, triage_model, analyze_model, disabled_awp_classes, pipeline_phase, pipeline_progress_done, pipeline_progress_total, pipeline_stop_requested")
+        .select("status, summary_data, triage_tokens_used, analyze_tokens_used, triage_model, analyze_model, disabled_awp_classes, pipeline_phase, pipeline_progress_done, pipeline_progress_total, pipeline_stop_requested, error_message")
         .eq("id", requestId)
         .single();
       return data;
