@@ -1858,7 +1858,7 @@ export function AnalysisSection({ requestId, files, projectId, sourceType, isWMS
   }, [projectInfo]);
 
   // Sorted prompts to match Configuration page order — filtered to drawing-detectable only
-  const sortedPrompts = useMemo(() => {
+  const sortedPromptsBase = useMemo(() => {
     if (!prompts) return [];
     return [...prompts]
       .filter(p => isDrawingDetectable(p))
@@ -1868,6 +1868,77 @@ export function AnalysisSection({ requestId, files, projectId, sourceType, isWMS
         return oa - ob;
       });
   }, [prompts, globalOrderMap, isDrawingDetectable]);
+
+  // For WMSV: further filter to only visible AWP classes
+  const sortedPrompts = useMemo(() => {
+    if (!visibleAwpClasses || visibleAwpClasses.length === 0) return sortedPromptsBase;
+    const allowed = new Set(visibleAwpClasses);
+    return sortedPromptsBase.filter(p => allowed.has(p.awp_class_name));
+  }, [sortedPromptsBase, visibleAwpClasses]);
+
+  // ---- WMSV chained analysis state ----
+  const [wmsvPhase, setWmsvPhase] = useState<"idle" | "extracting" | "triaging" | "analyzing">("idle");
+  const wmsvAbortRef = useRef(false);
+
+  const handleWmsvStartAnalysis = async () => {
+    wmsvAbortRef.current = false;
+    
+    // Phase 1: Extract
+    setWmsvPhase("extracting");
+    await handleExtractAll();
+    
+    // Wait for extraction to complete
+    await new Promise<void>((resolve) => {
+      const poll = setInterval(() => {
+        if (wmsvAbortRef.current) { clearInterval(poll); resolve(); return; }
+        if (!extractRunning && extractQueueRef.current.length === 0 && inFlightCountRef.current <= 0) {
+          clearInterval(poll);
+          resolve();
+        }
+      }, 500);
+    });
+    if (wmsvAbortRef.current) { setWmsvPhase("idle"); return; }
+
+    // Phase 2: Triage
+    setWmsvPhase("triaging");
+    await handleTriageAll();
+
+    // Wait for triage to complete
+    await new Promise<void>((resolve) => {
+      const poll = setInterval(() => {
+        if (wmsvAbortRef.current) { clearInterval(poll); resolve(); return; }
+        if (!triageRunning && triageQueueRef.current.length === 0 && inFlightCountRef.current <= 0) {
+          clearInterval(poll);
+          resolve();
+        }
+      }, 500);
+    });
+    if (wmsvAbortRef.current) { setWmsvPhase("idle"); return; }
+
+    // Phase 3: Analyze
+    setWmsvPhase("analyzing");
+    await handleAnalyzeAllV2();
+
+    // Wait for analysis to complete
+    await new Promise<void>((resolve) => {
+      const poll = setInterval(() => {
+        if (wmsvAbortRef.current) { clearInterval(poll); resolve(); return; }
+        if (!analyzeV2Running && analyzeV2QueueRef.current.length === 0 && analyzeV2InFlightRef.current <= 0) {
+          clearInterval(poll);
+          resolve();
+        }
+      }, 500);
+    });
+    setWmsvPhase("idle");
+  };
+
+  const handleWmsvStop = () => {
+    wmsvAbortRef.current = true;
+    if (extractRunning) handleStopExtract();
+    if (triageRunning) handleStopTriage();
+    if (analyzeV2Running) handleStopAnalyzeV2();
+    setWmsvPhase("idle");
+  };
 
   // Helper to get the best prefix for a class name
   const getPrefix = (className: string) =>
