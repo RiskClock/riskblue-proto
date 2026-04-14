@@ -1009,6 +1009,7 @@ export type Database = {
       }
       profiles: {
         Row: {
+          account_type: string
           avatar_url: string | null
           created_at: string
           display_name: string | null
@@ -1017,6 +1018,7 @@ export type Database = {
           user_id: string
         }
         Insert: {
+          account_type?: string
           avatar_url?: string | null
           created_at?: string
           display_name?: string | null
@@ -1025,6 +1027,7 @@ export type Database = {
           user_id: string
         }
         Update: {
+          account_type?: string
           avatar_url?: string | null
           created_at?: string
           display_name?: string | null
@@ -1760,6 +1763,33 @@ export type Database = {
           start_date_formula?: string | null
           threat?: string
           updated_at?: string
+        }
+        Relationships: []
+      }
+      wmsv_control_selections: {
+        Row: {
+          awp_class_name: string
+          category: string
+          created_at: string
+          id: string
+          sub_options: Json | null
+          user_id: string
+        }
+        Insert: {
+          awp_class_name: string
+          category: string
+          created_at?: string
+          id?: string
+          sub_options?: Json | null
+          user_id: string
+        }
+        Update: {
+          awp_class_name?: string
+          category?: string
+          created_at?: string
+          id?: string
+          sub_options?: Json | null
+          user_id?: string
         }
         Relationships: []
       }
