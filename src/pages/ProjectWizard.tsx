@@ -2292,6 +2292,7 @@ const ProjectWizard = () => {
         };
         
         setProjectId(dbProjectId);
+        setProjectName(mergedData.name || "");
         setInitialData(mergedData);
       } catch (error: any) {
         console.error("Error fetching project:", error);
@@ -2320,6 +2321,11 @@ const ProjectWizard = () => {
         </div>
       </div>
     );
+  }
+
+  // WMSV users see the analysis detail layout instead of the wizard
+  if (isWMSV && projectId) {
+    return <WMSVProjectDetail projectId={projectId} projectName={projectName} />;
   }
 
   return (
