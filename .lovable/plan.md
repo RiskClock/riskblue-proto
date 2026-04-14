@@ -1,38 +1,35 @@
 
 
-# Restructure Controls Page: Flat Control Lists by Category
+# Separate WMSV Project Detail into Its Own Route
 
 ## Problem
-The current Controls page groups mitigation controls under individual AWP classes (e.g., "Electrical Room" > its controls). The user wants three flat columns listing all unique mitigation controls that protect each category, without AWP class grouping.
+Currently, `ProjectWizard.tsx` (2300+ lines) conditionally renders `WMSVProjectDetail` at the bottom based on `isWMSV`. This mixes two unrelated UX flows in one file and forces WMSV users through the full wizard's data-fetching and setup before short-circuiting to a different view.
 
-## Layout
-```text
-Critical Assets          | Water Systems              | Contractor Processes
-─────────────────────────┼────────────────────────────┼─────────────────────────
-☐ Presence of Water Mon. | ☐ Inline Flow Sensors      | ☐ Yearly Risk Controls
-  └ ☐ Single (Probe)     | ☐ Ultrasonic Flow Sensors  | ☐ No Sole Contractor...
-  └ ☐ Area (Rope)        | ☐ Automatic Shut Off Valves| ☐ Water Leak Account...
-☐ Lumber Moisture Content|   └ ☐ ⌀1"                  | ...
-...                      |   └ ☐ ⌀2"                  |
-                         |   └ ☐ ⌀4"                  |
-                         |   └ ☐ ⌀8"                  |
-```
+## Approach
+Create a dedicated `/wmsv-project/:id` route and page component. Update the project list navigation to route WMSV users there instead of `/project/:id`.
 
-## Data approach
-1. Fetch all `critical_assets`, `water_systems`, `processes` with their `default_control_ids`
-2. Collect unique control IDs per category (union of all default_control_ids across all items in each table)
-3. Fetch control names from `mitigation_controls`
-4. Render three flat checkbox lists
+## Changes
 
-## Database change
-Update `wmsv_control_selections` to store selections by category + control (not by AWP class name):
-- Change unique constraint from `(user_id, awp_class_name, control_id)` to `(user_id, category, control_id)`
-- The `awp_class_name` column becomes unused; we keep `category` as the grouping key (`critical_assets`, `water_systems`, `processes`)
+### 1. New page: `src/pages/WMSVProject.tsx`
+- Thin wrapper that reads `:id` from URL params, fetches the project name, and renders `WMSVProjectDetail`
+- Includes `ProtectedRoute` auth gating (handled by the router in `App.tsx`)
 
-## Files to update
+### 2. Update `src/App.tsx`
+- Add route: `/wmsv-project/:id` pointing to the new `WMSVProject` page
+
+### 3. Update `src/pages/Projects.tsx`
+- When a WMSV user clicks a project row, navigate to `/wmsv-project/:id` instead of `/project/:id`
+
+### 4. Clean up `src/pages/ProjectWizard.tsx`
+- Remove the `isWMSV` check, `useAccountType` import, and `WMSVProjectDetail` import
+- The wizard no longer needs to know about WMSV at all
+
+## Files
 
 | File | Change |
 |---|---|
-| Migration SQL | Update unique constraint on `wmsv_control_selections` |
-| `src/pages/Controls.tsx` | Rewrite to show flat control lists per category instead of AWP-grouped |
+| `src/pages/WMSVProject.tsx` | New page — fetch project name, render `WMSVProjectDetail` |
+| `src/App.tsx` | Add `/wmsv-project/:id` route |
+| `src/pages/Projects.tsx` | Navigate WMSV users to `/wmsv-project/:id` |
+| `src/pages/ProjectWizard.tsx` | Remove WMSV conditional branch and related imports |
 
