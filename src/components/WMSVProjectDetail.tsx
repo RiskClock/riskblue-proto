@@ -324,6 +324,32 @@ export function WMSVProjectDetail({ projectId, projectName }: WMSVProjectDetailP
               </div>
             )}
 
+            {/* Re-import drawings */}
+            {files && files.length > 0 && !isImporting(request.status) && (
+              <div className="flex items-center gap-2">
+                <Button variant="outline" size="sm" onClick={() => fileInputRef.current?.click()} disabled={uploading}>
+                  {uploading ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Upload className="w-4 h-4 mr-2" />}
+                  Upload Files
+                </Button>
+                <Button variant="outline" size="sm" onClick={() => setShowDriveDialog(true)}>
+                  <img src="/icons/icon_googledrive.png" className="w-4 h-4 mr-2" alt="" />
+                  Google Drive
+                </Button>
+                <Button variant="outline" size="sm" onClick={() => setShowProcoreDialog(true)}>
+                  <img src="/icons/icon_procore.png" className="w-4 h-4 mr-2" alt="" />
+                  Procore
+                </Button>
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept=".pdf,.png,.jpg,.jpeg,.dwg,.dxf"
+                  multiple
+                  className="hidden"
+                  onChange={handleFileUpload}
+                />
+              </div>
+            )}
+
             {/* Analysis section */}
             {files && files.length > 0 && !isImporting(request.status) && (
               <AnalysisSection
