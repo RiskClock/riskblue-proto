@@ -43,6 +43,28 @@ const formatLocation = (city?: string, country?: string) => {
   return parts.length > 0 ? parts.join(", ") : "—";
 };
 
+const analysisStatusLabels: Record<string, string> = {
+  awaiting_upload: "Awaiting Upload",
+  pending: "Importing Drawings",
+  copying: "Importing Drawings",
+  copied: "Ready for Analysis",
+  started: "Analysis Started",
+  processing: "Analysis in Progress",
+  complete: "Analysis Complete",
+  failed: "Import Failed",
+};
+
+const analysisStatusColors: Record<string, string> = {
+  awaiting_upload: "bg-gray-100 text-gray-800 border-gray-300",
+  pending: "bg-blue-100 text-blue-800 border-blue-300",
+  copying: "bg-blue-100 text-blue-800 border-blue-300",
+  copied: "bg-amber-100 text-amber-800 border-amber-300",
+  started: "bg-yellow-100 text-yellow-800 border-yellow-300",
+  processing: "bg-purple-100 text-purple-800 border-purple-300",
+  complete: "bg-emerald-100 text-emerald-800 border-emerald-300",
+  failed: "bg-red-100 text-red-800 border-red-300",
+};
+
 const Projects = () => {
   const { user } = useAuth();
   const navigate = useNavigate();
@@ -54,6 +76,7 @@ const Projects = () => {
   const [showWMSVModal, setShowWMSVModal] = useState(false);
   const [loading, setLoading] = useState(true);
   const [userProjectRoles, setUserProjectRoles] = useState<Map<string, string>>(new Map());
+  const [analysisStatuses, setAnalysisStatuses] = useState<Map<string, string>>(new Map());
   const [showWelcome, setShowWelcome] = useState(() => 
     sessionStorage.getItem('riskblue_welcome_dismissed') !== 'true'
   );
@@ -79,11 +102,12 @@ const Projects = () => {
 
       if (projectsError) throw projectsError;
 
-      // Get unique user IDs
+      // Get unique user IDs and project IDs
       const userIds = [...new Set((projectsData || []).map(p => p.user_id))];
+      const projectIds = (projectsData || []).map(p => p.id);
       
-      // Fetch profiles, roles, and emails in parallel for performance
-      const [profilesResult, rolesResult, emailsResult] = await Promise.all([
+      // Fetch profiles, roles, emails, and analysis statuses in parallel
+      const [profilesResult, rolesResult, emailsResult, analysisResult] = await Promise.all([
         supabase
           .from("profiles")
           .select("user_id, display_name")
@@ -95,7 +119,14 @@ const Projects = () => {
         supabase.functions.invoke(
           `get-user-emails?userIds=${userIds.join(",")}`,
           { method: "GET" }
-        ).catch(() => ({ data: null }))
+        ).catch(() => ({ data: null })),
+        isWMSV && projectIds.length > 0
+          ? supabase
+              .from("analysis_requests")
+              .select("project_id, status")
+              .in("project_id", projectIds)
+              .order("created_at", { ascending: false })
+          : Promise.resolve({ data: null }),
       ]);
 
       // Create a map of user_id to display_name
@@ -114,8 +145,18 @@ const Projects = () => {
         emailsResult.data?.emails ? Object.entries(emailsResult.data.emails) : []
       );
 
+      // Build analysis status map (latest per project)
+      const statusMap = new Map<string, string>();
+      if (analysisResult.data) {
+        for (const row of analysisResult.data as Array<{ project_id: string; status: string }>) {
+          if (!statusMap.has(row.project_id)) {
+            statusMap.set(row.project_id, row.status);
+          }
+        }
+      }
+      setAnalysisStatuses(statusMap);
+
       // Merge projects with creator names and emails
-      // Use email prefix as fallback when display_name is null
       const projectsWithCreators: ProjectWithCreator[] = (projectsData || []).map(project => {
         const displayName = profilesMap.get(project.user_id);
         const email = emailsMap.get(project.user_id) || "";
