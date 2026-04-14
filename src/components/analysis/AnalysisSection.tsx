@@ -1422,18 +1422,18 @@ export function AnalysisSection({ requestId, files, projectId, sourceType, isWMS
     }
   };
 
-  // Fetch persisted model selections and token count
+  // Fetch persisted model selections, token count, and pipeline progress
   const { data: requestMeta } = useQuery({
     queryKey: ["analysis-request-meta", requestId],
     queryFn: async () => {
       const { data } = await supabase
         .from("analysis_requests")
-        .select("status, summary_data, triage_tokens_used, analyze_tokens_used, triage_model, analyze_model, disabled_awp_classes")
+        .select("status, summary_data, triage_tokens_used, analyze_tokens_used, triage_model, analyze_model, disabled_awp_classes, pipeline_phase, pipeline_progress_done, pipeline_progress_total, pipeline_stop_requested")
         .eq("id", requestId)
         .single();
       return data;
     },
-    refetchInterval: analyzeV2Running ? 5000 : false,
+    refetchInterval: (requestMeta as any)?.status === "processing" || analyzeV2Running ? 3000 : false,
   });
 
   // Initialize models and tokens from DB
