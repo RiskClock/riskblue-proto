@@ -95,20 +95,12 @@ export function WMSVProjectDetail({ projectId, projectName }: WMSVProjectDetailP
     staleTime: 1000 * 60 * 30,
   });
 
-  // Compute visible AWP classes: only those where at least one default control is enabled
+  // Compute visible AWP classes: any class where at least one default control is enabled (cross-category)
   const visibleAwpClasses = useMemo(() => {
     if (!controlSelections || !awpSourceData) return undefined;
-    const enabledByCategory = new Map<string, Set<string>>();
-    for (const sel of controlSelections) {
-      if (!enabledByCategory.has(sel.category)) enabledByCategory.set(sel.category, new Set());
-      enabledByCategory.get(sel.category)!.add(sel.control_id);
-    }
+    const enabledControlIds = new Set(controlSelections.map(sel => sel.control_id));
     return awpSourceData
-      .filter((awp) => {
-        const enabledControls = enabledByCategory.get(awp.category);
-        if (!enabledControls || enabledControls.size === 0) return false;
-        return awp.controlIds.some((cid) => enabledControls.has(cid));
-      })
+      .filter((awp) => awp.controlIds.some((cid) => enabledControlIds.has(cid)))
       .map((awp) => awp.name);
   }, [controlSelections, awpSourceData]);
 
