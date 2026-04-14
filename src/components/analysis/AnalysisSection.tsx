@@ -3311,6 +3311,8 @@ export function AnalysisSection({ requestId, files, projectId, sourceType, isWMS
   if (!prompts?.length) return null;
 
   const anyAnalyzing = analyzingClasses.size > 0;
+  const wmsvRunning = wmsvPhase !== "idle";
+  const wmsvPhaseLabel = wmsvPhase === "extracting" ? "Extracting Context…" : wmsvPhase === "triaging" ? "Triaging…" : wmsvPhase === "analyzing" ? "Analyzing…" : "";
 
   return (
     <TooltipProvider delayDuration={0}>
