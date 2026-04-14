@@ -1,35 +1,35 @@
 
 
-# Separate WMSV Project Detail into Its Own Route
+# WMSV Analysis UI: Streamlined Flow with Control-Filtered AWP Columns
 
-## Problem
-Currently, `ProjectWizard.tsx` (2300+ lines) conditionally renders `WMSVProjectDetail` at the bottom based on `isWMSV`. This mixes two unrelated UX flows in one file and forces WMSV users through the full wizard's data-fetching and setup before short-circuiting to a different view.
-
-## Approach
-Create a dedicated `/wmsv-project/:id` route and page component. Update the project list navigation to route WMSV users there instead of `/project/:id`.
+## Summary
+After file import completes on the WMSV project detail page (`/wmsv-project/:id`), show the file list with AWP class columns filtered to only those with enabled controls. Replace the multi-button analysis toolbar with a single "Start Analysis" button that chains extract → triage → analyze with progressive status display.
 
 ## Changes
 
-### 1. New page: `src/pages/WMSVProject.tsx`
-- Thin wrapper that reads `:id` from URL params, fetches the project name, and renders `WMSVProjectDetail`
-- Includes `ProtectedRoute` auth gating (handled by the router in `App.tsx`)
+### 1. `src/components/WMSVProjectDetail.tsx`
+- Fetch the user's `wmsv_control_selections` (category + control_id)
+- Fetch `critical_assets`, `water_systems`, `processes` with their `default_control_ids`
+- Compute `visibleAwpClasses`: AWP class names where at least one of its `default_control_ids` is in the user's enabled controls for that category
+- Pass `visibleAwpClasses` and `isWMSV={true}` props to `AnalysisSection`
 
-### 2. Update `src/App.tsx`
-- Add route: `/wmsv-project/:id` pointing to the new `WMSVProject` page
-
-### 3. Update `src/pages/Projects.tsx`
-- When a WMSV user clicks a project row, navigate to `/wmsv-project/:id` instead of `/project/:id`
-
-### 4. Clean up `src/pages/ProjectWizard.tsx`
-- Remove the `isWMSV` check, `useAccountType` import, and `WMSVProjectDetail` import
-- The wizard no longer needs to know about WMSV at all
+### 2. `src/components/analysis/AnalysisSection.tsx`
+- Add optional props: `isWMSV?: boolean`, `visibleAwpClasses?: string[]`
+- When `visibleAwpClasses` is provided, filter `sortedPrompts` to only include matching AWP class names
+- When `isWMSV` is true:
+  - Replace Extract/Triage/Analyze buttons with a single **"Start Analysis"** button
+  - Chain the three phases sequentially: extract → triage → analyze (reusing existing handlers)
+  - Show progressive status: "Extracting Context" → "Triaging" → "Analyzing"
+  - Keep a "Stop" button to halt the current phase
+  - Hide model selectors, token counters, and "Clear" dropdown
+  - Preserve AWP column header checkboxes and per-column triggers
 
 ## Files
 
 | File | Change |
 |---|---|
-| `src/pages/WMSVProject.tsx` | New page — fetch project name, render `WMSVProjectDetail` |
-| `src/App.tsx` | Add `/wmsv-project/:id` route |
-| `src/pages/Projects.tsx` | Navigate WMSV users to `/wmsv-project/:id` |
-| `src/pages/ProjectWizard.tsx` | Remove WMSV conditional branch and related imports |
+| `src/components/WMSVProjectDetail.tsx` | Compute `visibleAwpClasses` from control selections; pass new props to `AnalysisSection` |
+| `src/components/analysis/AnalysisSection.tsx` | Accept `isWMSV` + `visibleAwpClasses` props; filter columns; render simplified single-button toolbar with chained analysis |
+
+No database changes needed. No new files.
 
