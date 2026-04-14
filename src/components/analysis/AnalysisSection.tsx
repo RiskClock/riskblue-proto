@@ -1882,64 +1882,48 @@ export function AnalysisSection({ requestId, files, projectId, sourceType, isWMS
   const [wmsvPhase, setWmsvPhase] = useState<"idle" | "extracting" | "triaging" | "analyzing">("idle");
   const wmsvAbortRef = useRef(false);
 
-  const handleWmsvStartAnalysis = async () => {
-    wmsvAbortRef.current = false;
-    
-    // Phase 1: Extract
-    setWmsvPhase("extracting");
-    await handleExtractAll();
-    
-    // Wait for extraction to complete
-    await new Promise<void>((resolve) => {
-      const poll = setInterval(() => {
-        if (wmsvAbortRef.current) { clearInterval(poll); resolve(); return; }
-        if (!extractRunning && extractQueueRef.current.length === 0 && inFlightCountRef.current <= 0) {
-          clearInterval(poll);
-          resolve();
-        }
-      }, 500);
-    });
-    if (wmsvAbortRef.current) { setWmsvPhase("idle"); return; }
+  // Helper to start the backend pipeline
+  const startPipeline = async (phaseOverride?: string) => {
+    try {
+      const { data: sessionData } = await supabase.auth.getSession();
+      const token = sessionData.session?.access_token;
 
-    // Phase 2: Triage
-    setWmsvPhase("triaging");
-    await handleTriageAll();
+      const response = await supabase.functions.invoke("run-analysis-pipeline", {
+        body: {
+          analysisRequestId: requestId,
+          visibleAwpClasses: visibleAwpClasses,
+          triageModel,
+          analyzeModel,
+          disabledColumns: [...disabledColumns],
+          phaseOverride,
+        },
+      });
 
-    // Wait for triage to complete
-    await new Promise<void>((resolve) => {
-      const poll = setInterval(() => {
-        if (wmsvAbortRef.current) { clearInterval(poll); resolve(); return; }
-        if (!triageRunning && triageQueueRef.current.length === 0 && inFlightCountRef.current <= 0) {
-          clearInterval(poll);
-          resolve();
-        }
-      }, 500);
-    });
-    if (wmsvAbortRef.current) { setWmsvPhase("idle"); return; }
+      if (response.error) {
+        throw new Error(response.error.message);
+      }
 
-    // Phase 3: Analyze
-    setWmsvPhase("analyzing");
-    await handleAnalyzeAllV2();
-
-    // Wait for analysis to complete
-    await new Promise<void>((resolve) => {
-      const poll = setInterval(() => {
-        if (wmsvAbortRef.current) { clearInterval(poll); resolve(); return; }
-        if (!analyzeV2Running && analyzeV2QueueRef.current.length === 0 && analyzeV2InFlightRef.current <= 0) {
-          clearInterval(poll);
-          resolve();
-        }
-      }, 500);
-    });
-    setWmsvPhase("idle");
+      // Immediately refresh meta to pick up processing status
+      queryClient.invalidateQueries({ queryKey: ["analysis-request-meta", requestId] });
+    } catch (e) {
+      toast({
+        title: "Failed to start analysis",
+        description: e instanceof Error ? e.message : "Unknown error",
+        variant: "destructive",
+      });
+    }
   };
 
-  const handleWmsvStop = () => {
-    wmsvAbortRef.current = true;
-    if (extractRunning) handleStopExtract();
-    if (triageRunning) handleStopTriage();
-    if (analyzeV2Running) handleStopAnalyzeV2();
-    setWmsvPhase("idle");
+  const handleWmsvStartAnalysis = async () => {
+    await startPipeline();
+  };
+
+  const handleWmsvStop = async () => {
+    await supabase
+      .from("analysis_requests")
+      .update({ pipeline_stop_requested: true } as any)
+      .eq("id", requestId);
+    queryClient.invalidateQueries({ queryKey: ["analysis-request-meta", requestId] });
   };
 
   // Helper to get the best prefix for a class name
