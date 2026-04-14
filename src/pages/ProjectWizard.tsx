@@ -2209,9 +2209,11 @@ const ProjectWizard = () => {
   const navigate = useNavigate();
   const { user } = useAuth();
   const { toast } = useToast();
+  const { isWMSV } = useAccountType();
   const [initialData, setInitialData] = useState<ProjectData>({});
   const [isLoading, setIsLoading] = useState(true);
   const [projectId, setProjectId] = useState<string | undefined>(id);
+  const [projectName, setProjectName] = useState<string>("");
   const isCreatingProject = useRef(false);
 
   // Create a new project immediately when navigating to /project/new
