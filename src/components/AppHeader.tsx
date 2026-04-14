@@ -9,8 +9,9 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { LogOut, Settings, FileText, BarChart3 } from "lucide-react";
+import { LogOut, Settings, FileText, BarChart3, Shield } from "lucide-react";
 import riskBlueLogo from "@/assets/logo-riskblue.png";
+import { useAccountType } from "@/hooks/useAccountType";
 
 interface AppHeaderProps {
   leftContent?: React.ReactNode;
@@ -21,6 +22,7 @@ export const AppHeader = ({ leftContent }: AppHeaderProps) => {
   const navigate = useNavigate();
   const location = useLocation();
   const { getInitial } = useUserDisplayName();
+  const { isWMSV } = useAccountType();
 
   const isInternalUser = user?.email?.toLowerCase().endsWith("@riskclock.com") ?? false;
 
@@ -52,6 +54,15 @@ export const AppHeader = ({ leftContent }: AppHeaderProps) => {
               </Avatar>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-48">
+              {isWMSV && (
+                <>
+                  <DropdownMenuItem onClick={() => navigate("/controls")} className="cursor-pointer">
+                    <Shield className="h-4 w-4 mr-2" />
+                    Controls
+                  </DropdownMenuItem>
+                  <DropdownMenuSeparator />
+                </>
+              )}
               {isInternalUser && (
                 <>
                   <DropdownMenuItem onClick={() => navigate("/configuration")} className="cursor-pointer">

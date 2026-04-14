@@ -17,6 +17,7 @@ import ProcoreConnect from "./pages/ProcoreConnect";
 import ResetPassword from "./pages/ResetPassword";
 import InternalAnalysisQueue from "./pages/InternalAnalysisQueue";
 import AnalysisRequestDetail from "./pages/AnalysisRequestDetail";
+import Controls from "./pages/Controls";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -47,6 +48,7 @@ const App = () => (
             <Route path="/solution-provider-portal" element={<ProtectedRoute><SolutionProviderPortal /></ProtectedRoute>} />
             <Route path="/configuration" element={<ProtectedRoute><Configuration /></ProtectedRoute>} />
             <Route path="/logs" element={<ProtectedRoute><Logs /></ProtectedRoute>} />
+            <Route path="/controls" element={<ProtectedRoute><Controls /></ProtectedRoute>} />
             <Route path="/internal/analysis-queue" element={<ProtectedRoute><InternalAnalysisQueue /></ProtectedRoute>} />
             <Route path="/internal/analysis-queue/:requestId" element={<ProtectedRoute><AnalysisRequestDetail /></ProtectedRoute>} />
             <Route path="/accept-invite" element={<AcceptInvite />} />

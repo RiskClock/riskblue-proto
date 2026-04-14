@@ -12,6 +12,8 @@ import { AppHeader } from "@/components/AppHeader";
 import { Trash2, X } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { useAccountType } from "@/hooks/useAccountType";
+import { WMSVCreateProjectModal } from "@/components/WMSVCreateProjectModal";
 
 interface Project {
   id: string;
@@ -47,7 +49,9 @@ const Projects = () => {
   const { toast } = useToast();
   useHeapIdentify();
   const { logActivity } = useActivityLogger();
+  const { isWMSV } = useAccountType();
   const [projects, setProjects] = useState<ProjectWithCreator[]>([]);
+  const [showWMSVModal, setShowWMSVModal] = useState(false);
   const [loading, setLoading] = useState(true);
   const [userProjectRoles, setUserProjectRoles] = useState<Map<string, string>>(new Map());
   const [showWelcome, setShowWelcome] = useState(() => 
@@ -137,7 +141,11 @@ const Projects = () => {
 
   const handleNewProject = () => {
     logActivity("add_new_clicked");
-    navigate("/project/new");
+    if (isWMSV) {
+      setShowWMSVModal(true);
+    } else {
+      navigate("/project/new");
+    }
   };
 
   const handleDeleteProject = async (projectId: string, e: React.MouseEvent) => {
@@ -314,6 +322,11 @@ const Projects = () => {
         )}
       </main>
 
+      <WMSVCreateProjectModal
+        open={showWMSVModal}
+        onOpenChange={setShowWMSVModal}
+        onCreated={fetchProjects}
+      />
     </div>
   );
 };
