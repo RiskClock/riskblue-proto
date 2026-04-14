@@ -3302,6 +3302,7 @@ export function AnalysisSection({ requestId, files, projectId, sourceType, isWMS
   const pipelineDone = ((requestMeta as any)?.pipeline_progress_done as number) || 0;
   const pipelineTotal = ((requestMeta as any)?.pipeline_progress_total as number) || 0;
   const dbStatus = (requestMeta as any)?.status as string | undefined;
+  const dbErrorMessage = (requestMeta as any)?.error_message as string | null;
   const pipelineRunning = dbStatus === "processing" && !!pipelinePhase;
   const pipelinePhaseLabel = pipelinePhase === "extracting" ? "Extracting Context…" : pipelinePhase === "triaging" ? "Triaging…" : pipelinePhase === "analyzing" ? "Analyzing…" : "Processing…";
   const wmsvRunning = pipelineRunning;
@@ -3507,6 +3508,13 @@ export function AnalysisSection({ requestId, files, projectId, sourceType, isWMS
             </div>
             )}
           </div>
+
+          {dbErrorMessage && !pipelineRunning && (
+            <div className="px-4 py-2 bg-destructive/10 text-destructive text-sm border-b flex items-center gap-2">
+              <AlertTriangle className="w-4 h-4 shrink-0" />
+              {dbErrorMessage}
+            </div>
+          )}
 
           {copiedFiles.length === 0 ? (
             <div className="px-4 py-6 text-sm text-muted-foreground text-center">
