@@ -302,11 +302,14 @@ async function runPipeline(params: PipelineParams) {
       return;
     }
 
-    // Filter prompts: only drawing-detectable, not disabled, optionally filtered by visibleAwpClasses
+    // Filter prompts: only drawing-detectable, optionally scoped by visibleAwpClasses, then exclude disabledColumns
     let prompts: any[];
 
+    // Step 1: Start with drawing-detectable prompts
+    let eligible = allPrompts.filter((p: any) => p.detection_method !== "always");
+
+    // Step 2: If visibleAwpClasses provided, restrict to that set first
     if (visibleAwpClasses !== undefined) {
-      // WMSV mode: visibleAwpClasses is the authoritative filter, ignore disabledColumns
       if (visibleAwpClasses.length === 0) {
         await admin
           .from("analysis_requests")
@@ -318,16 +321,11 @@ async function runPipeline(params: PipelineParams) {
         return;
       }
       const allowed = new Set(visibleAwpClasses);
-      prompts = allPrompts.filter(
-        (p: any) => p.detection_method !== "always" && allowed.has(p.awp_class_name),
-      );
-    } else {
-      // Standard mode: use disabledColumns
-      prompts = allPrompts.filter(
-        (p: any) =>
-          p.detection_method !== "always" && !disabledColumns.has(p.awp_class_name),
-      );
+      eligible = eligible.filter((p: any) => allowed.has(p.awp_class_name));
     }
+
+    // Step 3: Apply disabledColumns on top (user can deselect classes in both modes)
+    prompts = eligible.filter((p: any) => !disabledColumns.has(p.awp_class_name));
 
     const runPhase = (phase: string) =>
       !phaseOverride || phaseOverride === phase;
