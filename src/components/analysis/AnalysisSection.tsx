@@ -1433,7 +1433,7 @@ export function AnalysisSection({ requestId, files, projectId, sourceType, isWMS
         .single();
       return data;
     },
-    refetchInterval: (requestMeta as any)?.status === "processing" || analyzeV2Running ? 3000 : false,
+    refetchInterval: 3000,
   });
 
   // Initialize models and tokens from DB
