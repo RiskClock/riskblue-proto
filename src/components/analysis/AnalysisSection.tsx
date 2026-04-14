@@ -1350,7 +1350,7 @@ export function AnalysisSection({ requestId, files, projectId, sourceType, isWMS
       if (error) throw error;
       return data as AnalysisResult[];
     },
-    refetchInterval: analyzeV2Running ? 5000 : false,
+    refetchInterval: 5000,
   });
 
   // Fetch existing triage results
