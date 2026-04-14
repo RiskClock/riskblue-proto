@@ -23,23 +23,44 @@ async function callFunction(
   fnName: string,
   body: Record<string, unknown>,
 ): Promise<{ ok: boolean; status: number; data: any }> {
+  const MAX_RETRIES = 3;
   const url = `${supabaseUrl}/functions/v1/${fnName}`;
-  const res = await fetch(url, {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${authToken}`,
-      "Content-Type": "application/json",
-      apikey: serviceKey,
-    },
-    body: JSON.stringify(body),
-  });
-  let data: any = null;
-  try {
-    data = await res.json();
-  } catch {
-    // not JSON
+
+  for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+    const res = await fetch(url, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${authToken}`,
+        "Content-Type": "application/json",
+        apikey: serviceKey,
+      },
+      body: JSON.stringify(body),
+    });
+    let data: any = null;
+    try {
+      data = await res.json();
+    } catch {
+      // not JSON
+    }
+
+    // Retry on rate limit
+    const isRateLimited =
+      res.status === 429 ||
+      (data?.error && typeof data.error === "string" && data.error.toLowerCase().includes("rate"));
+    if (isRateLimited && attempt < MAX_RETRIES) {
+      const delay = Math.pow(2, attempt + 1) * 1000; // 2s, 4s, 8s
+      console.warn(
+        `[pipeline] Rate limited calling ${fnName}, retrying in ${delay}ms (attempt ${attempt + 1}/${MAX_RETRIES})`,
+      );
+      await new Promise((r) => setTimeout(r, delay));
+      continue;
+    }
+
+    return { ok: res.ok, status: res.status, data };
   }
-  return { ok: res.ok, status: res.status, data };
+
+  // Should not reach here, but just in case
+  return { ok: false, status: 429, data: { error: "Max retries exceeded" } };
 }
 
 // ---------------------------------------------------------------------------
@@ -281,12 +302,10 @@ async function runPipeline(params: PipelineParams) {
     }
 
     // Filter prompts: only drawing-detectable, not disabled, optionally filtered by visibleAwpClasses
-    let prompts = allPrompts.filter(
-      (p: any) =>
-        p.detection_method !== "always" && !disabledColumns.has(p.awp_class_name),
-    );
+    let prompts: any[];
 
     if (visibleAwpClasses !== undefined) {
+      // WMSV mode: visibleAwpClasses is the authoritative filter, ignore disabledColumns
       if (visibleAwpClasses.length === 0) {
         await admin
           .from("analysis_requests")
@@ -298,7 +317,15 @@ async function runPipeline(params: PipelineParams) {
         return;
       }
       const allowed = new Set(visibleAwpClasses);
-      prompts = prompts.filter((p: any) => allowed.has(p.awp_class_name));
+      prompts = allPrompts.filter(
+        (p: any) => p.detection_method !== "always" && allowed.has(p.awp_class_name),
+      );
+    } else {
+      // Standard mode: use disabledColumns
+      prompts = allPrompts.filter(
+        (p: any) =>
+          p.detection_method !== "always" && !disabledColumns.has(p.awp_class_name),
+      );
     }
 
     const runPhase = (phase: string) =>
@@ -378,6 +405,8 @@ async function runPipeline(params: PipelineParams) {
       await updateProgress(admin, analysisRequestId, "triaging", 0, triageItems.length);
 
       let triageTokens = 0;
+      let triageSuccesses = 0;
+      let triageFailures = 0;
       for (let i = 0; i < triageItems.length; i++) {
         if (await shouldStop(admin, analysisRequestId)) {
           console.log("[pipeline] Stop requested during triage");
@@ -414,14 +443,23 @@ async function runPipeline(params: PipelineParams) {
               model: triageModel,
             },
           );
-          if (result.ok && result.data?.usage?.total_tokens) {
-            triageTokens += result.data.usage.total_tokens;
-            await admin
-              .from("analysis_requests")
-              .update({ triage_tokens_used: triageTokens } as any)
-              .eq("id", analysisRequestId);
+          if (result.ok) {
+            triageSuccesses++;
+            if (result.data?.usage?.total_tokens) {
+              triageTokens += result.data.usage.total_tokens;
+              await admin
+                .from("analysis_requests")
+                .update({ triage_tokens_used: triageTokens } as any)
+                .eq("id", analysisRequestId);
+            }
+          } else {
+            triageFailures++;
+            console.error(
+              `[pipeline] Triage error for ${item.fileName}/${item.prompt.awp_class_name}: ${result.status} ${JSON.stringify(result.data)}`,
+            );
           }
         } catch (e) {
+          triageFailures++;
           console.error(
             `[pipeline] Triage failed for ${item.fileName}/${item.prompt.awp_class_name}:`,
             e,
@@ -434,6 +472,22 @@ async function runPipeline(params: PipelineParams) {
           i + 1,
           triageItems.length,
         );
+      }
+
+      // If ALL triage items failed, stop with error
+      if (triageItems.length > 0 && triageSuccesses === 0) {
+        console.error(`[pipeline] All ${triageFailures} triage items failed`);
+        await admin
+          .from("analysis_requests")
+          .update({
+            status: "started",
+            pipeline_phase: null,
+            pipeline_progress_done: 0,
+            pipeline_progress_total: 0,
+            error_message: `All ${triageFailures} triage items failed. This may be due to rate limiting — please try again in a few minutes.`,
+          } as any)
+          .eq("id", analysisRequestId);
+        return;
       }
     }
 
@@ -538,6 +592,8 @@ async function runPipeline(params: PipelineParams) {
       await updateProgress(admin, analysisRequestId, "analyzing", 0, workQueue.length);
 
       let analyzeTokens = 0;
+      let analyzeSuccesses = 0;
+      let analyzeFailures = 0;
       for (let i = 0; i < workQueue.length; i++) {
         if (await shouldStop(admin, analysisRequestId)) {
           console.log("[pipeline] Stop requested during analysis");
@@ -602,14 +658,23 @@ async function runPipeline(params: PipelineParams) {
             },
           );
 
-          if (result.ok && result.data?.usage?.total_tokens) {
-            analyzeTokens += result.data.usage.total_tokens;
-            await admin
-              .from("analysis_requests")
-              .update({ analyze_tokens_used: analyzeTokens } as any)
-              .eq("id", analysisRequestId);
+          if (result.ok) {
+            analyzeSuccesses++;
+            if (result.data?.usage?.total_tokens) {
+              analyzeTokens += result.data.usage.total_tokens;
+              await admin
+                .from("analysis_requests")
+                .update({ analyze_tokens_used: analyzeTokens } as any)
+                .eq("id", analysisRequestId);
+            }
+          } else {
+            analyzeFailures++;
+            console.error(
+              `[pipeline] Analyze error for ${item.fileName}/${item.awpClassName}: ${result.status}`,
+            );
           }
         } catch (e) {
+          analyzeFailures++;
           console.error(
             `[pipeline] Analyze failed for ${item.fileName}/${item.awpClassName}:`,
             e,
@@ -622,6 +687,22 @@ async function runPipeline(params: PipelineParams) {
           i + 1,
           workQueue.length,
         );
+      }
+
+      // If ALL analyze items failed, set error
+      if (workQueue.length > 0 && analyzeSuccesses === 0) {
+        console.error(`[pipeline] All ${analyzeFailures} analyze items failed`);
+        await admin
+          .from("analysis_requests")
+          .update({
+            status: "started",
+            pipeline_phase: null,
+            pipeline_progress_done: 0,
+            pipeline_progress_total: 0,
+            error_message: `All ${analyzeFailures} analysis items failed. Please try again in a few minutes.`,
+          } as any)
+          .eq("id", analysisRequestId);
+        return;
       }
     }
 
