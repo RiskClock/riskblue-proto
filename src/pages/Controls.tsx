@@ -1,63 +1,67 @@
-import { useState, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
+import { useState, useEffect, useMemo } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import { AppHeader } from "@/components/AppHeader";
 import { Checkbox } from "@/components/ui/checkbox";
 import { useAccountType } from "@/hooks/useAccountType";
-import { useToast } from "@/hooks/use-toast";
 import { ChevronDown, ChevronRight, Loader2 } from "lucide-react";
-import { Button } from "@/components/ui/button";
 
 interface AWPItem {
   id: string;
   name: string;
+  default_control_ids: string[];
   category: "critical_assets" | "water_systems" | "processes";
 }
 
-interface ControlSelection {
-  awp_class_name: string;
-  category: string;
-  sub_options: string[];
+interface MitigationControl {
+  id: string;
+  name: string;
 }
 
-// Items with special dropdown sub-options
-const SPECIAL_ITEMS: Record<string, { label: string; subOptions: string[] }> = {
-  "Presence of Water Monitoring": {
-    label: "Presence of Water Monitoring",
-    subOptions: ["Single (Probe)", "Area (Rope)"],
-  },
-  "Automatic Shut Off Valves": {
-    label: "Automatic Shut Off Valves",
-    subOptions: ['⌀1"', '⌀2"', '⌀4"', '⌀8"'],
-  },
+// Controls with special sub-options
+const SPECIAL_CONTROLS: Record<string, string[]> = {
+  "Presence of Water Monitoring": ["Single (Probe)", "Area (Rope)"],
+  "Automatic Shut Off Valves": ['⌀1"', '⌀2"', '⌀4"', '⌀8"'],
 };
 
 export default function Controls() {
   const { user } = useAuth();
-  const navigate = useNavigate();
-  const { toast } = useToast();
   const { isWMSV, loading: accountLoading } = useAccountType();
-  const queryClient = useQueryClient();
 
-  const [selections, setSelections] = useState<Map<string, ControlSelection>>(new Map());
-  const [expandedItems, setExpandedItems] = useState<Set<string>>(new Set());
+  // Selected control IDs per AWP class: Map<`${awpClassName}::${controlId}`, sub_options>
+  const [selections, setSelections] = useState<Map<string, string[]>>(new Map());
+  const [expandedAWP, setExpandedAWP] = useState<Set<string>>(new Set());
+  const [expandedControls, setExpandedControls] = useState<Set<string>>(new Set());
 
-  // Fetch AWP items (same as Configuration page)
+  // Fetch AWP items with default_control_ids
   const { data: awpItems = [], isLoading: awpLoading } = useQuery({
-    queryKey: ["controls-awp-items"],
+    queryKey: ["controls-awp-items-with-controls"],
     queryFn: async (): Promise<AWPItem[]> => {
       const [assetsRes, systemsRes, processesRes] = await Promise.all([
-        supabase.from("critical_assets").select("id, name").eq("is_active", true).order("display_order"),
-        supabase.from("water_systems").select("id, name").eq("is_active", true).order("display_order"),
-        supabase.from("processes").select("id, name").eq("is_active", true).order("display_order"),
+        supabase.from("critical_assets").select("id, name, default_control_ids").eq("is_active", true).order("display_order"),
+        supabase.from("water_systems").select("id, name, default_control_ids").eq("is_active", true).order("display_order"),
+        supabase.from("processes").select("id, name, default_control_ids").eq("is_active", true).order("display_order"),
       ]);
       return [
         ...(assetsRes.data || []).map(a => ({ ...a, category: "critical_assets" as const })),
         ...(systemsRes.data || []).map(s => ({ ...s, category: "water_systems" as const })),
         ...(processesRes.data || []).map(p => ({ ...p, category: "processes" as const })),
       ];
+    },
+  });
+
+  // Fetch all mitigation controls
+  const { data: allControls = [], isLoading: controlsLoading } = useQuery({
+    queryKey: ["all-mitigation-controls"],
+    queryFn: async (): Promise<MitigationControl[]> => {
+      const { data, error } = await supabase
+        .from("mitigation_controls")
+        .select("id, name")
+        .eq("is_active", true)
+        .order("display_order");
+      if (error) throw error;
+      return data || [];
     },
   });
 
@@ -75,107 +79,84 @@ export default function Controls() {
     enabled: !!user,
   });
 
-  // Populate selections from DB on load
+  // Build control lookup
+  const controlMap = useMemo(() => {
+    const m = new Map<string, MitigationControl>();
+    allControls.forEach(c => m.set(c.id, c));
+    return m;
+  }, [allControls]);
+
+  // Populate selections from DB
   useEffect(() => {
     if (existingSelections.length > 0) {
-      const map = new Map<string, ControlSelection>();
+      const map = new Map<string, string[]>();
       existingSelections.forEach((s: any) => {
-        map.set(s.awp_class_name, {
-          awp_class_name: s.awp_class_name,
-          category: s.category,
-          sub_options: (s.sub_options as string[]) || [],
-        });
-        // Auto-expand special items that have selections
-        if (SPECIAL_ITEMS[s.awp_class_name]) {
-          setExpandedItems(prev => new Set(prev).add(s.awp_class_name));
+        const key = `${s.awp_class_name}::${s.control_id}`;
+        map.set(key, (s.sub_options as string[]) || []);
+        // Auto-expand AWP classes and special controls that have selections
+        setExpandedAWP(prev => new Set(prev).add(s.awp_class_name));
+        const control = controlMap.get(s.control_id);
+        if (control && SPECIAL_CONTROLS[control.name]) {
+          setExpandedControls(prev => new Set(prev).add(key));
         }
       });
       setSelections(map);
     }
-  }, [existingSelections]);
+  }, [existingSelections, controlMap]);
 
-  const categoryMap: Record<string, string> = {
-    critical_assets: "critical_assets",
-    water_systems: "water_systems",
-    processes: "processes",
-  };
+  const makeKey = (awpName: string, controlId: string) => `${awpName}::${controlId}`;
 
-  const toggleSelection = async (item: AWPItem) => {
-    const isSpecial = !!SPECIAL_ITEMS[item.name];
-    const isSelected = selections.has(item.name);
+  const toggleControl = async (awpItem: AWPItem, controlId: string) => {
+    const key = makeKey(awpItem.name, controlId);
+    const isSelected = selections.has(key);
+    const control = controlMap.get(controlId);
+    const isSpecial = control && SPECIAL_CONTROLS[control.name];
 
     if (isSelected) {
-      // Remove
-      setSelections(prev => {
-        const next = new Map(prev);
-        next.delete(item.name);
-        return next;
-      });
+      setSelections(prev => { const n = new Map(prev); n.delete(key); return n; });
       if (isSpecial) {
-        setExpandedItems(prev => {
-          const next = new Set(prev);
-          next.delete(item.name);
-          return next;
-        });
+        setExpandedControls(prev => { const n = new Set(prev); n.delete(key); return n; });
       }
       await supabase
         .from("wmsv_control_selections")
         .delete()
         .eq("user_id", user!.id)
-        .eq("awp_class_name", item.name);
+        .eq("awp_class_name", awpItem.name)
+        .eq("control_id", controlId);
     } else {
-      // Add
-      const sel: ControlSelection = {
-        awp_class_name: item.name,
-        category: categoryMap[item.category],
-        sub_options: [],
-      };
-      setSelections(prev => new Map(prev).set(item.name, sel));
+      setSelections(prev => new Map(prev).set(key, []));
       if (isSpecial) {
-        setExpandedItems(prev => new Set(prev).add(item.name));
+        setExpandedControls(prev => new Set(prev).add(key));
       }
       await supabase.from("wmsv_control_selections").upsert({
         user_id: user!.id,
-        awp_class_name: item.name,
-        category: categoryMap[item.category],
+        awp_class_name: awpItem.name,
+        category: awpItem.category,
+        control_id: controlId,
         sub_options: [],
-      }, { onConflict: "user_id,awp_class_name" });
+      } as any, { onConflict: "user_id,awp_class_name,control_id" });
     }
   };
 
-  const toggleSubOption = async (itemName: string, subOption: string, category: string) => {
-    const existing = selections.get(itemName);
-    const currentSubs = existing?.sub_options || [];
+  const toggleSubOption = async (awpItem: AWPItem, controlId: string, subOption: string) => {
+    const key = makeKey(awpItem.name, controlId);
+    const currentSubs = selections.get(key) || [];
     const newSubs = currentSubs.includes(subOption)
       ? currentSubs.filter(s => s !== subOption)
       : [...currentSubs, subOption];
 
-    const sel: ControlSelection = {
-      awp_class_name: itemName,
-      category,
-      sub_options: newSubs,
-    };
-    setSelections(prev => new Map(prev).set(itemName, sel));
+    setSelections(prev => new Map(prev).set(key, newSubs));
 
-    // If no sub-options left, keep the parent selected but with empty sub_options
     await supabase.from("wmsv_control_selections").upsert({
       user_id: user!.id,
-      awp_class_name: itemName,
-      category,
+      awp_class_name: awpItem.name,
+      category: awpItem.category,
+      control_id: controlId,
       sub_options: newSubs,
-    }, { onConflict: "user_id,awp_class_name" });
+    } as any, { onConflict: "user_id,awp_class_name,control_id" });
   };
 
-  const toggleExpand = (name: string) => {
-    setExpandedItems(prev => {
-      const next = new Set(prev);
-      if (next.has(name)) next.delete(name);
-      else next.add(name);
-      return next;
-    });
-  };
-
-  if (accountLoading || awpLoading || selectionsLoading) {
+  if (accountLoading || awpLoading || controlsLoading || selectionsLoading) {
     return (
       <div className="min-h-screen bg-background">
         <AppHeader />
@@ -197,67 +178,103 @@ export default function Controls() {
     );
   }
 
-  const criticalAssets = awpItems.filter(a => a.category === "critical_assets");
-  const waterSystems = awpItems.filter(a => a.category === "water_systems");
-  const processes = awpItems.filter(a => a.category === "processes");
+  const categories = [
+    { key: "critical_assets", label: "Critical Assets" },
+    { key: "water_systems", label: "Water Systems" },
+    { key: "processes", label: "Contractor Processes" },
+  ] as const;
 
-  const renderItem = (item: AWPItem) => {
-    const isSpecial = !!SPECIAL_ITEMS[item.name];
-    const isSelected = selections.has(item.name);
-    const isExpanded = expandedItems.has(item.name);
-    const specialConfig = SPECIAL_ITEMS[item.name];
-    const currentSubs = selections.get(item.name)?.sub_options || [];
+  const renderAWPGroup = (awpItem: AWPItem) => {
+    const controlIds = awpItem.default_control_ids || [];
+    const controls = controlIds
+      .map(id => controlMap.get(id))
+      .filter((c): c is MitigationControl => !!c);
 
-    if (isSpecial) {
-      return (
-        <div key={item.id} className="space-y-1">
-          <div className="flex items-center gap-2">
-            <button
-              onClick={() => {
-                if (!isSelected) {
-                  toggleSelection(item);
-                } else {
-                  toggleExpand(item.name);
-                }
-              }}
-              className="flex items-center gap-1 text-muted-foreground hover:text-foreground"
-            >
-              {isSelected && isExpanded ? (
-                <ChevronDown className="w-4 h-4" />
-              ) : (
-                <ChevronRight className="w-4 h-4" />
-              )}
-            </button>
-            <Checkbox
-              checked={isSelected}
-              onCheckedChange={() => toggleSelection(item)}
-            />
-            <span className="text-sm">{item.name}</span>
-          </div>
-          {isSelected && isExpanded && specialConfig && (
-            <div className="ml-10 space-y-1">
-              {specialConfig.subOptions.map(sub => (
-                <div key={sub} className="flex items-center gap-2">
-                  <Checkbox
-                    checked={currentSubs.includes(sub)}
-                    onCheckedChange={() => toggleSubOption(item.name, sub, categoryMap[item.category])}
-                  />
-                  <span className="text-sm text-muted-foreground">{sub}</span>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-      );
-    }
+    if (controls.length === 0) return null;
+
+    const isExpanded = expandedAWP.has(awpItem.name);
+    const selectedCount = controls.filter(c => selections.has(makeKey(awpItem.name, c.id))).length;
 
     return (
-      <div key={item.id} className="flex items-center gap-2 py-1">
-        <Checkbox
-          checked={isSelected}
-          onCheckedChange={() => toggleSelection(item)}
-        />
-        <span className="text-sm">{item.name}</span>
+      <div key={awpItem.id} className="space-y-1">
+        <button
+          onClick={() => setExpandedAWP(prev => {
+            const n = new Set(prev);
+            if (n.has(awpItem.name)) n.delete(awpItem.name); else n.add(awpItem.name);
+            return n;
+          })}
+          className="flex items-center gap-1.5 w-full text-left hover:bg-muted/50 rounded px-1 py-1"
+        >
+          {isExpanded ? <ChevronDown className="w-4 h-4 text-muted-foreground shrink-0" /> : <ChevronRight className="w-4 h-4 text-muted-foreground shrink-0" />}
+          <span className="text-sm font-medium">{awpItem.name}</span>
+          {selectedCount > 0 && (
+            <span className="text-xs text-muted-foreground ml-auto">{selectedCount}/{controls.length}</span>
+          )}
+        </button>
+        {isExpanded && (
+          <div className="ml-6 space-y-1">
+            {controls.map(control => {
+              const key = makeKey(awpItem.name, control.id);
+              const isSelected = selections.has(key);
+              const specialSubs = SPECIAL_CONTROLS[control.name];
+              const isControlExpanded = expandedControls.has(key);
+              const currentSubs = selections.get(key) || [];
+
+              if (specialSubs) {
+                return (
+                  <div key={control.id} className="space-y-1">
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={() => {
+                          if (!isSelected) {
+                            toggleControl(awpItem, control.id);
+                          } else {
+                            setExpandedControls(prev => {
+                              const n = new Set(prev);
+                              if (n.has(key)) n.delete(key); else n.add(key);
+                              return n;
+                            });
+                          }
+                        }}
+                        className="text-muted-foreground hover:text-foreground"
+                      >
+                        {isSelected && isControlExpanded ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronRight className="w-3.5 h-3.5" />}
+                      </button>
+                      <Checkbox
+                        checked={isSelected}
+                        onCheckedChange={() => toggleControl(awpItem, control.id)}
+                      />
+                      <span className="text-sm">{control.name}</span>
+                    </div>
+                    {isSelected && isControlExpanded && (
+                      <div className="ml-10 space-y-1">
+                        {specialSubs.map(sub => (
+                          <div key={sub} className="flex items-center gap-2">
+                            <Checkbox
+                              checked={currentSubs.includes(sub)}
+                              onCheckedChange={() => toggleSubOption(awpItem, control.id, sub)}
+                            />
+                            <span className="text-sm text-muted-foreground">{sub}</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                );
+              }
+
+              return (
+                <div key={control.id} className="flex items-center gap-2 py-0.5">
+                  <Checkbox
+                    checked={isSelected}
+                    onCheckedChange={() => toggleControl(awpItem, control.id)}
+                  />
+                  <span className="text-sm">{control.name}</span>
+                </div>
+              );
+            })}
+          </div>
+        )}
       </div>
     );
   };
@@ -267,31 +284,18 @@ export default function Controls() {
       <AppHeader />
       <main className="container mx-auto px-6 py-8">
         <h1 className="text-3xl font-bold text-foreground mb-8">Risk Mitigation Controls</h1>
-
         <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-          {/* Critical Assets */}
-          <div className="bg-card rounded-lg border p-6">
-            <h2 className="text-lg font-semibold text-foreground mb-4">Critical Assets</h2>
-            <div className="space-y-2">
-              {criticalAssets.map(renderItem)}
-            </div>
-          </div>
-
-          {/* Water Systems */}
-          <div className="bg-card rounded-lg border p-6">
-            <h2 className="text-lg font-semibold text-foreground mb-4">Water Systems</h2>
-            <div className="space-y-2">
-              {waterSystems.map(renderItem)}
-            </div>
-          </div>
-
-          {/* Contractor Processes */}
-          <div className="bg-card rounded-lg border p-6">
-            <h2 className="text-lg font-semibold text-foreground mb-4">Contractor Processes</h2>
-            <div className="space-y-2">
-              {processes.map(renderItem)}
-            </div>
-          </div>
+          {categories.map(cat => {
+            const items = awpItems.filter(a => a.category === cat.key);
+            return (
+              <div key={cat.key} className="bg-card rounded-lg border p-6">
+                <h2 className="text-lg font-semibold text-foreground mb-4">{cat.label}</h2>
+                <div className="space-y-2">
+                  {items.map(renderAWPGroup)}
+                </div>
+              </div>
+            );
+          })}
         </div>
       </main>
     </div>
