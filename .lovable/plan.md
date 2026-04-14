@@ -1,35 +1,31 @@
 
 
-# WMSV Analysis UI: Streamlined Flow with Control-Filtered AWP Columns
+# Fix AWP Class Filtering: Match by Control ID Across All Categories
 
-## Summary
-After file import completes on the WMSV project detail page (`/wmsv-project/:id`), show the file list with AWP class columns filtered to only those with enabled controls. Replace the multi-button analysis toolbar with a single "Start Analysis" button that chains extract → triage → analyze with progressive status display.
+## Problem
+The current `visibleAwpClasses` computation in `WMSVProjectDetail.tsx` filters AWP classes by matching controls **within the same category**. For example, if "Presence of Water Monitoring" is enabled under `critical_assets`, it only unlocks critical asset AWP classes — not water system or process AWP classes that also use that control.
 
-## Changes
+The correct behavior: collect **all enabled control IDs** (ignoring category), then show **any AWP class** (from any source table) that has at least one of those control IDs in its `default_control_ids`.
 
-### 1. `src/components/WMSVProjectDetail.tsx`
-- Fetch the user's `wmsv_control_selections` (category + control_id)
-- Fetch `critical_assets`, `water_systems`, `processes` with their `default_control_ids`
-- Compute `visibleAwpClasses`: AWP class names where at least one of its `default_control_ids` is in the user's enabled controls for that category
-- Pass `visibleAwpClasses` and `isWMSV={true}` props to `AnalysisSection`
+## Change
 
-### 2. `src/components/analysis/AnalysisSection.tsx`
-- Add optional props: `isWMSV?: boolean`, `visibleAwpClasses?: string[]`
-- When `visibleAwpClasses` is provided, filter `sortedPrompts` to only include matching AWP class names
-- When `isWMSV` is true:
-  - Replace Extract/Triage/Analyze buttons with a single **"Start Analysis"** button
-  - Chain the three phases sequentially: extract → triage → analyze (reusing existing handlers)
-  - Show progressive status: "Extracting Context" → "Triaging" → "Analyzing"
-  - Keep a "Stop" button to halt the current phase
-  - Hide model selectors, token counters, and "Clear" dropdown
-  - Preserve AWP column header checkboxes and per-column triggers
+**File: `src/components/WMSVProjectDetail.tsx`** (lines 98-113)
 
-## Files
+Replace the category-grouped filtering logic with a simpler approach:
 
-| File | Change |
-|---|---|
-| `src/components/WMSVProjectDetail.tsx` | Compute `visibleAwpClasses` from control selections; pass new props to `AnalysisSection` |
-| `src/components/analysis/AnalysisSection.tsx` | Accept `isWMSV` + `visibleAwpClasses` props; filter columns; render simplified single-button toolbar with chained analysis |
+1. Collect all unique `control_id` values from `controlSelections` into a single flat `Set<string>`
+2. Filter `awpSourceData` to include any AWP class where at least one of its `controlIds` is in that set
 
-No database changes needed. No new files.
+```typescript
+const visibleAwpClasses = useMemo(() => {
+  if (!controlSelections || !awpSourceData) return undefined;
+  // Flat set of all enabled control IDs, regardless of category
+  const enabledControlIds = new Set(controlSelections.map(sel => sel.control_id));
+  return awpSourceData
+    .filter((awp) => awp.controlIds.some((cid) => enabledControlIds.has(cid)))
+    .map((awp) => awp.name);
+}, [controlSelections, awpSourceData]);
+```
+
+This is a ~10 line change in one file. No database or other file changes needed.
 
