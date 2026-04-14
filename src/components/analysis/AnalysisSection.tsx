@@ -128,6 +128,8 @@ interface AnalysisSectionProps {
   files: AnalysisFile[];
   projectId: string;
   sourceType?: string;
+  isWMSV?: boolean;
+  visibleAwpClasses?: string[];
 }
 
 // ---------------------------------------------------------------------------
