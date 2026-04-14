@@ -1354,8 +1354,6 @@ export function AnalysisSection({ requestId, files, projectId, sourceType, isWMS
   });
 
   // Fetch existing triage results
-  const triagePollActive = (requestMeta as any)?.status === "processing" && 
-    ["triaging", "analyzing"].includes((requestMeta as any)?.pipeline_phase || "");
   const { data: triageData } = useQuery({
     queryKey: ["triage-results", requestId],
     queryFn: async () => {
@@ -1367,7 +1365,7 @@ export function AnalysisSection({ requestId, files, projectId, sourceType, isWMS
       return data as TriageResult[];
     },
     refetchOnWindowFocus: false,
-    refetchInterval: triagePollActive ? 5000 : false,
+    refetchInterval: analyzeV2Running ? 5000 : false,
   });
 
   // Hydrate triage results into map
