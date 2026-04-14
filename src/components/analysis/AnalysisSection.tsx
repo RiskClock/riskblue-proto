@@ -1365,6 +1365,7 @@ export function AnalysisSection({ requestId, files, projectId, sourceType, isWMS
       return data as TriageResult[];
     },
     refetchOnWindowFocus: false,
+    refetchInterval: analyzeV2Running ? 5000 : false,
   });
 
   // Hydrate triage results into map
@@ -1903,7 +1904,15 @@ export function AnalysisSection({ requestId, files, projectId, sourceType, isWMS
         throw new Error(response.error.message);
       }
 
-      // Immediately refresh meta to pick up processing status
+      // Optimistic UI update — immediately show "processing" state
+      queryClient.setQueryData(["analysis-request-meta", requestId], (old: any) => ({
+        ...old,
+        status: "processing",
+        pipeline_phase: phaseOverride || "extracting",
+        pipeline_progress_done: 0,
+        pipeline_progress_total: 0,
+        error_message: null,
+      }));
       queryClient.invalidateQueries({ queryKey: ["analysis-request-meta", requestId] });
     } catch (e) {
       toast({

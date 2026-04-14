@@ -27,15 +27,31 @@ async function callFunction(
   const url = `${supabaseUrl}/functions/v1/${fnName}`;
 
   for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
-    const res = await fetch(url, {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${authToken}`,
-        "Content-Type": "application/json",
-        apikey: serviceKey,
-      },
-      body: JSON.stringify(body),
-    });
+    let res: Response;
+    try {
+      res = await fetch(url, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${authToken}`,
+          "Content-Type": "application/json",
+          apikey: serviceKey,
+        },
+        body: JSON.stringify(body),
+      });
+    } catch (fetchErr: any) {
+      // Deno throws RateLimitError as an exception instead of returning HTTP 429
+      if (fetchErr?.name === "RateLimitError" && attempt < MAX_RETRIES) {
+        const delay = fetchErr.retryAfterMs || Math.pow(2, attempt + 1) * 1000;
+        console.warn(
+          `[pipeline] RateLimitError calling ${fnName}, retrying in ${delay}ms (attempt ${attempt + 1}/${MAX_RETRIES})`,
+        );
+        await new Promise((r) => setTimeout(r, delay));
+        continue;
+      }
+      // Non-retryable fetch error
+      throw fetchErr;
+    }
+
     let data: any = null;
     try {
       data = await res.json();
@@ -43,7 +59,7 @@ async function callFunction(
       // not JSON
     }
 
-    // Retry on rate limit
+    // Retry on rate limit (HTTP 429 response)
     const isRateLimited =
       res.status === 429 ||
       (data?.error && typeof data.error === "string" && data.error.toLowerCase().includes("rate"));
