@@ -87,5 +87,8 @@ verify_jwt = false
 [functions.triage-drawings]
 verify_jwt = false
 
+[functions.run-analysis-pipeline]
+verify_jwt = false
+
 [functions.applied-epic-api]
 verify_jwt = false
