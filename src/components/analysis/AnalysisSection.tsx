@@ -1871,7 +1871,9 @@ export function AnalysisSection({ requestId, files, projectId, sourceType, isWMS
 
   // For WMSV: further filter to only visible AWP classes
   const sortedPrompts = useMemo(() => {
-    if (!visibleAwpClasses || visibleAwpClasses.length === 0) return sortedPromptsBase;
+    // undefined = no filtering (non-WMSV), empty array = no controls enabled (hide all)
+    if (visibleAwpClasses === undefined) return sortedPromptsBase;
+    if (visibleAwpClasses.length === 0) return [];
     const allowed = new Set(visibleAwpClasses);
     return sortedPromptsBase.filter(p => allowed.has(p.awp_class_name));
   }, [sortedPromptsBase, visibleAwpClasses]);
