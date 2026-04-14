@@ -42,6 +42,7 @@ import { ProjectFilesUpload, DriveFileInfo } from "@/components/wizard/ProjectFi
 import { ResponsePlanUploadChat } from "@/components/ResponsePlanUploadChat";
 import { Download, FileText, Loader2, Users, FilePlus, Upload, ChevronDown as ChevronDownIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { WMSVProjectDetail } from "@/components/WMSVProjectDetail";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Label } from "@/components/ui/label";
 import { WaterRiskReport } from "@/components/reports/WaterRiskReport";
