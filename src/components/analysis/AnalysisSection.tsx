@@ -3323,21 +3323,9 @@ export function AnalysisSection({ requestId, files, projectId, sourceType, isWMS
                   <div className="flex items-center gap-3">
                     <Loader2 className="w-4 h-4 animate-spin text-primary" />
                     <span className="text-sm font-medium text-foreground">{wmsvPhaseLabel}</span>
-                    {wmsvPhase === "extracting" && (
-                      <span className="text-xs text-muted-foreground tabular-nums">
-                        {triageProgress.done}/{triageProgress.total} files
-                      </span>
-                    )}
-                    {wmsvPhase === "triaging" && (
-                      <span className="text-xs text-muted-foreground tabular-nums">
-                        {triageProgress.done}/{triageProgress.total} instances
-                      </span>
-                    )}
-                    {wmsvPhase === "analyzing" && (
-                      <span className="text-xs text-muted-foreground tabular-nums">
-                        {analyzeV2Progress.done}/{analyzeV2Progress.total} instances
-                      </span>
-                    )}
+                    <span className="text-xs text-muted-foreground tabular-nums">
+                      {pipelineDone}/{pipelineTotal} {pipelinePhase === "extracting" ? "files" : "instances"}
+                    </span>
                     <Button
                       size="sm"
                       variant="destructive"
