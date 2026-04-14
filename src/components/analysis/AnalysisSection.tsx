@@ -1894,7 +1894,7 @@ export function AnalysisSection({ requestId, files, projectId, sourceType, isWMS
           visibleAwpClasses: visibleAwpClasses,
           triageModel,
           analyzeModel,
-          ...(isWMSV ? {} : { disabledColumns: [...disabledColumns] }),
+          disabledColumns: [...disabledColumns],
           phaseOverride,
         },
       });
@@ -3532,17 +3532,15 @@ export function AnalysisSection({ requestId, files, projectId, sourceType, isWMS
                       </span>
                     </th>
                      {sortedPrompts.map((prompt) => {
-                      const isDisabled = !isWMSV && disabledColumns.has(prompt.awp_class_name);
+                      const isDisabled = disabledColumns.has(prompt.awp_class_name);
                       return (
                       <th key={prompt.id} className={`w-14 px-2 py-2 text-center font-medium text-muted-foreground ${isDisabled ? 'opacity-30' : ''}`}>
                         <div className="flex flex-col items-center gap-1">
-                          {!isWMSV && (
                             <Checkbox
                               checked={!isDisabled}
                               onCheckedChange={() => toggleColumnDisabled(prompt.awp_class_name)}
                               className="h-3.5 w-3.5"
                             />
-                          )}
                           <Tooltip>
                             <TooltipTrigger asChild>
                               {prompt.drive_file_url && !isWMSV ? (
