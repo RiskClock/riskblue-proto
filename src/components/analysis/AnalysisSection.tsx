@@ -3535,7 +3535,7 @@ export function AnalysisSection({ requestId, files, projectId, sourceType, isWMS
                           />
                           <Tooltip>
                             <TooltipTrigger asChild>
-                              {prompt.drive_file_url ? (
+                              {prompt.drive_file_url && !isWMSV ? (
                                 <a
                                   href={prompt.drive_file_url}
                                   target="_blank"
