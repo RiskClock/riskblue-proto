@@ -62,6 +62,56 @@ export function WMSVProjectDetail({ projectId, projectName }: WMSVProjectDetailP
   const [showDriveDialog, setShowDriveDialog] = useState(false);
   const [showProcoreDialog, setShowProcoreDialog] = useState(false);
 
+  // Fetch user's enabled control selections
+  const { data: controlSelections } = useQuery({
+    queryKey: ["wmsv-control-selections", user?.id],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("wmsv_control_selections")
+        .select("category, control_id")
+        .eq("user_id", user!.id);
+      if (error) throw error;
+      return data as Array<{ category: string; control_id: string }>;
+    },
+    enabled: !!user?.id,
+    staleTime: 1000 * 60 * 10,
+  });
+
+  // Fetch AWP source tables with default_control_ids
+  const { data: awpSourceData } = useQuery({
+    queryKey: ["wmsv-awp-source-controls"],
+    queryFn: async () => {
+      const [a, w, p] = await Promise.all([
+        supabase.from("critical_assets").select("name, default_control_ids").eq("is_active", true),
+        supabase.from("water_systems").select("name, default_control_ids").eq("is_active", true),
+        supabase.from("processes").select("name, default_control_ids").eq("is_active", true),
+      ]);
+      return [
+        ...(a.data || []).map((x) => ({ name: x.name, controlIds: (x.default_control_ids as string[]) || [], category: "critical_assets" })),
+        ...(w.data || []).map((x) => ({ name: x.name, controlIds: (x.default_control_ids as string[]) || [], category: "water_systems" })),
+        ...(p.data || []).map((x) => ({ name: x.name, controlIds: (x.default_control_ids as string[]) || [], category: "processes" })),
+      ];
+    },
+    staleTime: 1000 * 60 * 30,
+  });
+
+  // Compute visible AWP classes: only those where at least one default control is enabled
+  const visibleAwpClasses = useMemo(() => {
+    if (!controlSelections || !awpSourceData) return undefined;
+    const enabledByCategory = new Map<string, Set<string>>();
+    for (const sel of controlSelections) {
+      if (!enabledByCategory.has(sel.category)) enabledByCategory.set(sel.category, new Set());
+      enabledByCategory.get(sel.category)!.add(sel.control_id);
+    }
+    return awpSourceData
+      .filter((awp) => {
+        const enabledControls = enabledByCategory.get(awp.category);
+        if (!enabledControls || enabledControls.size === 0) return false;
+        return awp.controlIds.some((cid) => enabledControls.has(cid));
+      })
+      .map((awp) => awp.name);
+  }, [controlSelections, awpSourceData]);
+
   // Fetch the latest analysis request for this project
   const { data: request, isLoading: requestLoading } = useQuery({
     queryKey: ["wmsv-analysis-request", projectId],
@@ -281,6 +331,8 @@ export function WMSVProjectDetail({ projectId, projectName }: WMSVProjectDetailP
                 files={files}
                 projectId={projectId}
                 sourceType={request.source_type}
+                isWMSV={true}
+                visibleAwpClasses={visibleAwpClasses}
               />
             )}
           </div>
