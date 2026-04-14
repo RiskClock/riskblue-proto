@@ -1239,7 +1239,7 @@ function ExtractedTextBody({ fileId, localText }: { fileId: string; localText?: 
 // AnalysisSection
 // ---------------------------------------------------------------------------
 
-export function AnalysisSection({ requestId, files, projectId, sourceType }: AnalysisSectionProps) {
+export function AnalysisSection({ requestId, files, projectId, sourceType, isWMSV, visibleAwpClasses }: AnalysisSectionProps) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
