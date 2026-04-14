@@ -3297,8 +3297,15 @@ export function AnalysisSection({ requestId, files, projectId, sourceType, isWMS
   if (!prompts?.length) return null;
 
   const anyAnalyzing = analyzingClasses.size > 0;
-  const wmsvRunning = wmsvPhase !== "idle";
-  const wmsvPhaseLabel = wmsvPhase === "extracting" ? "Extracting Context…" : wmsvPhase === "triaging" ? "Triaging…" : wmsvPhase === "analyzing" ? "Analyzing…" : "";
+  // Pipeline-driven state from DB
+  const pipelinePhase = (requestMeta as any)?.pipeline_phase as string | null;
+  const pipelineDone = ((requestMeta as any)?.pipeline_progress_done as number) || 0;
+  const pipelineTotal = ((requestMeta as any)?.pipeline_progress_total as number) || 0;
+  const dbStatus = (requestMeta as any)?.status as string | undefined;
+  const pipelineRunning = dbStatus === "processing" && !!pipelinePhase;
+  const pipelinePhaseLabel = pipelinePhase === "extracting" ? "Extracting Context…" : pipelinePhase === "triaging" ? "Triaging…" : pipelinePhase === "analyzing" ? "Analyzing…" : "Processing…";
+  const wmsvRunning = pipelineRunning;
+  const wmsvPhaseLabel = pipelinePhaseLabel;
 
   return (
     <TooltipProvider delayDuration={0}>
