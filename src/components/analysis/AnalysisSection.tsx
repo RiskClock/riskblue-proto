@@ -3323,6 +3323,50 @@ export function AnalysisSection({ requestId, files, projectId, sourceType, isWMS
         ================================================================ */}
         <div className="bg-card border rounded-lg overflow-hidden">
           <div className="px-4 py-3 border-b flex items-center gap-3">
+            {isWMSV ? (
+              /* ---- WMSV simplified toolbar ---- */
+              <div className="flex items-center gap-3">
+                {wmsvRunning ? (
+                  <div className="flex items-center gap-3">
+                    <Loader2 className="w-4 h-4 animate-spin text-primary" />
+                    <span className="text-sm font-medium text-foreground">{wmsvPhaseLabel}</span>
+                    {wmsvPhase === "extracting" && (
+                      <span className="text-xs text-muted-foreground tabular-nums">
+                        {triageProgress.done}/{triageProgress.total} files
+                      </span>
+                    )}
+                    {wmsvPhase === "triaging" && (
+                      <span className="text-xs text-muted-foreground tabular-nums">
+                        {triageProgress.done}/{triageProgress.total} instances
+                      </span>
+                    )}
+                    {wmsvPhase === "analyzing" && (
+                      <span className="text-xs text-muted-foreground tabular-nums">
+                        {analyzeV2Progress.done}/{analyzeV2Progress.total} instances
+                      </span>
+                    )}
+                    <Button
+                      size="sm"
+                      variant="destructive"
+                      onClick={handleWmsvStop}
+                    >
+                      <Square className="w-4 h-4 mr-2" />
+                      Stop
+                    </Button>
+                  </div>
+                ) : (
+                  <Button
+                    size="sm"
+                    onClick={handleWmsvStartAnalysis}
+                    disabled={copiedFiles.length === 0}
+                  >
+                    <Play className="w-4 h-4 mr-2" />
+                    Start Analysis
+                  </Button>
+                )}
+              </div>
+            ) : (
+              /* ---- Standard toolbar ---- */
             <div className="flex items-center gap-3">
               {/* Extract Context group */}
               {extractRunning ? (
@@ -3513,11 +3557,9 @@ export function AnalysisSection({ requestId, files, projectId, sourceType, isWMS
                      <DropdownMenuContent align="start">
                        <DropdownMenuItem onClick={async () => {
                          if (!requestId) return;
-                         // Clear triage results + overrides + analysis results
                          await supabase.from("analysis_triage_results").delete().eq("analysis_request_id", requestId);
                          await supabase.from("analysis_triage_overrides").delete().eq("analysis_request_id", requestId);
                          await supabase.from("analysis_results").delete().eq("analysis_request_id", requestId);
-                         // Clear summary_data
                          await supabase.from("analysis_requests").update({ summary_data: {} }).eq("id", requestId);
                          queryClient.invalidateQueries({ queryKey: ["analysis-triage-results", requestId] });
                          queryClient.invalidateQueries({ queryKey: ["analysis-results", requestId] });
@@ -3528,9 +3570,7 @@ export function AnalysisSection({ requestId, files, projectId, sourceType, isWMS
                        </DropdownMenuItem>
                        <DropdownMenuItem onClick={async () => {
                          if (!requestId) return;
-                         // Clear analysis results only
                          await supabase.from("analysis_results").delete().eq("analysis_request_id", requestId);
-                         // Clear summary_data
                          await supabase.from("analysis_requests").update({ summary_data: {} }).eq("id", requestId);
                          queryClient.invalidateQueries({ queryKey: ["analysis-results", requestId] });
                          queryClient.invalidateQueries({ queryKey: ["requestMeta", requestId] });
@@ -3543,7 +3583,7 @@ export function AnalysisSection({ requestId, files, projectId, sourceType, isWMS
                  </div>
               )}
             </div>
-          </div>
+            )}
 
           {copiedFiles.length === 0 ? (
             <div className="px-4 py-6 text-sm text-muted-foreground text-center">
