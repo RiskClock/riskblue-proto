@@ -269,7 +269,7 @@ const Projects = () => {
                   <tr
                     key={project.id}
                     className="border-t hover:bg-muted/30 cursor-pointer"
-                    onClick={() => navigate(`/project/${project.id}`)}
+                    onClick={() => navigate(isWMSV ? `/wmsv-project/${project.id}` : `/project/${project.id}`)}
                   >
                     <td className="px-6 py-4">
                       {isWMSV ? (

@@ -18,6 +18,7 @@ import ResetPassword from "./pages/ResetPassword";
 import InternalAnalysisQueue from "./pages/InternalAnalysisQueue";
 import AnalysisRequestDetail from "./pages/AnalysisRequestDetail";
 import Controls from "./pages/Controls";
+import WMSVProject from "./pages/WMSVProject";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -45,6 +46,7 @@ const App = () => (
             <Route path="/auth" element={<PublicRoute><Auth /></PublicRoute>} />
             <Route path="/projects" element={<ProtectedRoute><Projects /></ProtectedRoute>} />
             <Route path="/project/:id" element={<ProtectedRoute><ProjectWizard /></ProtectedRoute>} />
+            <Route path="/wmsv-project/:id" element={<ProtectedRoute><WMSVProject /></ProtectedRoute>} />
             <Route path="/solution-provider-portal" element={<ProtectedRoute><SolutionProviderPortal /></ProtectedRoute>} />
             <Route path="/configuration" element={<ProtectedRoute><Configuration /></ProtectedRoute>} />
             <Route path="/logs" element={<ProtectedRoute><Logs /></ProtectedRoute>} />
