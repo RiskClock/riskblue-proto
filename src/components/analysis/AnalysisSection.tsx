@@ -1350,7 +1350,7 @@ export function AnalysisSection({ requestId, files, projectId, sourceType, isWMS
       if (error) throw error;
       return data as AnalysisResult[];
     },
-    refetchInterval: analyzeV2Running ? 5000 : false,
+    refetchInterval: 5000,
   });
 
   // Fetch existing triage results
@@ -1422,18 +1422,18 @@ export function AnalysisSection({ requestId, files, projectId, sourceType, isWMS
     }
   };
 
-  // Fetch persisted model selections and token count
+  // Fetch persisted model selections, token count, and pipeline progress
   const { data: requestMeta } = useQuery({
     queryKey: ["analysis-request-meta", requestId],
     queryFn: async () => {
       const { data } = await supabase
         .from("analysis_requests")
-        .select("status, summary_data, triage_tokens_used, analyze_tokens_used, triage_model, analyze_model, disabled_awp_classes")
+        .select("status, summary_data, triage_tokens_used, analyze_tokens_used, triage_model, analyze_model, disabled_awp_classes, pipeline_phase, pipeline_progress_done, pipeline_progress_total, pipeline_stop_requested")
         .eq("id", requestId)
         .single();
       return data;
     },
-    refetchInterval: analyzeV2Running ? 5000 : false,
+    refetchInterval: 3000,
   });
 
   // Initialize models and tokens from DB
@@ -1882,64 +1882,48 @@ export function AnalysisSection({ requestId, files, projectId, sourceType, isWMS
   const [wmsvPhase, setWmsvPhase] = useState<"idle" | "extracting" | "triaging" | "analyzing">("idle");
   const wmsvAbortRef = useRef(false);
 
-  const handleWmsvStartAnalysis = async () => {
-    wmsvAbortRef.current = false;
-    
-    // Phase 1: Extract
-    setWmsvPhase("extracting");
-    await handleExtractAll();
-    
-    // Wait for extraction to complete
-    await new Promise<void>((resolve) => {
-      const poll = setInterval(() => {
-        if (wmsvAbortRef.current) { clearInterval(poll); resolve(); return; }
-        if (!extractRunning && extractQueueRef.current.length === 0 && inFlightCountRef.current <= 0) {
-          clearInterval(poll);
-          resolve();
-        }
-      }, 500);
-    });
-    if (wmsvAbortRef.current) { setWmsvPhase("idle"); return; }
+  // Helper to start the backend pipeline
+  const startPipeline = async (phaseOverride?: string) => {
+    try {
+      const { data: sessionData } = await supabase.auth.getSession();
+      const token = sessionData.session?.access_token;
 
-    // Phase 2: Triage
-    setWmsvPhase("triaging");
-    await handleTriageAll();
+      const response = await supabase.functions.invoke("run-analysis-pipeline", {
+        body: {
+          analysisRequestId: requestId,
+          visibleAwpClasses: visibleAwpClasses,
+          triageModel,
+          analyzeModel,
+          disabledColumns: [...disabledColumns],
+          phaseOverride,
+        },
+      });
 
-    // Wait for triage to complete
-    await new Promise<void>((resolve) => {
-      const poll = setInterval(() => {
-        if (wmsvAbortRef.current) { clearInterval(poll); resolve(); return; }
-        if (!triageRunning && triageQueueRef.current.length === 0 && inFlightCountRef.current <= 0) {
-          clearInterval(poll);
-          resolve();
-        }
-      }, 500);
-    });
-    if (wmsvAbortRef.current) { setWmsvPhase("idle"); return; }
+      if (response.error) {
+        throw new Error(response.error.message);
+      }
 
-    // Phase 3: Analyze
-    setWmsvPhase("analyzing");
-    await handleAnalyzeAllV2();
-
-    // Wait for analysis to complete
-    await new Promise<void>((resolve) => {
-      const poll = setInterval(() => {
-        if (wmsvAbortRef.current) { clearInterval(poll); resolve(); return; }
-        if (!analyzeV2Running && analyzeV2QueueRef.current.length === 0 && analyzeV2InFlightRef.current <= 0) {
-          clearInterval(poll);
-          resolve();
-        }
-      }, 500);
-    });
-    setWmsvPhase("idle");
+      // Immediately refresh meta to pick up processing status
+      queryClient.invalidateQueries({ queryKey: ["analysis-request-meta", requestId] });
+    } catch (e) {
+      toast({
+        title: "Failed to start analysis",
+        description: e instanceof Error ? e.message : "Unknown error",
+        variant: "destructive",
+      });
+    }
   };
 
-  const handleWmsvStop = () => {
-    wmsvAbortRef.current = true;
-    if (extractRunning) handleStopExtract();
-    if (triageRunning) handleStopTriage();
-    if (analyzeV2Running) handleStopAnalyzeV2();
-    setWmsvPhase("idle");
+  const handleWmsvStartAnalysis = async () => {
+    await startPipeline();
+  };
+
+  const handleWmsvStop = async () => {
+    await supabase
+      .from("analysis_requests")
+      .update({ pipeline_stop_requested: true } as any)
+      .eq("id", requestId);
+    queryClient.invalidateQueries({ queryKey: ["analysis-request-meta", requestId] });
   };
 
   // Helper to get the best prefix for a class name
@@ -3313,8 +3297,15 @@ export function AnalysisSection({ requestId, files, projectId, sourceType, isWMS
   if (!prompts?.length) return null;
 
   const anyAnalyzing = analyzingClasses.size > 0;
-  const wmsvRunning = wmsvPhase !== "idle";
-  const wmsvPhaseLabel = wmsvPhase === "extracting" ? "Extracting Context…" : wmsvPhase === "triaging" ? "Triaging…" : wmsvPhase === "analyzing" ? "Analyzing…" : "";
+  // Pipeline-driven state from DB
+  const pipelinePhase = (requestMeta as any)?.pipeline_phase as string | null;
+  const pipelineDone = ((requestMeta as any)?.pipeline_progress_done as number) || 0;
+  const pipelineTotal = ((requestMeta as any)?.pipeline_progress_total as number) || 0;
+  const dbStatus = (requestMeta as any)?.status as string | undefined;
+  const pipelineRunning = dbStatus === "processing" && !!pipelinePhase;
+  const pipelinePhaseLabel = pipelinePhase === "extracting" ? "Extracting Context…" : pipelinePhase === "triaging" ? "Triaging…" : pipelinePhase === "analyzing" ? "Analyzing…" : "Processing…";
+  const wmsvRunning = pipelineRunning;
+  const wmsvPhaseLabel = pipelinePhaseLabel;
 
   return (
     <TooltipProvider delayDuration={0}>
@@ -3332,21 +3323,9 @@ export function AnalysisSection({ requestId, files, projectId, sourceType, isWMS
                   <div className="flex items-center gap-3">
                     <Loader2 className="w-4 h-4 animate-spin text-primary" />
                     <span className="text-sm font-medium text-foreground">{wmsvPhaseLabel}</span>
-                    {wmsvPhase === "extracting" && (
-                      <span className="text-xs text-muted-foreground tabular-nums">
-                        {triageProgress.done}/{triageProgress.total} files
-                      </span>
-                    )}
-                    {wmsvPhase === "triaging" && (
-                      <span className="text-xs text-muted-foreground tabular-nums">
-                        {triageProgress.done}/{triageProgress.total} instances
-                      </span>
-                    )}
-                    {wmsvPhase === "analyzing" && (
-                      <span className="text-xs text-muted-foreground tabular-nums">
-                        {analyzeV2Progress.done}/{analyzeV2Progress.total} instances
-                      </span>
-                    )}
+                    <span className="text-xs text-muted-foreground tabular-nums">
+                      {pipelineDone}/{pipelineTotal} {pipelinePhase === "extracting" ? "files" : "instances"}
+                    </span>
                     <Button
                       size="sm"
                       variant="destructive"
@@ -3370,39 +3349,36 @@ export function AnalysisSection({ requestId, files, projectId, sourceType, isWMS
             ) : (
               /* ---- Standard toolbar ---- */
             <div className="flex items-center gap-3">
-              {/* Extract Context group */}
-              {extractRunning ? (
-                <div className="flex items-center gap-2">
+              {/* Pipeline running indicator — shown when backend pipeline is active */}
+              {pipelineRunning ? (
+                <div className="flex items-center gap-3">
+                  <Loader2 className="w-4 h-4 animate-spin text-primary" />
+                  <span className="text-sm font-medium text-foreground">{pipelinePhaseLabel}</span>
                   <span className="text-xs text-muted-foreground tabular-nums">
-                    Extracting: {triageProgress.done}/{triageProgress.total} files
+                    {pipelineDone}/{pipelineTotal} {pipelinePhase === "extracting" ? "files" : "instances"}
                   </span>
                   <Button
                     size="sm"
                     variant="destructive"
-                    onClick={handleStopExtract}
-                    disabled={extractStopping}
+                    onClick={handleWmsvStop}
                   >
-                    {extractStopping ? (
-                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                    ) : (
-                      <Square className="w-4 h-4 mr-2" />
-                    )}
-                    {extractStopping ? "Stopping…" : "Stop"}
+                    <Square className="w-4 h-4 mr-2" />
+                    Stop
                   </Button>
                 </div>
               ) : (
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={handleExtractAll}
-                  disabled={triageRunning || anyAnalyzing || copiedFiles.length === 0}
-                >
-                  <FileSearch className="w-4 h-4 mr-2" />
-                  Extract Context
-                </Button>
-              )}
+                <>
+              {/* Extract Context */}
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => startPipeline("extract")}
+                disabled={triageRunning || anyAnalyzing || copiedFiles.length === 0}
+              >
+                <FileSearch className="w-4 h-4 mr-2" />
+                Extract Context
+              </Button>
 
-              {/* Separator */}
               <div className="h-6 w-px bg-border" />
 
               {/* Triage group */}
@@ -3412,7 +3388,7 @@ export function AnalysisSection({ requestId, files, projectId, sourceType, isWMS
                   className="h-8 rounded-md border border-input bg-background px-2 text-xs focus:outline-none focus:ring-1 focus:ring-ring disabled:opacity-50"
                   value={triageModel}
                   onChange={(e) => updateTriageModel(e.target.value)}
-                  disabled={triageRunning}
+                  disabled={pipelineRunning}
                 >
                   <option value="gpt-5">RiskClock Engine / OpenAI gpt-5</option>
                   <option value="gpt-5-mini">RiskClock Engine / OpenAI gpt-5-mini</option>
@@ -3424,11 +3400,6 @@ export function AnalysisSection({ requestId, files, projectId, sourceType, isWMS
                   <option value="claude-haiku">RiskClock Engine / Anthropic claude-haiku</option>
                 </select>
               </div>
-              {triageRunning && triagePhase && (
-                <span className="text-xs text-muted-foreground tabular-nums">
-                  Triaging: {triageProgress.done}/{triageProgress.total} instances
-                </span>
-              )}
               {!triageRunning && triageTokens > 0 && (
                 <Tooltip>
                   <TooltipTrigger asChild>
@@ -3441,38 +3412,16 @@ export function AnalysisSection({ requestId, files, projectId, sourceType, isWMS
                   </TooltipContent>
                 </Tooltip>
               )}
-              {triageRunning && triageTokens > 0 && (
-                <span className="text-xs text-muted-foreground tabular-nums">
-                  {triageTokens.toLocaleString()} tokens
-                </span>
-              )}
-              {triageRunning ? (
-                <Button
-                  size="sm"
-                  variant="destructive"
-                  onClick={handleStopTriage}
-                  disabled={triageStopping}
-                >
-                  {triageStopping ? (
-                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                  ) : (
-                    <Square className="w-4 h-4 mr-2" />
-                  )}
-                  {triageStopping ? "Stopping…" : "Stop"}
-                </Button>
-              ) : (
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={handleTriageAll}
-                  disabled={anyAnalyzing || extractRunning || copiedFiles.length === 0}
-                >
-                  <ScanLine className="w-4 h-4 mr-2" />
-                  Triage
-                </Button>
-              )}
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => startPipeline("triage")}
+                disabled={anyAnalyzing || copiedFiles.length === 0}
+              >
+                <ScanLine className="w-4 h-4 mr-2" />
+                Triage
+              </Button>
 
-              {/* Separator */}
               <div className="h-6 w-px bg-border" />
 
               {/* Analyze group */}
@@ -3482,7 +3431,7 @@ export function AnalysisSection({ requestId, files, projectId, sourceType, isWMS
                   className="h-8 rounded-md border border-input bg-background px-2 text-xs focus:outline-none focus:ring-1 focus:ring-ring disabled:opacity-50"
                   value={analyzeModel}
                   onChange={(e) => updateAnalyzeModel(e.target.value)}
-                  disabled={anyAnalyzing}
+                  disabled={pipelineRunning}
                 >
                   <option value="gpt-5">RiskClock Engine / OpenAI gpt-5</option>
                   <option value="gpt-5-mini">RiskClock Engine / OpenAI gpt-5-mini</option>
@@ -3494,11 +3443,6 @@ export function AnalysisSection({ requestId, files, projectId, sourceType, isWMS
                   <option value="claude-haiku">RiskClock Engine / Anthropic claude-haiku</option>
                 </select>
               </div>
-              {analyzeV2Running && analyzeTokens > 0 && (
-                <span className="text-xs text-muted-foreground tabular-nums">
-                  {analyzeTokens.toLocaleString()} tokens
-                </span>
-              )}
               {!analyzeV2Running && analyzeTokens > 0 && (
                 <Tooltip>
                   <TooltipTrigger asChild>
@@ -3511,78 +3455,54 @@ export function AnalysisSection({ requestId, files, projectId, sourceType, isWMS
                   </TooltipContent>
                 </Tooltip>
               )}
-              {analyzeV2Running ? (
-                <div className="flex items-center gap-2">
-                  <span className="text-xs text-muted-foreground tabular-nums">
-                    Analyzing: {analyzeV2Progress.done}/{analyzeV2Progress.total} instances
-                  </span>
-                  <Button
-                    size="sm"
-                    variant="destructive"
-                    onClick={handleStopAnalyzeV2}
-                    disabled={analyzeV2Stopping}
-                  >
-                    {analyzeV2Stopping ? (
-                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                    ) : (
-                      <Square className="w-4 h-4 mr-2" />
-                    )}
-                    {analyzeV2Stopping ? "Stopping…" : "Stop"}
-                  </Button>
-                </div>
-              ) : (
-                <div className="flex items-center gap-2">
-                   <Button
-                     size="sm"
-                     onClick={handleAnalyzeAllV2}
-                     disabled={anyAnalyzing || triageRunning || extractRunning || copiedFiles.length === 0}
-                   >
-                     {anyAnalyzing ? (
-                       <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                     ) : (
-                       <Search className="w-4 h-4 mr-2" />
-                     )}
-                     Analyze
-                   </Button>
-                   <Separator orientation="vertical" className="h-6" />
-                   <DropdownMenu>
-                     <DropdownMenuTrigger asChild>
-                       <Button
-                         size="sm"
-                         variant="outline"
-                         disabled={anyAnalyzing || triageRunning || extractRunning || copiedFiles.length === 0}
-                       >
-                         
-                         Clear
-                       </Button>
-                     </DropdownMenuTrigger>
-                     <DropdownMenuContent align="start">
-                       <DropdownMenuItem onClick={async () => {
-                         if (!requestId) return;
-                         await supabase.from("analysis_triage_results").delete().eq("analysis_request_id", requestId);
-                         await supabase.from("analysis_triage_overrides").delete().eq("analysis_request_id", requestId);
-                         await supabase.from("analysis_results").delete().eq("analysis_request_id", requestId);
-                         await supabase.from("analysis_requests").update({ summary_data: {} }).eq("id", requestId);
-                         queryClient.invalidateQueries({ queryKey: ["analysis-triage-results", requestId] });
-                         queryClient.invalidateQueries({ queryKey: ["analysis-results", requestId] });
-                         queryClient.invalidateQueries({ queryKey: ["requestMeta", requestId] });
-                         toast({ title: "Triage and analysis results cleared" });
-                       }}>
-                         Clear Triage Results
-                       </DropdownMenuItem>
-                       <DropdownMenuItem onClick={async () => {
-                         if (!requestId) return;
-                         await supabase.from("analysis_results").delete().eq("analysis_request_id", requestId);
-                         await supabase.from("analysis_requests").update({ summary_data: {} }).eq("id", requestId);
-                         queryClient.invalidateQueries({ queryKey: ["analysis-results", requestId] });
-                         queryClient.invalidateQueries({ queryKey: ["requestMeta", requestId] });
-                         toast({ title: "Analysis results cleared" });
-                       }}>
-                         Clear Analysis Results
-                       </DropdownMenuItem>
-                     </DropdownMenuContent>
-                   </DropdownMenu>
-                 </div>
+              <div className="flex items-center gap-2">
+                 <Button
+                   size="sm"
+                   onClick={() => startPipeline("analyze")}
+                   disabled={anyAnalyzing || copiedFiles.length === 0}
+                 >
+                   <Search className="w-4 h-4 mr-2" />
+                   Analyze
+                 </Button>
+                 <Separator orientation="vertical" className="h-6" />
+                 <DropdownMenu>
+                   <DropdownMenuTrigger asChild>
+                     <Button
+                       size="sm"
+                       variant="outline"
+                       disabled={anyAnalyzing || copiedFiles.length === 0}
+                     >
+                       Clear
+                     </Button>
+                   </DropdownMenuTrigger>
+                   <DropdownMenuContent align="start">
+                     <DropdownMenuItem onClick={async () => {
+                       if (!requestId) return;
+                       await supabase.from("analysis_triage_results").delete().eq("analysis_request_id", requestId);
+                       await supabase.from("analysis_triage_overrides").delete().eq("analysis_request_id", requestId);
+                       await supabase.from("analysis_results").delete().eq("analysis_request_id", requestId);
+                       await supabase.from("analysis_requests").update({ summary_data: {} }).eq("id", requestId);
+                       queryClient.invalidateQueries({ queryKey: ["analysis-triage-results", requestId] });
+                       queryClient.invalidateQueries({ queryKey: ["analysis-results", requestId] });
+                       queryClient.invalidateQueries({ queryKey: ["requestMeta", requestId] });
+                       toast({ title: "Triage and analysis results cleared" });
+                     }}>
+                       Clear Triage Results
+                     </DropdownMenuItem>
+                     <DropdownMenuItem onClick={async () => {
+                       if (!requestId) return;
+                       await supabase.from("analysis_results").delete().eq("analysis_request_id", requestId);
+                       await supabase.from("analysis_requests").update({ summary_data: {} }).eq("id", requestId);
+                       queryClient.invalidateQueries({ queryKey: ["analysis-results", requestId] });
+                       queryClient.invalidateQueries({ queryKey: ["requestMeta", requestId] });
+                       toast({ title: "Analysis results cleared" });
+                     }}>
+                       Clear Analysis Results
+                     </DropdownMenuItem>
+                   </DropdownMenuContent>
+                 </DropdownMenu>
+               </div>
+              </>
               )}
             </div>
             )}

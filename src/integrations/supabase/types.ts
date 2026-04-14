@@ -113,6 +113,10 @@ export type Database = {
           error_message: string | null
           file_count: number | null
           id: string
+          pipeline_phase: string | null
+          pipeline_progress_done: number
+          pipeline_progress_total: number
+          pipeline_stop_requested: boolean
           project_id: string
           source_type: string
           status: string
@@ -133,6 +137,10 @@ export type Database = {
           error_message?: string | null
           file_count?: number | null
           id?: string
+          pipeline_phase?: string | null
+          pipeline_progress_done?: number
+          pipeline_progress_total?: number
+          pipeline_stop_requested?: boolean
           project_id: string
           source_type?: string
           status?: string
@@ -153,6 +161,10 @@ export type Database = {
           error_message?: string | null
           file_count?: number | null
           id?: string
+          pipeline_phase?: string | null
+          pipeline_progress_done?: number
+          pipeline_progress_total?: number
+          pipeline_stop_requested?: boolean
           project_id?: string
           source_type?: string
           status?: string
