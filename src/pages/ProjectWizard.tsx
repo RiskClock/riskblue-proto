@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { useNavigate, useParams } from "react-router-dom";
+import { useAccountType } from "@/hooks/useAccountType";
 import { useAuth } from "@/contexts/AuthContext";
 import { ProjectProvider, useProject } from "@/contexts/ProjectContext";
 import { supabase } from "@/integrations/supabase/client";
@@ -41,6 +42,7 @@ import { ProjectFilesUpload, DriveFileInfo } from "@/components/wizard/ProjectFi
 import { ResponsePlanUploadChat } from "@/components/ResponsePlanUploadChat";
 import { Download, FileText, Loader2, Users, FilePlus, Upload, ChevronDown as ChevronDownIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { WMSVProjectDetail } from "@/components/WMSVProjectDetail";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Label } from "@/components/ui/label";
 import { WaterRiskReport } from "@/components/reports/WaterRiskReport";
@@ -2207,9 +2209,11 @@ const ProjectWizard = () => {
   const navigate = useNavigate();
   const { user } = useAuth();
   const { toast } = useToast();
+  const { isWMSV } = useAccountType();
   const [initialData, setInitialData] = useState<ProjectData>({});
   const [isLoading, setIsLoading] = useState(true);
   const [projectId, setProjectId] = useState<string | undefined>(id);
+  const [projectName, setProjectName] = useState<string>("");
   const isCreatingProject = useRef(false);
 
   // Create a new project immediately when navigating to /project/new
@@ -2288,6 +2292,7 @@ const ProjectWizard = () => {
         };
         
         setProjectId(dbProjectId);
+        setProjectName(mergedData.name || "");
         setInitialData(mergedData);
       } catch (error: any) {
         console.error("Error fetching project:", error);
@@ -2316,6 +2321,11 @@ const ProjectWizard = () => {
         </div>
       </div>
     );
+  }
+
+  // WMSV users see the analysis detail layout instead of the wizard
+  if (isWMSV && projectId) {
+    return <WMSVProjectDetail projectId={projectId} projectName={projectName} />;
   }
 
   return (
