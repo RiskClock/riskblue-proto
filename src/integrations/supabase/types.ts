@@ -1770,6 +1770,7 @@ export type Database = {
         Row: {
           awp_class_name: string
           category: string
+          control_id: string
           created_at: string
           id: string
           sub_options: Json | null
@@ -1778,6 +1779,7 @@ export type Database = {
         Insert: {
           awp_class_name: string
           category: string
+          control_id: string
           created_at?: string
           id?: string
           sub_options?: Json | null
@@ -1786,6 +1788,7 @@ export type Database = {
         Update: {
           awp_class_name?: string
           category?: string
+          control_id?: string
           created_at?: string
           id?: string
           sub_options?: Json | null
