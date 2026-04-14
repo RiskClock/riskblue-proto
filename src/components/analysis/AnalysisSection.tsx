@@ -128,6 +128,8 @@ interface AnalysisSectionProps {
   files: AnalysisFile[];
   projectId: string;
   sourceType?: string;
+  isWMSV?: boolean;
+  visibleAwpClasses?: string[];
 }
 
 // ---------------------------------------------------------------------------
@@ -1237,7 +1239,7 @@ function ExtractedTextBody({ fileId, localText }: { fileId: string; localText?: 
 // AnalysisSection
 // ---------------------------------------------------------------------------
 
-export function AnalysisSection({ requestId, files, projectId, sourceType }: AnalysisSectionProps) {
+export function AnalysisSection({ requestId, files, projectId, sourceType, isWMSV, visibleAwpClasses }: AnalysisSectionProps) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
@@ -1856,7 +1858,7 @@ export function AnalysisSection({ requestId, files, projectId, sourceType }: Ana
   }, [projectInfo]);
 
   // Sorted prompts to match Configuration page order — filtered to drawing-detectable only
-  const sortedPrompts = useMemo(() => {
+  const sortedPromptsBase = useMemo(() => {
     if (!prompts) return [];
     return [...prompts]
       .filter(p => isDrawingDetectable(p))
@@ -1866,6 +1868,77 @@ export function AnalysisSection({ requestId, files, projectId, sourceType }: Ana
         return oa - ob;
       });
   }, [prompts, globalOrderMap, isDrawingDetectable]);
+
+  // For WMSV: further filter to only visible AWP classes
+  const sortedPrompts = useMemo(() => {
+    if (!visibleAwpClasses || visibleAwpClasses.length === 0) return sortedPromptsBase;
+    const allowed = new Set(visibleAwpClasses);
+    return sortedPromptsBase.filter(p => allowed.has(p.awp_class_name));
+  }, [sortedPromptsBase, visibleAwpClasses]);
+
+  // ---- WMSV chained analysis state ----
+  const [wmsvPhase, setWmsvPhase] = useState<"idle" | "extracting" | "triaging" | "analyzing">("idle");
+  const wmsvAbortRef = useRef(false);
+
+  const handleWmsvStartAnalysis = async () => {
+    wmsvAbortRef.current = false;
+    
+    // Phase 1: Extract
+    setWmsvPhase("extracting");
+    await handleExtractAll();
+    
+    // Wait for extraction to complete
+    await new Promise<void>((resolve) => {
+      const poll = setInterval(() => {
+        if (wmsvAbortRef.current) { clearInterval(poll); resolve(); return; }
+        if (!extractRunning && extractQueueRef.current.length === 0 && inFlightCountRef.current <= 0) {
+          clearInterval(poll);
+          resolve();
+        }
+      }, 500);
+    });
+    if (wmsvAbortRef.current) { setWmsvPhase("idle"); return; }
+
+    // Phase 2: Triage
+    setWmsvPhase("triaging");
+    await handleTriageAll();
+
+    // Wait for triage to complete
+    await new Promise<void>((resolve) => {
+      const poll = setInterval(() => {
+        if (wmsvAbortRef.current) { clearInterval(poll); resolve(); return; }
+        if (!triageRunning && triageQueueRef.current.length === 0 && inFlightCountRef.current <= 0) {
+          clearInterval(poll);
+          resolve();
+        }
+      }, 500);
+    });
+    if (wmsvAbortRef.current) { setWmsvPhase("idle"); return; }
+
+    // Phase 3: Analyze
+    setWmsvPhase("analyzing");
+    await handleAnalyzeAllV2();
+
+    // Wait for analysis to complete
+    await new Promise<void>((resolve) => {
+      const poll = setInterval(() => {
+        if (wmsvAbortRef.current) { clearInterval(poll); resolve(); return; }
+        if (!analyzeV2Running && analyzeV2QueueRef.current.length === 0 && analyzeV2InFlightRef.current <= 0) {
+          clearInterval(poll);
+          resolve();
+        }
+      }, 500);
+    });
+    setWmsvPhase("idle");
+  };
+
+  const handleWmsvStop = () => {
+    wmsvAbortRef.current = true;
+    if (extractRunning) handleStopExtract();
+    if (triageRunning) handleStopTriage();
+    if (analyzeV2Running) handleStopAnalyzeV2();
+    setWmsvPhase("idle");
+  };
 
   // Helper to get the best prefix for a class name
   const getPrefix = (className: string) =>
@@ -3238,6 +3311,8 @@ export function AnalysisSection({ requestId, files, projectId, sourceType }: Ana
   if (!prompts?.length) return null;
 
   const anyAnalyzing = analyzingClasses.size > 0;
+  const wmsvRunning = wmsvPhase !== "idle";
+  const wmsvPhaseLabel = wmsvPhase === "extracting" ? "Extracting Context…" : wmsvPhase === "triaging" ? "Triaging…" : wmsvPhase === "analyzing" ? "Analyzing…" : "";
 
   return (
     <TooltipProvider delayDuration={0}>
@@ -3248,6 +3323,50 @@ export function AnalysisSection({ requestId, files, projectId, sourceType }: Ana
         ================================================================ */}
         <div className="bg-card border rounded-lg overflow-hidden">
           <div className="px-4 py-3 border-b flex items-center gap-3">
+            {isWMSV ? (
+              /* ---- WMSV simplified toolbar ---- */
+              <div className="flex items-center gap-3">
+                {wmsvRunning ? (
+                  <div className="flex items-center gap-3">
+                    <Loader2 className="w-4 h-4 animate-spin text-primary" />
+                    <span className="text-sm font-medium text-foreground">{wmsvPhaseLabel}</span>
+                    {wmsvPhase === "extracting" && (
+                      <span className="text-xs text-muted-foreground tabular-nums">
+                        {triageProgress.done}/{triageProgress.total} files
+                      </span>
+                    )}
+                    {wmsvPhase === "triaging" && (
+                      <span className="text-xs text-muted-foreground tabular-nums">
+                        {triageProgress.done}/{triageProgress.total} instances
+                      </span>
+                    )}
+                    {wmsvPhase === "analyzing" && (
+                      <span className="text-xs text-muted-foreground tabular-nums">
+                        {analyzeV2Progress.done}/{analyzeV2Progress.total} instances
+                      </span>
+                    )}
+                    <Button
+                      size="sm"
+                      variant="destructive"
+                      onClick={handleWmsvStop}
+                    >
+                      <Square className="w-4 h-4 mr-2" />
+                      Stop
+                    </Button>
+                  </div>
+                ) : (
+                  <Button
+                    size="sm"
+                    onClick={handleWmsvStartAnalysis}
+                    disabled={copiedFiles.length === 0}
+                  >
+                    <Play className="w-4 h-4 mr-2" />
+                    Start Analysis
+                  </Button>
+                )}
+              </div>
+            ) : (
+              /* ---- Standard toolbar ---- */
             <div className="flex items-center gap-3">
               {/* Extract Context group */}
               {extractRunning ? (
@@ -3438,11 +3557,9 @@ export function AnalysisSection({ requestId, files, projectId, sourceType }: Ana
                      <DropdownMenuContent align="start">
                        <DropdownMenuItem onClick={async () => {
                          if (!requestId) return;
-                         // Clear triage results + overrides + analysis results
                          await supabase.from("analysis_triage_results").delete().eq("analysis_request_id", requestId);
                          await supabase.from("analysis_triage_overrides").delete().eq("analysis_request_id", requestId);
                          await supabase.from("analysis_results").delete().eq("analysis_request_id", requestId);
-                         // Clear summary_data
                          await supabase.from("analysis_requests").update({ summary_data: {} }).eq("id", requestId);
                          queryClient.invalidateQueries({ queryKey: ["analysis-triage-results", requestId] });
                          queryClient.invalidateQueries({ queryKey: ["analysis-results", requestId] });
@@ -3453,9 +3570,7 @@ export function AnalysisSection({ requestId, files, projectId, sourceType }: Ana
                        </DropdownMenuItem>
                        <DropdownMenuItem onClick={async () => {
                          if (!requestId) return;
-                         // Clear analysis results only
                          await supabase.from("analysis_results").delete().eq("analysis_request_id", requestId);
-                         // Clear summary_data
                          await supabase.from("analysis_requests").update({ summary_data: {} }).eq("id", requestId);
                          queryClient.invalidateQueries({ queryKey: ["analysis-results", requestId] });
                          queryClient.invalidateQueries({ queryKey: ["requestMeta", requestId] });
@@ -3468,6 +3583,7 @@ export function AnalysisSection({ requestId, files, projectId, sourceType }: Ana
                  </div>
               )}
             </div>
+            )}
           </div>
 
           {copiedFiles.length === 0 ? (
