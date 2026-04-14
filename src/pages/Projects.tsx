@@ -248,12 +248,17 @@ const Projects = () => {
             <table className="w-full">
               <thead className="bg-muted/50">
                 <tr className="text-left">
-                  <th className="px-6 py-3 text-sm font-medium text-foreground">
-                    Project Name
-                  </th>
-                  <th className="px-6 py-3 text-sm font-medium text-foreground">Project Type</th>
-                  <th className="px-6 py-3 text-sm font-medium text-foreground">Location</th>
-                  <th className="px-6 py-3 text-sm font-medium text-foreground">Construction Start</th>
+                  <th className="px-6 py-3 text-sm font-medium text-foreground">Project Name</th>
+                  {!isWMSV && (
+                    <>
+                      <th className="px-6 py-3 text-sm font-medium text-foreground">Project Type</th>
+                      <th className="px-6 py-3 text-sm font-medium text-foreground">Location</th>
+                      <th className="px-6 py-3 text-sm font-medium text-foreground">Construction Start</th>
+                    </>
+                  )}
+                  {isWMSV && (
+                    <th className="px-6 py-3 text-sm font-medium text-foreground">Status</th>
+                  )}
                   <th className="px-6 py-3 text-sm font-medium text-foreground">Created By</th>
                   <th className="px-6 py-3 text-sm font-medium text-foreground">Created On</th>
                   <th className="px-6 py-3 w-[80px]"></th>
@@ -267,21 +272,39 @@ const Projects = () => {
                     onClick={() => navigate(`/project/${project.id}`)}
                   >
                     <td className="px-6 py-4">
-                      <div className="flex items-center gap-2">
+                      {isWMSV ? (
                         <span className="text-foreground">{project.name}</span>
+                      ) : (
+                        <div className="flex items-center gap-2">
+                          <span className="text-foreground">{project.name}</span>
+                          <Badge
+                            variant={project.status === "completed" ? "default" : "secondary"}
+                            className="text-xs"
+                          >
+                            {project.status || "draft"}
+                          </Badge>
+                        </div>
+                      )}
+                    </td>
+                    {!isWMSV && (
+                      <>
+                        <td className="px-6 py-4 text-muted-foreground">{capitalizeFirst(project.project_type) || "—"}</td>
+                        <td className="px-6 py-4 text-muted-foreground">{formatLocation(project.city, project.country)}</td>
+                        <td className="px-6 py-4 text-muted-foreground">
+                          {formatDateShort(project.construction_start_date)}
+                        </td>
+                      </>
+                    )}
+                    {isWMSV && (
+                      <td className="px-6 py-4">
                         <Badge
                           variant={project.status === "completed" ? "default" : "secondary"}
                           className="text-xs"
                         >
-                          {project.status || "draft"}
+                          {capitalizeFirst(project.status || "draft")}
                         </Badge>
-                      </div>
-                    </td>
-                    <td className="px-6 py-4 text-muted-foreground">{capitalizeFirst(project.project_type) || "—"}</td>
-                    <td className="px-6 py-4 text-muted-foreground">{formatLocation(project.city, project.country)}</td>
-                    <td className="px-6 py-4 text-muted-foreground">
-                      {formatDateShort(project.construction_start_date)}
-                    </td>
+                      </td>
+                    )}
                     <td className="px-6 py-4 text-muted-foreground">
                       {project.creator_email ? (
                         <TooltipProvider>
