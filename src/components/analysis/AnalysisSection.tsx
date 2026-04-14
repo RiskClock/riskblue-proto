@@ -1428,7 +1428,7 @@ export function AnalysisSection({ requestId, files, projectId, sourceType, isWMS
     queryFn: async () => {
       const { data } = await supabase
         .from("analysis_requests")
-        .select("status, summary_data, triage_tokens_used, analyze_tokens_used, triage_model, analyze_model, disabled_awp_classes, pipeline_phase, pipeline_progress_done, pipeline_progress_total, pipeline_stop_requested")
+        .select("status, summary_data, triage_tokens_used, analyze_tokens_used, triage_model, analyze_model, disabled_awp_classes, pipeline_phase, pipeline_progress_done, pipeline_progress_total, pipeline_stop_requested, error_message")
         .eq("id", requestId)
         .single();
       return data;
@@ -1894,7 +1894,7 @@ export function AnalysisSection({ requestId, files, projectId, sourceType, isWMS
           visibleAwpClasses: visibleAwpClasses,
           triageModel,
           analyzeModel,
-          disabledColumns: [...disabledColumns],
+          ...(isWMSV ? {} : { disabledColumns: [...disabledColumns] }),
           phaseOverride,
         },
       });
@@ -3302,6 +3302,7 @@ export function AnalysisSection({ requestId, files, projectId, sourceType, isWMS
   const pipelineDone = ((requestMeta as any)?.pipeline_progress_done as number) || 0;
   const pipelineTotal = ((requestMeta as any)?.pipeline_progress_total as number) || 0;
   const dbStatus = (requestMeta as any)?.status as string | undefined;
+  const dbErrorMessage = (requestMeta as any)?.error_message as string | null;
   const pipelineRunning = dbStatus === "processing" && !!pipelinePhase;
   const pipelinePhaseLabel = pipelinePhase === "extracting" ? "Extracting Context…" : pipelinePhase === "triaging" ? "Triaging…" : pipelinePhase === "analyzing" ? "Analyzing…" : "Processing…";
   const wmsvRunning = pipelineRunning;
@@ -3508,6 +3509,13 @@ export function AnalysisSection({ requestId, files, projectId, sourceType, isWMS
             )}
           </div>
 
+          {dbErrorMessage && !pipelineRunning && (
+            <div className="px-4 py-2 bg-destructive/10 text-destructive text-sm border-b flex items-center gap-2">
+              <AlertTriangle className="w-4 h-4 shrink-0" />
+              {dbErrorMessage}
+            </div>
+          )}
+
           {copiedFiles.length === 0 ? (
             <div className="px-4 py-6 text-sm text-muted-foreground text-center">
               No files ready for analysis.
@@ -3524,15 +3532,17 @@ export function AnalysisSection({ requestId, files, projectId, sourceType, isWMS
                       </span>
                     </th>
                      {sortedPrompts.map((prompt) => {
-                      const isDisabled = disabledColumns.has(prompt.awp_class_name);
+                      const isDisabled = !isWMSV && disabledColumns.has(prompt.awp_class_name);
                       return (
                       <th key={prompt.id} className={`w-14 px-2 py-2 text-center font-medium text-muted-foreground ${isDisabled ? 'opacity-30' : ''}`}>
                         <div className="flex flex-col items-center gap-1">
-                          <Checkbox
-                            checked={!isDisabled}
-                            onCheckedChange={() => toggleColumnDisabled(prompt.awp_class_name)}
-                            className="h-3.5 w-3.5"
-                          />
+                          {!isWMSV && (
+                            <Checkbox
+                              checked={!isDisabled}
+                              onCheckedChange={() => toggleColumnDisabled(prompt.awp_class_name)}
+                              className="h-3.5 w-3.5"
+                            />
+                          )}
                           <Tooltip>
                             <TooltipTrigger asChild>
                               {prompt.drive_file_url && !isWMSV ? (
