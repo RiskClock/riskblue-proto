@@ -338,12 +338,16 @@ const Projects = () => {
                     )}
                     {isWMSV && (
                       <td className="px-6 py-4">
-                        <Badge
-                          variant={project.status === "completed" ? "default" : "secondary"}
-                          className="text-xs"
-                        >
-                          {capitalizeFirst(project.status || "draft")}
-                        </Badge>
+                        {(() => {
+                          const aStatus = analysisStatuses.get(project.id);
+                          const label = aStatus ? analysisStatusLabels[aStatus] || capitalizeFirst(aStatus) : "New";
+                          const colorClass = aStatus ? analysisStatusColors[aStatus] || "" : "";
+                          return (
+                            <Badge variant="outline" className={`text-xs ${colorClass}`}>
+                              {label}
+                            </Badge>
+                          );
+                        })()}
                       </td>
                     )}
                     <td className="px-6 py-4 text-muted-foreground">
