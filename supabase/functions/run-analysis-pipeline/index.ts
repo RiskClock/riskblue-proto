@@ -184,6 +184,7 @@ Deno.serve(async (req) => {
         pipeline_progress_done: 0,
         pipeline_progress_total: 0,
         status: "processing",
+        error_message: null,
       } as any)
       .eq("id", analysisRequestId);
 
