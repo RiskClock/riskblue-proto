@@ -3699,10 +3699,32 @@ export function AnalysisSection({ requestId, files, projectId, sourceType, isWMS
                   {/* Button sub-row: per-column analyze/stop controls */}
                   <tr className="border-b bg-muted/20">
                      <td className="sticky left-0 z-10 bg-muted/20 px-4 py-1.5 border-r min-w-[180px] max-w-[320px] w-auto">
-                       <Button size="sm" variant="outline" className="h-6 text-xs gap-1" onClick={handleDownloadZip}>
-                         <Download className="w-3 h-3" />
-                         Download ZIP
-                       </Button>
+                       {isWMSV && onAddFileUpload ? (
+                         <div className="flex items-center gap-2 flex-wrap">
+                           <span className="text-xs text-muted-foreground whitespace-nowrap">Add more files:</span>
+                           <Button size="sm" variant="outline" className="h-6 text-xs gap-1" onClick={onAddFileUpload}>
+                             <Upload className="w-3 h-3" />
+                             Upload Files
+                           </Button>
+                           <Button size="sm" variant="outline" className="h-6 text-xs gap-1" onClick={onAddFileDrive}>
+                             <img src="/icons/icon_googledrive.png" className="w-3 h-3" alt="" />
+                             Google Drive
+                           </Button>
+                           <Button size="sm" variant="outline" className="h-6 text-xs gap-1" onClick={onAddFileProcore}>
+                             <img src="/icons/icon_procore.png" className="w-3 h-3" alt="" />
+                             Procore
+                           </Button>
+                           <Button size="sm" variant="outline" className="h-6 text-xs gap-1" disabled title="Coming soon">
+                             <img src="/icons/icon_sharepoint.png" className="w-3 h-3" alt="" />
+                             SharePoint (coming soon)
+                           </Button>
+                         </div>
+                       ) : (
+                         <Button size="sm" variant="outline" className="h-6 text-xs gap-1" onClick={handleDownloadZip}>
+                           <Download className="w-3 h-3" />
+                           Download ZIP
+                         </Button>
+                       )}
                      </td>
                     
                      {sortedPrompts.map((prompt) => {
