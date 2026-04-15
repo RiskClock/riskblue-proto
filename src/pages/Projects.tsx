@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
+import type { RealtimeChannel } from "@supabase/supabase-js";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 import { useActivityLogger } from "@/hooks/useActivityLogger";
@@ -91,6 +92,29 @@ const Projects = () => {
       fetchProjects();
     }
   }, [user]);
+
+  // Realtime subscription for WMSV status badges
+  useEffect(() => {
+    if (!isWMSV || !user) return;
+    const channel: RealtimeChannel = supabase
+      .channel("projects-analysis-status")
+      .on(
+        "postgres_changes",
+        { event: "UPDATE", schema: "public", table: "analysis_requests" },
+        (payload: any) => {
+          const row = payload.new;
+          if (row?.project_id && row?.status) {
+            setAnalysisStatuses((prev) => {
+              const next = new Map(prev);
+              next.set(row.project_id, row.status);
+              return next;
+            });
+          }
+        }
+      )
+      .subscribe();
+    return () => { supabase.removeChannel(channel); };
+  }, [isWMSV, user]);
 
   const fetchProjects = async () => {
     try {
