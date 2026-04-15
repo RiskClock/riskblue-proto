@@ -14,9 +14,9 @@ interface MitigationControl {
 
 const SPECIAL_CONTROLS: Record<string, string[]> = {
   "Presence of Water Monitoring": ["Single (Probe)", "Area (Rope)"],
-  "Automatic Shut Off Valves": ['1"', '2"', '4"', '8"'],
-  "Inline Flow Meters": ['1"', '2"', '4"', '8"'],
-  "Ultrasonic Flow Meters": ['1"', '2"', '4"', '8"'],
+  "Automatic Shut Off Valve": ['1"', '2"', '4"', '8"'],
+  "Inline Flow Sensors": ['1"', '2"', '4"', '8"'],
+  "Ultrasonic Flow Sensors": ['1"', '2"', '4"', '8"'],
 };
 
 const CATEGORIES = [
