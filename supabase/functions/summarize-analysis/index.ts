@@ -40,14 +40,6 @@ serve(async (req) => {
       });
     }
 
-    const email = user.email;
-    const isInternal = email?.toLowerCase().endsWith("@riskclock.com") ?? false;
-    if (!isInternal) {
-      return new Response(JSON.stringify({ error: "Access denied" }), {
-        status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
-    }
-
     const { analysisRequestId, awpClassName } = await req.json();
     if (!analysisRequestId || !awpClassName) {
       return new Response(JSON.stringify({ error: "Missing analysisRequestId or awpClassName" }), {
@@ -57,6 +49,54 @@ serve(async (req) => {
 
     const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const adminSupabase = createClient(supabaseUrl, serviceKey);
+
+    // --- Project-access auth: verify user is request owner, project owner, project member, or internal ---
+    const email = user.email;
+    const isInternal = email?.toLowerCase().endsWith("@riskclock.com") ?? false;
+
+    if (!isInternal) {
+      const { data: reqData, error: reqError } = await adminSupabase
+        .from("analysis_requests")
+        .select("user_id, project_id")
+        .eq("id", analysisRequestId)
+        .single();
+
+      if (reqError || !reqData) {
+        return new Response(JSON.stringify({ error: "Analysis request not found" }), {
+          status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      const isRequestOwner = reqData.user_id === user.id;
+      let hasAccess = isRequestOwner;
+
+      if (!hasAccess) {
+        // Check project ownership
+        const { data: project } = await adminSupabase
+          .from("projects")
+          .select("user_id")
+          .eq("id", reqData.project_id)
+          .single();
+        if (project && project.user_id === user.id) hasAccess = true;
+      }
+
+      if (!hasAccess) {
+        // Check project membership
+        const { data: membership } = await adminSupabase
+          .from("project_user_roles")
+          .select("id")
+          .eq("project_id", reqData.project_id)
+          .eq("user_id", user.id)
+          .single();
+        if (membership) hasAccess = true;
+      }
+
+      if (!hasAccess) {
+        return new Response(JSON.stringify({ error: "Access denied" }), {
+          status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+    }
 
     // Fetch all complete results for this AWP class
     const { data: results, error: resultsError } = await adminSupabase
