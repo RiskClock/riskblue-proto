@@ -1471,12 +1471,32 @@ export function AnalysisSection({ requestId, files, projectId, sourceType, isWMS
   useEffect(() => {
     if (!requestMeta) return;
     const dbStatus = (requestMeta as any).status as string;
+    const isTerminal = dbStatus === "complete" || dbStatus === "failed";
+
+    // Status-precedence guard: if we have an optimistic status set,
+    // reject incoming data that has a lower rank (stale poll/realtime)
+    if (optimisticStatusRef.current && !isTerminal) {
+      const incomingRank = STATUS_RANK[dbStatus] ?? 0;
+      const optimisticRank = STATUS_RANK[optimisticStatusRef.current] ?? 0;
+      if (incomingRank < optimisticRank) {
+        return; // Ignore stale regression
+      }
+    }
+
+    // DB has caught up or reached terminal — clear optimistic guard
+    if (optimisticStatusRef.current) {
+      const incomingRank = STATUS_RANK[dbStatus] ?? 0;
+      const optimisticRank = STATUS_RANK[optimisticStatusRef.current] ?? 0;
+      if (incomingRank >= optimisticRank || isTerminal) {
+        optimisticStatusRef.current = null;
+      }
+    }
 
     if (!hydratedProcessing) {
       if (dbStatus === "processing") {
         analyzeRunSyncRef.current = "running";
         setAnalyzeV2Running(true);
-      } else if (dbStatus === "complete") {
+      } else if (isTerminal) {
         analyzeRunSyncRef.current = "idle";
         setAnalyzeV2Running(false);
         setAnalyzeV2Stopping(false);
@@ -1495,11 +1515,7 @@ export function AnalysisSection({ requestId, files, projectId, sourceType, isWMS
       return;
     }
 
-    if (dbStatus === "complete") {
-      if (analyzeRunSyncRef.current === "starting") {
-        return;
-      }
-
+    if (isTerminal) {
       analyzeRunSyncRef.current = "idle";
       setAnalyzeV2Running(false);
       setAnalyzeV2Stopping(false);
@@ -1507,6 +1523,34 @@ export function AnalysisSection({ requestId, files, projectId, sourceType, isWMS
       setClassFileStatuses({});
     }
   }, [requestMeta, hydratedProcessing, analyzeV2Running]);
+
+  // ---- Realtime subscriptions ----
+  useEffect(() => {
+    if (!requestId) return;
+    const channel: RealtimeChannel = supabase
+      .channel(`analysis-rt-${requestId}`)
+      .on(
+        "postgres_changes",
+        { event: "UPDATE", schema: "public", table: "analysis_requests", filter: `id=eq.${requestId}` },
+        () => {
+          queryClient.invalidateQueries({ queryKey: ["analysis-request-meta", requestId] });
+          queryClient.invalidateQueries({ queryKey: ["triage-results", requestId] });
+          queryClient.invalidateQueries({ queryKey: ["analysis-results", requestId] });
+        }
+      )
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "analysis_triage_results", filter: `analysis_request_id=eq.${requestId}` },
+        () => {
+          queryClient.invalidateQueries({ queryKey: ["triage-results", requestId] });
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [requestId, queryClient]);
 
   // Load extracted file IDs on mount so "Processed" badges appear immediately
   useEffect(() => {
@@ -1895,10 +1939,23 @@ export function AnalysisSection({ requestId, files, projectId, sourceType, isWMS
 
   // Helper to start the backend pipeline
   const startPipeline = async (phaseOverride?: string) => {
-    try {
-      const { data: sessionData } = await supabase.auth.getSession();
-      const token = sessionData.session?.access_token;
+    // Save previous cache for rollback
+    const prevMeta = queryClient.getQueryData(["analysis-request-meta", requestId]);
 
+    // Optimistic update BEFORE invoke
+    optimisticStatusRef.current = "processing";
+    analyzeRunSyncRef.current = "starting";
+    setAnalyzeV2Running(true);
+    queryClient.setQueryData(["analysis-request-meta", requestId], (old: any) => ({
+      ...old,
+      status: "processing",
+      pipeline_phase: phaseOverride || "extracting",
+      pipeline_progress_done: 0,
+      pipeline_progress_total: 0,
+      error_message: null,
+    }));
+
+    try {
       const response = await supabase.functions.invoke("run-analysis-pipeline", {
         body: {
           analysisRequestId: requestId,
@@ -1913,18 +1970,13 @@ export function AnalysisSection({ requestId, files, projectId, sourceType, isWMS
       if (response.error) {
         throw new Error(response.error.message);
       }
-
-      // Optimistic UI update — immediately show "processing" state
-      queryClient.setQueryData(["analysis-request-meta", requestId], (old: any) => ({
-        ...old,
-        status: "processing",
-        pipeline_phase: phaseOverride || "extracting",
-        pipeline_progress_done: 0,
-        pipeline_progress_total: 0,
-        error_message: null,
-      }));
-      queryClient.invalidateQueries({ queryKey: ["analysis-request-meta", requestId] });
+      // Success — realtime will handle further updates
     } catch (e) {
+      // Rollback optimistic state
+      optimisticStatusRef.current = null;
+      analyzeRunSyncRef.current = "idle";
+      setAnalyzeV2Running(false);
+      queryClient.setQueryData(["analysis-request-meta", requestId], prevMeta);
       toast({
         title: "Failed to start analysis",
         description: e instanceof Error ? e.message : "Unknown error",
@@ -1938,11 +1990,18 @@ export function AnalysisSection({ requestId, files, projectId, sourceType, isWMS
   };
 
   const handleWmsvStop = async () => {
+    // Optimistic stop — keep active status, show "Stopping..."
+    optimisticStatusRef.current = "stopping";
+    setAnalyzeV2Stopping(true);
+    queryClient.setQueryData(["analysis-request-meta", requestId], (old: any) => ({
+      ...old,
+      pipeline_stop_requested: true,
+    }));
     await supabase
       .from("analysis_requests")
       .update({ pipeline_stop_requested: true } as any)
       .eq("id", requestId);
-    queryClient.invalidateQueries({ queryKey: ["analysis-request-meta", requestId] });
+    // Don't invalidate — realtime handles the final transition
   };
 
   // Helper to get the best prefix for a class name
