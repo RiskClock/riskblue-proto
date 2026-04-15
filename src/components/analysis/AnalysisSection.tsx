@@ -1257,6 +1257,7 @@ export function AnalysisSection({ requestId, files, projectId, sourceType, isWMS
   const [classFileStatuses, setClassFileStatuses] = useState<Record<string, Record<string, string>>>({});
   const [triageModel, setTriageModel] = useState<string>("gpt-5-nano");
   const [analyzeModel, setAnalyzeModel] = useState<string>("gpt-5-mini");
+  const [engineVersion, setEngineVersion] = useState<string>("7.2");
   const abortControllers = useRef<Record<string, AbortController>>({});
   const [rawResultModal, setRawResultModal] = useState<{
     fileName: string;
@@ -3470,14 +3471,25 @@ export function AnalysisSection({ requestId, files, projectId, sourceType, isWMS
                     </Button>
                   </div>
                 ) : (
-                  <Button
-                    size="sm"
-                    onClick={handleWmsvStartAnalysis}
-                    disabled={copiedFiles.length === 0}
-                  >
-                    <Play className="w-4 h-4 mr-2" />
-                    Start Analysis
-                  </Button>
+                  <div className="flex items-center gap-2">
+                    <select
+                      className="h-8 rounded-md border border-input bg-background px-2 text-xs focus:outline-none focus:ring-1 focus:ring-ring"
+                      value={engineVersion}
+                      onChange={(e) => setEngineVersion(e.target.value)}
+                    >
+                      <option value="6.8">RiskClock Engine 6.8</option>
+                      <option value="7.1">RiskClock Engine 7.1</option>
+                      <option value="7.2">RiskClock Engine 7.2</option>
+                    </select>
+                    <Button
+                      size="sm"
+                      onClick={handleWmsvStartAnalysis}
+                      disabled={copiedFiles.length === 0}
+                    >
+                      <Play className="w-4 h-4 mr-2" />
+                      Start Analysis
+                    </Button>
+                  </div>
                 )}
               </div>
             ) : (
