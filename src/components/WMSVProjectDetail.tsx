@@ -354,6 +354,18 @@ export function WMSVProjectDetail({ projectId, projectName }: WMSVProjectDetailP
                 sourceType={request.source_type}
                 isWMSV={true}
                 visibleAwpClasses={visibleAwpClasses}
+                onAddFileUpload={() => fileInputRef.current?.click()}
+                onAddFileDrive={() => setShowDriveDialog(true)}
+                onAddFileProcore={() => setShowProcoreDialog(true)}
+              />
+              {/* Hidden file input for upload-from-grid */}
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept=".pdf,.png,.jpg,.jpeg,.dwg,.dxf"
+                multiple
+                className="hidden"
+                onChange={handleFileUpload}
               />
             )}
           </div>
