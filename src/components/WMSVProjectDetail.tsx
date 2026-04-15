@@ -1,7 +1,8 @@
-import { useRef, useState, useMemo } from "react";
+import { useRef, useState, useMemo, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
+import type { RealtimeChannel } from "@supabase/supabase-js";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { AppHeader } from "@/components/AppHeader";
 import { AnalysisSection } from "@/components/analysis/AnalysisSection";
@@ -12,6 +13,8 @@ import { useToast } from "@/hooks/use-toast";
 import { ArrowLeft, Loader2, Upload, FileText, CheckCircle2, Circle, FolderSync } from "lucide-react";
 import { RepositoryConnectionDialog } from "@/components/wizard/RepositoryConnectionDialog";
 import { ProcoreConnectionDialog } from "@/components/wizard/ProcoreConnectionDialog";
+
+const ACTIVE_STATUSES = ["pending", "copying", "copied", "started", "processing"];
 
 interface WMSVProjectDetailProps {
   projectId: string;
@@ -119,11 +122,27 @@ export function WMSVProjectDetail({ projectId, projectName }: WMSVProjectDetailP
       return data;
     },
     enabled: !!projectId,
-    refetchInterval: (query) => {
+    refetchInterval: (() => {
       const status = query.state.data?.status;
-      return isImporting(status) ? 3000 : false;
-    },
+      return ACTIVE_STATUSES.includes(status) ? 5000 : false;
+    }),
   });
+
+  // Realtime subscription for analysis_requests changes
+  useEffect(() => {
+    if (!projectId) return;
+    const channel: RealtimeChannel = supabase
+      .channel(`wmsv-ar-${projectId}`)
+      .on(
+        "postgres_changes",
+        { event: "UPDATE", schema: "public", table: "analysis_requests", filter: `project_id=eq.${projectId}` },
+        () => {
+          queryClient.invalidateQueries({ queryKey: ["wmsv-analysis-request", projectId] });
+        }
+      )
+      .subscribe();
+    return () => { supabase.removeChannel(channel); };
+  }, [projectId, queryClient]);
 
   const { data: files } = useQuery({
     queryKey: ["wmsv-analysis-files", request?.id],
@@ -136,8 +155,10 @@ export function WMSVProjectDetail({ projectId, projectName }: WMSVProjectDetailP
       if (error) throw error;
       return data as AnalysisFile[];
     },
-    enabled: !!request?.id,
-    refetchInterval: isImporting(request?.status) ? 3000 : false,
+    refetchInterval: (() => {
+      const s = request?.status;
+      return ACTIVE_STATUSES.includes(s || "") ? 5000 : false;
+    })() as number | false,
   });
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
