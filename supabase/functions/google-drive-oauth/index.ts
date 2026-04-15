@@ -137,7 +137,7 @@ serve(async (req) => {
 
       if (!tokenData) {
         return new Response(
-          JSON.stringify({ error: "No token found" }),
+          JSON.stringify({ error: "No token found", needs_reauth: true }),
           { status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" } }
         );
       }

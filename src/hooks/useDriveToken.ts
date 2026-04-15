@@ -11,6 +11,7 @@ export function useDriveToken() {
   const [driveToken, setDriveToken] = useState<DriveToken | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [needsReauth, setNeedsReauth] = useState(false);
   const popupRef = useRef<Window | null>(null);
   const messageHandlerRef = useRef<((event: MessageEvent) => void) | null>(null);
 
@@ -18,6 +19,7 @@ export function useDriveToken() {
     try {
       setLoading(true);
       setError(null);
+      setNeedsReauth(false);
 
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) {
@@ -36,12 +38,12 @@ export function useDriveToken() {
       });
 
       if (!response.ok) {
-        if (response.status === 404) {
-          // No token found - user hasn't connected Google Drive
+        const errorData = await response.json().catch(() => ({}));
+        if (errorData?.needs_reauth === true) {
           setDriveToken(null);
+          setNeedsReauth(true);
           return;
         }
-        const errorData = await response.json();
         console.error("Error fetching drive token:", errorData);
         setError(errorData.error || "Failed to fetch token");
         return;
@@ -88,13 +90,14 @@ export function useDriveToken() {
       });
 
       if (!response.ok) {
-        const errorData = await response.json();
+        const errorData = await response.json().catch(() => ({}));
         console.error("Token refresh error:", errorData);
         
-        // If refresh token is invalid, clear the stored token so user can reconnect
-        if (errorData?.error === "Token refresh failed" || errorData?.details?.error === "invalid_grant") {
+        if (errorData?.needs_reauth === true) {
           console.log("Refresh token invalid, clearing stored token");
+          setNeedsReauth(true);
           await disconnectDriveInternal();
+          setDriveToken(null);
         }
         return false;
       }
@@ -251,6 +254,7 @@ export function useDriveToken() {
     driveToken,
     loading,
     error,
+    needsReauth,
     isConnected: !!driveToken,
     connectDrive,
     disconnectDrive,
