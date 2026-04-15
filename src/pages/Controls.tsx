@@ -119,9 +119,6 @@ export default function Controls() {
 
     if (isSelected) {
       setSelections(prev => { const n = new Map(prev); n.delete(key); return n; });
-      if (specialSubs) {
-        setExpandedControls(prev => { const n = new Set(prev); n.delete(key); return n; });
-      }
       await supabase
         .from("wmsv_control_selections")
         .delete()
@@ -132,9 +129,6 @@ export default function Controls() {
       // When selecting parent, select all sub-options
       const defaultSubs = specialSubs ? [...specialSubs] : [];
       setSelections(prev => new Map(prev).set(key, defaultSubs));
-      if (specialSubs) {
-        setExpandedControls(prev => new Set(prev).add(key));
-      }
       await supabase.from("wmsv_control_selections").upsert({
         user_id: user!.id,
         awp_class_name: category,
