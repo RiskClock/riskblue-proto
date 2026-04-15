@@ -1586,6 +1586,24 @@ export function AnalysisSection({ requestId, files, projectId, sourceType, isWMS
     return () => { cancelled = true; };
   }, [requestId, files.length]);
 
+  // Refresh extraction badges when pipeline phase transitions OUT of "extracting"
+  useEffect(() => {
+    const currentPhase = (requestMeta as any)?.pipeline_phase as string | null;
+    const prev = prevPipelinePhaseRef.current;
+    prevPipelinePhaseRef.current = currentPhase;
+
+    if (prev === "extracting" && currentPhase !== "extracting" && requestId) {
+      supabase
+        .from("analysis_request_files")
+        .select("id")
+        .eq("analysis_request_id", requestId)
+        .not("extracted_text", "is", null)
+        .then(({ data }) => {
+          if (data) setExtractedFileIds(new Set(data.map((f: any) => f.id)));
+        });
+    }
+  }, [(requestMeta as any)?.pipeline_phase, requestId]);
+
   const savedSummaryData = useMemo(() => {
     return (requestMeta?.summary_data as unknown as Record<string, SummarizedInstance[]>) || {};
   }, [requestMeta]);
