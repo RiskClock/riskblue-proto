@@ -14,7 +14,9 @@ interface MitigationControl {
 
 const SPECIAL_CONTROLS: Record<string, string[]> = {
   "Presence of Water Monitoring": ["Single (Probe)", "Area (Rope)"],
-  "Automatic Shut Off Valves": ['⌀1"', '⌀2"', '⌀4"', '⌀8"'],
+  "Automatic Shut Off Valves": ['1"', '2"', '4"', '8"'],
+  "Inline Flow Meters": ['1"', '2"', '4"', '8"'],
+  "Ultrasonic Flow Meters": ['1"', '2"', '4"', '8"'],
 };
 
 const CATEGORIES = [
@@ -113,11 +115,11 @@ export default function Controls() {
     const key = makeKey(category, controlId);
     const isSelected = selections.has(key);
     const control = controlMap.get(controlId);
-    const isSpecial = control && SPECIAL_CONTROLS[control.name];
+    const specialSubs = control ? SPECIAL_CONTROLS[control.name] : undefined;
 
     if (isSelected) {
       setSelections(prev => { const n = new Map(prev); n.delete(key); return n; });
-      if (isSpecial) {
+      if (specialSubs) {
         setExpandedControls(prev => { const n = new Set(prev); n.delete(key); return n; });
       }
       await supabase
@@ -127,8 +129,10 @@ export default function Controls() {
         .eq("category", category)
         .eq("control_id", controlId);
     } else {
-      setSelections(prev => new Map(prev).set(key, []));
-      if (isSpecial) {
+      // When selecting parent, select all sub-options
+      const defaultSubs = specialSubs ? [...specialSubs] : [];
+      setSelections(prev => new Map(prev).set(key, defaultSubs));
+      if (specialSubs) {
         setExpandedControls(prev => new Set(prev).add(key));
       }
       await supabase.from("wmsv_control_selections").upsert({
@@ -136,7 +140,7 @@ export default function Controls() {
         awp_class_name: category,
         category,
         control_id: controlId,
-        sub_options: [],
+        sub_options: defaultSubs,
       } as any, { onConflict: "user_id,category,control_id" });
     }
   };
@@ -148,15 +152,26 @@ export default function Controls() {
       ? currentSubs.filter(s => s !== subOption)
       : [...currentSubs, subOption];
 
-    setSelections(prev => new Map(prev).set(key, newSubs));
-
-    await supabase.from("wmsv_control_selections").upsert({
-      user_id: user!.id,
-      awp_class_name: category,
-      category,
-      control_id: controlId,
-      sub_options: newSubs,
-    } as any, { onConflict: "user_id,category,control_id" });
+    if (newSubs.length === 0) {
+      // All children unchecked → uncheck parent
+      setSelections(prev => { const n = new Map(prev); n.delete(key); return n; });
+      setExpandedControls(prev => { const n = new Set(prev); n.delete(key); return n; });
+      await supabase
+        .from("wmsv_control_selections")
+        .delete()
+        .eq("user_id", user!.id)
+        .eq("category", category)
+        .eq("control_id", controlId);
+    } else {
+      setSelections(prev => new Map(prev).set(key, newSubs));
+      await supabase.from("wmsv_control_selections").upsert({
+        user_id: user!.id,
+        awp_class_name: category,
+        category,
+        control_id: controlId,
+        sub_options: newSubs,
+      } as any, { onConflict: "user_id,category,control_id" });
+    }
   };
 
   if (accountLoading || awpLoading || controlsLoading || selectionsLoading) {
@@ -183,7 +198,6 @@ export default function Controls() {
 
   const renderControlList = (category: CategoryKey) => {
     const controlIds = (categoryControlIds as Record<CategoryKey, string[]>)[category] || [];
-    // Maintain display_order from allControls
     const controls = allControls.filter(c => controlIds.includes(c.id));
 
     return controls.map(control => {
@@ -194,6 +208,10 @@ export default function Controls() {
       const currentSubs = selections.get(key) || [];
 
       if (specialSubs) {
+        // Determine parent checkbox state
+        const allChecked = isSelected && currentSubs.length === specialSubs.length;
+        const someChecked = isSelected && currentSubs.length > 0 && currentSubs.length < specialSubs.length;
+
         return (
           <div key={control.id} className="space-y-1">
             <div className="flex items-center gap-2">
@@ -214,10 +232,51 @@ export default function Controls() {
                 {isSelected && isControlExpanded ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronRight className="w-3.5 h-3.5" />}
               </button>
               <Checkbox
-                checked={isSelected}
-                onCheckedChange={() => toggleControl(category, control.id)}
+                checked={allChecked ? true : someChecked ? "indeterminate" : false}
+                indeterminate={someChecked}
+                onCheckedChange={() => {
+                  if (isSelected && allChecked) {
+                    // Uncheck parent → uncheck all children
+                    toggleControl(category, control.id);
+                  } else if (isSelected && someChecked) {
+                    // Partial → select all children
+                    const allSubs = [...specialSubs];
+                    setSelections(prev => new Map(prev).set(key, allSubs));
+                    supabase.from("wmsv_control_selections").upsert({
+                      user_id: user!.id,
+                      awp_class_name: category,
+                      category,
+                      control_id: control.id,
+                      sub_options: allSubs,
+                    } as any, { onConflict: "user_id,category,control_id" });
+                  } else {
+                    // Not selected → select all
+                    toggleControl(category, control.id);
+                  }
+                }}
               />
-              <span className="text-sm">{control.name}</span>
+              <span
+                className="text-sm cursor-pointer select-none"
+                onClick={() => {
+                  if (isSelected && allChecked) {
+                    toggleControl(category, control.id);
+                  } else if (isSelected && someChecked) {
+                    const allSubs = [...specialSubs];
+                    setSelections(prev => new Map(prev).set(key, allSubs));
+                    supabase.from("wmsv_control_selections").upsert({
+                      user_id: user!.id,
+                      awp_class_name: category,
+                      category,
+                      control_id: control.id,
+                      sub_options: allSubs,
+                    } as any, { onConflict: "user_id,category,control_id" });
+                  } else {
+                    toggleControl(category, control.id);
+                  }
+                }}
+              >
+                {control.name}
+              </span>
             </div>
             {isSelected && isControlExpanded && (
               <div className="ml-10 space-y-1">
@@ -227,7 +286,12 @@ export default function Controls() {
                       checked={currentSubs.includes(sub)}
                       onCheckedChange={() => toggleSubOption(category, control.id, sub)}
                     />
-                    <span className="text-sm text-muted-foreground">{sub}</span>
+                    <span
+                      className="text-sm text-muted-foreground cursor-pointer select-none"
+                      onClick={() => toggleSubOption(category, control.id, sub)}
+                    >
+                      {sub}
+                    </span>
                   </div>
                 ))}
               </div>
@@ -242,7 +306,12 @@ export default function Controls() {
             checked={isSelected}
             onCheckedChange={() => toggleControl(category, control.id)}
           />
-          <span className="text-sm">{control.name}</span>
+          <span
+            className="text-sm cursor-pointer select-none"
+            onClick={() => toggleControl(category, control.id)}
+          >
+            {control.name}
+          </span>
         </div>
       );
     });
