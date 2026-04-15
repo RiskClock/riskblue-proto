@@ -38,14 +38,14 @@ export function useDriveToken() {
       });
 
       if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
+        const errorData = await response.json().catch(() => null);
         if (errorData?.needs_reauth === true) {
           setDriveToken(null);
           setNeedsReauth(true);
           return;
         }
         console.error("Error fetching drive token:", errorData);
-        setError(errorData.error || "Failed to fetch token");
+        setError(errorData?.error || "Failed to fetch token");
         return;
       }
 
@@ -90,7 +90,7 @@ export function useDriveToken() {
       });
 
       if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
+        const errorData = await response.json().catch(() => null);
         console.error("Token refresh error:", errorData);
         
         if (errorData?.needs_reauth === true) {
