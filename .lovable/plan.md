@@ -1,142 +1,66 @@
 
 
-# Fix: Authoritative Result Clearing, Upload Buttons, Drawing Preview, Aggressive Stop
+# Fix: Authoritative Rerun Clearing, Override Locking, Summarize Auth
 
-## 1. Authoritative result clearing on rerun — `run-analysis-pipeline/index.ts`
+## Root Cause: Results Not Clearing on Rerun
 
-**Problem**: Currently triage/analysis results are only deleted at the start of Phase 2 (line 479-500), not at the start of Phase 1. When "Start Analysis" is clicked, old triage cells and deep-analysis results persist in the DB and repopulate via realtime/queries even though the UI tried to clear local state.
+The race condition is in the pipeline edge function's execution order:
 
-**Fix**: Move the deletion of `analysis_triage_results`, `analysis_results`, `analysis_triage_overrides`, extracted text, and summary data to the **very beginning** of `runPipeline`, before Phase 1 starts. This ensures all three result layers are cleared at the source immediately when the pipeline begins:
+1. **Line 249-260**: Sets `status: "processing"` and returns 202 immediately (line 306)
+2. **Line 286-296**: Kicks off `runPipeline()` in background via `waitUntil`
+3. **Line 347-358** (inside `runPipeline`): Deletes old rows
 
-```typescript
-// At top of runPipeline, before Phase 1:
+The status update to `"processing"` triggers a realtime event on `analysis_requests`, which causes the frontend's realtime subscription to invalidate `triage-results` and `analysis-results` queries. These refetch from the DB **before** the background `runPipeline` has executed the DELETE statements. The 5-second polling interval on `analysis-results` (line 1364, unconditional) compounds this by continuously re-fetching stale rows.
+
+**Fix**: Move the authoritative DELETE block from inside `runPipeline` (background, line 347-358) to the **main handler** (line 249-260 area), **before** setting `status: "processing"`. This ensures old rows are gone from the DB before any status change triggers realtime events or query refetches.
+
+## Changes
+
+### 1. `supabase/functions/run-analysis-pipeline/index.ts` — Move DELETE before status update
+
+In the main handler (around line 249), insert the authoritative clear **before** the status update to `"processing"`:
+
+```
+// 1. Delete all previous results (before status change triggers realtime)
 await Promise.all([
-  admin.from("analysis_triage_results").delete().eq("analysis_request_id", analysisRequestId),
-  admin.from("analysis_results").delete().eq("analysis_request_id", analysisRequestId),
-  admin.from("analysis_triage_overrides").delete().eq("analysis_request_id", analysisRequestId),
-  admin.from("analysis_request_files")
-    .update({ extracted_text: null, openai_file_id: null, openai_file_status: null } as any)
-    .eq("analysis_request_id", analysisRequestId),
-  admin.from("analysis_requests")
-    .update({ triage_tokens_used: 0, analyze_tokens_used: 0, summary_data: {} } as any)
-    .eq("id", analysisRequestId),
+  admin.from("analysis_triage_results").delete().eq(...),
+  admin.from("analysis_results").delete().eq(...),
+  admin.from("analysis_triage_overrides").delete().eq(...),
+  admin.from("analysis_request_files").update({ extracted_text: null, ... }).eq(...),
+  admin.from("analysis_requests").update({ triage_tokens_used: 0, analyze_tokens_used: 0, summary_data: {} }).eq(...),
 ]);
+
+// 2. THEN set status to "processing" (this triggers realtime → refetch → rows are already gone)
+await admin.from("analysis_requests").update({ status: "processing", ... }).eq(...);
 ```
 
-Remove the duplicate deletion block currently at the start of Phase 2 (lines 479-500). The Phase 3 per-class deletion (lines 677-685) can stay since it handles the case where Phase 3 runs independently.
+Remove the duplicate DELETE block from inside `runPipeline` (line 347-358) since it's now handled before the 202 response.
 
-On the frontend (`AnalysisSection.tsx`), keep `setExtractedFileIds(new Set())` in `startPipeline` for immediate visual feedback, and also clear the triage/analysis query caches so the UI doesn't flash stale data while waiting for the backend deletion to propagate:
+### 2. `src/components/analysis/AnalysisSection.tsx` — Lock overrides during deep analysis only
+
+In `handleTriageCellClick`, add a guard that checks if the pipeline is in the `"analyzing"` phase specifically, not the whole pipeline:
 
 ```typescript
-setExtractedFileIds(new Set());
-setTriageResults(new Map());
-setTriageOverrides(new Map());
-queryClient.setQueryData(["analysis-results", requestId], []);
-queryClient.setQueryData(["triage-results", requestId], []);
+const handleTriageCellClick = async (...) => {
+  // Lock overrides only during deep analysis phase
+  if (pipelinePhase === "analyzing") return;
+  // ... existing logic
+};
 ```
 
-## 2. Upload buttons in grid sub-header — `AnalysisSection.tsx` + `WMSVProjectDetail.tsx`
+Also remove `cursor-pointer` from triage cells when `pipelinePhase === "analyzing"`. Users can still include/exclude during extraction and triage phases.
 
-**Props**: Add optional callbacks to `AnalysisSectionProps`:
-- `onAddFileUpload?: () => void`
-- `onAddFileDrive?: () => void`
-- `onAddFileProcore?: () => void`
+Note: `pipelinePhase` is already derived from `requestMeta` at line 3428 but `handleTriageCellClick` is defined earlier (line 1418). The phase value will need to be read from `requestMeta` directly inside the handler, or the handler needs to be moved/wrapped to access the derived value.
 
-**Grid sub-header** (line 3694-3698): For WMSV, replace the Download ZIP button with:
-```
-Add more files: [Upload Files] [Google Drive] [Procore] [SharePoint (coming soon)]
-```
-For non-WMSV, keep Download ZIP.
+### 3. `supabase/functions/summarize-analysis/index.ts` — Auth fix
 
-**WMSVProjectDetail**: Pass the three callbacks to `<AnalysisSection>`. Remove the redundant inline upload button row (the "else" branch around lines 226-240 that shows upload buttons when files exist).
-
-## 3. Drawing preview — RLS policy fix via migration
-
-**Root cause confirmed**: The `drive-analysis-files` SELECT policy has a bug:
-```sql
-(projects.id)::text = (storage.foldername(projects.name))[1]
-```
-This compares the project UUID to `foldername(projects.name)` — the project's display name — instead of `name` (the storage object's path column). This means it never matches for non-internal users, causing a 403 on download.
-
-The download code itself (`supabase.storage.from("drive-analysis-files").download(sourceFile.storage_path)`) is correct — this is purely an RLS bug.
-
-**Fix** — migration:
-```sql
-DROP POLICY "Project members and internal users can view analysis files" ON storage.objects;
-
-CREATE POLICY "Project members and internal users can view analysis files"
-ON storage.objects FOR SELECT
-USING (
-  bucket_id = 'drive-analysis-files'
-  AND (
-    EXISTS (
-      SELECT 1 FROM projects
-      WHERE (projects.id)::text = (storage.foldername(name))[1]
-      AND (
-        projects.user_id = auth.uid()
-        OR is_project_member(auth.uid(), projects.id)
-      )
-    )
-    OR is_internal_user(auth.uid())
-  )
-);
-```
-
-The key change: `storage.foldername(projects.name)` → `storage.foldername(name)` where `name` is the storage object's path.
-
-## 4. Aggressive stop — `run-analysis-pipeline/index.ts`
-
-**Current behavior**: Stop flag is checked every 3 items (`STOP_CHECK_INTERVAL = 3`), shared across 5 workers. A worker can dispatch 2 expensive calls before checking.
-
-**Fix**: Check stop **before every item dispatch** instead of every N items:
-
-```typescript
-async function worker() {
-  while (!stopped) {
-    const i = nextIndex++;
-    if (i >= items.length) return;
-
-    // Check stop before every item
-    if (await shouldStop(admin, requestId)) {
-      stopped = true;
-      return;
-    }
-
-    await processFn(items[i]);
-    progress.increment();
-    await progress.flush();
-  }
-}
-```
-
-Remove `itemsSinceStopCheck` and `STOP_CHECK_INTERVAL`. The worst-case delay becomes just the in-flight calls completing (up to 5 concurrent). The UI stays in "Stopping..." until the backend writes `status: "started"`, which is already handled by the fix from the previous round.
-
-## 5. Extraction badge refresh — `AnalysisSection.tsx` (from previous round, unchanged)
-
-Track `prevPipelinePhaseRef` and refresh `extractedFileIds` only when transitioning from `"extracting"` to another phase:
-
-```typescript
-const prevPipelinePhaseRef = useRef<string | null>(null);
-useEffect(() => {
-  const prev = prevPipelinePhaseRef.current;
-  prevPipelinePhaseRef.current = pipelinePhase;
-  if (prev === "extracting" && pipelinePhase !== "extracting" && requestId) {
-    supabase.from("analysis_request_files").select("id")
-      .eq("analysis_request_id", requestId)
-      .not("extracted_text", "is", null)
-      .then(({ data }) => {
-        if (data) setExtractedFileIds(new Set(data.map((f: any) => f.id)));
-      });
-  }
-}, [pipelinePhase, requestId]);
-```
+Replace the `isInternal` gate (lines 44-49) with project-access auth: parse `analysisRequestId` from body first, then verify user is request owner, project owner, or project member via `analysis_requests` → `projects` join + `project_user_roles` check. Keep `isInternal` as fast-path bypass.
 
 ## Files changed
 
 | File | Change |
 |---|---|
-| `supabase/functions/run-analysis-pipeline/index.ts` | Move result deletion to pipeline start; check stop before every item |
-| `src/components/analysis/AnalysisSection.tsx` | Clear caches on rerun; add upload button props/UI; phase-transition badge refresh |
-| `src/components/WMSVProjectDetail.tsx` | Pass upload callbacks; remove redundant upload row |
-| Migration SQL | Fix `drive-analysis-files` SELECT RLS policy |
+| `supabase/functions/run-analysis-pipeline/index.ts` | Move DELETE to main handler before status update |
+| `src/components/analysis/AnalysisSection.tsx` | Lock triage overrides only during `"analyzing"` phase |
+| `supabase/functions/summarize-analysis/index.ts` | Replace internal-only gate with project-access auth |
 
