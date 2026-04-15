@@ -100,7 +100,7 @@ serve(async (req) => {
       const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
       const { data: tokenData, error: fetchError } = await supabase
         .from("user_procore_tokens")
-        .select("access_token, encrypted_access_token, is_encrypted, token_expiry, procore_email, procore_company_id")
+        .select("access_token, encrypted_access_token, is_encrypted, token_expiry, procore_email, procore_company_id, refresh_token, encrypted_refresh_token")
         .eq("user_id", user.id)
         .maybeSingle();
 
@@ -232,6 +232,11 @@ serve(async (req) => {
 
       const { access_token, refresh_token, expires_in } = tokenData;
 
+      console.log(`[callback] Token exchange response — has refresh_token: ${!!refresh_token}`);
+      if (!refresh_token) {
+        console.warn(`[callback] WARNING: Provider did not return refresh_token for user: ${stateData.userId}`);
+      }
+
       // Get user info from Procore
       let procoreEmail: string | null = null;
       let procoreCompanyId: number | null = null;
@@ -312,17 +317,18 @@ serve(async (req) => {
 
       // === Server-side concurrency lock ===
       // Atomically acquire lock: only succeed if no recent refresh is in progress
+      const staleCutoff = new Date(Date.now() - 30000).toISOString();
       const { data: lockResult, error: lockError } = await supabase
         .from("user_procore_tokens")
         .update({ refreshing_since: new Date().toISOString() })
         .eq("user_id", user.id)
-        .or("refreshing_since.is.null,refreshing_since.lt." + new Date(Date.now() - 30000).toISOString())
-        .select("id")
+        .or(`refreshing_since.is.null,refreshing_since.lt.${staleCutoff}`)
+        .select("id, refreshing_since")
         .maybeSingle();
 
       if (lockError) {
         console.error("[refresh] Lock query error:", lockError);
-        return new Response(JSON.stringify({ error: "Internal error" }),
+        return new Response(JSON.stringify({ error: "Internal error", retryable: true }),
           { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } });
       }
 
@@ -331,6 +337,11 @@ serve(async (req) => {
         console.log(`[refresh] Refresh already in progress for user: ${user.id}`);
         return new Response(JSON.stringify({ retry: true, message: "Refresh in progress" }),
           { status: 409, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+      }
+
+      // Log if we reclaimed a stale lock
+      if (lockResult.refreshing_since) {
+        console.log(`[refresh] Reclaimed stale lock for user: ${user.id} (was locked since ${lockResult.refreshing_since})`);
       }
 
       // Helper to clear the lock
@@ -359,7 +370,7 @@ serve(async (req) => {
         refreshToken = tokenData.refresh_token;
       } else {
         await clearLock();
-        return new Response(JSON.stringify({ error: "No refresh token available" }),
+        return new Response(JSON.stringify({ error: "No refresh token available", needs_reauth: true }),
           { status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" } });
       }
 
@@ -394,7 +405,7 @@ serve(async (req) => {
         }
 
         return new Response(
-          JSON.stringify({ error: "Token refresh failed", details: refreshData }),
+          JSON.stringify({ error: "Token refresh failed", retryable: true, details: refreshData }),
           { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
         );
       }
