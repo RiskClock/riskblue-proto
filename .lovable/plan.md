@@ -1,38 +1,86 @@
 
 
-# Fix: Laggy Start + Missing Triage Progress/Results
+# Realtime Subscriptions, Status-Precedence Guard, Optimistic Start/Stop
 
-## Issue 1: Start Analysis feels laggy (couple seconds delay)
+## What this fixes
+1. **Start Analysis lag + flicker** — UI updates instantly before backend responds; stale polls cannot regress the state
+2. **Triage cells not coloring** — Realtime subscription pushes triage results immediately; polling no longer depends on flickering `analyzeV2Running`
+3. **Stop lag** — optimistic "Stopping..." UI appears immediately
 
-**Root cause:** After calling `startPipeline()`, the UI waits for the next 3-second polling cycle (`refetchInterval: 3000` on `requestMeta`) to detect `status: "processing"`. There's no optimistic UI update.
+## Migration
 
-**Fix:** In `startPipeline()`, immediately set optimistic local state so the toolbar switches to the "running" view before the backend even responds. Specifically, set a local `optimisticPipelineRunning` flag and use it alongside `pipelineRunning` to control the toolbar display. Clear it once `requestMeta` confirms processing.
+Enable realtime for `analysis_triage_results` (`analysis_requests` is already enabled):
 
-Simpler approach: after the `supabase.functions.invoke` call succeeds, immediately call `queryClient.setQueryData` to optimistically update the `requestMeta` cache with `status: "processing"` and `pipeline_phase: "extracting"` (or the appropriate phase). This makes the toolbar switch instantly without waiting for the poll.
+```sql
+ALTER TABLE public.analysis_triage_results REPLICA IDENTITY FULL;
+ALTER PUBLICATION supabase_realtime ADD TABLE public.analysis_triage_results;
+```
 
-## Issue 2: Triage progress and results not showing
+## `src/components/analysis/AnalysisSection.tsx`
 
-**Root cause (two problems):**
+**A) Status-precedence guard**
 
-1. **Triage results query never re-fetches during pipeline:** The `triageData` query (line 1357) has `refetchOnWindowFocus: false` and **no `refetchInterval`**. When the backend pipeline creates triage results, the UI never polls for them. Only `requestMeta` polls every 3s.
+Add a rank map and ref to prevent stale data from regressing UI:
 
-2. **`RateLimitError` thrown as Deno exception, not caught:** The logs show `RateLimitError` is thrown by Deno's `fetch()` itself (not returned as HTTP 429). The `callFunction` helper's retry logic only checks `res.status === 429` after `fetch` returns, but `fetch` throws before returning. The `catch` at the call site (line 460-466) catches it but doesn't retry — it just increments `triageFailures` and moves on.
+```
+STATUS_RANK = { awaiting_upload:0, copied:1, started:2, processing:3, stopping:3, complete:4, failed:4 }
+optimisticStatusRef = useRef<string|null>(null)
+```
 
-**Fixes:**
+In the hydration effect (lines 1461-1499): if `optimisticStatusRef` is set and incoming status has a lower rank, skip the update. Clear optimistic ref when DB catches up or reaches terminal state.
 
-**a) Add polling for triage results during pipeline run:**
-Add `refetchInterval` to the `triageData` query, gated on whether the pipeline is running. When `pipelinePhase === "triaging"`, poll every 5 seconds so results appear in real-time.
+**B) Optimistic start (before invoke, rollback on failure)**
 
-**b) Catch `RateLimitError` exception in `callFunction`:**
-Wrap the `fetch()` call in a try/catch. If the caught error has `name === "RateLimitError"`, use its `retryAfterMs` property (or exponential backoff) and retry. This is the critical fix — without it, every triage call fails immediately.
+In `startPipeline` (line 1887):
+1. Save previous cache data
+2. Set `optimisticStatusRef = "processing"`, `analyzeRunSyncRef = "starting"`, `setAnalyzeV2Running(true)`
+3. Update query cache optimistically
+4. Then call `supabase.functions.invoke`
+5. On failure: rollback cache, clear refs, show toast
+6. Remove `invalidateQueries` after optimistic set
 
-**c) Also poll `analysis-results` during analyzing phase:**
-The `results` query already has `refetchInterval: 5000` so this is fine, but verify it's adequate.
+**C) Optimistic stop (keeping active status)**
 
-## Summary of Changes
+In `handleWmsvStop` (line 1930):
+1. Set `optimisticStatusRef = "stopping"`, `setAnalyzeV2Stopping(true)`
+2. Update query cache: keep `status: "processing"`, set `pipeline_stop_requested: true`
+3. Toolbar shows "Stopping..." when `analyzeV2Stopping` is true, with disabled Stop button
+4. Do NOT `invalidateQueries` — realtime handles the final state transition
+
+**D) Realtime subscriptions**
+
+Subscribe to:
+- `analysis_requests` changes filtered by `id = requestId` → invalidate meta, triage, and analysis results
+- `analysis_triage_results` changes filtered by `analysis_request_id = requestId` → invalidate triage results
+
+Cleanup on unmount.
+
+**E) Fallback polling**
+
+`requestMeta` query: change `refetchInterval: 3000` → `ACTIVE_STATUSES.includes(dbStatus) ? 5000 : false`
+`triageData` query: change `analyzeV2Running ? 5000 : false` → `ACTIVE_STATUSES.includes(dbStatus) ? 5000 : false`
+
+Where `ACTIVE_STATUSES = ["pending","copying","copied","started","processing"]`
+
+**F) Toolbar Stopping state**
+
+WMSV toolbar condition changes from `wmsvRunning` to `wmsvRunning || analyzeV2Stopping`. When stopping, show "Stopping..." label, disable the Stop button.
+
+## `src/components/WMSVProjectDetail.tsx`
+
+1. Add Realtime subscription on `analysis_requests` filtered by `project_id`. On change, invalidate `wmsv-analysis-request` and `wmsv-analysis-files`.
+2. Change polling from `isImporting ? 3000 : false` to `ACTIVE_STATUSES.includes(status) ? 5000 : false`.
+
+## `src/pages/Projects.tsx`
+
+For WMSV users, add Realtime subscription on `analysis_requests` (all rows). On UPDATE, update `analysisStatuses` map from payload. Cleanup on unmount.
+
+## Files changed
 
 | File | Change |
 |---|---|
-| `supabase/functions/run-analysis-pipeline/index.ts` | Wrap `fetch()` in try/catch to handle Deno `RateLimitError` exceptions with retry using `retryAfterMs` |
-| `src/components/analysis/AnalysisSection.tsx` | 1) Optimistic UI update in `startPipeline` so toolbar switches immediately. 2) Add `refetchInterval` to `triageData` query when pipeline is running. |
+| Migration SQL | Enable realtime for `analysis_triage_results` |
+| `src/components/analysis/AnalysisSection.tsx` | Status-precedence guard, realtime subs, optimistic start/stop, fallback polling, toolbar stopping state |
+| `src/components/WMSVProjectDetail.tsx` | Realtime subscription + fallback-only polling |
+| `src/pages/Projects.tsx` | Realtime subscription for WMSV status badges |
 
