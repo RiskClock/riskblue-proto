@@ -39,7 +39,6 @@ async function callFunction(
         body: JSON.stringify(body),
       });
     } catch (fetchErr: any) {
-      // Deno throws RateLimitError as an exception instead of returning HTTP 429
       if (fetchErr?.name === "RateLimitError" && attempt < MAX_RETRIES) {
         const delay = fetchErr.retryAfterMs || Math.pow(2, attempt + 1) * 1000;
         console.warn(
@@ -48,7 +47,6 @@ async function callFunction(
         await new Promise((r) => setTimeout(r, delay));
         continue;
       }
-      // Non-retryable fetch error
       throw fetchErr;
     }
 
@@ -59,12 +57,11 @@ async function callFunction(
       // not JSON
     }
 
-    // Retry on rate limit (HTTP 429 response)
     const isRateLimited =
       res.status === 429 ||
       (data?.error && typeof data.error === "string" && data.error.toLowerCase().includes("rate"));
     if (isRateLimited && attempt < MAX_RETRIES) {
-      const delay = Math.pow(2, attempt + 1) * 1000; // 2s, 4s, 8s
+      const delay = Math.pow(2, attempt + 1) * 1000;
       console.warn(
         `[pipeline] Rate limited calling ${fnName}, retrying in ${delay}ms (attempt ${attempt + 1}/${MAX_RETRIES})`,
       );
@@ -75,7 +72,6 @@ async function callFunction(
     return { ok: res.ok, status: res.status, data };
   }
 
-  // Should not reach here, but just in case
   return { ok: false, status: 429, data: { error: "Max retries exceeded" } };
 }
 
@@ -95,24 +91,93 @@ async function shouldStop(
 }
 
 // ---------------------------------------------------------------------------
-// Update pipeline progress
+// Monotonic progress tracker — safe for concurrent workers
 // ---------------------------------------------------------------------------
-async function updateProgress(
+function createProgressTracker(
   admin: ReturnType<typeof createClient>,
   requestId: string,
   phase: string,
-  done: number,
   total: number,
 ) {
-  await admin
-    .from("analysis_requests")
-    .update({
-      pipeline_phase: phase,
-      pipeline_progress_done: done,
-      pipeline_progress_total: total,
-      status: "processing",
-    } as any)
-    .eq("id", requestId);
+  let completed = 0;
+  let lastWritten = -1;
+  let pendingFlush: Promise<void> | null = null;
+
+  async function doFlush(value: number) {
+    await admin
+      .from("analysis_requests")
+      .update({
+        pipeline_phase: phase,
+        pipeline_progress_done: value,
+        pipeline_progress_total: total,
+        status: "processing",
+      } as any)
+      .eq("id", requestId);
+  }
+
+  return {
+    get completed() { return completed; },
+    increment() {
+      completed++;
+    },
+    async flush() {
+      const current = completed;
+      if (current <= lastWritten) return;
+      lastWritten = current;
+      // Await any pending flush to serialise DB writes
+      if (pendingFlush) await pendingFlush;
+      pendingFlush = doFlush(current);
+      await pendingFlush;
+      pendingFlush = null;
+    },
+    async init() {
+      lastWritten = 0;
+      await doFlush(0);
+    },
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Concurrent worker pool with stop checks
+// ---------------------------------------------------------------------------
+async function runPool<T>(
+  items: T[],
+  maxConcurrency: number,
+  admin: ReturnType<typeof createClient>,
+  requestId: string,
+  progress: ReturnType<typeof createProgressTracker>,
+  processFn: (item: T) => Promise<void>,
+): Promise<{ completed: number; stopped: boolean }> {
+  let nextIndex = 0;
+  let stopped = false;
+  let itemsSinceStopCheck = 0;
+  const STOP_CHECK_INTERVAL = 3;
+
+  async function worker() {
+    while (!stopped) {
+      const i = nextIndex++;
+      if (i >= items.length) return;
+
+      // Periodic stop check (every N items per worker)
+      itemsSinceStopCheck++;
+      if (itemsSinceStopCheck >= STOP_CHECK_INTERVAL) {
+        itemsSinceStopCheck = 0;
+        if (await shouldStop(admin, requestId)) {
+          stopped = true;
+          return;
+        }
+      }
+
+      await processFn(items[i]);
+      progress.increment();
+      await progress.flush();
+    }
+  }
+
+  const workerCount = Math.min(maxConcurrency, items.length);
+  const workers = Array.from({ length: workerCount }, () => worker());
+  await Promise.all(workers);
+  return { completed: progress.completed, stopped };
 }
 
 // ---------------------------------------------------------------------------
@@ -131,7 +196,6 @@ Deno.serve(async (req) => {
     const supabaseAnonKey = Deno.env.get("SUPABASE_ANON_KEY")!;
     const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 
-    // Authenticate user
     const userClient = createClient(supabaseUrl, supabaseAnonKey, {
       global: { headers: { Authorization: authHeader } },
     });
@@ -141,28 +205,27 @@ Deno.serve(async (req) => {
     } = await userClient.auth.getUser();
     if (userErr || !user) return json({ error: "Unauthorized" }, 401);
 
-    // Verify access: must be internal OR project owner
     const isInternal =
       user.email?.toLowerCase().endsWith("@riskclock.com") ?? false;
 
     const body = await req.json();
     const {
       analysisRequestId,
-      visibleAwpClasses,
+      enabledAwpClasses,
       triageModel,
       analyzeModel,
-      disabledColumns,
-      phaseOverride, // optional: "extract" | "triage" | "analyze" to run only one phase
+      phaseOverride,
     } = body as {
       analysisRequestId: string;
-      visibleAwpClasses?: string[];
+      enabledAwpClasses?: string[];
       triageModel?: string;
       analyzeModel?: string;
-      disabledColumns?: string[];
       phaseOverride?: string;
     };
 
     if (!analysisRequestId) return json({ error: "Missing analysisRequestId" }, 400);
+
+    console.log(`[pipeline] Received enabledAwpClasses:`, enabledAwpClasses);
 
     const admin = createClient(supabaseUrl, serviceKey);
 
@@ -177,7 +240,6 @@ Deno.serve(async (req) => {
       return json({ error: "Analysis request not found" }, 404);
 
     if (!isInternal && (request as any).user_id !== user.id) {
-      // Check project ownership
       const { data: project } = await admin
         .from("projects")
         .select("user_id")
@@ -188,7 +250,6 @@ Deno.serve(async (req) => {
       }
     }
 
-    // Save the user's auth token for internal calls
     const userToken = authHeader.replace("Bearer ", "");
 
     // Reset stop flag and set initial status
@@ -204,16 +265,27 @@ Deno.serve(async (req) => {
       } as any)
       .eq("id", analysisRequestId);
 
-    // Persist model selections
+    // Persist model selections and disabled classes
     const modelUpdates: Record<string, unknown> = {};
     if (triageModel) modelUpdates.triage_model = triageModel;
     if (analyzeModel) modelUpdates.analyze_model = analyzeModel;
-    if (disabledColumns) modelUpdates.disabled_awp_classes = disabledColumns;
+
+    // Derive disabled_awp_classes from full prompt list minus enabledAwpClasses
+    // (stored for record-keeping)
+    if (enabledAwpClasses) {
+      const enabledSet = new Set(enabledAwpClasses);
+      // We'll compute this after fetching prompts — for now mark intent
+      modelUpdates._enabledIntent = true;
+    }
+
     if (Object.keys(modelUpdates).length > 0) {
-      await admin
-        .from("analysis_requests")
-        .update(modelUpdates as any)
-        .eq("id", analysisRequestId);
+      const { _enabledIntent, ...dbUpdates } = modelUpdates;
+      if (Object.keys(dbUpdates).length > 0) {
+        await admin
+          .from("analysis_requests")
+          .update(dbUpdates as any)
+          .eq("id", analysisRequestId);
+      }
     }
 
     // Return 202 immediately — pipeline runs in background
@@ -223,14 +295,12 @@ Deno.serve(async (req) => {
       serviceKey,
       userToken,
       analysisRequestId,
-      visibleAwpClasses,
+      enabledAwpClasses,
       triageModel: triageModel || "gpt-5-nano",
       analyzeModel: analyzeModel || "gpt-5-mini",
-      disabledColumns: new Set(disabledColumns || []),
       phaseOverride,
     });
 
-    // Use EdgeRuntime.waitUntil if available, otherwise fire-and-forget
     if (typeof (globalThis as any).EdgeRuntime?.waitUntil === "function") {
       (globalThis as any).EdgeRuntime.waitUntil(promise);
     } else {
@@ -258,10 +328,9 @@ interface PipelineParams {
   serviceKey: string;
   userToken: string;
   analysisRequestId: string;
-  visibleAwpClasses?: string[];
+  enabledAwpClasses?: string[];
   triageModel: string;
   analyzeModel: string;
-  disabledColumns: Set<string>;
   phaseOverride?: string;
 }
 
@@ -272,12 +341,13 @@ async function runPipeline(params: PipelineParams) {
     serviceKey,
     userToken,
     analysisRequestId,
-    visibleAwpClasses,
+    enabledAwpClasses,
     triageModel,
     analyzeModel,
-    disabledColumns,
     phaseOverride,
   } = params;
+
+  const MAX_CONCURRENCY = 5;
 
   try {
     // Fetch files
@@ -318,15 +388,12 @@ async function runPipeline(params: PipelineParams) {
       return;
     }
 
-    // Filter prompts: only drawing-detectable, optionally scoped by visibleAwpClasses, then exclude disabledColumns
+    // Filter prompts using enabledAwpClasses as the single source of truth
     let prompts: any[];
+    const drawingDetectable = allPrompts.filter((p: any) => p.detection_method !== "always");
 
-    // Step 1: Start with drawing-detectable prompts
-    let eligible = allPrompts.filter((p: any) => p.detection_method !== "always");
-
-    // Step 2: If visibleAwpClasses provided, restrict to that set first
-    if (visibleAwpClasses !== undefined) {
-      if (visibleAwpClasses.length === 0) {
+    if (enabledAwpClasses !== undefined) {
+      if (enabledAwpClasses.length === 0) {
         await admin
           .from("analysis_requests")
           .update({
@@ -336,48 +403,73 @@ async function runPipeline(params: PipelineParams) {
           .eq("id", analysisRequestId);
         return;
       }
-      const allowed = new Set(visibleAwpClasses);
-      eligible = eligible.filter((p: any) => allowed.has(p.awp_class_name));
+      const allowed = new Set(enabledAwpClasses);
+      prompts = drawingDetectable.filter((p: any) => allowed.has(p.awp_class_name));
+    } else {
+      // Fallback: no filtering (legacy callers)
+      prompts = drawingDetectable;
     }
 
-    // Step 3: Apply disabledColumns on top (user can deselect classes in both modes)
-    prompts = eligible.filter((p: any) => !disabledColumns.has(p.awp_class_name));
+    console.log(`[pipeline] Final prompt classes (${prompts.length}): ${prompts.map((p: any) => p.awp_class_name).join(", ")}`);
+
+    // Persist disabled_awp_classes for record-keeping
+    if (enabledAwpClasses) {
+      const enabledSet = new Set(enabledAwpClasses);
+      const disabledClasses = drawingDetectable
+        .map((p: any) => p.awp_class_name)
+        .filter((name: string) => !enabledSet.has(name));
+      await admin
+        .from("analysis_requests")
+        .update({ disabled_awp_classes: disabledClasses } as any)
+        .eq("id", analysisRequestId);
+    }
 
     const runPhase = (phase: string) =>
       !phaseOverride || phaseOverride === phase;
+
+    // Helper for stopped cleanup
+    async function handleStopped() {
+      console.log("[pipeline] Stop requested — halting");
+      await admin
+        .from("analysis_requests")
+        .update({
+          status: "started",
+          pipeline_phase: null,
+          pipeline_progress_done: 0,
+          pipeline_progress_total: 0,
+        } as any)
+        .eq("id", analysisRequestId);
+    }
 
     // ======================== PHASE 1: EXTRACT ========================
     if (runPhase("extract")) {
       console.log(
         `[pipeline] Phase 1: Extract context for ${files.length} files`,
       );
-      await updateProgress(admin, analysisRequestId, "extracting", 0, files.length);
+      const progress = createProgressTracker(admin, analysisRequestId, "extracting", files.length);
+      await progress.init();
 
-      for (let i = 0; i < files.length; i++) {
-        if (await shouldStop(admin, analysisRequestId)) {
-          console.log("[pipeline] Stop requested during extraction");
-          await admin
-            .from("analysis_requests")
-            .update({
-              status: "started",
-              pipeline_phase: null,
-              pipeline_progress_done: 0,
-              pipeline_progress_total: 0,
-            } as any)
-            .eq("id", analysisRequestId);
-          return;
-        }
+      const { stopped } = await runPool(
+        files,
+        MAX_CONCURRENCY,
+        admin,
+        analysisRequestId,
+        progress,
+        async (file) => {
+          try {
+            await callFunction(supabaseUrl, serviceKey, userToken, "triage-drawings", {
+              fileId: file.id,
+              action: "extract",
+            });
+          } catch (e) {
+            console.error(`[pipeline] Extract failed for ${file.name}:`, e);
+          }
+        },
+      );
 
-        const file = files[i];
-        try {
-          await callFunction(supabaseUrl, serviceKey, userToken, "triage-drawings", {
-            fileId: file.id,
-            action: "extract",
-          });
-        } catch (e) {
-          console.error(`[pipeline] Extract failed for ${file.name}:`, e);
-        }
-        await updateProgress(admin, analysisRequestId, "extracting", i + 1, files.length);
+      if (stopped) {
+        await handleStopped();
+        return;
       }
     }
 
@@ -417,76 +509,80 @@ async function runPipeline(params: PipelineParams) {
       console.log(
         `[pipeline] Phase 2: Triage ${triageItems.length} items (${files.length} files × ${prompts.length} classes)`,
       );
-      await updateProgress(admin, analysisRequestId, "triaging", 0, triageItems.length);
+
+      const progress = createProgressTracker(admin, analysisRequestId, "triaging", triageItems.length);
+      await progress.init();
 
       let triageTokens = 0;
       let triageSuccesses = 0;
       let triageFailures = 0;
-      for (let i = 0; i < triageItems.length; i++) {
-        if (await shouldStop(admin, analysisRequestId)) {
-          console.log("[pipeline] Stop requested during triage");
-          await admin
-            .from("analysis_requests")
-            .update({
-              status: "started",
-              pipeline_phase: null,
-              pipeline_progress_done: 0,
-              pipeline_progress_total: 0,
-            } as any)
-            .eq("id", analysisRequestId);
-          return;
-        }
+      let tokenUpdateCounter = 0;
 
-        const item = triageItems[i];
-        try {
-          const result = await callFunction(
-            supabaseUrl,
-            serviceKey,
-            userToken,
-            "triage-drawings",
-            {
-              analysisRequestId,
-              fileId: item.fileId,
-              awpClassName: item.prompt.awp_class_name,
-              assetType: item.prompt.category,
-              drawingName: item.fileName,
-              promptContent:
-                item.prompt.triage_prompt_content ||
-                item.prompt.prompt_content ||
-                null,
-              action: "triage",
-              model: triageModel,
-            },
-          );
-          if (result.ok) {
-            triageSuccesses++;
-            if (result.data?.usage?.total_tokens) {
-              triageTokens += result.data.usage.total_tokens;
-              await admin
-                .from("analysis_requests")
-                .update({ triage_tokens_used: triageTokens } as any)
-                .eq("id", analysisRequestId);
+      const { stopped } = await runPool(
+        triageItems,
+        MAX_CONCURRENCY,
+        admin,
+        analysisRequestId,
+        progress,
+        async (item) => {
+          try {
+            const result = await callFunction(
+              supabaseUrl,
+              serviceKey,
+              userToken,
+              "triage-drawings",
+              {
+                analysisRequestId,
+                fileId: item.fileId,
+                awpClassName: item.prompt.awp_class_name,
+                assetType: item.prompt.category,
+                drawingName: item.fileName,
+                promptContent:
+                  item.prompt.triage_prompt_content ||
+                  item.prompt.prompt_content ||
+                  null,
+                action: "triage",
+                model: triageModel,
+              },
+            );
+            if (result.ok) {
+              triageSuccesses++;
+              if (result.data?.usage?.total_tokens) {
+                triageTokens += result.data.usage.total_tokens;
+                tokenUpdateCounter++;
+                if (tokenUpdateCounter >= 5) {
+                  tokenUpdateCounter = 0;
+                  await admin
+                    .from("analysis_requests")
+                    .update({ triage_tokens_used: triageTokens } as any)
+                    .eq("id", analysisRequestId);
+                }
+              }
+            } else {
+              triageFailures++;
+              console.error(
+                `[pipeline] Triage error for ${item.fileName}/${item.prompt.awp_class_name}: ${result.status} ${JSON.stringify(result.data)}`,
+              );
             }
-          } else {
+          } catch (e) {
             triageFailures++;
             console.error(
-              `[pipeline] Triage error for ${item.fileName}/${item.prompt.awp_class_name}: ${result.status} ${JSON.stringify(result.data)}`,
+              `[pipeline] Triage failed for ${item.fileName}/${item.prompt.awp_class_name}:`,
+              e,
             );
           }
-        } catch (e) {
-          triageFailures++;
-          console.error(
-            `[pipeline] Triage failed for ${item.fileName}/${item.prompt.awp_class_name}:`,
-            e,
-          );
-        }
-        await updateProgress(
-          admin,
-          analysisRequestId,
-          "triaging",
-          i + 1,
-          triageItems.length,
-        );
+        },
+      );
+
+      // Final token flush
+      await admin
+        .from("analysis_requests")
+        .update({ triage_tokens_used: triageTokens } as any)
+        .eq("id", analysisRequestId);
+
+      if (stopped) {
+        await handleStopped();
+        return;
       }
 
       // If ALL triage items failed, stop with error
@@ -508,13 +604,11 @@ async function runPipeline(params: PipelineParams) {
 
     // ======================== PHASE 3: ANALYZE ========================
     if (runPhase("analyze")) {
-      // Fetch triage results to determine eligible cells
       const { data: triageResults } = await admin
         .from("analysis_triage_results")
         .select("file_id, awp_class_name, status, score")
         .eq("analysis_request_id", analysisRequestId);
 
-      // Fetch overrides
       const { data: overrides } = await admin
         .from("analysis_triage_overrides")
         .select("file_id, awp_class_name, override_type")
@@ -528,7 +622,6 @@ async function runPipeline(params: PipelineParams) {
         );
       }
 
-      // Build work queue: file-first ordering
       interface WorkItem {
         fileId: string;
         fileName: string;
@@ -604,104 +697,98 @@ async function runPipeline(params: PipelineParams) {
         .update({ summary_data: summaryData } as any)
         .eq("id", analysisRequestId);
 
-      await updateProgress(admin, analysisRequestId, "analyzing", 0, workQueue.length);
+      const progress = createProgressTracker(admin, analysisRequestId, "analyzing", workQueue.length);
+      await progress.init();
 
       let analyzeTokens = 0;
       let analyzeSuccesses = 0;
       let analyzeFailures = 0;
-      for (let i = 0; i < workQueue.length; i++) {
-        if (await shouldStop(admin, analysisRequestId)) {
-          console.log("[pipeline] Stop requested during analysis");
-          await admin
-            .from("analysis_requests")
-            .update({
-              status: "started",
-              pipeline_phase: null,
-              pipeline_progress_done: 0,
-              pipeline_progress_total: 0,
-            } as any)
-            .eq("id", analysisRequestId);
-          return;
-        }
+      let tokenUpdateCounter = 0;
 
-        const item = workQueue[i];
-        try {
-          // Resolve prompt content — prefer cached, then the stored content
-          let promptContent = item.promptContent;
-          if (!promptContent) {
-            // Try to resolve from Drive doc
-            const resolveResult = await callFunction(
+      const { stopped } = await runPool(
+        workQueue,
+        MAX_CONCURRENCY,
+        admin,
+        analysisRequestId,
+        progress,
+        async (item) => {
+          try {
+            let promptContent = item.promptContent;
+            if (!promptContent) {
+              const resolveResult = await callFunction(
+                supabaseUrl,
+                serviceKey,
+                userToken,
+                "resolve-drive-doc",
+                {
+                  fileUrl: promptByClass.get(item.awpClassName)?.drive_file_id,
+                  exportContent: true,
+                },
+              );
+              if (resolveResult.ok && resolveResult.data?.content) {
+                promptContent = resolveResult.data.content;
+              }
+            }
+
+            if (!promptContent) {
+              console.warn(
+                `[pipeline] No prompt for ${item.awpClassName}, skipping`,
+              );
+              return;
+            }
+
+            const result = await callFunction(
               supabaseUrl,
               serviceKey,
               userToken,
-              "resolve-drive-doc",
+              "analyze-drawings",
               {
-                fileUrl: promptByClass.get(item.awpClassName)?.drive_file_id,
-                exportContent: true,
+                analysisRequestId,
+                fileId: item.fileId,
+                awpClassName: item.awpClassName,
+                promptContent,
+                model: analyzeModel,
               },
             );
-            if (resolveResult.ok && resolveResult.data?.content) {
-              promptContent = resolveResult.data.content;
+
+            if (result.ok) {
+              analyzeSuccesses++;
+              if (result.data?.usage?.total_tokens) {
+                analyzeTokens += result.data.usage.total_tokens;
+                tokenUpdateCounter++;
+                if (tokenUpdateCounter >= 5) {
+                  tokenUpdateCounter = 0;
+                  await admin
+                    .from("analysis_requests")
+                    .update({ analyze_tokens_used: analyzeTokens } as any)
+                    .eq("id", analysisRequestId);
+                }
+              }
+            } else {
+              analyzeFailures++;
+              console.error(
+                `[pipeline] Analyze error for ${item.fileName}/${item.awpClassName}: ${result.status}`,
+              );
             }
-          }
-
-          if (!promptContent) {
-            console.warn(
-              `[pipeline] No prompt for ${item.awpClassName}, skipping`,
-            );
-            await updateProgress(
-              admin,
-              analysisRequestId,
-              "analyzing",
-              i + 1,
-              workQueue.length,
-            );
-            continue;
-          }
-
-          const result = await callFunction(
-            supabaseUrl,
-            serviceKey,
-            userToken,
-            "analyze-drawings",
-            {
-              analysisRequestId,
-              fileId: item.fileId,
-              awpClassName: item.awpClassName,
-              promptContent,
-              model: analyzeModel,
-            },
-          );
-
-          if (result.ok) {
-            analyzeSuccesses++;
-            if (result.data?.usage?.total_tokens) {
-              analyzeTokens += result.data.usage.total_tokens;
-              await admin
-                .from("analysis_requests")
-                .update({ analyze_tokens_used: analyzeTokens } as any)
-                .eq("id", analysisRequestId);
-            }
-          } else {
+          } catch (e) {
             analyzeFailures++;
             console.error(
-              `[pipeline] Analyze error for ${item.fileName}/${item.awpClassName}: ${result.status}`,
+              `[pipeline] Analyze failed for ${item.fileName}/${item.awpClassName}:`,
+              e,
             );
           }
-        } catch (e) {
-          analyzeFailures++;
-          console.error(
-            `[pipeline] Analyze failed for ${item.fileName}/${item.awpClassName}:`,
-            e,
-          );
-        }
-        await updateProgress(
-          admin,
-          analysisRequestId,
-          "analyzing",
-          i + 1,
-          workQueue.length,
-        );
+        },
+      );
+
+      // Final token flush
+      await admin
+        .from("analysis_requests")
+        .update({ analyze_tokens_used: analyzeTokens } as any)
+        .eq("id", analysisRequestId);
+
+      if (stopped) {
+        await handleStopped();
+        return;
       }
 
       // If ALL analyze items failed, set error

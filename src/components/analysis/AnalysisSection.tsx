@@ -1969,14 +1969,21 @@ export function AnalysisSection({ requestId, files, projectId, sourceType, isWMS
       error_message: null,
     }));
 
+    // Clear processed badges on rerun
+    setExtractedFileIds(new Set());
+
     try {
+      // Compute enabledAwpClasses as the single source of truth
+      const enabledAwpClasses = sortedPrompts
+        .filter(p => !disabledColumns.has(p.awp_class_name))
+        .map(p => p.awp_class_name);
+
       const response = await supabase.functions.invoke("run-analysis-pipeline", {
         body: {
           analysisRequestId: requestId,
-          visibleAwpClasses: visibleAwpClasses,
+          enabledAwpClasses,
           triageModel,
           analyzeModel,
-          disabledColumns: [...disabledColumns],
           phaseOverride,
         },
       });
@@ -3397,7 +3404,7 @@ export function AnalysisSection({ requestId, files, projectId, sourceType, isWMS
   const dbErrorMessage = (requestMeta as any)?.error_message as string | null;
   const pipelineRunning = dbStatus === "processing" && !!pipelinePhase;
   const pipelinePhaseLabel = pipelinePhase === "extracting" ? "Extracting Context…" : pipelinePhase === "triaging" ? "Triaging…" : pipelinePhase === "analyzing" ? "Analyzing…" : "Processing…";
-  const wmsvRunning = pipelineRunning || analyzeV2Stopping;
+  const wmsvRunning = analyzeV2Running || pipelineRunning || analyzeV2Stopping;
   const wmsvPhaseLabel = analyzeV2Stopping ? "Stopping…" : pipelinePhaseLabel;
 
   return (
