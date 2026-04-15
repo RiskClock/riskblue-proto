@@ -253,59 +253,40 @@ export function WMSVProjectDetail({ projectId, projectName }: WMSVProjectDetailP
               </div>
             )}
 
-            {/* Upload / re-import actions */}
-            {(request.status === "awaiting_upload" || request.status === "failed" || (!!files && files.length > 0 && !isImporting(request.status))) && (
+            {/* Upload / re-import actions — only show when no files yet */}
+            {(request.status === "awaiting_upload" || request.status === "failed") && (!files || files.length === 0) && (
               <div className="border rounded-lg p-6 space-y-4">
-                {(request.status === "awaiting_upload" || request.status === "failed") && (!files || files.length === 0) ? (
-                  <>
-                    <div className="text-center space-y-4">
-                      <FileText className="w-12 h-12 text-muted-foreground/50 mx-auto" />
-                      <div>
-                        <h3 className="text-lg font-medium text-foreground">
-                          {request.status === "failed" ? "Import failed" : "No files uploaded yet"}
-                        </h3>
-                        <p className="text-sm text-muted-foreground mt-1">
-                          {request.status === "failed"
-                            ? "Try importing the drawing files again from one of the sources below"
-                            : "Upload drawing files to begin analysis"}
-                        </p>
-                      </div>
-                    </div>
-                    <div className="flex flex-wrap justify-center gap-2">
-                      <Button onClick={() => fileInputRef.current?.click()} disabled={uploading}>
-                        {uploading ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Upload className="w-4 h-4 mr-2" />}
-                        Upload from Computer
-                      </Button>
-                      <Button variant="outline" onClick={() => setShowDriveDialog(true)}>
-                        <img src="/icons/icon_googledrive.png" className="w-4 h-4 mr-2" alt="Google Drive" />
-                        Google Drive
-                      </Button>
-                      <Button variant="outline" onClick={() => setShowProcoreDialog(true)}>
-                        <img src="/icons/icon_procore.png" className="w-4 h-4 mr-2" alt="Procore" />
-                        Procore
-                      </Button>
-                      <Button variant="outline" disabled title="Coming soon">
-                        <img src="/icons/icon_sharepoint.png" className="w-4 h-4 mr-2" alt="SharePoint" />
-                        SharePoint (coming soon)
-                      </Button>
-                    </div>
-                  </>
-                ) : (
-                  <div className="flex flex-wrap items-center gap-2">
-                    <Button variant="outline" size="sm" onClick={() => fileInputRef.current?.click()} disabled={uploading}>
-                      {uploading ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Upload className="w-4 h-4 mr-2" />}
-                      Upload Files
-                    </Button>
-                    <Button variant="outline" size="sm" onClick={() => setShowDriveDialog(true)}>
-                      <img src="/icons/icon_googledrive.png" className="w-4 h-4 mr-2" alt="" />
-                      Google Drive
-                    </Button>
-                    <Button variant="outline" size="sm" onClick={() => setShowProcoreDialog(true)}>
-                      <img src="/icons/icon_procore.png" className="w-4 h-4 mr-2" alt="" />
-                      Procore
-                    </Button>
+                <div className="text-center space-y-4">
+                  <FileText className="w-12 h-12 text-muted-foreground/50 mx-auto" />
+                  <div>
+                    <h3 className="text-lg font-medium text-foreground">
+                      {request.status === "failed" ? "Import failed" : "No files uploaded yet"}
+                    </h3>
+                    <p className="text-sm text-muted-foreground mt-1">
+                      {request.status === "failed"
+                        ? "Try importing the drawing files again from one of the sources below"
+                        : "Upload drawing files to begin analysis"}
+                    </p>
                   </div>
-                )}
+                </div>
+                <div className="flex flex-wrap justify-center gap-2">
+                  <Button onClick={() => fileInputRef.current?.click()} disabled={uploading}>
+                    {uploading ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Upload className="w-4 h-4 mr-2" />}
+                    Upload from Computer
+                  </Button>
+                  <Button variant="outline" onClick={() => setShowDriveDialog(true)}>
+                    <img src="/icons/icon_googledrive.png" className="w-4 h-4 mr-2" alt="Google Drive" />
+                    Google Drive
+                  </Button>
+                  <Button variant="outline" onClick={() => setShowProcoreDialog(true)}>
+                    <img src="/icons/icon_procore.png" className="w-4 h-4 mr-2" alt="Procore" />
+                    Procore
+                  </Button>
+                  <Button variant="outline" disabled title="Coming soon">
+                    <img src="/icons/icon_sharepoint.png" className="w-4 h-4 mr-2" alt="SharePoint" />
+                    SharePoint (coming soon)
+                  </Button>
+                </div>
                 <input
                   ref={fileInputRef}
                   type="file"
@@ -366,14 +347,28 @@ export function WMSVProjectDetail({ projectId, projectName }: WMSVProjectDetailP
 
             {/* Analysis section */}
             {files && files.length > 0 && !isImporting(request.status) && (
-              <AnalysisSection
-                requestId={request.id}
-                files={files}
-                projectId={projectId}
-                sourceType={request.source_type}
-                isWMSV={true}
-                visibleAwpClasses={visibleAwpClasses}
-              />
+              <>
+                <AnalysisSection
+                  requestId={request.id}
+                  files={files}
+                  projectId={projectId}
+                  sourceType={request.source_type}
+                  isWMSV={true}
+                  visibleAwpClasses={visibleAwpClasses}
+                  onAddFileUpload={() => fileInputRef.current?.click()}
+                  onAddFileDrive={() => setShowDriveDialog(true)}
+                  onAddFileProcore={() => setShowProcoreDialog(true)}
+                />
+                {/* Hidden file input for upload-from-grid */}
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept=".pdf,.png,.jpg,.jpeg,.dwg,.dxf"
+                  multiple
+                  className="hidden"
+                  onChange={handleFileUpload}
+                />
+              </>
             )}
           </div>
         )}
