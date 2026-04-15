@@ -227,7 +227,6 @@ export default function Controls() {
               >
                 {isControlExpanded ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronRight className="w-3.5 h-3.5" />}
               </button>
-              </button>
               <Checkbox
                 checked={allChecked ? true : someChecked ? "indeterminate" : false}
                 indeterminate={someChecked}
