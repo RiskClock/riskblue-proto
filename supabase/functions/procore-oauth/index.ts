@@ -332,7 +332,7 @@ serve(async (req) => {
         .or(`refreshing_since.is.null,refreshing_since.lt.${staleCutoff}`)
         .select("id")
         .maybeSingle();
-...
+
       // Log stale reclaim based on pre-update state
       if (lockResult && preState?.refreshing_since) {
         console.log(`[refresh] Reclaimed stale lock for user: ${user.id} (was locked since ${preState.refreshing_since})`);
