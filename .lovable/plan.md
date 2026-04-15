@@ -1,111 +1,58 @@
 
 
-# Fix: Triage Authorization, Realtime Badges, UI Labels & Flicker
+# Implementation: Pipeline Class Selection, Concurrency, UI Flicker & Project Status
 
-## 1. `supabase/functions/triage-drawings/index.ts` — Authorization fix (Priority 1)
+This plan was previously approved. Proceeding with one user refinement: the Projects.tsx status-refetch effect depends on both `isWMSV` AND `projects` (stable project IDs), not only `isWMSV`.
 
-**Verified join path**: `analysis_request_files.analysis_request_id` → `analysis_requests.project_id` + `analysis_requests.user_id` → `projects.user_id` / `project_user_roles.user_id`
+## 1. `supabase/functions/run-analysis-pipeline/index.ts` — Full rewrite
 
-The existing query on line 58-62 already joins `analysis_requests!inner(source_type)`. We expand that join to also fetch `project_id` and `user_id`.
+- Replace `visibleAwpClasses` + `disabledColumns` with single `enabledAwpClasses: string[]`
+- Add `createProgressTracker()` for monotonic DB writes (shared counter, `lastWritten` guard, coalescing)
+- Add `runPool()` for max-5 concurrent workers with periodic stop checks (every 3 items per worker)
+- Log received classes and final prompt/class list
+- Batch token updates every 5 successes
+- All three phases (extract, triage, analyze) use the pool
 
-**Changes**:
-- Move `const body = await req.json()` and `fileId` extraction BEFORE the authorization block (currently at line 46, needs to come before line 39)
-- Replace hard internal-only gate (lines 39-43) with:
-  1. Parse body to get `fileId`
-  2. If internal → allow
-  3. Otherwise, use `adminSupabase` to look up the file's analysis request, get `project_id` and `user_id`
-  4. Allow if `user_id === analysis_request.user_id` (request creator)
-  5. Allow if user is project owner (`projects.user_id === user.id`)
-  6. Allow if user is project collaborator (`project_user_roles` row exists)
-  7. Otherwise → 403
+## 2. `src/components/analysis/AnalysisSection.tsx` — Three targeted edits
 
+**A) Send `enabledAwpClasses`** (lines 1973-1981): Replace `visibleAwpClasses` + `disabledColumns` with:
 ```typescript
-// After getting user, parse body early for fileId
-const body = await req.json();
-const { analysisRequestId, fileId, ... } = body;
-
-if (!fileId) { return 400; }
-
-const adminSupabase = createClient(supabaseUrl, supabaseServiceKey);
-
-if (!isInternal) {
-  // Resolve access: fileId → analysis_request → project
-  const { data: fileAccess } = await adminSupabase
-    .from("analysis_request_files")
-    .select("analysis_request_id, analysis_requests!inner(project_id, user_id)")
-    .eq("id", fileId)
-    .single();
-  
-  if (!fileAccess) { return 404 "File not found"; }
-  
-  const arData = fileAccess.analysis_requests as any;
-  const projectId = arData.project_id;
-  const requestOwner = arData.user_id;
-  
-  let allowed = requestOwner === user.id;
-  
-  if (!allowed) {
-    const { data: project } = await adminSupabase
-      .from("projects").select("user_id").eq("id", projectId).single();
-    allowed = project?.user_id === user.id;
-  }
-  
-  if (!allowed) {
-    const { data: role } = await adminSupabase
-      .from("project_user_roles").select("id")
-      .eq("project_id", projectId).eq("user_id", user.id).maybeSingle();
-    allowed = !!role;
-  }
-  
-  if (!allowed) { return 403 "Access denied"; }
-}
+const enabledAwpClasses = sortedPrompts
+  .filter(p => !disabledColumns.has(p.awp_class_name))
+  .map(p => p.awp_class_name);
+// body: { analysisRequestId, enabledAwpClasses, triageModel, analyzeModel, phaseOverride }
 ```
 
-Then remove the duplicate `const body = await req.json()` on current line 46 and the duplicate `adminSupabase` creation on line 55. The file record lookup (lines 57-62) stays but the join can be simplified since we already fetched the needed fields.
-
-## 2. Migration: Enable realtime on `analysis_request_files`
-
-```sql
-ALTER PUBLICATION supabase_realtime ADD TABLE public.analysis_request_files;
-```
-
-## 3. `src/components/analysis/AnalysisSection.tsx` — Realtime for extraction badges
-
-Add a third `.on()` block to the existing realtime channel (lines 1530-1548), subscribing to `*` (INSERT and UPDATE) on `analysis_request_files`:
-
+**B) Clear extractedFileIds on rerun** (before the invoke in `startPipeline`):
 ```typescript
-.on(
-  "postgres_changes",
-  { event: "*", schema: "public", table: "analysis_request_files", 
-    filter: `analysis_request_id=eq.${requestId}` },
-  () => {
-    supabase
-      .from("analysis_request_files")
-      .select("id")
-      .eq("analysis_request_id", requestId)
-      .not("extracted_text", "is", null)
-      .then(({ data }) => {
-        if (data) setExtractedFileIds(new Set(data.map((f: any) => f.id)));
-      });
-  }
-)
+setExtractedFileIds(new Set());
 ```
 
-## 4. `src/components/analysis/AnalysisSection.tsx` — Fix optimistic total (Bug 1)
+**C) Fix `wmsvRunning`** (line 3400):
+```typescript
+const wmsvRunning = analyzeV2Running || pipelineRunning || analyzeV2Stopping;
+```
 
-Line 1954: Change `pipeline_progress_total: 0` → `pipeline_progress_total: copiedFiles.length`.
+## 3. `src/pages/Projects.tsx` — Status hydration fix
 
-The existing status-precedence guard (lines 1478-1493) remains untouched — it already prevents stale regressions via `STATUS_RANK` comparison and `optimisticStatusRef`. The optimistic total fix eliminates the 0/0 flash, while the guard prevents Start/Stop flicker from stale backend polls.
+Add effect depending on both `isWMSV` and project IDs:
+```typescript
+const projectIds = useMemo(() => projects.map(p => p.id), [projects]);
 
-## 5. `src/components/analysis/AnalysisSection.tsx` — Fix label (Bug 3)
+useEffect(() => {
+  if (isWMSV && projectIds.length > 0) {
+    fetchAnalysisStatuses(projectIds);
+  }
+}, [isWMSV, projectIds, fetchAnalysisStatuses]);
+```
 
-Lines 3407 and 3440: Change `"instances"` → `"items"`.
+This ensures statuses are fetched when either `isWMSV` hydrates after projects load, or when projects load after `isWMSV` is already true.
 
 ## Files changed
 
 | File | Change |
 |---|---|
-| `supabase/functions/triage-drawings/index.ts` | Auth: allow project owners/collaborators via verified join path |
-| Migration SQL | Add `analysis_request_files` to `supabase_realtime` publication |
-| `src/components/analysis/AnalysisSection.tsx` | Optimistic total fix; realtime subscription for extraction badges (`*` events); rename "instances" → "items" |
+| `supabase/functions/run-analysis-pipeline/index.ts` | `enabledAwpClasses` only; concurrent worker pool (max 5); monotonic progress; logging |
+| `src/components/analysis/AnalysisSection.tsx` | Send `enabledAwpClasses`; fix `wmsvRunning`; clear extractedFileIds on rerun |
+| `src/pages/Projects.tsx` | Re-fetch statuses when both `isWMSV` and `projectIds` are available |
 
