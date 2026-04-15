@@ -347,26 +347,28 @@ export function WMSVProjectDetail({ projectId, projectName }: WMSVProjectDetailP
 
             {/* Analysis section */}
             {files && files.length > 0 && !isImporting(request.status) && (
-              <AnalysisSection
-                requestId={request.id}
-                files={files}
-                projectId={projectId}
-                sourceType={request.source_type}
-                isWMSV={true}
-                visibleAwpClasses={visibleAwpClasses}
-                onAddFileUpload={() => fileInputRef.current?.click()}
-                onAddFileDrive={() => setShowDriveDialog(true)}
-                onAddFileProcore={() => setShowProcoreDialog(true)}
-              />
-              {/* Hidden file input for upload-from-grid */}
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept=".pdf,.png,.jpg,.jpeg,.dwg,.dxf"
-                multiple
-                className="hidden"
-                onChange={handleFileUpload}
-              />
+              <>
+                <AnalysisSection
+                  requestId={request.id}
+                  files={files}
+                  projectId={projectId}
+                  sourceType={request.source_type}
+                  isWMSV={true}
+                  visibleAwpClasses={visibleAwpClasses}
+                  onAddFileUpload={() => fileInputRef.current?.click()}
+                  onAddFileDrive={() => setShowDriveDialog(true)}
+                  onAddFileProcore={() => setShowProcoreDialog(true)}
+                />
+                {/* Hidden file input for upload-from-grid */}
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept=".pdf,.png,.jpg,.jpeg,.dwg,.dxf"
+                  multiple
+                  className="hidden"
+                  onChange={handleFileUpload}
+                />
+              </>
             )}
           </div>
         )}
