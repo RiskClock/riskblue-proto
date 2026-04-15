@@ -1371,8 +1371,10 @@ export function AnalysisSection({ requestId, files, projectId, sourceType, isWMS
       if (error) throw error;
       return data as TriageResult[];
     },
-    refetchOnWindowFocus: false,
-    refetchInterval: analyzeV2Running ? 5000 : false,
+    refetchInterval: (() => {
+      const s = queryClient.getQueryData<any>(["analysis-request-meta", requestId])?.status;
+      return ACTIVE_STATUSES.includes(s) ? 5000 : false;
+    })() as number | false,
   });
 
   // Hydrate triage results into map
@@ -1441,8 +1443,10 @@ export function AnalysisSection({ requestId, files, projectId, sourceType, isWMS
         .single();
       return data;
     },
-    refetchInterval: 3000,
-  });
+    refetchInterval: (() => {
+      const s = queryClient.getQueryData<any>(["analysis-request-meta", requestId])?.status;
+      return ACTIVE_STATUSES.includes(s) ? 5000 : false;
+    })() as number | false,
 
   // Initialize models and tokens from DB
   useEffect(() => {
