@@ -122,10 +122,10 @@ export function WMSVProjectDetail({ projectId, projectName }: WMSVProjectDetailP
       return data;
     },
     enabled: !!projectId,
-    refetchInterval: (() => {
-      const status = query.state.data?.status;
+    refetchInterval: (q: any) => {
+      const status = q.state.data?.status;
       return ACTIVE_STATUSES.includes(status) ? 5000 : false;
-    }),
+    },
   });
 
   // Realtime subscription for analysis_requests changes
