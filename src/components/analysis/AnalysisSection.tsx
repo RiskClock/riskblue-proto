@@ -3383,8 +3383,8 @@ export function AnalysisSection({ requestId, files, projectId, sourceType, isWMS
   const dbErrorMessage = (requestMeta as any)?.error_message as string | null;
   const pipelineRunning = dbStatus === "processing" && !!pipelinePhase;
   const pipelinePhaseLabel = pipelinePhase === "extracting" ? "Extracting Context…" : pipelinePhase === "triaging" ? "Triaging…" : pipelinePhase === "analyzing" ? "Analyzing…" : "Processing…";
-  const wmsvRunning = pipelineRunning;
-  const wmsvPhaseLabel = pipelinePhaseLabel;
+  const wmsvRunning = pipelineRunning || analyzeV2Stopping;
+  const wmsvPhaseLabel = analyzeV2Stopping ? "Stopping…" : pipelinePhaseLabel;
 
   return (
     <TooltipProvider delayDuration={0}>
@@ -3402,16 +3402,19 @@ export function AnalysisSection({ requestId, files, projectId, sourceType, isWMS
                   <div className="flex items-center gap-3">
                     <Loader2 className="w-4 h-4 animate-spin text-primary" />
                     <span className="text-sm font-medium text-foreground">{wmsvPhaseLabel}</span>
-                    <span className="text-xs text-muted-foreground tabular-nums">
-                      {pipelineDone}/{pipelineTotal} {pipelinePhase === "extracting" ? "files" : "instances"}
-                    </span>
+                    {!analyzeV2Stopping && (
+                      <span className="text-xs text-muted-foreground tabular-nums">
+                        {pipelineDone}/{pipelineTotal} {pipelinePhase === "extracting" ? "files" : "instances"}
+                      </span>
+                    )}
                     <Button
                       size="sm"
                       variant="destructive"
                       onClick={handleWmsvStop}
+                      disabled={analyzeV2Stopping}
                     >
                       <Square className="w-4 h-4 mr-2" />
-                      Stop
+                      {analyzeV2Stopping ? "Stopping…" : "Stop"}
                     </Button>
                   </div>
                 ) : (
