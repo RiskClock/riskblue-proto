@@ -126,9 +126,12 @@ export default function Controls() {
         .eq("category", category)
         .eq("control_id", controlId);
     } else {
-      // When selecting parent, select all sub-options
+      // When selecting parent, select all sub-options and expand
       const defaultSubs = specialSubs ? [...specialSubs] : [];
       setSelections(prev => new Map(prev).set(key, defaultSubs));
+      if (specialSubs) {
+        setExpandedControls(prev => new Set(prev).add(key));
+      }
       await supabase.from("wmsv_control_selections").upsert({
         user_id: user!.id,
         awp_class_name: category,
@@ -147,9 +150,8 @@ export default function Controls() {
       : [...currentSubs, subOption];
 
     if (newSubs.length === 0) {
-      // All children unchecked → uncheck parent
+      // All children unchecked → uncheck parent, but keep current expand/collapse state
       setSelections(prev => { const n = new Map(prev); n.delete(key); return n; });
-      setExpandedControls(prev => { const n = new Set(prev); n.delete(key); return n; });
       await supabase
         .from("wmsv_control_selections")
         .delete()
