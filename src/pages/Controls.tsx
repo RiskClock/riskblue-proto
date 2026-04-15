@@ -217,19 +217,15 @@ export default function Controls() {
             <div className="flex items-center gap-2">
               <button
                 onClick={() => {
-                  if (!isSelected) {
-                    toggleControl(category, control.id);
-                  } else {
-                    setExpandedControls(prev => {
-                      const n = new Set(prev);
-                      if (n.has(key)) n.delete(key); else n.add(key);
-                      return n;
-                    });
-                  }
+                  setExpandedControls(prev => {
+                    const n = new Set(prev);
+                    if (n.has(key)) n.delete(key); else n.add(key);
+                    return n;
+                  });
                 }}
                 className="text-muted-foreground hover:text-foreground"
               >
-                {isSelected && isControlExpanded ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronRight className="w-3.5 h-3.5" />}
+                {isControlExpanded ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronRight className="w-3.5 h-3.5" />}
               </button>
               <Checkbox
                 checked={allChecked ? true : someChecked ? "indeterminate" : false}
@@ -278,7 +274,7 @@ export default function Controls() {
                 {control.name}
               </span>
             </div>
-            {isSelected && isControlExpanded && (
+            {isControlExpanded && (
               <div className="ml-10 space-y-1">
                 {specialSubs.map(sub => (
                   <div key={sub} className="flex items-center gap-2">
