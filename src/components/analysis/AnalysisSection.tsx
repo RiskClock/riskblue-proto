@@ -1496,12 +1496,13 @@ export function AnalysisSection({ requestId, files, projectId, sourceType, isWMS
       if (dbStatus === "processing") {
         analyzeRunSyncRef.current = "running";
         setAnalyzeV2Running(true);
-      } else if (isTerminal) {
+      } else if (isTerminal || dbStatus === "started") {
         analyzeRunSyncRef.current = "idle";
         setAnalyzeV2Running(false);
         setAnalyzeV2Stopping(false);
         setAnalyzingClasses(new Set());
         setClassFileStatuses({});
+        optimisticStatusRef.current = null;
       }
       setHydratedProcessing(true);
       return;
@@ -1515,12 +1516,13 @@ export function AnalysisSection({ requestId, files, projectId, sourceType, isWMS
       return;
     }
 
-    if (isTerminal) {
+    if (isTerminal || dbStatus === "started") {
       analyzeRunSyncRef.current = "idle";
       setAnalyzeV2Running(false);
       setAnalyzeV2Stopping(false);
       setAnalyzingClasses(new Set());
       setClassFileStatuses({});
+      optimisticStatusRef.current = null;
     }
   }, [requestMeta, hydratedProcessing, analyzeV2Running]);
 
