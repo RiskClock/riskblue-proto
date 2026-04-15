@@ -37,12 +37,8 @@ Deno.serve(async (req) => {
     }
 
     const isInternal = user.email?.toLowerCase().endsWith("@riskclock.com") ?? false;
-    if (!isInternal) {
-      return new Response(JSON.stringify({ error: "Access denied" }), {
-        status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
-    }
 
+    // Parse body early so we have fileId for authorization
     const body = await req.json();
     const { analysisRequestId, fileId, awpClassName, assetType, drawingName, action, promptContent, model } = body;
 
@@ -53,6 +49,47 @@ Deno.serve(async (req) => {
     }
 
     const adminSupabase = createClient(supabaseUrl, supabaseServiceKey);
+
+    // ========== Authorization ==========
+    if (!isInternal) {
+      // Resolve access: fileId → analysis_request → project
+      const { data: fileAccess, error: fileAccessError } = await adminSupabase
+        .from("analysis_request_files")
+        .select("analysis_request_id, analysis_requests!inner(project_id, user_id)")
+        .eq("id", fileId)
+        .single();
+
+      if (fileAccessError || !fileAccess) {
+        return new Response(JSON.stringify({ error: "File not found" }), {
+          status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      const arData = fileAccess.analysis_requests as any;
+      const projectId = arData.project_id;
+      const requestOwner = arData.user_id;
+
+      let allowed = requestOwner === user.id;
+
+      if (!allowed) {
+        const { data: project } = await adminSupabase
+          .from("projects").select("user_id").eq("id", projectId).single();
+        allowed = project?.user_id === user.id;
+      }
+
+      if (!allowed) {
+        const { data: role } = await adminSupabase
+          .from("project_user_roles").select("id")
+          .eq("project_id", projectId).eq("user_id", user.id).maybeSingle();
+        allowed = !!role;
+      }
+
+      if (!allowed) {
+        return new Response(JSON.stringify({ error: "Access denied" }), {
+          status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+    }
 
     // Look up the file record
     const { data: fileRecord, error: fileError } = await adminSupabase

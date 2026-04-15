@@ -1545,6 +1545,20 @@ export function AnalysisSection({ requestId, files, projectId, sourceType, isWMS
           queryClient.invalidateQueries({ queryKey: ["triage-results", requestId] });
         }
       )
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "analysis_request_files", filter: `analysis_request_id=eq.${requestId}` },
+        () => {
+          supabase
+            .from("analysis_request_files")
+            .select("id")
+            .eq("analysis_request_id", requestId)
+            .not("extracted_text", "is", null)
+            .then(({ data }) => {
+              if (data) setExtractedFileIds(new Set(data.map((f: any) => f.id)));
+            });
+        }
+      )
       .subscribe();
 
     return () => {
@@ -1951,7 +1965,7 @@ export function AnalysisSection({ requestId, files, projectId, sourceType, isWMS
       status: "processing",
       pipeline_phase: phaseOverride || "extracting",
       pipeline_progress_done: 0,
-      pipeline_progress_total: 0,
+      pipeline_progress_total: copiedFiles.length,
       error_message: null,
     }));
 
@@ -3404,7 +3418,7 @@ export function AnalysisSection({ requestId, files, projectId, sourceType, isWMS
                     <span className="text-sm font-medium text-foreground">{wmsvPhaseLabel}</span>
                     {!analyzeV2Stopping && (
                       <span className="text-xs text-muted-foreground tabular-nums">
-                        {pipelineDone}/{pipelineTotal} {pipelinePhase === "extracting" ? "files" : "instances"}
+                        {pipelineDone}/{pipelineTotal} {pipelinePhase === "extracting" ? "files" : "items"}
                       </span>
                     )}
                     <Button
@@ -3437,7 +3451,7 @@ export function AnalysisSection({ requestId, files, projectId, sourceType, isWMS
                   <Loader2 className="w-4 h-4 animate-spin text-primary" />
                   <span className="text-sm font-medium text-foreground">{pipelinePhaseLabel}</span>
                   <span className="text-xs text-muted-foreground tabular-nums">
-                    {pipelineDone}/{pipelineTotal} {pipelinePhase === "extracting" ? "files" : "instances"}
+                    {pipelineDone}/{pipelineTotal} {pipelinePhase === "extracting" ? "files" : "items"}
                   </span>
                   <Button
                     size="sm"
