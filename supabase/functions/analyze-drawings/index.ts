@@ -263,17 +263,50 @@ serve(async (req) => {
     }
 
     const isInternal = user.email?.toLowerCase().endsWith("@riskclock.com") ?? false;
-    if (!isInternal) {
-      return new Response(JSON.stringify({ error: "Access denied" }), {
-        status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
-    }
 
     const { analysisRequestId, fileId, awpClassName, promptContent, model, openaiFileId: suppliedOpenaiFileId } = await req.json();
     if (!analysisRequestId || !fileId || !awpClassName || !promptContent) {
       return new Response(JSON.stringify({ error: "Missing required fields" }), {
         status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
+    }
+
+    // Project-access check (internal users skip)
+    if (!isInternal) {
+      const adminForAuth = createClient(supabaseUrl, supabaseServiceKey);
+      const { data: fileAccess } = await adminForAuth
+        .from("analysis_request_files")
+        .select("analysis_request_id, analysis_requests!inner(project_id, user_id)")
+        .eq("id", fileId)
+        .single();
+
+      if (!fileAccess) {
+        return new Response(JSON.stringify({ error: "File not found" }), {
+          status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      const arData = fileAccess.analysis_requests as unknown as { project_id: string; user_id: string };
+      let allowed = arData.user_id === user.id;
+
+      if (!allowed) {
+        const { data: project } = await adminForAuth
+          .from("projects").select("user_id").eq("id", arData.project_id).single();
+        allowed = project?.user_id === user.id;
+      }
+
+      if (!allowed) {
+        const { data: role } = await adminForAuth
+          .from("project_user_roles").select("id")
+          .eq("project_id", arData.project_id).eq("user_id", user.id).maybeSingle();
+        allowed = !!role;
+      }
+
+      if (!allowed) {
+        return new Response(JSON.stringify({ error: "Access denied" }), {
+          status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
     }
 
     const adminSupabase = createClient(supabaseUrl, supabaseServiceKey);

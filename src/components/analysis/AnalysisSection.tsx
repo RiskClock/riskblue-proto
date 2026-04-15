@@ -1274,6 +1274,7 @@ export function AnalysisSection({ requestId, files, projectId, sourceType, isWMS
   const [analyzeV2Running, setAnalyzeV2Running] = useState(false);
   const analyzeRunSyncRef = useRef<"idle" | "starting" | "running" | "stopping">("idle");
   const optimisticStatusRef = useRef<string | null>(null);
+  const prevPipelinePhaseRef = useRef<string | null>(null);
   const [triagePhase, setTriagePhase] = useState<"extract" | "score" | null>(null);
   const [summaryGroupBy, setSummaryGroupBy] = useState<"awp" | "floor">("awp");
   const [triageProgress, setTriageProgress] = useState<{ done: number; total: number }>({ done: 0, total: 0 });
@@ -1496,12 +1497,13 @@ export function AnalysisSection({ requestId, files, projectId, sourceType, isWMS
       if (dbStatus === "processing") {
         analyzeRunSyncRef.current = "running";
         setAnalyzeV2Running(true);
-      } else if (isTerminal) {
+      } else if (isTerminal || dbStatus === "started") {
         analyzeRunSyncRef.current = "idle";
         setAnalyzeV2Running(false);
         setAnalyzeV2Stopping(false);
         setAnalyzingClasses(new Set());
         setClassFileStatuses({});
+        optimisticStatusRef.current = null;
       }
       setHydratedProcessing(true);
       return;
@@ -1515,12 +1517,13 @@ export function AnalysisSection({ requestId, files, projectId, sourceType, isWMS
       return;
     }
 
-    if (isTerminal) {
+    if (isTerminal || dbStatus === "started") {
       analyzeRunSyncRef.current = "idle";
       setAnalyzeV2Running(false);
       setAnalyzeV2Stopping(false);
       setAnalyzingClasses(new Set());
       setClassFileStatuses({});
+      optimisticStatusRef.current = null;
     }
   }, [requestMeta, hydratedProcessing, analyzeV2Running]);
 
@@ -1582,6 +1585,24 @@ export function AnalysisSection({ requestId, files, projectId, sourceType, isWMS
     })();
     return () => { cancelled = true; };
   }, [requestId, files.length]);
+
+  // Refresh extraction badges when pipeline phase transitions OUT of "extracting"
+  useEffect(() => {
+    const currentPhase = (requestMeta as any)?.pipeline_phase as string | null;
+    const prev = prevPipelinePhaseRef.current;
+    prevPipelinePhaseRef.current = currentPhase;
+
+    if (prev === "extracting" && currentPhase !== "extracting" && requestId) {
+      supabase
+        .from("analysis_request_files")
+        .select("id")
+        .eq("analysis_request_id", requestId)
+        .not("extracted_text", "is", null)
+        .then(({ data }) => {
+          if (data) setExtractedFileIds(new Set(data.map((f: any) => f.id)));
+        });
+    }
+  }, [(requestMeta as any)?.pipeline_phase, requestId]);
 
   const savedSummaryData = useMemo(() => {
     return (requestMeta?.summary_data as unknown as Record<string, SummarizedInstance[]>) || {};
