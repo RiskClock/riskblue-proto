@@ -150,22 +150,16 @@ async function runPool<T>(
 ): Promise<{ completed: number; stopped: boolean }> {
   let nextIndex = 0;
   let stopped = false;
-  let itemsSinceStopCheck = 0;
-  const STOP_CHECK_INTERVAL = 3;
 
   async function worker() {
     while (!stopped) {
       const i = nextIndex++;
       if (i >= items.length) return;
 
-      // Periodic stop check (every N items per worker)
-      itemsSinceStopCheck++;
-      if (itemsSinceStopCheck >= STOP_CHECK_INTERVAL) {
-        itemsSinceStopCheck = 0;
-        if (await shouldStop(admin, requestId)) {
-          stopped = true;
-          return;
-        }
+      // Check stop before every item dispatch
+      if (await shouldStop(admin, requestId)) {
+        stopped = true;
+        return;
       }
 
       await processFn(items[i]);
@@ -350,6 +344,19 @@ async function runPipeline(params: PipelineParams) {
   const MAX_CONCURRENCY = 5;
 
   try {
+    // ---- Authoritative clear: delete ALL previous results at pipeline start ----
+    await Promise.all([
+      admin.from("analysis_triage_results").delete().eq("analysis_request_id", analysisRequestId),
+      admin.from("analysis_results").delete().eq("analysis_request_id", analysisRequestId),
+      admin.from("analysis_triage_overrides").delete().eq("analysis_request_id", analysisRequestId),
+      admin.from("analysis_request_files")
+        .update({ extracted_text: null, openai_file_id: null, openai_file_status: null } as any)
+        .eq("analysis_request_id", analysisRequestId),
+      admin.from("analysis_requests")
+        .update({ triage_tokens_used: 0, analyze_tokens_used: 0, summary_data: {} } as any)
+        .eq("id", analysisRequestId),
+    ]);
+
     // Fetch files
     const { data: files } = await admin
       .from("analysis_request_files")
@@ -475,29 +482,7 @@ async function runPipeline(params: PipelineParams) {
 
     // ======================== PHASE 2: TRIAGE ========================
     if (runPhase("triage")) {
-      // Clear previous triage + analysis results
-      await Promise.all([
-        admin
-          .from("analysis_triage_results")
-          .delete()
-          .eq("analysis_request_id", analysisRequestId),
-        admin
-          .from("analysis_results")
-          .delete()
-          .eq("analysis_request_id", analysisRequestId),
-        admin
-          .from("analysis_triage_overrides")
-          .delete()
-          .eq("analysis_request_id", analysisRequestId),
-        admin
-          .from("analysis_requests")
-          .update({
-            triage_tokens_used: 0,
-            analyze_tokens_used: 0,
-            summary_data: {},
-          } as any)
-          .eq("id", analysisRequestId),
-      ]);
+      // (Previous results already cleared at pipeline start)
 
       const triageItems: Array<{ fileId: string; fileName: string; prompt: any }> = [];
       for (const prompt of prompts) {
