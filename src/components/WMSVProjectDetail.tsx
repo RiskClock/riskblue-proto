@@ -10,7 +10,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { useToast } from "@/hooks/use-toast";
-import { ArrowLeft, Loader2, Upload, FileText, CheckCircle2, Circle, FolderSync } from "lucide-react";
+import { ArrowLeft, Loader2, Upload, FileText, CheckCircle2, Circle, FolderSync, Download } from "lucide-react";
 import { RepositoryConnectionDialog } from "@/components/wizard/RepositoryConnectionDialog";
 import { ProcoreConnectionDialog } from "@/components/wizard/ProcoreConnectionDialog";
 
@@ -245,132 +245,141 @@ export function WMSVProjectDetail({ projectId, projectName }: WMSVProjectDetailP
             <p>No analysis request found for this project.</p>
           </div>
         ) : (
-          <div className="space-y-6">
-            {request.error_message && (
-              <div className="bg-destructive/10 border border-destructive/20 rounded-lg p-4">
-                <p className="text-sm font-medium text-destructive">Error</p>
-                <p className="text-sm text-destructive/80 mt-1">{request.error_message}</p>
-              </div>
-            )}
+            <div className="space-y-6">
+              {request.error_message && (
+                <div className="bg-destructive/10 border border-destructive/20 rounded-lg p-4">
+                  <p className="text-sm font-medium text-destructive">Error</p>
+                  <p className="text-sm text-destructive/80 mt-1">{request.error_message}</p>
+                </div>
+              )}
 
-            {/* Upload / re-import actions — only show when no files yet */}
-            {(request.status === "awaiting_upload" || request.status === "failed") && (!files || files.length === 0) && (
-              <div className="border rounded-lg p-6 space-y-4">
-                <div className="text-center space-y-4">
-                  <FileText className="w-12 h-12 text-muted-foreground/50 mx-auto" />
-                  <div>
-                    <h3 className="text-lg font-medium text-foreground">
-                      {request.status === "failed" ? "Import failed" : "No files uploaded yet"}
-                    </h3>
-                    <p className="text-sm text-muted-foreground mt-1">
-                      {request.status === "failed"
-                        ? "Try importing the drawing files again from one of the sources below"
-                        : "Upload drawing files to begin analysis"}
-                    </p>
-                  </div>
-                </div>
-                <div className="flex flex-wrap justify-center gap-2">
-                  <Button onClick={() => fileInputRef.current?.click()} disabled={uploading}>
-                    {uploading ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Upload className="w-4 h-4 mr-2" />}
-                    Upload from Computer
-                  </Button>
-                  <Button variant="outline" onClick={() => setShowDriveDialog(true)}>
-                    <img src="/icons/icon_googledrive.png" className="w-4 h-4 mr-2" alt="Google Drive" />
-                    Google Drive
-                  </Button>
-                  <Button variant="outline" onClick={() => setShowProcoreDialog(true)}>
-                    <img src="/icons/icon_procore.png" className="w-4 h-4 mr-2" alt="Procore" />
-                    Procore
-                  </Button>
-                  <Button variant="outline" disabled title="Coming soon">
-                    <img src="/icons/icon_sharepoint.png" className="w-4 h-4 mr-2" alt="SharePoint" />
-                    SharePoint (coming soon)
-                  </Button>
-                </div>
-                <input
-                  ref={fileInputRef}
-                  type="file"
-                  accept=".pdf,.png,.jpg,.jpeg,.dwg,.dxf"
-                  multiple
-                  className="hidden"
-                  onChange={handleFileUpload}
-                />
-              </div>
-            )}
-
-            {/* Import progress */}
-            {isImporting(request.status) && (
-              <div className="border rounded-lg p-6 space-y-4">
-                <div className="flex items-center gap-3">
-                  <Loader2 className="w-5 h-5 animate-spin text-primary" />
-                  <div>
-                    <h3 className="text-lg font-medium text-foreground">
-                      Importing Files{request.source_type === "google_drive" ? " from Google Drive" : request.source_type === "procore" ? " from Procore" : ""}
-                    </h3>
-                    <p className="text-sm text-muted-foreground">Files are being copied to the analysis workspace</p>
-                  </div>
-                </div>
-                {(() => {
-                  const total = files?.length || request.file_count || 0;
-                  const copied = files?.filter(f => f.copy_status === "copied").length || 0;
-                  const pct = total > 0 ? Math.round((copied / total) * 100) : 0;
-                  return (
-                    <div className="space-y-2">
-                      <div className="flex items-center justify-between text-sm text-muted-foreground">
-                        <span>{copied} of {total} files imported</span>
-                        <span>{pct}%</span>
-                      </div>
-                      <Progress value={pct} className="h-2" />
+              {/* Upload / re-import actions — only show when no files yet */}
+              {(request.status === "awaiting_upload" || request.status === "failed") && (!files || files.length === 0) && (
+                <div className="border rounded-lg p-6 space-y-4">
+                  <div className="text-center space-y-4">
+                    <FileText className="w-12 h-12 text-muted-foreground/50 mx-auto" />
+                    <div>
+                      <h3 className="text-lg font-medium text-foreground">
+                        {request.status === "failed" ? "Import failed" : "No files uploaded yet"}
+                      </h3>
+                      <p className="text-sm text-muted-foreground mt-1">
+                        {request.status === "failed"
+                          ? "Try importing the drawing files again from one of the sources below"
+                          : "Upload drawing files to begin analysis"}
+                      </p>
                     </div>
-                  );
-                })()}
-                {files && files.length > 0 && (
-                  <div className="max-h-48 overflow-y-auto space-y-1 p-3 bg-muted/30 rounded-md">
-                    {files.map((file) => (
-                      <div key={file.id} className="text-sm flex items-center gap-2">
-                        {file.copy_status === "copied" ? (
-                          <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
-                        ) : file.copy_status === "pending" ? (
-                          <Circle className="w-3.5 h-3.5 text-muted-foreground/40 shrink-0" />
-                        ) : (
-                          <Loader2 className="w-3.5 h-3.5 animate-spin text-primary shrink-0" />
-                        )}
-                        <span className={`truncate ${file.copy_status === "copied" ? "text-foreground" : "text-muted-foreground"}`}>
-                          {file.name}
-                        </span>
-                      </div>
-                    ))}
                   </div>
-                )}
-              </div>
-            )}
+                  <div className="flex flex-wrap justify-center gap-2">
+                    <Button onClick={() => fileInputRef.current?.click()} disabled={uploading}>
+                      {uploading ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Upload className="w-4 h-4 mr-2" />}
+                      Upload from Computer
+                    </Button>
+                    <Button variant="outline" onClick={() => setShowDriveDialog(true)}>
+                      <img src="/icons/icon_googledrive.png" className="w-4 h-4 mr-2" alt="Google Drive" />
+                      Google Drive
+                    </Button>
+                    <Button variant="outline" onClick={() => setShowProcoreDialog(true)}>
+                      <img src="/icons/icon_procore.png" className="w-4 h-4 mr-2" alt="Procore" />
+                      Procore
+                    </Button>
+                    <Button variant="outline" disabled title="Coming soon">
+                      <img src="/icons/icon_sharepoint.png" className="w-4 h-4 mr-2" alt="SharePoint" />
+                      SharePoint (coming soon)
+                    </Button>
+                  </div>
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept=".pdf,.png,.jpg,.jpeg,.dwg,.dxf"
+                    multiple
+                    className="hidden"
+                    onChange={handleFileUpload}
+                  />
+                </div>
+              )}
 
-            {/* Analysis section */}
-            {files && files.length > 0 && !isImporting(request.status) && (
-              <>
-                <AnalysisSection
-                  requestId={request.id}
-                  files={files}
-                  projectId={projectId}
-                  sourceType={request.source_type}
-                  isWMSV={true}
-                  visibleAwpClasses={visibleAwpClasses}
-                  onAddFileUpload={() => fileInputRef.current?.click()}
-                  onAddFileDrive={() => setShowDriveDialog(true)}
-                  onAddFileProcore={() => setShowProcoreDialog(true)}
-                />
-                {/* Hidden file input for upload-from-grid */}
-                <input
-                  ref={fileInputRef}
-                  type="file"
-                  accept=".pdf,.png,.jpg,.jpeg,.dwg,.dxf"
-                  multiple
-                  className="hidden"
-                  onChange={handleFileUpload}
-                />
-              </>
-            )}
-          </div>
+              {/* Import progress */}
+              {isImporting(request.status) && (
+                <div className="border rounded-lg p-6 space-y-4">
+                  <div className="flex items-center gap-3">
+                    <Loader2 className="w-5 h-5 animate-spin text-primary" />
+                    <div>
+                      <h3 className="text-lg font-medium text-foreground">
+                        Importing Files{request.source_type === "google_drive" ? " from Google Drive" : request.source_type === "procore" ? " from Procore" : ""}
+                      </h3>
+                      <p className="text-sm text-muted-foreground">Files are being copied to the analysis workspace</p>
+                    </div>
+                  </div>
+                  {(() => {
+                    const total = files?.length || request.file_count || 0;
+                    const copied = files?.filter(f => f.copy_status === "copied").length || 0;
+                    const pct = total > 0 ? Math.round((copied / total) * 100) : 0;
+                    return (
+                      <div className="space-y-2">
+                        <div className="flex items-center justify-between text-sm text-muted-foreground">
+                          <span>{copied} of {total} files imported</span>
+                          <span>{pct}%</span>
+                        </div>
+                        <Progress value={pct} className="h-2" />
+                      </div>
+                    );
+                  })()}
+                  {files && files.length > 0 && (
+                    <div className="max-h-48 overflow-y-auto space-y-1 p-3 bg-muted/30 rounded-md">
+                      {files.map((file) => (
+                        <div key={file.id} className="text-sm flex items-center gap-2">
+                          {file.copy_status === "copied" ? (
+                            <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
+                          ) : file.copy_status === "pending" ? (
+                            <Circle className="w-3.5 h-3.5 text-muted-foreground/40 shrink-0" />
+                          ) : (
+                            <Loader2 className="w-3.5 h-3.5 animate-spin text-primary shrink-0" />
+                          )}
+                          <span className={`truncate ${file.copy_status === "copied" ? "text-foreground" : "text-muted-foreground"}`}>
+                            {file.name}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Analysis section */}
+              {files && files.length > 0 && !isImporting(request.status) && (
+                <>
+                  <AnalysisSection
+                    requestId={request.id}
+                    files={files}
+                    projectId={projectId}
+                    sourceType={request.source_type}
+                    isWMSV={true}
+                    visibleAwpClasses={visibleAwpClasses}
+                    onAddFileUpload={() => fileInputRef.current?.click()}
+                    onAddFileDrive={() => setShowDriveDialog(true)}
+                    onAddFileProcore={() => setShowProcoreDialog(true)}
+                  />
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept=".pdf,.png,.jpg,.jpeg,.dwg,.dxf"
+                    multiple
+                    className="hidden"
+                    onChange={handleFileUpload}
+                  />
+                </>
+              )}
+
+              <div className="flex justify-end pt-2">
+                <Button
+                  onClick={() => toast({ title: "Export Analysis", description: "Export action UI added — functionality can be wired next." })}
+                  disabled={!files || files.length === 0}
+                >
+                  <Download className="w-4 h-4 mr-2" />
+                  Export Analysis
+                </Button>
+              </div>
+            </div>
         )}
       </main>
 
