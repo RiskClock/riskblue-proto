@@ -1240,6 +1240,11 @@ function ExtractedTextBody({ fileId, localText }: { fileId: string; localText?: 
 // AnalysisSection
 // ---------------------------------------------------------------------------
 
+const ACTIVE_STATUSES = ["pending", "copying", "copied", "started", "processing"];
+const STATUS_RANK: Record<string, number> = {
+  awaiting_upload: 0, pending: 1, copying: 1, copied: 2, started: 3, processing: 4, stopping: 4, complete: 5, failed: 5,
+};
+
 export function AnalysisSection({ requestId, files, projectId, sourceType, isWMSV, visibleAwpClasses }: AnalysisSectionProps) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -1268,6 +1273,7 @@ export function AnalysisSection({ requestId, files, projectId, sourceType, isWMS
   const [uploadingFileIds, setUploadingFileIds] = useState<Set<string>>(new Set());
   const [analyzeV2Running, setAnalyzeV2Running] = useState(false);
   const analyzeRunSyncRef = useRef<"idle" | "starting" | "running" | "stopping">("idle");
+  const optimisticStatusRef = useRef<string | null>(null);
   const [triagePhase, setTriagePhase] = useState<"extract" | "score" | null>(null);
   const [summaryGroupBy, setSummaryGroupBy] = useState<"awp" | "floor">("awp");
   const [triageProgress, setTriageProgress] = useState<{ done: number; total: number }>({ done: 0, total: 0 });
