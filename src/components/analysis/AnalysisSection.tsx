@@ -1274,6 +1274,7 @@ export function AnalysisSection({ requestId, files, projectId, sourceType, isWMS
   const [analyzeV2Running, setAnalyzeV2Running] = useState(false);
   const analyzeRunSyncRef = useRef<"idle" | "starting" | "running" | "stopping">("idle");
   const optimisticStatusRef = useRef<string | null>(null);
+  const prevPipelinePhaseRef = useRef<string | null>(null);
   const [triagePhase, setTriagePhase] = useState<"extract" | "score" | null>(null);
   const [summaryGroupBy, setSummaryGroupBy] = useState<"awp" | "floor">("awp");
   const [triageProgress, setTriageProgress] = useState<{ done: number; total: number }>({ done: 0, total: 0 });
