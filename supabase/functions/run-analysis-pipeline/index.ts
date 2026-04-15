@@ -246,7 +246,21 @@ Deno.serve(async (req) => {
 
     const userToken = authHeader.replace("Bearer ", "");
 
-    // Reset stop flag and set initial status
+    // ---- Authoritative clear: delete ALL previous results BEFORE status change ----
+    // This ensures old rows are gone from DB before realtime events trigger refetches
+    await Promise.all([
+      admin.from("analysis_triage_results").delete().eq("analysis_request_id", analysisRequestId),
+      admin.from("analysis_results").delete().eq("analysis_request_id", analysisRequestId),
+      admin.from("analysis_triage_overrides").delete().eq("analysis_request_id", analysisRequestId),
+      admin.from("analysis_request_files")
+        .update({ extracted_text: null, openai_file_id: null, openai_file_status: null } as any)
+        .eq("analysis_request_id", analysisRequestId),
+      admin.from("analysis_requests")
+        .update({ triage_tokens_used: 0, analyze_tokens_used: 0, summary_data: {} } as any)
+        .eq("id", analysisRequestId),
+    ]);
+
+    // THEN set status to "processing" (this triggers realtime → refetch → rows are already gone)
     await admin
       .from("analysis_requests")
       .update({
@@ -344,18 +358,7 @@ async function runPipeline(params: PipelineParams) {
   const MAX_CONCURRENCY = 5;
 
   try {
-    // ---- Authoritative clear: delete ALL previous results at pipeline start ----
-    await Promise.all([
-      admin.from("analysis_triage_results").delete().eq("analysis_request_id", analysisRequestId),
-      admin.from("analysis_results").delete().eq("analysis_request_id", analysisRequestId),
-      admin.from("analysis_triage_overrides").delete().eq("analysis_request_id", analysisRequestId),
-      admin.from("analysis_request_files")
-        .update({ extracted_text: null, openai_file_id: null, openai_file_status: null } as any)
-        .eq("analysis_request_id", analysisRequestId),
-      admin.from("analysis_requests")
-        .update({ triage_tokens_used: 0, analyze_tokens_used: 0, summary_data: {} } as any)
-        .eq("id", analysisRequestId),
-    ]);
+    // (Authoritative clearing already done in main handler before status update)
 
     // Fetch files
     const { data: files } = await admin

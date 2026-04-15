@@ -1416,6 +1416,9 @@ export function AnalysisSection({ requestId, files, projectId, sourceType, isWMS
 
   // Toggle triage override (3-state: default → override → back to default)
   const handleTriageCellClick = async (fileId: string, awpClassName: string, score: number) => {
+    // Lock overrides during deep analysis phase — cells become non-interactive
+    const currentPhase = (queryClient.getQueryData(["analysis-request-meta", requestId]) as any)?.pipeline_phase;
+    if (currentPhase === "analyzing") return;
     const key = `${fileId}_${awpClassName}`;
     const currentOverride = triageOverrides.get(key);
 
@@ -3914,7 +3917,8 @@ export function AnalysisSection({ requestId, files, projectId, sourceType, isWMS
 
                           // Determine visual style based on override state
                           let cellStyle: React.CSSProperties = {};
-                          let cellClass = `w-14 px-2 py-2 text-center cursor-pointer transition-colors${disabledCls}`;
+                          const isAnalyzingPhase = pipelinePhase === "analyzing";
+                          let cellClass = `w-14 px-2 py-2 text-center ${isAnalyzingPhase ? 'cursor-default' : 'cursor-pointer'} transition-colors${disabledCls}`;
                           let overrideLabel = "";
 
                           // Always show triage score background on the cell
