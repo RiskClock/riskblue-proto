@@ -1447,8 +1447,7 @@ export function AnalysisSection({ requestId, files, projectId, sourceType, isWMS
       const s = queryClient.getQueryData<any>(["analysis-request-meta", requestId])?.status;
       return ACTIVE_STATUSES.includes(s) ? 5000 : false;
     })() as number | false,
-
-  // Initialize models and tokens from DB
+  });
   useEffect(() => {
     if (!requestMeta) return;
     if (requestMeta.triage_model) setTriageModel(requestMeta.triage_model as string);
