@@ -131,6 +131,9 @@ interface AnalysisSectionProps {
   sourceType?: string;
   isWMSV?: boolean;
   visibleAwpClasses?: string[];
+  onAddFileUpload?: () => void;
+  onAddFileDrive?: () => void;
+  onAddFileProcore?: () => void;
 }
 
 // ---------------------------------------------------------------------------
