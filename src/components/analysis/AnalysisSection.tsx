@@ -1248,7 +1248,7 @@ const STATUS_RANK: Record<string, number> = {
   awaiting_upload: 0, pending: 1, copying: 1, copied: 2, started: 3, processing: 4, stopping: 4, complete: 5, failed: 5,
 };
 
-export function AnalysisSection({ requestId, files, projectId, sourceType, isWMSV, visibleAwpClasses }: AnalysisSectionProps) {
+export function AnalysisSection({ requestId, files, projectId, sourceType, isWMSV, visibleAwpClasses, onAddFileUpload, onAddFileDrive, onAddFileProcore }: AnalysisSectionProps) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
