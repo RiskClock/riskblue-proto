@@ -45,7 +45,7 @@ import {
   Search,
   FileSearch,
   Info,
-  
+  Upload,
 } from "lucide-react";
 import { Separator } from "@/components/ui/separator";
 import {
