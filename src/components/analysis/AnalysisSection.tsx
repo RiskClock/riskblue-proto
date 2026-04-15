@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { useMapNavigation } from "@/hooks/useMapNavigation";
 import { supabase } from "@/integrations/supabase/client";
+import type { RealtimeChannel } from "@supabase/supabase-js";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
@@ -1239,6 +1240,11 @@ function ExtractedTextBody({ fileId, localText }: { fileId: string; localText?: 
 // AnalysisSection
 // ---------------------------------------------------------------------------
 
+const ACTIVE_STATUSES = ["pending", "copying", "copied", "started", "processing"];
+const STATUS_RANK: Record<string, number> = {
+  awaiting_upload: 0, pending: 1, copying: 1, copied: 2, started: 3, processing: 4, stopping: 4, complete: 5, failed: 5,
+};
+
 export function AnalysisSection({ requestId, files, projectId, sourceType, isWMSV, visibleAwpClasses }: AnalysisSectionProps) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -1267,6 +1273,7 @@ export function AnalysisSection({ requestId, files, projectId, sourceType, isWMS
   const [uploadingFileIds, setUploadingFileIds] = useState<Set<string>>(new Set());
   const [analyzeV2Running, setAnalyzeV2Running] = useState(false);
   const analyzeRunSyncRef = useRef<"idle" | "starting" | "running" | "stopping">("idle");
+  const optimisticStatusRef = useRef<string | null>(null);
   const [triagePhase, setTriagePhase] = useState<"extract" | "score" | null>(null);
   const [summaryGroupBy, setSummaryGroupBy] = useState<"awp" | "floor">("awp");
   const [triageProgress, setTriageProgress] = useState<{ done: number; total: number }>({ done: 0, total: 0 });
@@ -1364,8 +1371,10 @@ export function AnalysisSection({ requestId, files, projectId, sourceType, isWMS
       if (error) throw error;
       return data as TriageResult[];
     },
-    refetchOnWindowFocus: false,
-    refetchInterval: analyzeV2Running ? 5000 : false,
+    refetchInterval: (() => {
+      const s = queryClient.getQueryData<any>(["analysis-request-meta", requestId])?.status;
+      return ACTIVE_STATUSES.includes(s) ? 5000 : false;
+    })() as number | false,
   });
 
   // Hydrate triage results into map
@@ -1434,10 +1443,11 @@ export function AnalysisSection({ requestId, files, projectId, sourceType, isWMS
         .single();
       return data;
     },
-    refetchInterval: 3000,
+    refetchInterval: (() => {
+      const s = queryClient.getQueryData<any>(["analysis-request-meta", requestId])?.status;
+      return ACTIVE_STATUSES.includes(s) ? 5000 : false;
+    })() as number | false,
   });
-
-  // Initialize models and tokens from DB
   useEffect(() => {
     if (!requestMeta) return;
     if (requestMeta.triage_model) setTriageModel(requestMeta.triage_model as string);
@@ -1461,12 +1471,32 @@ export function AnalysisSection({ requestId, files, projectId, sourceType, isWMS
   useEffect(() => {
     if (!requestMeta) return;
     const dbStatus = (requestMeta as any).status as string;
+    const isTerminal = dbStatus === "complete" || dbStatus === "failed";
+
+    // Status-precedence guard: if we have an optimistic status set,
+    // reject incoming data that has a lower rank (stale poll/realtime)
+    if (optimisticStatusRef.current && !isTerminal) {
+      const incomingRank = STATUS_RANK[dbStatus] ?? 0;
+      const optimisticRank = STATUS_RANK[optimisticStatusRef.current] ?? 0;
+      if (incomingRank < optimisticRank) {
+        return; // Ignore stale regression
+      }
+    }
+
+    // DB has caught up or reached terminal — clear optimistic guard
+    if (optimisticStatusRef.current) {
+      const incomingRank = STATUS_RANK[dbStatus] ?? 0;
+      const optimisticRank = STATUS_RANK[optimisticStatusRef.current] ?? 0;
+      if (incomingRank >= optimisticRank || isTerminal) {
+        optimisticStatusRef.current = null;
+      }
+    }
 
     if (!hydratedProcessing) {
       if (dbStatus === "processing") {
         analyzeRunSyncRef.current = "running";
         setAnalyzeV2Running(true);
-      } else if (dbStatus === "complete") {
+      } else if (isTerminal) {
         analyzeRunSyncRef.current = "idle";
         setAnalyzeV2Running(false);
         setAnalyzeV2Stopping(false);
@@ -1485,11 +1515,7 @@ export function AnalysisSection({ requestId, files, projectId, sourceType, isWMS
       return;
     }
 
-    if (dbStatus === "complete") {
-      if (analyzeRunSyncRef.current === "starting") {
-        return;
-      }
-
+    if (isTerminal) {
       analyzeRunSyncRef.current = "idle";
       setAnalyzeV2Running(false);
       setAnalyzeV2Stopping(false);
@@ -1497,6 +1523,34 @@ export function AnalysisSection({ requestId, files, projectId, sourceType, isWMS
       setClassFileStatuses({});
     }
   }, [requestMeta, hydratedProcessing, analyzeV2Running]);
+
+  // ---- Realtime subscriptions ----
+  useEffect(() => {
+    if (!requestId) return;
+    const channel: RealtimeChannel = supabase
+      .channel(`analysis-rt-${requestId}`)
+      .on(
+        "postgres_changes",
+        { event: "UPDATE", schema: "public", table: "analysis_requests", filter: `id=eq.${requestId}` },
+        () => {
+          queryClient.invalidateQueries({ queryKey: ["analysis-request-meta", requestId] });
+          queryClient.invalidateQueries({ queryKey: ["triage-results", requestId] });
+          queryClient.invalidateQueries({ queryKey: ["analysis-results", requestId] });
+        }
+      )
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "analysis_triage_results", filter: `analysis_request_id=eq.${requestId}` },
+        () => {
+          queryClient.invalidateQueries({ queryKey: ["triage-results", requestId] });
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [requestId, queryClient]);
 
   // Load extracted file IDs on mount so "Processed" badges appear immediately
   useEffect(() => {
@@ -1885,10 +1939,23 @@ export function AnalysisSection({ requestId, files, projectId, sourceType, isWMS
 
   // Helper to start the backend pipeline
   const startPipeline = async (phaseOverride?: string) => {
-    try {
-      const { data: sessionData } = await supabase.auth.getSession();
-      const token = sessionData.session?.access_token;
+    // Save previous cache for rollback
+    const prevMeta = queryClient.getQueryData(["analysis-request-meta", requestId]);
 
+    // Optimistic update BEFORE invoke
+    optimisticStatusRef.current = "processing";
+    analyzeRunSyncRef.current = "starting";
+    setAnalyzeV2Running(true);
+    queryClient.setQueryData(["analysis-request-meta", requestId], (old: any) => ({
+      ...old,
+      status: "processing",
+      pipeline_phase: phaseOverride || "extracting",
+      pipeline_progress_done: 0,
+      pipeline_progress_total: 0,
+      error_message: null,
+    }));
+
+    try {
       const response = await supabase.functions.invoke("run-analysis-pipeline", {
         body: {
           analysisRequestId: requestId,
@@ -1903,18 +1970,13 @@ export function AnalysisSection({ requestId, files, projectId, sourceType, isWMS
       if (response.error) {
         throw new Error(response.error.message);
       }
-
-      // Optimistic UI update — immediately show "processing" state
-      queryClient.setQueryData(["analysis-request-meta", requestId], (old: any) => ({
-        ...old,
-        status: "processing",
-        pipeline_phase: phaseOverride || "extracting",
-        pipeline_progress_done: 0,
-        pipeline_progress_total: 0,
-        error_message: null,
-      }));
-      queryClient.invalidateQueries({ queryKey: ["analysis-request-meta", requestId] });
+      // Success — realtime will handle further updates
     } catch (e) {
+      // Rollback optimistic state
+      optimisticStatusRef.current = null;
+      analyzeRunSyncRef.current = "idle";
+      setAnalyzeV2Running(false);
+      queryClient.setQueryData(["analysis-request-meta", requestId], prevMeta);
       toast({
         title: "Failed to start analysis",
         description: e instanceof Error ? e.message : "Unknown error",
@@ -1928,11 +1990,18 @@ export function AnalysisSection({ requestId, files, projectId, sourceType, isWMS
   };
 
   const handleWmsvStop = async () => {
+    // Optimistic stop — keep active status, show "Stopping..."
+    optimisticStatusRef.current = "stopping";
+    setAnalyzeV2Stopping(true);
+    queryClient.setQueryData(["analysis-request-meta", requestId], (old: any) => ({
+      ...old,
+      pipeline_stop_requested: true,
+    }));
     await supabase
       .from("analysis_requests")
       .update({ pipeline_stop_requested: true } as any)
       .eq("id", requestId);
-    queryClient.invalidateQueries({ queryKey: ["analysis-request-meta", requestId] });
+    // Don't invalidate — realtime handles the final transition
   };
 
   // Helper to get the best prefix for a class name
@@ -3314,8 +3383,8 @@ export function AnalysisSection({ requestId, files, projectId, sourceType, isWMS
   const dbErrorMessage = (requestMeta as any)?.error_message as string | null;
   const pipelineRunning = dbStatus === "processing" && !!pipelinePhase;
   const pipelinePhaseLabel = pipelinePhase === "extracting" ? "Extracting Context…" : pipelinePhase === "triaging" ? "Triaging…" : pipelinePhase === "analyzing" ? "Analyzing…" : "Processing…";
-  const wmsvRunning = pipelineRunning;
-  const wmsvPhaseLabel = pipelinePhaseLabel;
+  const wmsvRunning = pipelineRunning || analyzeV2Stopping;
+  const wmsvPhaseLabel = analyzeV2Stopping ? "Stopping…" : pipelinePhaseLabel;
 
   return (
     <TooltipProvider delayDuration={0}>
@@ -3333,16 +3402,19 @@ export function AnalysisSection({ requestId, files, projectId, sourceType, isWMS
                   <div className="flex items-center gap-3">
                     <Loader2 className="w-4 h-4 animate-spin text-primary" />
                     <span className="text-sm font-medium text-foreground">{wmsvPhaseLabel}</span>
-                    <span className="text-xs text-muted-foreground tabular-nums">
-                      {pipelineDone}/{pipelineTotal} {pipelinePhase === "extracting" ? "files" : "instances"}
-                    </span>
+                    {!analyzeV2Stopping && (
+                      <span className="text-xs text-muted-foreground tabular-nums">
+                        {pipelineDone}/{pipelineTotal} {pipelinePhase === "extracting" ? "files" : "instances"}
+                      </span>
+                    )}
                     <Button
                       size="sm"
                       variant="destructive"
                       onClick={handleWmsvStop}
+                      disabled={analyzeV2Stopping}
                     >
                       <Square className="w-4 h-4 mr-2" />
-                      Stop
+                      {analyzeV2Stopping ? "Stopping…" : "Stop"}
                     </Button>
                   </div>
                 ) : (
