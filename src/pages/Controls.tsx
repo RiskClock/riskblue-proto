@@ -275,7 +275,7 @@ export default function Controls() {
                 {control.name}
               </span>
             </div>
-            {isSelected && isControlExpanded && (
+            {isControlExpanded && (
               <div className="ml-10 space-y-1">
                 {specialSubs.map(sub => (
                   <div key={sub} className="flex items-center gap-2">
