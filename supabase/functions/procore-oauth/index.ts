@@ -316,6 +316,13 @@ serve(async (req) => {
       const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 
       // === Server-side concurrency lock ===
+      // Read pre-update state for accurate stale-lock logging
+      const { data: preState } = await supabase
+        .from("user_procore_tokens")
+        .select("refreshing_since")
+        .eq("user_id", user.id)
+        .maybeSingle();
+
       // Atomically acquire lock: only succeed if no recent refresh is in progress
       const staleCutoff = new Date(Date.now() - 30000).toISOString();
       const { data: lockResult, error: lockError } = await supabase
@@ -323,25 +330,12 @@ serve(async (req) => {
         .update({ refreshing_since: new Date().toISOString() })
         .eq("user_id", user.id)
         .or(`refreshing_since.is.null,refreshing_since.lt.${staleCutoff}`)
-        .select("id, refreshing_since")
+        .select("id")
         .maybeSingle();
-
-      if (lockError) {
-        console.error("[refresh] Lock query error:", lockError);
-        return new Response(JSON.stringify({ error: "Internal error", retryable: true }),
-          { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } });
-      }
-
-      if (!lockResult) {
-        // Another refresh is in progress (lock held < 30s ago)
-        console.log(`[refresh] Refresh already in progress for user: ${user.id}`);
-        return new Response(JSON.stringify({ retry: true, message: "Refresh in progress" }),
-          { status: 409, headers: { ...corsHeaders, "Content-Type": "application/json" } });
-      }
-
-      // Log if we reclaimed a stale lock
-      if (lockResult.refreshing_since) {
-        console.log(`[refresh] Reclaimed stale lock for user: ${user.id} (was locked since ${lockResult.refreshing_since})`);
+...
+      // Log stale reclaim based on pre-update state
+      if (lockResult && preState?.refreshing_since) {
+        console.log(`[refresh] Reclaimed stale lock for user: ${user.id} (was locked since ${preState.refreshing_since})`);
       }
 
       // Helper to clear the lock
