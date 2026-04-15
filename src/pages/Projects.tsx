@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
@@ -82,6 +82,42 @@ const Projects = () => {
     sessionStorage.getItem('riskblue_welcome_dismissed') !== 'true'
   );
 
+  const projectIdsRef = useRef<string[]>([]);
+  const fetchSeqRef = useRef(0);
+  const debounceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Keep projectIdsRef in sync with projects
+  useEffect(() => {
+    projectIdsRef.current = projects.map(p => p.id);
+  }, [projects]);
+
+  const fetchAnalysisStatuses = useCallback(async (ids: string[]) => {
+    if (!ids.length) return;
+    const seq = ++fetchSeqRef.current;
+    const { data } = await supabase
+      .from("analysis_requests")
+      .select("project_id, status")
+      .in("project_id", ids)
+      .order("created_at", { ascending: false });
+    if (seq !== fetchSeqRef.current) return; // superseded by a newer call
+    const statusMap = new Map<string, string>();
+    if (data) {
+      for (const row of data as Array<{ project_id: string; status: string }>) {
+        if (!statusMap.has(row.project_id)) {
+          statusMap.set(row.project_id, row.status);
+        }
+      }
+    }
+    setAnalysisStatuses(statusMap);
+  }, []);
+
+  const debouncedFetchStatuses = useCallback(() => {
+    if (debounceTimerRef.current) clearTimeout(debounceTimerRef.current);
+    debounceTimerRef.current = setTimeout(() => {
+      fetchAnalysisStatuses(projectIdsRef.current);
+    }, 500);
+  }, [fetchAnalysisStatuses]);
+
   const handleDismissWelcome = () => {
     setShowWelcome(false);
     sessionStorage.setItem('riskblue_welcome_dismissed', 'true');
@@ -93,7 +129,7 @@ const Projects = () => {
     }
   }, [user]);
 
-  // Realtime subscription for WMSV status badges
+  // Realtime subscription for WMSV status badges — refetch instead of direct patch
   useEffect(() => {
     if (!isWMSV || !user) return;
     const channel: RealtimeChannel = supabase
@@ -101,20 +137,16 @@ const Projects = () => {
       .on(
         "postgres_changes",
         { event: "UPDATE", schema: "public", table: "analysis_requests" },
-        (payload: any) => {
-          const row = payload.new;
-          if (row?.project_id && row?.status) {
-            setAnalysisStatuses((prev) => {
-              const next = new Map(prev);
-              next.set(row.project_id, row.status);
-              return next;
-            });
-          }
+        () => {
+          debouncedFetchStatuses();
         }
       )
       .subscribe();
-    return () => { supabase.removeChannel(channel); };
-  }, [isWMSV, user]);
+    return () => {
+      if (debounceTimerRef.current) clearTimeout(debounceTimerRef.current);
+      supabase.removeChannel(channel);
+    };
+  }, [isWMSV, user, debouncedFetchStatuses]);
 
   const fetchProjects = async () => {
     try {
@@ -169,16 +201,19 @@ const Projects = () => {
         emailsResult.data?.emails ? Object.entries(emailsResult.data.emails) : []
       );
 
-      // Build analysis status map (latest per project)
-      const statusMap = new Map<string, string>();
+      // Build analysis status map (latest per project) — reuse extracted helper
       if (analysisResult.data) {
+        const seq = ++fetchSeqRef.current;
+        const statusMap = new Map<string, string>();
         for (const row of analysisResult.data as Array<{ project_id: string; status: string }>) {
           if (!statusMap.has(row.project_id)) {
             statusMap.set(row.project_id, row.status);
           }
         }
+        if (seq === fetchSeqRef.current) {
+          setAnalysisStatuses(statusMap);
+        }
       }
-      setAnalysisStatuses(statusMap);
 
       // Merge projects with creator names and emails
       const projectsWithCreators: ProjectWithCreator[] = (projectsData || []).map(project => {
