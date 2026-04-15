@@ -123,11 +123,20 @@ const Projects = () => {
     sessionStorage.setItem('riskblue_welcome_dismissed', 'true');
   };
 
+  const projectIds = useMemo(() => projects.map(p => p.id), [projects]);
+
   useEffect(() => {
     if (user) {
       fetchProjects();
     }
   }, [user]);
+
+  // Re-fetch analysis statuses when isWMSV hydrates or projects change
+  useEffect(() => {
+    if (isWMSV && projectIds.length > 0) {
+      fetchAnalysisStatuses(projectIds);
+    }
+  }, [isWMSV, projectIds, fetchAnalysisStatuses]);
 
   // Realtime subscription for WMSV status badges — refetch instead of direct patch
   useEffect(() => {
