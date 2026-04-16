@@ -234,6 +234,7 @@ export const ProcoreConnectionDialog = ({
             source_type: "procore",
             status: "pending",
             drive_folder_id: driveFolderId,
+            error_message: null,
           })
           .eq("id", analysisRequestId);
         if (updateError) throw new Error(updateError.message);
