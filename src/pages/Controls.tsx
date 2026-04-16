@@ -29,7 +29,7 @@ type CategoryKey = typeof CATEGORIES[number]["key"];
 
 export default function Controls() {
   const { user } = useAuth();
-  const { isWMSV, loading: accountLoading } = useAccountType();
+  const { isWMSV, company, loading: accountLoading } = useAccountType();
 
   // Selections: Map<`${category}::${controlId}`, sub_options[]>
   const [selections, setSelections] = useState<Map<string, string[]>>(new Map());
@@ -313,7 +313,7 @@ export default function Controls() {
     <div className="min-h-screen bg-background">
       <AppHeader />
       <main className="container mx-auto px-6 py-8">
-        <h1 className="text-3xl font-bold text-foreground mb-8">Control Library</h1>
+        <h1 className="text-3xl font-bold text-foreground mb-8">{company ? `${company}'s Control Library` : "Control Library"}</h1>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
           {CATEGORIES.map(cat => (
             <div key={cat.key} className="bg-card rounded-lg border p-6">
