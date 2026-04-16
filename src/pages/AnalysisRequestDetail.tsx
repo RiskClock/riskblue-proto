@@ -337,6 +337,16 @@ export default function AnalysisRequestDetail() {
                 sourceType={request.source_type}
               />
             )}
+
+            {/* Export Button */}
+            {request.status === "complete" && request.summary_data && Object.keys(request.summary_data as Record<string, unknown>).length > 0 && (
+              <div className="flex justify-end pt-2">
+                <Button onClick={handleExportDocx} disabled={exporting}>
+                  {exporting ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Download className="w-4 h-4 mr-2" />}
+                  {exporting ? "Exporting…" : "Export Analysis"}
+                </Button>
+              </div>
+            )}
           </div>
         )}
       </main>
