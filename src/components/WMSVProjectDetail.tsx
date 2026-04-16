@@ -1,4 +1,4 @@
-import { useRef, useState, useMemo, useEffect } from "react";
+import { useRef, useState, useMemo, useEffect, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
@@ -13,6 +13,7 @@ import { useToast } from "@/hooks/use-toast";
 import { ArrowLeft, Loader2, Upload, FileText, CheckCircle2, Circle, FolderSync, Download } from "lucide-react";
 import { RepositoryConnectionDialog } from "@/components/wizard/RepositoryConnectionDialog";
 import { ProcoreConnectionDialog } from "@/components/wizard/ProcoreConnectionDialog";
+import { generateAnalysisDocx } from "@/lib/analysisDocxExporter";
 
 const ACTIVE_STATUSES = ["pending", "copying", "copied", "started", "processing"];
 
@@ -62,6 +63,7 @@ export function WMSVProjectDetail({ projectId, projectName }: WMSVProjectDetailP
   const queryClient = useQueryClient();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [uploading, setUploading] = useState(false);
+  const [exporting, setExporting] = useState(false);
   const [showDriveDialog, setShowDriveDialog] = useState(false);
   const [showProcoreDialog, setShowProcoreDialog] = useState(false);
 
@@ -215,6 +217,31 @@ export function WMSVProjectDetail({ projectId, projectName }: WMSVProjectDetailP
   const handleCloudAnalysisStarted = () => {
     queryClient.invalidateQueries({ queryKey: ["wmsv-analysis-request", projectId] });
   };
+
+  const handleExportDocx = useCallback(async () => {
+    if (!request) return;
+    const summaryData = (request.summary_data as unknown as Record<string, any[]>) || {};
+    const hasInstances = Object.values(summaryData).some((arr) => arr?.length > 0);
+    if (!hasInstances) {
+      toast({ title: "No Data", description: "No summarized instances to export.", variant: "destructive" });
+      return;
+    }
+    setExporting(true);
+    try {
+      const blob = await generateAnalysisDocx(request.id, summaryData as any, projectName || "Project");
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `${(projectName || "Analysis").replace(/[^a-zA-Z0-9]/g, "_")}_Export.docx`;
+      a.click();
+      URL.revokeObjectURL(url);
+      toast({ title: "Export Complete", description: "DOCX file downloaded." });
+    } catch (e) {
+      toast({ title: "Export Failed", description: (e as Error).message, variant: "destructive" });
+    } finally {
+      setExporting(false);
+    }
+  }, [request, projectName, toast]);
 
   return (
     <div className="min-h-screen bg-background">
@@ -370,15 +397,14 @@ export function WMSVProjectDetail({ projectId, projectName }: WMSVProjectDetailP
                 </>
               )}
 
-              <div className="flex justify-end pt-2">
-                <Button
-                  onClick={() => toast({ title: "Export Analysis", description: "Export action UI added — functionality can be wired next." })}
-                  disabled={!files || files.length === 0}
-                >
-                  <Download className="w-4 h-4 mr-2" />
-                  Export Analysis
-                </Button>
-              </div>
+              {request.status === "complete" && request.summary_data && Object.keys(request.summary_data as Record<string, unknown>).length > 0 && (
+                <div className="flex justify-end pt-2">
+                  <Button onClick={handleExportDocx} disabled={exporting}>
+                    {exporting ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Download className="w-4 h-4 mr-2" />}
+                    {exporting ? "Exporting…" : "Export Analysis"}
+                  </Button>
+                </div>
+              )}
             </div>
         )}
       </main>
