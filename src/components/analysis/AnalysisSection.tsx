@@ -46,7 +46,9 @@ import {
   FileSearch,
   Info,
   Upload,
+  MoreVertical,
 } from "lucide-react";
+import { DropdownMenuSeparator } from "@/components/ui/dropdown-menu";
 import { Separator } from "@/components/ui/separator";
 import {
   DropdownMenu,
