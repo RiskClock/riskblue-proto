@@ -38,6 +38,9 @@ export const AppHeader = ({ leftContent }: AppHeaderProps) => {
             className="h-8 cursor-pointer"
             onClick={() => navigate("/projects")}
           />
+          <span className="text-lg font-bold text-black">
+            {isWMSV ? "Workbench" : "Contractor Portal"}
+          </span>
           {leftContent}
         </div>
         <div className="flex items-center gap-6">
