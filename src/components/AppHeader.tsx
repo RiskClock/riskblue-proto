@@ -22,7 +22,7 @@ export const AppHeader = ({ leftContent }: AppHeaderProps) => {
   const navigate = useNavigate();
   const location = useLocation();
   const { getInitial } = useUserDisplayName();
-  const { isWMSV } = useAccountType();
+  const { isWMSV, loading: accountLoading } = useAccountType();
 
   const isInternalUser = user?.email?.toLowerCase().endsWith("@riskclock.com") ?? false;
 
@@ -38,9 +38,11 @@ export const AppHeader = ({ leftContent }: AppHeaderProps) => {
             className="h-8 cursor-pointer"
             onClick={() => navigate("/projects")}
           />
-          <span className="text-lg font-bold text-black">
-            {isWMSV ? "Workbench" : "Contractor Portal"}
-          </span>
+          {!accountLoading && (
+            <span className="text-lg font-bold text-black">
+              {isWMSV ? "Workbench" : "Contractor Portal"}
+            </span>
+          )}
           {leftContent}
         </div>
         <div className="flex items-center gap-6">
