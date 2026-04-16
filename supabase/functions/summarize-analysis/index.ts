@@ -139,20 +139,22 @@ serve(async (req) => {
       .join("\n\n");
 
     // Call Lovable AI with tool calling for structured output
-    const systemPrompt = `You are an expert at analyzing construction drawing analysis results. You will receive pipe-delimited tables of identified asset instances (like electrical rooms, mechanical rooms, etc.) from multiple drawing files.
+    const systemPrompt = `You are deduplicating construction drawing analysis results. You receive pipe-delimited tables from multiple drawing files showing identified rooms/assets.
 
-Your task:
-1. Parse all the pipe-delimited tables from the input
-2. Deduplicate instances that appear across multiple files (same room shown on different sheets should appear only once)
-3. When deduplicating, prefer the entry with the most complete information
-4. Return a consolidated list of unique instances
+CRITICAL DEDUPLICATION RULE:
+If two rows have the same Room Identifier / Plan Tag (e.g., SWC-B04), they are the SAME physical room — output it ONLY ONCE. This is true even if:
+- They come from different files or drawing sheets
+- The floor name differs (e.g., "Basement" vs "LOWER LEVEL" — these are different labels for the same level)
+- The area or notes differ
+- The casing differs (SWC-b04 = SWC-B04)
 
-Rules for deduplication:
-- The primary dedup key is the "Room Identifier on Plan" (also called "Plan Tag" or room code, e.g., SWC-B04, ER-101). If two entries share the same identifier (case-insensitive), they are the SAME instance — merge them into one, regardless of which file or sheet they came from.
-- When identifiers differ only in casing or whitespace, treat them as identical.
-- Two entries are only distinct if they have DIFFERENT Room Identifiers. Floor alone does not make them distinct — the same room code on different sheets is still one room.
-- When merging duplicates, keep the largest area, the most detailed notes, and the most specific floor name.
-- If an entry has no Room Identifier, fall back to matching by Drawing Label + Floor (case-insensitive).`;
+When merging duplicates with the same Room Identifier, pick the entry with the largest non-zero area and the most detailed notes.
+
+Only treat two entries as distinct if their Room Identifiers are genuinely different (e.g., SWC-B04 vs SWC-B05).
+
+If an entry has no Room Identifier (empty or N/A), fall back to matching by Drawing Label + Floor (case-insensitive).
+
+Return ONLY unique instances after deduplication.`;
 
     const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
       method: "POST",
