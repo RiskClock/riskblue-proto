@@ -13,7 +13,6 @@ import { useToast } from "@/hooks/use-toast";
 import { ArrowLeft, Loader2, ShieldAlert, Upload, FileText, CheckCircle2, Circle, Download } from "lucide-react";
 import { format } from "date-fns";
 import { generateAnalysisDocx } from "@/lib/analysisDocxExporter";
-import { generateAnalysisDocx } from "@/lib/analysisDocxExporter";
 import { RepositoryConnectionDialog } from "@/components/wizard/RepositoryConnectionDialog";
 import { ProcoreConnectionDialog } from "@/components/wizard/ProcoreConnectionDialog";
 
