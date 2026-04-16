@@ -57,6 +57,7 @@ export default function AnalysisRequestDetail() {
   useHeapIdentify();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [uploading, setUploading] = useState(false);
+  const [exporting, setExporting] = useState(false);
 
   // Cloud source dialog state
   const [showDriveDialog, setShowDriveDialog] = useState(false);
