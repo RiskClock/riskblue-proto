@@ -10,8 +10,9 @@ import { AppHeader } from "@/components/AppHeader";
 import { AnalysisSection } from "@/components/analysis/AnalysisSection";
 import { useHeapIdentify } from "@/hooks/useHeapIdentify";
 import { useToast } from "@/hooks/use-toast";
-import { ArrowLeft, Loader2, ShieldAlert, Upload, FileText, CheckCircle2, Circle } from "lucide-react";
+import { ArrowLeft, Loader2, ShieldAlert, Upload, FileText, CheckCircle2, Circle, Download } from "lucide-react";
 import { format } from "date-fns";
+import { generateAnalysisDocx } from "@/lib/analysisDocxExporter";
 import { RepositoryConnectionDialog } from "@/components/wizard/RepositoryConnectionDialog";
 import { ProcoreConnectionDialog } from "@/components/wizard/ProcoreConnectionDialog";
 
