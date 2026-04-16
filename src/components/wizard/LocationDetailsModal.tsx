@@ -148,9 +148,9 @@ export const LocationDetailsModal = ({
       } else {
         // Fallback: text-layer search using multiple candidates
         const candidates: string[] = [];
-        if (loc.areaName) candidates.push(loc.areaName);
-        if ((loc as any).drawingCode) candidates.push((loc as any).drawingCode);
         if (loc.id) candidates.push(loc.id);
+        if ((loc as any).drawingCode) candidates.push((loc as any).drawingCode);
+        if (loc.areaName) candidates.push(loc.areaName);
         if (loc.name) candidates.push(loc.name);
         console.log(`[LocationModal] No stored coords, searching text layer with candidates:`, candidates);
         for (const candidate of candidates) {
