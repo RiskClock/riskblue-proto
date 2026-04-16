@@ -1330,6 +1330,7 @@ export function AnalysisSection({ requestId, files, projectId, sourceType, isWMS
   const [triageOverrides, setTriageOverrides] = useState<Map<string, "include" | "exclude">>(new Map());
   const inFlightCountRef = useRef(0);
   const MAX_CONCURRENT_TRIAGE = 10;
+  const MAX_CONCURRENT_TRIAGE_SINGLE = 5;
 
   // ---- Extract Context state ----
   const [extractRunning, setExtractRunning] = useState(false);
@@ -2982,10 +2983,10 @@ export function AnalysisSection({ requestId, files, projectId, sourceType, isWMS
     }
   };
 
-  const startTriageScheduler = (onComplete: () => void) => {
+  const startTriageScheduler = (onComplete: () => void, maxConcurrency: number = MAX_CONCURRENT_TRIAGE) => {
     triageTimerRef.current = setInterval(() => {
       while (
-        inFlightCountRef.current < MAX_CONCURRENT_TRIAGE &&
+        inFlightCountRef.current < maxConcurrency &&
         triageQueueRef.current.length > 0
       ) {
         const item = triageQueueRef.current.shift()!;
@@ -3003,7 +3004,7 @@ export function AnalysisSection({ requestId, files, projectId, sourceType, isWMS
 
     // Immediately fire first batch
     while (
-      inFlightCountRef.current < MAX_CONCURRENT_TRIAGE &&
+      inFlightCountRef.current < maxConcurrency &&
       triageQueueRef.current.length > 0
     ) {
       const item = triageQueueRef.current.shift()!;
@@ -3169,7 +3170,7 @@ export function AnalysisSection({ requestId, files, projectId, sourceType, isWMS
       // Mark request as started (idle between phases)
       supabase.from("analysis_requests").update({ status: "started" }).eq("id", requestId);
       queryClient.invalidateQueries({ queryKey: ["analysis-request-meta", requestId] });
-    });
+    }, MAX_CONCURRENT_TRIAGE_SINGLE);
   };
 
   const handleTriageAll = async () => {
