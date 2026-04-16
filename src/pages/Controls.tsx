@@ -31,10 +31,6 @@ export default function Controls() {
   const { user } = useAuth();
   const { isWMSV, company, loading: accountLoading } = useAccountType();
 
-  if (accountLoading) {
-    return <div className="min-h-screen flex items-center justify-center text-foreground">Loading...</div>;
-  }
-
   // Selections: Map<`${category}::${controlId}`, sub_options[]>
   const [selections, setSelections] = useState<Map<string, string[]>>(new Map());
   const [expandedControls, setExpandedControls] = useState<Set<string>>(new Set());

@@ -344,7 +344,7 @@ const Projects = () => {
           </div>
         </div>
 
-        {loading || !user ? (
+        {loading || !user || accountLoading ? (
           <div className="text-center py-12">
             <p className="text-muted-foreground">Loading projects...</p>
           </div>
