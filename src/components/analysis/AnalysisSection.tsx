@@ -3170,7 +3170,7 @@ export function AnalysisSection({ requestId, files, projectId, sourceType, isWMS
       // Mark request as started (idle between phases)
       supabase.from("analysis_requests").update({ status: "started" }).eq("id", requestId);
       queryClient.invalidateQueries({ queryKey: ["analysis-request-meta", requestId] });
-    });
+    }, MAX_CONCURRENT_TRIAGE_SINGLE);
   };
 
   const handleTriageAll = async () => {
