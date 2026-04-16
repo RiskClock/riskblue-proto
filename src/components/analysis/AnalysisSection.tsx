@@ -2983,10 +2983,10 @@ export function AnalysisSection({ requestId, files, projectId, sourceType, isWMS
     }
   };
 
-  const startTriageScheduler = (onComplete: () => void) => {
+  const startTriageScheduler = (onComplete: () => void, maxConcurrency: number = MAX_CONCURRENT_TRIAGE) => {
     triageTimerRef.current = setInterval(() => {
       while (
-        inFlightCountRef.current < MAX_CONCURRENT_TRIAGE &&
+        inFlightCountRef.current < maxConcurrency &&
         triageQueueRef.current.length > 0
       ) {
         const item = triageQueueRef.current.shift()!;
@@ -3004,7 +3004,7 @@ export function AnalysisSection({ requestId, files, projectId, sourceType, isWMS
 
     // Immediately fire first batch
     while (
-      inFlightCountRef.current < MAX_CONCURRENT_TRIAGE &&
+      inFlightCountRef.current < maxConcurrency &&
       triageQueueRef.current.length > 0
     ) {
       const item = triageQueueRef.current.shift()!;
