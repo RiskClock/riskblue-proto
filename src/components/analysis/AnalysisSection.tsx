@@ -2035,12 +2035,24 @@ export function AnalysisSection({ requestId, files, projectId, sourceType, isWMS
       error_message: null,
     }));
 
-    // Clear all result layers immediately for visual feedback
-    setExtractedFileIds(new Set());
-    setTriageResults(new Map());
-    setTriageOverrides(new Map());
-    queryClient.setQueryData(["analysis-results", requestId], []);
-    queryClient.setQueryData(["triage-results", requestId], []);
+    // Phase-aware clearing for visual feedback
+    if (phaseOverride === "analyze") {
+      // Only clear analysis results; keep extracted text, triage results, and overrides
+      queryClient.setQueryData(["analysis-results", requestId], []);
+    } else if (phaseOverride === "triage") {
+      // Clear triage + analysis results; keep extracted file IDs
+      setTriageResults(new Map());
+      setTriageOverrides(new Map());
+      queryClient.setQueryData(["analysis-results", requestId], []);
+      queryClient.setQueryData(["triage-results", requestId], []);
+    } else {
+      // Full clear
+      setExtractedFileIds(new Set());
+      setTriageResults(new Map());
+      setTriageOverrides(new Map());
+      queryClient.setQueryData(["analysis-results", requestId], []);
+      queryClient.setQueryData(["triage-results", requestId], []);
+    }
 
     try {
       // Compute enabledAwpClasses as the single source of truth

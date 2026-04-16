@@ -246,19 +246,39 @@ Deno.serve(async (req) => {
 
     const userToken = authHeader.replace("Bearer ", "");
 
-    // ---- Authoritative clear: delete ALL previous results BEFORE status change ----
-    // This ensures old rows are gone from DB before realtime events trigger refetches
-    await Promise.all([
-      admin.from("analysis_triage_results").delete().eq("analysis_request_id", analysisRequestId),
-      admin.from("analysis_results").delete().eq("analysis_request_id", analysisRequestId),
-      admin.from("analysis_triage_overrides").delete().eq("analysis_request_id", analysisRequestId),
-      admin.from("analysis_request_files")
-        .update({ extracted_text: null, openai_file_id: null, openai_file_status: null } as any)
-        .eq("analysis_request_id", analysisRequestId),
-      admin.from("analysis_requests")
-        .update({ triage_tokens_used: 0, analyze_tokens_used: 0, summary_data: {} } as any)
-        .eq("id", analysisRequestId),
-    ]);
+    // ---- Phase-aware clear: only delete data relevant to the requested phase ----
+    if (phaseOverride === "analyze") {
+      // Only clear analysis results and summary — keep triage, extracted text, and OpenAI file caches
+      await Promise.all([
+        admin.from("analysis_results").delete().eq("analysis_request_id", analysisRequestId),
+        admin.from("analysis_requests")
+          .update({ analyze_tokens_used: 0, summary_data: {} } as any)
+          .eq("id", analysisRequestId),
+      ]);
+    } else if (phaseOverride === "triage") {
+      // Clear triage + analysis results, but keep extracted text and OpenAI file IDs
+      await Promise.all([
+        admin.from("analysis_triage_results").delete().eq("analysis_request_id", analysisRequestId),
+        admin.from("analysis_results").delete().eq("analysis_request_id", analysisRequestId),
+        admin.from("analysis_triage_overrides").delete().eq("analysis_request_id", analysisRequestId),
+        admin.from("analysis_requests")
+          .update({ triage_tokens_used: 0, analyze_tokens_used: 0, summary_data: {} } as any)
+          .eq("id", analysisRequestId),
+      ]);
+    } else {
+      // Full clear: delete everything including extracted text and OpenAI file caches
+      await Promise.all([
+        admin.from("analysis_triage_results").delete().eq("analysis_request_id", analysisRequestId),
+        admin.from("analysis_results").delete().eq("analysis_request_id", analysisRequestId),
+        admin.from("analysis_triage_overrides").delete().eq("analysis_request_id", analysisRequestId),
+        admin.from("analysis_request_files")
+          .update({ extracted_text: null, openai_file_id: null, openai_file_status: null } as any)
+          .eq("analysis_request_id", analysisRequestId),
+        admin.from("analysis_requests")
+          .update({ triage_tokens_used: 0, analyze_tokens_used: 0, summary_data: {} } as any)
+          .eq("id", analysisRequestId),
+      ]);
+    }
 
     // THEN set status to "processing" (this triggers realtime → refetch → rows are already gone)
     await admin
@@ -719,8 +739,9 @@ async function runPipeline(params: PipelineParams) {
             }
 
             if (!promptContent) {
+              const driveId = promptByClass.get(item.awpClassName)?.drive_file_id || "none";
               console.warn(
-                `[pipeline] No prompt for ${item.awpClassName}, recording failure`,
+                `[pipeline] No prompt for ${item.awpClassName} (drive_file_id: ${driveId}), recording failure`,
               );
               analyzeFailures++;
               await admin.from("analysis_results").insert({
