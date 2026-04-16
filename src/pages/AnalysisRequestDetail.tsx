@@ -10,8 +10,9 @@ import { AppHeader } from "@/components/AppHeader";
 import { AnalysisSection } from "@/components/analysis/AnalysisSection";
 import { useHeapIdentify } from "@/hooks/useHeapIdentify";
 import { useToast } from "@/hooks/use-toast";
-import { ArrowLeft, Loader2, ShieldAlert, Upload, FileText, CheckCircle2, Circle } from "lucide-react";
+import { ArrowLeft, Loader2, ShieldAlert, Upload, FileText, CheckCircle2, Circle, Download } from "lucide-react";
 import { format } from "date-fns";
+import { generateAnalysisDocx } from "@/lib/analysisDocxExporter";
 import { RepositoryConnectionDialog } from "@/components/wizard/RepositoryConnectionDialog";
 import { ProcoreConnectionDialog } from "@/components/wizard/ProcoreConnectionDialog";
 
@@ -56,6 +57,7 @@ export default function AnalysisRequestDetail() {
   useHeapIdentify();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [uploading, setUploading] = useState(false);
+  const [exporting, setExporting] = useState(false);
 
   // Cloud source dialog state
   const [showDriveDialog, setShowDriveDialog] = useState(false);
@@ -159,6 +161,31 @@ export default function AnalysisRequestDetail() {
   const handleCloudAnalysisStarted = () => {
     queryClient.invalidateQueries({ queryKey: ["analysis-request", requestId] });
     queryClient.invalidateQueries({ queryKey: ["analysis-files", requestId] });
+  };
+
+  const handleExportDocx = async () => {
+    if (!request || !requestId) return;
+    const summaryData = (request.summary_data as unknown as Record<string, any[]>) || {};
+    const hasInstances = Object.values(summaryData).some((arr) => arr?.length > 0);
+    if (!hasInstances) {
+      toast({ title: "No Data", description: "No summarized instances to export.", variant: "destructive" });
+      return;
+    }
+    setExporting(true);
+    try {
+      const blob = await generateAnalysisDocx(requestId, summaryData as any, request.project?.name || "Project");
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `${(request.project?.name || "Analysis").replace(/[^a-zA-Z0-9]/g, "_")}_Export.docx`;
+      a.click();
+      URL.revokeObjectURL(url);
+      toast({ title: "Export Complete", description: "DOCX file downloaded." });
+    } catch (e) {
+      toast({ title: "Export Failed", description: (e as Error).message, variant: "destructive" });
+    } finally {
+      setExporting(false);
+    }
   };
 
   if (!isInternal) {
@@ -309,6 +336,16 @@ export default function AnalysisRequestDetail() {
                 projectId={request.project_id}
                 sourceType={request.source_type}
               />
+            )}
+
+            {/* Export Button */}
+            {request.status === "complete" && request.summary_data && Object.keys(request.summary_data as Record<string, unknown>).length > 0 && (
+              <div className="flex justify-end pt-2">
+                <Button onClick={handleExportDocx} disabled={exporting}>
+                  {exporting ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Download className="w-4 h-4 mr-2" />}
+                  {exporting ? "Exporting…" : "Export Analysis"}
+                </Button>
+              </div>
             )}
           </div>
         )}
