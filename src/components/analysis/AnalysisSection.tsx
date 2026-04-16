@@ -168,9 +168,9 @@ interface OverlayRow {
 /**
  * Parse the AI result markdown table and return multiple search candidates
  * per row.  Priority order for candidate columns:
- *   1. drawing label / label
- *   2. generated room code / room code
- *   3. code / identifier / tag
+ *   1. generated room code / room code / identifier / tag
+ *   2. drawing code / drawing label
+ *   3. component / name
  *   4. first data column (fallback)
  *
  * Each non-empty value from these columns becomes a candidate the caller
@@ -200,9 +200,8 @@ function parseOverlayCandidates(resultText: string): OverlayRow[] {
     // Build candidate column indices in priority order
     const candidateColIndices: number[] = [];
     const colPriority: Array<(h: string) => boolean> = [
-      (h) => h.includes("drawing label") || h.includes("drawing code"),
-      (h) => (h.includes("label") && !h.includes("page")) || h.includes("room code") || h.includes("generated room") || h.includes("room identifier"),
-      (h) => h.includes("code") || h.includes("identifier") || h.includes("tag"),
+      (h) => h === "id" || h.includes("room code") || h.includes("generated room") || h.includes("room identifier") || ((h.includes("code") || h.includes("identifier") || h.includes("tag")) && !h.includes("drawing")),
+      (h) => h.includes("drawing code") || h.includes("drawing label") || (h.includes("label") && !h.includes("page")),
       (h) => h.includes("component type") || h.includes("component"),
       (h) => h === "name" || h.includes("name"),
     ];
@@ -226,10 +225,15 @@ function parseOverlayCandidates(resultText: string): OverlayRow[] {
     for (const line of dataLines) {
       const cells = line.split("|").map((c) => c.trim());
       const candidates: string[] = [];
+      const seenCandidates = new Set<string>();
       for (const ci of candidateColIndices) {
         const val = cells[ci];
         if (val && val !== "-" && !val.toLowerCase().includes("none") && !val.toLowerCase().includes("no instance") && val.length > 1) {
-          candidates.push(val);
+          const normalized = normalizeText(val);
+          if (!seenCandidates.has(normalized)) {
+            seenCandidates.add(normalized);
+            candidates.push(val);
+          }
         }
       }
       let pageNum = 1;
@@ -264,6 +268,42 @@ function parseOverlayCandidates(resultText: string): OverlayRow[] {
 
 // Re-export shared text-layer search utilities
 import { findBBoxInTextLayer, normalizeText, itemBBox, type PDFBBox } from "@/lib/pdfTextLayerSearch";
+
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+function matchesDetectionId(candidate: string, targetId: string, allowBounded = false): boolean {
+  const normalizedCandidate = normalizeText(candidate);
+  const normalizedTarget = normalizeText(targetId);
+  if (!normalizedCandidate || !normalizedTarget) return false;
+  if (normalizedCandidate === normalizedTarget) return true;
+  if (!allowBounded) return false;
+
+  return new RegExp(`(^|[^a-z0-9])${escapeRegExp(normalizedTarget)}([^a-z0-9]|$)`, "i").test(normalizedCandidate);
+}
+
+function findMatchingOverlayRow(rows: OverlayRow[], targetId: string): OverlayRow | undefined {
+  return rows.find((row) => row.candidates.some((candidate) => matchesDetectionId(candidate, targetId)))
+    ?? rows.find((row) => row.candidates.some((candidate) => matchesDetectionId(candidate, targetId, true)));
+}
+
+function buildOverlaySearchCandidates(row: OverlayRow | undefined, instance: Pick<SummarizedInstance, "id" | "name">): string[] {
+  const values = [instance.id, ...(row?.candidates ?? []), instance.name];
+  const seen = new Set<string>();
+  const ordered: string[] = [];
+
+  for (const value of values) {
+    const trimmed = value?.trim();
+    if (!trimmed) continue;
+    const normalized = normalizeText(trimmed);
+    if (!normalized || seen.has(normalized)) continue;
+    seen.add(normalized);
+    ordered.push(trimmed);
+  }
+
+  return ordered;
+}
 
 // ---------------------------------------------------------------------------
 // InstanceDetailModal sub-component (unchanged)
@@ -324,12 +364,8 @@ function InstanceDetailModal({
         // find the row whose candidates include instance.id, then use all its
         // candidates.  Fall back to instance.id if nothing matches.
         const overlayRows = resultText ? parseOverlayCandidates(resultText) : [];
-        const matchingRow = overlayRows.find((r) =>
-          r.candidates.some((c) => c.toUpperCase() === instance.id.toUpperCase())
-        ) ?? overlayRows.find((r) =>
-          r.candidates.some((c) => c.toUpperCase().includes(instance.id.toUpperCase()))
-        );
-        const searchCandidates = matchingRow?.candidates ?? [instance.id];
+        const matchingRow = findMatchingOverlayRow(overlayRows, instance.id);
+        const searchCandidates = buildOverlaySearchCandidates(matchingRow, instance);
         const hintPage = matchingRow?.pageNum;
         const matchedAiBBox = matchingRow?.aiBBox;
 
@@ -3321,30 +3357,27 @@ export function AnalysisSection({ requestId, files, projectId, sourceType, isWMS
         let coordinates: number[] | null = null;
         // Try to match instance to a result file by checking result_text for the instance id
         for (const ar of analysisResults) {
-          if (ar.result_text && ar.result_text.includes(inst.id)) {
-            const fileInfo = fileStoragePaths[ar.file_id];
-            if (fileInfo) {
-              fileName = fileInfo.fileName;
-              drawingUrl = fileInfo.storagePath;
-            }
-            // Parse bounding box from the row containing this instance id
-            const lines = ar.result_text.split("\n").filter((l) => l.includes("|"));
-            for (const line of lines) {
-              if (line.includes(inst.id)) {
-                const bboxMatch = line.match(/\(?\s*(\d+)[,\s]+(\d+)\s*\)?\s*(?:→|->|—|–)\s*\(?\s*(\d+)[,\s]+(\d+)\s*\)?/);
-                if (bboxMatch) {
-                  coordinates = [
-                    parseInt(bboxMatch[1], 10),
-                    parseInt(bboxMatch[2], 10),
-                    parseInt(bboxMatch[3], 10),
-                    parseInt(bboxMatch[4], 10),
-                  ];
-                }
-                break;
-              }
-            }
-            break;
+          if (!ar.result_text) continue;
+
+          const matchingRow = findMatchingOverlayRow(parseOverlayCandidates(ar.result_text), inst.id);
+          if (!matchingRow) continue;
+
+          const fileInfo = fileStoragePaths[ar.file_id];
+          if (fileInfo) {
+            fileName = fileInfo.fileName;
+            drawingUrl = fileInfo.storagePath;
           }
+
+          if (matchingRow.aiBBox) {
+            coordinates = [
+              matchingRow.aiBBox.x1,
+              matchingRow.aiBBox.y1,
+              matchingRow.aiBBox.x2,
+              matchingRow.aiBBox.y2,
+            ];
+          }
+
+          break;
         }
         // Fallback: if only one file, use it
         if (!drawingUrl && Object.keys(fileStoragePaths).length === 1) {
