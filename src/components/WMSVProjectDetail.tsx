@@ -218,6 +218,31 @@ export function WMSVProjectDetail({ projectId, projectName }: WMSVProjectDetailP
     queryClient.invalidateQueries({ queryKey: ["wmsv-analysis-request", projectId] });
   };
 
+  const handleExportDocx = useCallback(async () => {
+    if (!request) return;
+    const summaryData = (request.summary_data as unknown as Record<string, any[]>) || {};
+    const hasInstances = Object.values(summaryData).some((arr) => arr?.length > 0);
+    if (!hasInstances) {
+      toast({ title: "No Data", description: "No summarized instances to export.", variant: "destructive" });
+      return;
+    }
+    setExporting(true);
+    try {
+      const blob = await generateAnalysisDocx(request.id, summaryData as any, projectName || "Project");
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `${(projectName || "Analysis").replace(/[^a-zA-Z0-9]/g, "_")}_Export.docx`;
+      a.click();
+      URL.revokeObjectURL(url);
+      toast({ title: "Export Complete", description: "DOCX file downloaded." });
+    } catch (e) {
+      toast({ title: "Export Failed", description: (e as Error).message, variant: "destructive" });
+    } finally {
+      setExporting(false);
+    }
+  }, [request, projectName, toast]);
+
   return (
     <div className="min-h-screen bg-background">
       <AppHeader />
