@@ -720,8 +720,16 @@ async function runPipeline(params: PipelineParams) {
 
             if (!promptContent) {
               console.warn(
-                `[pipeline] No prompt for ${item.awpClassName}, skipping`,
+                `[pipeline] No prompt for ${item.awpClassName}, recording failure`,
               );
+              analyzeFailures++;
+              await admin.from("analysis_results").insert({
+                analysis_request_id: analysisRequestId,
+                file_id: item.fileId,
+                awp_class_name: item.awpClassName,
+                status: "failed",
+                error_message: "No prompt content available for this class",
+              });
               return;
             }
 
