@@ -72,7 +72,7 @@ const Projects = () => {
   const { toast } = useToast();
   useHeapIdentify();
   const { logActivity } = useActivityLogger();
-  const { isWMSV } = useAccountType();
+  const { isWMSV, loading: accountLoading } = useAccountType();
   const [projects, setProjects] = useState<ProjectWithCreator[]>([]);
   const [showWMSVModal, setShowWMSVModal] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -250,6 +250,7 @@ const Projects = () => {
 
   const handleNewProject = () => {
     logActivity("add_new_clicked");
+    if (accountLoading) return;
     if (isWMSV) {
       setShowWMSVModal(true);
     } else {
