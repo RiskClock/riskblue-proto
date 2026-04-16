@@ -1,66 +1,57 @@
 
 
-# Fix: Authoritative Rerun Clearing, Override Locking, Summarize Auth
+## Plan: Export Analysis DOCX from Analysis Queue Detail Page
 
-## Root Cause: Results Not Clearing on Rerun
+### What we're building
+An "Export Analysis" button at the bottom of the `AnalysisRequestDetail` page that generates and downloads a `.docx` file. Each detection instance from the analysis summary gets its own page with a structured info table and the drawing image showing the red circle highlight.
 
-The race condition is in the pipeline edge function's execution order:
+### Technical approach
 
-1. **Line 249-260**: Sets `status: "processing"` and returns 202 immediately (line 306)
-2. **Line 286-296**: Kicks off `runPipeline()` in background via `waitUntil`
-3. **Line 347-358** (inside `runPipeline`): Deletes old rows
+**1. Add Export button to `src/pages/AnalysisRequestDetail.tsx`**
+- Add a `Download` icon button at the bottom of the page (after the `AnalysisSection`)
+- The button will be disabled when there's no summary data
+- Wire it to call an export function
 
-The status update to `"processing"` triggers a realtime event on `analysis_requests`, which causes the frontend's realtime subscription to invalidate `triage-results` and `analysis-results` queries. These refetch from the DB **before** the background `runPipeline` has executed the DELETE statements. The 5-second polling interval on `analysis-results` (line 1364, unconditional) compounds this by continuously re-fetching stale rows.
+**2. Create `src/lib/analysisDocxExporter.ts`** — the main export logic
+- Install `docx` npm package for DOCX generation
+- Fetch `summary_data` from the `analysis_requests` table (already available via existing query)
+- For each instance across all AWP classes:
+  - Determine category (Asset/Water System/Process) from `awpOrderData` lookup
+  - Find the source file and result text (matching instance ID in `analysis_results`)
+  - Find default controls from source tables (`critical_assets`/`water_systems`/`processes`)
+  - Render the PDF page to a canvas, draw the red circle, and capture as a PNG image
+  - Build a DOCX page with:
+    - Table: Detection (N of X), Display ID, Display Name, Floor, Type (category), Class (AWP class name), Area/Diameter, Controls, File
+    - Drawing image below the table (scaled to fit remaining page space)
+  - Insert page break before next instance
 
-**Fix**: Move the authoritative DELETE block from inside `runPipeline` (background, line 347-358) to the **main handler** (line 249-260 area), **before** setting `status: "processing"`. This ensures old rows are gone from the DB before any status change triggers realtime events or query refetches.
+**3. Drawing image generation**
+- Reuse the existing PDF rendering logic (download from `drive-analysis-files` bucket, render with pdfjs at scale 2, find bbox via text layer search or AI bbox, draw red circle overlay)
+- Convert canvas to PNG blob for embedding in DOCX
 
-## Changes
-
-### 1. `supabase/functions/run-analysis-pipeline/index.ts` — Move DELETE before status update
-
-In the main handler (around line 249), insert the authoritative clear **before** the status update to `"processing"`:
-
-```
-// 1. Delete all previous results (before status change triggers realtime)
-await Promise.all([
-  admin.from("analysis_triage_results").delete().eq(...),
-  admin.from("analysis_results").delete().eq(...),
-  admin.from("analysis_triage_overrides").delete().eq(...),
-  admin.from("analysis_request_files").update({ extracted_text: null, ... }).eq(...),
-  admin.from("analysis_requests").update({ triage_tokens_used: 0, analyze_tokens_used: 0, summary_data: {} }).eq(...),
-]);
-
-// 2. THEN set status to "processing" (this triggers realtime → refetch → rows are already gone)
-await admin.from("analysis_requests").update({ status: "processing", ... }).eq(...);
-```
-
-Remove the duplicate DELETE block from inside `runPipeline` (line 347-358) since it's now handled before the 202 response.
-
-### 2. `src/components/analysis/AnalysisSection.tsx` — Lock overrides during deep analysis only
-
-In `handleTriageCellClick`, add a guard that checks if the pipeline is in the `"analyzing"` phase specifically, not the whole pipeline:
-
-```typescript
-const handleTriageCellClick = async (...) => {
-  // Lock overrides only during deep analysis phase
-  if (pipelinePhase === "analyzing") return;
-  // ... existing logic
-};
+**4. Data flow**
+```text
+summary_data (from analysis_requests)
+  → for each AWP class → for each instance:
+      → query analysis_results to find source file + result_text
+      → query analysis_request_files for storage_path + name
+      → query source tables for default_control_ids → mitigation_controls for names
+      → download PDF → render page → find bbox → draw circle → capture PNG
+      → build DOCX page with table + image
 ```
 
-Also remove `cursor-pointer` from triage cells when `pipelinePhase === "analyzing"`. Users can still include/exclude during extraction and triage phases.
+### Key details
+- Uses `docx` (npm) library with `Packer.toBlob()` for client-side generation
+- Each page: US Letter size, 1" margins
+- Table uses compact formatting to leave room for the drawing image
+- Image scaled to fit within remaining page height after table
+- Page breaks between instances
+- "Detection | 1 of X" uses total count across all classes
+- For pipes, header says "Diameter" instead of "Area (sqft)" and shows `pipe_diameter_mm` converted to inches
+- Controls come from the AWP class's `default_control_ids` in the source table
 
-Note: `pipelinePhase` is already derived from `requestMeta` at line 3428 but `handleTriageCellClick` is defined earlier (line 1418). The phase value will need to be read from `requestMeta` directly inside the handler, or the handler needs to be moved/wrapped to access the derived value.
-
-### 3. `supabase/functions/summarize-analysis/index.ts` — Auth fix
-
-Replace the `isInternal` gate (lines 44-49) with project-access auth: parse `analysisRequestId` from body first, then verify user is request owner, project owner, or project member via `analysis_requests` → `projects` join + `project_user_roles` check. Keep `isInternal` as fast-path bypass.
-
-## Files changed
-
-| File | Change |
-|---|---|
-| `supabase/functions/run-analysis-pipeline/index.ts` | Move DELETE to main handler before status update |
-| `src/components/analysis/AnalysisSection.tsx` | Lock triage overrides only during `"analyzing"` phase |
-| `supabase/functions/summarize-analysis/index.ts` | Replace internal-only gate with project-access auth |
+### Files to create/modify
+- `src/lib/analysisDocxExporter.ts` — new file with export logic
+- `src/pages/AnalysisRequestDetail.tsx` — add Export button
+- `package.json` — add `docx` dependency
 
