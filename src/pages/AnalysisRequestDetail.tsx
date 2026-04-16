@@ -163,7 +163,31 @@ export default function AnalysisRequestDetail() {
     queryClient.invalidateQueries({ queryKey: ["analysis-files", requestId] });
   };
 
-  if (!isInternal) {
+  const handleExportDocx = async () => {
+    if (!request || !requestId) return;
+    const summaryData = (request.summary_data as unknown as Record<string, any[]>) || {};
+    const hasInstances = Object.values(summaryData).some((arr) => arr?.length > 0);
+    if (!hasInstances) {
+      toast({ title: "No Data", description: "No summarized instances to export.", variant: "destructive" });
+      return;
+    }
+    setExporting(true);
+    try {
+      const blob = await generateAnalysisDocx(requestId, summaryData as any, request.project?.name || "Project");
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `${(request.project?.name || "Analysis").replace(/[^a-zA-Z0-9]/g, "_")}_Export.docx`;
+      a.click();
+      URL.revokeObjectURL(url);
+      toast({ title: "Export Complete", description: "DOCX file downloaded." });
+    } catch (e) {
+      toast({ title: "Export Failed", description: (e as Error).message, variant: "destructive" });
+    } finally {
+      setExporting(false);
+    }
+  };
+
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
         <div className="text-center space-y-4">
