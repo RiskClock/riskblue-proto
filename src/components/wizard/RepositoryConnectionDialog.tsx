@@ -136,6 +136,7 @@ export const RepositoryConnectionDialog = ({
             source_type: "google_drive",
             status: "pending",
             file_count: filesCount,
+            error_message: null,
           })
           .eq("id", analysisRequestId);
         if (updateError) throw new Error(updateError.message);
