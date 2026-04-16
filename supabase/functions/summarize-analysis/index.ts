@@ -148,9 +148,11 @@ Your task:
 4. Return a consolidated list of unique instances
 
 Rules for deduplication:
-- If two entries have the same Generated Room Code (e.g., ER001), they are the same instance
-- If two entries have the same Drawing Label AND Floor, they are likely the same instance
-- Keep the richest data (largest area, most detailed notes)`;
+- The primary dedup key is the "Room Identifier on Plan" (also called "Plan Tag" or room code, e.g., SWC-B04, ER-101). If two entries share the same identifier (case-insensitive), they are the SAME instance — merge them into one, regardless of which file or sheet they came from.
+- When identifiers differ only in casing or whitespace, treat them as identical.
+- Two entries are only distinct if they have DIFFERENT Room Identifiers. Floor alone does not make them distinct — the same room code on different sheets is still one room.
+- When merging duplicates, keep the largest area, the most detailed notes, and the most specific floor name.
+- If an entry has no Room Identifier, fall back to matching by Drawing Label + Floor (case-insensitive).`;
 
     const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
       method: "POST",
