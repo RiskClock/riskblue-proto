@@ -110,7 +110,7 @@ export const BuyCreditsModal = ({ open, onOpenChange, reason }: BuyCreditsModalP
         </DialogHeader>
 
         {isPaymentsTestMode() && !clientSecret && (
-          <div className="rounded-md bg-orange-100 border border-orange-300 px-3 py-2 text-xs text-orange-800">
+          <div className="rounded-md border border-warning/30 bg-warning/10 px-3 py-2 text-xs text-warning-foreground">
             Test mode — use card <code className="font-mono">4242 4242 4242 4242</code> with any future expiry &amp; any CVC.
           </div>
         )}

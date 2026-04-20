@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import { useUserDisplayName } from "@/hooks/useUserDisplayName";
@@ -9,9 +10,11 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { LogOut, Settings, FileText, BarChart3, Shield } from "lucide-react";
+import { LogOut, Settings, FileText, BarChart3, Shield, Coins } from "lucide-react";
 import riskBlueLogo from "@/assets/logo-riskblue.png";
 import { useAccountType } from "@/hooks/useAccountType";
+import { useCredits } from "@/hooks/useCredits";
+import { BuyCreditsModal } from "@/components/BuyCreditsModal";
 
 interface AppHeaderProps {
   leftContent?: React.ReactNode;
@@ -23,6 +26,8 @@ export const AppHeader = ({ leftContent }: AppHeaderProps) => {
   const location = useLocation();
   const { getInitial } = useUserDisplayName();
   const { isWMSV, loading: accountLoading } = useAccountType();
+  const { balance: credits } = useCredits();
+  const [buyOpen, setBuyOpen] = useState(false);
 
   const isInternalUser = user?.email?.toLowerCase().endsWith("@riskclock.com") ?? false;
 
@@ -58,16 +63,24 @@ export const AppHeader = ({ leftContent }: AppHeaderProps) => {
                 <AvatarFallback>{getInitial()}</AvatarFallback>
               </Avatar>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-48">
+            <DropdownMenuContent align="end" className="w-56">
               {isWMSV && (
-                <>
-                  <DropdownMenuItem onClick={() => navigate("/controls")} className="cursor-pointer">
-                    <Shield className="h-4 w-4 mr-2" />
-                    Controls
-                  </DropdownMenuItem>
-                  <DropdownMenuSeparator />
-                </>
+                <DropdownMenuItem onClick={() => navigate("/controls")} className="cursor-pointer">
+                  <Shield className="h-4 w-4 mr-2" />
+                  Controls
+                </DropdownMenuItem>
               )}
+              <DropdownMenuItem
+                onClick={() => setBuyOpen(true)}
+                className="cursor-pointer"
+              >
+                <Coins className="h-4 w-4 mr-2" />
+                <span className="flex-1">Credits</span>
+                <span className="text-xs font-semibold tabular-nums text-muted-foreground">
+                  {credits}
+                </span>
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
               {isInternalUser && (
                 <>
                   <DropdownMenuItem onClick={() => navigate("/configuration")} className="cursor-pointer">
