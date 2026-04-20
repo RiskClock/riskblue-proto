@@ -4329,6 +4329,13 @@ export function AnalysisSection({ requestId, files, projectId, sourceType, isWMS
           />
         );
       })()}
+
+      {/* Buy Credits modal — opened when user runs out of credits */}
+      <BuyCreditsModal
+        open={buyCreditsOpen}
+        onOpenChange={setBuyCreditsOpen}
+        reason="You're out of scan credits. Buy more to start a triage."
+      />
     </TooltipProvider>
   );
 }
