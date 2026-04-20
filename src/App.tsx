@@ -19,6 +19,7 @@ import InternalAnalysisQueue from "./pages/InternalAnalysisQueue";
 import AnalysisRequestDetail from "./pages/AnalysisRequestDetail";
 import Controls from "./pages/Controls";
 import WMSVProject from "./pages/WMSVProject";
+import CheckoutReturn from "./pages/CheckoutReturn";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -58,6 +59,7 @@ const App = () => (
             <Route path="/connect/google-drive" element={<GoogleDriveConnect />} />
             <Route path="/connect/procore" element={<ProcoreConnect />} />
             <Route path="/reset-password" element={<ResetPassword />} />
+            <Route path="/credits/return" element={<ProtectedRoute><CheckoutReturn /></ProtectedRoute>} />
             <Route path="/" element={<Navigate to="/projects" />} />
             <Route path="*" element={<NotFound />} />
           </Routes>

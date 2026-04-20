@@ -92,3 +92,9 @@ verify_jwt = false
 
 [functions.applied-epic-api]
 verify_jwt = false
+
+[functions.create-credit-checkout]
+verify_jwt = false
+
+[functions.payments-webhook]
+verify_jwt = false

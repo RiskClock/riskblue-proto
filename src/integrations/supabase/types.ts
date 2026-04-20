@@ -670,6 +670,42 @@ export type Database = {
           },
         ]
       }
+      credit_transactions: {
+        Row: {
+          amount_cents: number | null
+          analysis_request_id: string | null
+          created_at: string
+          delta: number
+          id: string
+          package_label: string | null
+          reason: string
+          stripe_session_id: string | null
+          user_id: string
+        }
+        Insert: {
+          amount_cents?: number | null
+          analysis_request_id?: string | null
+          created_at?: string
+          delta: number
+          id?: string
+          package_label?: string | null
+          reason: string
+          stripe_session_id?: string | null
+          user_id: string
+        }
+        Update: {
+          amount_cents?: number | null
+          analysis_request_id?: string | null
+          created_at?: string
+          delta?: number
+          id?: string
+          package_label?: string | null
+          reason?: string
+          stripe_session_id?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
       critical_assets: {
         Row: {
           cost: string
@@ -1025,6 +1061,7 @@ export type Database = {
           avatar_url: string | null
           company: string | null
           created_at: string
+          credits_balance: number
           display_name: string | null
           id: string
           updated_at: string
@@ -1035,6 +1072,7 @@ export type Database = {
           avatar_url?: string | null
           company?: string | null
           created_at?: string
+          credits_balance?: number
           display_name?: string | null
           id?: string
           updated_at?: string
@@ -1045,6 +1083,7 @@ export type Database = {
           avatar_url?: string | null
           company?: string | null
           created_at?: string
+          credits_balance?: number
           display_name?: string | null
           id?: string
           updated_at?: string
@@ -1817,6 +1856,21 @@ export type Database = {
     }
     Functions: {
       cleanup_expired_reset_tokens: { Args: never; Returns: undefined }
+      consume_credit: {
+        Args: { p_analysis_request_id?: string; p_user_id: string }
+        Returns: Json
+      }
+      grant_credits: {
+        Args: {
+          p_amount: number
+          p_amount_cents?: number
+          p_package_label?: string
+          p_reason: string
+          p_stripe_session_id?: string
+          p_user_id: string
+        }
+        Returns: Json
+      }
       has_project_access: { Args: { project_uuid: string }; Returns: boolean }
       has_project_role: {
         Args: {
