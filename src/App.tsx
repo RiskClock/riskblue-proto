@@ -21,18 +21,26 @@ import Controls from "./pages/Controls";
 import WMSVProject from "./pages/WMSVProject";
 import CheckoutReturn from "./pages/CheckoutReturn";
 import NotFound from "./pages/NotFound";
+import { Loader2 } from "lucide-react";
 
 const queryClient = new QueryClient();
 
+const FullScreenLoader = () => (
+  <div className="min-h-screen flex flex-col items-center justify-center gap-3 bg-background">
+    <Loader2 className="h-8 w-8 animate-spin text-primary" />
+    <p className="text-sm text-muted-foreground">Loading...</p>
+  </div>
+);
+
 const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
   const { user, loading } = useAuth();
-  if (loading) return <div className="min-h-screen flex items-center justify-center">Loading...</div>;
+  if (loading) return <FullScreenLoader />;
   return user ? <>{children}</> : <Navigate to="/auth" />;
 };
 
 const PublicRoute = ({ children }: { children: React.ReactNode }) => {
   const { user, loading } = useAuth();
-  if (loading) return <div className="min-h-screen flex items-center justify-center">Loading...</div>;
+  if (loading) return <FullScreenLoader />;
   return user ? <Navigate to="/projects" /> : <>{children}</>;
 };
 
