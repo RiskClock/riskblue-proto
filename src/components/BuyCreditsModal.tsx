@@ -24,10 +24,10 @@ interface CreditPackage {
   highlight?: boolean;
 }
 
-const PACKAGES: CreditPackage[] = [
-  { id: "pack_5", credits: 5, priceUsd: 80, perCredit: 16 },
-  { id: "pack_20", credits: 20, priceUsd: 300, perCredit: 15, highlight: true },
-  { id: "pack_50", credits: 50, priceUsd: 700, perCredit: 14 },
+const PACKAGES: (CreditPackage & { originalPriceUsd: number })[] = [
+  { id: "pack_5", credits: 5, priceUsd: 80, perCredit: 16, originalPriceUsd: 500 },
+  { id: "pack_20", credits: 20, priceUsd: 300, perCredit: 15, originalPriceUsd: 2000 },
+  { id: "pack_50", credits: 50, priceUsd: 700, perCredit: 14, originalPriceUsd: 5000 },
 ];
 
 export const BuyCreditsModal = ({ open, onOpenChange, reason }: BuyCreditsModalProps) => {
@@ -98,7 +98,7 @@ export const BuyCreditsModal = ({ open, onOpenChange, reason }: BuyCreditsModalP
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Coins className="h-5 w-5 text-primary" />
-            {clientSecret ? `Buy ${selectedPackage?.credits} Credits` : "Buy Scan Credits"}
+            {clientSecret ? `Buy ${selectedPackage?.credits} Credits` : "Buy Credits"}
           </DialogTitle>
           <DialogDescription>
             {clientSecret
@@ -116,50 +116,46 @@ export const BuyCreditsModal = ({ open, onOpenChange, reason }: BuyCreditsModalP
         )}
 
         {!clientSecret && (
-          <div className="grid gap-4 md:grid-cols-3 mt-2">
-            {PACKAGES.map((pkg) => (
-              <Card
-                key={pkg.id}
-                className={`relative p-5 flex flex-col gap-3 transition-all ${
-                  pkg.highlight ? "border-primary ring-1 ring-primary/30" : ""
-                }`}
-              >
-                {pkg.highlight && (
-                  <div className="absolute -top-2 right-3 rounded-full bg-primary px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-primary-foreground">
-                    Best value
-                  </div>
-                )}
-                <div className="flex items-baseline gap-1">
-                  <span className="text-3xl font-bold">{pkg.credits}</span>
-                  <span className="text-sm text-muted-foreground">credits</span>
-                </div>
-                <div className="flex items-baseline gap-1">
-                  <span className="text-2xl font-semibold">${pkg.priceUsd}</span>
-                  <span className="text-xs text-muted-foreground">
-                    (${pkg.perCredit}/credit)
-                  </span>
-                </div>
-                <div className="text-xs text-muted-foreground flex-1">
-                  {pkg.credits} drawing-set scans
-                </div>
-                <Button
-                  size="sm"
-                  variant={pkg.highlight ? "default" : "outline"}
-                  onClick={() => handleSelect(pkg)}
-                  disabled={loadingPackage !== null}
+          <>
+            <div className="rounded-md border border-primary/30 bg-primary/10 px-3 py-2 text-center text-sm font-semibold text-primary mt-2">
+              Early Partnership Pricing
+            </div>
+            <div className="grid gap-4 md:grid-cols-3 mt-2">
+              {PACKAGES.map((pkg) => (
+                <Card
+                  key={pkg.id}
+                  className="relative p-5 flex flex-col gap-3 transition-all"
                 >
-                  {loadingPackage === pkg.id ? (
-                    <>
-                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                      Loading...
-                    </>
-                  ) : (
-                    "Buy"
-                  )}
-                </Button>
-              </Card>
-            ))}
-          </div>
+                  <div className="flex items-baseline gap-1">
+                    <span className="text-3xl font-bold">{pkg.credits}</span>
+                    <span className="text-sm text-muted-foreground">credits</span>
+                  </div>
+                  <div className="flex items-baseline gap-2">
+                    <span className="text-2xl font-semibold">${pkg.priceUsd}</span>
+                    <span className="text-sm text-muted-foreground line-through">
+                      ${pkg.originalPriceUsd.toLocaleString()}
+                    </span>
+                  </div>
+                  <div className="flex-1" />
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => handleSelect(pkg)}
+                    disabled={loadingPackage !== null}
+                  >
+                    {loadingPackage === pkg.id ? (
+                      <>
+                        <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                        Loading...
+                      </>
+                    ) : (
+                      "Buy"
+                    )}
+                  </Button>
+                </Card>
+              ))}
+            </div>
+          </>
         )}
 
         {clientSecret && !completed && (
