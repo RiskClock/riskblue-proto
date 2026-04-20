@@ -106,6 +106,7 @@ export const AppHeader = ({ leftContent }: AppHeaderProps) => {
           </DropdownMenu>
         </div>
       </div>
+      <BuyCreditsModal open={buyOpen} onOpenChange={setBuyOpen} />
     </header>
   );
 };
