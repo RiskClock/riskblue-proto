@@ -57,6 +57,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Checkbox } from "@/components/ui/checkbox";
+import { BuyCreditsModal } from "@/components/BuyCreditsModal";
 import * as pdfjsLib from "pdfjs-dist";
 
 // Configure PDF.js worker (idempotent — safe to call multiple times)
@@ -2020,6 +2021,35 @@ export function AnalysisSection({ requestId, files, projectId, sourceType, isWMS
 
   // Helper to start the backend pipeline
   const startPipeline = async (phaseOverride?: string) => {
+    // Credit gate — only the "triage" phase consumes a credit (per product spec).
+    // Per-AWP re-triage (handleTriageClass) is free.
+    if (phaseOverride === "triage") {
+      const { data: consumeData, error: consumeError } = await supabase.rpc(
+        "consume_credit",
+        { p_user_id: (await supabase.auth.getUser()).data.user?.id, p_analysis_request_id: requestId },
+      );
+      if (consumeError) {
+        toast({
+          title: "Couldn't check credit balance",
+          description: consumeError.message,
+          variant: "destructive",
+        });
+        return;
+      }
+      const result = consumeData as { success: boolean; balance: number; reason?: string } | null;
+      if (!result?.success) {
+        setBuyCreditsOpen(true);
+        toast({
+          title: "Out of credits",
+          description: "You need at least 1 credit to start a triage scan.",
+          variant: "destructive",
+        });
+        return;
+      }
+      // Refresh credit balance shown in header
+      queryClient.invalidateQueries({ queryKey: ["credits-balance"] });
+    }
+
     // Save previous cache for rollback
     const prevMeta = queryClient.getQueryData(["analysis-request-meta", requestId]);
 
