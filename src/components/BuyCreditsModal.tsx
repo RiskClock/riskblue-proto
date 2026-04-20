@@ -131,7 +131,7 @@ export const BuyCreditsModal = ({ open, onOpenChange, reason }: BuyCreditsModalP
                     <span className="text-sm text-muted-foreground">credits</span>
                   </div>
                   <div className="flex items-baseline gap-2">
-                    <span className="text-2xl font-semibold">${pkg.priceUsd}</span>
+                    <span className="text-2xl font-semibold text-primary">${pkg.priceUsd}</span>
                     <span className="text-sm text-muted-foreground line-through">
                       ${pkg.originalPriceUsd.toLocaleString()}
                     </span>
