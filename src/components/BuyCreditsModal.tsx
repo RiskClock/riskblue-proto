@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { Coins, Loader2, Check } from "lucide-react";
+import { Coins, Loader2, Check, Sparkles } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { useCredits } from "@/hooks/useCredits";
@@ -17,17 +17,16 @@ interface BuyCreditsModalProps {
 }
 
 interface CreditPackage {
-  id: "pack_5" | "pack_20" | "pack_50";
+  id: "pack_20" | "pack_100" | "pack_500";
   credits: number;
   priceUsd: number;
-  perCredit: number;
-  highlight?: boolean;
+  originalPriceUsd: number;
 }
 
-const PACKAGES: (CreditPackage & { originalPriceUsd: number })[] = [
-  { id: "pack_5", credits: 5, priceUsd: 80, perCredit: 16, originalPriceUsd: 500 },
-  { id: "pack_20", credits: 20, priceUsd: 300, perCredit: 15, originalPriceUsd: 2000 },
-  { id: "pack_50", credits: 50, priceUsd: 700, perCredit: 14, originalPriceUsd: 5000 },
+const PACKAGES: CreditPackage[] = [
+  { id: "pack_20", credits: 20, priceUsd: 30, originalPriceUsd: 100 },
+  { id: "pack_100", credits: 100, priceUsd: 130, originalPriceUsd: 430 },
+  { id: "pack_500", credits: 500, priceUsd: 500, originalPriceUsd: 1650 },
 ];
 
 export const BuyCreditsModal = ({ open, onOpenChange, reason }: BuyCreditsModalProps) => {
@@ -117,43 +116,55 @@ export const BuyCreditsModal = ({ open, onOpenChange, reason }: BuyCreditsModalP
 
         {!clientSecret && (
           <>
-            <div className="rounded-md border border-primary/30 bg-primary/10 px-3 py-2 text-center text-sm font-semibold text-primary mt-2">
-              Early Partnership Pricing
+            <div className="rounded-lg border border-primary/30 bg-gradient-to-r from-primary/15 via-primary/10 to-primary/15 px-4 py-3 mt-2 flex items-center justify-center gap-2 shadow-sm">
+              <Sparkles className="h-4 w-4 text-primary" />
+              <span className="text-sm font-semibold text-primary tracking-wide">
+                Water Mitigation Vendor Promotional Pricing
+              </span>
+              <Sparkles className="h-4 w-4 text-primary" />
             </div>
             <div className="grid gap-4 md:grid-cols-3 mt-2">
-              {PACKAGES.map((pkg) => (
-                <Card
-                  key={pkg.id}
-                  className="relative p-5 flex flex-col gap-3 transition-all"
-                >
-                  <div className="flex items-baseline gap-1">
-                    <span className="text-3xl font-bold">{pkg.credits}</span>
-                    <span className="text-sm text-muted-foreground">credits</span>
-                  </div>
-                  <div className="flex items-baseline gap-2">
-                    <span className="text-2xl font-semibold text-primary">${pkg.priceUsd}</span>
-                    <span className="text-sm text-muted-foreground line-through">
-                      ${pkg.originalPriceUsd.toLocaleString()}
-                    </span>
-                  </div>
-                  <div className="flex-1" />
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={() => handleSelect(pkg)}
-                    disabled={loadingPackage !== null}
+              {PACKAGES.map((pkg) => {
+                const discountPct = Math.round(
+                  (1 - pkg.priceUsd / pkg.originalPriceUsd) * 100,
+                );
+                return (
+                  <Card
+                    key={pkg.id}
+                    className="relative overflow-hidden p-5 flex flex-col gap-3 transition-all border-primary/20 hover:border-primary/50 hover:shadow-lg hover:shadow-primary/10 bg-gradient-to-br from-card to-primary/5"
                   >
-                    {loadingPackage === pkg.id ? (
-                      <>
-                        <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                        Loading...
-                      </>
-                    ) : (
-                      "Buy"
-                    )}
-                  </Button>
-                </Card>
-              ))}
+                    <div className="absolute top-0 right-0 bg-primary text-primary-foreground text-[10px] font-bold px-2 py-1 rounded-bl-lg">
+                      -{discountPct}%
+                    </div>
+                    <div className="flex items-baseline gap-1">
+                      <span className="text-3xl font-bold text-primary">{pkg.credits}</span>
+                      <span className="text-sm text-muted-foreground">credits</span>
+                    </div>
+                    <div className="flex items-baseline gap-2">
+                      <span className="text-2xl font-semibold text-primary">${pkg.priceUsd}</span>
+                      <span className="text-sm text-muted-foreground line-through">
+                        ${pkg.originalPriceUsd.toLocaleString()}
+                      </span>
+                    </div>
+                    <div className="flex-1" />
+                    <Button
+                      size="sm"
+                      onClick={() => handleSelect(pkg)}
+                      disabled={loadingPackage !== null}
+                      className="bg-primary hover:bg-primary/90 text-primary-foreground"
+                    >
+                      {loadingPackage === pkg.id ? (
+                        <>
+                          <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                          Loading...
+                        </>
+                      ) : (
+                        "Buy"
+                      )}
+                    </Button>
+                  </Card>
+                );
+              })}
             </div>
           </>
         )}
