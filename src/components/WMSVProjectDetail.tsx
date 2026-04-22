@@ -13,6 +13,7 @@ import { useToast } from "@/hooks/use-toast";
 import { ArrowLeft, Loader2, Upload, FileText, CheckCircle2, Circle, FolderSync, Download } from "lucide-react";
 import { RepositoryConnectionDialog } from "@/components/wizard/RepositoryConnectionDialog";
 import { ProcoreConnectionDialog } from "@/components/wizard/ProcoreConnectionDialog";
+import { SharePointConnectionDialog } from "@/components/wizard/SharePointConnectionDialog";
 import { generateAnalysisDocx } from "@/lib/analysisDocxExporter";
 
 const ACTIVE_STATUSES = ["pending", "copying", "copied", "started", "processing"];
@@ -66,6 +67,7 @@ export function WMSVProjectDetail({ projectId, projectName }: WMSVProjectDetailP
   const [exporting, setExporting] = useState(false);
   const [showDriveDialog, setShowDriveDialog] = useState(false);
   const [showProcoreDialog, setShowProcoreDialog] = useState(false);
+  const [showSharePointDialog, setShowSharePointDialog] = useState(false);
 
   // Fetch user's enabled control selections
   const { data: controlSelections } = useQuery({
@@ -309,9 +311,9 @@ export function WMSVProjectDetail({ projectId, projectName }: WMSVProjectDetailP
                       <img src="/icons/icon_procore.png" className="w-4 h-4 mr-2" alt="Procore" />
                       Procore
                     </Button>
-                    <Button variant="outline" disabled title="Coming soon">
+                    <Button variant="outline" onClick={() => setShowSharePointDialog(true)}>
                       <img src="/icons/icon_sharepoint.png" className="w-4 h-4 mr-2" alt="SharePoint" />
-                      SharePoint (coming soon)
+                      SharePoint
                     </Button>
                   </div>
                   <input
@@ -332,7 +334,7 @@ export function WMSVProjectDetail({ projectId, projectName }: WMSVProjectDetailP
                     <Loader2 className="w-5 h-5 animate-spin text-primary" />
                     <div>
                       <h3 className="text-lg font-medium text-foreground">
-                        Importing Files{request.source_type === "google_drive" ? " from Google Drive" : request.source_type === "procore" ? " from Procore" : ""}
+                        Importing Files{request.source_type === "google_drive" ? " from Google Drive" : request.source_type === "procore" ? " from Procore" : request.source_type === "sharepoint" ? " from SharePoint" : ""}
                       </h3>
                       <p className="text-sm text-muted-foreground">Files are being copied to the analysis workspace</p>
                     </div>
@@ -385,6 +387,7 @@ export function WMSVProjectDetail({ projectId, projectName }: WMSVProjectDetailP
                     onAddFileUpload={() => fileInputRef.current?.click()}
                     onAddFileDrive={() => setShowDriveDialog(true)}
                     onAddFileProcore={() => setShowProcoreDialog(true)}
+                    onAddFileSharePoint={() => setShowSharePointDialog(true)}
                   />
                   <input
                     ref={fileInputRef}
