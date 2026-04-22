@@ -185,7 +185,7 @@ serve(async (req) => {
   </body>
 </html>`;
 
-    const subject = `Analysis complete — ${projectName} (${totalInstances} instance${totalInstances === 1 ? "" : "s"})`;
+    const subject = `Analysis complete: ${projectName} (${totalInstances} instance${totalInstances === 1 ? "" : "s"})`;
 
     const toRecipients = [creatorEmail.toLowerCase()];
     const bccRecipients = creatorEmail.toLowerCase() === INTERNAL_BCC.toLowerCase()
