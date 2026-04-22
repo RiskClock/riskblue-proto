@@ -71,6 +71,8 @@ export function WMSVProjectDetail({ projectId, projectName }: WMSVProjectDetailP
   const [showDriveDialog, setShowDriveDialog] = useState(false);
   const [showProcoreDialog, setShowProcoreDialog] = useState(false);
   const [showSharePointDialog, setShowSharePointDialog] = useState(false);
+  const [pendingFiles, setPendingFiles] = useState<File[]>([]);
+  const [reviewOpen, setReviewOpen] = useState(false);
 
   // Fetch user's enabled control selections
   const { data: controlSelections } = useQuery({
