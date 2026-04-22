@@ -4476,6 +4476,37 @@ export function AnalysisSection({ requestId, files, projectId, sourceType, isWMS
         onOpenChange={setBuyCreditsOpen}
         reason="You're out of scan credits. Buy more to start a triage."
       />
+
+      {/* Confirm delete file */}
+      <AlertDialog open={!!fileToDelete} onOpenChange={(o) => { if (!o) setFileToDelete(null); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Remove this file?</AlertDialogTitle>
+            <AlertDialogDescription>
+              <span className="block">
+                <span className="font-medium text-foreground">{fileToDelete?.name}</span>
+              </span>
+              <span className="block mt-2">
+                This will delete the file and any analysis results tied to it. This can't be undone.
+              </span>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={!!deletingFileId}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={(e) => { e.preventDefault(); if (fileToDelete) handleDeleteFile(fileToDelete); }}
+              disabled={!!deletingFileId}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              {deletingFileId ? (
+                <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Removing…</>
+              ) : (
+                <><Trash2 className="w-4 h-4 mr-2" />Remove file</>
+              )}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </TooltipProvider>
   );
 }
