@@ -47,7 +47,19 @@ import {
   Info,
   Upload,
   MoreVertical,
+  Trash2,
+  X,
 } from "lucide-react";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { DropdownMenuSeparator } from "@/components/ui/dropdown-menu";
 import { Separator } from "@/components/ui/separator";
 import {
@@ -1498,6 +1510,7 @@ export function AnalysisSection({ requestId, files, projectId, sourceType, isWMS
       return ACTIVE_STATUSES.includes(s) ? 5000 : false;
     })() as number | false,
   });
+  const [disabledDefaultsApplied, setDisabledDefaultsApplied] = useState(false);
   useEffect(() => {
     if (!requestMeta) return;
     if (requestMeta.triage_model) setTriageModel(requestMeta.triage_model as string);
@@ -1511,8 +1524,11 @@ export function AnalysisSection({ requestId, files, projectId, sourceType, isWMS
     const disabled = (requestMeta as any).disabled_awp_classes as string[] | null;
     if (disabled && disabled.length > 0) {
       setDisabledColumns(new Set(disabled));
+      setDisabledDefaultsApplied(true);
     }
   }, [requestMeta]);
+
+  // (Default-disabled AWP classes are applied below, after sortedPrompts is defined.)
 
   // Hydrate analyzeV2Running from DB status on mount/navigation
   // Also auto-clear when DB status transitions to complete while we're showing "running"
@@ -2016,6 +2032,39 @@ export function AnalysisSection({ requestId, files, projectId, sourceType, isWMS
     const allowed = new Set(visibleAwpClasses);
     return sortedPromptsBase.filter(p => allowed.has(p.awp_class_name));
   }, [sortedPromptsBase, visibleAwpClasses]);
+
+  // Apply default disabled AWP classes (ERS, MRS, TWR, FS, SPSDD) when nothing has been persisted yet.
+  const DEFAULT_DISABLED_AWP = useMemo(
+    () => new Set([
+      "Mechanical Riser",
+      "Electrical Riser",
+      "Temporary Water Run",
+      "Fire Suppression System",
+      "Sump Pit, Storm Drain & Drainage",
+    ]),
+    []
+  );
+  useEffect(() => {
+    if (disabledDefaultsApplied) return;
+    if (!requestMeta) return;
+    const persisted = (requestMeta as any).disabled_awp_classes as string[] | null;
+    if (persisted && persisted.length > 0) return;
+    if (!sortedPrompts || sortedPrompts.length === 0) return;
+    const namesPresent = sortedPrompts
+      .map((p) => p.awp_class_name)
+      .filter((n) => DEFAULT_DISABLED_AWP.has(n));
+    if (namesPresent.length === 0) {
+      setDisabledDefaultsApplied(true);
+      return;
+    }
+    setDisabledColumns(new Set(namesPresent));
+    setDisabledDefaultsApplied(true);
+    supabase
+      .from("analysis_requests")
+      .update({ disabled_awp_classes: namesPresent } as any)
+      .eq("id", requestId)
+      .then(() => {});
+  }, [disabledDefaultsApplied, requestMeta, sortedPrompts, DEFAULT_DISABLED_AWP, requestId]);
 
   // ---- WMSV chained analysis state ----
   const [wmsvPhase, setWmsvPhase] = useState<"idle" | "extracting" | "triaging" | "analyzing">("idle");
@@ -3322,6 +3371,77 @@ export function AnalysisSection({ requestId, files, projectId, sourceType, isWMS
     }
   };
 
+  // ---- Delete a single file from the analysis ----
+  const [fileToDelete, setFileToDelete] = useState<AnalysisFile | null>(null);
+  const [deletingFileId, setDeletingFileId] = useState<string | null>(null);
+
+  const handleDeleteFile = async (file: AnalysisFile) => {
+    setDeletingFileId(file.id);
+    try {
+      // Best-effort storage cleanup
+      if (file.storage_path) {
+        const { error: storageErr } = await supabase
+          .storage
+          .from("uploaded-drawings")
+          .remove([file.storage_path]);
+        if (storageErr) {
+          console.warn("Storage delete warning:", storageErr.message);
+        }
+      }
+
+      // Clean up dependent rows that reference this file
+      await Promise.all([
+        supabase.from("analysis_results").delete().eq("file_id", file.id),
+        supabase.from("analysis_triage_results").delete().eq("file_id", file.id),
+        supabase.from("analysis_triage_overrides").delete().eq("file_id", file.id),
+      ]);
+
+      // Delete the file row itself
+      const { error: rowErr } = await supabase
+        .from("analysis_request_files")
+        .delete()
+        .eq("id", file.id);
+      if (rowErr) throw rowErr;
+
+      // Update analysis_requests aggregate counters and reset status if last file
+      const remaining = (copiedFiles || []).filter(f => f.id !== file.id);
+      const newFileCount = remaining.length;
+      const newTotalBytes = remaining.reduce((s, f) => s + ((f as any).size_bytes || 0), 0);
+
+      const updates: Record<string, any> = {
+        file_count: newFileCount,
+        total_size_bytes: newTotalBytes,
+      };
+      if (newFileCount === 0) {
+        updates.status = "awaiting_upload";
+        updates.error_message = null;
+        updates.summary_data = {};
+        updates.pipeline_phase = null;
+        updates.pipeline_progress_done = 0;
+        updates.pipeline_progress_total = 0;
+      }
+      await supabase.from("analysis_requests").update(updates).eq("id", requestId);
+
+      toast({ title: "File deleted", description: file.name });
+
+      // Refresh queries — invalidate broadly so both AnalysisRequestDetail and WMSV pages update
+      await queryClient.invalidateQueries({ queryKey: ["analysis-files", requestId] });
+      await queryClient.invalidateQueries({ queryKey: ["wmsv-analysis-files", requestId] });
+      await queryClient.invalidateQueries({ queryKey: ["analysis-request-meta", requestId] });
+      await queryClient.invalidateQueries({ queryKey: ["wmsv-analysis-request"] });
+      await queryClient.invalidateQueries({ queryKey: ["analysis-request"] });
+    } catch (e) {
+      toast({
+        title: "Failed to delete file",
+        description: e instanceof Error ? e.message : String(e),
+        variant: "destructive",
+      });
+    } finally {
+      setDeletingFileId(null);
+      setFileToDelete(null);
+    }
+  };
+
   const handleAddToProject = async (awpClassName: string) => {
     const instances = summarizedInstances[awpClassName];
     if (!instances || instances.length === 0 || !projectId) return;
@@ -3930,6 +4050,25 @@ export function AnalysisSection({ requestId, files, projectId, sourceType, isWMS
                               Processed
                             </button>
                           )}
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-6 w-6 flex-shrink-0 text-muted-foreground hover:text-destructive"
+                                onClick={() => setFileToDelete(file)}
+                                disabled={deletingFileId === file.id}
+                                aria-label={`Remove ${file.name}`}
+                              >
+                                {deletingFileId === file.id ? (
+                                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                                ) : (
+                                  <X className="w-3.5 h-3.5" />
+                                )}
+                              </Button>
+                            </TooltipTrigger>
+                            <TooltipContent>Remove this file</TooltipContent>
+                          </Tooltip>
                         </div>
                       </td>
 
@@ -4337,6 +4476,37 @@ export function AnalysisSection({ requestId, files, projectId, sourceType, isWMS
         onOpenChange={setBuyCreditsOpen}
         reason="You're out of scan credits. Buy more to start a triage."
       />
+
+      {/* Confirm delete file */}
+      <AlertDialog open={!!fileToDelete} onOpenChange={(o) => { if (!o) setFileToDelete(null); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Remove this file?</AlertDialogTitle>
+            <AlertDialogDescription>
+              <span className="block">
+                <span className="font-medium text-foreground">{fileToDelete?.name}</span>
+              </span>
+              <span className="block mt-2">
+                This will delete the file and any analysis results tied to it. This can't be undone.
+              </span>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={!!deletingFileId}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={(e) => { e.preventDefault(); if (fileToDelete) handleDeleteFile(fileToDelete); }}
+              disabled={!!deletingFileId}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              {deletingFileId ? (
+                <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Removing…</>
+              ) : (
+                <><Trash2 className="w-4 h-4 mr-2" />Remove file</>
+              )}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </TooltipProvider>
   );
 }
