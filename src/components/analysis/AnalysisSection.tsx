@@ -137,6 +137,7 @@ interface AnalysisSectionProps {
   onAddFileUpload?: () => void;
   onAddFileDrive?: () => void;
   onAddFileProcore?: () => void;
+  onAddFileSharePoint?: () => void;
 }
 
 // ---------------------------------------------------------------------------
@@ -1287,7 +1288,7 @@ const STATUS_RANK: Record<string, number> = {
   awaiting_upload: 0, pending: 1, copying: 1, copied: 2, started: 3, processing: 4, stopping: 4, complete: 5, failed: 5,
 };
 
-export function AnalysisSection({ requestId, files, projectId, sourceType, isWMSV, visibleAwpClasses, onAddFileUpload, onAddFileDrive, onAddFileProcore }: AnalysisSectionProps) {
+export function AnalysisSection({ requestId, files, projectId, sourceType, isWMSV, visibleAwpClasses, onAddFileUpload, onAddFileDrive, onAddFileProcore, onAddFileSharePoint }: AnalysisSectionProps) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
@@ -3839,9 +3840,9 @@ export function AnalysisSection({ requestId, files, projectId, sourceType, isWMS
                              <img src="/icons/icon_procore.png" className="w-3 h-3" alt="" />
                              Procore
                            </Button>
-                           <Button size="sm" variant="outline" className="h-6 text-xs gap-1" disabled title="Coming soon">
+                           <Button size="sm" variant="outline" className="h-6 text-xs gap-1" onClick={onAddFileSharePoint}>
                              <img src="/icons/icon_sharepoint.png" className="w-3 h-3" alt="" />
-                             SharePoint (coming soon)
+                             SharePoint
                            </Button>
                          </div>
                        ) : (

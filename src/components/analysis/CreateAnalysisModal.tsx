@@ -25,6 +25,7 @@ import {
 } from "@/components/ui/popover";
 import { RepositoryConnectionDialog } from "@/components/wizard/RepositoryConnectionDialog";
 import { ProcoreConnectionDialog } from "@/components/wizard/ProcoreConnectionDialog";
+import { SharePointConnectionDialog } from "@/components/wizard/SharePointConnectionDialog";
 
 const LS_KEY = "analysis-queue-navigate-after-create";
 const ACCEPTED_TYPES = ".pdf,.png,.jpg,.jpeg,.dwg,.dxf";
@@ -54,6 +55,7 @@ export function CreateAnalysisModal({ open, onOpenChange, onCreated }: CreateAna
   // Cloud source dialog state
   const [showDriveDialog, setShowDriveDialog] = useState(false);
   const [showProcoreDialog, setShowProcoreDialog] = useState(false);
+  const [showSharePointDialog, setShowSharePointDialog] = useState(false);
   const [pendingProjectId, setPendingProjectId] = useState<string | null>(null);
   const [pendingRequestId, setPendingRequestId] = useState<string | null>(null);
 
@@ -122,7 +124,7 @@ export function CreateAnalysisModal({ open, onOpenChange, onCreated }: CreateAna
     return { projectId: project.id, requestId: req.id };
   };
 
-  const handleCloudSourceClick = async (source: "drive" | "procore") => {
+  const handleCloudSourceClick = async (source: "drive" | "procore" | "sharepoint") => {
     if (!name.trim()) {
       toast({ title: "Name Required", description: "Please enter a project name first.", variant: "destructive" });
       return;
@@ -131,7 +133,8 @@ export function CreateAnalysisModal({ open, onOpenChange, onCreated }: CreateAna
       setCreating(true);
       await ensureProjectAndRequest();
       if (source === "drive") setShowDriveDialog(true);
-      else setShowProcoreDialog(true);
+      else if (source === "procore") setShowProcoreDialog(true);
+      else setShowSharePointDialog(true);
     } catch (error) {
       const msg = (error as any)?.message || "Failed to create project";
       toast({ title: "Error", description: msg, variant: "destructive" });
@@ -326,9 +329,9 @@ export function CreateAnalysisModal({ open, onOpenChange, onCreated }: CreateAna
                   <img src="/icons/icon_procore.png" className="w-4 h-4 mr-1" alt="Procore" />
                   Procore
                 </Button>
-                <Button variant="outline" size="sm" disabled title="Coming soon">
+                <Button variant="outline" size="sm" onClick={() => handleCloudSourceClick("sharepoint")} disabled={creating}>
                   <img src="/icons/icon_sharepoint.png" className="w-4 h-4 mr-1" alt="SharePoint" />
-                  SharePoint (coming soon)
+                  SharePoint
                 </Button>
               </div>
               <input
@@ -398,6 +401,14 @@ export function CreateAnalysisModal({ open, onOpenChange, onCreated }: CreateAna
           <ProcoreConnectionDialog
             isOpen={showProcoreDialog}
             onClose={() => setShowProcoreDialog(false)}
+            projectId={pendingProjectId}
+            projectName={name.trim()}
+            analysisRequestId={pendingRequestId || undefined}
+            onAnalysisStarted={handleCloudAnalysisStarted}
+          />
+          <SharePointConnectionDialog
+            isOpen={showSharePointDialog}
+            onClose={() => setShowSharePointDialog(false)}
             projectId={pendingProjectId}
             projectName={name.trim()}
             analysisRequestId={pendingRequestId || undefined}
