@@ -170,23 +170,39 @@ export function WMSVProjectDetail({ projectId, projectName }: WMSVProjectDetailP
     })() as number | false,
   });
 
-  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const selectedFiles = e.target.files;
-    if (!selectedFiles?.length || !request || !user) return;
+    if (!selectedFiles?.length) return;
+    setPendingFiles(Array.from(selectedFiles));
+    setReviewOpen(true);
     e.target.value = "";
+  };
+
+  const confirmUpload = async (selected: File[]) => {
+    if (!selected.length || !request || !user) {
+      setReviewOpen(false);
+      setPendingFiles([]);
+      return;
+    }
     setUploading(true);
+    let copiedCount = 0;
+    const failures: string[] = [];
 
     try {
       let totalBytes = 0;
-      for (const file of Array.from(selectedFiles)) {
+      for (const file of selected) {
         const filePath = `${projectId}/${request.id}/${file.name}`;
         const { error: uploadError } = await supabase.storage
           .from("uploaded-drawings")
-          .upload(filePath, file);
-        if (uploadError) throw uploadError;
+          .upload(filePath, file, { upsert: true });
+        if (uploadError) {
+          console.error(`Upload failed for ${file.name}:`, uploadError);
+          failures.push(`${file.name}: ${uploadError.message}`);
+          continue;
+        }
         totalBytes += file.size;
 
-        await supabase.from("analysis_request_files").insert({
+        const { error: insertError } = await supabase.from("analysis_request_files").insert({
           analysis_request_id: request.id,
           drive_file_id: `manual_${Date.now()}_${file.name}`,
           name: file.name,
@@ -196,18 +212,36 @@ export function WMSVProjectDetail({ projectId, projectName }: WMSVProjectDetailP
           storage_path: filePath,
           copy_status: "copied",
         });
+        if (insertError) {
+          console.error(`DB insert failed for ${file.name}:`, insertError);
+          failures.push(`${file.name}: ${insertError.message}`);
+          continue;
+        }
+        copiedCount++;
       }
 
-      await supabase
-        .from("analysis_requests")
-        .update({
-          status: "copied",
-          file_count: (request.file_count || 0) + selectedFiles.length,
-          total_size_bytes: (request.total_size_bytes || 0) + totalBytes,
-        })
-        .eq("id", request.id);
+      if (copiedCount > 0) {
+        await supabase
+          .from("analysis_requests")
+          .update({
+            status: "copied",
+            file_count: (request.file_count || 0) + copiedCount,
+            total_size_bytes: (request.total_size_bytes || 0) + totalBytes,
+          })
+          .eq("id", request.id);
+      }
 
-      toast({ title: "Files Uploaded", description: `${selectedFiles.length} file(s) uploaded successfully.` });
+      if (failures.length === 0) {
+        toast({ title: "Files Uploaded", description: `${copiedCount} file(s) uploaded successfully.` });
+        setReviewOpen(false);
+        setPendingFiles([]);
+      } else {
+        toast({
+          title: copiedCount > 0 ? "Some uploads failed" : "Upload Failed",
+          description: `${copiedCount}/${selected.length} uploaded. ${failures[0]}${failures.length > 1 ? ` (+${failures.length - 1} more)` : ""}`,
+          variant: "destructive",
+        });
+      }
       queryClient.invalidateQueries({ queryKey: ["wmsv-analysis-request", projectId] });
       queryClient.invalidateQueries({ queryKey: ["wmsv-analysis-files", request.id] });
     } catch (error) {
