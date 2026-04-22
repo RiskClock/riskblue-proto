@@ -836,6 +836,28 @@ async function runPipeline(params: PipelineParams) {
         pipeline_progress_total: 0,
       } as any)
       .eq("id", analysisRequestId);
+
+    // Fire-and-forget completion email (does not affect pipeline status)
+    try {
+      const emailUrl = `${supabaseUrl}/functions/v1/send-analysis-complete-email`;
+      const emailRes = await fetch(emailUrl, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${serviceKey}`,
+          "Content-Type": "application/json",
+          apikey: serviceKey,
+        },
+        body: JSON.stringify({ analysisRequestId }),
+      });
+      if (!emailRes.ok) {
+        const txt = await emailRes.text().catch(() => "");
+        console.warn("[pipeline] completion email returned non-OK", emailRes.status, txt);
+      } else {
+        console.log("[pipeline] completion email dispatched");
+      }
+    } catch (emailErr) {
+      console.warn("[pipeline] completion email dispatch failed (non-fatal):", emailErr);
+    }
   } catch (e) {
     console.error("[pipeline] Fatal error:", e);
     await params.admin
