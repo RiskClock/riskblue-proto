@@ -479,6 +479,15 @@ export function WMSVProjectDetail({ projectId, projectName }: WMSVProjectDetailP
           />
         </>
       )}
+
+      <UploadReviewModal
+        open={reviewOpen}
+        onOpenChange={setReviewOpen}
+        initialFiles={pendingFiles}
+        accept={ACCEPTED_TYPES}
+        uploading={uploading}
+        onConfirm={confirmUpload}
+      />
     </div>
   );
 }
