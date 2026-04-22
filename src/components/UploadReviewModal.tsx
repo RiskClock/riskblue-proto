@@ -8,7 +8,7 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
-import { FileText, Loader2, Plus, Upload, X } from "lucide-react";
+import { Loader2, Plus, Upload, X } from "lucide-react";
 
 interface UploadReviewModalProps {
   open: boolean;
@@ -176,11 +176,8 @@ export function UploadReviewModal({
                     onCheckedChange={() => toggle(it.key)}
                     disabled={uploading}
                   />
-                  <FileText className="w-4 h-4 text-muted-foreground shrink-0" />
-                  <div className="flex-1 min-w-0">
-                    <div className="text-sm truncate">{it.file.name}</div>
-                    <div className="text-xs text-muted-foreground">{formatBytes(it.file.size)}</div>
-                  </div>
+                  <div className="flex-1 min-w-0 text-sm truncate">{it.file.name}</div>
+                  <div className="text-xs text-muted-foreground shrink-0">{formatBytes(it.file.size)}</div>
                   <Button
                     variant="ghost"
                     size="sm"
