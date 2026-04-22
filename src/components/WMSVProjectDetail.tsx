@@ -430,6 +430,14 @@ export function WMSVProjectDetail({ projectId, projectName }: WMSVProjectDetailP
             analysisRequestId={request.id}
             onAnalysisStarted={handleCloudAnalysisStarted}
           />
+          <SharePointConnectionDialog
+            isOpen={showSharePointDialog}
+            onClose={() => setShowSharePointDialog(false)}
+            projectId={projectId}
+            projectName={projectName}
+            analysisRequestId={request.id}
+            onAnalysisStarted={handleCloudAnalysisStarted}
+          />
         </>
       )}
     </div>
