@@ -1754,6 +1754,51 @@ export type Database = {
         }
         Relationships: []
       }
+      user_sharepoint_tokens: {
+        Row: {
+          access_token: string
+          created_at: string | null
+          encrypted_access_token: string | null
+          encrypted_refresh_token: string | null
+          id: string
+          is_encrypted: boolean | null
+          refresh_token: string | null
+          refreshing_since: string | null
+          sharepoint_email: string | null
+          token_expiry: string | null
+          updated_at: string | null
+          user_id: string
+        }
+        Insert: {
+          access_token?: string
+          created_at?: string | null
+          encrypted_access_token?: string | null
+          encrypted_refresh_token?: string | null
+          id?: string
+          is_encrypted?: boolean | null
+          refresh_token?: string | null
+          refreshing_since?: string | null
+          sharepoint_email?: string | null
+          token_expiry?: string | null
+          updated_at?: string | null
+          user_id: string
+        }
+        Update: {
+          access_token?: string
+          created_at?: string | null
+          encrypted_access_token?: string | null
+          encrypted_refresh_token?: string | null
+          id?: string
+          is_encrypted?: boolean | null
+          refresh_token?: string | null
+          refreshing_since?: string | null
+          sharepoint_email?: string | null
+          token_expiry?: string | null
+          updated_at?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
       water_systems: {
         Row: {
           cost: string
