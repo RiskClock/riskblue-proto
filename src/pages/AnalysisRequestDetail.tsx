@@ -15,6 +15,7 @@ import { format } from "date-fns";
 import { generateAnalysisDocx } from "@/lib/analysisDocxExporter";
 import { RepositoryConnectionDialog } from "@/components/wizard/RepositoryConnectionDialog";
 import { ProcoreConnectionDialog } from "@/components/wizard/ProcoreConnectionDialog";
+import { SharePointConnectionDialog } from "@/components/wizard/SharePointConnectionDialog";
 
 interface AnalysisFile {
   id: string;
@@ -62,6 +63,7 @@ export default function AnalysisRequestDetail() {
   // Cloud source dialog state
   const [showDriveDialog, setShowDriveDialog] = useState(false);
   const [showProcoreDialog, setShowProcoreDialog] = useState(false);
+  const [showSharePointDialog, setShowSharePointDialog] = useState(false);
 
   const isInternal = user?.email?.toLowerCase().endsWith("@riskclock.com") ?? false;
 
@@ -248,23 +250,26 @@ export default function AnalysisRequestDetail() {
                   <h3 className="text-lg font-medium text-foreground">No files uploaded yet</h3>
                   <p className="text-sm text-muted-foreground mt-1">Upload drawing files to begin analysis</p>
                 </div>
-                <div className="flex flex-wrap justify-center gap-2">
+                <div className="flex flex-wrap justify-center items-center gap-3">
                   <Button onClick={() => fileInputRef.current?.click()} disabled={uploading}>
                     {uploading ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Upload className="w-4 h-4 mr-2" />}
                     Upload from Computer
                   </Button>
-                  <Button variant="outline" onClick={() => setShowDriveDialog(true)}>
-                    <img src="/icons/icon_googledrive.png" className="w-4 h-4 mr-2" alt="Google Drive" />
-                    Google Drive
-                  </Button>
-                  <Button variant="outline" onClick={() => setShowProcoreDialog(true)}>
-                    <img src="/icons/icon_procore.png" className="w-4 h-4 mr-2" alt="Procore" />
-                    Procore
-                  </Button>
-                  <Button variant="outline" disabled title="Coming soon">
-                    <img src="/icons/icon_sharepoint.png" className="w-4 h-4 mr-2" alt="SharePoint" />
-                    SharePoint (coming soon)
-                  </Button>
+                  <span className="text-sm text-muted-foreground">or</span>
+                  <div className="flex flex-wrap justify-center gap-2">
+                    <Button variant="outline" onClick={() => setShowDriveDialog(true)}>
+                      <img src="/icons/icon_googledrive.png" className="w-4 h-4 mr-2" alt="Google Drive" />
+                      Google Drive
+                    </Button>
+                    <Button variant="outline" onClick={() => setShowProcoreDialog(true)}>
+                      <img src="/icons/icon_procore.png" className="w-4 h-4 mr-2" alt="Procore" />
+                      Procore
+                    </Button>
+                    <Button variant="outline" onClick={() => setShowSharePointDialog(true)}>
+                      <img src="/icons/icon_sharepoint.png" className="w-4 h-4 mr-2" alt="SharePoint" />
+                      SharePoint
+                    </Button>
+                  </div>
                 </div>
                 <input
                   ref={fileInputRef}
