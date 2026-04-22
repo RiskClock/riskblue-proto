@@ -379,8 +379,8 @@ export function WMSVProjectDetail({ projectId, projectName }: WMSVProjectDetailP
                     </div>
                   </div>
                   <div className="flex flex-wrap justify-center gap-2">
-                    <Button onClick={() => fileInputRef.current?.click()} disabled={uploading}>
-                      {uploading ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Upload className="w-4 h-4 mr-2" />}
+                    <Button onClick={() => fileInputRef.current?.click()}>
+                      <Upload className="w-4 h-4 mr-2" />
                       Upload from Computer
                     </Button>
                     <Button variant="outline" onClick={() => setShowDriveDialog(true)}>
@@ -526,7 +526,6 @@ export function WMSVProjectDetail({ projectId, projectName }: WMSVProjectDetailP
         onOpenChange={setReviewOpen}
         initialFiles={pendingFiles}
         accept={ACCEPTED_TYPES}
-        uploading={uploading}
         onConfirm={confirmUpload}
       />
     </div>
