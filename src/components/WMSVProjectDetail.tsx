@@ -66,7 +66,6 @@ export function WMSVProjectDetail({ projectId, projectName }: WMSVProjectDetailP
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const [uploading, setUploading] = useState(false);
   const [exporting, setExporting] = useState(false);
   const [showDriveDialog, setShowDriveDialog] = useState(false);
   const [showProcoreDialog, setShowProcoreDialog] = useState(false);
