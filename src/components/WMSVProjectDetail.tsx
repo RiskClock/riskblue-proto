@@ -14,7 +14,10 @@ import { ArrowLeft, Loader2, Upload, FileText, CheckCircle2, Circle, FolderSync,
 import { RepositoryConnectionDialog } from "@/components/wizard/RepositoryConnectionDialog";
 import { ProcoreConnectionDialog } from "@/components/wizard/ProcoreConnectionDialog";
 import { SharePointConnectionDialog } from "@/components/wizard/SharePointConnectionDialog";
+import { UploadReviewModal } from "@/components/UploadReviewModal";
 import { generateAnalysisDocx } from "@/lib/analysisDocxExporter";
+
+const ACCEPTED_TYPES = ".pdf,.png,.jpg,.jpeg,.dwg,.dxf";
 
 const ACTIVE_STATUSES = ["pending", "copying", "copied", "started", "processing"];
 
