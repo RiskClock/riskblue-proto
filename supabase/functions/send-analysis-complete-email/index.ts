@@ -7,7 +7,7 @@ const corsHeaders = {
     "authorization, x-client-info, apikey, content-type",
 };
 
-const FROM_ADDRESS = "RiskBlue <notifications@riskblue.com>";
+const FROM_ADDRESS = "RiskBlue <notifications@riskclock.com>";
 const INTERNAL_CC = "qbo@riskclock.com";
 
 interface AwpCount {
