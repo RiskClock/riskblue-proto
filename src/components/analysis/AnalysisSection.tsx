@@ -1528,38 +1528,7 @@ export function AnalysisSection({ requestId, files, projectId, sourceType, isWMS
     }
   }, [requestMeta]);
 
-  // Apply default disabled AWP classes (ERS, MRS, TWR, FS, SPSDD) when nothing has been persisted yet.
-  const DEFAULT_DISABLED_AWP = useMemo(
-    () => new Set([
-      "Mechanical Riser",
-      "Electrical Riser",
-      "Temporary Water Run",
-      "Fire Suppression System",
-      "Sump Pit, Storm Drain & Drainage",
-    ]),
-    []
-  );
-  useEffect(() => {
-    if (disabledDefaultsApplied) return;
-    if (!requestMeta) return;
-    const persisted = (requestMeta as any).disabled_awp_classes as string[] | null;
-    if (persisted && persisted.length > 0) return;
-    if (!sortedPrompts || sortedPrompts.length === 0) return;
-    const namesPresent = sortedPrompts
-      .map((p) => p.awp_class_name)
-      .filter((n) => DEFAULT_DISABLED_AWP.has(n));
-    if (namesPresent.length === 0) {
-      setDisabledDefaultsApplied(true);
-      return;
-    }
-    setDisabledColumns(new Set(namesPresent));
-    setDisabledDefaultsApplied(true);
-    supabase
-      .from("analysis_requests")
-      .update({ disabled_awp_classes: namesPresent } as any)
-      .eq("id", requestId)
-      .then(() => {});
-  }, [disabledDefaultsApplied, requestMeta, sortedPrompts, DEFAULT_DISABLED_AWP, requestId]);
+  // (Default-disabled AWP classes are applied below, after sortedPrompts is defined.)
 
   // Hydrate analyzeV2Running from DB status on mount/navigation
   // Also auto-clear when DB status transitions to complete while we're showing "running"
