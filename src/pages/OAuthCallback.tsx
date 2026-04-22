@@ -15,22 +15,17 @@ const OAuthCallback = () => {
         const urlParams = new URLSearchParams(window.location.search);
         const driveConnected = urlParams.get("drive_connected");
         const procoreConnected = urlParams.get("procore_connected");
+        const sharepointConnected = urlParams.get("sharepoint_connected");
         const error = urlParams.get("error");
 
         if (error) {
           setStatus("error");
           setMessage(`Authentication failed: ${error}`);
           
-          // Post error to opener
           if (window.opener) {
-            window.opener.postMessage(
-              { type: "google-oauth-callback", success: false, error },
-              window.location.origin
-            );
-            window.opener.postMessage(
-              { type: "procore-oauth-callback", success: false, error },
-              window.location.origin
-            );
+            window.opener.postMessage({ type: "google-oauth-callback", success: false, error }, window.location.origin);
+            window.opener.postMessage({ type: "procore-oauth-callback", success: false, error }, window.location.origin);
+            window.opener.postMessage({ type: "sharepoint-oauth-callback", success: false, error }, window.location.origin);
           }
           
           setTimeout(() => window.close(), 2000);
@@ -52,14 +47,16 @@ const OAuthCallback = () => {
         } else if (procoreConnected === "true") {
           setStatus("success");
           setMessage("Connected to Procore! This window will close...");
-          
           if (window.opener) {
-            window.opener.postMessage(
-              { type: "procore-oauth-callback", success: true },
-              window.location.origin
-            );
+            window.opener.postMessage({ type: "procore-oauth-callback", success: true }, window.location.origin);
           }
-          
+          setTimeout(() => window.close(), 1000);
+        } else if (sharepointConnected === "true") {
+          setStatus("success");
+          setMessage("Connected to SharePoint! This window will close...");
+          if (window.opener) {
+            window.opener.postMessage({ type: "sharepoint-oauth-callback", success: true }, window.location.origin);
+          }
           setTimeout(() => window.close(), 1000);
         } else {
           setStatus("error");

@@ -64,7 +64,7 @@ function FolderNode({
           className="flex items-center gap-1.5 flex-1 text-left"
           onClick={() => selectable && onSelectFolder?.(folder.id, folder.name)}
         >
-          <Folder className="w-3.5 h-3.5 text-amber-600 shrink-0" />
+          <Folder className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
           <span className="truncate">{folder.name}</span>
         </button>
       </div>
