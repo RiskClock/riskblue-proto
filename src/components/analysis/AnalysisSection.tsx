@@ -3441,6 +3441,8 @@ export function AnalysisSection({ requestId, files, projectId, sourceType, isWMS
       setFileToDelete(null);
     }
   };
+
+  const handleAddToProject = async (awpClassName: string) => {
     const instances = summarizedInstances[awpClassName];
     if (!instances || instances.length === 0 || !projectId) return;
 
