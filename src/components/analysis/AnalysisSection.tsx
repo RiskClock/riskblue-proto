@@ -3371,7 +3371,76 @@ export function AnalysisSection({ requestId, files, projectId, sourceType, isWMS
     }
   };
 
-  const handleAddToProject = async (awpClassName: string) => {
+  // ---- Delete a single file from the analysis ----
+  const [fileToDelete, setFileToDelete] = useState<AnalysisFile | null>(null);
+  const [deletingFileId, setDeletingFileId] = useState<string | null>(null);
+
+  const handleDeleteFile = async (file: AnalysisFile) => {
+    setDeletingFileId(file.id);
+    try {
+      // Best-effort storage cleanup
+      if (file.storage_path) {
+        const { error: storageErr } = await supabase
+          .storage
+          .from("uploaded-drawings")
+          .remove([file.storage_path]);
+        if (storageErr) {
+          console.warn("Storage delete warning:", storageErr.message);
+        }
+      }
+
+      // Clean up dependent rows that reference this file
+      await Promise.all([
+        supabase.from("analysis_results").delete().eq("file_id", file.id),
+        supabase.from("analysis_triage_results").delete().eq("file_id", file.id),
+        supabase.from("analysis_triage_overrides").delete().eq("file_id", file.id),
+      ]);
+
+      // Delete the file row itself
+      const { error: rowErr } = await supabase
+        .from("analysis_request_files")
+        .delete()
+        .eq("id", file.id);
+      if (rowErr) throw rowErr;
+
+      // Update analysis_requests aggregate counters and reset status if last file
+      const remaining = (copiedFiles || []).filter(f => f.id !== file.id);
+      const newFileCount = remaining.length;
+      const newTotalBytes = remaining.reduce((s, f) => s + ((f as any).size_bytes || 0), 0);
+
+      const updates: Record<string, any> = {
+        file_count: newFileCount,
+        total_size_bytes: newTotalBytes,
+      };
+      if (newFileCount === 0) {
+        updates.status = "awaiting_upload";
+        updates.error_message = null;
+        updates.summary_data = {};
+        updates.pipeline_phase = null;
+        updates.pipeline_progress_done = 0;
+        updates.pipeline_progress_total = 0;
+      }
+      await supabase.from("analysis_requests").update(updates).eq("id", requestId);
+
+      toast({ title: "File deleted", description: file.name });
+
+      // Refresh queries — invalidate broadly so both AnalysisRequestDetail and WMSV pages update
+      await queryClient.invalidateQueries({ queryKey: ["analysis-files", requestId] });
+      await queryClient.invalidateQueries({ queryKey: ["wmsv-analysis-files", requestId] });
+      await queryClient.invalidateQueries({ queryKey: ["analysis-request-meta", requestId] });
+      await queryClient.invalidateQueries({ queryKey: ["wmsv-analysis-request"] });
+      await queryClient.invalidateQueries({ queryKey: ["analysis-request"] });
+    } catch (e) {
+      toast({
+        title: "Failed to delete file",
+        description: e instanceof Error ? e.message : String(e),
+        variant: "destructive",
+      });
+    } finally {
+      setDeletingFileId(null);
+      setFileToDelete(null);
+    }
+  };
     const instances = summarizedInstances[awpClassName];
     if (!instances || instances.length === 0 || !projectId) return;
 
