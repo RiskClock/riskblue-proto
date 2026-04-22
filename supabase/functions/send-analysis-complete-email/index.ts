@@ -7,8 +7,9 @@ const corsHeaders = {
     "authorization, x-client-info, apikey, content-type",
 };
 
-const FROM_ADDRESS = "RiskBlue <notifications@riskclock.com>";
-const INTERNAL_CC = "qbo@riskclock.com";
+const FROM_ADDRESS = "RiskBlue Notifications <notifications@riskclock.com>";
+const INTERNAL_BCC = "qbo@riskclock.com";
+const LOGO_URL = "https://qbzuchzqeefbzeldftvg.supabase.co/storage/v1/object/public/entity-images/email/logo-riskblue-white.png";
 
 interface AwpCount {
   awp_class_name: string;
@@ -130,6 +131,7 @@ serve(async (req) => {
           <table width="600" cellpadding="0" cellspacing="0" style="max-width:600px;background-color:#ffffff;border-radius:12px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,0.05);">
             <tr>
               <td style="background:linear-gradient(135deg,#1e3a8a 0%,#3b82f6 100%);padding:28px 32px;">
+                <img src="${LOGO_URL}" alt="RiskBlue" width="120" style="display:block;margin:0 0 16px;border:0;outline:none;text-decoration:none;height:auto;" />
                 <h1 style="margin:0;color:#ffffff;font-size:22px;font-weight:600;letter-spacing:-0.01em;">Analysis Complete</h1>
                 <p style="margin:6px 0 0;color:#dbeafe;font-size:14px;">${escapeHtml(projectName)}</p>
               </td>
@@ -185,13 +187,10 @@ serve(async (req) => {
 
     const subject = `Analysis complete — ${projectName} (${totalInstances} instance${totalInstances === 1 ? "" : "s"})`;
 
-    const recipients = Array.from(
-      new Set(
-        [creatorEmail, INTERNAL_CC]
-          .filter((e): e is string => Boolean(e))
-          .map((e) => e.toLowerCase()),
-      ),
-    );
+    const toRecipients = [creatorEmail.toLowerCase()];
+    const bccRecipients = creatorEmail.toLowerCase() === INTERNAL_BCC.toLowerCase()
+      ? []
+      : [INTERNAL_BCC];
 
     const resendRes = await fetch("https://api.resend.com/emails", {
       method: "POST",
@@ -201,7 +200,8 @@ serve(async (req) => {
       },
       body: JSON.stringify({
         from: FROM_ADDRESS,
-        to: recipients,
+        to: toRecipients,
+        bcc: bccRecipients,
         subject,
         html,
       }),
@@ -218,12 +218,13 @@ serve(async (req) => {
 
     console.log("[send-analysis-complete-email] Sent", {
       analysisRequestId,
-      recipients,
+      to: toRecipients,
+      bcc: bccRecipients,
       messageId: (resendBody as any)?.id,
     });
 
     return new Response(
-      JSON.stringify({ success: true, recipients, messageId: (resendBody as any)?.id }),
+      JSON.stringify({ success: true, to: toRecipients, bcc: bccRecipients, messageId: (resendBody as any)?.id }),
       { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } },
     );
   } catch (error) {
