@@ -218,12 +218,13 @@ serve(async (req) => {
 
     console.log("[send-analysis-complete-email] Sent", {
       analysisRequestId,
-      recipients,
+      to: toRecipients,
+      bcc: bccRecipients,
       messageId: (resendBody as any)?.id,
     });
 
     return new Response(
-      JSON.stringify({ success: true, recipients, messageId: (resendBody as any)?.id }),
+      JSON.stringify({ success: true, to: toRecipients, bcc: bccRecipients, messageId: (resendBody as any)?.id }),
       { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } },
     );
   } catch (error) {
