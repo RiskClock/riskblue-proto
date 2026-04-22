@@ -87,15 +87,53 @@ serve(async (req) => {
     let bodyData: any = {};
     if (req.method === "POST") { try { bodyData = await req.json(); } catch {} }
 
-    // ============= List Sites (followed sites) =============
+    // ============= List Sites =============
     if (action === "list-sites") {
-      // Use search to get all sites the user has access to
-      const data = await graphFetch(`/sites?search=*&$select=id,name,displayName,webUrl&$top=100`, accessToken);
-      const sites = (data.value || []).map((s: any) => ({
-        id: s.id,
-        name: s.displayName || s.name,
-        webUrl: s.webUrl,
-      }));
+      // Try multiple strategies — Graph's /sites?search=* is unreliable across tenants.
+      const sitesMap = new Map<string, { id: string; name: string; webUrl: string }>();
+      const addSite = (s: any) => {
+        if (!s?.id) return;
+        sitesMap.set(s.id, { id: s.id, name: s.displayName || s.name || "(unnamed)", webUrl: s.webUrl });
+      };
+
+      const strategies: Array<{ label: string; path: string }> = [
+        { label: "followedSites", path: `/me/followedSites?$select=id,name,displayName,webUrl&$top=100` },
+        { label: "search-empty", path: `/sites?search=&$select=id,name,displayName,webUrl&$top=100` },
+        { label: "root-site", path: `/sites/root?$select=id,name,displayName,webUrl` },
+      ];
+
+      const errors: string[] = [];
+      for (const strat of strategies) {
+        try {
+          const data = await graphFetch(strat.path, accessToken);
+          if (Array.isArray(data?.value)) {
+            for (const s of data.value) addSite(s);
+          } else if (data?.id) {
+            addSite(data);
+          }
+        } catch (e) {
+          errors.push(`${strat.label}: ${e instanceof Error ? e.message : String(e)}`);
+          console.warn(`Site strategy ${strat.label} failed:`, e);
+        }
+      }
+
+      // Also try root-site subsites
+      try {
+        const rootSubsites = await graphFetch(`/sites/root/sites?$select=id,name,displayName,webUrl&$top=100`, accessToken);
+        for (const s of (rootSubsites.value || [])) addSite(s);
+      } catch (e) {
+        errors.push(`root-subsites: ${e instanceof Error ? e.message : String(e)}`);
+      }
+
+      const sites = Array.from(sitesMap.values()).sort((a, b) => a.name.localeCompare(b.name));
+
+      if (sites.length === 0) {
+        return new Response(JSON.stringify({
+          sites: [],
+          error: "No SharePoint sites found. Errors: " + errors.join(" | "),
+        }), { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+      }
+
       return new Response(JSON.stringify({ sites }),
         { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
