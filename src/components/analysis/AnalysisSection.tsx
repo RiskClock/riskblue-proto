@@ -4050,6 +4050,25 @@ export function AnalysisSection({ requestId, files, projectId, sourceType, isWMS
                               Processed
                             </button>
                           )}
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-6 w-6 flex-shrink-0 text-muted-foreground hover:text-destructive"
+                                onClick={() => setFileToDelete(file)}
+                                disabled={deletingFileId === file.id}
+                                aria-label={`Remove ${file.name}`}
+                              >
+                                {deletingFileId === file.id ? (
+                                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                                ) : (
+                                  <X className="w-3.5 h-3.5" />
+                                )}
+                              </Button>
+                            </TooltipTrigger>
+                            <TooltipContent>Remove this file</TooltipContent>
+                          </Tooltip>
                         </div>
                       </td>
 
