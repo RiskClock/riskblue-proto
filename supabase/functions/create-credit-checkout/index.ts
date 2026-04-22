@@ -8,9 +8,9 @@ const corsHeaders = {
 };
 
 const PACKAGES: Record<string, { priceId: string; credits: number; label: string; amountCents: number }> = {
-  pack_5: { priceId: "credits_pack_5_usd", credits: 5, label: "5 Scan Credits", amountCents: 8000 },
-  pack_20: { priceId: "credits_pack_20_usd", credits: 20, label: "20 Scan Credits", amountCents: 30000 },
-  pack_50: { priceId: "credits_pack_50_usd", credits: 50, label: "50 Scan Credits", amountCents: 70000 },
+  pack_20: { priceId: "credits_pack_20_usd", credits: 20, label: "20 Scan Credits", amountCents: 3000 },
+  pack_100: { priceId: "credits_pack_100_usd", credits: 100, label: "100 Scan Credits", amountCents: 13000 },
+  pack_500: { priceId: "credits_pack_500_usd", credits: 500, label: "500 Scan Credits", amountCents: 50000 },
 };
 
 serve(async (req) => {

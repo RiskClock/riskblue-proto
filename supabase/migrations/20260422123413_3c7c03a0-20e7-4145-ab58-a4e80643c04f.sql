@@ -1,0 +1,1 @@
+ALTER TABLE public.profiles ALTER COLUMN credits_balance SET DEFAULT 20;
