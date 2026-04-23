@@ -15,6 +15,19 @@ import type { PageViewport } from "pdfjs-dist";
 
 export type CoordSpace = "normalized" | "pdf-points" | "pixels";
 
+/**
+ * Overlay shape model.
+ *  - "rect"   : bordered translucent rectangle sized to the bbox. Use for
+ *               region/extent highlights (e.g. table-row hits in raw results).
+ *  - "circle" : translucent disc with outline, centered on the bbox centroid.
+ *               Use for exact-location emphasis (single instance markers).
+ *               Geometry is anchored in document (normalized 0..1) space so it
+ *               scales consistently across page sizes / fit modes / raster
+ *               resolutions; a CSS minimum diameter only kicks in for visual
+ *               legibility on tiny bboxes.
+ */
+export type OverlayShape = "rect" | "circle";
+
 export type BBoxArray =
   | [number, number, number, number]
   | number[];
@@ -37,12 +50,15 @@ export interface OverlayInput {
   pdfViewport?: PageViewport;
   color?: string;
   label?: string;
+  /** Defaults to 'rect' when omitted. */
+  shape?: OverlayShape;
 }
 
 export interface NormalizedOverlay {
   id: string;
   page: number;
   rect: NormalizedRect;
+  shape: OverlayShape;
   color?: string;
   label?: string;
 }

@@ -9,6 +9,7 @@ export type {
   NormalizedRect,
   OverlayInput,
   NormalizedOverlay,
+  OverlayShape,
   FitTarget,
 } from "./viewerGeometry";
 export {

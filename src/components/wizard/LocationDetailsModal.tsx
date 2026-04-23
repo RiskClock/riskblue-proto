@@ -56,32 +56,52 @@ export const LocationDetailsModal = ({
   // Source priority (preserved from prior implementation):
   //  1. Analysis source file (storage path in `drive-analysis-files`) — bbox-aware
   //  2. Custom uploaded drawing (URL or storage path in `awp-drawings`)
-  //  3. Static mapped drawing (public asset)
-  const analysisStoragePath = (location as any)?.drawing_url || (location as any)?.drawingUrl;
+  //  3. Static mapped drawing (Vite-imported public asset, path begins with `/`)
+  const rawDrawingUrl: string | undefined =
+    (location as any)?.drawing_url || (location as any)?.drawingUrl;
+  // An analysis-source storage path is a bare relative key (no scheme, no
+  // leading slash, no `data:` / `blob:`). Anything else is either a Vite asset
+  // (leading `/`), a hosted URL (`http(s)://`), or an inline blob/data URL.
   const isAnalysisSource =
-    !!analysisStoragePath &&
-    !analysisStoragePath.startsWith("http") &&
-    !analysisStoragePath.startsWith("/");
-  const customDrawingUrl = isAnalysisSource
-    ? null
-    : ((location as any)?.drawingUrl || (location as any)?.drawing_url);
+    !!rawDrawingUrl &&
+    !rawDrawingUrl.startsWith("http") &&
+    !rawDrawingUrl.startsWith("/") &&
+    !rawDrawingUrl.startsWith("data:") &&
+    !rawDrawingUrl.startsWith("blob:");
+  const analysisStoragePath = isAnalysisSource ? rawDrawingUrl : null;
+  const customDrawingUrl = isAnalysisSource ? null : rawDrawingUrl;
   const staticDrawingUrl =
     !isAnalysisSource && !customDrawingUrl && location ? getDrawingImage(location.id) : null;
   const drawingUrl = customDrawingUrl || staticDrawingUrl;
   const showDrawingViewer = !!drawingUrl || !!isAnalysisSource;
 
-  // Resolve a non-analysis drawing URL (storage path or legacy public URL)
-  // into a usable source descriptor for the shared viewer.
+  // Resolve a non-analysis drawing URL into a usable source descriptor for the
+  // shared viewer. Handles every variant the wizard can produce:
+  //   - Vite-imported asset path  (e.g. "/assets/drawings/ERM001-abc.png")
+  //   - data: / blob: inline URL  (e.g. previewing a freshly uploaded file)
+  //   - hosted http(s) URL        (legacy public bucket URL or external)
+  //   - bare relative storage key (awp-drawings bucket path)
   const resolveNonAnalysisSource = async (
     url: string
   ): Promise<DocumentSourceDescriptor> => {
+    if (url.startsWith("data:") || url.startsWith("blob:")) {
+      return { kind: "url", url };
+    }
+    if (url.startsWith("/")) {
+      // Vite/public asset — the dev/prod server serves it directly.
+      return { kind: "url", url };
+    }
     if (url.startsWith("http")) {
+      // Extract a bucket path from legacy public-bucket URLs so signed access
+      // still works if the bucket goes private; otherwise fall back to a
+      // direct fetch.
       const awpMatch = url.match(/\/awp-drawings\/(.+?)(\?.*)?$/);
       if (awpMatch) {
         return { kind: "supabase-storage", bucket: "awp-drawings", path: awpMatch[1] };
       }
       return { kind: "url", url };
     }
+    // Bare relative key → awp-drawings bucket
     return { kind: "supabase-storage", bucket: "awp-drawings", path: url };
   };
 
@@ -229,6 +249,7 @@ export const LocationDetailsModal = ({
   }, [isOpen, showDrawingViewer, location?.id]);
 
   // Build the single overlay for the viewer (only for analysis-source PDFs with bbox).
+  // Exact-location emphasis → use a translucent circle marker (not a region rect).
   const overlays: OverlayInput[] = useMemo(() => {
     if (!resolvedOverlay) return [];
     return [
@@ -241,6 +262,7 @@ export const LocationDetailsModal = ({
         pdfViewport: resolvedOverlay.pdfViewport,
         color: "hsl(var(--destructive))",
         label: location?.id,
+        shape: "circle",
       },
     ];
   }, [resolvedOverlay, location?.id]);

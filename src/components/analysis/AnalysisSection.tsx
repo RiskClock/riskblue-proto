@@ -470,6 +470,8 @@ function InstanceDetailModal({
       pdfViewport: resolvedOverlay.pdfViewport,
       color: "hsl(var(--destructive))",
       label: instance.id,
+      // Exact-location emphasis → translucent circle marker.
+      shape: "circle",
     }];
   }, [resolvedOverlay, instance.id]);
 
