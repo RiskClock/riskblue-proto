@@ -3700,9 +3700,9 @@ export function AnalysisSection({ requestId, files, projectId, sourceType, isWMS
                       value={engineVersion}
                       onChange={(e) => setEngineVersion(e.target.value)}
                     >
-                      <option value="6.8">RiskClock Engine 6.8</option>
-                      <option value="7.1">RiskClock Engine 7.1</option>
-                      <option value="7.2">RiskClock Engine 7.2</option>
+                      <option value="6.8" disabled>RiskClock Engine 6.8 (Jan-2026) (deprecated)</option>
+                      <option value="7.1">RiskClock Engine 7.1 (Mar-2026)</option>
+                      <option value="7.2">RiskClock Engine 7.2 (Apr-2026)</option>
                     </select>
                     <Button
                       size="sm"
@@ -3932,14 +3932,30 @@ export function AnalysisSection({ requestId, files, projectId, sourceType, isWMS
                     </th>
                      {sortedPrompts.map((prompt) => {
                       const isDisabled = disabledColumns.has(prompt.awp_class_name);
+                      const isComingSoon = DEFAULT_DISABLED_AWP.has(prompt.awp_class_name);
                       return (
                       <th key={prompt.id} className={`w-14 px-2 py-2 text-center font-medium text-muted-foreground ${isDisabled ? 'opacity-30' : ''}`}>
                         <div className="flex flex-col items-center gap-1">
-                            <Checkbox
-                              checked={!isDisabled}
-                              onCheckedChange={() => toggleColumnDisabled(prompt.awp_class_name)}
-                              className="h-3.5 w-3.5"
-                            />
+                            {isComingSoon ? (
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <span className="inline-flex">
+                                    <Checkbox
+                                      checked={false}
+                                      disabled
+                                      className="h-3.5 w-3.5 cursor-not-allowed"
+                                    />
+                                  </span>
+                                </TooltipTrigger>
+                                <TooltipContent>Coming soon</TooltipContent>
+                              </Tooltip>
+                            ) : (
+                              <Checkbox
+                                checked={!isDisabled}
+                                onCheckedChange={() => toggleColumnDisabled(prompt.awp_class_name)}
+                                className="h-3.5 w-3.5"
+                              />
+                            )}
                           <Tooltip>
                             <TooltipTrigger asChild>
                               {prompt.drive_file_url && !isWMSV ? (
@@ -3957,7 +3973,7 @@ export function AnalysisSection({ requestId, files, projectId, sourceType, isWMS
                                 </span>
                               )}
                             </TooltipTrigger>
-                            <TooltipContent>{prompt.awp_class_name}</TooltipContent>
+                            <TooltipContent>{isComingSoon ? "Coming soon" : prompt.awp_class_name}</TooltipContent>
                           </Tooltip>
                         </div>
                       </th>
