@@ -21,6 +21,17 @@ interface SystemDetection {
   fileName?: string;
 }
 
+/**
+ * Non-Drive source override. When provided, the modal skips the Drive descriptor
+ * and feeds this directly to the shared viewer. Used for QA / preview testing
+ * without requiring a connected Google Drive account.
+ *
+ * Example:
+ *   <FileViewerModal
+ *     ...
+ *     sourceOverride={{ kind: "supabase-storage", bucket: "uploaded-drawings", path }}
+ *   />
+ */
 interface FileViewerModalProps {
   isOpen: boolean;
   onClose: () => void;
@@ -29,6 +40,8 @@ interface FileViewerModalProps {
   mimeType: string;
   accessToken: string;
   detections: SystemDetection[];
+  /** Optional: bypass Drive and use any source descriptor supported by useDocumentSource. */
+  sourceOverride?: DocumentSourceDescriptor;
 }
 
 const BOUNDING_BOX_COLOR = "#39FF14"; // highlighter green
@@ -41,13 +54,17 @@ export const FileViewerModal = ({
   mimeType,
   accessToken,
   detections,
+  sourceOverride,
 }: FileViewerModalProps) => {
   const [hoveredCode, setHoveredCode] = useState<string | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
 
-  // Build the source descriptor for the shared viewer (Drive download).
+  // Build the source descriptor for the shared viewer.
+  // Priority: explicit override (QA / non-Drive flows) → Drive download.
   const source: DocumentSourceDescriptor | null = useMemo(() => {
-    if (!isOpen || !fileId || !accessToken) return null;
+    if (!isOpen) return null;
+    if (sourceOverride) return sourceOverride;
+    if (!fileId || !accessToken) return null;
     return {
       kind: "drive",
       fileId,
@@ -55,7 +72,7 @@ export const FileViewerModal = ({
       mimeType,
       fileName,
     };
-  }, [isOpen, fileId, accessToken, mimeType, fileName]);
+  }, [isOpen, sourceOverride, fileId, accessToken, mimeType, fileName]);
 
   // Convert legacy detection coordinates into the shared viewer's overlay model.
   // Detection coords are either normalized 0..1 [x,y,w,h] or PDF points [x1,y1,x2,y2].

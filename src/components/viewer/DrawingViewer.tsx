@@ -200,10 +200,27 @@ export const DrawingViewer = forwardRef<DrawingViewerApi, DrawingViewerProps>(
     // Fit-to-selection
     const fitToOverlay = useFitToSelection(wrapperRef);
 
+    /**
+     * Compute and apply a true fit-to-viewport transform for the active page.
+     *
+     * Note: pageCssSize is already sized so that the page fits the viewport at
+     * scale = 1 (see the useMemo above), so the resulting transform is
+     * { scale: 1, x: centered, y: centered }. This is the same visual result
+     * as resetTransform(), but the math is now explicit and consistent with
+     * fit-to-selection — no accidental coupling to "reset".
+     */
     const fitPage = () => {
       const w = wrapperRef.current;
-      if (!w) return;
-      w.resetTransform(250);
+      if (!w || !activePage || pageCssSize.width === 0) return;
+      const target = computeFitToRect({
+        rect: { nx: 0, ny: 0, nw: 1, nh: 1 },
+        pageSize: pageCssSize,
+        viewportSize,
+        paddingRatio: 0,
+        minScale,
+        maxScale,
+      });
+      w.setTransform(target.positionX, target.positionY, target.scale, 250);
     };
 
     const doFitOverlay = (
@@ -233,19 +250,24 @@ export const DrawingViewer = forwardRef<DrawingViewerApi, DrawingViewerProps>(
       }
     }, [activePage, pageCssSize.width, initialFit, initialFitOverlayId]);
 
-    // API
-    const api: DrawingViewerApi = {
-      zoomIn: () => wrapperRef.current?.zoomIn(),
-      zoomOut: () => wrapperRef.current?.zoomOut(),
-      reset: () => wrapperRef.current?.resetTransform(),
-      fitPage,
-      fitToOverlay: doFitOverlay,
-    };
-    useImperativeHandle(ref, () => api, [pageCssSize, normalizedByPage, activePage]);
+    // Imperative API. Depend on primitive scalars so the object identity is
+    // stable across renders that don't actually change layout (avoids
+    // re-running consumer effects keyed on the api).
+    const api: DrawingViewerApi = useMemo(
+      () => ({
+        zoomIn: () => wrapperRef.current?.zoomIn(),
+        zoomOut: () => wrapperRef.current?.zoomOut(),
+        reset: () => wrapperRef.current?.resetTransform(),
+        fitPage,
+        fitToOverlay: doFitOverlay,
+      }),
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+      [pageCssSize.width, pageCssSize.height, activePage?.pageNum, viewportSize.width, viewportSize.height]
+    );
+    useImperativeHandle(ref, () => api, [api]);
     useEffect(() => {
       onApiReady?.(api);
-      // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [pageCssSize.width, pageCssSize.height, activePage?.pageNum]);
+    }, [api, onApiReady]);
 
     const loading = srcLoading || pdfLoading;
     const error = srcError || pdfError;
