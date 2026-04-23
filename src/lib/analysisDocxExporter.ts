@@ -15,6 +15,7 @@ import {
 } from "docx";
 import { supabase } from "@/integrations/supabase/client";
 import * as pdfjsLib from "pdfjs-dist";
+import { findBBoxInTextLayer, normalizeText } from "@/lib/pdfTextLayerSearch";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -41,14 +42,145 @@ interface InstanceExportRow {
   pipeDiameterMM?: number;
   controls: string[];
   fileName: string;
-  drawingImage: Uint8Array | null;
+  drawingImage: { png: Uint8Array; width: number; height: number } | null;
 }
 
 // ---------------------------------------------------------------------------
-// Helpers
+// Overlay helpers — TEMPORARY narrow-scope duplication of viewer logic.
+// Names + behavior MUST stay identical to AnalysisSection.tsx so a future
+// extraction into src/lib/overlayCandidates.ts is a mechanical move.
+// Follow-up: extract these three helpers + the OverlayRow type into a shared
+// module and import from both AnalysisSection.tsx and this file.
 // ---------------------------------------------------------------------------
 
-/** Determine category from source tables */
+interface OverlayRow {
+  candidates: string[];
+  pageNum: number;
+  aiBBox?: { x1: number; y1: number; x2: number; y2: number };
+}
+
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+function matchesDetectionId(candidate: string, targetId: string, allowBounded = false): boolean {
+  const normalizedCandidate = normalizeText(candidate);
+  const normalizedTarget = normalizeText(targetId);
+  if (!normalizedCandidate || !normalizedTarget) return false;
+  if (normalizedCandidate === normalizedTarget) return true;
+  if (!allowBounded) return false;
+  return new RegExp(`(^|[^a-z0-9])${escapeRegExp(normalizedTarget)}([^a-z0-9]|$)`, "i").test(normalizedCandidate);
+}
+
+function parseOverlayCandidates(resultText: string): OverlayRow[] {
+  try {
+    const lines = resultText.split("\n").filter((l) => l.includes("|"));
+    if (lines.length < 2) return [];
+
+    let headerIdx = -1;
+    const HEADER_KW = ["room code", "generated room", "code", "id", "label", "name", "component", "type", "identifier", "tag", "drawing"];
+    for (let i = 0; i < lines.length; i++) {
+      const low = lines[i].toLowerCase();
+      if (HEADER_KW.some((k) => low.includes(k)) && (lines[i].match(/\|/g) || []).length >= 2) {
+        headerIdx = i;
+        break;
+      }
+    }
+    if (headerIdx === -1) return [];
+
+    const headers = lines[headerIdx].split("|").map((c) => c.trim().toLowerCase());
+    const pageCol = headers.findIndex((h) => h.includes("page") || h.includes("sheet"));
+    const bboxCol = headers.findIndex((h) => h.includes("bounding box") || h.includes("bbox") || h.includes("coordinates"));
+
+    const candidateColIndices: number[] = [];
+    const colPriority: Array<(h: string) => boolean> = [
+      (h) => h === "id" || h.includes("room code") || h.includes("generated room") || h.includes("room identifier") || ((h.includes("code") || h.includes("identifier") || h.includes("tag")) && !h.includes("drawing")),
+      (h) => h.includes("drawing code") || h.includes("drawing label") || (h.includes("label") && !h.includes("page")),
+      (h) => h.includes("component type") || h.includes("component"),
+      (h) => h === "name" || h.includes("name"),
+    ];
+
+    for (const matcher of colPriority) {
+      for (let ci = 0; ci < headers.length; ci++) {
+        if (matcher(headers[ci]) && !candidateColIndices.includes(ci) && ci !== pageCol) {
+          candidateColIndices.push(ci);
+        }
+      }
+    }
+
+    if (candidateColIndices.length === 0 && headers.length > 1) {
+      candidateColIndices.push(1);
+    }
+
+    const dataLines = lines.slice(headerIdx + 1).filter((l) => !l.match(/^[\s|:-]+$/));
+    const rows: OverlayRow[] = [];
+
+    for (const line of dataLines) {
+      const cells = line.split("|").map((c) => c.trim());
+      const candidates: string[] = [];
+      const seenCandidates = new Set<string>();
+      for (const ci of candidateColIndices) {
+        const val = cells[ci];
+        if (val && val !== "-" && !val.toLowerCase().includes("none") && !val.toLowerCase().includes("no instance") && val.length > 1) {
+          const normalized = normalizeText(val);
+          if (!seenCandidates.has(normalized)) {
+            seenCandidates.add(normalized);
+            candidates.push(val);
+          }
+        }
+      }
+      let pageNum = 1;
+      if (pageCol !== -1) {
+        const pv = parseInt(cells[pageCol] || "1", 10);
+        if (!isNaN(pv) && pv > 0) pageNum = pv;
+      }
+      let aiBBox: OverlayRow["aiBBox"] = undefined;
+      if (bboxCol !== -1) {
+        const bboxStr = cells[bboxCol] || "";
+        const bboxMatch = bboxStr.match(/\(?\s*(\d+)[,\s]+(\d+)\s*\)?\s*(?:→|->|—|–)\s*\(?\s*(\d+)[,\s]+(\d+)\s*\)?/);
+        if (bboxMatch) {
+          aiBBox = {
+            x1: parseInt(bboxMatch[1], 10),
+            y1: parseInt(bboxMatch[2], 10),
+            x2: parseInt(bboxMatch[3], 10),
+            y2: parseInt(bboxMatch[4], 10),
+          };
+        }
+      }
+      if (candidates.length > 0) {
+        rows.push({ candidates, pageNum, aiBBox });
+      }
+    }
+    return rows;
+  } catch {
+    return [];
+  }
+}
+
+function findMatchingOverlayRow(rows: OverlayRow[], targetId: string): OverlayRow | undefined {
+  return rows.find((row) => row.candidates.some((c) => matchesDetectionId(c, targetId)))
+    ?? rows.find((row) => row.candidates.some((c) => matchesDetectionId(c, targetId, true)));
+}
+
+function buildOverlaySearchCandidates(row: OverlayRow | undefined, instance: Pick<SummarizedInstance, "id" | "name">): string[] {
+  const values = [instance.id, ...(row?.candidates ?? []), instance.name];
+  const seen = new Set<string>();
+  const ordered: string[] = [];
+  for (const value of values) {
+    const trimmed = value?.trim();
+    if (!trimmed) continue;
+    const normalized = normalizeText(trimmed);
+    if (!normalized || seen.has(normalized)) continue;
+    seen.add(normalized);
+    ordered.push(trimmed);
+  }
+  return ordered;
+}
+
+// ---------------------------------------------------------------------------
+// Domain helpers
+// ---------------------------------------------------------------------------
+
 async function resolveCategory(awpClassName: string): Promise<string> {
   const { data: a } = await supabase.from("critical_assets").select("name").eq("name", awpClassName).maybeSingle();
   if (a) return "Critical Asset";
@@ -59,7 +191,6 @@ async function resolveCategory(awpClassName: string): Promise<string> {
   return "Asset";
 }
 
-/** Fetch default control names for an AWP class */
 async function fetchControlNames(awpClassName: string, category: string): Promise<string[]> {
   const sourceTable =
     category === "Critical Asset" ? "critical_assets" :
@@ -82,7 +213,6 @@ async function fetchControlNames(awpClassName: string, category: string): Promis
   return controls?.map((c) => c.name) || [];
 }
 
-/** Find the source file name for an instance by matching its ID in analysis results */
 async function findSourceFile(
   requestId: string,
   awpClassName: string,
@@ -104,94 +234,145 @@ async function findSourceFile(
       }
     }
   }
-
-  // Fallback: first file
   if (files.length > 0) {
     return { fileName: files[0].name, storagePath: files[0].storage_path };
   }
   return { fileName: "Unknown", storagePath: null };
 }
 
-/** Render a PDF page from storage, draw red circle on bbox, return PNG bytes */
-async function renderDrawingImage(
-  storagePath: string | null,
-  instanceId: string,
-  awpClassName: string,
-  requestId: string,
-  resultText: string | null,
-): Promise<Uint8Array | null> {
-  if (!storagePath) return null;
+// ---------------------------------------------------------------------------
+// Drawing render — uses viewer-parity overlay resolution + red translucent
+// circle that matches OverlayLayer (translucent fill, thin red outline,
+// minimum diameter 34 CSS px scaled, side * 1.5 sizing).
+// ---------------------------------------------------------------------------
 
+const EXPORT_SCALE = 1.5;
+// docx@9.6.1 ImageRun.transformation values are PIXELS (multiplied by 9525
+// to produce EMU). Verified in node_modules/docx/dist/index.cjs.
+const MAX_IMG_W_PX = 620; // ~6.5" at 96 DPI
+const MAX_IMG_H_PX = 720; // ~7.5" at 96 DPI — leaves room for the table
+
+// Cache PDF documents per storage_path within a single export run so we
+// don't re-download the same file for every detection.
+type PdfCache = Map<string, pdfjsLib.PDFDocumentProxy | null>;
+
+async function loadPdf(
+  storagePath: string,
+  bucket: string,
+  cache: PdfCache,
+): Promise<pdfjsLib.PDFDocumentProxy | null> {
+  if (cache.has(storagePath)) return cache.get(storagePath)!;
   try {
-    // Download the PDF from storage
-    const { data: fileData, error } = await supabase.storage
-      .from("drive-analysis-files")
-      .download(storagePath);
-    if (error || !fileData) return null;
-
+    const { data: fileData, error } = await supabase.storage.from(bucket).download(storagePath);
+    if (error || !fileData) {
+      cache.set(storagePath, null);
+      return null;
+    }
     const arrayBuffer = await fileData.arrayBuffer();
     const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+    cache.set(storagePath, pdf);
+    return pdf;
+  } catch (e) {
+    console.warn("Failed to load PDF for export:", storagePath, e);
+    cache.set(storagePath, null);
+    return null;
+  }
+}
 
-    // Find the page — try to extract page number from result_text
+async function renderDrawingImage(
+  storagePath: string | null,
+  instance: SummarizedInstance,
+  resultText: string | null,
+  sourceType: string | undefined,
+  pdfCache: PdfCache,
+): Promise<{ png: Uint8Array; width: number; height: number } | null> {
+  if (!storagePath) return null;
+
+  const bucket = sourceType === "manual_upload" ? "uploaded-drawings" : "drive-analysis-files";
+
+  try {
+    const pdf = await loadPdf(storagePath, bucket, pdfCache);
+    if (!pdf) return null;
+
+    // ---- Resolve overlay using the SAME priority as InstanceDetailModal ----
+    const rows = resultText ? parseOverlayCandidates(resultText) : [];
+    const matchingRow = findMatchingOverlayRow(rows, instance.id);
+    const hintPage = matchingRow?.pageNum;
+    const aiBBox = matchingRow?.aiBBox;
+    const searchCandidates = buildOverlaySearchCandidates(matchingRow, instance);
+
     let pageNum = 1;
-    if (resultText) {
-      const lines = resultText.split("\n").filter((l) => l.includes("|"));
-      for (const line of lines) {
-        if (line.includes(instanceId)) {
-          const pageMatch = line.match(/\|\s*(\d+)\s*\|/);
-          if (pageMatch) {
-            const parsed = parseInt(pageMatch[1], 10);
-            if (parsed > 0 && parsed <= pdf.numPages) pageNum = parsed;
-          }
-          break;
-        }
+    let bbox: [number, number, number, number] | null = null;
+    let coordSpace: "pixels" | "pdf-points" = "pixels";
+    let aiViewportWidth = 0; // for pixels-coord rescaling
+
+    if (aiBBox) {
+      pageNum = Math.min(hintPage ?? 1, pdf.numPages);
+      bbox = [aiBBox.x1, aiBBox.y1, aiBBox.x2, aiBBox.y2];
+      coordSpace = "pixels";
+      const refPage = await pdf.getPage(pageNum);
+      const refVp = refPage.getViewport({ scale: 4 });
+      aiViewportWidth = refVp.width;
+    } else {
+      let textBBox = null as null | { x1: number; y1: number; x2: number; y2: number; pageNum: number };
+      for (const candidate of searchCandidates) {
+        textBBox = await findBBoxInTextLayer(pdf, candidate, hintPage);
+        if (textBBox) break;
+      }
+      if (textBBox) {
+        pageNum = Math.min(textBBox.pageNum, pdf.numPages);
+        bbox = [textBBox.x1, textBBox.y1, textBBox.x2, textBBox.y2];
+        coordSpace = "pdf-points";
+      } else {
+        pageNum = Math.min(hintPage ?? 1, pdf.numPages);
+        bbox = null;
       }
     }
 
+    // ---- Render the page ----
     const page = await pdf.getPage(pageNum);
-    const scale = 1.5;
-    const viewport = page.getViewport({ scale });
+    const exportViewport = page.getViewport({ scale: EXPORT_SCALE });
 
     const canvas = document.createElement("canvas");
-    canvas.width = viewport.width;
-    canvas.height = viewport.height;
+    canvas.width = exportViewport.width;
+    canvas.height = exportViewport.height;
     const ctx = canvas.getContext("2d")!;
 
-    await page.render({ canvasContext: ctx, viewport, canvas } as any).promise;
+    await page.render({ canvasContext: ctx, viewport: exportViewport, canvas } as any).promise;
 
-    // Try to find bbox from result_text
-    if (resultText) {
-      const lines = resultText.split("\n").filter((l) => l.includes("|"));
-      for (const line of lines) {
-        if (line.includes(instanceId)) {
-          const bboxMatch = line.match(
-            /\(?\s*(\d+)[,\s]+(\d+)\s*\)?\s*(?:→|->|—|–|-)\s*\(?\s*(\d+)[,\s]+(\d+)\s*\)?/
-          );
-          if (bboxMatch) {
-            const x1 = parseInt(bboxMatch[1], 10) * scale;
-            const y1 = parseInt(bboxMatch[2], 10) * scale;
-            const x2 = parseInt(bboxMatch[3], 10) * scale;
-            const y2 = parseInt(bboxMatch[4], 10) * scale;
-            const cx = (x1 + x2) / 2;
-            const cy = (y1 + y2) / 2;
-            const r = Math.max(Math.abs(x2 - x1), Math.abs(y2 - y1)) / 2 + 15;
-
-            ctx.beginPath();
-            ctx.arc(cx, cy, r, 0, 2 * Math.PI);
-            ctx.strokeStyle = "red";
-            ctx.lineWidth = 4;
-            ctx.stroke();
-          }
-          break;
-        }
+    // ---- Draw red translucent circle (mirrors OverlayLayer) ----
+    if (bbox) {
+      const [x1, y1, x2, y2] = bbox;
+      let cx: number, cy: number, side: number;
+      if (coordSpace === "pixels") {
+        // bbox is in scale-4 pixels; rescale to current canvas
+        const k = exportViewport.width / aiViewportWidth;
+        cx = ((x1 + x2) / 2) * k;
+        cy = ((y1 + y2) / 2) * k;
+        side = Math.max(Math.abs(x2 - x1), Math.abs(y2 - y1)) * k;
+      } else {
+        // pdf-points → viewport
+        const [vx1, vy1, vx2, vy2] = exportViewport.convertToViewportRectangle([x1, y1, x2, y2]);
+        cx = (vx1 + vx2) / 2;
+        cy = (vy1 + vy2) / 2;
+        side = Math.max(Math.abs(vx2 - vx1), Math.abs(vy2 - vy1));
       }
+      const diameter = Math.max(34, side * 1.5);
+      ctx.beginPath();
+      ctx.arc(cx, cy, diameter / 2, 0, 2 * Math.PI);
+      ctx.fillStyle = "rgba(220, 38, 38, 0.22)";
+      ctx.fill();
+      ctx.strokeStyle = "rgb(220, 38, 38)";
+      ctx.lineWidth = 1.5;
+      ctx.stroke();
     }
 
     const blob = await new Promise<Blob | null>((resolve) =>
       canvas.toBlob((b) => resolve(b), "image/png", 0.85)
     );
     if (!blob) return null;
-    return new Uint8Array(await blob.arrayBuffer());
+    const png = new Uint8Array(await blob.arrayBuffer());
+    return { png, width: canvas.width, height: canvas.height };
   } catch (e) {
     console.warn("Failed to render drawing for export:", e);
     return null;
@@ -201,12 +382,17 @@ async function renderDrawingImage(
 // ---------------------------------------------------------------------------
 // Main Export Function
 // ---------------------------------------------------------------------------
+//
+// Signature note: `onProgress` keeps its original 4th-arg position. `sourceType`
+// is appended as the 5th arg so existing call sites (3 or 4 positional args)
+// continue to work without changes.
 
 export async function generateAnalysisDocx(
   requestId: string,
   summaryData: Record<string, SummarizedInstance[]>,
   projectName: string,
   onProgress?: (done: number, total: number) => void,
+  sourceType?: string,
 ): Promise<Blob> {
   // 1. Gather all files for this request
   const { data: filesData } = await supabase
@@ -253,27 +439,24 @@ export async function generateAnalysisDocx(
   const rows: InstanceExportRow[] = [];
   const categoryCache: Record<string, string> = {};
   const controlsCache: Record<string, string[]> = {};
+  const pdfCache: PdfCache = new Map();
 
   for (let i = 0; i < allInstances.length; i++) {
     const { awpClassName, instance } = allInstances[i];
     onProgress?.(i, totalDetections);
 
-    // Category
     if (!categoryCache[awpClassName]) {
       categoryCache[awpClassName] = await resolveCategory(awpClassName);
     }
     const type = categoryCache[awpClassName];
 
-    // Controls
     if (!controlsCache[awpClassName]) {
       controlsCache[awpClassName] = await fetchControlNames(awpClassName, type);
     }
     const controls = controlsCache[awpClassName];
 
-    // Source file
     const sourceFile = await findSourceFile(requestId, awpClassName, instance.id, files);
 
-    // Find result_text for this instance
     let resultText: string | null = null;
     if (allResults) {
       for (const r of allResults) {
@@ -284,18 +467,15 @@ export async function generateAnalysisDocx(
       }
     }
 
-    // Render drawing image
     const drawingImage = await renderDrawingImage(
       sourceFile.storagePath,
-      instance.id,
-      awpClassName,
-      requestId,
+      instance,
       resultText,
+      sourceType,
+      pdfCache,
     );
 
-    // Build display ID
     const prefix = prefixMap[awpClassName] || awpClassName.replace(/[^a-zA-Z]/g, "").substring(0, 3).toUpperCase();
-    // Use the instance.id as-is (it's already something like "SWC-901")
     const displayId = instance.id;
 
     rows.push({
@@ -324,6 +504,7 @@ export async function generateAnalysisDocx(
 
   const buildInfoRow = (label: string, value: string) =>
     new DocxTableRow({
+      cantSplit: true, // best-effort: keep a single row from breaking across pages
       children: [
         new DocxTableCell({
           borders: cellBorders,
@@ -378,31 +559,41 @@ export async function generateAnalysisDocx(
 
     const children: (Paragraph | DocxTable)[] = [];
 
-    // Page break before all except first
+    // Hard guarantee: every detection after the first starts on a new page.
     if (idx > 0) {
       children.push(new Paragraph({ children: [new PageBreak()] }));
     }
 
     children.push(tableElement);
 
-    // Add drawing image if available
     if (row.drawingImage) {
-      children.push(new Paragraph({ spacing: { before: 200 } }));
+      // Spacer with keepNext to push Word to keep the image with the table
+      // when content fits (best-effort — Word may still overflow if too tall).
+      children.push(
+        new Paragraph({
+          spacing: { before: 200 },
+          keepNext: true,
+        })
+      );
 
-      // Scale image to fit page width (9360 DXA = ~6.5 inches = ~468pt)
-      // Keep aspect ratio — cap at ~468px wide and ~600px tall
-      const maxWidth = 468;
-      const maxHeight = 550;
+      // Proportional sizing in PIXELS (docx@9.6.1 transformation unit).
+      const ratio = row.drawingImage.width / row.drawingImage.height;
+      let w = MAX_IMG_W_PX;
+      let h = MAX_IMG_W_PX / ratio;
+      if (h > MAX_IMG_H_PX) {
+        h = MAX_IMG_H_PX;
+        w = MAX_IMG_H_PX * ratio;
+      }
 
-      // We don't know actual dimensions from PNG bytes, so use maxWidth and let aspect ratio be approximate
       children.push(
         new Paragraph({
           alignment: AlignmentType.CENTER,
+          keepLines: true,
           children: [
             new ImageRun({
               type: "png",
-              data: row.drawingImage,
-              transformation: { width: maxWidth, height: maxHeight },
+              data: row.drawingImage.png,
+              transformation: { width: Math.round(w), height: Math.round(h) },
               altText: {
                 title: `Drawing for ${row.displayId}`,
                 description: `Source drawing showing ${row.displayName} detection`,
