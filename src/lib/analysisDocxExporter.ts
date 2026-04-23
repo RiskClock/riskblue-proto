@@ -43,6 +43,9 @@ interface InstanceExportRow {
   controls: string[];
   fileName: string;
   drawingImage: { png: Uint8Array; width: number; height: number } | null;
+  // True when the image was rendered but no bbox could be resolved, so no
+  // red circle is drawn. Used to show a fallback caption under the image.
+  drawingWithoutHighlight: boolean;
 }
 
 // ---------------------------------------------------------------------------
