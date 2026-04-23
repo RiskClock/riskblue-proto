@@ -506,7 +506,10 @@ export async function generateAnalysisDocx(
       pipeDiameterMM: instance.pipe_diameter_mm,
       controls,
       fileName: sourceFile.fileName,
-      drawingImage,
+      drawingImage: drawingImage
+        ? { png: drawingImage.png, width: drawingImage.width, height: drawingImage.height }
+        : null,
+      drawingWithoutHighlight: !!drawingImage && !drawingImage.hasHighlight,
     });
   }
 
