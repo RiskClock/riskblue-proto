@@ -4442,6 +4442,7 @@ export function AnalysisSection({ requestId, files, projectId, sourceType, isWMS
       {previewFile && (
         <FilePreviewModal
           file={previewFile}
+          sourceType={sourceType}
           onClose={() => setPreviewFile(null)}
         />
       )}
@@ -4468,6 +4469,7 @@ export function AnalysisSection({ requestId, files, projectId, sourceType, isWMS
           resultText={rawResultModal.resultText}
           instanceCount={rawResultModal.instanceCount}
           sourceFile={rawResultModal.sourceFile}
+          sourceType={sourceType}
           onClose={() => setRawResultModal(null)}
         />
       )}
@@ -4490,6 +4492,7 @@ export function AnalysisSection({ requestId, files, projectId, sourceType, isWMS
             awpClassName={awpClassName}
             sourceFile={sourceFile}
             resultText={sourceResult?.result_text || undefined}
+            sourceType={sourceType}
             onClose={() => setSelectedInstance(null)}
           />
         );
