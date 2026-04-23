@@ -310,7 +310,11 @@ export const DrawingViewer = forwardRef<DrawingViewerApi, DrawingViewerProps>(
               doubleClick={{ disabled: false, step: 0.5 }}
               pinch={{ step: 5 }}
               panning={{ velocityDisabled: true }}
-              onTransformed={onTransformed}
+              onTransform={handleTransform}
+              onZoomStop={handleSettle}
+              onPanningStop={handleSettle}
+              onWheelStop={handleSettle}
+              onPinchingStop={handleSettle}
             >
               <TransformComponent
                 wrapperStyle={{ width: "100%", height: "100%" }}
