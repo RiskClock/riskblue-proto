@@ -20,6 +20,7 @@ import InternalAnalysisQueue from "./pages/InternalAnalysisQueue";
 import AnalysisRequestDetail from "./pages/AnalysisRequestDetail";
 import Controls from "./pages/Controls";
 import WMSVProject from "./pages/WMSVProject";
+import InternalViewerTest from "./pages/InternalViewerTest";
 import CheckoutReturn from "./pages/CheckoutReturn";
 import NotFound from "./pages/NotFound";
 import { Loader2 } from "lucide-react";
@@ -63,6 +64,7 @@ const App = () => (
             <Route path="/controls" element={<ProtectedRoute><Controls /></ProtectedRoute>} />
             <Route path="/internal/analysis-queue" element={<ProtectedRoute><InternalAnalysisQueue /></ProtectedRoute>} />
             <Route path="/internal/analysis-queue/:requestId" element={<ProtectedRoute><AnalysisRequestDetail /></ProtectedRoute>} />
+            <Route path="/internal/viewer-test" element={<ProtectedRoute><InternalViewerTest /></ProtectedRoute>} />
             <Route path="/accept-invite" element={<AcceptInvite />} />
             <Route path="/oauth/callback" element={<OAuthCallback />} />
             <Route path="/connect/google-drive" element={<GoogleDriveConnect />} />
