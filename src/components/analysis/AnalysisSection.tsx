@@ -578,28 +578,34 @@ interface RawResultModalProps {
 }
 
 function RawResultModal({ fileName, awpClassName, resultText, instanceCount, sourceFile, sourceType, onClose }: RawResultModalProps) {
-  const [pages, setPages] = useState<HTMLCanvasElement[]>([]);
-  const [pdfLoading, setPdfLoading] = useState(false);
-  const [pdfError, setPdfError] = useState<string | null>(null);
-  const [zoom, setZoom] = useState(1);
-  const [bboxCount, setBboxCount] = useState(0);
-  const pdfContainerRef = useRef<HTMLDivElement>(null);
-  const pdfScrollRef = useRef<HTMLDivElement>(null);
+  // Resolve overlays once: build OverlayInputs in document coordinates so the
+  // shared DrawingViewer owns rendering, interaction, and fit math. Stacked
+  // multi-page behavior is preserved via layout="stacked-pages".
+  const [resolveLoading, setResolveLoading] = useState(false);
+  const [resolveError, setResolveError] = useState<string | null>(null);
+  const [overlays, setOverlays] = useState<OverlayInput[]>([]);
 
-  // Load PDF from storage and draw bounding boxes
+  const bucket = sourceType === "manual_upload" ? "uploaded-drawings" : "drive-analysis-files";
+  const storagePath = sourceFile?.storage_path ?? null;
+
+  const source: DocumentSourceDescriptor | null = useMemo(() => {
+    if (!storagePath) return null;
+    return { kind: "supabase-storage", bucket, path: storagePath };
+  }, [bucket, storagePath]);
+
   useEffect(() => {
-    const storagePath = sourceFile?.storage_path;
-    if (!storagePath) { setPdfError("Drawing not available"); return; }
+    if (!storagePath) {
+      setOverlays([]);
+      setResolveError(null);
+      return;
+    }
     let cancelled = false;
-    setPdfLoading(true);
-    setPdfError(null);
-    setPages([]);
-    setZoom(1);
-    setBboxCount(0);
+    setResolveLoading(true);
+    setResolveError(null);
+    setOverlays([]);
 
     (async () => {
       try {
-        const bucket = sourceType === "manual_upload" ? "uploaded-drawings" : "drive-analysis-files";
         const { data: blob, error: dlErr } = await supabase.storage
           .from(bucket)
           .download(storagePath);
@@ -609,138 +615,73 @@ function RawResultModal({ fileName, awpClassName, resultText, instanceCount, sou
         const pdf = await pdfjsLib.getDocument({ data: ab }).promise;
         if (cancelled) return;
 
-        // Parse overlay candidates from AI result text (multi-candidate per row)
         const overlayRows = resultText ? parseOverlayCandidates(resultText) : [];
-        console.log(`[RawResultModal] Found ${overlayRows.length} overlay rows:`, overlayRows.map(r => ({ candidates: r.candidates, aiBBox: r.aiBBox })));
+        // Cache per-page viewport at scale=4 to match the legacy AI raster
+        // resolution, so AI pixel bboxes map 1:1.
+        const viewportCache = new Map<number, any>();
+        const getViewport = async (pageNum: number) => {
+          const cached = viewportCache.get(pageNum);
+          if (cached) return cached;
+          const safePage = Math.min(Math.max(1, pageNum), pdf.numPages);
+          const page = await pdf.getPage(safePage);
+          const vp = page.getViewport({ scale: 4 });
+          viewportCache.set(safePage, vp);
+          return vp;
+        };
 
-        // Build circle data: prefer AI bounding box, fall back to text-layer search
-        interface CircleData { cx: number; cy: number; radius: number; pageNum: number; source: "ai" | "text" }
-        const circles: CircleData[] = [];
+        const built: OverlayInput[] = [];
+        let idx = 0;
         for (const row of overlayRows) {
+          const pageNum = Math.min(Math.max(1, row.pageNum), pdf.numPages);
           if (row.aiBBox) {
-            // AI bbox is in pixel coordinates of the image sent to OpenAI
-            const { x1, y1, x2, y2 } = row.aiBBox;
-            circles.push({
-              cx: (x1 + x2) / 2,
-              cy: (y1 + y2) / 2,
-              radius: Math.max(Math.abs(x2 - x1), Math.abs(y2 - y1)) / 2 + 30,
-              pageNum: row.pageNum,
-              source: "ai",
+            const vp = await getViewport(pageNum);
+            if (cancelled) return;
+            built.push({
+              id: `raw-${idx++}`,
+              page: pageNum,
+              bbox: [row.aiBBox.x1, row.aiBBox.y1, row.aiBBox.x2, row.aiBBox.y2],
+              coordSpace: "pixels",
+              pixelSize: { w: vp.width, h: vp.height },
+              color: "hsl(var(--destructive))",
             });
           } else {
-            // Fall back to text-layer search
-            let found = false;
+            // Text-layer fallback: try candidates until one matches
             for (const candidate of row.candidates) {
-              const bbox = await findBBoxInTextLayer(pdf, candidate, row.pageNum);
-              if (bbox) {
-                circles.push({ cx: 0, cy: 0, radius: 0, pageNum: bbox.pageNum ?? row.pageNum, source: "text", ...bbox } as any);
-                // We'll convert text-layer bboxes during rendering
-                found = true;
+              const tb = await findBBoxInTextLayer(pdf, candidate, pageNum);
+              if (cancelled) return;
+              if (tb) {
+                const tbPage = Math.min(Math.max(1, tb.pageNum ?? pageNum), pdf.numPages);
+                const vp = await getViewport(tbPage);
+                if (cancelled) return;
+                built.push({
+                  id: `raw-${idx++}`,
+                  page: tbPage,
+                  bbox: [tb.x1, tb.y1, tb.x2, tb.y2],
+                  coordSpace: "pdf-points",
+                  pdfViewport: vp,
+                  color: "hsl(var(--destructive))",
+                });
                 break;
               }
-              if (cancelled) return;
             }
-            if (!found) console.log(`[RawResultModal] No match for candidates:`, row.candidates);
           }
         }
-        console.log(`[RawResultModal] Found ${circles.length} circle locations`);
-        setBboxCount(circles.length);
-
-        // Render pages with circle overlays
-        const maxPages = Math.min(pdf.numPages, 20);
-        const canvases: HTMLCanvasElement[] = [];
-        for (let i = 1; i <= maxPages; i++) {
-          const page = await pdf.getPage(i);
-          const scale = 4; // high-res for bbox precision
-          const viewport = page.getViewport({ scale });
-          const canvas = document.createElement("canvas");
-          canvas.width = viewport.width;
-          canvas.height = viewport.height;
-          const ctx = canvas.getContext("2d")!;
-          await page.render({ canvasContext: ctx, viewport, canvas } as any).promise;
-          if (cancelled) return;
-
-          // AI image dimensions: the image sent to OpenAI is the PDF page rendered at scale 4
-          const aiImageW = viewport.width;
-          const aiImageH = viewport.height;
-
-          // Draw circles for this page
-          const pageCircles = circles.filter(c => c.pageNum === i);
-          for (const circle of pageCircles) {
-            let cx: number, cy: number, radius: number;
-            if (circle.source === "ai") {
-              // AI coordinates are in the original image pixel space
-              // Scale from AI image to canvas (both are scale=4, so 1:1 mapping)
-              cx = (circle.cx / aiImageW) * viewport.width;
-              cy = (circle.cy / aiImageH) * viewport.height;
-              radius = (circle.radius / Math.max(aiImageW, aiImageH)) * Math.max(viewport.width, viewport.height);
-              // Ensure minimum radius
-              radius = Math.max(radius, 40);
-            } else {
-              // Text-layer fallback: circle has bbox coords stored
-              const bbox = circle as any;
-              const rect = viewport.convertToViewportRectangle([bbox.x1, bbox.y1, bbox.x2, bbox.y2]);
-              const [vx1, vy1, vx2, vy2] = rect;
-              const x = Math.min(vx1, vx2);
-              const y = Math.min(vy1, vy2);
-              const w = Math.abs(vx2 - vx1);
-              const h = Math.abs(vy2 - vy1);
-              cx = x + w / 2;
-              cy = y + h / 2;
-              radius = Math.max(w, h) / 2 + 80;
-            }
-
-            ctx.beginPath();
-            ctx.arc(cx, cy, radius, 0, Math.PI * 2);
-            ctx.fillStyle = "rgba(239, 68, 68, 0.15)";
-            ctx.fill();
-            ctx.strokeStyle = "rgba(239, 68, 68, 0.9)";
-            ctx.lineWidth = 3;
-            ctx.stroke();
-          }
-
-          canvases.push(canvas);
-        }
-        setPages(canvases);
+        if (cancelled) return;
+        setOverlays(built);
       } catch (e) {
-        if (!cancelled) setPdfError("Could not render drawing.");
+        if (!cancelled) {
+          console.error("RawResultModal resolve error:", e);
+          setResolveError("Could not render drawing.");
+        }
       } finally {
-        if (!cancelled) setPdfLoading(false);
+        if (!cancelled) setResolveLoading(false);
       }
     })();
+
     return () => { cancelled = true; };
-  }, [sourceFile?.storage_path, resultText, sourceType]);
+  }, [storagePath, bucket, resultText]);
 
-  // Mount canvases into container
-  useEffect(() => {
-    if (!pdfContainerRef.current || pages.length === 0) return;
-    const container = pdfContainerRef.current;
-    container.innerHTML = "";
-    for (const canvas of pages) {
-      canvas.style.display = "block";
-      canvas.style.maxWidth = "100%";
-      canvas.style.height = "auto";
-      canvas.style.marginBottom = "8px";
-      container.appendChild(canvas);
-    }
-  }, [pages]);
-
-  const handleZoom = (delta: number) => {
-    const scroll = pdfScrollRef.current;
-    if (!scroll) { setZoom(z => Math.min(8, Math.max(1, z + delta))); return; }
-    const cx = scroll.scrollWidth > 0 ? (scroll.scrollLeft + scroll.clientWidth / 2) / scroll.scrollWidth : 0.5;
-    const cy = scroll.scrollHeight > 0 ? (scroll.scrollTop + scroll.clientHeight / 2) / scroll.scrollHeight : 0.5;
-    setZoom(prev => {
-      const next = Math.min(8, Math.max(1, prev + delta));
-      requestAnimationFrame(() => {
-        scroll.scrollLeft = cx * scroll.scrollWidth - scroll.clientWidth / 2;
-        scroll.scrollTop = cy * scroll.scrollHeight - scroll.clientHeight / 2;
-      });
-      return next;
-    });
-  };
-
-  const rawMapNav = useMapNavigation({ zoom, setZoom, minZoom: 1, maxZoom: 8, containerRef: pdfScrollRef });
+  const bboxCount = overlays.length;
 
   return (
     <Dialog open onOpenChange={(open) => { if (!open) onClose(); }}>
@@ -753,34 +694,30 @@ function RawResultModal({ fileName, awpClassName, resultText, instanceCount, sou
           </p>
         </DialogHeader>
         <div className="flex flex-1 gap-3 min-h-0 overflow-hidden">
-          {/* Left: Drawing viewer */}
+          {/* Left: Drawing viewer (stacked pages, owned by shared viewer) */}
           <div className="flex-[6] flex flex-col min-w-0 border rounded-lg overflow-hidden bg-muted/30">
-            <div className="h-10 flex-shrink-0 flex items-center justify-between px-3 border-b bg-background">
-              <span className="text-xs text-muted-foreground truncate">Drawing Preview</span>
-              <div className="flex items-center gap-1">
-                <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => handleZoom(-0.25)} disabled={zoom <= 1}>
-                  <ZoomOut className="w-3.5 h-3.5" />
-                </Button>
-                <span className="text-xs w-10 text-center">{Math.round(zoom * 100)}%</span>
-                <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => handleZoom(0.25)} disabled={zoom >= 8}>
-                  <ZoomIn className="w-3.5 h-3.5" />
-                </Button>
+            {!source ? (
+              <div className="flex items-center justify-center h-full text-xs text-muted-foreground">
+                Drawing not available
               </div>
-            </div>
-            <div ref={pdfScrollRef} className="flex-1 overflow-auto p-2" style={rawMapNav.containerStyle} {...rawMapNav.handlers}>
-              {pdfLoading ? (
-                <div className="flex items-center justify-center h-full">
-                  <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
-                </div>
-              ) : pdfError ? (
-                <div className="flex items-center justify-center h-full text-xs text-muted-foreground">{pdfError}</div>
-              ) : (
-                <div
-                  ref={pdfContainerRef}
-                  style={{ transform: `scale(${zoom})`, transformOrigin: "top left" }}
-                />
-              )}
-            </div>
+            ) : resolveError ? (
+              <div className="flex items-center justify-center h-full text-xs text-destructive">
+                {resolveError}
+              </div>
+            ) : resolveLoading ? (
+              <div className="flex items-center justify-center h-full">
+                <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
+              </div>
+            ) : (
+              <DrawingViewer
+                source={source}
+                layout="stacked-pages"
+                overlays={overlays}
+                initialFit="page"
+                minScale={0.5}
+                maxScale={8}
+              />
+            )}
           </div>
           {/* Right: AI response text */}
           <div className="flex-[4] flex flex-col min-w-0 border rounded-lg overflow-hidden">
