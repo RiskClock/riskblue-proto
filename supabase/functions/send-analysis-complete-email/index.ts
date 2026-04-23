@@ -44,10 +44,11 @@ serve(async (req) => {
     const appUrl = Deno.env.get("APP_URL") || "https://app.riskblue.com";
     const admin = createClient(supabaseUrl, serviceKey);
 
-    // Fetch the analysis request + project
+    // Fetch the analysis request + project (include summary_data so the email
+    // reflects the deduplicated instance counts produced by Phase 4 — Summarize).
     const { data: request, error: reqError } = await admin
       .from("analysis_requests")
-      .select("id, user_id, project_id, file_count")
+      .select("id, user_id, project_id, file_count, summary_data")
       .eq("id", analysisRequestId)
       .single();
 
@@ -89,20 +90,38 @@ serve(async (req) => {
       : `/project/${request.project_id}`;
     const projectUrl = `${appUrl.replace(/\/$/, "")}${projectPath}`;
 
-    // Aggregate AWP class counts from analysis_results
-    const { data: results } = await admin
-      .from("analysis_results")
-      .select("awp_class_name, status")
-      .eq("analysis_request_id", analysisRequestId)
-      .eq("status", "complete");
+    // Prefer the deduplicated summary_data (one row per AWP class with a unique
+    // instance count). Fall back to raw analysis_results if summary is missing.
+    const summaryData =
+      ((request as any).summary_data as Record<string, unknown[]> | null) || {};
+    const summaryEntries = Object.entries(summaryData).filter(
+      ([, instances]) => Array.isArray(instances),
+    );
 
-    const countsMap = new Map<string, number>();
-    for (const r of results || []) {
-      countsMap.set(r.awp_class_name, (countsMap.get(r.awp_class_name) || 0) + 1);
+    let awpCounts: AwpCount[];
+    if (summaryEntries.length > 0) {
+      awpCounts = summaryEntries
+        .map(([awp_class_name, instances]) => ({
+          awp_class_name,
+          count: (instances as unknown[]).length,
+        }))
+        .filter((c) => c.count > 0)
+        .sort((a, b) => b.count - a.count);
+    } else {
+      // Fallback: raw analysis_results row counts (pre-dedup)
+      const { data: results } = await admin
+        .from("analysis_results")
+        .select("awp_class_name, status")
+        .eq("analysis_request_id", analysisRequestId)
+        .eq("status", "complete");
+      const countsMap = new Map<string, number>();
+      for (const r of results || []) {
+        countsMap.set(r.awp_class_name, (countsMap.get(r.awp_class_name) || 0) + 1);
+      }
+      awpCounts = Array.from(countsMap.entries())
+        .map(([awp_class_name, count]) => ({ awp_class_name, count }))
+        .sort((a, b) => b.count - a.count);
     }
-    const awpCounts: AwpCount[] = Array.from(countsMap.entries())
-      .map(([awp_class_name, count]) => ({ awp_class_name, count }))
-      .sort((a, b) => b.count - a.count);
 
     const totalInstances = awpCounts.reduce((sum, c) => sum + c.count, 0);
     const totalClasses = awpCounts.length;
@@ -142,13 +161,13 @@ serve(async (req) => {
                 <p style="margin:0 0 24px;color:#475569;font-size:14px;line-height:1.6;">
                   Your drawing analysis for <strong style="color:#1e293b;">${escapeHtml(projectName)}</strong> is complete.
                   We detected <strong style="color:#1e293b;">${totalInstances} instance${totalInstances === 1 ? "" : "s"}</strong>
-                  across <strong style="color:#1e293b;">${totalClasses} AWP class${totalClasses === 1 ? "" : "es"}</strong>.
+                  across <strong style="color:#1e293b;">${totalClasses} asset and water system class${totalClasses === 1 ? "" : "es"}</strong>.
                 </p>
 
                 <table width="100%" cellpadding="0" cellspacing="0" style="border:1px solid #e5e7eb;border-radius:8px;overflow:hidden;margin-bottom:28px;">
                   <thead>
                     <tr style="background-color:#f8fafc;">
-                      <th align="left" style="padding:12px 14px;color:#475569;font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:0.05em;border-bottom:1px solid #e5e7eb;">AWP Class</th>
+                      <th align="left" style="padding:12px 14px;color:#475569;font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:0.05em;border-bottom:1px solid #e5e7eb;">Asset / Water System Class</th>
                       <th align="right" style="padding:12px 14px;color:#475569;font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:0.05em;border-bottom:1px solid #e5e7eb;">Instances</th>
                     </tr>
                   </thead>
