@@ -1,86 +1,98 @@
+# Refactor drawing modals to a shared, library-based viewer
 
-Goal
+## Guiding principles
+- **Preserve product behavior**: do not change any modal's UX as part of this refactor. Behavior changes (e.g., RawResultModal page-by-page) are deferred decisions.
+- **Transform state is the single source of truth**: pan/zoom state lives in `react-zoom-pan-pinch`. No `scrollLeft`/`scrollTop` navigation model. No modal-owned anchoring math after migration.
+- **Adaptive PDF raster**: CSS transform during interaction; reraster only after transform settles, only for PDF sources, with capped DPR + total pixel budget.
+- **Overlays in document coordinates**: overlays live inside the transformed surface so geometric alignment holds across zoom/pan (not pixel-perfect at every scale, but geometrically correct).
+- **Centralized coordinate normalization**: 0..1 normalized, PDF-point, and page-indexed overlays handled in shared utilities — never in modals.
+- **Delete `useMapNavigation` only after** all consumers are migrated.
 
-Fix the repeated manual-upload failure, then change the local upload UX so clicking Upload immediately closes the review modal, switches the project into an importing state, and continues the file transfer asynchronously.
+## Goal
+Replace the custom scroll-based zoom/pan implementation (`useMapNavigation`) across all drawing modals with a single shared viewer built on `react-zoom-pan-pinch` + `pdfjs`. Eliminate per-zoom PDF rerasterization, share overlay/fit-to-selection logic, and make UX consistent — without changing per-modal behavior in this pass.
 
-Deep investigation findings
+## Scope: modals to migrate
+1. `FileViewerModal` (wizard) — multi-page PDF + overlays — **migrate first** (highest visible interaction pain)
+2. `InstanceDetailModal` (in `AnalysisSection.tsx`) — selection/fit-to-bbox
+3. `LocationDetailsModal` (wizard) — selection/fit-to-bbox
+4. `RawResultModal` (in `AnalysisSection.tsx`) — split-pane source PDF + AI text; **keep stacked-pages behavior** initially
+5. `FilePreviewModal` (in `AnalysisSection.tsx`) — simple file preview
 
-1. The real upload failure is the storage RLS policy on `uploaded-drawings`, not the modal.
-   - The live policy currently resolves the folder check from `storage.foldername(p.name)` / `storage.foldername(projects.name)`.
-   - That means it is reading the project title column, not the storage object path, so normal uploads fail with `new row violates row-level security policy`.
+## Shared architecture
 
-2. The recent “fix” migration is still logically wrong in Postgres.
-   - Even though the SQL text uses `storage.foldername(name)`, inside the subquery `name` gets captured by `projects.name` / `p.name`.
-   - The policy must explicitly reference the storage row’s column, e.g. `storage.foldername(objects.name)`.
+```text
+src/components/viewer/
+  DrawingViewer.tsx       <-- shell: TransformWrapper + toolbar + overlays; supports single-page OR stacked-pages mode
+  DocumentSurface.tsx     <-- pdfjs raster OR <img>; adaptive reraster on settle
+  OverlayLayer.tsx        <-- bboxes/labels in document/page coordinates; lives inside TransformComponent
+  ViewerToolbar.tsx       <-- zoom in/out, reset, fit page, fit selection, page nav
+  hooks/
+    useDocumentSource.ts  <-- unify Drive / Supabase (uploaded-drawings vs drive-analysis-files) / blob URL loading
+    usePdfPageRaster.ts   <-- base raster; settle-based high-DPI reraster with capped budget
+    useFitToSelection.ts  <-- compute transform from a target bbox via the rzpp API
+  viewerGeometry.ts       <-- bbox normalization (0..1, PDF points, page-indexed) + transform math
+```
 
-3. There are overlapping legacy policies still active on `storage.objects` for `uploaded-drawings`.
-   - Old owner-only policies and newer member policies are both present.
-   - This makes access behavior hard to reason about and should be cleaned up before anything else.
+### `DrawingViewer` API
+```ts
+<DrawingViewer
+  source={{ kind: 'pdf' | 'image', blob | url, accessToken? }}
+  layout="single-page" | "stacked-pages"   // preserves RawResultModal behavior
+  page?={1}                                 // single-page mode
+  overlays={[{ id, bbox, page?, coordSpace: 'normalized' | 'pdf-points', color, label }]}
+  selection?={bboxId | bbox}                // drives fit-to-selection
+  initialFit="page" | "selection" | "actual"
+  minScale={0.5} maxScale={8}
+  toolbar={{ pageNav, fit, zoomButtons }}
+  onReady={(api) => ...}                    // exposes zoomTo, fitToBox, getTransform
+/>
+```
 
-4. The current local upload flow is fully blocking.
-   - `src/components/WMSVProjectDetail.tsx` keeps the modal open and awaits every storage upload and DB insert before closing.
-   - So it cannot behave like a background import yet.
+### Adaptive raster strategy (PDF only)
+- One base raster per page at a moderate scale (e.g., devicePixelRatio-aware base).
+- During wheel/pinch/drag: **no reraster**, CSS transform only.
+- After `onTransformed` quiet period (~250ms) AND scale exceeds a threshold: reraster the visible page(s) at higher DPI.
+- Cap requested resolution by:
+  - max effective DPR (e.g., 3)
+  - max total pixel budget per page (e.g., 16M px)
+  - skip reraster entirely if computed size exceeds budget
+- Image sources: never reraster.
 
-5. Collaborator access is still inconsistent for request visibility.
-   - `analysis_requests` INSERT/UPDATE allow project members, but SELECT is still owner/internal only.
-   - That can break status refresh/polling for collaborators.
+### State model
+- All pan/zoom comes from `react-zoom-pan-pinch` transform state.
+- No modal reads or writes `scrollLeft`/`scrollTop`.
+- Fit-to-selection computes a target `{x, y, scale}` and calls the rzpp API (`setTransform`/`zoomToElement`).
 
-Implementation plan
+### Overlay alignment
+- Overlays declared in document coordinates (normalized 0..1 OR PDF points + page index).
+- Rendered as absolutely-positioned elements inside `TransformComponent` so they share the same transform as the page.
+- Acceptance is **geometric alignment** across zoom/pan — not pixel-perfect at every scale.
 
-1. Fix the storage policies correctly
-   - Create one cleanup migration that drops all `uploaded-drawings` policies, including the old owner-only rules and the malformed member rules.
-   - Recreate a single authoritative set of INSERT/SELECT/UPDATE/DELETE policies for `uploaded-drawings`.
-   - Use an explicit reference to the storage object path (`objects.name`) so the project id is read from `{project_id}/{request_id}/{file}` correctly.
-   - Keep access for project owner, project members, and internal users.
+## Per-modal migration (behavior-preserving)
 
-2. Align request/file RLS for the upload workflow
-   - Update `analysis_requests` SELECT so project members can read the request they are allowed to update.
-   - Add a project-member UPDATE policy to `analysis_request_files` if placeholder file rows are used during upload progress.
-   - Keep all rules scoped to the project via `project_id` / `analysis_request_id`.
+| Modal | Layout mode | Selection | Notes |
+|---|---|---|---|
+| FileViewerModal | single-page (current) | n/a | Toolbar gets page chevrons; first migration target |
+| InstanceDetailModal | single-page | yes | Preserve "fit selection" auto-zoom behavior |
+| LocationDetailsModal | single-page | yes | Preserve detection bbox initial fit |
+| RawResultModal | **stacked-pages** | n/a | Preserve current stacked behavior; only the PDF pane uses `DrawingViewer` |
+| FilePreviewModal | single-page or image | n/a | Source kind switches `pdf` vs `image` |
 
-3. Refactor manual upload into an async post-confirm flow
-   - In `src/components/WMSVProjectDetail.tsx`, change Upload button behavior to:
-     - capture selected files
-     - close the review modal immediately
-     - clear pending modal state
-     - set the request status to `pending`/`copying`
-     - start the upload task without awaiting it from the button click
-   - Insert placeholder `analysis_request_files` rows first with `copy_status: 'pending'` so the file list appears immediately.
-   - Upload files in the background from the page session, then update each row to `copied` or `failed`.
-   - Finalize the request with updated `file_count`, `total_size_bytes`, and final status (`copied` or `failed`).
+## Migration order
+1. Build shared viewer (`DrawingViewer`, `DocumentSurface`, `OverlayLayer`, `ViewerToolbar`, hooks, geometry utils). Add `react-zoom-pan-pinch`.
+2. Migrate **FileViewerModal** (highest interaction pain) — validate base viewer, raster strategy, page nav.
+3. Migrate **InstanceDetailModal** — validate selection-fit + overlays.
+4. Migrate **LocationDetailsModal** — same selection-fit path.
+5. Migrate **RawResultModal** in `stacked-pages` mode — preserve current UX.
+6. Migrate **FilePreviewModal**.
+7. Verify zero remaining consumers, then delete `useMapNavigation.ts` and remove modal-local bbox/zoom math.
 
-4. Update the status UX
-   - Reuse the existing status badge/progress UI in `WMSVProjectDetail`.
-   - As soon as Upload is clicked, show “Importing Files” instead of leaving the project in “Awaiting File Upload”.
-   - If any file fails, surface the first error in `error_message` and show a partial-failure toast.
-   - If all succeed, transition to “Ready for Analysis”.
-
-5. Remove duplicated risky upload logic
-   - Extract the local manual-upload workflow into a shared helper/hook so the same fixed behavior can be reused in:
-     - `src/components/WMSVProjectDetail.tsx`
-     - `src/pages/AnalysisRequestDetail.tsx`
-     - `src/components/WMSVCreateProjectModal.tsx`
-     - `src/components/analysis/CreateAnalysisModal.tsx`
-     - `src/pages/ProjectWizard.tsx`
-   - This prevents the same RLS and blocking-flow bug from resurfacing in other entry points.
-
-Technical details
-
-Files likely involved
-- `supabase/migrations/<new_migration>.sql`
-- `src/components/WMSVProjectDetail.tsx`
-- `src/components/UploadReviewModal.tsx`
-- likely a new shared uploader helper/hook under `src/hooks/` or `src/lib/`
-
-Important design choice
-- For computer uploads, true server-side backgrounding is not possible until the browser sends the file bytes somewhere.
-- So the practical fix is: dismiss modal immediately, then continue uploading asynchronously in the page while the project status updates live.
-- Cloud-source imports can keep using their existing backend/background copy flows.
-
-Expected result
-
-- The RLS error stops.
-- Upload no longer says `0/N uploaded` because the storage rule will finally match the object path.
-- Clicking Upload closes the modal immediately.
-- The project status changes right away to an importing state.
-- Files continue uploading in the background and the analysis request updates progressively until complete or failed.
+## Acceptance criteria
+- All target modals render through `DrawingViewer`.
+- No modal owns wheel/drag/scroll math; transform state is owned by rzpp.
+- Wheel + trackpad pinch + drag-pan feel smooth on mouse and trackpad.
+- Overlays remain **geometrically aligned** with the underlying document during zoom/pan.
+- No PDF rerasterization on every zoom tick; reraster occurs only after settle and within DPR/pixel budget.
+- Bbox normalization and fit-to-selection logic are centralized in shared utilities.
+- Current per-modal behavior preserved (incl. RawResultModal stacked pages).
+- `useMapNavigation` removed only after the last consumer is migrated.
