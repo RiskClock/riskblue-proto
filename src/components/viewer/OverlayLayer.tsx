@@ -88,7 +88,7 @@ export const OverlayLayer = ({
           height: diameter,
           borderRadius: "9999px",
           borderColor: color,
-          borderWidth: hovered ? 4 : 3,
+          borderWidth: hovered ? 2 : 1.5,
           borderStyle: "solid",
           backgroundColor: withAlpha(color, hovered ? 0.28 : 0.22),
           boxSizing: "border-box",
