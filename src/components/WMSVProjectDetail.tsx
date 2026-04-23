@@ -310,7 +310,7 @@ export function WMSVProjectDetail({ projectId, projectName }: WMSVProjectDetailP
     }
     setExporting(true);
     try {
-      const blob = await generateAnalysisDocx(request.id, summaryData as any, projectName || "Project");
+      const blob = await generateAnalysisDocx(request.id, summaryData as any, projectName || "Project", undefined, request.source_type);
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;

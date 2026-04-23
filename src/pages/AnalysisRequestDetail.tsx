@@ -175,7 +175,7 @@ export default function AnalysisRequestDetail() {
     }
     setExporting(true);
     try {
-      const blob = await generateAnalysisDocx(requestId, summaryData as any, request.project?.name || "Project");
+      const blob = await generateAnalysisDocx(requestId, summaryData as any, request.project?.name || "Project", undefined, request.source_type);
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
