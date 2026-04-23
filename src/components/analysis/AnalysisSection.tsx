@@ -330,6 +330,7 @@ interface InstanceDetailModalProps {
   awpClassName: string;
   sourceFile: AnalysisFile | undefined;
   resultText: string | undefined;
+  sourceType?: string;
   onClose: () => void;
 }
 
@@ -338,6 +339,7 @@ function InstanceDetailModal({
   awpClassName,
   sourceFile,
   resultText,
+  sourceType,
   onClose,
 }: InstanceDetailModalProps) {
   const [pageImage, setPageImage] = useState<HTMLImageElement | null>(null);
@@ -369,8 +371,9 @@ function InstanceDetailModal({
 
     (async () => {
       try {
+        const bucket = sourceType === "manual_upload" ? "uploaded-drawings" : "drive-analysis-files";
         const { data: blob, error: dlErr } = await supabase.storage
-          .from("drive-analysis-files")
+          .from(bucket)
           .download(sourceFile.storage_path!);
         if (dlErr || !blob) throw dlErr || new Error("Download failed");
         const ab = await blob.arrayBuffer();
@@ -462,7 +465,7 @@ function InstanceDetailModal({
     })();
 
     return () => { cancelled = true; };
-  }, [sourceFile?.storage_path, instance.id, resultText]);
+  }, [sourceFile?.storage_path, instance.id, resultText, sourceType]);
 
   // Step 2: Compute base dimensions when image loads (fit to container) — exact LocationDetailsModal pattern
   useEffect(() => {
@@ -765,10 +768,11 @@ interface RawResultModalProps {
   resultText: string;
   instanceCount: number;
   sourceFile?: AnalysisFile;
+  sourceType?: string;
   onClose: () => void;
 }
 
-function RawResultModal({ fileName, awpClassName, resultText, instanceCount, sourceFile, onClose }: RawResultModalProps) {
+function RawResultModal({ fileName, awpClassName, resultText, instanceCount, sourceFile, sourceType, onClose }: RawResultModalProps) {
   const [pages, setPages] = useState<HTMLCanvasElement[]>([]);
   const [pdfLoading, setPdfLoading] = useState(false);
   const [pdfError, setPdfError] = useState<string | null>(null);
@@ -790,8 +794,9 @@ function RawResultModal({ fileName, awpClassName, resultText, instanceCount, sou
 
     (async () => {
       try {
+        const bucket = sourceType === "manual_upload" ? "uploaded-drawings" : "drive-analysis-files";
         const { data: blob, error: dlErr } = await supabase.storage
-          .from("drive-analysis-files")
+          .from(bucket)
           .download(storagePath);
         if (dlErr || !blob) throw dlErr || new Error("Download failed");
         const ab = await blob.arrayBuffer();
@@ -899,7 +904,7 @@ function RawResultModal({ fileName, awpClassName, resultText, instanceCount, sou
       }
     })();
     return () => { cancelled = true; };
-  }, [sourceFile?.storage_path, resultText]);
+  }, [sourceFile?.storage_path, resultText, sourceType]);
 
   // Mount canvases into container
   useEffect(() => {
@@ -993,10 +998,11 @@ function RawResultModal({ fileName, awpClassName, resultText, instanceCount, sou
 
 interface FilePreviewModalProps {
   file: AnalysisFile;
+  sourceType?: string;
   onClose: () => void;
 }
 
-function FilePreviewModal({ file, onClose }: FilePreviewModalProps) {
+function FilePreviewModal({ file, sourceType, onClose }: FilePreviewModalProps) {
   const [pages, setPages] = useState<HTMLCanvasElement[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -1014,8 +1020,9 @@ function FilePreviewModal({ file, onClose }: FilePreviewModalProps) {
 
     (async () => {
       try {
+        const bucket = sourceType === "manual_upload" ? "uploaded-drawings" : "drive-analysis-files";
         const { data: blob, error: dlErr } = await supabase.storage
-          .from("drive-analysis-files")
+          .from(bucket)
           .download(file.storage_path!);
         if (dlErr || !blob) throw dlErr || new Error("Download failed");
         const ab = await blob.arrayBuffer();
@@ -1043,7 +1050,7 @@ function FilePreviewModal({ file, onClose }: FilePreviewModalProps) {
       }
     })();
     return () => { cancelled = true; };
-  }, [file.storage_path]);
+  }, [file.storage_path, sourceType]);
 
   useEffect(() => {
     if (!containerRef.current || pages.length === 0) return;
@@ -3693,9 +3700,9 @@ export function AnalysisSection({ requestId, files, projectId, sourceType, isWMS
                       value={engineVersion}
                       onChange={(e) => setEngineVersion(e.target.value)}
                     >
-                      <option value="6.8">RiskClock Engine 6.8</option>
-                      <option value="7.1">RiskClock Engine 7.1</option>
-                      <option value="7.2">RiskClock Engine 7.2</option>
+                      <option value="6.8" disabled>RiskClock Engine 6.8 (Jan-2026) (deprecated)</option>
+                      <option value="7.1">RiskClock Engine 7.1 (Mar-2026)</option>
+                      <option value="7.2">RiskClock Engine 7.2 (Apr-2026)</option>
                     </select>
                     <Button
                       size="sm"
@@ -3925,14 +3932,30 @@ export function AnalysisSection({ requestId, files, projectId, sourceType, isWMS
                     </th>
                      {sortedPrompts.map((prompt) => {
                       const isDisabled = disabledColumns.has(prompt.awp_class_name);
+                      const isComingSoon = DEFAULT_DISABLED_AWP.has(prompt.awp_class_name);
                       return (
                       <th key={prompt.id} className={`w-14 px-2 py-2 text-center font-medium text-muted-foreground ${isDisabled ? 'opacity-30' : ''}`}>
                         <div className="flex flex-col items-center gap-1">
-                            <Checkbox
-                              checked={!isDisabled}
-                              onCheckedChange={() => toggleColumnDisabled(prompt.awp_class_name)}
-                              className="h-3.5 w-3.5"
-                            />
+                            {isComingSoon ? (
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <span className="inline-flex">
+                                    <Checkbox
+                                      checked={false}
+                                      disabled
+                                      className="h-3.5 w-3.5 cursor-not-allowed"
+                                    />
+                                  </span>
+                                </TooltipTrigger>
+                                <TooltipContent>Coming soon</TooltipContent>
+                              </Tooltip>
+                            ) : (
+                              <Checkbox
+                                checked={!isDisabled}
+                                onCheckedChange={() => toggleColumnDisabled(prompt.awp_class_name)}
+                                className="h-3.5 w-3.5"
+                              />
+                            )}
                           <Tooltip>
                             <TooltipTrigger asChild>
                               {prompt.drive_file_url && !isWMSV ? (
@@ -3950,7 +3973,7 @@ export function AnalysisSection({ requestId, files, projectId, sourceType, isWMS
                                 </span>
                               )}
                             </TooltipTrigger>
-                            <TooltipContent>{prompt.awp_class_name}</TooltipContent>
+                            <TooltipContent>{isComingSoon ? "Coming soon" : prompt.awp_class_name}</TooltipContent>
                           </Tooltip>
                         </div>
                       </th>
@@ -4299,10 +4322,12 @@ export function AnalysisSection({ requestId, files, projectId, sourceType, isWMS
                 )}
               </Button>
             </div>
-            <div className="flex items-center gap-1">
-              <Button size="sm" variant={summaryGroupBy === "awp" ? "default" : "outline"} onClick={() => setSummaryGroupBy("awp")} className="h-7 text-xs">By AWP</Button>
-              <Button size="sm" variant={summaryGroupBy === "floor" ? "default" : "outline"} onClick={() => setSummaryGroupBy("floor")} className="h-7 text-xs">By Floor</Button>
-            </div>
+            {!isWMSV && (
+              <div className="flex items-center gap-1">
+                <Button size="sm" variant={summaryGroupBy === "awp" ? "default" : "outline"} onClick={() => setSummaryGroupBy("awp")} className="h-7 text-xs">By AWP</Button>
+                <Button size="sm" variant={summaryGroupBy === "floor" ? "default" : "outline"} onClick={() => setSummaryGroupBy("floor")} className="h-7 text-xs">By Floor</Button>
+              </div>
+            )}
           </div>
 
           <div className="divide-y">
@@ -4323,7 +4348,7 @@ export function AnalysisSection({ requestId, files, projectId, sourceType, isWMS
                         <span className="text-xs text-muted-foreground font-mono">({prefix})</span>
                         {isSummarizing && <Loader2 className="w-3.5 h-3.5 animate-spin text-muted-foreground" />}
                       </div>
-                      {summary && summary.length > 0 && (
+                      {!isWMSV && summary && summary.length > 0 && (
                         <Button size="sm" variant={isAdded ? "outline" : "default"} onClick={() => handleAddToProject(cn2)} disabled={isAdding || isAdded}>
                           {isAdding ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <PlusCircle className="w-4 h-4 mr-2" />}
                           {isAdded ? "Added" : "Add to Project"}
@@ -4435,6 +4460,7 @@ export function AnalysisSection({ requestId, files, projectId, sourceType, isWMS
       {previewFile && (
         <FilePreviewModal
           file={previewFile}
+          sourceType={sourceType}
           onClose={() => setPreviewFile(null)}
         />
       )}
@@ -4461,6 +4487,7 @@ export function AnalysisSection({ requestId, files, projectId, sourceType, isWMS
           resultText={rawResultModal.resultText}
           instanceCount={rawResultModal.instanceCount}
           sourceFile={rawResultModal.sourceFile}
+          sourceType={sourceType}
           onClose={() => setRawResultModal(null)}
         />
       )}
@@ -4483,6 +4510,7 @@ export function AnalysisSection({ requestId, files, projectId, sourceType, isWMS
             awpClassName={awpClassName}
             sourceFile={sourceFile}
             resultText={sourceResult?.result_text || undefined}
+            sourceType={sourceType}
             onClose={() => setSelectedInstance(null)}
           />
         );
