@@ -183,14 +183,17 @@ export const DrawingViewer = forwardRef<DrawingViewerApi, DrawingViewerProps>(
       return byPage;
     }, [overlays, allPages]);
 
-    // Adaptive reraster on settle
-    const onTransformed = (
-      ref: ReactZoomPanPinchRef,
+    // Adaptive reraster on settle (panning/zooming stop) — and track scale via onTransform.
+    const handleTransform = (
+      _ref: ReactZoomPanPinchRef,
       state: { scale: number; positionX: number; positionY: number }
     ) => {
       setScale(state.scale);
+    };
+    const handleSettle = (ref: ReactZoomPanPinchRef) => {
+      const s = ref.state.scale;
       if (isPdf && activePage) {
-        scheduleReraster(activePage.pageNum, state.scale);
+        scheduleReraster(activePage.pageNum, s);
       }
     };
 
