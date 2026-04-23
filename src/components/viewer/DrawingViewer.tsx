@@ -303,7 +303,7 @@ export const DrawingViewer = forwardRef<DrawingViewerApi, DrawingViewerProps>(
               maxScale={maxScale}
               limitToBounds={false}
               centerOnInit
-              wheel={{ step: 0.15, smoothStep: 0.005 }}
+              wheel={{ step: 0.15 }}
               doubleClick={{ disabled: false, step: 0.5 }}
               pinch={{ step: 5 }}
               panning={{ velocityDisabled: true }}
