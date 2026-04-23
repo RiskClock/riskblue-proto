@@ -998,10 +998,11 @@ function RawResultModal({ fileName, awpClassName, resultText, instanceCount, sou
 
 interface FilePreviewModalProps {
   file: AnalysisFile;
+  sourceType?: string;
   onClose: () => void;
 }
 
-function FilePreviewModal({ file, onClose }: FilePreviewModalProps) {
+function FilePreviewModal({ file, sourceType, onClose }: FilePreviewModalProps) {
   const [pages, setPages] = useState<HTMLCanvasElement[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -1019,8 +1020,9 @@ function FilePreviewModal({ file, onClose }: FilePreviewModalProps) {
 
     (async () => {
       try {
+        const bucket = sourceType === "manual_upload" ? "uploaded-drawings" : "drive-analysis-files";
         const { data: blob, error: dlErr } = await supabase.storage
-          .from("drive-analysis-files")
+          .from(bucket)
           .download(file.storage_path!);
         if (dlErr || !blob) throw dlErr || new Error("Download failed");
         const ab = await blob.arrayBuffer();
@@ -1048,7 +1050,7 @@ function FilePreviewModal({ file, onClose }: FilePreviewModalProps) {
       }
     })();
     return () => { cancelled = true; };
-  }, [file.storage_path]);
+  }, [file.storage_path, sourceType]);
 
   useEffect(() => {
     if (!containerRef.current || pages.length === 0) return;
