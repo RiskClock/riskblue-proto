@@ -330,6 +330,7 @@ interface InstanceDetailModalProps {
   awpClassName: string;
   sourceFile: AnalysisFile | undefined;
   resultText: string | undefined;
+  sourceType?: string;
   onClose: () => void;
 }
 
@@ -338,6 +339,7 @@ function InstanceDetailModal({
   awpClassName,
   sourceFile,
   resultText,
+  sourceType,
   onClose,
 }: InstanceDetailModalProps) {
   const [pageImage, setPageImage] = useState<HTMLImageElement | null>(null);
@@ -369,8 +371,9 @@ function InstanceDetailModal({
 
     (async () => {
       try {
+        const bucket = sourceType === "manual_upload" ? "uploaded-drawings" : "drive-analysis-files";
         const { data: blob, error: dlErr } = await supabase.storage
-          .from("drive-analysis-files")
+          .from(bucket)
           .download(sourceFile.storage_path!);
         if (dlErr || !blob) throw dlErr || new Error("Download failed");
         const ab = await blob.arrayBuffer();
