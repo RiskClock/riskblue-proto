@@ -314,7 +314,7 @@ export const DrawingViewer = forwardRef<DrawingViewerApi, DrawingViewerProps>(
               onZoomStop={handleSettle}
               onPanningStop={handleSettle}
               onWheelStop={handleSettle}
-              onPinchingStop={handleSettle}
+              onPinchStop={handleSettle}
             >
               <TransformComponent
                 wrapperStyle={{ width: "100%", height: "100%" }}
