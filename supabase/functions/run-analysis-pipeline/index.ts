@@ -825,19 +825,110 @@ async function runPipeline(params: PipelineParams) {
       }
     }
 
-    // ======================== COMPLETE ========================
-    console.log("[pipeline] All phases complete");
+    // ======================== PHASE 4: SUMMARIZE (background) ========================
+    // Mark analysis as complete first so the UI unblocks immediately,
+    // then run deduplication/summarization for every class that has results,
+    // and finally dispatch the completion email with the summarized counts.
+    console.log("[pipeline] Phases 1-3 complete, starting background summarize");
     await admin
       .from("analysis_requests")
       .update({
         status: "complete",
-        pipeline_phase: null,
+        pipeline_phase: "summarizing",
         pipeline_progress_done: 0,
         pipeline_progress_total: 0,
       } as any)
       .eq("id", analysisRequestId);
 
-    // Fire-and-forget completion email (does not affect pipeline status)
+    try {
+      // Determine which classes have at least one complete result
+      const { data: completeResults } = await admin
+        .from("analysis_results")
+        .select("awp_class_name")
+        .eq("analysis_request_id", analysisRequestId)
+        .eq("status", "complete");
+
+      const classesToSummarize = Array.from(
+        new Set((completeResults || []).map((r: any) => r.awp_class_name)),
+      );
+
+      console.log(
+        `[pipeline] Phase 4: Summarize ${classesToSummarize.length} classes`,
+      );
+
+      const summaryProgress = createProgressTracker(
+        admin,
+        analysisRequestId,
+        "summarizing",
+        classesToSummarize.length,
+      );
+      await summaryProgress.init();
+
+      // Sequentially summarize (low concurrency to avoid AI rate limits)
+      for (const awpClassName of classesToSummarize) {
+        try {
+          const result = await callFunction(
+            supabaseUrl,
+            serviceKey,
+            userToken,
+            "summarize-analysis",
+            { analysisRequestId, awpClassName },
+          );
+          if (result.ok && Array.isArray(result.data?.instances)) {
+            // Persist summary_data merge
+            const { data: reqMeta } = await admin
+              .from("analysis_requests")
+              .select("summary_data")
+              .eq("id", analysisRequestId)
+              .single();
+            const existing =
+              ((reqMeta as any)?.summary_data as Record<string, unknown>) || {};
+            await admin
+              .from("analysis_requests")
+              .update({
+                summary_data: {
+                  ...existing,
+                  [awpClassName]: result.data.instances,
+                } as any,
+              })
+              .eq("id", analysisRequestId);
+          } else {
+            console.warn(
+              `[pipeline] Summarize failed for ${awpClassName}: ${result.status}`,
+            );
+          }
+        } catch (sumErr) {
+          console.warn(
+            `[pipeline] Summarize threw for ${awpClassName}:`,
+            sumErr,
+          );
+        }
+        summaryProgress.increment();
+        await summaryProgress.flush();
+      }
+
+      // Clear summarizing phase indicator
+      await admin
+        .from("analysis_requests")
+        .update({
+          pipeline_phase: null,
+          pipeline_progress_done: 0,
+          pipeline_progress_total: 0,
+        } as any)
+        .eq("id", analysisRequestId);
+    } catch (sumPhaseErr) {
+      console.warn("[pipeline] Summarize phase failed (non-fatal):", sumPhaseErr);
+      await admin
+        .from("analysis_requests")
+        .update({
+          pipeline_phase: null,
+          pipeline_progress_done: 0,
+          pipeline_progress_total: 0,
+        } as any)
+        .eq("id", analysisRequestId);
+    }
+
+    // Completion email (after summary so it can include deduped counts)
     try {
       const emailUrl = `${supabaseUrl}/functions/v1/send-analysis-complete-email`;
       const emailRes = await fetch(emailUrl, {
