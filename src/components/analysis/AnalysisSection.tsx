@@ -465,7 +465,7 @@ function InstanceDetailModal({
     })();
 
     return () => { cancelled = true; };
-  }, [sourceFile?.storage_path, instance.id, resultText]);
+  }, [sourceFile?.storage_path, instance.id, resultText, sourceType]);
 
   // Step 2: Compute base dimensions when image loads (fit to container) — exact LocationDetailsModal pattern
   useEffect(() => {
@@ -768,10 +768,11 @@ interface RawResultModalProps {
   resultText: string;
   instanceCount: number;
   sourceFile?: AnalysisFile;
+  sourceType?: string;
   onClose: () => void;
 }
 
-function RawResultModal({ fileName, awpClassName, resultText, instanceCount, sourceFile, onClose }: RawResultModalProps) {
+function RawResultModal({ fileName, awpClassName, resultText, instanceCount, sourceFile, sourceType, onClose }: RawResultModalProps) {
   const [pages, setPages] = useState<HTMLCanvasElement[]>([]);
   const [pdfLoading, setPdfLoading] = useState(false);
   const [pdfError, setPdfError] = useState<string | null>(null);
