@@ -176,6 +176,7 @@ export const DrawingViewer = forwardRef<DrawingViewerApi, DrawingViewerProps>(
           id: ov.id,
           page: p.pageNum,
           rect,
+          shape: ov.shape ?? "rect",
           color: ov.color,
           label: ov.label,
         });
@@ -335,9 +336,9 @@ export const DrawingViewer = forwardRef<DrawingViewerApi, DrawingViewerProps>(
               minScale={minScale}
               maxScale={maxScale}
               limitToBounds={false}
-              wheel={{ step: 0.15 }}
-              doubleClick={{ disabled: false, step: 0.5 }}
-              pinch={{ step: 5 }}
+              wheel={{ step: 0.06, smoothStep: 0.005 }}
+              doubleClick={{ disabled: false, step: 0.3 }}
+              pinch={{ step: 2 }}
               panning={{ velocityDisabled: true }}
               onTransform={handleTransform}
               onZoomStop={handleSettle}
