@@ -288,7 +288,7 @@ async function renderDrawingImage(
   resultText: string | null,
   sourceType: string | undefined,
   pdfCache: PdfCache,
-): Promise<{ png: Uint8Array; width: number; height: number } | null> {
+): Promise<{ png: Uint8Array; width: number; height: number; hasHighlight: boolean } | null> {
   if (!storagePath) return null;
 
   const bucket = sourceType === "manual_upload" ? "uploaded-drawings" : "drive-analysis-files";
@@ -308,6 +308,11 @@ async function renderDrawingImage(
     let bbox: [number, number, number, number] | null = null;
     let coordSpace: "pixels" | "pdf-points" = "pixels";
     let aiViewportWidth = 0; // for pixels-coord rescaling
+    // Whether we have any signal that this page is the right page for this
+    // detection (matching overlay row OR successful text-layer match). If
+    // false AND we have no bbox, we omit the image entirely rather than
+    // showing an arbitrary first page.
+    let pageResolved = false;
 
     if (aiBBox) {
       pageNum = Math.min(hintPage ?? 1, pdf.numPages);
@@ -316,6 +321,7 @@ async function renderDrawingImage(
       const refPage = await pdf.getPage(pageNum);
       const refVp = refPage.getViewport({ scale: 4 });
       aiViewportWidth = refVp.width;
+      pageResolved = true;
     } else {
       let textBBox = null as null | { x1: number; y1: number; x2: number; y2: number; pageNum: number };
       for (const candidate of searchCandidates) {
@@ -326,9 +332,16 @@ async function renderDrawingImage(
         pageNum = Math.min(textBBox.pageNum, pdf.numPages);
         bbox = [textBBox.x1, textBBox.y1, textBBox.x2, textBBox.y2];
         coordSpace = "pdf-points";
-      } else {
-        pageNum = Math.min(hintPage ?? 1, pdf.numPages);
+        pageResolved = true;
+      } else if (hintPage) {
+        // Page is known from the overlay row even though we can't find the
+        // exact bounds — render the page without a circle (fallback).
+        pageNum = Math.min(hintPage, pdf.numPages);
         bbox = null;
+        pageResolved = true;
+      } else {
+        // No bbox AND no page hint — don't render an arbitrary page.
+        return null;
       }
     }
 
@@ -375,7 +388,7 @@ async function renderDrawingImage(
     );
     if (!blob) return null;
     const png = new Uint8Array(await blob.arrayBuffer());
-    return { png, width: canvas.width, height: canvas.height };
+    return { png, width: canvas.width, height: canvas.height, hasHighlight: bbox !== null };
   } catch (e) {
     console.warn("Failed to render drawing for export:", e);
     return null;
