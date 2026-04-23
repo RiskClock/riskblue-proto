@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from "react";
-import { useMapNavigation } from "@/hooks/useMapNavigation";
+
 import { supabase } from "@/integrations/supabase/client";
 import type { RealtimeChannel } from "@supabase/supabase-js";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -38,8 +38,6 @@ import {
   RotateCcw,
   AlertTriangle,
   Download,
-  ZoomIn,
-  ZoomOut,
   Copy,
   Check,
   Search,
@@ -745,142 +743,46 @@ interface FilePreviewModalProps {
 }
 
 function FilePreviewModal({ file, sourceType, onClose }: FilePreviewModalProps) {
-  const [pages, setPages] = useState<HTMLCanvasElement[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [zoom, setZoom] = useState(1);
-  const containerRef = useRef<HTMLDivElement>(null);
-  const scrollRef = useRef<HTMLDivElement>(null);
+  const bucket = sourceType === "manual_upload" ? "uploaded-drawings" : "drive-analysis-files";
+  const storagePath = file.storage_path ?? null;
 
-  useEffect(() => {
-    if (!file.storage_path) { setError("No file available."); return; }
-    let cancelled = false;
-    setLoading(true);
-    setError(null);
-    setPages([]);
-    setZoom(1);
+  // Hint mime type from filename so PDF vs image is detected even if storage
+  // doesn't return Content-Type. The shared loader falls back to blob.type.
+  const lowerName = (file.name ?? "").toLowerCase();
+  const mimeHint = lowerName.endsWith(".pdf")
+    ? "application/pdf"
+    : lowerName.endsWith(".png")
+    ? "image/png"
+    : lowerName.endsWith(".jpg") || lowerName.endsWith(".jpeg")
+    ? "image/jpeg"
+    : undefined;
 
-    (async () => {
-      try {
-        const bucket = sourceType === "manual_upload" ? "uploaded-drawings" : "drive-analysis-files";
-        const { data: blob, error: dlErr } = await supabase.storage
-          .from(bucket)
-          .download(file.storage_path!);
-        if (dlErr || !blob) throw dlErr || new Error("Download failed");
-        const ab = await blob.arrayBuffer();
-        if (cancelled) return;
-        const pdf = await pdfjsLib.getDocument({ data: ab }).promise;
-        if (cancelled) return;
-        const maxPages = Math.min(pdf.numPages, 20);
-        const canvases: HTMLCanvasElement[] = [];
-        for (let i = 1; i <= maxPages; i++) {
-          const page = await pdf.getPage(i);
-          const viewport = page.getViewport({ scale: 2 });
-          const canvas = document.createElement("canvas");
-          canvas.width = viewport.width;
-          canvas.height = viewport.height;
-          const ctx = canvas.getContext("2d")!;
-          await page.render({ canvasContext: ctx, viewport, canvas } as any).promise;
-          if (cancelled) return;
-          canvases.push(canvas);
-        }
-        setPages(canvases);
-      } catch (e) {
-        if (!cancelled) setError("Could not render file preview.");
-      } finally {
-        if (!cancelled) setLoading(false);
-      }
-    })();
-    return () => { cancelled = true; };
-  }, [file.storage_path, sourceType]);
-
-  useEffect(() => {
-    if (!containerRef.current || pages.length === 0) return;
-    const container = containerRef.current;
-    container.innerHTML = "";
-    for (const canvas of pages) {
-      canvas.style.display = "block";
-      canvas.style.maxWidth = "100%";
-      canvas.style.height = "auto";
-      canvas.style.marginBottom = "8px";
-      container.appendChild(canvas);
-    }
-  }, [pages]);
-
-  const handleZoomIn = () => {
-    const scroll = scrollRef.current;
-    if (!scroll) { setZoom(z => Math.min(8, z + 0.25)); return; }
-    const cx = scroll.scrollWidth > 0 ? (scroll.scrollLeft + scroll.clientWidth / 2) / scroll.scrollWidth : 0.5;
-    const cy = scroll.scrollHeight > 0 ? (scroll.scrollTop + scroll.clientHeight / 2) / scroll.scrollHeight : 0.5;
-    setZoom(prev => {
-      const next = Math.min(8, prev + 0.25);
-      requestAnimationFrame(() => {
-        scroll.scrollLeft = cx * scroll.scrollWidth - scroll.clientWidth / 2;
-        scroll.scrollTop = cy * scroll.scrollHeight - scroll.clientHeight / 2;
-      });
-      return next;
-    });
-  };
-
-  const handleZoomOut = () => {
-    const scroll = scrollRef.current;
-    if (!scroll) { setZoom(z => Math.max(1, z - 0.25)); return; }
-    const cx = scroll.scrollWidth > 0 ? (scroll.scrollLeft + scroll.clientWidth / 2) / scroll.scrollWidth : 0.5;
-    const cy = scroll.scrollHeight > 0 ? (scroll.scrollTop + scroll.clientHeight / 2) / scroll.scrollHeight : 0.5;
-    setZoom(prev => {
-      const next = Math.max(1, prev - 0.25);
-      requestAnimationFrame(() => {
-        scroll.scrollLeft = cx * scroll.scrollWidth - scroll.clientWidth / 2;
-        scroll.scrollTop = cy * scroll.scrollHeight - scroll.clientHeight / 2;
-      });
-      return next;
-    });
-  };
-
-  const filePreviewMapNav = useMapNavigation({ zoom, setZoom, minZoom: 1, maxZoom: 8, containerRef: scrollRef });
+  const source: DocumentSourceDescriptor | null = useMemo(() => {
+    if (!storagePath) return null;
+    return { kind: "supabase-storage", bucket, path: storagePath, mimeType: mimeHint };
+  }, [bucket, storagePath, mimeHint]);
 
   return (
     <Dialog open onOpenChange={(open) => { if (!open) onClose(); }}>
       <DialogContent className="sm:max-w-5xl h-[90vh] flex flex-col p-0">
-        {/* Fixed header with zoom controls */}
         <DialogHeader className="px-6 pt-5 pb-3 border-b flex-shrink-0">
-          <div className="flex items-center justify-between gap-4">
-            <DialogTitle className="truncate text-sm font-mono flex-1 min-w-0">{file.name}</DialogTitle>
-            <div className="flex items-center gap-2 flex-shrink-0">
-              <Button variant="outline" size="icon" className="h-8 w-8" onClick={handleZoomOut} disabled={zoom <= 1 || loading}>
-                <ZoomOut className="w-4 h-4" />
-              </Button>
-              <span className="text-sm min-w-[3rem] text-center tabular-nums">{Math.round(zoom * 100)}%</span>
-              <Button variant="outline" size="icon" className="h-8 w-8" onClick={handleZoomIn} disabled={zoom >= 8 || loading}>
-                <ZoomIn className="w-4 h-4" />
-              </Button>
-            </div>
-          </div>
+          <DialogTitle className="truncate text-sm font-mono">{file.name}</DialogTitle>
         </DialogHeader>
 
-        {/* Scrollable body */}
-        <div ref={scrollRef} className="flex-1 overflow-auto bg-muted/20" style={filePreviewMapNav.containerStyle} {...filePreviewMapNav.handlers}>
-          {loading && (
-            <div className="flex items-center justify-center py-12">
-              <Loader2 className="w-6 h-6 animate-spin mr-2" />
-              <span className="text-sm text-muted-foreground">Loading…</span>
+        <div className="flex-1 min-h-0 overflow-hidden bg-muted/20">
+          {!source ? (
+            <div className="flex items-center justify-center h-full">
+              <p className="text-sm text-destructive">No file available.</p>
             </div>
+          ) : (
+            <DrawingViewer
+              source={source}
+              layout="stacked-pages"
+              initialFit="page"
+              minScale={0.5}
+              maxScale={8}
+            />
           )}
-          {error && <p className="text-sm text-destructive text-center py-8">{error}</p>}
-          {!loading && !error && pages.length === 0 && (
-            <p className="text-sm text-muted-foreground text-center py-8">No preview available.</p>
-          )}
-          <div
-            style={{
-              transform: `scale(${zoom})`,
-              transformOrigin: "top center",
-              width: "fit-content",
-              minWidth: "100%",
-              padding: "16px",
-            }}
-          >
-            <div ref={containerRef} />
-          </div>
         </div>
       </DialogContent>
     </Dialog>
