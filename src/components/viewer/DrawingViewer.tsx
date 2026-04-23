@@ -335,7 +335,6 @@ export const DrawingViewer = forwardRef<DrawingViewerApi, DrawingViewerProps>(
               minScale={minScale}
               maxScale={maxScale}
               limitToBounds={false}
-              centerOnInit
               wheel={{ step: 0.15 }}
               doubleClick={{ disabled: false, step: 0.5 }}
               pinch={{ step: 5 }}
@@ -346,15 +345,15 @@ export const DrawingViewer = forwardRef<DrawingViewerApi, DrawingViewerProps>(
               onWheelStop={handleSettle}
               onPinchStop={handleSettle}
             >
+              {/*
+                Positioning model: page surface is anchored at (0, 0) — NO flex
+                centering. The transform (positionX, positionY, scale) owns all
+                positioning so computeFitToRect math is consistent for both
+                fit-page and fit-to-selection.
+              */}
               <TransformComponent
                 wrapperStyle={{ width: "100%", height: "100%" }}
-                contentStyle={{
-                  width: "100%",
-                  height: "100%",
-                  display: "flex",
-                  alignItems: layout === "stacked-pages" ? "flex-start" : "center",
-                  justifyContent: "center",
-                }}
+                contentStyle={{ width: "auto", height: "auto" }}
               >
                 {layout === "single-page" ? (
                   <DocumentSurface
@@ -364,7 +363,7 @@ export const DrawingViewer = forwardRef<DrawingViewerApi, DrawingViewerProps>(
                     hoveredOverlayId={hoveredOverlayId}
                   />
                 ) : (
-                  <div className="flex flex-col items-center gap-4">
+                  <div className="flex flex-col gap-4">
                     {allPages.map((p) => {
                       // For stacked layout, size each page based on viewport width
                       const aspect = p.pdfSize.w / p.pdfSize.h;
