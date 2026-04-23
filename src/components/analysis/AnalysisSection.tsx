@@ -2269,9 +2269,13 @@ export function AnalysisSection({ requestId, files, projectId, sourceType, isWMS
     setAddedToProject({});
     summaryAbortRef.current = false;
     setSummaryRunning(true);
+    let aborted = false;
     try {
       for (const prompt of sortedPrompts) {
-        if (summaryAbortRef.current) break;
+        if (summaryAbortRef.current) {
+          aborted = true;
+          break;
+        }
         // Only summarize classes that have at least one complete result
         const hasResults = results?.some(
           (r) => r.awp_class_name === prompt.awp_class_name && r.status === "complete"
@@ -2279,10 +2283,22 @@ export function AnalysisSection({ requestId, files, projectId, sourceType, isWMS
         if (!hasResults) continue;
         await handleSummarize(prompt.awp_class_name);
       }
+
+      // Dispatch completion email after a manual "Summarize All" finishes
+      // (mirrors the automatic pipeline's Phase 4 → email behavior).
+      if (!aborted) {
+        try {
+          await supabase.functions.invoke("send-analysis-complete-email", {
+            body: { analysisRequestId: requestId },
+          });
+        } catch (emailErr) {
+          console.warn("Completion email dispatch failed (non-fatal):", emailErr);
+        }
+      }
     } finally {
       setSummaryRunning(false);
     }
-  }, [sortedPrompts, results, handleSummarize]);
+  }, [sortedPrompts, results, handleSummarize, requestId, summaryRunning]);
 
   // Hydrate summarized instances from DB on mount (avoids re-calling the AI)
   useEffect(() => {
