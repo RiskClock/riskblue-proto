@@ -4322,10 +4322,12 @@ export function AnalysisSection({ requestId, files, projectId, sourceType, isWMS
                 )}
               </Button>
             </div>
-            <div className="flex items-center gap-1">
-              <Button size="sm" variant={summaryGroupBy === "awp" ? "default" : "outline"} onClick={() => setSummaryGroupBy("awp")} className="h-7 text-xs">By AWP</Button>
-              <Button size="sm" variant={summaryGroupBy === "floor" ? "default" : "outline"} onClick={() => setSummaryGroupBy("floor")} className="h-7 text-xs">By Floor</Button>
-            </div>
+            {!isWMSV && (
+              <div className="flex items-center gap-1">
+                <Button size="sm" variant={summaryGroupBy === "awp" ? "default" : "outline"} onClick={() => setSummaryGroupBy("awp")} className="h-7 text-xs">By AWP</Button>
+                <Button size="sm" variant={summaryGroupBy === "floor" ? "default" : "outline"} onClick={() => setSummaryGroupBy("floor")} className="h-7 text-xs">By Floor</Button>
+              </div>
+            )}
           </div>
 
           <div className="divide-y">
@@ -4346,7 +4348,7 @@ export function AnalysisSection({ requestId, files, projectId, sourceType, isWMS
                         <span className="text-xs text-muted-foreground font-mono">({prefix})</span>
                         {isSummarizing && <Loader2 className="w-3.5 h-3.5 animate-spin text-muted-foreground" />}
                       </div>
-                      {summary && summary.length > 0 && (
+                      {!isWMSV && summary && summary.length > 0 && (
                         <Button size="sm" variant={isAdded ? "outline" : "default"} onClick={() => handleAddToProject(cn2)} disabled={isAdding || isAdded}>
                           {isAdding ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <PlusCircle className="w-4 h-4 mr-2" />}
                           {isAdded ? "Added" : "Add to Project"}
