@@ -71,6 +71,8 @@ import {
 import { Checkbox } from "@/components/ui/checkbox";
 import { BuyCreditsModal } from "@/components/BuyCreditsModal";
 import * as pdfjsLib from "pdfjs-dist";
+import { DrawingViewer } from "@/components/viewer";
+import type { DocumentSourceDescriptor, OverlayInput } from "@/components/viewer";
 
 // Configure PDF.js worker (idempotent — safe to call multiple times)
 pdfjsLib.GlobalWorkerOptions.workerSrc = new URL(
