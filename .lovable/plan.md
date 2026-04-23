@@ -1,98 +1,143 @@
-# Refactor drawing modals to a shared, library-based viewer
+# Plan: WMSV DOCX export — embed highlighted drawing, one detection per page
 
-## Guiding principles
-- **Preserve product behavior**: do not change any modal's UX as part of this refactor. Behavior changes (e.g., RawResultModal page-by-page) are deferred decisions.
-- **Transform state is the single source of truth**: pan/zoom state lives in `react-zoom-pan-pinch`. No `scrollLeft`/`scrollTop` navigation model. No modal-owned anchoring math after migration.
-- **Adaptive PDF raster**: CSS transform during interaction; reraster only after transform settles, only for PDF sources, with capped DPR + total pixel budget.
-- **Overlays in document coordinates**: overlays live inside the transformed surface so geometric alignment holds across zoom/pan (not pixel-perfect at every scale, but geometrically correct).
-- **Centralized coordinate normalization**: 0..1 normalized, PDF-point, and page-indexed overlays handled in shared utilities — never in modals.
-- **Delete `useMapNavigation` only after** all consumers are migrated.
+## Root cause of the missing image
 
-## Goal
-Replace the custom scroll-based zoom/pan implementation (`useMapNavigation`) across all drawing modals with a single shared viewer built on `react-zoom-pan-pinch` + `pdfjs`. Eliminate per-zoom PDF rerasterization, share overlay/fit-to-selection logic, and make UX consistent — without changing per-modal behavior in this pass.
+`generateAnalysisDocx` always downloads from the `drive-analysis-files` Supabase bucket. WMSV manual-upload projects store PDFs in `uploaded-drawings`, so `supabase.storage.from("drive-analysis-files").download(path)` returns a "not found" error and `renderDrawingImage` swallows it via its `try/catch`, producing `null`. Result: the DOCX has the table and file name but no image.
 
-## Scope: modals to migrate
-1. `FileViewerModal` (wizard) — multi-page PDF + overlays — **migrate first** (highest visible interaction pain)
-2. `InstanceDetailModal` (in `AnalysisSection.tsx`) — selection/fit-to-bbox
-3. `LocationDetailsModal` (wizard) — selection/fit-to-bbox
-4. `RawResultModal` (in `AnalysisSection.tsx`) — split-pane source PDF + AI text; **keep stacked-pages behavior** initially
-5. `FilePreviewModal` (in `AnalysisSection.tsx`) — simple file preview
+Secondary issue: even when the image renders, the bbox parser in the exporter is a brittle regex that ignores AI-bbox columns, has no text-layer fallback, and uses a different page-resolution path than the in-app viewer — so it can disagree with what the user sees on screen for many detections.
 
-## Shared architecture
+## Scope of changes
 
-```text
-src/components/viewer/
-  DrawingViewer.tsx       <-- shell: TransformWrapper + toolbar + overlays; supports single-page OR stacked-pages mode
-  DocumentSurface.tsx     <-- pdfjs raster OR <img>; adaptive reraster on settle
-  OverlayLayer.tsx        <-- bboxes/labels in document/page coordinates; lives inside TransformComponent
-  ViewerToolbar.tsx       <-- zoom in/out, reset, fit page, fit selection, page nav
-  hooks/
-    useDocumentSource.ts  <-- unify Drive / Supabase (uploaded-drawings vs drive-analysis-files) / blob URL loading
-    usePdfPageRaster.ts   <-- base raster; settle-based high-DPI reraster with capped budget
-    useFitToSelection.ts  <-- compute transform from a target bbox via the rzpp API
-  viewerGeometry.ts       <-- bbox normalization (0..1, PDF points, page-indexed) + transform math
-```
+### Files edited
+1. `src/lib/analysisDocxExporter.ts` — accept `sourceType`, route bucket, reuse the viewer's overlay-resolution logic, draw a red translucent circle (matching `OverlayLayer`), proportionally scale image, page-break before each detection.
+2. `src/components/WMSVProjectDetail.tsx` — pass `request.source_type` into `generateAnalysisDocx(...)`.
+3. `src/pages/AnalysisRequestDetail.tsx` — same call-site update so the Internal Analysis Queue export keeps parity.
 
-### `DrawingViewer` API
+No other files are touched. The shared viewer (`DrawingViewer`, `OverlayLayer`, `viewerGeometry`) is not modified.
+
+## Change 1 — Bucket routing
+
+**Signature change must not break existing call sites.** Keep `onProgress` in its existing position and append `sourceType` after it:
+
 ```ts
-<DrawingViewer
-  source={{ kind: 'pdf' | 'image', blob | url, accessToken? }}
-  layout="single-page" | "stacked-pages"   // preserves RawResultModal behavior
-  page?={1}                                 // single-page mode
-  overlays={[{ id, bbox, page?, coordSpace: 'normalized' | 'pdf-points', color, label }]}
-  selection?={bboxId | bbox}                // drives fit-to-selection
-  initialFit="page" | "selection" | "actual"
-  minScale={0.5} maxScale={8}
-  toolbar={{ pageNav, fit, zoomButtons }}
-  onReady={(api) => ...}                    // exposes zoomTo, fitToBox, getTransform
-/>
+export async function generateAnalysisDocx(
+  requestId: string,
+  summaryData: Record<string, SummarizedInstance[]>,
+  projectName: string,
+  onProgress?: (done: number, total: number) => void,   // unchanged position
+  sourceType?: string,                                   // NEW (appended)
+): Promise<Blob>
 ```
 
-### Adaptive raster strategy (PDF only)
-- One base raster per page at a moderate scale (e.g., devicePixelRatio-aware base).
-- During wheel/pinch/drag: **no reraster**, CSS transform only.
-- After `onTransformed` quiet period (~250ms) AND scale exceeds a threshold: reraster the visible page(s) at higher DPI.
-- Cap requested resolution by:
-  - max effective DPR (e.g., 3)
-  - max total pixel budget per page (e.g., 16M px)
-  - skip reraster entirely if computed size exceeds budget
-- Image sources: never reraster.
+All existing call sites (which pass 3 or 4 positional args) continue to work unchanged. New call sites pass `sourceType` as the 5th arg.
 
-### State model
-- All pan/zoom comes from `react-zoom-pan-pinch` transform state.
-- No modal reads or writes `scrollLeft`/`scrollTop`.
-- Fit-to-selection computes a target `{x, y, scale}` and calls the rzpp API (`setTransform`/`zoomToElement`).
+**`renderDrawingImage`** — accept `sourceType`, choose bucket:
+```ts
+const bucket = sourceType === "manual_upload" ? "uploaded-drawings" : "drive-analysis-files";
+const { data: fileData, error } = await supabase.storage.from(bucket).download(storagePath);
+```
 
-### Overlay alignment
-- Overlays declared in document coordinates (normalized 0..1 OR PDF points + page index).
-- Rendered as absolutely-positioned elements inside `TransformComponent` so they share the same transform as the page.
-- Acceptance is **geometric alignment** across zoom/pan — not pixel-perfect at every scale.
+**Call sites updated**
+- `WMSVProjectDetail.tsx`: `generateAnalysisDocx(request.id, summaryData, projectName, undefined, request.source_type)`
+- `AnalysisRequestDetail.tsx`: `generateAnalysisDocx(requestId, summaryData, request.project?.name, undefined, request.source_type)`
 
-## Per-modal migration (behavior-preserving)
+**What this fixes vs. what it doesn't:** Bucket routing fixes the storage fetch path so manual-upload PDFs can actually be downloaded. It does **not** by itself guarantee the DOCX shows an image or that the circle lands in the right spot — image inclusion and circle placement still depend on overlay/page resolution succeeding (Change 2). When those fail for a given detection, the export still succeeds, just without an image for that detection.
 
-| Modal | Layout mode | Selection | Notes |
-|---|---|---|---|
-| FileViewerModal | single-page (current) | n/a | Toolbar gets page chevrons; first migration target |
-| InstanceDetailModal | single-page | yes | Preserve "fit selection" auto-zoom behavior |
-| LocationDetailsModal | single-page | yes | Preserve detection bbox initial fit |
-| RawResultModal | **stacked-pages** | n/a | Preserve current stacked behavior; only the PDF pane uses `DrawingViewer` |
-| FilePreviewModal | single-page or image | n/a | Source kind switches `pdf` vs `image` |
+## Change 2 — Use the same overlay-resolution logic as the viewer
 
-## Migration order
-1. Build shared viewer (`DrawingViewer`, `DocumentSurface`, `OverlayLayer`, `ViewerToolbar`, hooks, geometry utils). Add `react-zoom-pan-pinch`.
-2. Migrate **FileViewerModal** (highest interaction pain) — validate base viewer, raster strategy, page nav.
-3. Migrate **InstanceDetailModal** — validate selection-fit + overlays.
-4. Migrate **LocationDetailsModal** — same selection-fit path.
-5. Migrate **RawResultModal** in `stacked-pages` mode — preserve current UX.
-6. Migrate **FilePreviewModal**.
-7. Verify zero remaining consumers, then delete `useMapNavigation.ts` and remove modal-local bbox/zoom math.
+Replace the exporter's ad-hoc regex with the same path `InstanceDetailModal` uses:
 
-## Acceptance criteria
-- All target modals render through `DrawingViewer`.
-- No modal owns wheel/drag/scroll math; transform state is owned by rzpp.
-- Wheel + trackpad pinch + drag-pan feel smooth on mouse and trackpad.
-- Overlays remain **geometrically aligned** with the underlying document during zoom/pan.
-- No PDF rerasterization on every zoom tick; reraster occurs only after settle and within DPR/pixel budget.
-- Bbox normalization and fit-to-selection logic are centralized in shared utilities.
-- Current per-modal behavior preserved (incl. RawResultModal stacked pages).
-- `useMapNavigation` removed only after the last consumer is migrated.
+1. Import the shared parser pieces:
+   ```ts
+   import { findBBoxInTextLayer, normalizeText } from "@/lib/pdfTextLayerSearch";
+   ```
+2. **Temporary narrow-scope duplication.** Copy three helpers from `AnalysisSection.tsx` into the exporter file: `parseOverlayCandidates`, `findMatchingOverlayRow`, `buildOverlaySearchCandidates`. **Keep the duplicated helper names and behavior identical to the viewer path** — same function names, same signatures, same output shape — so any future change in one place can be mirrored mechanically to the other.
+   - **Follow-up note (out of scope here):** extract these three helpers into `src/lib/overlayCandidates.ts` and import from both `AnalysisSection.tsx` and `analysisDocxExporter.ts`. We accept the duplication temporarily to keep this diff narrow and reversible.
+3. New `resolveDrawingOverlay(pdf, instance, resultText)` returns `{ pageNum, bbox: [x1,y1,x2,y2], coordSpace: "pixels" | "pdf-points", sourceViewport }` using the same priority as the viewer:
+   - parse rows → match by `instance.id` (loose-bounded fallback)
+   - if matched row has `aiBBox` → use `pixels` against the AI-reference viewport (`getViewport({ scale: 4 })`)
+   - else iterate `searchCandidates` through `findBBoxInTextLayer` (`pdf-points`)
+   - fallback: page from row.pageNum or 1, no bbox (no circle drawn, image still embedded)
+
+This way the DOCX shows the same page and the same target as `InstanceDetailModal`.
+
+## Change 3 — Red circle highlight matching the viewer
+
+Replace the current "draw a red rect-derived circle" canvas code with the same geometry rule used by `OverlayLayer`:
+
+```ts
+// after rendering page to canvas at exportScale = 1.5:
+if (overlay) {
+  const [x1, y1, x2, y2] = overlay.bbox;
+  let cx: number, cy: number, side: number;
+  if (overlay.coordSpace === "pixels") {
+    // overlay.sourceViewport was scale 4; rescale to current canvas
+    const k = exportScale / 4;
+    cx = ((x1 + x2) / 2) * k;
+    cy = ((y1 + y2) / 2) * k;
+    side = Math.max(Math.abs(x2 - x1), Math.abs(y2 - y1)) * k;
+  } else {
+    // pdf-points → use convertToViewportRectangle on the export viewport
+    const [vx1, vy1, vx2, vy2] = exportViewport.convertToViewportRectangle([x1, y1, x2, y2]);
+    cx = (vx1 + vx2) / 2;
+    cy = (vy1 + vy2) / 2;
+    side = Math.max(Math.abs(vx2 - vx1), Math.abs(vy2 - vy1));
+  }
+  const diameter = Math.max(34, side * 1.5);  // matches OverlayLayer rule
+  ctx.beginPath();
+  ctx.arc(cx, cy, diameter / 2, 0, 2 * Math.PI);
+  ctx.fillStyle = "rgba(220, 38, 38, 0.22)";   // translucent red fill
+  ctx.fill();
+  ctx.strokeStyle = "rgb(220, 38, 38)";
+  ctx.lineWidth = 1.5;
+  ctx.stroke();
+}
+```
+
+Same translucent fill + thin red outline + same minimum diameter as the on-screen overlay.
+
+## Change 4 — Page-break per detection + proportional image sizing
+
+### Unit confirmed
+**`docx@9.6.1` (this repo's installed version) treats `ImageRun.transformation.width` / `height` as PIXELS, not points.** Verified directly in `node_modules/docx/dist/index.cjs`: the values are multiplied by `9525` to produce EMU (1 pixel = 9525 EMU). All sizing math below uses pixels.
+
+### Page break: hard guarantee
+- Keep an explicit `PageBreak` paragraph before every detection after the first. **Reliable guarantee:** every detection starts on a new page.
+
+### Keeping table + image together: best-effort
+Word's renderer ultimately decides where content overflows. We use the standard hints:
+- Mark every info-table row with `cantSplit: true` so a single row never breaks across a page.
+- Apply `keepNext: true` to the spacer paragraph between table and image, and `keepLines: true` on the image paragraph.
+
+These hints push Word to keep the table + image on the same page when content fits. If the combined block doesn't fit (very long control list, very tall source drawing), the image may flow to the next page. The page-break-before rule still holds — no two detections share a page. This is a known DOCX renderer limitation and not something the script can force.
+
+### Proportional image sizing (in pixels)
+- Have `renderDrawingImage` return `{ png, width: canvas.width, height: canvas.height }`.
+- Compute display size in **pixels** (US Letter content area at 96 DPI ≈ 624 × 864 px; we leave room for the table):
+  ```ts
+  const MAX_W_PX = 620;   // ~6.5 inches at 96 DPI
+  const MAX_H_PX = 720;   // ~7.5 inches at 96 DPI — leaves room for table
+  const ratio = img.width / img.height;
+  let w = MAX_W_PX, h = MAX_W_PX / ratio;
+  if (h > MAX_H_PX) { h = MAX_H_PX; w = MAX_H_PX * ratio; }
+  ```
+- Pass `{ width: Math.round(w), height: Math.round(h) }` into `ImageRun.transformation`.
+
+This replaces the current fixed `468 × 550` (which distorts and frequently overflows). Shrinking the image first is preferred over allowing overflow.
+
+### No-image case
+Exporter already handles this. Detection still gets its own page (page break before it), table only.
+
+## Validation steps after implementation
+
+1. WMSV manual-upload project: export DOCX → every detection has a red circle on the correct page; one detection per page.
+2. WMSV with Drive: export still works, image present.
+3. Internal Analysis Queue Drive request: behavior unchanged plus circle treatment matches the in-app marker.
+4. Detection where text-layer / AI bbox cannot resolve: section renders with table only, page break still applied, export still succeeds.
+
+## Limitations that remain
+
+- Keeping a detection's table + image on the same physical page is best-effort. The hard guarantee is page-break-before each detection. With very long control lists or tall drawings, Word may still push the image to the following page even with `cantSplit` + `keepNext` + `keepLines`.
+- `pdf-points` overlays are converted with `convertToViewportRectangle` against the export viewport; tiny sub-pixel drift versus the on-screen render is possible but visually indistinguishable.
+- Exporter runs in the browser tab; very large requests (hundreds of detections) may take a while because PDFs are downloaded once per detection. Caching downloaded PDFs by `storage_path` within a single export run is a small follow-up — explicitly out of scope here.
+- Helpers `parseOverlayCandidates` / `findMatchingOverlayRow` / `buildOverlaySearchCandidates` are duplicated into the exporter as a temporary narrow-scope duplication. Follow-up: extract them into `src/lib/overlayCandidates.ts` and have both `AnalysisSection.tsx` and the exporter import from one place.
