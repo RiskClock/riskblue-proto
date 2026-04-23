@@ -794,8 +794,9 @@ function RawResultModal({ fileName, awpClassName, resultText, instanceCount, sou
 
     (async () => {
       try {
+        const bucket = sourceType === "manual_upload" ? "uploaded-drawings" : "drive-analysis-files";
         const { data: blob, error: dlErr } = await supabase.storage
-          .from("drive-analysis-files")
+          .from(bucket)
           .download(storagePath);
         if (dlErr || !blob) throw dlErr || new Error("Download failed");
         const ab = await blob.arrayBuffer();
