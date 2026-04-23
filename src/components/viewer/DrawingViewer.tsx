@@ -19,6 +19,7 @@ import { useDocumentSource, type DocumentSourceDescriptor } from "./hooks/useDoc
 import { usePdfPageRaster, type RasterPage } from "./hooks/usePdfPageRaster";
 import { useFitToSelection } from "./hooks/useFitToSelection";
 import {
+  computeFitToRect,
   toNormalizedRect,
   type NormalizedOverlay,
   type OverlayInput,
