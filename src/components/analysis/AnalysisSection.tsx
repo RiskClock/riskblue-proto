@@ -904,7 +904,7 @@ function RawResultModal({ fileName, awpClassName, resultText, instanceCount, sou
       }
     })();
     return () => { cancelled = true; };
-  }, [sourceFile?.storage_path, resultText]);
+  }, [sourceFile?.storage_path, resultText, sourceType]);
 
   // Mount canvases into container
   useEffect(() => {
