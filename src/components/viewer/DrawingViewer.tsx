@@ -202,26 +202,20 @@ export const DrawingViewer = forwardRef<DrawingViewerApi, DrawingViewerProps>(
     const fitToOverlay = useFitToSelection(wrapperRef);
 
     /**
-     * Compute and apply a true fit-to-viewport transform for the active page.
+     * Fit-to-viewport for the active page.
      *
-     * Note: pageCssSize is already sized so that the page fits the viewport at
-     * scale = 1 (see the useMemo above), so the resulting transform is
-     * { scale: 1, x: centered, y: centered }. This is the same visual result
-     * as resetTransform(), but the math is now explicit and consistent with
-     * fit-to-selection — no accidental coupling to "reset".
+     * `pageCssSize` is already computed so the page fits the viewport at
+     * scale = 1, AND the page is centered inside the TransformComponent via
+     * flex (`justify-content: center; align-items: center`). That centering
+     * happens in the wrapper's pre-transform layout, so the correct fit-page
+     * transform is simply { x: 0, y: 0, scale: 1 } — letting flex do the
+     * centering. computeFitToRect's positionX/Y assumes the page is anchored
+     * at (0,0) which would double-count the centering and shift the page.
      */
     const fitPage = () => {
       const w = wrapperRef.current;
-      if (!w || !activePage || pageCssSize.width === 0) return;
-      const target = computeFitToRect({
-        rect: { nx: 0, ny: 0, nw: 1, nh: 1 },
-        pageSize: pageCssSize,
-        viewportSize,
-        paddingRatio: 0,
-        minScale,
-        maxScale,
-      });
-      w.setTransform(target.positionX, target.positionY, target.scale, 250);
+      if (!w) return;
+      w.setTransform(0, 0, 1, 250);
     };
 
     const doFitOverlay = (
