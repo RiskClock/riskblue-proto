@@ -243,23 +243,29 @@ export const DrawingViewer = forwardRef<DrawingViewerApi, DrawingViewerProps>(
     // initialFit handling — fires once after layout is ready
     useEffect(() => {
       if (fitOnceRef.current) return;
-      if (!activePage || pageCssSize.width === 0) return;
+      if (!activePage || pageCssSize.width === 0 || viewportSize.width === 0) return;
       if (initialFit === "selection" && initialFitOverlayId) {
         doFitOverlay(initialFitOverlayId);
         fitOnceRef.current = true;
       } else if (initialFit === "page") {
+        fitPage();
+        fitOnceRef.current = true;
+      } else if (initialFit === "actual") {
+        wrapperRef.current?.setTransform(0, 0, 1, 0);
         fitOnceRef.current = true;
       }
-    }, [activePage, pageCssSize.width, initialFit, initialFitOverlayId]);
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [activePage, pageCssSize.width, pageCssSize.height, viewportSize.width, viewportSize.height, initialFit, initialFitOverlayId]);
 
     // Imperative API. Depend on primitive scalars so the object identity is
     // stable across renders that don't actually change layout (avoids
-    // re-running consumer effects keyed on the api).
+    // re-running consumer effects keyed on the api). `reset` returns to the
+    // default fit-page view (the intended default for this viewer).
     const api: DrawingViewerApi = useMemo(
       () => ({
         zoomIn: () => wrapperRef.current?.zoomIn(),
         zoomOut: () => wrapperRef.current?.zoomOut(),
-        reset: () => wrapperRef.current?.resetTransform(),
+        reset: fitPage,
         fitPage,
         fitToOverlay: doFitOverlay,
       }),
