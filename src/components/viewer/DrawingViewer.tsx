@@ -202,20 +202,27 @@ export const DrawingViewer = forwardRef<DrawingViewerApi, DrawingViewerProps>(
     const fitToOverlay = useFitToSelection(wrapperRef);
 
     /**
-     * Fit-to-viewport for the active page.
+     * Positioning model:
      *
-     * `pageCssSize` is already computed so the page fits the viewport at
-     * scale = 1, AND the page is centered inside the TransformComponent via
-     * flex (`justify-content: center; align-items: center`). That centering
-     * happens in the wrapper's pre-transform layout, so the correct fit-page
-     * transform is simply { x: 0, y: 0, scale: 1 } — letting flex do the
-     * centering. computeFitToRect's positionX/Y assumes the page is anchored
-     * at (0,0) which would double-count the centering and shift the page.
+     * The page surface is anchored at (0, 0) inside TransformComponent — we do
+     * NOT use flex centering on the transformed content. All positioning is
+     * owned by the transform (positionX, positionY, scale). This keeps a single
+     * coordinate model so computeFitToRect is deterministic for BOTH fit-page
+     * and fit-to-selection. (Previously flex centering double-counted offsets
+     * and shifted selection fits off-target.)
      */
     const fitPage = () => {
       const w = wrapperRef.current;
-      if (!w) return;
-      w.setTransform(0, 0, 1, 250);
+      if (!w || pageCssSize.width === 0) return;
+      const target = computeFitToRect({
+        rect: { nx: 0, ny: 0, nw: 1, nh: 1 },
+        pageSize: pageCssSize,
+        viewportSize,
+        paddingRatio: 0,
+        minScale,
+        maxScale,
+      });
+      w.setTransform(target.positionX, target.positionY, target.scale, 250);
     };
 
     const doFitOverlay = (
@@ -236,23 +243,29 @@ export const DrawingViewer = forwardRef<DrawingViewerApi, DrawingViewerProps>(
     // initialFit handling — fires once after layout is ready
     useEffect(() => {
       if (fitOnceRef.current) return;
-      if (!activePage || pageCssSize.width === 0) return;
+      if (!activePage || pageCssSize.width === 0 || viewportSize.width === 0) return;
       if (initialFit === "selection" && initialFitOverlayId) {
         doFitOverlay(initialFitOverlayId);
         fitOnceRef.current = true;
       } else if (initialFit === "page") {
+        fitPage();
+        fitOnceRef.current = true;
+      } else if (initialFit === "actual") {
+        wrapperRef.current?.setTransform(0, 0, 1, 0);
         fitOnceRef.current = true;
       }
-    }, [activePage, pageCssSize.width, initialFit, initialFitOverlayId]);
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [activePage, pageCssSize.width, pageCssSize.height, viewportSize.width, viewportSize.height, initialFit, initialFitOverlayId]);
 
     // Imperative API. Depend on primitive scalars so the object identity is
     // stable across renders that don't actually change layout (avoids
-    // re-running consumer effects keyed on the api).
+    // re-running consumer effects keyed on the api). `reset` returns to the
+    // default fit-page view (the intended default for this viewer).
     const api: DrawingViewerApi = useMemo(
       () => ({
         zoomIn: () => wrapperRef.current?.zoomIn(),
         zoomOut: () => wrapperRef.current?.zoomOut(),
-        reset: () => wrapperRef.current?.resetTransform(),
+        reset: fitPage,
         fitPage,
         fitToOverlay: doFitOverlay,
       }),
@@ -322,7 +335,6 @@ export const DrawingViewer = forwardRef<DrawingViewerApi, DrawingViewerProps>(
               minScale={minScale}
               maxScale={maxScale}
               limitToBounds={false}
-              centerOnInit
               wheel={{ step: 0.15 }}
               doubleClick={{ disabled: false, step: 0.5 }}
               pinch={{ step: 5 }}
@@ -333,15 +345,15 @@ export const DrawingViewer = forwardRef<DrawingViewerApi, DrawingViewerProps>(
               onWheelStop={handleSettle}
               onPinchStop={handleSettle}
             >
+              {/*
+                Positioning model: page surface is anchored at (0, 0) — NO flex
+                centering. The transform (positionX, positionY, scale) owns all
+                positioning so computeFitToRect math is consistent for both
+                fit-page and fit-to-selection.
+              */}
               <TransformComponent
                 wrapperStyle={{ width: "100%", height: "100%" }}
-                contentStyle={{
-                  width: "100%",
-                  height: "100%",
-                  display: "flex",
-                  alignItems: layout === "stacked-pages" ? "flex-start" : "center",
-                  justifyContent: "center",
-                }}
+                contentStyle={{ width: "auto", height: "auto" }}
               >
                 {layout === "single-page" ? (
                   <DocumentSurface
@@ -351,7 +363,7 @@ export const DrawingViewer = forwardRef<DrawingViewerApi, DrawingViewerProps>(
                     hoveredOverlayId={hoveredOverlayId}
                   />
                 ) : (
-                  <div className="flex flex-col items-center gap-4">
+                  <div className="flex flex-col gap-4">
                     {allPages.map((p) => {
                       // For stacked layout, size each page based on viewport width
                       const aspect = p.pdfSize.w / p.pdfSize.h;
