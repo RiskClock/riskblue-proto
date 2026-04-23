@@ -322,8 +322,25 @@ function buildOverlaySearchCandidates(row: OverlayRow | undefined, instance: Pic
 }
 
 // ---------------------------------------------------------------------------
-// InstanceDetailModal sub-component (unchanged)
+// InstanceDetailModal — migrated to the shared DrawingViewer
 // ---------------------------------------------------------------------------
+//
+// Coordinate model (preserved from previous implementation):
+//   - AI bbox: pixel coordinates in the scale-4 raster of the source page.
+//   - Text-layer fallback: PDF user-space points (origin bottom-left).
+//
+// We resolve the matching overlay row + bbox + page once on mount, then hand
+// the source + a single `OverlayInput` to the shared viewer with
+// initialFit="selection" so it auto-zooms to the bbox using the shared
+// fit-to-rect math. All wheel/drag/zoom math now lives in the shared viewer.
+
+interface ResolvedOverlay {
+  pageNum: number;
+  bbox: [number, number, number, number];
+  coordSpace: "pixels" | "pdf-points";
+  pixelSize?: { w: number; h: number };
+  pdfViewport?: pdfjsLib.PageViewport;
+}
 
 interface InstanceDetailModalProps {
   instance: SummarizedInstance;
@@ -342,36 +359,36 @@ function InstanceDetailModal({
   sourceType,
   onClose,
 }: InstanceDetailModalProps) {
-  const [pageImage, setPageImage] = useState<HTMLImageElement | null>(null);
-  const [zoom, setZoom] = useState(1);
-  const [baseDimensions, setBaseDimensions] = useState<{ width: number; height: number } | null>(null);
-  const [rawCoords, setRawCoords] = useState<{ x1: number; y1: number; x2: number; y2: number } | null>(null);
-  const [isAiBBoxMode, setIsAiBBoxMode] = useState(false);
-  const [isLoadingPdf, setIsLoadingPdf] = useState(false);
-  const [pdfError, setPdfError] = useState<string | null>(null);
-  const [pdfViewport, setPdfViewport] = useState<pdfjsLib.PageViewport | null>(null);
-  const [offscreenSize, setOffscreenSize] = useState<{ w: number; h: number } | null>(null);
-  const canvasRef = useRef<HTMLCanvasElement>(null);
-  const containerRef = useRef<HTMLDivElement>(null);
-  const didAutoFitRef = useRef(false);
+  const [resolvedOverlay, setResolvedOverlay] = useState<ResolvedOverlay | null>(null);
+  const [resolveLoading, setResolveLoading] = useState(false);
+  const [resolveError, setResolveError] = useState<string | null>(null);
 
-  // Step 1: Download PDF → render to offscreen canvas at scale 4 → convert to HTMLImageElement
+  const bucket = sourceType === "manual_upload" ? "uploaded-drawings" : "drive-analysis-files";
+
+  // Source descriptor for the shared viewer (storage-backed PDF).
+  const source: DocumentSourceDescriptor | null = useMemo(() => {
+    if (!sourceFile?.storage_path) return null;
+    return { kind: "supabase-storage", bucket, path: sourceFile.storage_path };
+  }, [sourceFile?.storage_path, bucket]);
+
+  // Resolve the matching overlay (page + bbox) — runs once per modal open.
+  // We need pdfViewport / pixelSize for coordinate normalization, so we
+  // download the PDF and inspect the target page here. The shared viewer will
+  // download and raster the same blob; both go through the storage cache so
+  // the cost is acceptable and we avoid re-architecting the viewer to expose
+  // resolved per-page metadata externally.
   useEffect(() => {
-    if (!sourceFile?.storage_path) return;
-    setIsLoadingPdf(true);
-    setPdfError(null);
-    setPageImage(null);
-    setRawCoords(null);
-    setBaseDimensions(null);
-    setPdfViewport(null);
-    setOffscreenSize(null);
-    setZoom(1);
-
+    if (!sourceFile?.storage_path) {
+      setResolvedOverlay(null);
+      return;
+    }
     let cancelled = false;
+    setResolveLoading(true);
+    setResolveError(null);
+    setResolvedOverlay(null);
 
     (async () => {
       try {
-        const bucket = sourceType === "manual_upload" ? "uploaded-drawings" : "drive-analysis-files";
         const { data: blob, error: dlErr } = await supabase.storage
           .from(bucket)
           .download(sourceFile.storage_path!);
@@ -379,9 +396,6 @@ function InstanceDetailModal({
         const ab = await blob.arrayBuffer();
         if (cancelled) return;
 
-        // Build search candidates: parse all overlay rows from the AI result,
-        // find the row whose candidates include instance.id, then use all its
-        // candidates.  Fall back to instance.id if nothing matches.
         const overlayRows = resultText ? parseOverlayCandidates(resultText) : [];
         const matchingRow = findMatchingOverlayRow(overlayRows, instance.id);
         const searchCandidates = buildOverlaySearchCandidates(matchingRow, instance);
@@ -394,14 +408,8 @@ function InstanceDetailModal({
         const pdf = await pdfjsLib.getDocument({ data: ab }).promise;
         if (cancelled) return;
 
-        // Prefer AI bounding box coordinates; fall back to text-layer search
         let textBBox: PDFBBox | null = null;
-        let useAiBBox = false;
-        if (matchedAiBBox) {
-          useAiBBox = true;
-          console.log(`[BBox] Using AI bounding box:`, matchedAiBBox);
-        } else {
-          // Try each candidate until one matches in the PDF text layer
+        if (!matchedAiBBox) {
           for (const candidate of searchCandidates) {
             textBBox = await findBBoxInTextLayer(pdf, candidate, hintPage);
             if (textBBox) break;
@@ -410,254 +418,65 @@ function InstanceDetailModal({
         }
         if (cancelled) return;
 
-        console.log(`[BBox] text layer result=`, textBBox, `useAiBBox=`, useAiBBox);
-        if (textBBox) {
-          setRawCoords({ x1: textBBox.x1, y1: textBBox.y1, x2: textBBox.x2, y2: textBBox.y2 });
-        }
-
         const targetPage = textBBox?.pageNum ?? hintPage ?? 1;
-        const page = await pdf.getPage(Math.min(targetPage, pdf.numPages));
+        const pageNum = Math.min(targetPage, pdf.numPages);
+        const page = await pdf.getPage(pageNum);
         if (cancelled) return;
 
-        // Render at high resolution (scale 4) to offscreen canvas
+        // Match the legacy raster scale so AI pixel bboxes map 1:1.
         const viewport = page.getViewport({ scale: 4 });
-        setPdfViewport(viewport);
-        setOffscreenSize({ w: viewport.width, h: viewport.height });
-        const offscreen = document.createElement("canvas");
-        offscreen.width = viewport.width;
-        offscreen.height = viewport.height;
-        const ctx = offscreen.getContext("2d")!;
-        await page.render({ canvasContext: ctx, viewport, canvas: offscreen } as any).promise;
-        if (cancelled) return;
 
-        // If using AI bbox, store as rawCoords in a special way
-        // We'll convert AI pixel coords to PDF viewport coords for consistent rendering
-        if (useAiBBox && matchedAiBBox) {
-          // AI coords are in the same pixel space as the rendered image (scale 4)
-          // Store them directly as viewport pixel coords (not PDF user-space)
-          // We set rawCoords to a sentinel and handle in the draw step
-          setRawCoords({
-            x1: matchedAiBBox.x1,
-            y1: matchedAiBBox.y1,
-            x2: matchedAiBBox.x2,
-            y2: matchedAiBBox.y2,
+        if (matchedAiBBox) {
+          setResolvedOverlay({
+            pageNum,
+            bbox: [matchedAiBBox.x1, matchedAiBBox.y1, matchedAiBBox.x2, matchedAiBBox.y2],
+            coordSpace: "pixels",
+            pixelSize: { w: viewport.width, h: viewport.height },
           });
-          setIsAiBBoxMode(true);
+        } else if (textBBox) {
+          setResolvedOverlay({
+            pageNum,
+            bbox: [textBBox.x1, textBBox.y1, textBBox.x2, textBBox.y2],
+            coordSpace: "pdf-points",
+            pdfViewport: viewport,
+          });
         } else {
-          setIsAiBBoxMode(false);
+          // No match — open the modal at fit-page with no overlay.
+          setResolvedOverlay(null);
         }
-
-        // Convert to HTMLImageElement
-        const img = new Image();
-        img.src = offscreen.toDataURL();
-        await new Promise<void>((resolve) => { img.onload = () => resolve(); });
-        if (cancelled) return;
-
-        setPageImage(img);
       } catch (e) {
         if (!cancelled) {
-          console.error("PDF render error:", e);
-          setPdfError("Failed to render drawing.");
+          console.error("Overlay resolve error:", e);
+          setResolveError("Failed to resolve drawing.");
         }
       } finally {
-        if (!cancelled) setIsLoadingPdf(false);
+        if (!cancelled) setResolveLoading(false);
       }
     })();
 
     return () => { cancelled = true; };
-  }, [sourceFile?.storage_path, instance.id, resultText, sourceType]);
+  }, [sourceFile?.storage_path, instance.id, instance.name, resultText, bucket]);
 
-  // Step 2: Compute base dimensions when image loads (fit to container) — exact LocationDetailsModal pattern
-  useEffect(() => {
-    if (!pageImage || !containerRef.current) return;
-    const rect = containerRef.current.getBoundingClientRect();
-    const containerW = rect.width - 32;
-    const containerH = rect.height - 32;
-    if (containerW <= 0 || containerH <= 0) return;
-    const imgAspect = pageImage.naturalWidth / pageImage.naturalHeight;
-    const containerAspect = containerW / containerH;
-    let baseW: number, baseH: number;
-    if (imgAspect > containerAspect) {
-      baseW = containerW;
-      baseH = containerW / imgAspect;
-    } else {
-      baseH = containerH;
-      baseW = containerH * imgAspect;
-    }
-    setBaseDimensions({ width: baseW, height: baseH });
-    setZoom(1);
-    // Safeguard 3: reset scroll position on new image load
-    containerRef.current?.scrollTo({ left: 0, top: 0 });
-    // Safeguard 4: allow auto-fit to fire again for the new image
-    didAutoFitRef.current = false;
-  }, [pageImage]);
+  // Build the single overlay for the shared viewer.
+  const OVERLAY_ID = "instance-bbox";
+  const overlays: OverlayInput[] = useMemo(() => {
+    if (!resolvedOverlay) return [];
+    return [{
+      id: OVERLAY_ID,
+      page: resolvedOverlay.pageNum,
+      bbox: resolvedOverlay.bbox,
+      coordSpace: resolvedOverlay.coordSpace,
+      pixelSize: resolvedOverlay.pixelSize,
+      pdfViewport: resolvedOverlay.pdfViewport,
+      color: "hsl(var(--destructive))",
+      label: instance.id,
+    }];
+  }, [resolvedOverlay, instance.id]);
 
-  // Step 3: Draw image + red bounding box overlay onto display canvas
-  useEffect(() => {
-    if (!pageImage || !baseDimensions || !canvasRef.current) return;
-    const canvas = canvasRef.current;
-    const w = Math.floor(baseDimensions.width * zoom);
-    const h = Math.floor(baseDimensions.height * zoom);
-    canvas.width = w;
-    canvas.height = h;
-    const ctx = canvas.getContext("2d")!;
-    ctx.imageSmoothingEnabled = true;
-    ctx.imageSmoothingQuality = "high";
-    ctx.drawImage(pageImage, 0, 0, w, h);
-
-    if (rawCoords && pdfViewport && offscreenSize) {
-      console.log(`[BBox] drawing: rawCoords=`, rawCoords, `isAiBBoxMode=`, isAiBBoxMode);
-      let cx: number, cy: number, radius: number;
-
-      if (isAiBBoxMode) {
-        // AI pixel coordinates — map directly to display canvas
-        // AI coords are in the same pixel space as offscreenSize (scale 4)
-        const ncx = ((rawCoords.x1 + rawCoords.x2) / 2) / offscreenSize.w;
-        const ncy = ((rawCoords.y1 + rawCoords.y2) / 2) / offscreenSize.h;
-        const nbw = Math.abs(rawCoords.x2 - rawCoords.x1) / offscreenSize.w;
-        const nbh = Math.abs(rawCoords.y2 - rawCoords.y1) / offscreenSize.h;
-        cx = ncx * w;
-        cy = ncy * h;
-        const bw = nbw * w;
-        const bh = nbh * h;
-        radius = Math.max(bw, bh) / 2 + 20;
-        radius = Math.max(radius, 15);
-      } else {
-        // PDF user-space (pts, origin bottom-left) → offscreen canvas pixels
-        const viewportRect = pdfViewport.convertToViewportRectangle([
-          rawCoords.x1, rawCoords.y1, rawCoords.x2, rawCoords.y2,
-        ]);
-        const [vx1, vy1, vx2, vy2] = viewportRect;
-        const nx1 = Math.min(vx1, vx2) / offscreenSize.w;
-        const ny1 = Math.min(vy1, vy2) / offscreenSize.h;
-        const nx2 = Math.max(vx1, vx2) / offscreenSize.w;
-        const ny2 = Math.max(vy1, vy2) / offscreenSize.h;
-        cx = ((nx1 + nx2) / 2) * w;
-        cy = ((ny1 + ny2) / 2) * h;
-        const bw = (nx2 - nx1) * w;
-        const bh = (ny2 - ny1) * h;
-        radius = Math.max(bw, bh) / 2 + 20;
-      }
-
-      ctx.beginPath();
-      ctx.arc(cx, cy, radius, 0, Math.PI * 2);
-      ctx.fillStyle = "rgba(239, 68, 68, 0.12)";
-      ctx.fill();
-      ctx.strokeStyle = "rgba(239, 68, 68, 0.9)";
-      ctx.lineWidth = 2.5;
-      ctx.stroke();
-    }
-  }, [pageImage, baseDimensions, zoom, rawCoords, pdfViewport, offscreenSize, isAiBBoxMode]);
-
-  // Step 4: Auto fit-selection — fires once per modal open when all data is ready
-  useEffect(() => {
-    // Guard: only run once per load
-    if (didAutoFitRef.current) return;
-    if (!rawCoords || !pdfViewport || !offscreenSize || !baseDimensions) return;
-    const container = containerRef.current;
-    if (!container) return;
-
-    let bx: number, by: number, radius: number;
-
-    if (isAiBBoxMode) {
-      // AI pixel coordinates — map directly
-      const ncx = ((rawCoords.x1 + rawCoords.x2) / 2) / offscreenSize.w;
-      const ncy = ((rawCoords.y1 + rawCoords.y2) / 2) / offscreenSize.h;
-      const nbw = Math.abs(rawCoords.x2 - rawCoords.x1) / offscreenSize.w;
-      const nbh = Math.abs(rawCoords.y2 - rawCoords.y1) / offscreenSize.h;
-      const bw = nbw * baseDimensions.width;
-      const bh = nbh * baseDimensions.height;
-      radius = Math.max(bw, bh) / 2 + 20;
-      radius = Math.max(radius, 15);
-      bx = ncx * baseDimensions.width - radius;
-      by = ncy * baseDimensions.height - radius;
-    } else {
-      // Convert PDF user-space → offscreen canvas pixels
-      const [vx1, vy1, vx2, vy2] = pdfViewport.convertToViewportRectangle([
-        rawCoords.x1, rawCoords.y1, rawCoords.x2, rawCoords.y2,
-      ]);
-      const nx1 = Math.min(vx1, vx2) / offscreenSize.w;
-      const ny1 = Math.min(vy1, vy2) / offscreenSize.h;
-      const nx2 = Math.max(vx1, vx2) / offscreenSize.w;
-      const ny2 = Math.max(vy1, vy2) / offscreenSize.h;
-      const bw = (nx2 - nx1) * baseDimensions.width;
-      const bh = (ny2 - ny1) * baseDimensions.height;
-      radius = Math.max(bw, bh) / 2 + 20;
-      bx = ((nx1 + nx2) / 2) * baseDimensions.width - radius;
-      by = ((ny1 + ny2) / 2) * baseDimensions.height - radius;
-    }
-
-    const diameter = radius * 2;
-    // Safeguard: skip zero-size region
-    if (diameter <= 2) return;
-
-    // Compute fit zoom (20% padding, clamped 1.0–4.0)
-    const PADDING = 0.20;
-    const fitScale = Math.min(
-      container.clientWidth  / (diameter * (1 + PADDING)),
-      container.clientHeight / (diameter * (1 + PADDING)),
-    );
-    const targetZoom = Math.min(4.0, Math.max(1.0, fitScale));
-
-    // circle center in zoomed-canvas pixels
-    const cx = (bx + radius) * targetZoom;
-    const cy = (by + radius) * targetZoom;
-
-    // Mark as done before applying (prevents any re-entry)
-    didAutoFitRef.current = true;
-
-    setZoom(targetZoom);
-
-    requestAnimationFrame(() => {
-      requestAnimationFrame(() => {
-        const c = containerRef.current;
-        if (!c) return;
-        // Safeguard 2: non-negative clamp for maxLeft/maxTop
-        const maxLeft = Math.max(0, c.scrollWidth  - c.clientWidth);
-        const maxTop  = Math.max(0, c.scrollHeight - c.clientHeight);
-        const left = Math.min(maxLeft, Math.max(0, cx - c.clientWidth  / 2));
-        const top  = Math.min(maxTop,  Math.max(0, cy - c.clientHeight / 2));
-        c.scrollTo({ left, top }); // instant, no animation
-      });
-    });
-  }, [rawCoords, pdfViewport, offscreenSize, baseDimensions]);
-
-  // Center-preserving zoom handlers — exact copy from LocationDetailsModal
-  const handleZoomIn = () => {
-    const container = containerRef.current;
-    if (!container) { setZoom(z => Math.min(8, z + 0.25)); return; }
-    const scrollCenterX = container.scrollWidth > 0
-      ? (container.scrollLeft + container.clientWidth / 2) / container.scrollWidth : 0.5;
-    const scrollCenterY = container.scrollHeight > 0
-      ? (container.scrollTop + container.clientHeight / 2) / container.scrollHeight : 0.5;
-    setZoom(prevZoom => {
-      const newZoom = Math.min(8, prevZoom + 0.25);
-      requestAnimationFrame(() => {
-        container.scrollLeft = scrollCenterX * container.scrollWidth - container.clientWidth / 2;
-        container.scrollTop = scrollCenterY * container.scrollHeight - container.clientHeight / 2;
-      });
-      return newZoom;
-    });
-  };
-
-  const handleZoomOut = () => {
-    const container = containerRef.current;
-    if (!container) { setZoom(z => Math.max(1, z - 0.25)); return; }
-    const scrollCenterX = container.scrollWidth > 0
-      ? (container.scrollLeft + container.clientWidth / 2) / container.scrollWidth : 0.5;
-    const scrollCenterY = container.scrollHeight > 0
-      ? (container.scrollTop + container.clientHeight / 2) / container.scrollHeight : 0.5;
-    setZoom(prevZoom => {
-      const newZoom = Math.max(1, prevZoom - 0.25);
-      requestAnimationFrame(() => {
-        container.scrollLeft = scrollCenterX * container.scrollWidth - container.clientWidth / 2;
-        container.scrollTop = scrollCenterY * container.scrollHeight - container.clientHeight / 2;
-      });
-      return newZoom;
-    });
-  };
-
-  const instanceMapNav = useMapNavigation({ zoom, setZoom, minZoom: 1, maxZoom: 8, containerRef });
+  // Display string for the bounding-box readout (preserves prior UI).
+  const bboxReadout = resolvedOverlay
+    ? `(${Math.round(resolvedOverlay.bbox[0])}, ${Math.round(resolvedOverlay.bbox[1])}) → (${Math.round(resolvedOverlay.bbox[2])}, ${Math.round(resolvedOverlay.bbox[3])})`
+    : null;
 
   return (
     <Dialog open onOpenChange={(open) => { if (!open) onClose(); }}>
@@ -687,10 +506,9 @@ function InstanceDetailModal({
             </div>
             <div>
               <p className="text-xs text-muted-foreground uppercase tracking-wide mb-1">Bounding Box</p>
-              {rawCoords ? (
+              {bboxReadout ? (
                 <p className="text-xs font-mono text-muted-foreground leading-relaxed">
-                  ({Math.round(rawCoords.x1)}, {Math.round(rawCoords.y1)})<br />
-                  → ({Math.round(rawCoords.x2)}, {Math.round(rawCoords.y2)})
+                  {bboxReadout}
                 </p>
               ) : (
                 <p className="text-sm text-muted-foreground">—</p>
@@ -710,47 +528,32 @@ function InstanceDetailModal({
             )}
           </div>
 
-          {/* Right: drawing area with fixed toolbar + scrollable canvas */}
+          {/* Right: shared DrawingViewer (owns toolbar, zoom/pan, fit) */}
           <div className="flex-1 min-w-0 flex flex-col overflow-hidden">
-            {/* Fixed zoom toolbar */}
-            <div className="h-12 flex-shrink-0 flex items-center justify-between px-4 border-b bg-background">
-              <span className="text-sm text-muted-foreground">Drawing Preview</span>
-              <div className="flex items-center gap-2">
-                <Button variant="outline" size="icon" className="h-8 w-8" onClick={handleZoomOut} disabled={zoom <= 1}>
-                  <ZoomOut className="w-4 h-4" />
-                </Button>
-                <span className="text-sm min-w-[3rem] text-center tabular-nums">{Math.round(zoom * 100)}%</span>
-                <Button variant="outline" size="icon" className="h-8 w-8" onClick={handleZoomIn} disabled={zoom >= 8}>
-                  <ZoomIn className="w-4 h-4" />
-                </Button>
+            {!sourceFile?.storage_path ? (
+              <div className="flex items-center justify-center h-full">
+                <p className="text-sm text-muted-foreground">Drawing not available</p>
               </div>
-            </div>
-
-            {/* Scrollable drawing container */}
-            <div
-              ref={containerRef}
-              className="flex-1 min-h-0 overflow-auto bg-muted/30 m-4 border rounded-lg p-4"
-              style={instanceMapNav.containerStyle}
-              {...instanceMapNav.handlers}
-            >
-              {!sourceFile?.storage_path ? (
-                <div className="flex items-center justify-center h-full">
-                  <p className="text-sm text-muted-foreground">Drawing not available</p>
-                </div>
-              ) : pdfError ? (
-                <div className="flex items-center justify-center h-full">
-                  <p className="text-sm text-destructive">{pdfError}</p>
-                </div>
-              ) : isLoadingPdf ? (
-                <div className="flex items-center justify-center h-full">
-                  <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
-                </div>
-              ) : (
-                <div className="flex items-start justify-start min-h-full min-w-full">
-                  <canvas ref={canvasRef} className="rounded shadow-sm" style={{ maxWidth: "none", maxHeight: "none" }} />
-                </div>
-              )}
-            </div>
+            ) : resolveError ? (
+              <div className="flex items-center justify-center h-full">
+                <p className="text-sm text-destructive">{resolveError}</p>
+              </div>
+            ) : resolveLoading ? (
+              <div className="flex items-center justify-center h-full">
+                <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
+              </div>
+            ) : (
+              <DrawingViewer
+                source={source}
+                layout="single-page"
+                page={resolvedOverlay?.pageNum ?? 1}
+                overlays={overlays}
+                initialFit={resolvedOverlay ? "selection" : "page"}
+                initialFitOverlayId={resolvedOverlay ? OVERLAY_ID : undefined}
+                minScale={0.5}
+                maxScale={8}
+              />
+            )}
           </div>
         </div>
       </DialogContent>
