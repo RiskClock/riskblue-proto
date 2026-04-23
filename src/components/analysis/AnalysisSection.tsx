@@ -38,8 +38,6 @@ import {
   RotateCcw,
   AlertTriangle,
   Download,
-  ZoomIn,
-  ZoomOut,
   Copy,
   Check,
   Search,
