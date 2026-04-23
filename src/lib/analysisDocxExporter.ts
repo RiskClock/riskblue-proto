@@ -622,6 +622,27 @@ export async function generateAnalysisDocx(
           ],
         })
       );
+
+      // Fallback caption: image was rendered without a red circle because we
+      // couldn't resolve exact bounds. Make that explicit so the reader does
+      // not assume the highlight succeeded.
+      if (row.drawingWithoutHighlight) {
+        children.push(
+          new Paragraph({
+            alignment: AlignmentType.CENTER,
+            spacing: { before: 80 },
+            children: [
+              new TextRun({
+                text: "Drawing shown without highlight because export could not resolve the exact detection bounds.",
+                italics: true,
+                size: 16,
+                color: "666666",
+                font: "Arial",
+              }),
+            ],
+          })
+        );
+      }
     }
 
     return children;
