@@ -354,7 +354,7 @@ async function renderDrawingImage(
     sourceCanvas.height = exportViewport.height;
     const sourceCtx = sourceCanvas.getContext("2d")!;
 
-    await page.render({ canvasContext: ctx_unused_placeholder(sourceCtx), viewport: exportViewport, canvas: sourceCanvas } as any).promise;
+    await page.render({ canvasContext: sourceCtx, viewport: exportViewport, canvas: sourceCanvas } as any).promise;
 
     // ---- Resolve circle geometry on the SOURCE canvas (full page) ----
     let circle: { cx: number; cy: number; diameter: number } | null = null;
