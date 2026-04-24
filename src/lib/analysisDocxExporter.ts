@@ -282,6 +282,21 @@ async function loadPdf(
   }
 }
 
+function drawHighlightCircle(
+  ctx: CanvasRenderingContext2D,
+  cx: number,
+  cy: number,
+  diameter: number,
+): void {
+  ctx.beginPath();
+  ctx.arc(cx, cy, diameter / 2, 0, 2 * Math.PI);
+  ctx.fillStyle = "rgba(220, 38, 38, 0.22)";
+  ctx.fill();
+  ctx.strokeStyle = "rgb(220, 38, 38)";
+  ctx.lineWidth = 1.5;
+  ctx.stroke();
+}
+
 async function renderDrawingImage(
   storagePath: string | null,
   instance: SummarizedInstance,
@@ -349,14 +364,15 @@ async function renderDrawingImage(
     const page = await pdf.getPage(pageNum);
     const exportViewport = page.getViewport({ scale: EXPORT_SCALE });
 
-    const canvas = document.createElement("canvas");
-    canvas.width = exportViewport.width;
-    canvas.height = exportViewport.height;
-    const ctx = canvas.getContext("2d")!;
+    const sourceCanvas = document.createElement("canvas");
+    sourceCanvas.width = exportViewport.width;
+    sourceCanvas.height = exportViewport.height;
+    const sourceCtx = sourceCanvas.getContext("2d")!;
 
-    await page.render({ canvasContext: ctx, viewport: exportViewport, canvas } as any).promise;
+    await page.render({ canvasContext: sourceCtx, viewport: exportViewport, canvas: sourceCanvas } as any).promise;
 
-    // ---- Draw red translucent circle (mirrors OverlayLayer) ----
+    // ---- Resolve circle geometry on the SOURCE canvas (full page) ----
+    let circle: { cx: number; cy: number; diameter: number } | null = null;
     if (bbox) {
       const [x1, y1, x2, y2] = bbox;
       let cx: number, cy: number, side: number;
@@ -374,21 +390,77 @@ async function renderDrawingImage(
         side = Math.max(Math.abs(vx2 - vx1), Math.abs(vy2 - vy1));
       }
       const diameter = Math.max(34, side * 1.5);
-      ctx.beginPath();
-      ctx.arc(cx, cy, diameter / 2, 0, 2 * Math.PI);
-      ctx.fillStyle = "rgba(220, 38, 38, 0.22)";
-      ctx.fill();
-      ctx.strokeStyle = "rgb(220, 38, 38)";
-      ctx.lineWidth = 1.5;
-      ctx.stroke();
+      circle = { cx, cy, diameter };
+    }
+
+    // ---- Choose final canvas: cropped (if circle) or full page (fallback) ----
+    let finalCanvas: HTMLCanvasElement;
+    if (circle) {
+      // Target crop aspect matches DOCX max area (620 x 720 → w/h ≈ 0.861).
+      // Circle diameter should be ~20% of crop width (clamped 15–25%).
+      const TARGET_DIAMETER_RATIO = 0.20;
+      const MIN_DIAMETER_RATIO = 0.25; // → max crop = diameter / 0.25
+      const MAX_DIAMETER_RATIO = 0.15; // → min crop = diameter / 0.15
+      const TARGET_ASPECT_W_OVER_H = MAX_IMG_W_PX / MAX_IMG_H_PX; // ≈ 0.861
+
+      let cropW = circle.diameter / TARGET_DIAMETER_RATIO;
+      // Also enforce a minimum context margin of ~2.5x diameter on each side.
+      // That implies cropW >= diameter + 2 * 2.5 * diameter = 6 * diameter.
+      // 1 / 0.20 = 5 → bump to 6 when context margin dominates.
+      cropW = Math.max(cropW, circle.diameter * 6);
+      // Clamp ratio range so circle isn't too small or too large.
+      const minCropFromMaxRatio = circle.diameter / MIN_DIAMETER_RATIO;
+      const maxCropFromMinRatio = circle.diameter / MAX_DIAMETER_RATIO;
+      cropW = Math.max(cropW, minCropFromMaxRatio);
+      cropW = Math.min(cropW, maxCropFromMinRatio);
+
+      let cropH = cropW / TARGET_ASPECT_W_OVER_H;
+
+      // If crop is larger than the source page in either dim, fall back to full page.
+      if (cropW >= sourceCanvas.width && cropH >= sourceCanvas.height) {
+        finalCanvas = sourceCanvas;
+        // Draw circle directly on the full page.
+        const ctx = sourceCanvas.getContext("2d")!;
+        drawHighlightCircle(ctx, circle.cx, circle.cy, circle.diameter);
+      } else {
+        // Clamp crop to source bounds while keeping aspect ratio when possible.
+        cropW = Math.min(cropW, sourceCanvas.width);
+        cropH = Math.min(cropH, sourceCanvas.height);
+
+        let cropX = circle.cx - cropW / 2;
+        let cropY = circle.cy - cropH / 2;
+        cropX = Math.max(0, Math.min(cropX, sourceCanvas.width - cropW));
+        cropY = Math.max(0, Math.min(cropY, sourceCanvas.height - cropH));
+
+        const cropped = document.createElement("canvas");
+        cropped.width = Math.round(cropW);
+        cropped.height = Math.round(cropH);
+        const croppedCtx = cropped.getContext("2d")!;
+        croppedCtx.drawImage(
+          sourceCanvas,
+          cropX, cropY, cropW, cropH,
+          0, 0, cropW, cropH,
+        );
+        // Draw circle in cropped-canvas coordinates.
+        drawHighlightCircle(
+          croppedCtx,
+          circle.cx - cropX,
+          circle.cy - cropY,
+          circle.diameter,
+        );
+        finalCanvas = cropped;
+      }
+    } else {
+      // No bbox/circle → full-page fallback (no highlight).
+      finalCanvas = sourceCanvas;
     }
 
     const blob = await new Promise<Blob | null>((resolve) =>
-      canvas.toBlob((b) => resolve(b), "image/png", 0.85)
+      finalCanvas.toBlob((b) => resolve(b), "image/png", 0.85)
     );
     if (!blob) return null;
     const png = new Uint8Array(await blob.arrayBuffer());
-    return { png, width: canvas.width, height: canvas.height, hasHighlight: bbox !== null };
+    return { png, width: finalCanvas.width, height: finalCanvas.height, hasHighlight: bbox !== null };
   } catch (e) {
     console.warn("Failed to render drawing for export:", e);
     return null;

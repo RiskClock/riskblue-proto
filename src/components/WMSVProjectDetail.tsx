@@ -314,7 +314,10 @@ export function WMSVProjectDetail({ projectId, projectName }: WMSVProjectDetailP
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
-      a.download = `${(projectName || "Analysis").replace(/[^a-zA-Z0-9]/g, "_")}_Export.docx`;
+      const safeProjectName = (projectName || "Project").replace(/[^a-zA-Z0-9]+/g, "_").replace(/^_+|_+$/g, "");
+      const now = new Date();
+      const yyyymmdd = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, "0")}${String(now.getDate()).padStart(2, "0")}`;
+      a.download = `RiskBlue ${safeProjectName} Assets and Systems Export ${yyyymmdd}.docx`;
       a.click();
       URL.revokeObjectURL(url);
       toast({ title: "Export Complete", description: "DOCX file downloaded." });
