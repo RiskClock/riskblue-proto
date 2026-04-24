@@ -97,9 +97,11 @@ async function processJob(job: ExportJob) {
     // 1. Generate DOCX
     const { buffer, filename } = await generateExportDocx({
       supabase,
-      summaryData: job.summary_data_snapshot,
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      summaryData: job.summary_data_snapshot as any,
       projectName: job.project_name_snapshot,
       sourceType: job.source_type_snapshot,
+      analysisRequestId: job.analysis_request_id,
     });
 
     // 2. Upload to private bucket
