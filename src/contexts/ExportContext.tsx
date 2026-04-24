@@ -106,6 +106,7 @@ const CANCELLED_AUTO_DISMISS_MS = 4000;
 
 export function ExportProvider({ children }: { children: ReactNode }) {
   const { user } = useAuth();
+  const queryClient = useQueryClient();
   const [exports, setExports] = useState<ActiveExport[]>([]);
   /** Per-export AbortController. */
   const controllers = useRef<Map<string, AbortController>>(new Map());
