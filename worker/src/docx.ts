@@ -430,25 +430,65 @@ const PAGE_CONTENT_HEIGHT_PX = 864; // 9.0" content height at 96 DPI
 const MAX_IMG_W_PX = 620;           // ~6.45" — fits in 6.5" content width
 
 // ---- Per-row vertical budget (used to size the drawing) --------------------
-// Info table = 9 rows. Each row ≈ 22 px (font 9pt × line height + 60+60 DXA top/bot
-// margins ≈ 8 px padding). Real-world Word render measured at ~21–24 px per row;
-// we round up.
-const TABLE_ROW_HEIGHT_PX = 24;
+// Conservative table-height estimate. The info table is 9 rows; most rows are
+// single-line, but Controls and File can wrap onto multiple lines, which the
+// previous flat 24px estimate ignored and led to overflow onto a second page.
+//
+// Base single-line row: 30 px (was 24, bumped per follow-up). Calibrated from
+// real-world Word renders of 9pt Arial inside a cell with 60+60 DXA top/bottom
+// margins.
+//
+// Wrapping: value column is 6560 DXA ≈ 4.56" ≈ 437 px wide. Conservative
+// chars-per-line (9pt Arial proportional, accounts for cell padding):
+const TABLE_ROW_BASE_HEIGHT_PX = 30;
 const TABLE_ROW_COUNT = 9;
-const ESTIMATED_TABLE_HEIGHT_PX = TABLE_ROW_HEIGHT_PX * TABLE_ROW_COUNT; // 216 px
+const TABLE_VALUE_CHARS_PER_LINE = 75;     // chars per wrapped line in value cell
+const TABLE_WRAP_LINE_HEIGHT_PX = 14;      // additional px per extra wrapped line
+const TABLE_BASE_HEIGHT_PX = TABLE_ROW_BASE_HEIGHT_PX * TABLE_ROW_COUNT; // 270 px
+
 const SPACER_HEIGHT_PX = 14;        // Paragraph with 200 DXA before-spacing ≈ 14 px
 const CAPTION_HEIGHT_PX = 22;       // Italic 8pt note (only when no highlight)
 const SAFETY_BUFFER_PX = 32;        // Guards against Word's renderer rounding
 
-// Hard ceiling so a single drawing never exceeds the page even if the table
-// estimate is off. Equal to content height minus the smallest plausible table.
-const MAX_IMG_H_PX_HARD_CAP = PAGE_CONTENT_HEIGHT_PX - ESTIMATED_TABLE_HEIGHT_PX
-  - SPACER_HEIGHT_PX - SAFETY_BUFFER_PX; // = 864 - 216 - 14 - 32 = 602 px
+// Hard ceiling so a single drawing never exceeds the page even when a row's
+// table estimate spikes. Floor of the per-row image budget.
+// = 864 - 270 (table base) - 14 (spacer) - 32 (safety) = 548 px
+const MAX_IMG_H_PX_HARD_CAP = PAGE_CONTENT_HEIGHT_PX - TABLE_BASE_HEIGHT_PX
+  - SPACER_HEIGHT_PX - SAFETY_BUFFER_PX;
 
-function computeAvailableImageHeightPx(hasCaption: boolean): number {
+// Per-row wrap estimate. Each cell value contributes (extraLines × lineHeight),
+// where extraLines = ceil(len / charsPerLine) - 1 (clamped to ≥ 0).
+function estimateValueExtraHeightPx(value: string): number {
+  if (!value) return 0;
+  const lines = Math.ceil(value.length / TABLE_VALUE_CHARS_PER_LINE);
+  return Math.max(0, lines - 1) * TABLE_WRAP_LINE_HEIGHT_PX;
+}
+
+// Content-aware table height. Pass the values that can realistically wrap
+// (Controls and File are the dominant wrap risks; Display Name / Class are
+// included for safety but rarely wrap).
+function estimateTableHeightPx(args: {
+  controlsValue: string;
+  fileName: string;
+  displayName: string;
+  className: string;
+}): number {
+  return (
+    TABLE_BASE_HEIGHT_PX +
+    estimateValueExtraHeightPx(args.controlsValue) +
+    estimateValueExtraHeightPx(args.fileName) +
+    estimateValueExtraHeightPx(args.displayName) +
+    estimateValueExtraHeightPx(args.className)
+  );
+}
+
+function computeAvailableImageHeightPx(
+  hasCaption: boolean,
+  estimatedTableHeightPx: number,
+): number {
   const captionPx = hasCaption ? CAPTION_HEIGHT_PX : 0;
   const available = PAGE_CONTENT_HEIGHT_PX
-    - ESTIMATED_TABLE_HEIGHT_PX
+    - estimatedTableHeightPx
     - SPACER_HEIGHT_PX
     - captionPx
     - SAFETY_BUFFER_PX;
@@ -609,9 +649,10 @@ async function renderDrawingImage(
       const TARGET_DIAMETER_RATIO = 0.12;
       const MIN_DIAMETER_RATIO = 0.14;   // tightest allowed → smallest crop
       const MAX_DIAMETER_RATIO = 0.10;   // loosest allowed → largest crop
-      // Use the worst-case (no-caption) display budget for the crop aspect
-      // so every detection's drawing has a consistent shape on the page.
-      const TARGET_ASPECT_W_OVER_H = MAX_IMG_W_PX / computeAvailableImageHeightPx(false);
+      // Use the smallest plausible image budget (the hard cap) for the crop
+      // aspect so every detection's crop has a consistent shape and is safe
+      // for the tightest same-page layout.
+      const TARGET_ASPECT_W_OVER_H = MAX_IMG_W_PX / MAX_IMG_H_PX_HARD_CAP;
 
       let cropW = circle.diameter / TARGET_DIAMETER_RATIO;
       cropW = Math.max(cropW, circle.diameter * 6);
@@ -871,7 +912,16 @@ export async function generateExportDocx(args: GenerateArgs): Promise<GenerateRe
         }),
       );
 
-      const availableImageHeightPx = computeAvailableImageHeightPx(row.drawingWithoutHighlight);
+      const estimatedTableHeightPx = estimateTableHeightPx({
+        controlsValue,
+        fileName: row.fileName,
+        displayName: row.displayName,
+        className: row.className,
+      });
+      const availableImageHeightPx = computeAvailableImageHeightPx(
+        row.drawingWithoutHighlight,
+        estimatedTableHeightPx,
+      );
       const ratio = row.drawingImage.width / row.drawingImage.height;
       let w = MAX_IMG_W_PX;
       let h = MAX_IMG_W_PX / ratio;
