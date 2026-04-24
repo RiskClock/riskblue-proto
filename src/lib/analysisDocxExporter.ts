@@ -469,11 +469,12 @@ async function renderDrawingImage(
 
     let finalCanvas: HTMLCanvasElement;
     if (circle) {
-      // Looser crop: red circle ≈ 12% of cropped image width (preferred),
-      // clamped between 10% (loosest, more context) and 14% (tightest).
-      const TARGET_DIAMETER_RATIO = 0.12;
-      const MIN_DIAMETER_RATIO = 0.14; // tightest allowed → smallest crop
-      const MAX_DIAMETER_RATIO = 0.10; // loosest allowed → largest crop
+      // Looser crop: red circle ≈ 10% of cropped image width (preferred),
+      // clamped between 8% (loosest, more context) and 12% (tightest).
+      // crop width = circleDiameter / TARGET_DIAMETER_RATIO
+      const TARGET_DIAMETER_RATIO = 0.10;
+      const MIN_DIAMETER_RATIO = 0.12; // tightest allowed → smallest crop
+      const MAX_DIAMETER_RATIO = 0.08; // loosest allowed → largest crop
       // Match worst-case page budget so all crops have a consistent shape.
       const TARGET_ASPECT_W_OVER_H = MAX_IMG_W_PX / MAX_IMG_H_PX_HARD_CAP;
 
@@ -519,6 +520,11 @@ async function renderDrawingImage(
     } else {
       finalCanvas = sourceCanvas;
     }
+
+    // Draw a thin black border around the final image so it has a clear
+    // visual boundary in the DOCX. Only the drawing is bordered — never the
+    // detection table.
+    drawImageBorder(finalCanvas);
 
     const blob = await new Promise<Blob | null>((resolve) =>
       finalCanvas.toBlob((b) => resolve(b), "image/png", 0.85)
