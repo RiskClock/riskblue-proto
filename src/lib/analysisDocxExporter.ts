@@ -18,8 +18,32 @@ import * as pdfjsLib from "pdfjs-dist";
 import { findBBoxInTextLayer, normalizeText } from "@/lib/pdfTextLayerSearch";
 
 // ---------------------------------------------------------------------------
-// Types
+// Public types
 // ---------------------------------------------------------------------------
+
+export type ExportStage =
+  | "initializing"
+  | "loading"
+  | "rendering"
+  | "packing"
+  | "downloading";
+
+export interface ExportProgress {
+  stage: ExportStage;
+  /** 0..100 percentage to display in the UI */
+  percent: number;
+  /** Status text e.g. "Processing detection 7 of 22" */
+  detail?: string;
+  /** Detection-level counters when available */
+  done?: number;
+  total?: number;
+}
+
+export interface GenerateOptions {
+  onProgress?: (p: ExportProgress) => void;
+  signal?: AbortSignal;
+  sourceType?: string;
+}
 
 interface SummarizedInstance {
   id: string;
@@ -36,24 +60,38 @@ interface InstanceExportRow {
   displayId: string;
   displayName: string;
   floor: string;
-  type: string;        // "Critical Asset" | "Water System" | "Process"
-  className: string;   // AWP class name
+  type: string;
+  className: string;
   areaSqft: number;
   pipeDiameterMM?: number;
   controls: string[];
   fileName: string;
   drawingImage: { png: Uint8Array; width: number; height: number } | null;
-  // True when the image was rendered but no bbox could be resolved, so no
-  // red circle is drawn. Used to show a fallback caption under the image.
   drawingWithoutHighlight: boolean;
 }
 
 // ---------------------------------------------------------------------------
-// Overlay helpers — TEMPORARY narrow-scope duplication of viewer logic.
-// Names + behavior MUST stay identical to AnalysisSection.tsx so a future
-// extraction into src/lib/overlayCandidates.ts is a mechanical move.
-// Follow-up: extract these three helpers + the OverlayRow type into a shared
-// module and import from both AnalysisSection.tsx and this file.
+// Cancellation
+// ---------------------------------------------------------------------------
+
+export class ExportAbortError extends Error {
+  constructor() {
+    super("Export cancelled by user.");
+    this.name = "ExportAbortError";
+  }
+}
+
+function checkAbort(signal?: AbortSignal): void {
+  if (signal?.aborted) throw new ExportAbortError();
+}
+
+/** Yield to the event loop so the UI stays responsive between detections. */
+function yieldToBrowser(): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, 0));
+}
+
+// ---------------------------------------------------------------------------
+// Overlay helpers — kept identical to viewer logic.
 // ---------------------------------------------------------------------------
 
 interface OverlayRow {
@@ -200,11 +238,13 @@ async function fetchControlNames(awpClassName: string, category: string): Promis
     category === "Water System" ? "water_systems" : "processes";
 
   const { data: sourceEntry } = await supabase
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     .from(sourceTable as any)
     .select("default_control_ids")
     .eq("name", awpClassName)
     .maybeSingle();
 
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const controlIds = (sourceEntry as any)?.default_control_ids;
   if (!controlIds?.length) return [];
 
@@ -244,19 +284,63 @@ async function findSourceFile(
 }
 
 // ---------------------------------------------------------------------------
-// Drawing render — uses viewer-parity overlay resolution + red translucent
-// circle that matches OverlayLayer (translucent fill, thin red outline,
-// minimum diameter 34 CSS px scaled, side * 1.5 sizing).
+// Page geometry — US Letter, 1" margins, 96 DPI.
+//   Content area = 6.5" × 9" = 624 × 864 px.
 // ---------------------------------------------------------------------------
 
 const EXPORT_SCALE = 1.5;
-// docx@9.6.1 ImageRun.transformation values are PIXELS (multiplied by 9525
-// to produce EMU). Verified in node_modules/docx/dist/index.cjs.
-const MAX_IMG_W_PX = 620; // ~6.5" at 96 DPI
-const MAX_IMG_H_PX = 720; // ~7.5" at 96 DPI — leaves room for the table
+const PAGE_CONTENT_HEIGHT_PX = 864;
+const MAX_IMG_W_PX = 620;
 
-// Cache PDF documents per storage_path within a single export run so we
-// don't re-download the same file for every detection.
+const TABLE_ROW_BASE_HEIGHT_PX = 30;
+const TABLE_ROW_COUNT = 9;
+const TABLE_VALUE_CHARS_PER_LINE = 75;
+const TABLE_WRAP_LINE_HEIGHT_PX = 14;
+const TABLE_BASE_HEIGHT_PX = TABLE_ROW_BASE_HEIGHT_PX * TABLE_ROW_COUNT;
+
+const SPACER_HEIGHT_PX = 14;
+const CAPTION_HEIGHT_PX = 22;
+const SAFETY_BUFFER_PX = 32;
+
+// 864 - 270 - 14 - 32 = 548 px
+const MAX_IMG_H_PX_HARD_CAP =
+  PAGE_CONTENT_HEIGHT_PX - TABLE_BASE_HEIGHT_PX - SPACER_HEIGHT_PX - SAFETY_BUFFER_PX;
+
+function estimateValueExtraHeightPx(value: string): number {
+  if (!value) return 0;
+  const lines = Math.ceil(value.length / TABLE_VALUE_CHARS_PER_LINE);
+  return Math.max(0, lines - 1) * TABLE_WRAP_LINE_HEIGHT_PX;
+}
+
+function estimateTableHeightPx(args: {
+  controlsValue: string;
+  fileName: string;
+  displayName: string;
+  className: string;
+}): number {
+  return (
+    TABLE_BASE_HEIGHT_PX +
+    estimateValueExtraHeightPx(args.controlsValue) +
+    estimateValueExtraHeightPx(args.fileName) +
+    estimateValueExtraHeightPx(args.displayName) +
+    estimateValueExtraHeightPx(args.className)
+  );
+}
+
+function computeAvailableImageHeightPx(
+  hasCaption: boolean,
+  estimatedTableHeightPx: number,
+): number {
+  const captionPx = hasCaption ? CAPTION_HEIGHT_PX : 0;
+  const available =
+    PAGE_CONTENT_HEIGHT_PX - estimatedTableHeightPx - SPACER_HEIGHT_PX - captionPx - SAFETY_BUFFER_PX;
+  return Math.max(120, Math.min(available, MAX_IMG_H_PX_HARD_CAP));
+}
+
+// ---------------------------------------------------------------------------
+// Drawing render (browser, viewer-parity overlay + red translucent circle)
+// ---------------------------------------------------------------------------
+
 type PdfCache = Map<string, pdfjsLib.PDFDocumentProxy | null>;
 
 async function loadPdf(
@@ -312,7 +396,6 @@ async function renderDrawingImage(
     const pdf = await loadPdf(storagePath, bucket, pdfCache);
     if (!pdf) return null;
 
-    // ---- Resolve overlay using the SAME priority as InstanceDetailModal ----
     const rows = resultText ? parseOverlayCandidates(resultText) : [];
     const matchingRow = findMatchingOverlayRow(rows, instance.id);
     const hintPage = matchingRow?.pageNum;
@@ -322,11 +405,7 @@ async function renderDrawingImage(
     let pageNum = 1;
     let bbox: [number, number, number, number] | null = null;
     let coordSpace: "pixels" | "pdf-points" = "pixels";
-    let aiViewportWidth = 0; // for pixels-coord rescaling
-    // Whether we have any signal that this page is the right page for this
-    // detection (matching overlay row OR successful text-layer match). If
-    // false AND we have no bbox, we omit the image entirely rather than
-    // showing an arbitrary first page.
+    let aiViewportWidth = 0;
     let pageResolved = false;
 
     if (aiBBox) {
@@ -349,18 +428,16 @@ async function renderDrawingImage(
         coordSpace = "pdf-points";
         pageResolved = true;
       } else if (hintPage) {
-        // Page is known from the overlay row even though we can't find the
-        // exact bounds — render the page without a circle (fallback).
         pageNum = Math.min(hintPage, pdf.numPages);
         bbox = null;
         pageResolved = true;
       } else {
-        // No bbox AND no page hint — don't render an arbitrary page.
         return null;
       }
     }
 
-    // ---- Render the page ----
+    if (!pageResolved) return null;
+
     const page = await pdf.getPage(pageNum);
     const exportViewport = page.getViewport({ scale: EXPORT_SCALE });
 
@@ -371,19 +448,16 @@ async function renderDrawingImage(
 
     await page.render({ canvasContext: sourceCtx, viewport: exportViewport, canvas: sourceCanvas } as any).promise;
 
-    // ---- Resolve circle geometry on the SOURCE canvas (full page) ----
     let circle: { cx: number; cy: number; diameter: number } | null = null;
     if (bbox) {
       const [x1, y1, x2, y2] = bbox;
       let cx: number, cy: number, side: number;
       if (coordSpace === "pixels") {
-        // bbox is in scale-4 pixels; rescale to current canvas
         const k = exportViewport.width / aiViewportWidth;
         cx = ((x1 + x2) / 2) * k;
         cy = ((y1 + y2) / 2) * k;
         side = Math.max(Math.abs(x2 - x1), Math.abs(y2 - y1)) * k;
       } else {
-        // pdf-points → viewport
         const [vx1, vy1, vx2, vy2] = exportViewport.convertToViewportRectangle([x1, y1, x2, y2]);
         cx = (vx1 + vx2) / 2;
         cy = (vy1 + vy2) / 2;
@@ -393,22 +467,18 @@ async function renderDrawingImage(
       circle = { cx, cy, diameter };
     }
 
-    // ---- Choose final canvas: cropped (if circle) or full page (fallback) ----
     let finalCanvas: HTMLCanvasElement;
     if (circle) {
-      // Target crop aspect matches DOCX max area (620 x 720 → w/h ≈ 0.861).
-      // Circle diameter should be ~20% of crop width (clamped 15–25%).
-      const TARGET_DIAMETER_RATIO = 0.20;
-      const MIN_DIAMETER_RATIO = 0.25; // → max crop = diameter / 0.25
-      const MAX_DIAMETER_RATIO = 0.15; // → min crop = diameter / 0.15
-      const TARGET_ASPECT_W_OVER_H = MAX_IMG_W_PX / MAX_IMG_H_PX; // ≈ 0.861
+      // Looser crop: red circle ≈ 12% of cropped image width (preferred),
+      // clamped between 10% (loosest, more context) and 14% (tightest).
+      const TARGET_DIAMETER_RATIO = 0.12;
+      const MIN_DIAMETER_RATIO = 0.14; // tightest allowed → smallest crop
+      const MAX_DIAMETER_RATIO = 0.10; // loosest allowed → largest crop
+      // Match worst-case page budget so all crops have a consistent shape.
+      const TARGET_ASPECT_W_OVER_H = MAX_IMG_W_PX / MAX_IMG_H_PX_HARD_CAP;
 
       let cropW = circle.diameter / TARGET_DIAMETER_RATIO;
-      // Also enforce a minimum context margin of ~2.5x diameter on each side.
-      // That implies cropW >= diameter + 2 * 2.5 * diameter = 6 * diameter.
-      // 1 / 0.20 = 5 → bump to 6 when context margin dominates.
       cropW = Math.max(cropW, circle.diameter * 6);
-      // Clamp ratio range so circle isn't too small or too large.
       const minCropFromMaxRatio = circle.diameter / MIN_DIAMETER_RATIO;
       const maxCropFromMinRatio = circle.diameter / MAX_DIAMETER_RATIO;
       cropW = Math.max(cropW, minCropFromMaxRatio);
@@ -416,14 +486,11 @@ async function renderDrawingImage(
 
       let cropH = cropW / TARGET_ASPECT_W_OVER_H;
 
-      // If crop is larger than the source page in either dim, fall back to full page.
       if (cropW >= sourceCanvas.width && cropH >= sourceCanvas.height) {
         finalCanvas = sourceCanvas;
-        // Draw circle directly on the full page.
         const ctx = sourceCanvas.getContext("2d")!;
         drawHighlightCircle(ctx, circle.cx, circle.cy, circle.diameter);
       } else {
-        // Clamp crop to source bounds while keeping aspect ratio when possible.
         cropW = Math.min(cropW, sourceCanvas.width);
         cropH = Math.min(cropH, sourceCanvas.height);
 
@@ -441,7 +508,6 @@ async function renderDrawingImage(
           cropX, cropY, cropW, cropH,
           0, 0, cropW, cropH,
         );
-        // Draw circle in cropped-canvas coordinates.
         drawHighlightCircle(
           croppedCtx,
           circle.cx - cropX,
@@ -451,7 +517,6 @@ async function renderDrawingImage(
         finalCanvas = cropped;
       }
     } else {
-      // No bbox/circle → full-page fallback (no highlight).
       finalCanvas = sourceCanvas;
     }
 
@@ -468,26 +533,58 @@ async function renderDrawingImage(
 }
 
 // ---------------------------------------------------------------------------
-// Main Export Function
+// Filename
 // ---------------------------------------------------------------------------
-//
-// Signature note: `onProgress` keeps its original 4th-arg position. `sourceType`
-// is appended as the 5th arg so existing call sites (3 or 4 positional args)
-// continue to work without changes.
 
+/** RiskBlue {Project_Name_With_Underscores} Assets and Systems Export {YYYYMMDD}.docx */
+export function buildExportFilename(projectName: string, date: Date = new Date()): string {
+  const safeName = (projectName || "Project")
+    .replace(/[^a-zA-Z0-9]+/g, "_")
+    .replace(/^_+|_+$/g, "");
+  const yyyymmdd =
+    `${date.getFullYear()}` +
+    `${String(date.getMonth() + 1).padStart(2, "0")}` +
+    `${String(date.getDate()).padStart(2, "0")}`;
+  return `RiskBlue ${safeName} Assets and Systems Export ${yyyymmdd}.docx`;
+}
+
+// ---------------------------------------------------------------------------
+// Main entrypoint
+// ---------------------------------------------------------------------------
+
+/**
+ * Generate a DOCX export Blob in the browser.
+ *
+ * Progress allocation (matches the spec):
+ *   0–5%   initializing
+ *   5–10%  loading export data
+ *   10–85% rendering detections
+ *   85–95% packing DOCX
+ *   95–100% triggering download
+ *
+ * Throws ExportAbortError if `signal` is aborted.
+ */
 export async function generateAnalysisDocx(
   requestId: string,
   summaryData: Record<string, SummarizedInstance[]>,
   projectName: string,
-  onProgress?: (done: number, total: number) => void,
-  sourceType?: string,
+  options: GenerateOptions = {},
 ): Promise<Blob> {
+  const { onProgress, signal, sourceType } = options;
+
+  const report = (p: ExportProgress) => onProgress?.(p);
+
+  report({ stage: "initializing", percent: 2, detail: "Preparing export…" });
+  checkAbort(signal);
+
   // 1. Gather all files for this request
+  report({ stage: "loading", percent: 6, detail: "Loading export data…" });
   const { data: filesData } = await supabase
     .from("analysis_request_files")
     .select("id, name, storage_path")
     .eq("analysis_request_id", requestId);
   const files = filesData || [];
+  checkAbort(signal);
 
   // 2. Gather all analysis results for matching
   const { data: allResults } = await supabase
@@ -495,8 +592,9 @@ export async function generateAnalysisDocx(
     .select("file_id, awp_class_name, result_text, status")
     .eq("analysis_request_id", requestId)
     .eq("status", "complete");
+  checkAbort(signal);
 
-  // 3. Collect AWP order data for prefix
+  // 3. Collect AWP id_prefix lookup
   const [aData, wData, pData] = await Promise.all([
     supabase.from("critical_assets").select("name, id_prefix").eq("is_active", true),
     supabase.from("water_systems").select("name, id_prefix").eq("is_active", true),
@@ -506,13 +604,12 @@ export async function generateAnalysisDocx(
   for (const x of [...(aData.data || []), ...(wData.data || []), ...(pData.data || [])]) {
     if (x.id_prefix) prefixMap[x.name] = x.id_prefix;
   }
+  checkAbort(signal);
 
-  // 4. Flatten all instances and assign detection numbers
-  const allInstances: Array<{
-    awpClassName: string;
-    instance: SummarizedInstance;
-  }> = [];
+  // 4. Flatten all instances
+  const allInstances: Array<{ awpClassName: string; instance: SummarizedInstance }> = [];
   for (const [className, instances] of Object.entries(summaryData)) {
+    if (!Array.isArray(instances)) continue;
     for (const inst of instances) {
       allInstances.push({ awpClassName: className, instance: inst });
     }
@@ -523,15 +620,23 @@ export async function generateAnalysisDocx(
     throw new Error("No detection instances to export");
   }
 
-  // 5. Build export rows
+  report({
+    stage: "rendering",
+    percent: 10,
+    detail: `Processing detection 0 of ${totalDetections}`,
+    done: 0,
+    total: totalDetections,
+  });
+
+  // 5. Build export rows — yield between detections so the UI stays responsive.
   const rows: InstanceExportRow[] = [];
   const categoryCache: Record<string, string> = {};
   const controlsCache: Record<string, string[]> = {};
   const pdfCache: PdfCache = new Map();
 
   for (let i = 0; i < allInstances.length; i++) {
+    checkAbort(signal);
     const { awpClassName, instance } = allInstances[i];
-    onProgress?.(i, totalDetections);
 
     if (!categoryCache[awpClassName]) {
       categoryCache[awpClassName] = await resolveCategory(awpClassName);
@@ -563,13 +668,10 @@ export async function generateAnalysisDocx(
       pdfCache,
     );
 
-    const prefix = prefixMap[awpClassName] || awpClassName.replace(/[^a-zA-Z]/g, "").substring(0, 3).toUpperCase();
-    const displayId = instance.id;
-
     rows.push({
       detectionNumber: i + 1,
       totalDetections,
-      displayId,
+      displayId: instance.id,
       displayName: instance.name,
       floor: instance.floor || "—",
       type,
@@ -583,19 +685,33 @@ export async function generateAnalysisDocx(
         : null,
       drawingWithoutHighlight: !!drawingImage && !drawingImage.hasHighlight,
     });
+
+    const completed = i + 1;
+    const percent = 10 + (completed / totalDetections) * 75;
+    report({
+      stage: "rendering",
+      percent,
+      detail: `Processing detection ${completed} of ${totalDetections}`,
+      done: completed,
+      total: totalDetections,
+    });
+
+    // Yield to the browser between detections.
+    await yieldToBrowser();
   }
 
-  onProgress?.(totalDetections, totalDetections);
-
   // 6. Build DOCX
+  report({ stage: "packing", percent: 88, detail: "Packing DOCX…" });
+  checkAbort(signal);
+
   const cellBorder = { style: BorderStyle.SINGLE, size: 1, color: "CCCCCC" };
   const cellBorders = { top: cellBorder, bottom: cellBorder, left: cellBorder, right: cellBorder };
   const labelWidth = 2800;
-  const valueWidth = 6560; // total = 9360 (US Letter with 1" margins)
+  const valueWidth = 6560;
 
   const buildInfoRow = (label: string, value: string) =>
     new DocxTableRow({
-      cantSplit: true, // best-effort: keep a single row from breaking across pages
+      cantSplit: true,
       children: [
         new DocxTableCell({
           borders: cellBorders,
@@ -658,8 +774,6 @@ export async function generateAnalysisDocx(
     children.push(tableElement);
 
     if (row.drawingImage) {
-      // Spacer with keepNext to push Word to keep the image with the table
-      // when content fits (best-effort — Word may still overflow if too tall).
       children.push(
         new Paragraph({
           spacing: { before: 200 },
@@ -667,13 +781,23 @@ export async function generateAnalysisDocx(
         })
       );
 
-      // Proportional sizing in PIXELS (docx@9.6.1 transformation unit).
+      // Per-row, content-aware image height budget.
+      const estimatedTableHeightPx = estimateTableHeightPx({
+        controlsValue,
+        fileName: row.fileName,
+        displayName: row.displayName,
+        className: row.className,
+      });
+      const availableImageHeightPx = computeAvailableImageHeightPx(
+        row.drawingWithoutHighlight,
+        estimatedTableHeightPx,
+      );
       const ratio = row.drawingImage.width / row.drawingImage.height;
       let w = MAX_IMG_W_PX;
       let h = MAX_IMG_W_PX / ratio;
-      if (h > MAX_IMG_H_PX) {
-        h = MAX_IMG_H_PX;
-        w = MAX_IMG_H_PX * ratio;
+      if (h > availableImageHeightPx) {
+        h = availableImageHeightPx;
+        w = availableImageHeightPx * ratio;
       }
 
       children.push(
@@ -695,9 +819,6 @@ export async function generateAnalysisDocx(
         })
       );
 
-      // Fallback caption: image was rendered without a red circle because we
-      // couldn't resolve exact bounds. Make that explicit so the reader does
-      // not assume the highlight succeeded.
       if (row.drawingWithoutHighlight) {
         children.push(
           new Paragraph({
@@ -739,5 +860,8 @@ export async function generateAnalysisDocx(
     ],
   });
 
-  return Packer.toBlob(doc);
+  checkAbort(signal);
+  const blob = await Packer.toBlob(doc);
+  report({ stage: "downloading", percent: 96, detail: "Starting download…" });
+  return blob;
 }
