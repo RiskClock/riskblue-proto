@@ -22,7 +22,7 @@ export function ExportProgressPanel() {
 
   return (
     <div
-      className="fixed bottom-4 right-4 z-[60] w-[360px] max-w-[calc(100vw-2rem)] rounded-lg border border-border bg-card shadow-lg overflow-hidden"
+      className="pointer-events-none fixed bottom-4 left-4 z-[60] w-[min(440px,calc(100vw-2rem))] max-h-[60vh] overflow-hidden rounded-lg border border-border bg-card shadow-lg sm:bottom-6 sm:left-6"
       role="region"
       aria-label="Active exports"
     >
@@ -33,7 +33,7 @@ export function ExportProgressPanel() {
         </div>
       )}
 
-      <div className="divide-y divide-border">
+      <div className="pointer-events-auto max-h-[calc(60vh-2.25rem)] overflow-y-auto divide-y divide-border">
         {exports.map((exp) => (
           <ExportRow
             key={exp.id}
@@ -67,6 +67,14 @@ function ExportRow({ exp, onCancel, onDismiss }: ExportRowProps) {
         ? "Export cancelled —"
         : "Export failed —";
 
+  const statusText = isActive
+    ? exp.detail || "Working…"
+    : isComplete
+      ? "Export complete. Download started."
+      : isCancelled
+        ? "Export cancelled."
+        : exp.error || "Export failed.";
+
   return (
     <div className={cn("px-3 py-3", isFailed && "bg-destructive/5")}>
       <div className="flex items-start justify-between gap-2">
@@ -81,10 +89,17 @@ function ExportRow({ exp, onCancel, onDismiss }: ExportRowProps) {
             </p>
           </div>
 
+          <p className={cn(
+            "mt-1 text-xs break-words",
+            isFailed ? "text-destructive" : "text-muted-foreground",
+          )}>
+            {statusText}
+          </p>
+
           {isActive && (
             <>
               <div className="mt-2 flex items-center justify-between text-xs text-muted-foreground">
-                <span className="truncate">{exp.detail || "Working…"}</span>
+                <span className="truncate">{exp.projectName}</span>
                 <span className="ml-2 shrink-0">{exp.percent}%</span>
               </div>
               <Progress value={exp.percent} className="mt-1 h-1.5" />
@@ -92,22 +107,6 @@ function ExportRow({ exp, onCancel, onDismiss }: ExportRowProps) {
                 Tab must stay open
               </p>
             </>
-          )}
-
-          {isComplete && (
-            <p className="mt-1 text-xs text-muted-foreground">
-              Export complete. Download started.
-            </p>
-          )}
-
-          {isCancelled && (
-            <p className="mt-1 text-xs text-muted-foreground">Export cancelled.</p>
-          )}
-
-          {isFailed && (
-            <p className="mt-1 text-xs text-destructive break-words">
-              {exp.error || "Export failed."}
-            </p>
           )}
         </div>
 
