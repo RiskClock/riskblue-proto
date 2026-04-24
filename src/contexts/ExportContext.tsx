@@ -7,6 +7,8 @@ import {
   useState,
   type ReactNode,
 } from "react";
+import { useQueryClient } from "@tanstack/react-query";
+import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import {
@@ -104,6 +106,7 @@ const CANCELLED_AUTO_DISMISS_MS = 4000;
 
 export function ExportProvider({ children }: { children: ReactNode }) {
   const { user } = useAuth();
+  const queryClient = useQueryClient();
   const [exports, setExports] = useState<ActiveExport[]>([]);
   /** Per-export AbortController. */
   const controllers = useRef<Map<string, AbortController>>(new Map());
@@ -271,6 +274,12 @@ export function ExportProvider({ children }: { children: ReactNode }) {
             .eq("id", jobId)
             .then(() => undefined);
         }
+        toast.success("Export complete", {
+          description: `${args.projectName} — your download has started.`,
+        });
+        queryClient.invalidateQueries({
+          queryKey: ["analysis-export-active-job", args.analysisRequestId],
+        });
         scheduleAutoDismiss(localId, COMPLETE_AUTO_DISMISS_MS);
       } catch (e) {
         const aborted = e instanceof ExportAbortError || controller.signal.aborted;
@@ -296,13 +305,23 @@ export function ExportProvider({ children }: { children: ReactNode }) {
             .then(() => undefined);
         }
 
+        // Always invalidate so any "active" UI state clears immediately.
+        queryClient.invalidateQueries({
+          queryKey: ["analysis-export-active-job", args.analysisRequestId],
+        });
+
         if (aborted) {
+          toast("Export cancelled", {
+            description: `${args.projectName} export was cancelled.`,
+          });
           scheduleAutoDismiss(localId, CANCELLED_AUTO_DISMISS_MS);
+        } else {
+          toast.error("Export failed", { description: message });
         }
         // Failed rows stay until the user dismisses them manually.
       }
     },
-    [user, updateExport, scheduleAutoDismiss],
+    [user, updateExport, scheduleAutoDismiss, queryClient],
   );
 
   // -------------------------------------------------------------------------
