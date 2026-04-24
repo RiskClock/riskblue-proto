@@ -1,32 +1,51 @@
-import { useState } from "react";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useState, useCallback } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
+import { useExportManager } from "@/contexts/ExportContext";
+
+interface StartArgs {
+  projectId: string;
+  projectName: string;
+  sourceType?: string;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  summaryData: Record<string, any[]>;
+}
 
 /**
- * Manages the async DOCX export flow for a single analysis request.
+ * Per-request hook for the WMSV / Analysis Detail "Export Analysis" button.
  *
- * Behaviour:
- *  - Loads the most recent export job for the request (any status).
- *  - `triggerExport()` calls the request-analysis-export edge function which
- *    inserts a `pending` job. An external Node worker picks it up, generates
- *    the DOCX, uploads it, creates a 15-day signed URL, and emails the user.
- *  - The hook itself never downloads a file in the browser anymore.
+ * Flow:
+ *  - Looks up whether THIS analysis request currently has an active
+ *    (pending/processing) export job in the DB (covers exports started in
+ *    other tabs / by other users on the same project).
+ *  - Combined with in-memory state from ExportProvider, decides whether to
+ *    open the "already in progress" confirmation modal or start immediately.
+ *  - All actual generation, progress, and download happen client-side via
+ *    ExportProvider — no edge function is called.
  */
 export function useAnalysisExport(analysisRequestId: string | undefined) {
   const { toast } = useToast();
-  const queryClient = useQueryClient();
-  const [confirmOpen, setConfirmOpen] = useState(false);
-  const [submitting, setSubmitting] = useState(false);
+  const {
+    startExport,
+    isActiveForRequest,
+    cancelExportForRequest,
+  } = useExportManager();
 
-  const lastJobQuery = useQuery({
-    queryKey: ["analysis-export-job-latest", analysisRequestId],
+  const [confirmOpen, setConfirmOpen] = useState(false);
+  const [pendingArgs, setPendingArgs] = useState<StartArgs | null>(null);
+
+  // Server-side check: is there an active job for this request right now?
+  // Useful when the export was started in a different tab/session.
+  const activeJobQuery = useQuery({
+    queryKey: ["analysis-export-active-job", analysisRequestId],
     queryFn: async () => {
       if (!analysisRequestId) return null;
       const { data, error } = await supabase
         .from("analysis_export_jobs")
-        .select("id, status, created_at, completed_at, expires_at")
+        .select("id, status, created_at, requested_by_user_id")
         .eq("analysis_request_id", analysisRequestId)
+        .in("status", ["pending", "processing"])
         .order("created_at", { ascending: false })
         .limit(1)
         .maybeSingle();
@@ -34,55 +53,92 @@ export function useAnalysisExport(analysisRequestId: string | undefined) {
       return data;
     },
     enabled: !!analysisRequestId,
-    staleTime: 1000 * 30,
+    refetchInterval: 15000,
+    staleTime: 5000,
   });
 
-  const submit = async () => {
-    if (!analysisRequestId) return;
-    setSubmitting(true);
-    try {
-      const { error } = await supabase.functions.invoke(
-        "request-analysis-export",
-        { body: { analysisRequestId } },
-      );
-      if (error) throw error;
+  const hasActiveJob =
+    !!activeJobQuery.data ||
+    (analysisRequestId ? isActiveForRequest(analysisRequestId) : false);
 
-      toast({
-        title: "Export started",
-        description:
-          "We'll email you a download link in several minutes.",
-      });
-      setConfirmOpen(false);
-      await queryClient.invalidateQueries({
-        queryKey: ["analysis-export-job-latest", analysisRequestId],
-      });
-    } catch (e) {
-      toast({
-        title: "Could not start export",
-        description: (e as Error).message ?? "Unknown error",
-        variant: "destructive",
-      });
-    } finally {
-      setSubmitting(false);
-    }
-  };
+  const launch = useCallback(
+    async (args: StartArgs) => {
+      if (!analysisRequestId) return;
+      try {
+        await startExport({ analysisRequestId, ...args });
+        toast({
+          title: "Export started",
+          description:
+            "Keep this tab open while we prepare your file. Your download will start when it’s ready.",
+        });
+      } catch (e) {
+        toast({
+          title: "Could not start export",
+          description: (e as Error).message ?? "Unknown error",
+          variant: "destructive",
+        });
+      }
+    },
+    [analysisRequestId, startExport, toast],
+  );
 
   /** Click handler for the Export Analysis button. */
-  const requestExport = () => {
-    if (lastJobQuery.data) {
-      setConfirmOpen(true);
-    } else {
-      void submit();
+  const requestExport = useCallback(
+    (args: StartArgs) => {
+      if (!analysisRequestId) return;
+      if (hasActiveJob) {
+        setPendingArgs(args);
+        setConfirmOpen(true);
+        return;
+      }
+      void launch(args);
+    },
+    [analysisRequestId, hasActiveJob, launch],
+  );
+
+  /** "Cancel and Export Again" — kill in-flight client export, mark any
+   * stale DB rows as cancelled, then start a fresh one. */
+  const confirmCancelAndRestart = useCallback(async () => {
+    if (!analysisRequestId || !pendingArgs) return;
+
+    // 1. Cancel any locally-running export for this request.
+    cancelExportForRequest(analysisRequestId);
+
+    // 2. Best-effort: mark any DB rows still pending/processing as cancelled.
+    try {
+      await supabase
+        .from("analysis_export_jobs")
+        .update({
+          status: "cancelled",
+          error_message: "Export cancelled by user.",
+          completed_at: new Date().toISOString(),
+        })
+        .eq("analysis_request_id", analysisRequestId)
+        .in("status", ["pending", "processing"]);
+    } catch {
+      // Non-fatal — RLS may block updating other users' rows; the new
+      // export still proceeds.
     }
-  };
+
+    setConfirmOpen(false);
+    const args = pendingArgs;
+    setPendingArgs(null);
+    await launch(args);
+    activeJobQuery.refetch();
+  }, [
+    analysisRequestId,
+    pendingArgs,
+    cancelExportForRequest,
+    launch,
+    activeJobQuery,
+  ]);
 
   return {
-    lastJob: lastJobQuery.data ?? null,
-    isLoadingLastJob: lastJobQuery.isLoading,
+    /** True when an export for this request is in flight (locally or DB-wide). */
+    hasActiveJob,
     requestExport,
     confirmOpen,
     setConfirmOpen,
-    confirmAndSubmit: submit,
-    submitting,
+    confirmCancelAndRestart,
   };
 }

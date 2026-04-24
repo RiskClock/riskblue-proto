@@ -24,6 +24,8 @@ import InternalViewerTest from "./pages/InternalViewerTest";
 import CheckoutReturn from "./pages/CheckoutReturn";
 import NotFound from "./pages/NotFound";
 import { Loader2 } from "lucide-react";
+import { ExportProvider } from "./contexts/ExportContext";
+import { ExportProgressPanel } from "./components/export/ExportProgressPanel";
 
 const queryClient = new QueryClient();
 
@@ -53,7 +55,9 @@ const App = () => (
       <Sonner />
       <BrowserRouter>
         <AuthProvider>
-          <Routes>
+          <ExportProvider>
+            <ExportProgressPanel />
+            <Routes>
             <Route path="/auth" element={<PublicRoute><Auth /></PublicRoute>} />
             <Route path="/projects" element={<ProtectedRoute><Projects /></ProtectedRoute>} />
             <Route path="/project/:id" element={<ProtectedRoute><ProjectWizard /></ProtectedRoute>} />
