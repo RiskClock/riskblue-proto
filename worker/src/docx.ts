@@ -871,12 +871,13 @@ export async function generateExportDocx(args: GenerateArgs): Promise<GenerateRe
         }),
       );
 
+      const availableImageHeightPx = computeAvailableImageHeightPx(row.drawingWithoutHighlight);
       const ratio = row.drawingImage.width / row.drawingImage.height;
       let w = MAX_IMG_W_PX;
       let h = MAX_IMG_W_PX / ratio;
-      if (h > MAX_IMG_H_PX) {
-        h = MAX_IMG_H_PX;
-        w = MAX_IMG_H_PX * ratio;
+      if (h > availableImageHeightPx) {
+        h = availableImageHeightPx;
+        w = availableImageHeightPx * ratio;
       }
 
       children.push(
