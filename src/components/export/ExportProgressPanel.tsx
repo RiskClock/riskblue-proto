@@ -7,6 +7,9 @@ import { cn } from "@/lib/utils";
 /**
  * Fixed bottom-right global panel that surfaces all in-flight, completed,
  * failed, and cancelled DOCX exports. Mounted once at the app root.
+ *
+ * Single coherent container: warning header + export rows live inside the
+ * same card so it reads as one toast-style panel.
  */
 export function ExportProgressPanel() {
   const { exports, cancelExport, dismissExport } = useExportManager();
@@ -19,18 +22,18 @@ export function ExportProgressPanel() {
 
   return (
     <div
-      className="fixed bottom-4 right-4 z-[60] w-[360px] max-w-[calc(100vw-2rem)] space-y-2"
+      className="fixed bottom-4 right-4 z-[60] w-[360px] max-w-[calc(100vw-2rem)] rounded-lg border border-border bg-card shadow-lg overflow-hidden"
       role="region"
       aria-label="Active exports"
     >
       {hasActive && (
-        <div className="rounded-md border border-warning/40 bg-warning/10 px-3 py-2 text-xs text-warning-foreground shadow-sm">
+        <div className="border-b border-border bg-warning/10 px-3 py-2 text-xs text-foreground">
           Keep this tab open while exports are running. Closing this tab may
           stop the export before the download starts.
         </div>
       )}
 
-      <div className="space-y-2">
+      <div className="divide-y divide-border">
         {exports.map((exp) => (
           <ExportRow
             key={exp.id}
@@ -65,13 +68,7 @@ function ExportRow({ exp, onCancel, onDismiss }: ExportRowProps) {
         : "Export failed —";
 
   return (
-    <div
-      className={cn(
-        "rounded-lg border bg-card px-3 py-3 shadow-md",
-        isFailed && "border-destructive/40",
-        isComplete && "border-success/40",
-      )}
-    >
+    <div className={cn("px-3 py-3", isFailed && "bg-destructive/5")}>
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-1.5">
@@ -91,7 +88,7 @@ function ExportRow({ exp, onCancel, onDismiss }: ExportRowProps) {
                 <span className="ml-2 shrink-0">{exp.percent}%</span>
               </div>
               <Progress value={exp.percent} className="mt-1 h-1.5" />
-              <p className="mt-1.5 text-[11px] font-medium uppercase tracking-wide text-warning-foreground">
+              <p className="mt-1.5 text-[11px] text-muted-foreground">
                 Tab must stay open
               </p>
             </>
