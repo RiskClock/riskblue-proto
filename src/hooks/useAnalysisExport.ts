@@ -1,5 +1,5 @@
 import { useState, useCallback } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { useExportManager } from "@/contexts/ExportContext";
@@ -23,9 +23,15 @@ interface StartArgs {
  *    open the "already in progress" confirmation modal or start immediately.
  *  - All actual generation, progress, and download happen client-side via
  *    ExportProvider — no edge function is called.
+ *
+ * Toasts:
+ *  - We do NOT toast "Export started" here. The global progress panel is the
+ *    confirmation that an export began. ExportProvider emits the cancel /
+ *    complete / failure toasts.
  */
 export function useAnalysisExport(analysisRequestId: string | undefined) {
   const { toast } = useToast();
+  const queryClient = useQueryClient();
   const {
     startExport,
     isActiveForRequest,
@@ -37,6 +43,7 @@ export function useAnalysisExport(analysisRequestId: string | undefined) {
 
   // Server-side check: is there an active job for this request right now?
   // Useful when the export was started in a different tab/session.
+  // CRITICAL: only pending/processing rows count — never cancelled/failed/complete.
   const activeJobQuery = useQuery({
     queryKey: ["analysis-export-active-job", analysisRequestId],
     queryFn: async () => {
@@ -66,11 +73,6 @@ export function useAnalysisExport(analysisRequestId: string | undefined) {
       if (!analysisRequestId) return;
       try {
         await startExport({ analysisRequestId, ...args });
-        toast({
-          title: "Export started",
-          description:
-            "Keep this tab open while we prepare your file. Your download will start when it’s ready.",
-        });
       } catch (e) {
         toast({
           title: "Could not start export",
@@ -120,17 +122,21 @@ export function useAnalysisExport(analysisRequestId: string | undefined) {
       // export still proceeds.
     }
 
+    // 3. Refresh the active-job query so the modal won't reappear.
+    await queryClient.invalidateQueries({
+      queryKey: ["analysis-export-active-job", analysisRequestId],
+    });
+
     setConfirmOpen(false);
     const args = pendingArgs;
     setPendingArgs(null);
     await launch(args);
-    activeJobQuery.refetch();
   }, [
     analysisRequestId,
     pendingArgs,
     cancelExportForRequest,
     launch,
-    activeJobQuery,
+    queryClient,
   ]);
 
   return {
