@@ -347,7 +347,9 @@ async function loadPdf(
   storagePath: string,
   bucket: string,
   cache: PdfCache,
+  signal?: AbortSignal,
 ): Promise<pdfjsLib.PDFDocumentProxy | null> {
+  checkAbort(signal);
   if (cache.has(storagePath)) return cache.get(storagePath)!;
   try {
     const { data: fileData, error } = await supabase.storage.from(bucket).download(storagePath);
@@ -355,7 +357,9 @@ async function loadPdf(
       cache.set(storagePath, null);
       return null;
     }
+    checkAbort(signal);
     const arrayBuffer = await fileData.arrayBuffer();
+    checkAbort(signal);
     const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
     cache.set(storagePath, pdf);
     return pdf;
@@ -410,14 +414,16 @@ async function renderDrawingImage(
   resultText: string | null,
   sourceType: string | undefined,
   pdfCache: PdfCache,
+  signal?: AbortSignal,
 ): Promise<{ png: Uint8Array; width: number; height: number; hasHighlight: boolean } | null> {
   if (!storagePath) return null;
 
   const bucket = sourceType === "manual_upload" ? "uploaded-drawings" : "drive-analysis-files";
 
   try {
-    const pdf = await loadPdf(storagePath, bucket, pdfCache);
+    const pdf = await loadPdf(storagePath, bucket, pdfCache, signal);
     if (!pdf) return null;
+    checkAbort(signal);
 
     const rows = resultText ? parseOverlayCandidates(resultText) : [];
     const matchingRow = findMatchingOverlayRow(rows, instance.id);
@@ -442,6 +448,7 @@ async function renderDrawingImage(
     } else {
       let textBBox = null as null | { x1: number; y1: number; x2: number; y2: number; pageNum: number };
       for (const candidate of searchCandidates) {
+        checkAbort(signal);
         textBBox = await findBBoxInTextLayer(pdf, candidate, hintPage);
         if (textBBox) break;
       }
@@ -460,6 +467,7 @@ async function renderDrawingImage(
     }
 
     if (!pageResolved) return null;
+    checkAbort(signal);
 
     const page = await pdf.getPage(pageNum);
     const exportViewport = page.getViewport({ scale: EXPORT_SCALE });
@@ -470,6 +478,7 @@ async function renderDrawingImage(
     const sourceCtx = sourceCanvas.getContext("2d")!;
 
     await page.render({ canvasContext: sourceCtx, viewport: exportViewport, canvas: sourceCanvas } as any).promise;
+    checkAbort(signal);
 
     let circle: { cx: number; cy: number; diameter: number } | null = null;
     if (bbox) {
@@ -552,6 +561,7 @@ async function renderDrawingImage(
     const blob = await new Promise<Blob | null>((resolve) =>
       finalCanvas.toBlob((b) => resolve(b), "image/png", 0.85)
     );
+    checkAbort(signal);
     if (!blob) return null;
     const png = new Uint8Array(await blob.arrayBuffer());
     return { png, width: finalCanvas.width, height: finalCanvas.height, hasHighlight: bbox !== null };
@@ -695,6 +705,7 @@ export async function generateAnalysisDocx(
       resultText,
       sourceType,
       pdfCache,
+      signal,
     );
 
     rows.push({
