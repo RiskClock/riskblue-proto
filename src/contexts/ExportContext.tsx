@@ -61,6 +61,8 @@ interface ExportContextValue {
   exports: ActiveExport[];
   /** True if there is an active (pending/processing) export for this request. */
   isActiveForRequest: (analysisRequestId: string) => boolean;
+  /** True when this tab locally cancelled a request and should ignore stale active-job rows. */
+  isRequestSuppressed: (analysisRequestId: string) => boolean;
   startExport: (args: StartExportArgs) => Promise<void>;
   cancelExport: (localId: string) => void;
   cancelExportForRequest: (analysisRequestId: string) => void;
@@ -108,6 +110,7 @@ export function ExportProvider({ children }: { children: ReactNode }) {
   const { user } = useAuth();
   const queryClient = useQueryClient();
   const [exports, setExports] = useState<ActiveExport[]>([]);
+  const [suppressedRequestIds, setSuppressedRequestIds] = useState<Record<string, true>>({});
   /** Per-export AbortController. */
   const controllers = useRef<Map<string, AbortController>>(new Map());
   /** Per-export auto-dismiss timer. */
@@ -137,6 +140,26 @@ export function ExportProvider({ children }: { children: ReactNode }) {
       timers.current.set(localId, t);
     },
     [removeExport],
+  );
+
+  const suppressRequest = useCallback((analysisRequestId: string) => {
+    setSuppressedRequestIds((prev) =>
+      prev[analysisRequestId] ? prev : { ...prev, [analysisRequestId]: true },
+    );
+  }, []);
+
+  const clearSuppressedRequest = useCallback((analysisRequestId: string) => {
+    setSuppressedRequestIds((prev) => {
+      if (!prev[analysisRequestId]) return prev;
+      const next = { ...prev };
+      delete next[analysisRequestId];
+      return next;
+    });
+  }, []);
+
+  const isRequestSuppressed = useCallback(
+    (analysisRequestId: string) => !!suppressedRequestIds[analysisRequestId],
+    [suppressedRequestIds],
   );
 
   const isActiveForRequest = useCallback(
@@ -182,6 +205,8 @@ export function ExportProvider({ children }: { children: ReactNode }) {
         console.warn("Cannot start export: no auth user");
         return;
       }
+
+      clearSuppressedRequest(args.analysisRequestId);
 
       const localId = newLocalId();
       const controller = new AbortController();
@@ -229,6 +254,25 @@ export function ExportProvider({ children }: { children: ReactNode }) {
         updateExport(localId, { jobId });
       } catch (e) {
         console.warn("Failed to insert export job row (continuing locally):", e);
+      }
+
+      if (controller.signal.aborted) {
+        queryClient.setQueryData(["analysis-export-active-job", args.analysisRequestId], null);
+        if (jobId) {
+          void supabase
+            .from("analysis_export_jobs")
+            .update({
+              status: "cancelled",
+              error_message: "Export cancelled by user.",
+              completed_at: new Date().toISOString(),
+            })
+            .eq("id", jobId);
+        }
+        scheduleAutoDismiss(localId, CANCELLED_AUTO_DISMISS_MS);
+        void queryClient.invalidateQueries({
+          queryKey: ["analysis-export-active-job", args.analysisRequestId],
+        });
+        return;
       }
 
       // Mark as processing in DB.
@@ -311,9 +355,6 @@ export function ExportProvider({ children }: { children: ReactNode }) {
         });
 
         if (aborted) {
-          toast("Export cancelled", {
-            description: `${args.projectName} export was cancelled.`,
-          });
           scheduleAutoDismiss(localId, CANCELLED_AUTO_DISMISS_MS);
         } else {
           toast.error("Export failed", { description: message });
@@ -321,16 +362,42 @@ export function ExportProvider({ children }: { children: ReactNode }) {
         // Failed rows stay until the user dismisses them manually.
       }
     },
-    [user, updateExport, scheduleAutoDismiss, queryClient],
+    [user, clearSuppressedRequest, updateExport, scheduleAutoDismiss, queryClient],
   );
 
   // -------------------------------------------------------------------------
   // cancelExport
   // -------------------------------------------------------------------------
   const cancelExport = useCallback((localId: string) => {
-    const controller = controllers.current.get(localId);
-    controller?.abort();
-  }, []);
+    const exp = exports.find((item) => item.id === localId);
+    if (!exp || (exp.status !== "pending" && exp.status !== "processing")) return;
+
+    controllers.current.get(localId)?.abort();
+
+    updateExport(localId, {
+      status: "cancelled",
+      detail: "Export cancelled.",
+      error: undefined,
+    });
+    suppressRequest(exp.analysisRequestId);
+    queryClient.setQueryData(["analysis-export-active-job", exp.analysisRequestId], null);
+    scheduleAutoDismiss(localId, CANCELLED_AUTO_DISMISS_MS);
+
+    if (exp.jobId) {
+      void supabase
+        .from("analysis_export_jobs")
+        .update({
+          status: "cancelled",
+          error_message: "Export cancelled by user.",
+          completed_at: new Date().toISOString(),
+        })
+        .eq("id", exp.jobId);
+    }
+
+    void queryClient.invalidateQueries({
+      queryKey: ["analysis-export-active-job", exp.analysisRequestId],
+    });
+  }, [exports, queryClient, scheduleAutoDismiss, suppressRequest, updateExport]);
 
   const cancelExportForRequest = useCallback(
     (analysisRequestId: string) => {
@@ -340,10 +407,10 @@ export function ExportProvider({ children }: { children: ReactNode }) {
           (e.status === "pending" || e.status === "processing"),
       );
       for (const m of matches) {
-        controllers.current.get(m.id)?.abort();
+        cancelExport(m.id);
       }
     },
-    [exports],
+    [cancelExport, exports],
   );
 
   return (
@@ -351,6 +418,7 @@ export function ExportProvider({ children }: { children: ReactNode }) {
       value={{
         exports,
         isActiveForRequest,
+        isRequestSuppressed,
         startExport,
         cancelExport,
         cancelExportForRequest,
