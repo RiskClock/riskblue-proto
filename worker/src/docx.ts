@@ -912,7 +912,16 @@ export async function generateExportDocx(args: GenerateArgs): Promise<GenerateRe
         }),
       );
 
-      const availableImageHeightPx = computeAvailableImageHeightPx(row.drawingWithoutHighlight);
+      const estimatedTableHeightPx = estimateTableHeightPx({
+        controlsValue,
+        fileName: row.fileName,
+        displayName: row.displayName,
+        className: row.className,
+      });
+      const availableImageHeightPx = computeAvailableImageHeightPx(
+        row.drawingWithoutHighlight,
+        estimatedTableHeightPx,
+      );
       const ratio = row.drawingImage.width / row.drawingImage.height;
       let w = MAX_IMG_W_PX;
       let h = MAX_IMG_W_PX / ratio;
