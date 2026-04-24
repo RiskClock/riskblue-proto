@@ -381,6 +381,29 @@ function drawHighlightCircle(
   ctx.stroke();
 }
 
+/**
+ * Draw a thin black border inset along the canvas edges so the image has a
+ * clear visual boundary in the DOCX. Stroking with `inside` alignment is not
+ * available on canvas, so we offset by half the line width.
+ */
+function drawImageBorder(canvas: HTMLCanvasElement): void {
+  const ctx = canvas.getContext("2d");
+  if (!ctx) return;
+  // Scale border thickness with image size; clamp to a sensible range.
+  const lineWidth = Math.max(2, Math.min(4, Math.round(canvas.width / 600)));
+  const inset = lineWidth / 2;
+  ctx.save();
+  ctx.lineWidth = lineWidth;
+  ctx.strokeStyle = "rgb(0, 0, 0)";
+  ctx.strokeRect(
+    inset,
+    inset,
+    canvas.width - lineWidth,
+    canvas.height - lineWidth,
+  );
+  ctx.restore();
+}
+
 async function renderDrawingImage(
   storagePath: string | null,
   instance: SummarizedInstance,
