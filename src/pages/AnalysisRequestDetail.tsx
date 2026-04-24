@@ -330,9 +330,9 @@ export default function AnalysisRequestDetail() {
             {/* Export Button */}
             {request.status === "complete" && request.summary_data && Object.keys(request.summary_data as Record<string, unknown>).length > 0 && (
               <div className="flex justify-end pt-2">
-                <Button onClick={handleExportDocx} disabled={exporting}>
+                <Button onClick={requestExport} disabled={exporting}>
                   {exporting ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Download className="w-4 h-4 mr-2" />}
-                  {exporting ? "Exporting…" : "Export Analysis"}
+                  {exporting ? "Starting…" : "Export Analysis"}
                 </Button>
               </div>
             )}
@@ -361,6 +361,15 @@ export default function AnalysisRequestDetail() {
           />
         </>
       )}
+
+      <ExportConfirmationModal
+        open={confirmOpen}
+        onOpenChange={setConfirmOpen}
+        lastExportAt={lastJob?.created_at ?? null}
+        lastExportStatus={lastJob?.status ?? null}
+        onConfirm={confirmAndSubmit}
+        loading={exporting}
+      />
     </div>
   );
 }
