@@ -604,10 +604,14 @@ async function renderDrawingImage(
 
     let finalCanvas: Canvas;
     if (circle) {
-      const TARGET_DIAMETER_RATIO = 0.20;
-      const MIN_DIAMETER_RATIO = 0.25;
-      const MAX_DIAMETER_RATIO = 0.15;
-      const TARGET_ASPECT_W_OVER_H = MAX_IMG_W_PX / MAX_IMG_H_PX;
+      // Looser crop: red circle ≈ 12% of cropped image width (preferred),
+      // clamped between 10% (loosest, more context) and 14% (tightest).
+      const TARGET_DIAMETER_RATIO = 0.12;
+      const MIN_DIAMETER_RATIO = 0.14;   // tightest allowed → smallest crop
+      const MAX_DIAMETER_RATIO = 0.10;   // loosest allowed → largest crop
+      // Use the worst-case (no-caption) display budget for the crop aspect
+      // so every detection's drawing has a consistent shape on the page.
+      const TARGET_ASPECT_W_OVER_H = MAX_IMG_W_PX / computeAvailableImageHeightPx(false);
 
       let cropW = circle.diameter / TARGET_DIAMETER_RATIO;
       cropW = Math.max(cropW, circle.diameter * 6);
