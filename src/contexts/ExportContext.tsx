@@ -274,6 +274,12 @@ export function ExportProvider({ children }: { children: ReactNode }) {
             .eq("id", jobId)
             .then(() => undefined);
         }
+        toast.success("Export complete", {
+          description: `${args.projectName} — your download has started.`,
+        });
+        queryClient.invalidateQueries({
+          queryKey: ["analysis-export-active-job", args.analysisRequestId],
+        });
         scheduleAutoDismiss(localId, COMPLETE_AUTO_DISMISS_MS);
       } catch (e) {
         const aborted = e instanceof ExportAbortError || controller.signal.aborted;
@@ -299,13 +305,23 @@ export function ExportProvider({ children }: { children: ReactNode }) {
             .then(() => undefined);
         }
 
+        // Always invalidate so any "active" UI state clears immediately.
+        queryClient.invalidateQueries({
+          queryKey: ["analysis-export-active-job", args.analysisRequestId],
+        });
+
         if (aborted) {
+          toast("Export cancelled", {
+            description: `${args.projectName} export was cancelled.`,
+          });
           scheduleAutoDismiss(localId, CANCELLED_AUTO_DISMISS_MS);
+        } else {
+          toast.error("Export failed", { description: message });
         }
         // Failed rows stay until the user dismisses them manually.
       }
     },
-    [user, updateExport, scheduleAutoDismiss],
+    [user, updateExport, scheduleAutoDismiss, queryClient],
   );
 
   // -------------------------------------------------------------------------
