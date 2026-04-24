@@ -35,6 +35,7 @@ export function useAnalysisExport(analysisRequestId: string | undefined) {
   const {
     startExport,
     isActiveForRequest,
+    isRequestSuppressed,
     cancelExportForRequest,
   } = useExportManager();
 
@@ -64,9 +65,14 @@ export function useAnalysisExport(analysisRequestId: string | undefined) {
     staleTime: 5000,
   });
 
-  const hasActiveJob =
-    !!activeJobQuery.data ||
-    (analysisRequestId ? isActiveForRequest(analysisRequestId) : false);
+  const requestSuppressed = analysisRequestId
+    ? isRequestSuppressed(analysisRequestId)
+    : false;
+
+  const hasActiveJob = requestSuppressed
+    ? false
+    : !!activeJobQuery.data ||
+      (analysisRequestId ? isActiveForRequest(analysisRequestId) : false);
 
   const launch = useCallback(
     async (args: StartArgs) => {
@@ -88,6 +94,12 @@ export function useAnalysisExport(analysisRequestId: string | undefined) {
   const requestExport = useCallback(
     (args: StartArgs) => {
       if (!analysisRequestId) return;
+      if (requestSuppressed) {
+        setConfirmOpen(false);
+        setPendingArgs(null);
+        void launch(args);
+        return;
+      }
       if (hasActiveJob) {
         setPendingArgs(args);
         setConfirmOpen(true);
@@ -95,7 +107,7 @@ export function useAnalysisExport(analysisRequestId: string | undefined) {
       }
       void launch(args);
     },
-    [analysisRequestId, hasActiveJob, launch],
+    [analysisRequestId, hasActiveJob, launch, requestSuppressed],
   );
 
   /** "Cancel and Export Again" — kill in-flight client export, mark any
@@ -127,6 +139,8 @@ export function useAnalysisExport(analysisRequestId: string | undefined) {
       queryKey: ["analysis-export-active-job", analysisRequestId],
     });
 
+    await activeJobQuery.refetch();
+
     setConfirmOpen(false);
     const args = pendingArgs;
     setPendingArgs(null);
@@ -137,6 +151,7 @@ export function useAnalysisExport(analysisRequestId: string | undefined) {
     cancelExportForRequest,
     launch,
     queryClient,
+    activeJobQuery,
   ]);
 
   return {
