@@ -1,4 +1,4 @@
-import { useRef, useState, useMemo, useEffect, useCallback } from "react";
+import { useRef, useState, useMemo, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
@@ -15,7 +15,8 @@ import { RepositoryConnectionDialog } from "@/components/wizard/RepositoryConnec
 import { ProcoreConnectionDialog } from "@/components/wizard/ProcoreConnectionDialog";
 import { SharePointConnectionDialog } from "@/components/wizard/SharePointConnectionDialog";
 import { UploadReviewModal } from "@/components/UploadReviewModal";
-import { generateAnalysisDocx } from "@/lib/analysisDocxExporter";
+import { ExportConfirmationModal } from "@/components/ExportConfirmationModal";
+import { useAnalysisExport } from "@/hooks/useAnalysisExport";
 
 const ACCEPTED_TYPES = ".pdf,.png,.jpg,.jpeg,.dwg,.dxf";
 
@@ -66,7 +67,6 @@ export function WMSVProjectDetail({ projectId, projectName }: WMSVProjectDetailP
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const [exporting, setExporting] = useState(false);
   const [showDriveDialog, setShowDriveDialog] = useState(false);
   const [showProcoreDialog, setShowProcoreDialog] = useState(false);
   const [showSharePointDialog, setShowSharePointDialog] = useState(false);
@@ -300,33 +300,14 @@ export function WMSVProjectDetail({ projectId, projectName }: WMSVProjectDetailP
     queryClient.invalidateQueries({ queryKey: ["wmsv-analysis-request", projectId] });
   };
 
-  const handleExportDocx = useCallback(async () => {
-    if (!request) return;
-    const summaryData = (request.summary_data as unknown as Record<string, any[]>) || {};
-    const hasInstances = Object.values(summaryData).some((arr) => arr?.length > 0);
-    if (!hasInstances) {
-      toast({ title: "No Data", description: "No summarized instances to export.", variant: "destructive" });
-      return;
-    }
-    setExporting(true);
-    try {
-      const blob = await generateAnalysisDocx(request.id, summaryData as any, projectName || "Project", undefined, request.source_type);
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      const safeProjectName = (projectName || "Project").replace(/[^a-zA-Z0-9]+/g, "_").replace(/^_+|_+$/g, "");
-      const now = new Date();
-      const yyyymmdd = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, "0")}${String(now.getDate()).padStart(2, "0")}`;
-      a.download = `RiskBlue ${safeProjectName} Assets and Systems Export ${yyyymmdd}.docx`;
-      a.click();
-      URL.revokeObjectURL(url);
-      toast({ title: "Export Complete", description: "DOCX file downloaded." });
-    } catch (e) {
-      toast({ title: "Export Failed", description: (e as Error).message, variant: "destructive" });
-    } finally {
-      setExporting(false);
-    }
-  }, [request, projectName, toast]);
+  const {
+    lastJob,
+    requestExport,
+    confirmOpen,
+    setConfirmOpen,
+    confirmAndSubmit,
+    submitting: exporting,
+  } = useAnalysisExport(request?.id);
 
   return (
     <div className="min-h-screen bg-background">
@@ -485,9 +466,9 @@ export function WMSVProjectDetail({ projectId, projectName }: WMSVProjectDetailP
 
               {request.status === "complete" && request.summary_data && Object.keys(request.summary_data as Record<string, unknown>).length > 0 && (
                 <div className="flex justify-end pt-2">
-                  <Button onClick={handleExportDocx} disabled={exporting}>
+                  <Button onClick={requestExport} disabled={exporting}>
                     {exporting ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Download className="w-4 h-4 mr-2" />}
-                    {exporting ? "Exporting…" : "Export Analysis"}
+                    {exporting ? "Starting…" : "Export Analysis"}
                   </Button>
                 </div>
               )}
@@ -530,6 +511,15 @@ export function WMSVProjectDetail({ projectId, projectName }: WMSVProjectDetailP
         initialFiles={pendingFiles}
         accept={ACCEPTED_TYPES}
         onConfirm={confirmUpload}
+      />
+
+      <ExportConfirmationModal
+        open={confirmOpen}
+        onOpenChange={setConfirmOpen}
+        lastExportAt={lastJob?.created_at ?? null}
+        lastExportStatus={lastJob?.status ?? null}
+        onConfirm={confirmAndSubmit}
+        loading={exporting}
       />
     </div>
   );

@@ -41,6 +41,84 @@ export type Database = {
         }
         Relationships: []
       }
+      analysis_export_jobs: {
+        Row: {
+          analysis_request_id: string | null
+          attempts: number
+          completed_at: string | null
+          created_at: string
+          download_filename: string | null
+          error_message: string | null
+          expires_at: string | null
+          id: string
+          project_id: string
+          project_name_snapshot: string
+          requested_by_email: string
+          requested_by_user_id: string
+          source_type_snapshot: string
+          started_at: string | null
+          status: string
+          storage_path: string | null
+          summary_data_snapshot: Json
+          worker_id: string | null
+        }
+        Insert: {
+          analysis_request_id?: string | null
+          attempts?: number
+          completed_at?: string | null
+          created_at?: string
+          download_filename?: string | null
+          error_message?: string | null
+          expires_at?: string | null
+          id?: string
+          project_id: string
+          project_name_snapshot: string
+          requested_by_email: string
+          requested_by_user_id: string
+          source_type_snapshot: string
+          started_at?: string | null
+          status?: string
+          storage_path?: string | null
+          summary_data_snapshot?: Json
+          worker_id?: string | null
+        }
+        Update: {
+          analysis_request_id?: string | null
+          attempts?: number
+          completed_at?: string | null
+          created_at?: string
+          download_filename?: string | null
+          error_message?: string | null
+          expires_at?: string | null
+          id?: string
+          project_id?: string
+          project_name_snapshot?: string
+          requested_by_email?: string
+          requested_by_user_id?: string
+          source_type_snapshot?: string
+          started_at?: string | null
+          status?: string
+          storage_path?: string | null
+          summary_data_snapshot?: Json
+          worker_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "analysis_export_jobs_analysis_request_id_fkey"
+            columns: ["analysis_request_id"]
+            isOneToOne: false
+            referencedRelation: "analysis_requests"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "analysis_export_jobs_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       analysis_request_files: {
         Row: {
           analysis_request_id: string
@@ -1900,6 +1978,35 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      claim_next_export_job: {
+        Args: { p_worker_id: string }
+        Returns: {
+          analysis_request_id: string | null
+          attempts: number
+          completed_at: string | null
+          created_at: string
+          download_filename: string | null
+          error_message: string | null
+          expires_at: string | null
+          id: string
+          project_id: string
+          project_name_snapshot: string
+          requested_by_email: string
+          requested_by_user_id: string
+          source_type_snapshot: string
+          started_at: string | null
+          status: string
+          storage_path: string | null
+          summary_data_snapshot: Json
+          worker_id: string | null
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "analysis_export_jobs"
+          isOneToOne: false
+          isSetofReturn: true
+        }
+      }
       cleanup_expired_reset_tokens: { Args: never; Returns: undefined }
       consume_credit: {
         Args: { p_analysis_request_id?: string; p_user_id: string }
