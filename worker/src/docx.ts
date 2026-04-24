@@ -421,8 +421,39 @@ async function findSourceFile(
 // ---------------------------------------------------------------------------
 
 const EXPORT_SCALE = 1.5;
-const MAX_IMG_W_PX = 620;
-const MAX_IMG_H_PX = 720;
+
+// ---- Page geometry (US Letter, 1" margins) ---------------------------------
+// 1 inch = 1440 DXA = 96 px (at 96 DPI, which is what docx@9 uses for ImageRun).
+// Page content area: (12240 - 1440 - 1440) x (15840 - 1440 - 1440) DXA
+//                  = 9360 x 12960 DXA  =  6.5" x 9.0"  =  624 x 864 px.
+const PAGE_CONTENT_HEIGHT_PX = 864; // 9.0" content height at 96 DPI
+const MAX_IMG_W_PX = 620;           // ~6.45" — fits in 6.5" content width
+
+// ---- Per-row vertical budget (used to size the drawing) --------------------
+// Info table = 9 rows. Each row ≈ 22 px (font 9pt × line height + 60+60 DXA top/bot
+// margins ≈ 8 px padding). Real-world Word render measured at ~21–24 px per row;
+// we round up.
+const TABLE_ROW_HEIGHT_PX = 24;
+const TABLE_ROW_COUNT = 9;
+const ESTIMATED_TABLE_HEIGHT_PX = TABLE_ROW_HEIGHT_PX * TABLE_ROW_COUNT; // 216 px
+const SPACER_HEIGHT_PX = 14;        // Paragraph with 200 DXA before-spacing ≈ 14 px
+const CAPTION_HEIGHT_PX = 22;       // Italic 8pt note (only when no highlight)
+const SAFETY_BUFFER_PX = 32;        // Guards against Word's renderer rounding
+
+// Hard ceiling so a single drawing never exceeds the page even if the table
+// estimate is off. Equal to content height minus the smallest plausible table.
+const MAX_IMG_H_PX_HARD_CAP = PAGE_CONTENT_HEIGHT_PX - ESTIMATED_TABLE_HEIGHT_PX
+  - SPACER_HEIGHT_PX - SAFETY_BUFFER_PX; // = 864 - 216 - 14 - 32 = 602 px
+
+function computeAvailableImageHeightPx(hasCaption: boolean): number {
+  const captionPx = hasCaption ? CAPTION_HEIGHT_PX : 0;
+  const available = PAGE_CONTENT_HEIGHT_PX
+    - ESTIMATED_TABLE_HEIGHT_PX
+    - SPACER_HEIGHT_PX
+    - captionPx
+    - SAFETY_BUFFER_PX;
+  return Math.max(120, Math.min(available, MAX_IMG_H_PX_HARD_CAP));
+}
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type PdfCache = Map<string, any>;
