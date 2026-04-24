@@ -12,7 +12,7 @@ import { useHeapIdentify } from "@/hooks/useHeapIdentify";
 import { useToast } from "@/hooks/use-toast";
 import { ArrowLeft, Loader2, ShieldAlert, Upload, FileText, CheckCircle2, Circle, Download } from "lucide-react";
 import { format } from "date-fns";
-import { ExportConfirmationModal } from "@/components/ExportConfirmationModal";
+import { ActiveExportModal } from "@/components/export/ActiveExportModal";
 import { useAnalysisExport } from "@/hooks/useAnalysisExport";
 import { RepositoryConnectionDialog } from "@/components/wizard/RepositoryConnectionDialog";
 import { ProcoreConnectionDialog } from "@/components/wizard/ProcoreConnectionDialog";
@@ -166,13 +166,21 @@ export default function AnalysisRequestDetail() {
   };
 
   const {
-    lastJob,
     requestExport,
     confirmOpen,
     setConfirmOpen,
-    confirmAndSubmit,
-    submitting: exporting,
+    confirmCancelAndRestart,
   } = useAnalysisExport(requestId);
+
+  const handleExportClick = () => {
+    if (!request) return;
+    requestExport({
+      projectId: request.project_id,
+      projectName: request.project?.name || "Project",
+      sourceType: request.source_type,
+      summaryData: (request.summary_data ?? {}) as Record<string, unknown[]>,
+    });
+  };
 
   if (!isInternal) {
     return (
@@ -330,9 +338,9 @@ export default function AnalysisRequestDetail() {
             {/* Export Button */}
             {request.status === "complete" && request.summary_data && Object.keys(request.summary_data as Record<string, unknown>).length > 0 && (
               <div className="flex justify-end pt-2">
-                <Button onClick={requestExport} disabled={exporting}>
-                  {exporting ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Download className="w-4 h-4 mr-2" />}
-                  {exporting ? "Starting…" : "Export Analysis"}
+                <Button onClick={handleExportClick}>
+                  <Download className="w-4 h-4 mr-2" />
+                  Export Analysis
                 </Button>
               </div>
             )}
@@ -362,13 +370,10 @@ export default function AnalysisRequestDetail() {
         </>
       )}
 
-      <ExportConfirmationModal
+      <ActiveExportModal
         open={confirmOpen}
         onOpenChange={setConfirmOpen}
-        lastExportAt={lastJob?.created_at ?? null}
-        lastExportStatus={lastJob?.status ?? null}
-        onConfirm={confirmAndSubmit}
-        loading={exporting}
+        onConfirm={confirmCancelAndRestart}
       />
     </div>
   );

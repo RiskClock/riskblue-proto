@@ -15,7 +15,7 @@ import { RepositoryConnectionDialog } from "@/components/wizard/RepositoryConnec
 import { ProcoreConnectionDialog } from "@/components/wizard/ProcoreConnectionDialog";
 import { SharePointConnectionDialog } from "@/components/wizard/SharePointConnectionDialog";
 import { UploadReviewModal } from "@/components/UploadReviewModal";
-import { ExportConfirmationModal } from "@/components/ExportConfirmationModal";
+import { ActiveExportModal } from "@/components/export/ActiveExportModal";
 import { useAnalysisExport } from "@/hooks/useAnalysisExport";
 
 const ACCEPTED_TYPES = ".pdf,.png,.jpg,.jpeg,.dwg,.dxf";
@@ -301,13 +301,21 @@ export function WMSVProjectDetail({ projectId, projectName }: WMSVProjectDetailP
   };
 
   const {
-    lastJob,
     requestExport,
     confirmOpen,
     setConfirmOpen,
-    confirmAndSubmit,
-    submitting: exporting,
+    confirmCancelAndRestart,
   } = useAnalysisExport(request?.id);
+
+  const handleExportClick = () => {
+    if (!request) return;
+    requestExport({
+      projectId,
+      projectName,
+      sourceType: request.source_type,
+      summaryData: (request.summary_data ?? {}) as Record<string, unknown[]>,
+    });
+  };
 
   return (
     <div className="min-h-screen bg-background">
@@ -466,9 +474,9 @@ export function WMSVProjectDetail({ projectId, projectName }: WMSVProjectDetailP
 
               {request.status === "complete" && request.summary_data && Object.keys(request.summary_data as Record<string, unknown>).length > 0 && (
                 <div className="flex justify-end pt-2">
-                  <Button onClick={requestExport} disabled={exporting}>
-                    {exporting ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Download className="w-4 h-4 mr-2" />}
-                    {exporting ? "Starting…" : "Export Analysis"}
+                  <Button onClick={handleExportClick}>
+                    <Download className="w-4 h-4 mr-2" />
+                    Export Analysis
                   </Button>
                 </div>
               )}
@@ -513,13 +521,10 @@ export function WMSVProjectDetail({ projectId, projectName }: WMSVProjectDetailP
         onConfirm={confirmUpload}
       />
 
-      <ExportConfirmationModal
+      <ActiveExportModal
         open={confirmOpen}
         onOpenChange={setConfirmOpen}
-        lastExportAt={lastJob?.created_at ?? null}
-        lastExportStatus={lastJob?.status ?? null}
-        onConfirm={confirmAndSubmit}
-        loading={exporting}
+        onConfirm={confirmCancelAndRestart}
       />
     </div>
   );
