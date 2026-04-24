@@ -24,7 +24,7 @@ export function ExportProgressPanel() {
       aria-label="Active exports"
     >
       {hasActive && (
-        <div className="rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-900 shadow-sm">
+        <div className="rounded-md border border-warning/40 bg-warning/10 px-3 py-2 text-xs text-warning-foreground shadow-sm">
           Keep this tab open while exports are running. Closing this tab may
           stop the export before the download starts.
         </div>
@@ -69,14 +69,14 @@ function ExportRow({ exp, onCancel, onDismiss }: ExportRowProps) {
       className={cn(
         "rounded-lg border bg-card px-3 py-3 shadow-md",
         isFailed && "border-destructive/40",
-        isComplete && "border-emerald-300",
+        isComplete && "border-success/40",
       )}
     >
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-1.5">
             {isActive && <Loader2 className="h-3.5 w-3.5 animate-spin text-primary shrink-0" />}
-            {isComplete && <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500 shrink-0" />}
+            {isComplete && <CheckCircle2 className="h-3.5 w-3.5 text-success shrink-0" />}
             {isFailed && <AlertCircle className="h-3.5 w-3.5 text-destructive shrink-0" />}
             {isCancelled && <XCircle className="h-3.5 w-3.5 text-muted-foreground shrink-0" />}
             <p className="truncate text-sm font-medium text-foreground">
@@ -91,7 +91,7 @@ function ExportRow({ exp, onCancel, onDismiss }: ExportRowProps) {
                 <span className="ml-2 shrink-0">{exp.percent}%</span>
               </div>
               <Progress value={exp.percent} className="mt-1 h-1.5" />
-              <p className="mt-1.5 text-[11px] font-medium uppercase tracking-wide text-amber-700">
+              <p className="mt-1.5 text-[11px] font-medium uppercase tracking-wide text-warning-foreground">
                 Tab must stay open
               </p>
             </>
