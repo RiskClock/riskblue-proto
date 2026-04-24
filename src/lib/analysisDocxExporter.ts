@@ -282,6 +282,21 @@ async function loadPdf(
   }
 }
 
+function drawHighlightCircle(
+  ctx: CanvasRenderingContext2D,
+  cx: number,
+  cy: number,
+  diameter: number,
+): void {
+  ctx.beginPath();
+  ctx.arc(cx, cy, diameter / 2, 0, 2 * Math.PI);
+  ctx.fillStyle = "rgba(220, 38, 38, 0.22)";
+  ctx.fill();
+  ctx.strokeStyle = "rgb(220, 38, 38)";
+  ctx.lineWidth = 1.5;
+  ctx.stroke();
+}
+
 async function renderDrawingImage(
   storagePath: string | null,
   instance: SummarizedInstance,
