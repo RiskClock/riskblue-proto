@@ -78,7 +78,8 @@ const App = () => (
             <Route path="/credits/return" element={<CheckoutReturn />} />
             <Route path="/" element={<Navigate to="/projects" />} />
             <Route path="*" element={<NotFound />} />
-          </Routes>
+            </Routes>
+          </ExportProvider>
         </AuthProvider>
       </BrowserRouter>
     </TooltipProvider>
