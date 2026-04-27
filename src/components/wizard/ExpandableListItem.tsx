@@ -183,6 +183,7 @@ export const ExpandableListItem = ({
     points?: number;
     oneTimeCost?: number;
     monthlyMaintCost?: number;
+    vendors?: ControlVendors;
   } | null>(null);
 
   const handleViewControlDetails = useCallback((controlName: string, e: React.MouseEvent) => {
@@ -197,10 +198,11 @@ export const ExpandableListItem = ({
       category: controlData?.category,
       points: controlData?.points,
       oneTimeCost: controlData?.oneTimeCost,
-      monthlyMaintCost: controlData?.monthlyMaintCost
+      monthlyMaintCost: controlData?.monthlyMaintCost,
+      vendors: vendorMap.get(controlName.toLowerCase()),
     });
     setControlModalOpen(true);
-  }, [getControlPoints]);
+  }, [getControlPoints, vendorMap]);
 
   // Find drive file for the selected instance (uses partial matching for flexibility)
   const findDriveFile = useCallback((fileName: string): DriveFileInfo | undefined => {
