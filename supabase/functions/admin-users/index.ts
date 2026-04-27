@@ -446,9 +446,9 @@ Deno.serve(async (req) => {
       case "list":
         return json({ success: true, ...(await actionList()) });
       case "create":
-        return await actionCreate(body);
+        return await actionCreate(body, user.id);
       case "update":
-        return await actionUpdate(body);
+        return await actionUpdate(body, user.id);
       case "deactivate":
         return await actionDeactivate(body);
       case "reactivate":
