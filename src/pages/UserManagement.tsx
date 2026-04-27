@@ -587,32 +587,65 @@ const UserManagement = () => {
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead className="cursor-pointer select-none" onClick={() => toggleSort("email")}>
-                    User <SortIcon k="email" />
+                  {visibleColumns.map((colId) => {
+                    switch (colId) {
+                      case "user":
+                        return (
+                          <TableHead key={colId} className="cursor-pointer select-none" onClick={() => toggleSort("email")}>
+                            User <SortIcon k="email" />
+                          </TableHead>
+                        );
+                      case "company":
+                        return (
+                          <TableHead key={colId} className="cursor-pointer select-none" onClick={() => toggleSort("company")}>
+                            Company <SortIcon k="company" />
+                          </TableHead>
+                        );
+                      case "tags":
+                        return (
+                          <TableHead key={colId} className="cursor-pointer select-none w-[180px]" onClick={() => toggleSort("tags")}>
+                            Tags <SortIcon k="tags" />
+                          </TableHead>
+                        );
+                      case "type":
+                        return <TableHead key={colId}>Type</TableHead>;
+                      case "credits":
+                        return (
+                          <TableHead key={colId} className="cursor-pointer select-none text-right" onClick={() => toggleSort("credits")}>
+                            Credits <SortIcon k="credits" />
+                          </TableHead>
+                        );
+                      case "status":
+                        return (
+                          <TableHead key={colId} className="cursor-pointer select-none" onClick={() => toggleSort("status")}>
+                            Status <SortIcon k="status" />
+                          </TableHead>
+                        );
+                      case "created":
+                        return (
+                          <TableHead key={colId} className="cursor-pointer select-none" onClick={() => toggleSort("created_at")}>
+                            Created <SortIcon k="created_at" />
+                          </TableHead>
+                        );
+                      case "last_sign_in":
+                        return (
+                          <TableHead key={colId} className="cursor-pointer select-none" onClick={() => toggleSort("last_sign_in_at")}>
+                            Last Sign-In <SortIcon k="last_sign_in_at" />
+                          </TableHead>
+                        );
+                      default:
+                        return null;
+                    }
+                  })}
+                  <TableHead className="w-[96px] text-right">
+                    <ColumnEditDropdown columnPrefs={columnPrefs} setColumnPrefs={setColumnPrefs} />
                   </TableHead>
-                  <TableHead className="cursor-pointer select-none" onClick={() => toggleSort("company")}>
-                    Company <SortIcon k="company" />
-                  </TableHead>
-                  <TableHead className="cursor-pointer select-none w-[180px]" onClick={() => toggleSort("tags")}>
-                    Tags <SortIcon k="tags" />
-                  </TableHead>
-                  <TableHead>Type</TableHead>
-                  <TableHead className="cursor-pointer select-none" onClick={() => toggleSort("status")}>
-                    Status <SortIcon k="status" />
-                  </TableHead>
-                  <TableHead className="cursor-pointer select-none" onClick={() => toggleSort("created_at")}>
-                    Created <SortIcon k="created_at" />
-                  </TableHead>
-                  <TableHead className="cursor-pointer select-none" onClick={() => toggleSort("last_sign_in_at")}>
-                    Last Sign-In <SortIcon k="last_sign_in_at" />
-                  </TableHead>
-                  <TableHead className="w-[56px]"></TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {filteredSorted.length === 0 && (
                   <TableRow>
-                    <TableCell colSpan={8} className="text-center text-muted-foreground py-12">
+                    <TableCell colSpan={visibleColumns.length + 1} className="text-center text-muted-foreground py-12">
                       No users match your filters.
                     </TableCell>
                   </TableRow>
@@ -620,42 +653,74 @@ const UserManagement = () => {
                 {filteredSorted.map((u) => {
                   const status = getStatus(u);
                   const isDeactivated = status === "deactivated";
-                  // Apply opacity to all cells except the status pill cell
                   const dim = isDeactivated ? "opacity-80" : "";
                   return (
                     <TableRow key={u.user_id}>
-                      <TableCell className={cn("font-medium", dim)}>
-                        <div className="flex flex-col">
-                          <span>{u.display_name || "—"}</span>
-                          <span className="text-xs text-muted-foreground">{u.email}</span>
-                        </div>
-                      </TableCell>
-                      <TableCell className={dim}>
-                        {u.company || <span className="text-muted-foreground">—</span>}
-                      </TableCell>
-                      <TableCell className={dim}>
-                        {u.tags.length === 0 ? (
-                          <span className="text-muted-foreground text-xs">—</span>
-                        ) : (
-                          <div className="flex flex-wrap gap-1">
-                            {u.tags.map((t) => (
-                              <TagChip key={t.id} name={t.name} />
-                            ))}
-                          </div>
-                        )}
-                      </TableCell>
-                      <TableCell className={dim}>
-                        <Badge variant="outline">{u.account_type === "wmsv" ? "WMSV" : "Standard"}</Badge>
-                      </TableCell>
-                      <TableCell>
-                        <StatusBadge status={status} />
-                      </TableCell>
-                      <TableCell className={cn("text-muted-foreground tabular-nums whitespace-nowrap", dim)}>
-                        {format(new Date(u.created_at), "MMM d, yyyy")}
-                      </TableCell>
-                      <TableCell className={cn("text-muted-foreground tabular-nums whitespace-nowrap", dim)}>
-                        {u.last_sign_in_at ? format(new Date(u.last_sign_in_at), "MMM d, yyyy") : "Never"}
-                      </TableCell>
+                      {visibleColumns.map((colId) => {
+                        switch (colId) {
+                          case "user":
+                            return (
+                              <TableCell key={colId} className={cn("font-medium", dim)}>
+                                <span>
+                                  {u.display_name || "—"}
+                                  <span className="text-muted-foreground font-normal"> ({u.email})</span>
+                                </span>
+                              </TableCell>
+                            );
+                          case "company":
+                            return (
+                              <TableCell key={colId} className={dim}>
+                                {u.company || <span className="text-muted-foreground">—</span>}
+                              </TableCell>
+                            );
+                          case "tags":
+                            return (
+                              <TableCell key={colId} className={dim}>
+                                {u.tags.length === 0 ? (
+                                  <span className="text-muted-foreground text-xs">—</span>
+                                ) : (
+                                  <div className="flex flex-wrap gap-1">
+                                    {u.tags.map((t) => (
+                                      <TagChip key={t.id} name={t.name} />
+                                    ))}
+                                  </div>
+                                )}
+                              </TableCell>
+                            );
+                          case "type":
+                            return (
+                              <TableCell key={colId} className={dim}>
+                                <Badge variant="outline">{u.account_type === "wmsv" ? "WMSV" : "Standard"}</Badge>
+                              </TableCell>
+                            );
+                          case "credits":
+                            return (
+                              <TableCell key={colId} className={cn("text-right tabular-nums whitespace-nowrap", dim)}>
+                                {formatCredits(u.credits_balance ?? 0)}
+                              </TableCell>
+                            );
+                          case "status":
+                            return (
+                              <TableCell key={colId}>
+                                <StatusBadge status={status} />
+                              </TableCell>
+                            );
+                          case "created":
+                            return (
+                              <TableCell key={colId} className={cn("text-muted-foreground tabular-nums whitespace-nowrap", dim)}>
+                                {format(new Date(u.created_at), "MMM d, yyyy")}
+                              </TableCell>
+                            );
+                          case "last_sign_in":
+                            return (
+                              <TableCell key={colId} className={cn("text-muted-foreground tabular-nums whitespace-nowrap", dim)}>
+                                {u.last_sign_in_at ? format(new Date(u.last_sign_in_at), "MMM d, yyyy") : "Never"}
+                              </TableCell>
+                            );
+                          default:
+                            return null;
+                        }
+                      })}
                       <TableCell>
                         <DropdownMenu>
                           <DropdownMenuTrigger asChild>
