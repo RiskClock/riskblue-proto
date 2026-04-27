@@ -91,6 +91,7 @@ interface UserRow {
   display_name: string | null;
   account_type: string;
   company: string | null;
+  credits_balance: number;
   is_active: boolean;
   deactivated_at: string | null;
   created_at: string;
@@ -107,8 +108,86 @@ type SortKey =
   | "company"
   | "last_sign_in_at"
   | "status"
-  | "tags";
+  | "tags"
+  | "credits";
 type SortDir = "asc" | "desc";
+
+// ---- Column configuration ----
+type ColumnId =
+  | "user"
+  | "company"
+  | "tags"
+  | "type"
+  | "credits"
+  | "status"
+  | "created"
+  | "last_sign_in";
+
+interface ColumnDef {
+  id: ColumnId;
+  label: string;
+}
+
+const ALL_COLUMNS: ColumnDef[] = [
+  { id: "user", label: "User" },
+  { id: "company", label: "Company" },
+  { id: "tags", label: "Tags" },
+  { id: "type", label: "Type" },
+  { id: "credits", label: "Credits" },
+  { id: "status", label: "Status" },
+  { id: "created", label: "Created" },
+  { id: "last_sign_in", label: "Last Sign-In" },
+];
+
+const COLUMN_PREFS_KEY = "user-management-columns:v1";
+
+interface ColumnPrefs {
+  order: ColumnId[];
+  visible: Record<ColumnId, boolean>;
+}
+
+function loadColumnPrefs(): ColumnPrefs {
+  const defaults: ColumnPrefs = {
+    order: ALL_COLUMNS.map((c) => c.id),
+    visible: ALL_COLUMNS.reduce((acc, c) => ({ ...acc, [c.id]: true }), {} as Record<ColumnId, boolean>),
+  };
+  if (typeof window === "undefined") return defaults;
+  try {
+    const raw = window.localStorage.getItem(COLUMN_PREFS_KEY);
+    if (!raw) return defaults;
+    const parsed = JSON.parse(raw);
+    const validIds = new Set(ALL_COLUMNS.map((c) => c.id));
+    const order: ColumnId[] = Array.isArray(parsed.order)
+      ? parsed.order.filter((id: any) => validIds.has(id))
+      : defaults.order;
+    // Append any missing
+    for (const c of ALL_COLUMNS) if (!order.includes(c.id)) order.push(c.id);
+    // Force "user" first
+    const filtered = order.filter((id) => id !== "user");
+    const finalOrder = ["user" as ColumnId, ...filtered];
+    const visible = { ...defaults.visible };
+    if (parsed.visible && typeof parsed.visible === "object") {
+      for (const id of finalOrder) {
+        if (typeof parsed.visible[id] === "boolean") visible[id] = parsed.visible[id];
+      }
+    }
+    visible.user = true; // always visible
+    return { order: finalOrder, visible };
+  } catch {
+    return defaults;
+  }
+}
+
+function formatCredits(n: number): string {
+  if (!Number.isFinite(n)) return "0";
+  if (Math.abs(n) >= 1000) {
+    const v = n / 1000;
+    // 1 decimal if not whole, else no decimal
+    const s = (Math.round(v * 10) / 10).toString();
+    return `${s}k`;
+  }
+  return String(n);
+}
 
 const STATUS_OPTIONS = [
   { value: "active", label: "Active" },
