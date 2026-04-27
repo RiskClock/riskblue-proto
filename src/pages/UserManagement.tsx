@@ -611,7 +611,7 @@ const UserManagement = () => {
                         return <TableHead key={colId}>Type</TableHead>;
                       case "credits":
                         return (
-                          <TableHead key={colId} className="cursor-pointer select-none text-right" onClick={() => toggleSort("credits")}>
+                          <TableHead key={colId} className="cursor-pointer select-none text-center" onClick={() => toggleSort("credits")}>
                             Credits <SortIcon k="credits" />
                           </TableHead>
                         );
