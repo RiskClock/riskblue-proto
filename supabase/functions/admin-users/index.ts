@@ -357,6 +357,10 @@ async function actionUpdate(body: any, actor: { id: string | null; email: string
   if (typeof body.name === "string") updates.display_name = body.name.trim();
   if (typeof body.company === "string") updates.company = body.company.trim() || null;
   if (typeof body.is_wmsv === "boolean") updates.account_type = body.is_wmsv ? "wmsv" : "standard";
+  if (body.credits !== undefined && body.credits !== null && body.credits !== "") {
+    const c = Number(body.credits);
+    if (Number.isFinite(c)) updates.credits_balance = Math.max(0, Math.floor(c));
+  }
 
   if (Object.keys(updates).length > 0) {
     const { error } = await adminClient.from("profiles").update(updates).eq("user_id", userId);
@@ -367,6 +371,18 @@ async function actionUpdate(body: any, actor: { id: string | null; email: string
     await adminClient.auth.admin.updateUserById(userId, {
       user_metadata: { display_name: body.name.trim() },
     });
+  }
+
+  // Optional: set new password
+  let passwordChanged = false;
+  if (body.password && String(body.password).length > 0) {
+    const newPwd = String(body.password);
+    if (newPwd.length < 8) return json({ success: false, error: "Password must be at least 8 characters" }, 400);
+    const { error: pwdErr } = await adminClient.auth.admin.updateUserById(userId, {
+      password: newPwd,
+    });
+    if (pwdErr) return json({ success: false, error: pwdErr.message }, 500);
+    passwordChanged = true;
   }
 
   if (Array.isArray(body.tags)) {
@@ -385,7 +401,9 @@ async function actionUpdate(body: any, actor: { id: string | null; email: string
       ...(typeof body.name === "string" ? { name: body.name.trim() } : {}),
       ...(typeof body.company === "string" ? { company: body.company.trim() || null } : {}),
       ...(typeof body.is_wmsv === "boolean" ? { account_type: body.is_wmsv ? "wmsv" : "standard" } : {}),
+      ...(updates.credits_balance !== undefined ? { credits_balance: updates.credits_balance } : {}),
       ...(Array.isArray(body.tags) ? { tags: body.tags } : {}),
+      ...(passwordChanged ? { password_set: true } : {}),
     },
   });
 
