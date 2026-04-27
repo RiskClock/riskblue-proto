@@ -74,7 +74,7 @@ serve(async (req) => {
     const priceId = tier === "wmsv" ? pkg.wmsvPriceId : pkg.fullPriceId;
     const amountCents = tier === "wmsv" ? pkg.wmsvAmountCents : pkg.fullAmountCents;
 
-    const env = (environment || "sandbox") as StripeEnv;
+    const env = environment as StripeEnv;
     const stripe = createStripeClient(env);
 
     const prices = await stripe.prices.list({ lookup_keys: [priceId] });
@@ -93,6 +93,14 @@ serve(async (req) => {
         returnUrl ||
         `${req.headers.get("origin")}/credits/return?session_id={CHECKOUT_SESSION_ID}`,
       customer_email: user.email,
+      // Full compliance handling: Stripe handles tax calculation, collection,
+      // filing & remittance for buyers in ~80 supported countries; for buyers
+      // elsewhere it falls back to tax calculation only. Adds +3.5% per
+      // transaction. Eligible because credit packs are general digital goods
+      // (tax_code txcd_10000000 set on each product).
+      // Do NOT add `automatic_tax`, `tax_id_collection`, or other parameters
+      // that conflict with `managed_payments` — see Stripe docs.
+      managed_payments: { enabled: true },
       metadata: {
         userId: user.id,
         packageId,
@@ -100,6 +108,7 @@ serve(async (req) => {
         credits: String(pkg.credits),
         amountCents: String(amountCents),
         packageLabel: pkg.label,
+        managed_payments: "true",
       },
     });
 
