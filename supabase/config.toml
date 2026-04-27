@@ -101,3 +101,6 @@ verify_jwt = false
 
 [functions.setup-credit-tax-codes]
 verify_jwt = false
+
+[functions.analyze-level3-schedule]
+verify_jwt = false

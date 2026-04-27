@@ -258,24 +258,42 @@ export const ProjectFilesUpload = ({
 
     const webhookPromise = (async () => {
       try {
-        const response = await fetch(
-          "https://riskclock.app.n8n.cloud/webhook/478b15fa-6098-4d3d-b51d-77ae4d0a1b4e",
-          {
-            method: "POST",
-            body: formData,
-            signal: abortControllerRef.current?.signal,
-          }
-        );
+        // Get auth token for the edge function
+        const { data: { session } } = await supabase.auth.getSession();
+        const accessToken = session?.access_token;
+        if (!accessToken) {
+          throw new Error("Not authenticated");
+        }
+
+        const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+        const functionUrl = `${supabaseUrl}/functions/v1/analyze-level3-schedule`;
+
+        const response = await fetch(functionUrl, {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${accessToken}`,
+            apikey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
+          },
+          body: formData,
+          signal: abortControllerRef.current?.signal,
+        });
 
         if (!response.ok) {
           const errorText = await response.text();
-          console.error("Upload failed:", errorText);
-          throw new Error("Failed to upload file");
+          console.error("Schedule analysis failed:", errorText);
+          let errMsg = "Failed to analyze schedule";
+          try {
+            const parsedErr = JSON.parse(errorText);
+            if (parsedErr?.error) errMsg = parsedErr.error;
+          } catch {
+            // not JSON
+          }
+          throw new Error(errMsg);
         }
 
         const data = await response.text();
         setResponseData(data);
-        
+
         try {
           const parsedData = JSON.parse(data);
           // Await the data extraction to ensure it saves before we save the file name
