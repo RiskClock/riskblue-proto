@@ -22,12 +22,13 @@ interface CreditPackage {
   credits: number;
   priceUsd: number;
   originalPriceUsd: number;
+  priceIdFull: string;
 }
 
 const PACKAGES: CreditPackage[] = [
-  { id: "pack_20", credits: 20, priceUsd: 30, originalPriceUsd: 100 },
-  { id: "pack_100", credits: 100, priceUsd: 130, originalPriceUsd: 430 },
-  { id: "pack_500", credits: 500, priceUsd: 500, originalPriceUsd: 1650 },
+  { id: "pack_20", credits: 20, priceUsd: 30, originalPriceUsd: 100, priceIdFull: "credits_pack_20_full_usd" },
+  { id: "pack_100", credits: 100, priceUsd: 130, originalPriceUsd: 430, priceIdFull: "credits_pack_100_full_usd" },
+  { id: "pack_500", credits: 500, priceUsd: 500, originalPriceUsd: 1650, priceIdFull: "credits_pack_500_full_usd" },
 ];
 
 export const BuyCreditsModal = ({ open, onOpenChange, reason }: BuyCreditsModalProps) => {
