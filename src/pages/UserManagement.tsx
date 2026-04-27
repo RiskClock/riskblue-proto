@@ -584,7 +584,7 @@ const UserManagement = () => {
 
         {!isLoading && !error && (
           <div className="rounded-md border bg-card">
-            <Table>
+            <Table className="[&_td]:py-2 [&_th]:py-2">
               <TableHeader>
                 <TableRow>
                   {visibleColumns.map((colId) => {
