@@ -20,6 +20,8 @@ export type Database = {
           created_at: string | null
           full_name: string
           id: string
+          request_type: string
+          requesting_user_id: string | null
           status: string | null
           work_email: string
         }
@@ -28,6 +30,8 @@ export type Database = {
           created_at?: string | null
           full_name: string
           id?: string
+          request_type?: string
+          requesting_user_id?: string | null
           status?: string | null
           work_email: string
         }
@@ -36,6 +40,8 @@ export type Database = {
           created_at?: string | null
           full_name?: string
           id?: string
+          request_type?: string
+          requesting_user_id?: string | null
           status?: string | null
           work_email?: string
         }
@@ -552,6 +558,42 @@ export type Database = {
           id_prefix?: string
           is_active?: boolean | null
           name?: string
+        }
+        Relationships: []
+      }
+      company_control_selections: {
+        Row: {
+          category: string
+          company: string
+          control_id: string
+          created_at: string
+          created_by: string | null
+          id: string
+          sub_options: Json
+          updated_at: string
+          updated_by: string | null
+        }
+        Insert: {
+          category: string
+          company: string
+          control_id: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          sub_options?: Json
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Update: {
+          category?: string
+          company?: string
+          control_id?: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          sub_options?: Json
+          updated_at?: string
+          updated_by?: string | null
         }
         Relationships: []
       }
@@ -2070,6 +2112,14 @@ export type Database = {
       consume_credit: {
         Args: { p_analysis_request_id?: string; p_user_id: string }
         Returns: Json
+      }
+      get_control_vendor_offerings: {
+        Args: never
+        Returns: {
+          company: string
+          control_id: string
+          sub_options: Json
+        }[]
       }
       grant_credits: {
         Args: {
