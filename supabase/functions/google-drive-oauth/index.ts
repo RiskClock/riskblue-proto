@@ -332,7 +332,15 @@ serve(async (req) => {
 
       const tokenExpiry = new Date(Date.now() + expires_in * 1000).toISOString();
 
-      // Encrypt tokens if encryption key is available
+      // Encryption is REQUIRED — refuse to store plaintext tokens
+      if (!DRIVE_TOKEN_ENCRYPTION_KEY) {
+        console.error("DRIVE_TOKEN_ENCRYPTION_KEY not configured — refusing to store tokens");
+        return new Response(
+          "Server misconfigured: token encryption key missing. Please contact support.",
+          { status: 500 }
+        );
+      }
+
       let upsertData: any = {
         user_id: stateData.userId,
         token_expiry: tokenExpiry,
@@ -340,32 +348,26 @@ serve(async (req) => {
         updated_at: new Date().toISOString(),
       };
 
-      if (DRIVE_TOKEN_ENCRYPTION_KEY) {
-        try {
-          const encryptedAccessToken = await encryptToken(access_token, DRIVE_TOKEN_ENCRYPTION_KEY);
-          const encryptedRefreshToken = refresh_token
-            ? await encryptToken(refresh_token, DRIVE_TOKEN_ENCRYPTION_KEY)
-            : null;
+      try {
+        const encryptedAccessToken = await encryptToken(access_token, DRIVE_TOKEN_ENCRYPTION_KEY);
+        const encryptedRefreshToken = refresh_token
+          ? await encryptToken(refresh_token, DRIVE_TOKEN_ENCRYPTION_KEY)
+          : null;
 
-          upsertData.encrypted_access_token = encryptedAccessToken;
-          upsertData.encrypted_refresh_token = encryptedRefreshToken;
-          upsertData.is_encrypted = true;
-          // Store placeholder in plaintext columns for backward compatibility
-          upsertData.access_token = "ENCRYPTED";
-          upsertData.refresh_token = null;
+        upsertData.encrypted_access_token = encryptedAccessToken;
+        upsertData.encrypted_refresh_token = encryptedRefreshToken;
+        upsertData.is_encrypted = true;
+        // Wipe legacy plaintext columns
+        upsertData.access_token = "ENCRYPTED";
+        upsertData.refresh_token = null;
 
-          console.log("Tokens encrypted successfully");
-        } catch (err) {
-          console.error("Failed to encrypt tokens, storing in plaintext:", err);
-          upsertData.access_token = access_token;
-          upsertData.refresh_token = refresh_token;
-          upsertData.is_encrypted = false;
-        }
-      } else {
-        console.warn("DRIVE_TOKEN_ENCRYPTION_KEY not set, storing tokens in plaintext");
-        upsertData.access_token = access_token;
-        upsertData.refresh_token = refresh_token;
-        upsertData.is_encrypted = false;
+        console.log("Tokens encrypted successfully");
+      } catch (err) {
+        console.error("Failed to encrypt tokens — refusing to store plaintext:", err);
+        return new Response(
+          "Failed to encrypt tokens. Please try again or contact support.",
+          { status: 500 }
+        );
       }
 
       const { error: upsertError } = await supabase.from("user_drive_tokens").upsert(upsertData, {
@@ -479,28 +481,34 @@ serve(async (req) => {
       // Update stored tokens
       const newExpiry = new Date(Date.now() + refreshData.expires_in * 1000).toISOString();
 
+      // Encryption is REQUIRED — refuse to persist plaintext tokens
+      if (!DRIVE_TOKEN_ENCRYPTION_KEY) {
+        console.error("DRIVE_TOKEN_ENCRYPTION_KEY not configured — refusing to persist refreshed token");
+        return new Response(
+          JSON.stringify({ error: "Server misconfigured: token encryption key missing" }),
+          { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+
       let updateData: any = {
         token_expiry: newExpiry,
         updated_at: new Date().toISOString(),
       };
 
-      // Encrypt new access token if encryption is enabled
-      if (DRIVE_TOKEN_ENCRYPTION_KEY) {
-        try {
-          const encryptedAccessToken = await encryptToken(
-            refreshData.access_token,
-            DRIVE_TOKEN_ENCRYPTION_KEY
-          );
-          updateData.encrypted_access_token = encryptedAccessToken;
-          updateData.is_encrypted = true;
-          updateData.access_token = "ENCRYPTED";
-        } catch (err) {
-          console.error("Failed to encrypt new access token:", err);
-          updateData.access_token = refreshData.access_token;
-          updateData.is_encrypted = false;
-        }
-      } else {
-        updateData.access_token = refreshData.access_token;
+      try {
+        const encryptedAccessToken = await encryptToken(
+          refreshData.access_token,
+          DRIVE_TOKEN_ENCRYPTION_KEY
+        );
+        updateData.encrypted_access_token = encryptedAccessToken;
+        updateData.is_encrypted = true;
+        updateData.access_token = "ENCRYPTED";
+      } catch (err) {
+        console.error("Failed to encrypt new access token — refusing plaintext fallback:", err);
+        return new Response(
+          JSON.stringify({ error: "Failed to encrypt refreshed token" }),
+          { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
       }
 
       await supabase.from("user_drive_tokens").update(updateData).eq("user_id", user.id);

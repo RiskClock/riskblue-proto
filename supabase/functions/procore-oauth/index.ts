@@ -256,6 +256,15 @@ serve(async (req) => {
       const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
       const tokenExpiry = new Date(Date.now() + (expires_in || 7200) * 1000).toISOString();
 
+      // Encryption is REQUIRED — refuse to store plaintext tokens
+      if (!ENCRYPTION_KEY) {
+        console.error("DRIVE_TOKEN_ENCRYPTION_KEY not configured — refusing to store Procore tokens");
+        return new Response(
+          "Server misconfigured: token encryption key missing. Please contact support.",
+          { status: 500 }
+        );
+      }
+
       let upsertData: any = {
         user_id: stateData.userId,
         token_expiry: tokenExpiry,
@@ -264,25 +273,20 @@ serve(async (req) => {
         updated_at: new Date().toISOString(),
       };
 
-      if (ENCRYPTION_KEY) {
-        try {
-          upsertData.encrypted_access_token = await encryptToken(access_token, ENCRYPTION_KEY);
-          upsertData.encrypted_refresh_token = refresh_token
-            ? await encryptToken(refresh_token, ENCRYPTION_KEY)
-            : null;
-          upsertData.is_encrypted = true;
-          upsertData.access_token = "ENCRYPTED";
-          upsertData.refresh_token = null;
-        } catch (err) {
-          console.error("Encryption failed, storing plaintext:", err);
-          upsertData.access_token = access_token;
-          upsertData.refresh_token = refresh_token;
-          upsertData.is_encrypted = false;
-        }
-      } else {
-        upsertData.access_token = access_token;
-        upsertData.refresh_token = refresh_token;
-        upsertData.is_encrypted = false;
+      try {
+        upsertData.encrypted_access_token = await encryptToken(access_token, ENCRYPTION_KEY);
+        upsertData.encrypted_refresh_token = refresh_token
+          ? await encryptToken(refresh_token, ENCRYPTION_KEY)
+          : null;
+        upsertData.is_encrypted = true;
+        upsertData.access_token = "ENCRYPTED";
+        upsertData.refresh_token = null;
+      } catch (err) {
+        console.error("Encryption failed — refusing to store Procore tokens in plaintext:", err);
+        return new Response(
+          "Failed to encrypt tokens. Please try again or contact support.",
+          { status: 500 }
+        );
       }
 
       const { error: upsertError } = await supabase
@@ -407,38 +411,48 @@ serve(async (req) => {
       // === Atomically persist BOTH tokens + clear lock ===
       const newExpiry = new Date(Date.now() + (refreshData.expires_in || 7200) * 1000).toISOString();
 
+      // Encryption is REQUIRED — refuse to persist plaintext tokens
+      if (!ENCRYPTION_KEY) {
+        console.error("DRIVE_TOKEN_ENCRYPTION_KEY not configured — refusing to persist refreshed Procore token");
+        await clearLock();
+        return new Response(
+          JSON.stringify({ error: "Server misconfigured: token encryption key missing" }),
+          { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+
       let updateData: any = {
         token_expiry: newExpiry,
         updated_at: new Date().toISOString(),
         refreshing_since: null, // clear lock
       };
 
-      if (ENCRYPTION_KEY) {
-        try {
-          updateData.encrypted_access_token = await encryptToken(refreshData.access_token, ENCRYPTION_KEY);
-          updateData.is_encrypted = true;
-          updateData.access_token = "ENCRYPTED";
-        } catch (err) {
-          console.error("Failed to encrypt refreshed token:", err);
-          updateData.access_token = refreshData.access_token;
-          updateData.is_encrypted = false;
-        }
-      } else {
-        updateData.access_token = refreshData.access_token;
+      try {
+        updateData.encrypted_access_token = await encryptToken(refreshData.access_token, ENCRYPTION_KEY);
+        updateData.is_encrypted = true;
+        updateData.access_token = "ENCRYPTED";
+      } catch (err) {
+        console.error("Failed to encrypt refreshed Procore token — refusing plaintext fallback:", err);
+        await clearLock();
+        return new Response(
+          JSON.stringify({ error: "Failed to encrypt refreshed token" }),
+          { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
       }
 
-      // ALWAYS store new refresh token (Procore single-use tokens)
+      // ALWAYS store new refresh token (Procore single-use tokens), encrypted only
       if (refreshData.refresh_token) {
         console.log(`[refresh] Storing rotated refresh_token for user: ${user.id}`);
-        if (ENCRYPTION_KEY) {
-          try {
-            updateData.encrypted_refresh_token = await encryptToken(refreshData.refresh_token, ENCRYPTION_KEY);
-            updateData.refresh_token = null;
-          } catch {
-            updateData.refresh_token = refreshData.refresh_token;
-          }
-        } else {
-          updateData.refresh_token = refreshData.refresh_token;
+        try {
+          updateData.encrypted_refresh_token = await encryptToken(refreshData.refresh_token, ENCRYPTION_KEY);
+          updateData.refresh_token = null;
+        } catch (err) {
+          console.error("Failed to encrypt rotated refresh token — refusing plaintext fallback:", err);
+          await clearLock();
+          return new Response(
+            JSON.stringify({ error: "Failed to encrypt rotated refresh token" }),
+            { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          );
         }
       } else {
         console.warn(`[refresh] Procore did NOT return a new refresh_token for user: ${user.id}`);
