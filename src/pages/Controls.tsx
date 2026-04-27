@@ -349,7 +349,7 @@ export default function Controls() {
                 className="text-sm cursor-pointer select-none flex-1"
                 onClick={handleParentToggle}
               >
-                {control.name} ({optionCount} option{optionCount === 1 ? "" : "s"})
+                {control.name} <span className="underline">({optionCount} option{optionCount === 1 ? "" : "s"})</span>
               </span>
               <button
                 onClick={() => {
