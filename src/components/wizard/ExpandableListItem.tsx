@@ -667,13 +667,24 @@ export const ExpandableListItem = ({
                           />
                           <div className="flex-1 min-w-0">
                             <span className="text-sm">{control}</span>
-                            {controlData && (controlData.author || controlData.responsible) && (
-                              <div className="text-xs text-muted-foreground mt-0.5">
-                                {controlData.author && <span>By: {controlData.author}</span>}
-                                {controlData.author && controlData.responsible && <span className="mx-1">•</span>}
-                                {controlData.responsible && <span>Responsible: {controlData.responsible}</span>}
-                              </div>
-                            )}
+                            {(() => {
+                              const vendors = vendorMap.get(control.toLowerCase());
+                              const vendorCount = vendors?.companies.length || 0;
+                              const byLabel =
+                                vendorCount > 1
+                                  ? `${vendorCount} vendors`
+                                  : vendorCount === 1
+                                    ? vendors!.companies[0]
+                                    : controlData?.author;
+                              if (!byLabel && !controlData?.responsible) return null;
+                              return (
+                                <div className="text-xs text-muted-foreground mt-0.5">
+                                  {byLabel && <span>By: {byLabel}</span>}
+                                  {byLabel && controlData?.responsible && <span className="mx-1">•</span>}
+                                  {controlData?.responsible && <span>Responsible: {controlData.responsible}</span>}
+                                </div>
+                              );
+                            })()}
                           </div>
                           <div className="flex items-center gap-2 flex-shrink-0">
                             {/* Derisk points first (weighted) - round for display only */}
