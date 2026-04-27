@@ -33,6 +33,7 @@ const PACKAGES: CreditPackage[] = [
 export const BuyCreditsModal = ({ open, onOpenChange, reason }: BuyCreditsModalProps) => {
   const { toast } = useToast();
   const { balance, refetch } = useCredits();
+  const { isWMSV } = useAccountType();
   const [loadingPackage, setLoadingPackage] = useState<string | null>(null);
   const [clientSecret, setClientSecret] = useState<string | null>(null);
   const [selectedPackage, setSelectedPackage] = useState<CreditPackage | null>(null);
