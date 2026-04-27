@@ -3401,6 +3401,7 @@ export function AnalysisSection({ requestId, files, projectId, sourceType, isWMS
                       <option value="6.8" disabled>RiskClock Engine 6.8 (Jan-2026) (deprecated)</option>
                       <option value="7.1">RiskClock Engine 7.1 (Mar-2026)</option>
                       <option value="7.2">RiskClock Engine 7.2 (Apr-2026)</option>
+                      <option value="7.3-tp">RiskClock Engine 7.3 Technical Preview (May-2026)</option>
                     </select>
                     <Button
                       size="sm"
