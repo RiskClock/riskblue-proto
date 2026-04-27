@@ -67,7 +67,8 @@ export const BuyCreditsModal = ({ open, onOpenChange, reason }: BuyCreditsModalP
       const { data, error } = await supabase.functions.invoke("create-credit-checkout", {
         body: {
           packageId: pkg.id,
-          tier: isWMSV ? "wmsv" : "full",
+          // Pricing tier is determined server-side from profiles.account_type;
+          // the client doesn't send a tier hint anymore.
           environment: stripeEnvironment,
           returnUrl: `${window.location.origin}/credits/return?session_id={CHECKOUT_SESSION_ID}`,
         },
