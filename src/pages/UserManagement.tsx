@@ -721,7 +721,7 @@ const UserManagement = () => {
                             return null;
                         }
                       })}
-                      <TableCell>
+                      <TableCell className="text-center">
                         <DropdownMenu>
                           <DropdownMenuTrigger asChild>
                             <Button size="icon" variant="ghost">
