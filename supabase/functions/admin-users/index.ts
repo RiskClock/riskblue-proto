@@ -359,14 +359,30 @@ async function actionUpdate(body: any, actor: { id: string | null; email: string
   if (typeof body.name === "string") updates.display_name = body.name.trim();
   if (typeof body.company === "string") updates.company = body.company.trim() || null;
   if (typeof body.is_wmsv === "boolean") updates.account_type = body.is_wmsv ? "wmsv" : "standard";
+
+  // Credits are NOT written through the plain profile update — they go through
+  // admin_adjust_credits() so a row is logged in credit_transactions.
+  let newCreditsBalance: number | undefined;
   if (body.credits !== undefined && body.credits !== null && body.credits !== "") {
     const c = Number(body.credits);
-    if (Number.isFinite(c)) updates.credits_balance = Math.max(0, Math.floor(c));
+    if (Number.isFinite(c)) newCreditsBalance = Math.max(0, Math.floor(c));
   }
 
   if (Object.keys(updates).length > 0) {
     const { error } = await adminClient.from("profiles").update(updates).eq("user_id", userId);
     if (error) return json({ success: false, error: error.message }, 500);
+  }
+
+  if (newCreditsBalance !== undefined) {
+    const { error: adjErr } = await adminClient.rpc("admin_adjust_credits", {
+      p_user_id: userId,
+      p_new_balance: newCreditsBalance,
+      p_actor_user_id: actorId,
+      p_reason: "admin_adjust",
+    });
+    if (adjErr) return json({ success: false, error: adjErr.message }, 500);
+    // Mirror in updates so the activity-log "changes" payload reflects the new value.
+    updates.credits_balance = newCreditsBalance;
   }
 
   if (typeof body.name === "string") {
