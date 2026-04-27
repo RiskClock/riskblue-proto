@@ -226,12 +226,13 @@ async function setUserTags(userId: string, tagNames: string[], assignedBy: strin
   if (error) throw error;
 }
 
-async function actionCreate(body: any) {
+async function actionCreate(body: any, actorId: string | null) {
   const email = String(body.email || "").trim().toLowerCase();
   const name = String(body.name || "").trim();
   const password = body.password ? String(body.password) : null;
   const isWmsv = !!body.is_wmsv;
   const company = body.company ? String(body.company).trim() : null;
+  const tagNames: string[] = Array.isArray(body.tags) ? body.tags : [];
 
   if (!email || !name) return json({ success: false, error: "Email and name are required" }, 400);
   if (password && password.length < 8) return json({ success: false, error: "Password must be at least 8 characters" }, 400);
@@ -270,6 +271,13 @@ async function actionCreate(body: any) {
     );
   if (pErr) console.error("profile upsert err:", pErr);
 
+  // Assign tags
+  try {
+    await setUserTags(created.user.id, tagNames, actorId);
+  } catch (e) {
+    console.error("setUserTags create err:", e);
+  }
+
   // Send email
   if (password) {
     const html = emailLayout(
@@ -305,7 +313,7 @@ async function actionCreate(body: any) {
   return json({ success: true, user_id: created.user.id });
 }
 
-async function actionUpdate(body: any) {
+async function actionUpdate(body: any, actorId: string | null) {
   const userId = String(body.user_id || "");
   if (!userId) return json({ success: false, error: "user_id required" }, 400);
 
@@ -325,10 +333,16 @@ async function actionUpdate(body: any) {
     });
   }
 
+  if (Array.isArray(body.tags)) {
+    try {
+      await setUserTags(userId, body.tags, actorId);
+    } catch (e: any) {
+      return json({ success: false, error: e?.message || "Failed to set tags" }, 500);
+    }
+  }
+
   return json({ success: true });
 }
-
-async function actionDeactivate(body: any) {
   const userId = String(body.user_id || "");
   if (!userId) return json({ success: false, error: "user_id required" }, 400);
 
