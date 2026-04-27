@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useCallback } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
@@ -29,24 +29,36 @@ interface UserProfile {
 }
 
 const PAGE_SIZE = 50;
-const COLUMN_WIDTHS_KEY = "logs-column-widths";
 
-interface ColumnWidths {
-  timestamp: number;
-  user: number;
-  project: number;
-  action: number;
-}
-
-const DEFAULT_WIDTHS: ColumnWidths = {
-  timestamp: 160,
-  user: 280,
-  project: 200,
-  action: 400,
+const ACTION_LABEL_MAP: Record<string, string> = {
+  admin_user_created: "Created User",
+  admin_user_updated: "Updated User",
+  admin_user_deactivated: "Deactivated User",
+  admin_user_reactivated: "Reactivated User",
+  admin_password_reset_sent: "Sent Password Reset",
 };
 
+const formatAction = (action: string) => {
+  if (ACTION_LABEL_MAP[action]) return ACTION_LABEL_MAP[action];
+  return action
+    .split("_")
+    .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
+    .join(" ");
+};
+
+const PROJECT_RELATED = new Set([
+  "project_opened",
+  "project_deleted",
+  "project_created",
+  "add_new_clicked",
+  "export_clicked",
+  "manage_collaborators_clicked",
+  "google_drive_analysis_request",
+  "manual_drawings_upload",
+]);
+
 export default function Logs() {
-  const { user, signOut } = useAuth();
+  const { user } = useAuth();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   useHeapIdentify();
@@ -54,53 +66,9 @@ export default function Logs() {
   const [page, setPage] = useState(0);
   const [hideInternalUsers, setHideInternalUsers] = useState(false);
   const [isClearing, setIsClearing] = useState(false);
-  
-  // Column widths state
-  const [columnWidths, setColumnWidths] = useState<ColumnWidths>(() => {
-    const saved = localStorage.getItem(COLUMN_WIDTHS_KEY);
-    return saved ? JSON.parse(saved) : DEFAULT_WIDTHS;
-  });
-  const [resizing, setResizing] = useState<{ column: keyof ColumnWidths; startX: number; startWidth: number } | null>(null);
 
   const isInternalUser = user?.email?.toLowerCase().endsWith("@riskclock.com");
 
-  // Save column widths to localStorage
-  const saveColumnWidths = useCallback((widths: ColumnWidths) => {
-    localStorage.setItem(COLUMN_WIDTHS_KEY, JSON.stringify(widths));
-  }, []);
-
-  // Handle mouse move for resizing
-  useEffect(() => {
-    if (!resizing) return;
-
-    const handleMouseMove = (e: MouseEvent) => {
-      const diff = e.clientX - resizing.startX;
-      const newWidth = Math.max(80, resizing.startWidth + diff);
-      setColumnWidths(prev => {
-        const updated = { ...prev, [resizing.column]: newWidth };
-        return updated;
-      });
-    };
-
-    const handleMouseUp = () => {
-      if (resizing) {
-        setColumnWidths(prev => {
-          saveColumnWidths(prev);
-          return prev;
-        });
-      }
-      setResizing(null);
-    };
-
-    document.addEventListener("mousemove", handleMouseMove);
-    document.addEventListener("mouseup", handleMouseUp);
-    return () => {
-      document.removeEventListener("mousemove", handleMouseMove);
-      document.removeEventListener("mouseup", handleMouseUp);
-    };
-  }, [resizing, saveColumnWidths]);
-
-  // Fetch all activity logs
   const { data: logsData, isLoading: logsLoading } = useQuery({
     queryKey: ["activity-logs", selectedUserId, page],
     queryFn: async () => {
@@ -121,7 +89,6 @@ export default function Logs() {
     enabled: isInternalUser,
   });
 
-  // Fetch user profiles for display names
   const { data: profiles = [] } = useQuery({
     queryKey: ["user-profiles-for-logs"],
     queryFn: async () => {
@@ -134,7 +101,6 @@ export default function Logs() {
     enabled: isInternalUser,
   });
 
-  // Fetch project names for display
   const { data: projects = [] } = useQuery({
     queryKey: ["projects-for-logs"],
     queryFn: async () => {
@@ -147,13 +113,12 @@ export default function Logs() {
     enabled: isInternalUser,
   });
 
-  // Fetch user emails via edge function
   const [userEmails, setUserEmails] = useState<Map<string, string>>(new Map());
-  
+
   useEffect(() => {
     const fetchEmails = async () => {
       if (!profiles.length) return;
-      const userIds = profiles.map(p => p.user_id);
+      const userIds = profiles.map((p) => p.user_id);
       try {
         const { data } = await supabase.functions.invoke(
           `get-user-emails?userIds=${userIds.join(",")}`,
@@ -169,35 +134,32 @@ export default function Logs() {
     fetchEmails();
   }, [profiles]);
 
-  // Build lookup maps
-  const profileMap = useMemo(() => 
-    new Map(profiles.map(p => [p.user_id, p.display_name || "Unknown"])),
+  const profileMap = useMemo(
+    () => new Map(profiles.map((p) => [p.user_id, p.display_name || "Unknown"])),
     [profiles]
   );
 
-  const projectMap = useMemo(() => 
-    new Map(projects.map(p => [p.id, p.name])),
+  const projectMap = useMemo(
+    () => new Map(projects.map((p) => [p.id, p.name])),
     [projects]
   );
 
-  // Unique users for filter dropdown
   const uniqueUsers = useMemo(() => {
     const users = new Map<string, { id: string; name: string; email: string }>();
-    profiles.forEach(p => {
+    profiles.forEach((p) => {
       const email = userEmails.get(p.user_id) || "";
       users.set(p.user_id, {
         id: p.user_id,
         name: p.display_name || "Unknown",
-        email
+        email,
       });
     });
     return Array.from(users.values()).sort((a, b) => a.name.localeCompare(b.name));
   }, [profiles, userEmails]);
 
-  // Filter logs to hide internal users if checkbox is checked
   const filteredLogs = useMemo(() => {
     if (!hideInternalUsers) return logsData?.logs || [];
-    return (logsData?.logs || []).filter(log => {
+    return (logsData?.logs || []).filter((log) => {
       const email = userEmails.get(log.user_id) || "";
       return !email.toLowerCase().endsWith("@riskclock.com");
     });
@@ -206,15 +168,6 @@ export default function Logs() {
   const totalCount = logsData?.totalCount || 0;
   const totalPages = Math.ceil(totalCount / PAGE_SIZE);
 
-  // Format action for display
-  const formatAction = (action: string) => {
-    return action
-      .split("_")
-      .map(word => word.charAt(0).toUpperCase() + word.slice(1))
-      .join(" ");
-  };
-
-  // Clear all logs
   const handleClearLogs = async () => {
     setIsClearing(true);
     try {
@@ -232,28 +185,63 @@ export default function Logs() {
     }
   };
 
-  // Resize handle component
-  const ResizeHandle = ({ column }: { column: keyof ColumnWidths }) => (
-    <div
-      className="absolute right-0 top-0 h-full w-1 cursor-col-resize hover:bg-primary/50 active:bg-primary"
-      onMouseDown={(e) => {
-        e.preventDefault();
-        setResizing({ column, startX: e.clientX, startWidth: columnWidths[column] });
-      }}
-    />
-  );
+  const renderEventDetails = (log: ActivityLog) => {
+    const m = log.metadata || {};
+    const lines: { label?: string; value: string }[] = [];
 
-  // Get user display with email
-  const getUserDisplay = (userId: string) => {
-    const name = profileMap.get(userId) || "Unknown";
-    const email = userEmails.get(userId);
-    if (email) {
-      return `${name} (${email})`;
+    // Admin events: action-specific summary
+    if (log.action === "admin_user_created") {
+      lines.push({ value: `Created ${m.target_email || "user"}` });
+      const bits: string[] = [];
+      if (m.account_type) bits.push(m.account_type === "wmsv" ? "WMSV" : "Standard");
+      if (m.company) bits.push(`Company: ${m.company}`);
+      if (Array.isArray(m.tags) && m.tags.length) bits.push(`Tags: ${m.tags.join(", ")}`);
+      if (bits.length) lines.push({ value: bits.join(" • ") });
+    } else if (log.action === "admin_user_updated") {
+      lines.push({ value: `Updated ${m.target_email || "user"}` });
+      const c = m.changes || {};
+      const bits: string[] = [];
+      if ("name" in c) bits.push(`Name: ${c.name}`);
+      if ("company" in c) bits.push(`Company: ${c.company || "—"}`);
+      if ("account_type" in c) bits.push(`Type: ${c.account_type === "wmsv" ? "WMSV" : "Standard"}`);
+      if ("tags" in c) bits.push(`Tags: ${(c.tags || []).join(", ") || "—"}`);
+      if (bits.length) lines.push({ value: bits.join(" • ") });
+    } else if (log.action === "admin_user_deactivated") {
+      lines.push({ value: `Deactivated ${m.target_email || "user"}` });
+    } else if (log.action === "admin_user_reactivated") {
+      lines.push({ value: `Reactivated ${m.target_email || "user"}` });
+    } else if (log.action === "admin_password_reset_sent") {
+      lines.push({ value: `Sent reset link to ${m.target_email || "user"}` });
     }
-    return name;
+
+    // Project line
+    if (log.project_id) {
+      const projectName = projectMap.get(log.project_id) || log.project_id;
+      lines.push({ value: `Project: ${projectName}`, label: "project" });
+    } else if (PROJECT_RELATED.has(log.action) && m.project_name) {
+      lines.push({ value: `Project: ${m.project_name}`, label: "project" });
+    }
+
+    // Actor (for admin events)
+    if (m.actor_email && m.actor_email !== userEmails.get(log.user_id)) {
+      lines.push({ value: `By: ${m.actor_email}`, label: "actor" });
+    }
+
+    if (lines.length === 0) return <span className="text-muted-foreground">—</span>;
+    return (
+      <div className="text-sm space-y-0.5">
+        {lines.map((l, i) => (
+          <div
+            key={i}
+            className={l.label === "project" || l.label === "actor" ? "text-xs text-muted-foreground" : ""}
+          >
+            {l.value}
+          </div>
+        ))}
+      </div>
+    );
   };
 
-  // Access control
   if (!isInternalUser) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
@@ -309,10 +297,7 @@ export default function Logs() {
                   setPage(0);
                 }}
               />
-              <label
-                htmlFor="hide-internal"
-                className="text-sm text-muted-foreground cursor-pointer"
-              >
+              <label htmlFor="hide-internal" className="text-sm text-muted-foreground cursor-pointer">
                 Hide internal users
               </label>
             </div>
@@ -322,7 +307,7 @@ export default function Logs() {
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">All Users</SelectItem>
-                {uniqueUsers.map(u => (
+                {uniqueUsers.map((u) => (
                   <SelectItem key={u.id} value={u.id}>
                     {u.name} {u.email && `(${u.email})`}
                   </SelectItem>
@@ -339,46 +324,33 @@ export default function Logs() {
         ) : (
           <>
             <div className="bg-card rounded-lg border overflow-hidden">
-              <Table style={{ tableLayout: "fixed" }}>
+              <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead className="relative" style={{ width: columnWidths.timestamp }}>
-                      Timestamp
-                      <ResizeHandle column="timestamp" />
-                    </TableHead>
-                    <TableHead className="relative" style={{ width: columnWidths.user }}>
-                      User
-                      <ResizeHandle column="user" />
-                    </TableHead>
-                    <TableHead className="relative" style={{ width: columnWidths.project }}>
-                      Project
-                      <ResizeHandle column="project" />
-                    </TableHead>
-                    <TableHead className="relative" style={{ width: columnWidths.action }}>
-                      Action
-                      <ResizeHandle column="action" />
-                    </TableHead>
+                    <TableHead className="whitespace-nowrap w-px">Timestamp</TableHead>
+                    <TableHead className="whitespace-nowrap w-px">User</TableHead>
+                    <TableHead className="whitespace-nowrap w-px">Action</TableHead>
+                    <TableHead>Event Details</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {filteredLogs.map((log) => (
-                    <TableRow key={log.id}>
-                      <TableCell className="text-sm text-muted-foreground truncate" style={{ width: columnWidths.timestamp }}>
-                        {format(new Date(log.created_at), "MMM d, yyyy h:mm a")}
-                      </TableCell>
-                      <TableCell className="truncate" style={{ width: columnWidths.user }} title={getUserDisplay(log.user_id)}>
-                        <span className="text-sm font-medium">
-                          {getUserDisplay(log.user_id)}
-                        </span>
-                      </TableCell>
-                      <TableCell className="text-sm text-muted-foreground truncate" style={{ width: columnWidths.project }}>
-                        {log.project_id ? projectMap.get(log.project_id) || log.project_id : "—"}
-                      </TableCell>
-                      <TableCell className="text-sm truncate" style={{ width: columnWidths.action }}>
-                        {formatAction(log.action)}
-                      </TableCell>
-                    </TableRow>
-                  ))}
+                  {filteredLogs.map((log) => {
+                    const email = userEmails.get(log.user_id) || profileMap.get(log.user_id) || "Unknown";
+                    return (
+                      <TableRow key={log.id}>
+                        <TableCell className="text-sm text-muted-foreground whitespace-nowrap w-px">
+                          {format(new Date(log.created_at), "MMM d, yyyy h:mm a")}
+                        </TableCell>
+                        <TableCell className="text-sm whitespace-nowrap w-px" title={email}>
+                          {email}
+                        </TableCell>
+                        <TableCell className="text-sm whitespace-nowrap w-px">
+                          {formatAction(log.action)}
+                        </TableCell>
+                        <TableCell>{renderEventDetails(log)}</TableCell>
+                      </TableRow>
+                    );
+                  })}
                 </TableBody>
               </Table>
             </div>
@@ -392,7 +364,7 @@ export default function Logs() {
                 <Button
                   variant="outline"
                   size="sm"
-                  onClick={() => setPage(p => Math.max(0, p - 1))}
+                  onClick={() => setPage((p) => Math.max(0, p - 1))}
                   disabled={page === 0}
                 >
                   <ChevronLeft className="h-4 w-4" />
@@ -404,7 +376,7 @@ export default function Logs() {
                 <Button
                   variant="outline"
                   size="sm"
-                  onClick={() => setPage(p => p + 1)}
+                  onClick={() => setPage((p) => p + 1)}
                   disabled={page >= totalPages - 1}
                 >
                   Next
@@ -415,8 +387,6 @@ export default function Logs() {
           </>
         )}
       </main>
-
-      
     </div>
   );
 }
