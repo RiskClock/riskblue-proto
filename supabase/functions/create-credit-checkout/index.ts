@@ -42,7 +42,7 @@ serve(async (req) => {
       });
     }
 
-    const { packageId, environment, returnUrl } = await req.json();
+    const { packageId, tier: requestedTier, environment, returnUrl } = await req.json();
     const pkg = PACKAGES[packageId];
     if (!pkg) {
       return new Response(JSON.stringify({ error: "Invalid packageId" }), {
@@ -51,10 +51,22 @@ serve(async (req) => {
       });
     }
 
+    // Server-side authoritative tier: only WMSV accounts get promo pricing.
+    const { data: profile } = await supabase
+      .from("profiles")
+      .select("account_type")
+      .eq("user_id", user.id)
+      .maybeSingle();
+    const isWMSV = (profile as any)?.account_type === "wmsv";
+    const tier: "wmsv" | "full" = isWMSV ? "wmsv" : "full";
+
+    const priceId = tier === "wmsv" ? pkg.wmsvPriceId : pkg.fullPriceId;
+    const amountCents = tier === "wmsv" ? pkg.wmsvAmountCents : pkg.fullAmountCents;
+
     const env = (environment || "sandbox") as StripeEnv;
     const stripe = createStripeClient(env);
 
-    const prices = await stripe.prices.list({ lookup_keys: [pkg.priceId] });
+    const prices = await stripe.prices.list({ lookup_keys: [priceId] });
     if (!prices.data.length) {
       return new Response(JSON.stringify({ error: "Price not found" }), {
         status: 404,
@@ -73,8 +85,9 @@ serve(async (req) => {
       metadata: {
         userId: user.id,
         packageId,
+        tier,
         credits: String(pkg.credits),
-        amountCents: String(pkg.amountCents),
+        amountCents: String(amountCents),
         packageLabel: pkg.label,
       },
     });
