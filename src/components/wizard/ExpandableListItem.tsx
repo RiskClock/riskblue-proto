@@ -169,6 +169,7 @@ export const ExpandableListItem = ({
 }: ExpandableListItemProps) => {
   const [isExpanded, setIsExpanded] = useState(false);
   const [expandedInstanceIds, setExpandedInstanceIds] = useState<Set<string>>(new Set());
+  const vendorMap = useVendorMapByControlName();
   const [detailsModalOpen, setDetailsModalOpen] = useState(false);
   const [selectedDetailInstance, setSelectedDetailInstance] = useState<AnalysisItem | null>(null);
   const [controlModalOpen, setControlModalOpen] = useState(false);
