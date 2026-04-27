@@ -291,6 +291,7 @@ async function actionCreate(body: any, actor: { id: string | null; email: string
         account_type: isWmsv ? "wmsv" : "standard",
         company,
         is_active: true,
+        credits_balance: credits,
       },
       { onConflict: "user_id" }
     );
