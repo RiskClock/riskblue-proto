@@ -3630,7 +3630,7 @@ export function AnalysisSection({ requestId, files, projectId, sourceType, isWMS
                   <tr className="border-b">
                     <th className="sticky left-0 z-10 bg-card px-4 py-2 text-left font-medium text-muted-foreground min-w-[180px] max-w-[320px] w-auto border-r">
                       <span className="block text-sm">
-                        Files ({copiedFiles.length} files | {formatBytes(totalSizeBytes)} | {sourceLabel})
+                        Files ({copiedFiles.length} files | {formatBytes(totalSizeBytes)})
                       </span>
                     </th>
                      {sortedPrompts.map((prompt) => {
