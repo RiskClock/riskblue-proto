@@ -1007,6 +1007,8 @@ const STATUS_RANK: Record<string, number> = {
 
 export function AnalysisSection({ requestId, files, projectId, sourceType, isWMSV, visibleAwpClasses, onAddFileUpload, onAddFileDrive, onAddFileProcore, onAddFileSharePoint }: AnalysisSectionProps) {
   const { toast } = useToast();
+  const { user } = useAuth();
+  const isInternal = (user?.email?.toLowerCase().endsWith("@riskclock.com")) ?? false;
   const queryClient = useQueryClient();
 
   // ---- New state architecture ----
