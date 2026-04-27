@@ -695,7 +695,7 @@ const UserManagement = () => {
                             );
                           case "credits":
                             return (
-                              <TableCell key={colId} className={cn("text-right tabular-nums whitespace-nowrap", dim)}>
+                              <TableCell key={colId} className={cn("text-center tabular-nums whitespace-nowrap", dim)}>
                                 {formatCredits(u.credits_balance ?? 0)}
                               </TableCell>
                             );
