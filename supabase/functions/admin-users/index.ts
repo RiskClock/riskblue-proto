@@ -343,6 +343,8 @@ async function actionUpdate(body: any, actorId: string | null) {
 
   return json({ success: true });
 }
+
+async function actionDeactivate(body: any) {
   const userId = String(body.user_id || "");
   if (!userId) return json({ success: false, error: "user_id required" }, 400);
 
