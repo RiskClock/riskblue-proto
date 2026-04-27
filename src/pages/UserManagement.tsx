@@ -933,6 +933,7 @@ function CreateUserDialog({
     is_wmsv: boolean;
     company: string | null;
     tags: string[];
+    credits: number;
   }) => void;
   loading: boolean;
 }) {
@@ -942,6 +943,7 @@ function CreateUserDialog({
   const [isWmsv, setIsWmsv] = useState(false);
   const [company, setCompany] = useState<string | null>(null);
   const [tags, setTags] = useState<string[]>([]);
+  const [credits, setCredits] = useState<string>("20");
 
   useEffect(() => {
     if (open) {
@@ -951,11 +953,15 @@ function CreateUserDialog({
       setIsWmsv(false);
       setCompany(null);
       setTags([]);
+      setCredits("20");
     }
   }, [open]);
 
+  const creditsNum = Math.max(0, Math.floor(Number(credits) || 0));
+  const creditsValid = credits.trim() !== "" && Number.isFinite(Number(credits)) && Number(credits) >= 0;
+
   const submit = () => {
-    if (!email.trim() || !name.trim()) return;
+    if (!email.trim() || !name.trim() || !creditsValid) return;
     onSubmit({
       email: email.trim(),
       name: name.trim(),
@@ -963,6 +969,7 @@ function CreateUserDialog({
       is_wmsv: isWmsv,
       company,
       tags,
+      credits: creditsNum,
     });
   };
 
@@ -1003,10 +1010,21 @@ function CreateUserDialog({
               <p className="text-xs text-destructive mt-1">Must be at least 8 characters</p>
             )}
           </div>
+          <div>
+            <Label>Credits</Label>
+            <Input
+              type="number"
+              min={0}
+              step={1}
+              value={credits}
+              onChange={(e) => setCredits(e.target.value)}
+              className="mt-1"
+            />
+          </div>
           <div className="flex items-center gap-2">
             <Checkbox id="wmsv" checked={isWmsv} onCheckedChange={(v) => setIsWmsv(!!v)} />
             <Label htmlFor="wmsv" className="cursor-pointer font-normal">
-              WMSV account
+              WMSV (Water Mitigation Solution Vendor) account
             </Label>
           </div>
           <div>
@@ -1026,7 +1044,7 @@ function CreateUserDialog({
           </Button>
           <Button
             onClick={submit}
-            disabled={loading || !email.trim() || !name.trim() || (password.length > 0 && password.length < 8)}
+            disabled={loading || !email.trim() || !name.trim() || !creditsValid || (password.length > 0 && password.length < 8)}
           >
             {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : "Create user"}
           </Button>
