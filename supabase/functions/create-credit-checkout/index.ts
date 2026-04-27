@@ -42,10 +42,21 @@ serve(async (req) => {
       });
     }
 
-    const { packageId, tier: requestedTier, environment, returnUrl } = await req.json();
+    const { packageId, environment, returnUrl } = await req.json();
+    // Note: any "tier" sent by the client is ignored — the server determines
+    // pricing tier authoritatively from the user's profile.account_type.
     const pkg = PACKAGES[packageId];
     if (!pkg) {
       return new Response(JSON.stringify({ error: "Invalid packageId" }), {
+        status: 400,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    // Defensive: reject unknown environment strings so we never accidentally
+    // try to charge real money in a request that meant to be sandbox.
+    if (environment !== "sandbox" && environment !== "live") {
+      return new Response(JSON.stringify({ error: "Invalid environment" }), {
         status: 400,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
