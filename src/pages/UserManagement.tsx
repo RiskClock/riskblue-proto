@@ -72,9 +72,16 @@ import {
   Check,
   ChevronsUpDown,
   X,
+  RotateCcw,
 } from "lucide-react";
 import { format } from "date-fns";
 import { cn } from "@/lib/utils";
+import { TagPicker, TagChip } from "@/components/users/TagPicker";
+
+interface TagOption {
+  id: string;
+  name: string;
+}
 
 interface UserRow {
   user_id: string;
@@ -89,9 +96,16 @@ interface UserRow {
   email_confirmed_at: string | null;
   banned_until: string | null;
   has_profile: boolean;
+  tags: TagOption[];
 }
 
-type SortKey = "created_at" | "email" | "company" | "last_sign_in_at" | "status";
+type SortKey =
+  | "created_at"
+  | "email"
+  | "company"
+  | "last_sign_in_at"
+  | "status"
+  | "tags";
 type SortDir = "asc" | "desc";
 
 const STATUS_OPTIONS = [
@@ -100,6 +114,54 @@ const STATUS_OPTIONS = [
   { value: "pending", label: "Account Created (Not Signed In)" },
 ];
 
+const STORAGE_KEY = "user-management-prefs:v1";
+const DEFAULT_SORT_KEY: SortKey = "created_at";
+const DEFAULT_SORT_DIR: SortDir = "desc";
+
+interface PersistedPrefs {
+  search: string;
+  filterCompany: string | null;
+  filterStatus: string | null;
+  filterTags: string[]; // tag names
+  sortKey: SortKey;
+  sortDir: SortDir;
+}
+
+function loadPrefs(): PersistedPrefs {
+  if (typeof window === "undefined") {
+    return {
+      search: "",
+      filterCompany: null,
+      filterStatus: null,
+      filterTags: [],
+      sortKey: DEFAULT_SORT_KEY,
+      sortDir: DEFAULT_SORT_DIR,
+    };
+  }
+  try {
+    const raw = window.localStorage.getItem(STORAGE_KEY);
+    if (!raw) throw new Error("none");
+    const parsed = JSON.parse(raw);
+    return {
+      search: typeof parsed.search === "string" ? parsed.search : "",
+      filterCompany: parsed.filterCompany ?? null,
+      filterStatus: parsed.filterStatus ?? null,
+      filterTags: Array.isArray(parsed.filterTags) ? parsed.filterTags : [],
+      sortKey: parsed.sortKey || DEFAULT_SORT_KEY,
+      sortDir: parsed.sortDir === "asc" ? "asc" : parsed.sortDir === "desc" ? "desc" : DEFAULT_SORT_DIR,
+    };
+  } catch {
+    return {
+      search: "",
+      filterCompany: null,
+      filterStatus: null,
+      filterTags: [],
+      sortKey: DEFAULT_SORT_KEY,
+      sortDir: DEFAULT_SORT_DIR,
+    };
+  }
+}
+
 function getStatus(u: UserRow): "active" | "deactivated" | "pending" {
   if (!u.is_active) return "deactivated";
   if (!u.last_sign_in_at) return "pending";
@@ -107,9 +169,10 @@ function getStatus(u: UserRow): "active" | "deactivated" | "pending" {
 }
 
 function StatusBadge({ status }: { status: "active" | "deactivated" | "pending" }) {
-  if (status === "active") return <Badge variant="default" className="bg-emerald-600 hover:bg-emerald-600">Active</Badge>;
+  if (status === "active")
+    return <Badge variant="default" className="bg-emerald-600 hover:bg-emerald-600">Active</Badge>;
   if (status === "deactivated") return <Badge variant="destructive">Deactivated</Badge>;
-  return <Badge variant="secondary">Pending First Sign-In</Badge>;
+  return <Badge variant="secondary">Pending</Badge>;
 }
 
 const UserManagement = () => {
@@ -132,32 +195,52 @@ const UserManagement = () => {
       });
       if (error) throw error;
       if (!data?.success) throw new Error(data?.error || "Failed to load users");
-      return data as { users: UserRow[]; companies: string[] };
+      return data as { users: UserRow[]; companies: string[]; tags: TagOption[] };
     },
     enabled: isInternal,
   });
 
   const users = data?.users || [];
   const companies = data?.companies || [];
+  const allTags = data?.tags || [];
 
-  // ---- filters / sort ----
-  const [search, setSearch] = useState("");
-  const [filterCompany, setFilterCompany] = useState<string | null>(null);
-  const [filterStatus, setFilterStatus] = useState<string | null>(null);
-  const [sortKey, setSortKey] = useState<SortKey>("created_at");
-  const [sortDir, setSortDir] = useState<SortDir>("desc");
+  // ---- persisted filters / sort ----
+  const [prefs, setPrefs] = useState<PersistedPrefs>(() => loadPrefs());
+  const { search, filterCompany, filterStatus, filterTags, sortKey, sortDir } = prefs;
+
+  useEffect(() => {
+    try {
+      window.localStorage.setItem(STORAGE_KEY, JSON.stringify(prefs));
+    } catch {
+      /* ignore */
+    }
+  }, [prefs]);
+
+  const setSearch = (v: string) => setPrefs((p) => ({ ...p, search: v }));
+  const setFilterCompany = (v: string | null) =>
+    setPrefs((p) => ({ ...p, filterCompany: v }));
+  const setFilterStatus = (v: string | null) =>
+    setPrefs((p) => ({ ...p, filterStatus: v }));
+  const setFilterTags = (v: string[]) => setPrefs((p) => ({ ...p, filterTags: v }));
 
   const filteredSorted = useMemo(() => {
     let rows = [...users];
     if (filterCompany) rows = rows.filter((u) => (u.company || "") === filterCompany);
     if (filterStatus) rows = rows.filter((u) => getStatus(u) === filterStatus);
+    if (filterTags.length > 0) {
+      const wanted = new Set(filterTags.map((t) => t.toLowerCase()));
+      rows = rows.filter((u) =>
+        u.tags.some((t) => wanted.has(t.name.toLowerCase()))
+      );
+    }
     if (search.trim()) {
       const q = search.trim().toLowerCase();
       rows = rows.filter(
         (u) =>
           (u.display_name || "").toLowerCase().includes(q) ||
           (u.email || "").toLowerCase().includes(q) ||
-          (u.company || "").toLowerCase().includes(q)
+          (u.company || "").toLowerCase().includes(q) ||
+          u.tags.some((t) => t.name.toLowerCase().includes(q))
       );
     }
     rows.sort((a, b) => {
@@ -180,6 +263,10 @@ const UserManagement = () => {
           va = getStatus(a);
           vb = getStatus(b);
           break;
+        case "tags":
+          va = a.tags[0]?.name.toLowerCase() || "\uffff";
+          vb = b.tags[0]?.name.toLowerCase() || "\uffff";
+          break;
         case "created_at":
         default:
           va = new Date(a.created_at).getTime();
@@ -190,15 +277,20 @@ const UserManagement = () => {
       return 0;
     });
     return rows;
-  }, [users, search, filterCompany, filterStatus, sortKey, sortDir]);
+  }, [users, search, filterCompany, filterStatus, filterTags, sortKey, sortDir]);
 
   const toggleSort = (key: SortKey) => {
-    if (sortKey === key) {
-      setSortDir(sortDir === "asc" ? "desc" : "asc");
-    } else {
-      setSortKey(key);
-      setSortDir(key === "created_at" || key === "last_sign_in_at" ? "desc" : "asc");
-    }
+    setPrefs((p) => {
+      if (p.sortKey === key) {
+        return { ...p, sortDir: p.sortDir === "asc" ? "desc" : "asc" };
+      }
+      return {
+        ...p,
+        sortKey: key,
+        sortDir:
+          key === "created_at" || key === "last_sign_in_at" ? "desc" : "asc",
+      };
+    });
   };
 
   const SortIcon = ({ k }: { k: SortKey }) =>
@@ -209,6 +301,25 @@ const UserManagement = () => {
     ) : (
       <ArrowDown className="h-3 w-3 ml-1 inline" />
     );
+
+  const isDirty =
+    !!search ||
+    !!filterCompany ||
+    !!filterStatus ||
+    filterTags.length > 0 ||
+    sortKey !== DEFAULT_SORT_KEY ||
+    sortDir !== DEFAULT_SORT_DIR;
+
+  const resetAll = () => {
+    setPrefs({
+      search: "",
+      filterCompany: null,
+      filterStatus: null,
+      filterTags: [],
+      sortKey: DEFAULT_SORT_KEY,
+      sortDir: DEFAULT_SORT_DIR,
+    });
+  };
 
   // ---- modals ----
   const [createOpen, setCreateOpen] = useState(false);
@@ -265,6 +376,9 @@ const UserManagement = () => {
   if (!user) return null;
   if (!isInternal) return null;
 
+  const filterCount =
+    (filterCompany ? 1 : 0) + (filterStatus ? 1 : 0) + (filterTags.length > 0 ? 1 : 0);
+
   return (
     <div className="min-h-screen bg-background">
       <AppHeader />
@@ -280,7 +394,7 @@ const UserManagement = () => {
             <div className="relative">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
               <Input
-                placeholder="Search name, email, company"
+                placeholder="Search name, email, company, tag"
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 className="pl-9 w-72"
@@ -292,14 +406,14 @@ const UserManagement = () => {
                 <Button variant="outline">
                   <Filter className="h-4 w-4 mr-2" />
                   Filter
-                  {(filterCompany || filterStatus) && (
+                  {filterCount > 0 && (
                     <Badge variant="secondary" className="ml-2 px-1.5">
-                      {(filterCompany ? 1 : 0) + (filterStatus ? 1 : 0)}
+                      {filterCount}
                     </Badge>
                   )}
                 </Button>
               </PopoverTrigger>
-              <PopoverContent align="end" className="w-72 space-y-4">
+              <PopoverContent align="end" className="w-80 space-y-4">
                 <div>
                   <Label className="text-xs uppercase text-muted-foreground">Company</Label>
                   <CompanyCombobox
@@ -325,21 +439,29 @@ const UserManagement = () => {
                     ))}
                   </select>
                 </div>
-                {(filterCompany || filterStatus) && (
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className="w-full"
-                    onClick={() => {
-                      setFilterCompany(null);
-                      setFilterStatus(null);
-                    }}
-                  >
-                    Clear filters
-                  </Button>
-                )}
+                <div>
+                  <Label className="text-xs uppercase text-muted-foreground">Tags</Label>
+                  <div className="mt-1">
+                    <TagPicker
+                      selected={filterTags}
+                      onChange={setFilterTags}
+                      available={allTags}
+                      placeholder={filterTags.length > 0 ? "Edit tags" : "Any tags"}
+                    />
+                  </div>
+                </div>
               </PopoverContent>
             </Popover>
+
+            <Button
+              variant="outline"
+              onClick={resetAll}
+              disabled={!isDirty}
+              title="Reset filters and sorting"
+            >
+              <RotateCcw className="h-4 w-4 mr-2" />
+              Reset
+            </Button>
 
             <Button onClick={() => setCreateOpen(true)}>
               <Plus className="h-4 w-4 mr-2" />
@@ -362,7 +484,18 @@ const UserManagement = () => {
 
         {!isLoading && !error && (
           <div className="rounded-md border bg-card">
-            <Table>
+            <Table className="table-fixed">
+              <colgroup>
+                <col style={{ width: "180px" }} />
+                <col style={{ width: "240px" }} />
+                <col style={{ width: "160px" }} />
+                <col style={{ width: "240px" }} />
+                <col style={{ width: "100px" }} />
+                <col style={{ width: "130px" }} />
+                <col style={{ width: "130px" }} />
+                <col style={{ width: "130px" }} />
+                <col style={{ width: "56px" }} />
+              </colgroup>
               <TableHeader>
                 <TableRow>
                   <TableHead>Name</TableHead>
@@ -371,6 +504,9 @@ const UserManagement = () => {
                   </TableHead>
                   <TableHead className="cursor-pointer select-none" onClick={() => toggleSort("company")}>
                     Company <SortIcon k="company" />
+                  </TableHead>
+                  <TableHead className="cursor-pointer select-none" onClick={() => toggleSort("tags")}>
+                    Tags <SortIcon k="tags" />
                   </TableHead>
                   <TableHead>Type</TableHead>
                   <TableHead className="cursor-pointer select-none" onClick={() => toggleSort("status")}>
@@ -382,13 +518,13 @@ const UserManagement = () => {
                   <TableHead className="cursor-pointer select-none" onClick={() => toggleSort("last_sign_in_at")}>
                     Last Sign-In <SortIcon k="last_sign_in_at" />
                   </TableHead>
-                  <TableHead className="w-12"></TableHead>
+                  <TableHead></TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {filteredSorted.length === 0 && (
                   <TableRow>
-                    <TableCell colSpan={8} className="text-center text-muted-foreground py-12">
+                    <TableCell colSpan={9} className="text-center text-muted-foreground py-12">
                       No users match your filters.
                     </TableCell>
                   </TableRow>
@@ -397,9 +533,26 @@ const UserManagement = () => {
                   const status = getStatus(u);
                   return (
                     <TableRow key={u.user_id}>
-                      <TableCell className="font-medium">{u.display_name || "—"}</TableCell>
-                      <TableCell className="text-muted-foreground">{u.email}</TableCell>
-                      <TableCell>{u.company || <span className="text-muted-foreground">—</span>}</TableCell>
+                      <TableCell className="font-medium truncate" title={u.display_name || ""}>
+                        {u.display_name || "—"}
+                      </TableCell>
+                      <TableCell className="text-muted-foreground truncate" title={u.email}>
+                        {u.email}
+                      </TableCell>
+                      <TableCell className="truncate" title={u.company || ""}>
+                        {u.company || <span className="text-muted-foreground">—</span>}
+                      </TableCell>
+                      <TableCell>
+                        {u.tags.length === 0 ? (
+                          <span className="text-muted-foreground text-xs">—</span>
+                        ) : (
+                          <div className="flex flex-wrap gap-1">
+                            {u.tags.map((t) => (
+                              <TagChip key={t.id} name={t.name} />
+                            ))}
+                          </div>
+                        )}
+                      </TableCell>
                       <TableCell>
                         <Badge variant="outline">{u.account_type === "wmsv" ? "WMSV" : "Standard"}</Badge>
                       </TableCell>
@@ -459,6 +612,7 @@ const UserManagement = () => {
         open={createOpen}
         onOpenChange={setCreateOpen}
         companies={companies}
+        availableTags={allTags}
         onSubmit={(payload) => createMutation.mutate({ action: "create", ...payload })}
         loading={createMutation.isPending}
       />
@@ -467,6 +621,7 @@ const UserManagement = () => {
         user={editing}
         onOpenChange={(o) => !o && setEditing(null)}
         companies={companies}
+        availableTags={allTags}
         onSubmit={(payload) =>
           updateMutation.mutate({ action: "update", user_id: editing!.user_id, ...payload })
         }
@@ -615,13 +770,22 @@ function CreateUserDialog({
   open,
   onOpenChange,
   companies,
+  availableTags,
   onSubmit,
   loading,
 }: {
   open: boolean;
   onOpenChange: (o: boolean) => void;
   companies: string[];
-  onSubmit: (p: { email: string; name: string; password: string | null; is_wmsv: boolean; company: string | null }) => void;
+  availableTags: TagOption[];
+  onSubmit: (p: {
+    email: string;
+    name: string;
+    password: string | null;
+    is_wmsv: boolean;
+    company: string | null;
+    tags: string[];
+  }) => void;
   loading: boolean;
 }) {
   const [email, setEmail] = useState("");
@@ -629,6 +793,7 @@ function CreateUserDialog({
   const [password, setPassword] = useState("");
   const [isWmsv, setIsWmsv] = useState(false);
   const [company, setCompany] = useState<string | null>(null);
+  const [tags, setTags] = useState<string[]>([]);
 
   useEffect(() => {
     if (open) {
@@ -637,6 +802,7 @@ function CreateUserDialog({
       setPassword("");
       setIsWmsv(false);
       setCompany(null);
+      setTags([]);
     }
   }, [open]);
 
@@ -648,6 +814,7 @@ function CreateUserDialog({
       password: password.trim() || null,
       is_wmsv: isWmsv,
       company,
+      tags,
     });
   };
 
@@ -698,6 +865,12 @@ function CreateUserDialog({
             <Label>Company (optional)</Label>
             <CompanyCombobox value={company} onChange={setCompany} companies={companies} />
           </div>
+          <div>
+            <Label>Tags (optional)</Label>
+            <div className="mt-1">
+              <TagPicker selected={tags} onChange={setTags} available={availableTags} />
+            </div>
+          </div>
         </div>
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)} disabled={loading}>
@@ -721,24 +894,28 @@ function EditUserDialog({
   user,
   onOpenChange,
   companies,
+  availableTags,
   onSubmit,
   loading,
 }: {
   user: UserRow | null;
   onOpenChange: (o: boolean) => void;
   companies: string[];
-  onSubmit: (p: { name: string; is_wmsv: boolean; company: string | null }) => void;
+  availableTags: TagOption[];
+  onSubmit: (p: { name: string; is_wmsv: boolean; company: string | null; tags: string[] }) => void;
   loading: boolean;
 }) {
   const [name, setName] = useState("");
   const [isWmsv, setIsWmsv] = useState(false);
   const [company, setCompany] = useState<string | null>(null);
+  const [tags, setTags] = useState<string[]>([]);
 
   useEffect(() => {
     if (user) {
       setName(user.display_name || "");
       setIsWmsv(user.account_type === "wmsv");
       setCompany(user.company || null);
+      setTags(user.tags.map((t) => t.name));
     }
   }, [user]);
 
@@ -764,12 +941,21 @@ function EditUserDialog({
             <Label>Company</Label>
             <CompanyCombobox value={company} onChange={setCompany} companies={companies} />
           </div>
+          <div>
+            <Label>Tags</Label>
+            <div className="mt-1">
+              <TagPicker selected={tags} onChange={setTags} available={availableTags} />
+            </div>
+          </div>
         </div>
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)} disabled={loading}>
             Cancel
           </Button>
-          <Button onClick={() => onSubmit({ name: name.trim(), is_wmsv: isWmsv, company })} disabled={loading || !name.trim()}>
+          <Button
+            onClick={() => onSubmit({ name: name.trim(), is_wmsv: isWmsv, company, tags })}
+            disabled={loading || !name.trim()}
+          >
             {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : "Save"}
           </Button>
         </DialogFooter>
