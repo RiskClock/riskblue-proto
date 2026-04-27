@@ -3413,37 +3413,39 @@ export function AnalysisSection({ requestId, files, projectId, sourceType, isWMS
                       <Play className="w-4 h-4 mr-2" />
                       Start Analysis
                     </Button>
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
-                        <Button size="sm" variant="ghost" className="h-8 w-8 p-0">
-                          <MoreVertical className="w-4 h-4" />
-                        </Button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end">
-                        <DropdownMenuItem
-                          onClick={() => startPipeline("extract")}
-                          disabled={copiedFiles.length === 0}
-                        >
-                          <RotateCcw className="w-4 h-4 mr-2" />
-                          Restart from Context Extraction
-                        </DropdownMenuItem>
-                        <DropdownMenuItem
-                          onClick={() => startPipeline("triage")}
-                          disabled={copiedFiles.length === 0}
-                        >
-                          <RotateCcw className="w-4 h-4 mr-2" />
-                          Restart from Triaging
-                        </DropdownMenuItem>
-                        <DropdownMenuSeparator />
-                        <DropdownMenuItem
-                          onClick={() => startPipeline("analyze")}
-                          disabled={copiedFiles.length === 0}
-                        >
-                          <RotateCcw className="w-4 h-4 mr-2" />
-                          Restart from Deep Analysis
-                        </DropdownMenuItem>
-                      </DropdownMenuContent>
-                    </DropdownMenu>
+                    {isInternal && (
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button size="sm" variant="ghost" className="h-8 w-8 p-0">
+                            <MoreVertical className="w-4 h-4" />
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end">
+                          <DropdownMenuItem
+                            onClick={() => startPipeline("extract")}
+                            disabled={copiedFiles.length === 0}
+                          >
+                            <RotateCcw className="w-4 h-4 mr-2" />
+                            Restart from Context Extraction
+                          </DropdownMenuItem>
+                          <DropdownMenuItem
+                            onClick={() => startPipeline("triage")}
+                            disabled={copiedFiles.length === 0}
+                          >
+                            <RotateCcw className="w-4 h-4 mr-2" />
+                            Restart from Triaging
+                          </DropdownMenuItem>
+                          <DropdownMenuSeparator />
+                          <DropdownMenuItem
+                            onClick={() => startPipeline("analyze")}
+                            disabled={copiedFiles.length === 0}
+                          >
+                            <RotateCcw className="w-4 h-4 mr-2" />
+                            Restart from Deep Analysis
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    )}
                   </div>
                 )}
               </div>
