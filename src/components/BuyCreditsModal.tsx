@@ -6,6 +6,7 @@ import { Coins, Loader2, Check } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { useCredits } from "@/hooks/useCredits";
+import { useAccountType } from "@/hooks/useAccountType";
 import { EmbeddedCheckoutProvider, EmbeddedCheckout } from "@stripe/react-stripe-js";
 import { getStripe, stripeEnvironment, isPaymentsTestMode } from "@/lib/stripe";
 
