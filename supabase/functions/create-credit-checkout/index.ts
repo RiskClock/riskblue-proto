@@ -7,10 +7,10 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
-const PACKAGES: Record<string, { priceId: string; credits: number; label: string; amountCents: number }> = {
-  pack_20: { priceId: "credits_pack_20_usd", credits: 20, label: "20 Scan Credits", amountCents: 3000 },
-  pack_100: { priceId: "credits_pack_100_usd", credits: 100, label: "100 Scan Credits", amountCents: 13000 },
-  pack_500: { priceId: "credits_pack_500_usd", credits: 500, label: "500 Scan Credits", amountCents: 50000 },
+const PACKAGES: Record<string, { wmsvPriceId: string; fullPriceId: string; credits: number; label: string; wmsvAmountCents: number; fullAmountCents: number }> = {
+  pack_20: { wmsvPriceId: "credits_pack_20_usd", fullPriceId: "credits_pack_20_full_usd", credits: 20, label: "20 Scan Credits", wmsvAmountCents: 3000, fullAmountCents: 10000 },
+  pack_100: { wmsvPriceId: "credits_pack_100_usd", fullPriceId: "credits_pack_100_full_usd", credits: 100, label: "100 Scan Credits", wmsvAmountCents: 13000, fullAmountCents: 43000 },
+  pack_500: { wmsvPriceId: "credits_pack_500_usd", fullPriceId: "credits_pack_500_full_usd", credits: 500, label: "500 Scan Credits", wmsvAmountCents: 50000, fullAmountCents: 165000 },
 };
 
 serve(async (req) => {
@@ -42,7 +42,7 @@ serve(async (req) => {
       });
     }
 
-    const { packageId, environment, returnUrl } = await req.json();
+    const { packageId, tier: requestedTier, environment, returnUrl } = await req.json();
     const pkg = PACKAGES[packageId];
     if (!pkg) {
       return new Response(JSON.stringify({ error: "Invalid packageId" }), {
@@ -51,10 +51,22 @@ serve(async (req) => {
       });
     }
 
+    // Server-side authoritative tier: only WMSV accounts get promo pricing.
+    const { data: profile } = await supabase
+      .from("profiles")
+      .select("account_type")
+      .eq("user_id", user.id)
+      .maybeSingle();
+    const isWMSV = (profile as any)?.account_type === "wmsv";
+    const tier: "wmsv" | "full" = isWMSV ? "wmsv" : "full";
+
+    const priceId = tier === "wmsv" ? pkg.wmsvPriceId : pkg.fullPriceId;
+    const amountCents = tier === "wmsv" ? pkg.wmsvAmountCents : pkg.fullAmountCents;
+
     const env = (environment || "sandbox") as StripeEnv;
     const stripe = createStripeClient(env);
 
-    const prices = await stripe.prices.list({ lookup_keys: [pkg.priceId] });
+    const prices = await stripe.prices.list({ lookup_keys: [priceId] });
     if (!prices.data.length) {
       return new Response(JSON.stringify({ error: "Price not found" }), {
         status: 404,
@@ -73,8 +85,9 @@ serve(async (req) => {
       metadata: {
         userId: user.id,
         packageId,
+        tier,
         credits: String(pkg.credits),
-        amountCents: String(pkg.amountCents),
+        amountCents: String(amountCents),
         packageLabel: pkg.label,
       },
     });

@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from "react";
-
+import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
 import type { RealtimeChannel } from "@supabase/supabase-js";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -552,7 +552,7 @@ function InstanceDetailModal({
                 overlays={overlays}
                 initialFit={resolvedOverlay ? "selection" : "page"}
                 initialFitOverlayId={resolvedOverlay ? OVERLAY_ID : undefined}
-                minScale={0.5}
+                minScale={0.8}
                 maxScale={8}
               />
             )}
@@ -683,6 +683,47 @@ function RawResultModal({ fileName, awpClassName, resultText, instanceCount, sou
 
   const bboxCount = overlays.length;
 
+  // Determine if all overlays are on a single page → enable auto-fit-to-all-detections.
+  const detectionPages = useMemo(() => {
+    const set = new Set<number>();
+    for (const o of overlays) set.add(o.page ?? 1);
+    return set;
+  }, [overlays]);
+  const singlePageDetections = detectionPages.size === 1;
+  const detectionPage = singlePageDetections ? Array.from(detectionPages)[0] : 1;
+
+  // Synthetic "fit-all" overlay covering the union of all detection bboxes on
+  // a single page. We use coordSpace="pixels" to be invariant to AI vs text
+  // matches (whichever produced the originals); we approximate by re-using
+  // the first overlay's pixelSize/pdfViewport. The viewer already normalizes
+  // coordinates per-page during fit math.
+  const FIT_ALL_ID = "raw-fit-all";
+  const overlaysWithFit = useMemo(() => {
+    if (!singlePageDetections || overlays.length < 2) return overlays;
+    const onPage = overlays.filter((o) => (o.page ?? 1) === detectionPage);
+    if (onPage.length < 2) return overlays;
+    // Compute union in each overlay's own coord space — only works if all
+    // share the same coordSpace+ref. Group by coordSpace.
+    const sameSpace = onPage.every((o) => o.coordSpace === onPage[0].coordSpace);
+    if (!sameSpace) return overlays;
+    const xs1: number[] = [], ys1: number[] = [], xs2: number[] = [], ys2: number[] = [];
+    for (const o of onPage) {
+      const [x1, y1, x2, y2] = o.bbox;
+      xs1.push(x1); ys1.push(y1); xs2.push(x2); ys2.push(y2);
+    }
+    const union: OverlayInput = {
+      id: FIT_ALL_ID,
+      page: detectionPage,
+      bbox: [Math.min(...xs1), Math.min(...ys1), Math.max(...xs2), Math.max(...ys2)],
+      coordSpace: onPage[0].coordSpace,
+      pixelSize: onPage[0].pixelSize,
+      pdfViewport: onPage[0].pdfViewport,
+      // Hidden — used only for fit math; render with no visible color.
+      color: "transparent",
+    };
+    return [...overlays, union];
+  }, [overlays, singlePageDetections, detectionPage]);
+
   return (
     <Dialog open onOpenChange={(open) => { if (!open) onClose(); }}>
       <DialogContent className="!max-w-[95vw] h-[90vh] flex flex-col p-4 gap-2">
@@ -708,13 +749,24 @@ function RawResultModal({ fileName, awpClassName, resultText, instanceCount, sou
               <div className="flex items-center justify-center h-full">
                 <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
               </div>
+            ) : singlePageDetections && overlays.length > 0 ? (
+              <DrawingViewer
+                source={source}
+                layout="single-page"
+                page={detectionPage}
+                overlays={overlaysWithFit}
+                initialFit="selection"
+                initialFitOverlayId={overlays.length > 1 ? FIT_ALL_ID : overlays[0].id}
+                minScale={0.8}
+                maxScale={8}
+              />
             ) : (
               <DrawingViewer
                 source={source}
                 layout="stacked-pages"
                 overlays={overlays}
                 initialFit="page"
-                minScale={0.5}
+                minScale={0.8}
                 maxScale={8}
               />
             )}
@@ -781,7 +833,7 @@ function FilePreviewModal({ file, sourceType, onClose }: FilePreviewModalProps) 
               source={source}
               layout="stacked-pages"
               initialFit="page"
-              minScale={0.5}
+              minScale={0.8}
               maxScale={8}
             />
           )}
@@ -955,6 +1007,8 @@ const STATUS_RANK: Record<string, number> = {
 
 export function AnalysisSection({ requestId, files, projectId, sourceType, isWMSV, visibleAwpClasses, onAddFileUpload, onAddFileDrive, onAddFileProcore, onAddFileSharePoint }: AnalysisSectionProps) {
   const { toast } = useToast();
+  const { user } = useAuth();
+  const isInternal = (user?.email?.toLowerCase().endsWith("@riskclock.com")) ?? false;
   const queryClient = useQueryClient();
 
   // ---- New state architecture ----
@@ -3349,6 +3403,7 @@ export function AnalysisSection({ requestId, files, projectId, sourceType, isWMS
                       <option value="6.8" disabled>RiskClock Engine 6.8 (Jan-2026) (deprecated)</option>
                       <option value="7.1">RiskClock Engine 7.1 (Mar-2026)</option>
                       <option value="7.2">RiskClock Engine 7.2 (Apr-2026)</option>
+                      <option value="7.3-tp">RiskClock Engine 7.3 Technical Preview (May-2026)</option>
                     </select>
                     <Button
                       size="sm"
@@ -3358,37 +3413,39 @@ export function AnalysisSection({ requestId, files, projectId, sourceType, isWMS
                       <Play className="w-4 h-4 mr-2" />
                       Start Analysis
                     </Button>
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
-                        <Button size="sm" variant="ghost" className="h-8 w-8 p-0">
-                          <MoreVertical className="w-4 h-4" />
-                        </Button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end">
-                        <DropdownMenuItem
-                          onClick={() => startPipeline("extract")}
-                          disabled={copiedFiles.length === 0}
-                        >
-                          <RotateCcw className="w-4 h-4 mr-2" />
-                          Restart from Context Extraction
-                        </DropdownMenuItem>
-                        <DropdownMenuItem
-                          onClick={() => startPipeline("triage")}
-                          disabled={copiedFiles.length === 0}
-                        >
-                          <RotateCcw className="w-4 h-4 mr-2" />
-                          Restart from Triaging
-                        </DropdownMenuItem>
-                        <DropdownMenuSeparator />
-                        <DropdownMenuItem
-                          onClick={() => startPipeline("analyze")}
-                          disabled={copiedFiles.length === 0}
-                        >
-                          <RotateCcw className="w-4 h-4 mr-2" />
-                          Restart from Deep Analysis
-                        </DropdownMenuItem>
-                      </DropdownMenuContent>
-                    </DropdownMenu>
+                    {isInternal && (
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button size="sm" variant="ghost" className="h-8 w-8 p-0">
+                            <MoreVertical className="w-4 h-4" />
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end">
+                          <DropdownMenuItem
+                            onClick={() => startPipeline("extract")}
+                            disabled={copiedFiles.length === 0}
+                          >
+                            <RotateCcw className="w-4 h-4 mr-2" />
+                            Restart from Context Extraction
+                          </DropdownMenuItem>
+                          <DropdownMenuItem
+                            onClick={() => startPipeline("triage")}
+                            disabled={copiedFiles.length === 0}
+                          >
+                            <RotateCcw className="w-4 h-4 mr-2" />
+                            Restart from Triaging
+                          </DropdownMenuItem>
+                          <DropdownMenuSeparator />
+                          <DropdownMenuItem
+                            onClick={() => startPipeline("analyze")}
+                            disabled={copiedFiles.length === 0}
+                          >
+                            <RotateCcw className="w-4 h-4 mr-2" />
+                            Restart from Deep Analysis
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    )}
                   </div>
                 )}
               </div>
@@ -3573,7 +3630,7 @@ export function AnalysisSection({ requestId, files, projectId, sourceType, isWMS
                   <tr className="border-b">
                     <th className="sticky left-0 z-10 bg-card px-4 py-2 text-left font-medium text-muted-foreground min-w-[180px] max-w-[320px] w-auto border-r">
                       <span className="block text-sm">
-                        Files ({copiedFiles.length} files | {formatBytes(totalSizeBytes)} | {sourceLabel})
+                        Files ({copiedFiles.length} files | {formatBytes(totalSizeBytes)})
                       </span>
                     </th>
                      {sortedPrompts.map((prompt) => {
@@ -3669,7 +3726,7 @@ export function AnalysisSection({ requestId, files, projectId, sourceType, isWMS
                               <div className="flex items-center justify-center">
                                 <Loader2 className="w-3 h-3 animate-spin text-muted-foreground" />
                               </div>
-                            ) : (
+                            ) : isInternal ? (
                               <Tooltip>
                                 <TooltipTrigger asChild>
                                   <Button
@@ -3690,7 +3747,7 @@ export function AnalysisSection({ requestId, files, projectId, sourceType, isWMS
                                   {isDisabled ? `${className} is disabled` : hasTriageResults ? `Re-triage ${className}` : `Triage ${className}`}
                                 </TooltipContent>
                               </Tooltip>
-                            )}
+                            ) : null}
                          </td>
                        );
                      })}

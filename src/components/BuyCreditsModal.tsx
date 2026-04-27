@@ -22,12 +22,13 @@ interface CreditPackage {
   credits: number;
   priceUsd: number;
   originalPriceUsd: number;
+  priceIdFull: string;
 }
 
 const PACKAGES: CreditPackage[] = [
-  { id: "pack_20", credits: 20, priceUsd: 30, originalPriceUsd: 100 },
-  { id: "pack_100", credits: 100, priceUsd: 130, originalPriceUsd: 430 },
-  { id: "pack_500", credits: 500, priceUsd: 500, originalPriceUsd: 1650 },
+  { id: "pack_20", credits: 20, priceUsd: 30, originalPriceUsd: 100, priceIdFull: "credits_pack_20_full_usd" },
+  { id: "pack_100", credits: 100, priceUsd: 130, originalPriceUsd: 430, priceIdFull: "credits_pack_100_full_usd" },
+  { id: "pack_500", credits: 500, priceUsd: 500, originalPriceUsd: 1650, priceIdFull: "credits_pack_500_full_usd" },
 ];
 
 export const BuyCreditsModal = ({ open, onOpenChange, reason }: BuyCreditsModalProps) => {
@@ -66,6 +67,7 @@ export const BuyCreditsModal = ({ open, onOpenChange, reason }: BuyCreditsModalP
       const { data, error } = await supabase.functions.invoke("create-credit-checkout", {
         body: {
           packageId: pkg.id,
+          tier: isWMSV ? "wmsv" : "full",
           environment: stripeEnvironment,
           returnUrl: `${window.location.origin}/credits/return?session_id={CHECKOUT_SESSION_ID}`,
         },
@@ -106,7 +108,7 @@ export const BuyCreditsModal = ({ open, onOpenChange, reason }: BuyCreditsModalP
               ? "Complete your purchase below."
               : reason
                 ? reason
-                : `You currently have ${balance} credit${balance === 1 ? "" : "s"}. Each scan uses 1 credit.`}
+                : `You currently have ${balance} credit${balance === 1 ? "" : "s"}. Scanning each document uses 1 credit.`}
           </DialogDescription>
         </DialogHeader>
 
@@ -118,35 +120,40 @@ export const BuyCreditsModal = ({ open, onOpenChange, reason }: BuyCreditsModalP
 
         {!clientSecret && (
           <>
-            <div className="rounded-lg border border-primary/30 bg-gradient-to-r from-primary/15 via-primary/10 to-primary/15 px-4 py-3 mt-2 flex items-center justify-center gap-2 shadow-sm">
-              <Sparkles className="h-4 w-4 text-primary" />
-              <span className="text-sm font-semibold text-primary tracking-wide">
-                Water Mitigation Vendor Promotional Pricing
-              </span>
-              <Sparkles className="h-4 w-4 text-primary" />
-            </div>
+            {isWMSV && (
+              <div className="rounded-lg border border-primary/30 bg-gradient-to-r from-primary/15 via-primary/10 to-primary/15 px-4 py-3 mt-2 flex items-center justify-center gap-2 shadow-sm">
+                <span className="text-sm font-semibold text-primary tracking-wide">
+                  Water Mitigation Solution Vendor Promotional Pricing
+                </span>
+              </div>
+            )}
             <div className="grid gap-4 md:grid-cols-3 mt-2">
               {PACKAGES.map((pkg) => {
-                const discountPct = Math.round(
-                  (1 - pkg.priceUsd / pkg.originalPriceUsd) * 100,
-                );
+                const discountPct = isWMSV
+                  ? Math.round((1 - pkg.priceUsd / pkg.originalPriceUsd) * 100)
+                  : 0;
+                const displayPrice = isWMSV ? pkg.priceUsd : pkg.originalPriceUsd;
                 return (
                   <Card
                     key={pkg.id}
                     className="relative overflow-hidden p-5 flex flex-col gap-3 transition-all border-primary/20 hover:border-primary/50 hover:shadow-lg hover:shadow-primary/10 bg-gradient-to-br from-card to-primary/5"
                   >
-                    <div className="absolute top-0 right-0 bg-primary text-primary-foreground text-[10px] font-bold px-2 py-1 rounded-bl-lg">
-                      -{discountPct}%
-                    </div>
+                    {isWMSV && (
+                      <div className="absolute top-0 right-0 bg-primary text-primary-foreground text-[10px] font-bold px-2 py-1 rounded-bl-lg">
+                        -{discountPct}%
+                      </div>
+                    )}
                     <div className="flex items-baseline gap-1">
                       <span className="text-3xl font-bold text-primary">{pkg.credits}</span>
                       <span className="text-sm text-muted-foreground">credits</span>
                     </div>
                     <div className="flex items-baseline gap-2">
-                      <span className="text-2xl font-semibold text-primary">${pkg.priceUsd}</span>
-                      <span className="text-sm text-muted-foreground line-through">
-                        ${pkg.originalPriceUsd.toLocaleString()}
-                      </span>
+                      <span className="text-2xl font-semibold text-primary">${displayPrice.toLocaleString()}</span>
+                      {isWMSV && (
+                        <span className="text-sm text-muted-foreground line-through">
+                          ${pkg.originalPriceUsd.toLocaleString()}
+                        </span>
+                      )}
                     </div>
                     <div className="flex-1" />
                     <Button

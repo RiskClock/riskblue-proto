@@ -3,7 +3,6 @@ import {
   ChevronLeft,
   ChevronRight,
   Maximize2,
-  RotateCw,
   ZoomIn,
   ZoomOut,
 } from "lucide-react";
@@ -29,7 +28,6 @@ export const ViewerToolbar = ({
   scale,
   onZoomIn,
   onZoomOut,
-  onReset,
   onFitPage,
   onFitSelection,
   pageNav,
@@ -79,14 +77,11 @@ export const ViewerToolbar = ({
           variant="outline"
           size="sm"
           onClick={onFitSelection}
-          title="Fit selection"
+          title="Fit Detection"
         >
-          Fit selection
+          Fit Detection
         </Button>
       )}
-      <Button variant="outline" size="icon" onClick={onReset} title="Reset">
-        <RotateCw className="w-4 h-4" />
-      </Button>
     </div>
   );
 };

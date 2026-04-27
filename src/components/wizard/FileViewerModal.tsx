@@ -117,7 +117,7 @@ export const FileViewerModal = ({
                   : null
               }
               initialFit="page"
-              minScale={0.5}
+              minScale={0.8}
               maxScale={8}
             />
           </div>
