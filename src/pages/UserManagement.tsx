@@ -637,7 +637,7 @@ const UserManagement = () => {
                         return null;
                     }
                   })}
-                  <TableHead className="w-[96px] text-right">
+                  <TableHead className="w-[60px] text-center">
                     <ColumnEditDropdown columnPrefs={columnPrefs} setColumnPrefs={setColumnPrefs} />
                   </TableHead>
                 </TableRow>
