@@ -73,6 +73,8 @@ import {
   ChevronsUpDown,
   X,
   RotateCcw,
+  Settings2,
+  GripVertical,
 } from "lucide-react";
 import { format } from "date-fns";
 import { cn } from "@/lib/utils";
@@ -89,6 +91,7 @@ interface UserRow {
   display_name: string | null;
   account_type: string;
   company: string | null;
+  credits_balance: number;
   is_active: boolean;
   deactivated_at: string | null;
   created_at: string;
@@ -105,8 +108,86 @@ type SortKey =
   | "company"
   | "last_sign_in_at"
   | "status"
-  | "tags";
+  | "tags"
+  | "credits";
 type SortDir = "asc" | "desc";
+
+// ---- Column configuration ----
+type ColumnId =
+  | "user"
+  | "company"
+  | "tags"
+  | "type"
+  | "credits"
+  | "status"
+  | "created"
+  | "last_sign_in";
+
+interface ColumnDef {
+  id: ColumnId;
+  label: string;
+}
+
+const ALL_COLUMNS: ColumnDef[] = [
+  { id: "user", label: "User" },
+  { id: "company", label: "Company" },
+  { id: "tags", label: "Tags" },
+  { id: "type", label: "Type" },
+  { id: "credits", label: "Credits" },
+  { id: "status", label: "Status" },
+  { id: "created", label: "Created" },
+  { id: "last_sign_in", label: "Last Sign-In" },
+];
+
+const COLUMN_PREFS_KEY = "user-management-columns:v1";
+
+interface ColumnPrefs {
+  order: ColumnId[];
+  visible: Record<ColumnId, boolean>;
+}
+
+function loadColumnPrefs(): ColumnPrefs {
+  const defaults: ColumnPrefs = {
+    order: ALL_COLUMNS.map((c) => c.id),
+    visible: ALL_COLUMNS.reduce((acc, c) => ({ ...acc, [c.id]: true }), {} as Record<ColumnId, boolean>),
+  };
+  if (typeof window === "undefined") return defaults;
+  try {
+    const raw = window.localStorage.getItem(COLUMN_PREFS_KEY);
+    if (!raw) return defaults;
+    const parsed = JSON.parse(raw);
+    const validIds = new Set(ALL_COLUMNS.map((c) => c.id));
+    const order: ColumnId[] = Array.isArray(parsed.order)
+      ? parsed.order.filter((id: any) => validIds.has(id))
+      : defaults.order;
+    // Append any missing
+    for (const c of ALL_COLUMNS) if (!order.includes(c.id)) order.push(c.id);
+    // Force "user" first
+    const filtered = order.filter((id) => id !== "user");
+    const finalOrder = ["user" as ColumnId, ...filtered];
+    const visible = { ...defaults.visible };
+    if (parsed.visible && typeof parsed.visible === "object") {
+      for (const id of finalOrder) {
+        if (typeof parsed.visible[id] === "boolean") visible[id] = parsed.visible[id];
+      }
+    }
+    visible.user = true; // always visible
+    return { order: finalOrder, visible };
+  } catch {
+    return defaults;
+  }
+}
+
+function formatCredits(n: number): string {
+  if (!Number.isFinite(n)) return "0";
+  if (Math.abs(n) >= 1000) {
+    const v = n / 1000;
+    // 1 decimal if not whole, else no decimal
+    const s = (Math.round(v * 10) / 10).toString();
+    return `${s}k`;
+  }
+  return String(n);
+}
 
 const STATUS_OPTIONS = [
   { value: "active", label: "Active" },
@@ -267,6 +348,10 @@ const UserManagement = () => {
           va = a.tags[0]?.name.toLowerCase() || "\uffff";
           vb = b.tags[0]?.name.toLowerCase() || "\uffff";
           break;
+        case "credits":
+          va = a.credits_balance ?? 0;
+          vb = b.credits_balance ?? 0;
+          break;
         case "created_at":
         default:
           va = new Date(a.created_at).getTime();
@@ -320,6 +405,21 @@ const UserManagement = () => {
       sortDir: DEFAULT_SORT_DIR,
     });
   };
+
+  // ---- column prefs (persisted separately, NOT cleared by Reset) ----
+  const [columnPrefs, setColumnPrefs] = useState<ColumnPrefs>(() => loadColumnPrefs());
+  useEffect(() => {
+    try {
+      window.localStorage.setItem(COLUMN_PREFS_KEY, JSON.stringify(columnPrefs));
+    } catch {
+      /* ignore */
+    }
+  }, [columnPrefs]);
+
+  const visibleColumns = useMemo(
+    () => columnPrefs.order.filter((id) => columnPrefs.visible[id]),
+    [columnPrefs]
+  );
 
   // ---- modals ----
   const [createOpen, setCreateOpen] = useState(false);
@@ -487,32 +587,65 @@ const UserManagement = () => {
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead className="cursor-pointer select-none" onClick={() => toggleSort("email")}>
-                    User <SortIcon k="email" />
+                  {visibleColumns.map((colId) => {
+                    switch (colId) {
+                      case "user":
+                        return (
+                          <TableHead key={colId} className="cursor-pointer select-none" onClick={() => toggleSort("email")}>
+                            User <SortIcon k="email" />
+                          </TableHead>
+                        );
+                      case "company":
+                        return (
+                          <TableHead key={colId} className="cursor-pointer select-none" onClick={() => toggleSort("company")}>
+                            Company <SortIcon k="company" />
+                          </TableHead>
+                        );
+                      case "tags":
+                        return (
+                          <TableHead key={colId} className="cursor-pointer select-none w-[180px]" onClick={() => toggleSort("tags")}>
+                            Tags <SortIcon k="tags" />
+                          </TableHead>
+                        );
+                      case "type":
+                        return <TableHead key={colId}>Type</TableHead>;
+                      case "credits":
+                        return (
+                          <TableHead key={colId} className="cursor-pointer select-none text-right" onClick={() => toggleSort("credits")}>
+                            Credits <SortIcon k="credits" />
+                          </TableHead>
+                        );
+                      case "status":
+                        return (
+                          <TableHead key={colId} className="cursor-pointer select-none" onClick={() => toggleSort("status")}>
+                            Status <SortIcon k="status" />
+                          </TableHead>
+                        );
+                      case "created":
+                        return (
+                          <TableHead key={colId} className="cursor-pointer select-none" onClick={() => toggleSort("created_at")}>
+                            Created <SortIcon k="created_at" />
+                          </TableHead>
+                        );
+                      case "last_sign_in":
+                        return (
+                          <TableHead key={colId} className="cursor-pointer select-none" onClick={() => toggleSort("last_sign_in_at")}>
+                            Last Sign-In <SortIcon k="last_sign_in_at" />
+                          </TableHead>
+                        );
+                      default:
+                        return null;
+                    }
+                  })}
+                  <TableHead className="w-[96px] text-right">
+                    <ColumnEditDropdown columnPrefs={columnPrefs} setColumnPrefs={setColumnPrefs} />
                   </TableHead>
-                  <TableHead className="cursor-pointer select-none" onClick={() => toggleSort("company")}>
-                    Company <SortIcon k="company" />
-                  </TableHead>
-                  <TableHead className="cursor-pointer select-none w-[180px]" onClick={() => toggleSort("tags")}>
-                    Tags <SortIcon k="tags" />
-                  </TableHead>
-                  <TableHead>Type</TableHead>
-                  <TableHead className="cursor-pointer select-none" onClick={() => toggleSort("status")}>
-                    Status <SortIcon k="status" />
-                  </TableHead>
-                  <TableHead className="cursor-pointer select-none" onClick={() => toggleSort("created_at")}>
-                    Created <SortIcon k="created_at" />
-                  </TableHead>
-                  <TableHead className="cursor-pointer select-none" onClick={() => toggleSort("last_sign_in_at")}>
-                    Last Sign-In <SortIcon k="last_sign_in_at" />
-                  </TableHead>
-                  <TableHead className="w-[56px]"></TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {filteredSorted.length === 0 && (
                   <TableRow>
-                    <TableCell colSpan={8} className="text-center text-muted-foreground py-12">
+                    <TableCell colSpan={visibleColumns.length + 1} className="text-center text-muted-foreground py-12">
                       No users match your filters.
                     </TableCell>
                   </TableRow>
@@ -520,42 +653,74 @@ const UserManagement = () => {
                 {filteredSorted.map((u) => {
                   const status = getStatus(u);
                   const isDeactivated = status === "deactivated";
-                  // Apply opacity to all cells except the status pill cell
                   const dim = isDeactivated ? "opacity-80" : "";
                   return (
                     <TableRow key={u.user_id}>
-                      <TableCell className={cn("font-medium", dim)}>
-                        <div className="flex flex-col">
-                          <span>{u.display_name || "—"}</span>
-                          <span className="text-xs text-muted-foreground">{u.email}</span>
-                        </div>
-                      </TableCell>
-                      <TableCell className={dim}>
-                        {u.company || <span className="text-muted-foreground">—</span>}
-                      </TableCell>
-                      <TableCell className={dim}>
-                        {u.tags.length === 0 ? (
-                          <span className="text-muted-foreground text-xs">—</span>
-                        ) : (
-                          <div className="flex flex-wrap gap-1">
-                            {u.tags.map((t) => (
-                              <TagChip key={t.id} name={t.name} />
-                            ))}
-                          </div>
-                        )}
-                      </TableCell>
-                      <TableCell className={dim}>
-                        <Badge variant="outline">{u.account_type === "wmsv" ? "WMSV" : "Standard"}</Badge>
-                      </TableCell>
-                      <TableCell>
-                        <StatusBadge status={status} />
-                      </TableCell>
-                      <TableCell className={cn("text-muted-foreground tabular-nums whitespace-nowrap", dim)}>
-                        {format(new Date(u.created_at), "MMM d, yyyy")}
-                      </TableCell>
-                      <TableCell className={cn("text-muted-foreground tabular-nums whitespace-nowrap", dim)}>
-                        {u.last_sign_in_at ? format(new Date(u.last_sign_in_at), "MMM d, yyyy") : "Never"}
-                      </TableCell>
+                      {visibleColumns.map((colId) => {
+                        switch (colId) {
+                          case "user":
+                            return (
+                              <TableCell key={colId} className={cn("font-medium", dim)}>
+                                <span>
+                                  {u.display_name || "—"}
+                                  <span className="text-muted-foreground font-normal"> ({u.email})</span>
+                                </span>
+                              </TableCell>
+                            );
+                          case "company":
+                            return (
+                              <TableCell key={colId} className={dim}>
+                                {u.company || <span className="text-muted-foreground">—</span>}
+                              </TableCell>
+                            );
+                          case "tags":
+                            return (
+                              <TableCell key={colId} className={dim}>
+                                {u.tags.length === 0 ? (
+                                  <span className="text-muted-foreground text-xs">—</span>
+                                ) : (
+                                  <div className="flex flex-wrap gap-1">
+                                    {u.tags.map((t) => (
+                                      <TagChip key={t.id} name={t.name} />
+                                    ))}
+                                  </div>
+                                )}
+                              </TableCell>
+                            );
+                          case "type":
+                            return (
+                              <TableCell key={colId} className={dim}>
+                                <Badge variant="outline">{u.account_type === "wmsv" ? "WMSV" : "Standard"}</Badge>
+                              </TableCell>
+                            );
+                          case "credits":
+                            return (
+                              <TableCell key={colId} className={cn("text-right tabular-nums whitespace-nowrap", dim)}>
+                                {formatCredits(u.credits_balance ?? 0)}
+                              </TableCell>
+                            );
+                          case "status":
+                            return (
+                              <TableCell key={colId}>
+                                <StatusBadge status={status} />
+                              </TableCell>
+                            );
+                          case "created":
+                            return (
+                              <TableCell key={colId} className={cn("text-muted-foreground tabular-nums whitespace-nowrap", dim)}>
+                                {format(new Date(u.created_at), "MMM d, yyyy")}
+                              </TableCell>
+                            );
+                          case "last_sign_in":
+                            return (
+                              <TableCell key={colId} className={cn("text-muted-foreground tabular-nums whitespace-nowrap", dim)}>
+                                {u.last_sign_in_at ? format(new Date(u.last_sign_in_at), "MMM d, yyyy") : "Never"}
+                              </TableCell>
+                            );
+                          default:
+                            return null;
+                        }
+                      })}
                       <TableCell>
                         <DropdownMenu>
                           <DropdownMenuTrigger asChild>
@@ -768,6 +933,7 @@ function CreateUserDialog({
     is_wmsv: boolean;
     company: string | null;
     tags: string[];
+    credits: number;
   }) => void;
   loading: boolean;
 }) {
@@ -777,6 +943,7 @@ function CreateUserDialog({
   const [isWmsv, setIsWmsv] = useState(false);
   const [company, setCompany] = useState<string | null>(null);
   const [tags, setTags] = useState<string[]>([]);
+  const [credits, setCredits] = useState<string>("20");
 
   useEffect(() => {
     if (open) {
@@ -786,11 +953,15 @@ function CreateUserDialog({
       setIsWmsv(false);
       setCompany(null);
       setTags([]);
+      setCredits("20");
     }
   }, [open]);
 
+  const creditsNum = Math.max(0, Math.floor(Number(credits) || 0));
+  const creditsValid = credits.trim() !== "" && Number.isFinite(Number(credits)) && Number(credits) >= 0;
+
   const submit = () => {
-    if (!email.trim() || !name.trim()) return;
+    if (!email.trim() || !name.trim() || !creditsValid) return;
     onSubmit({
       email: email.trim(),
       name: name.trim(),
@@ -798,6 +969,7 @@ function CreateUserDialog({
       is_wmsv: isWmsv,
       company,
       tags,
+      credits: creditsNum,
     });
   };
 
@@ -838,10 +1010,21 @@ function CreateUserDialog({
               <p className="text-xs text-destructive mt-1">Must be at least 8 characters</p>
             )}
           </div>
+          <div>
+            <Label>Credits</Label>
+            <Input
+              type="number"
+              min={0}
+              step={1}
+              value={credits}
+              onChange={(e) => setCredits(e.target.value)}
+              className="mt-1"
+            />
+          </div>
           <div className="flex items-center gap-2">
             <Checkbox id="wmsv" checked={isWmsv} onCheckedChange={(v) => setIsWmsv(!!v)} />
             <Label htmlFor="wmsv" className="cursor-pointer font-normal">
-              WMSV account
+              WMSV (Water Mitigation Solution Vendor) account
             </Label>
           </div>
           <div>
@@ -861,7 +1044,7 @@ function CreateUserDialog({
           </Button>
           <Button
             onClick={submit}
-            disabled={loading || !email.trim() || !name.trim() || (password.length > 0 && password.length < 8)}
+            disabled={loading || !email.trim() || !name.trim() || !creditsValid || (password.length > 0 && password.length < 8)}
           >
             {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : "Create user"}
           </Button>
@@ -885,13 +1068,22 @@ function EditUserDialog({
   onOpenChange: (o: boolean) => void;
   companies: string[];
   availableTags: TagOption[];
-  onSubmit: (p: { name: string; is_wmsv: boolean; company: string | null; tags: string[] }) => void;
+  onSubmit: (p: {
+    name: string;
+    is_wmsv: boolean;
+    company: string | null;
+    tags: string[];
+    credits: number | null;
+    password: string | null;
+  }) => void;
   loading: boolean;
 }) {
   const [name, setName] = useState("");
   const [isWmsv, setIsWmsv] = useState(false);
   const [company, setCompany] = useState<string | null>(null);
   const [tags, setTags] = useState<string[]>([]);
+  const [credits, setCredits] = useState<string>("");
+  const [password, setPassword] = useState("");
 
   useEffect(() => {
     if (user) {
@@ -899,8 +1091,13 @@ function EditUserDialog({
       setIsWmsv(user.account_type === "wmsv");
       setCompany(user.company || null);
       setTags(user.tags.map((t) => t.name));
+      setCredits(String(user.credits_balance ?? 0));
+      setPassword("");
     }
   }, [user]);
+
+  const creditsValid = credits.trim() === "" || (Number.isFinite(Number(credits)) && Number(credits) >= 0);
+  const pwdValid = password.length === 0 || password.length >= 8;
 
   return (
     <Dialog open={!!user} onOpenChange={onOpenChange}>
@@ -914,10 +1111,34 @@ function EditUserDialog({
             <Label>Name</Label>
             <Input value={name} onChange={(e) => setName(e.target.value)} className="mt-1" />
           </div>
+          <div>
+            <Label>Credits</Label>
+            <Input
+              type="number"
+              min={0}
+              step={1}
+              value={credits}
+              onChange={(e) => setCredits(e.target.value)}
+              className="mt-1"
+            />
+          </div>
+          <div>
+            <Label>Set new password (optional)</Label>
+            <Input
+              type="text"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              placeholder="Leave empty to keep current password"
+              className="mt-1"
+            />
+            {password.length > 0 && password.length < 8 && (
+              <p className="text-xs text-destructive mt-1">Must be at least 8 characters</p>
+            )}
+          </div>
           <div className="flex items-center gap-2">
             <Checkbox id="edit-wmsv" checked={isWmsv} onCheckedChange={(v) => setIsWmsv(!!v)} />
             <Label htmlFor="edit-wmsv" className="cursor-pointer font-normal">
-              WMSV account
+              WMSV (Water Mitigation Solution Vendor) account
             </Label>
           </div>
           <div>
@@ -936,14 +1157,143 @@ function EditUserDialog({
             Cancel
           </Button>
           <Button
-            onClick={() => onSubmit({ name: name.trim(), is_wmsv: isWmsv, company, tags })}
-            disabled={loading || !name.trim()}
+            onClick={() =>
+              onSubmit({
+                name: name.trim(),
+                is_wmsv: isWmsv,
+                company,
+                tags,
+                credits: credits.trim() === "" ? null : Math.max(0, Math.floor(Number(credits))),
+                password: password.length > 0 ? password : null,
+              })
+            }
+            disabled={loading || !name.trim() || !creditsValid || !pwdValid}
           >
             {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : "Save"}
           </Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
+  );
+}
+
+// ---------- Column edit dropdown (with drag-to-reorder) ----------
+
+function ColumnEditDropdown({
+  columnPrefs,
+  setColumnPrefs,
+}: {
+  columnPrefs: ColumnPrefs;
+  setColumnPrefs: React.Dispatch<React.SetStateAction<ColumnPrefs>>;
+}) {
+  const [open, setOpen] = useState(false);
+  const [dragId, setDragId] = useState<ColumnId | null>(null);
+  const [overId, setOverId] = useState<ColumnId | null>(null);
+
+  const labelFor = (id: ColumnId) => ALL_COLUMNS.find((c) => c.id === id)?.label || id;
+
+  const toggleVisible = (id: ColumnId) => {
+    if (id === "user") return;
+    setColumnPrefs((prev) => ({
+      ...prev,
+      visible: { ...prev.visible, [id]: !prev.visible[id] },
+    }));
+  };
+
+  const handleDrop = (targetId: ColumnId) => {
+    if (!dragId || dragId === targetId || dragId === "user" || targetId === "user") {
+      setDragId(null);
+      setOverId(null);
+      return;
+    }
+    setColumnPrefs((prev) => {
+      const order = [...prev.order];
+      const from = order.indexOf(dragId);
+      const to = order.indexOf(targetId);
+      if (from === -1 || to === -1) return prev;
+      order.splice(from, 1);
+      order.splice(to, 0, dragId);
+      // Force user first
+      const filtered = order.filter((id) => id !== "user");
+      return { ...prev, order: ["user", ...filtered] };
+    });
+    setDragId(null);
+    setOverId(null);
+  };
+
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <Button size="sm" variant="ghost" className="gap-1 -mr-2">
+          <Settings2 className="h-4 w-4" />
+          Edit
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent align="end" className="w-64 p-2">
+        <div className="text-xs font-medium text-muted-foreground px-2 py-1.5">
+          Show & reorder columns
+        </div>
+        <div className="space-y-0.5">
+          {columnPrefs.order.map((id) => {
+            const isUser = id === "user";
+            const isDraggingOver = overId === id && dragId && dragId !== id;
+            return (
+              <div
+                key={id}
+                draggable={!isUser}
+                onDragStart={(e) => {
+                  if (isUser) {
+                    e.preventDefault();
+                    return;
+                  }
+                  setDragId(id);
+                  e.dataTransfer.effectAllowed = "move";
+                }}
+                onDragOver={(e) => {
+                  if (isUser || !dragId) return;
+                  e.preventDefault();
+                  e.dataTransfer.dropEffect = "move";
+                  if (overId !== id) setOverId(id);
+                }}
+                onDragLeave={() => {
+                  if (overId === id) setOverId(null);
+                }}
+                onDrop={(e) => {
+                  e.preventDefault();
+                  handleDrop(id);
+                }}
+                onDragEnd={() => {
+                  setDragId(null);
+                  setOverId(null);
+                }}
+                className={cn(
+                  "flex items-center gap-2 rounded-md px-2 py-1.5 text-sm select-none",
+                  !isUser && "cursor-grab active:cursor-grabbing hover:bg-accent",
+                  isDraggingOver && "border border-primary/40 bg-primary/5",
+                  dragId === id && "opacity-50"
+                )}
+              >
+                <GripVertical
+                  className={cn(
+                    "h-4 w-4 shrink-0",
+                    isUser ? "opacity-25" : "text-muted-foreground"
+                  )}
+                />
+                <Checkbox
+                  checked={columnPrefs.visible[id]}
+                  disabled={isUser}
+                  onCheckedChange={() => toggleVisible(id)}
+                  onClick={(e) => e.stopPropagation()}
+                />
+                <span className={cn("flex-1", isUser && "text-muted-foreground")}>
+                  {labelFor(id)}
+                </span>
+              </div>
+            );
+          })}
+        </div>
+      </PopoverContent>
+    </Popover>
   );
 }
 

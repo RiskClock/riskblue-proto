@@ -168,6 +168,7 @@ async function actionList() {
       company: p.company || null,
       is_active: isActive,
       deactivated_at: p.deactivated_at || null,
+      credits_balance: typeof p.credits_balance === "number" ? p.credits_balance : 0,
       has_profile: !!profileMap.get(u.id),
       tags,
     };
@@ -257,6 +258,7 @@ async function actionCreate(body: any, actor: { id: string | null; email: string
   const isWmsv = !!body.is_wmsv;
   const company = body.company ? String(body.company).trim() : null;
   const tagNames: string[] = Array.isArray(body.tags) ? body.tags : [];
+  const credits = Number.isFinite(Number(body.credits)) ? Math.max(0, Math.floor(Number(body.credits))) : 20;
 
   if (!email || !name) return json({ success: false, error: "Email and name are required" }, 400);
   if (password && password.length < 8) return json({ success: false, error: "Password must be at least 8 characters" }, 400);
@@ -290,6 +292,7 @@ async function actionCreate(body: any, actor: { id: string | null; email: string
         account_type: isWmsv ? "wmsv" : "standard",
         company,
         is_active: true,
+        credits_balance: credits,
       },
       { onConflict: "user_id" }
     );
@@ -340,6 +343,7 @@ async function actionCreate(body: any, actor: { id: string | null; email: string
     account_type: isWmsv ? "wmsv" : "standard",
     company,
     tags: tagNames,
+    credits_balance: credits,
     set_password_directly: !!password,
   });
 
@@ -355,6 +359,10 @@ async function actionUpdate(body: any, actor: { id: string | null; email: string
   if (typeof body.name === "string") updates.display_name = body.name.trim();
   if (typeof body.company === "string") updates.company = body.company.trim() || null;
   if (typeof body.is_wmsv === "boolean") updates.account_type = body.is_wmsv ? "wmsv" : "standard";
+  if (body.credits !== undefined && body.credits !== null && body.credits !== "") {
+    const c = Number(body.credits);
+    if (Number.isFinite(c)) updates.credits_balance = Math.max(0, Math.floor(c));
+  }
 
   if (Object.keys(updates).length > 0) {
     const { error } = await adminClient.from("profiles").update(updates).eq("user_id", userId);
@@ -365,6 +373,18 @@ async function actionUpdate(body: any, actor: { id: string | null; email: string
     await adminClient.auth.admin.updateUserById(userId, {
       user_metadata: { display_name: body.name.trim() },
     });
+  }
+
+  // Optional: set new password
+  let passwordChanged = false;
+  if (body.password && String(body.password).length > 0) {
+    const newPwd = String(body.password);
+    if (newPwd.length < 8) return json({ success: false, error: "Password must be at least 8 characters" }, 400);
+    const { error: pwdErr } = await adminClient.auth.admin.updateUserById(userId, {
+      password: newPwd,
+    });
+    if (pwdErr) return json({ success: false, error: pwdErr.message }, 500);
+    passwordChanged = true;
   }
 
   if (Array.isArray(body.tags)) {
@@ -383,7 +403,9 @@ async function actionUpdate(body: any, actor: { id: string | null; email: string
       ...(typeof body.name === "string" ? { name: body.name.trim() } : {}),
       ...(typeof body.company === "string" ? { company: body.company.trim() || null } : {}),
       ...(typeof body.is_wmsv === "boolean" ? { account_type: body.is_wmsv ? "wmsv" : "standard" } : {}),
+      ...(updates.credits_balance !== undefined ? { credits_balance: updates.credits_balance } : {}),
       ...(Array.isArray(body.tags) ? { tags: body.tags } : {}),
+      ...(passwordChanged ? { password_set: true } : {}),
     },
   });
 
