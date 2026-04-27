@@ -55,7 +55,7 @@ export interface DrawingViewerProps {
   className?: string;
 }
 
-const DEFAULT_MIN = 0.5;
+const DEFAULT_MIN = 0.8;
 const DEFAULT_MAX = 8;
 
 export const DrawingViewer = forwardRef<DrawingViewerApi, DrawingViewerProps>(
