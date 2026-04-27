@@ -406,6 +406,21 @@ const UserManagement = () => {
     });
   };
 
+  // ---- column prefs (persisted separately, NOT cleared by Reset) ----
+  const [columnPrefs, setColumnPrefs] = useState<ColumnPrefs>(() => loadColumnPrefs());
+  useEffect(() => {
+    try {
+      window.localStorage.setItem(COLUMN_PREFS_KEY, JSON.stringify(columnPrefs));
+    } catch {
+      /* ignore */
+    }
+  }, [columnPrefs]);
+
+  const visibleColumns = useMemo(
+    () => columnPrefs.order.filter((id) => columnPrefs.visible[id]),
+    [columnPrefs]
+  );
+
   // ---- modals ----
   const [createOpen, setCreateOpen] = useState(false);
   const [editing, setEditing] = useState<UserRow | null>(null);
