@@ -2,10 +2,11 @@ import { useEffect, useState } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { Coins, Loader2, Check, Sparkles } from "lucide-react";
+import { Coins, Loader2, Check } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { useCredits } from "@/hooks/useCredits";
+import { useAccountType } from "@/hooks/useAccountType";
 import { EmbeddedCheckoutProvider, EmbeddedCheckout } from "@stripe/react-stripe-js";
 import { getStripe, stripeEnvironment, isPaymentsTestMode } from "@/lib/stripe";
 
@@ -32,6 +33,7 @@ const PACKAGES: CreditPackage[] = [
 export const BuyCreditsModal = ({ open, onOpenChange, reason }: BuyCreditsModalProps) => {
   const { toast } = useToast();
   const { balance, refetch } = useCredits();
+  const { isWMSV } = useAccountType();
   const [loadingPackage, setLoadingPackage] = useState<string | null>(null);
   const [clientSecret, setClientSecret] = useState<string | null>(null);
   const [selectedPackage, setSelectedPackage] = useState<CreditPackage | null>(null);

@@ -584,7 +584,7 @@ const UserManagement = () => {
 
         {!isLoading && !error && (
           <div className="rounded-md border bg-card">
-            <Table>
+            <Table className="[&_td]:py-2 [&_th]:py-2">
               <TableHeader>
                 <TableRow>
                   {visibleColumns.map((colId) => {
@@ -611,7 +611,7 @@ const UserManagement = () => {
                         return <TableHead key={colId}>Type</TableHead>;
                       case "credits":
                         return (
-                          <TableHead key={colId} className="cursor-pointer select-none text-right" onClick={() => toggleSort("credits")}>
+                          <TableHead key={colId} className="cursor-pointer select-none text-center" onClick={() => toggleSort("credits")}>
                             Credits <SortIcon k="credits" />
                           </TableHead>
                         );
@@ -637,7 +637,7 @@ const UserManagement = () => {
                         return null;
                     }
                   })}
-                  <TableHead className="w-[96px] text-right">
+                  <TableHead className="w-[60px] text-center">
                     <ColumnEditDropdown columnPrefs={columnPrefs} setColumnPrefs={setColumnPrefs} />
                   </TableHead>
                 </TableRow>
@@ -695,7 +695,7 @@ const UserManagement = () => {
                             );
                           case "credits":
                             return (
-                              <TableCell key={colId} className={cn("text-right tabular-nums whitespace-nowrap", dim)}>
+                              <TableCell key={colId} className={cn("text-center tabular-nums whitespace-nowrap", dim)}>
                                 {formatCredits(u.credits_balance ?? 0)}
                               </TableCell>
                             );
@@ -721,7 +721,7 @@ const UserManagement = () => {
                             return null;
                         }
                       })}
-                      <TableCell>
+                      <TableCell className="text-center">
                         <DropdownMenu>
                           <DropdownMenuTrigger asChild>
                             <Button size="icon" variant="ghost">
@@ -1224,9 +1224,8 @@ function ColumnEditDropdown({
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
-        <Button size="sm" variant="ghost" className="gap-1 -mr-2">
+        <Button size="icon" variant="ghost" className="h-8 w-8" title="Edit columns">
           <Settings2 className="h-4 w-4" />
-          Edit
         </Button>
       </PopoverTrigger>
       <PopoverContent align="end" className="w-64 p-2">
