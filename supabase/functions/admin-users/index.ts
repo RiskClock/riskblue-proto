@@ -477,6 +477,10 @@ async function actionResetPassword(body: any, actor: { id: string | null; email:
     bcc: targetIsInternal ? undefined : INTERNAL_BCC,
   });
 
+  await logAdminEvent(userId, "admin_password_reset_sent", actor, {
+    target_email: email,
+  });
+
   return json({ success: true });
 }
 
@@ -500,19 +504,20 @@ Deno.serve(async (req) => {
     const body = await req.json().catch(() => ({}));
     const action = String(body.action || "");
 
+    const actor = { id: user.id, email: user.email ?? null };
     switch (action) {
       case "list":
         return json({ success: true, ...(await actionList()) });
       case "create":
-        return await actionCreate(body, user.id);
+        return await actionCreate(body, actor);
       case "update":
-        return await actionUpdate(body, user.id);
+        return await actionUpdate(body, actor);
       case "deactivate":
-        return await actionDeactivate(body);
+        return await actionDeactivate(body, actor);
       case "reactivate":
-        return await actionReactivate(body);
+        return await actionReactivate(body, actor);
       case "reset_password":
-        return await actionResetPassword(body);
+        return await actionResetPassword(body, actor);
       default:
         return json({ success: false, error: "Unknown action" }, 400);
     }
