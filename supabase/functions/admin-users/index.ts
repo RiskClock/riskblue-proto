@@ -342,6 +342,7 @@ async function actionCreate(body: any, actor: { id: string | null; email: string
     account_type: isWmsv ? "wmsv" : "standard",
     company,
     tags: tagNames,
+    credits_balance: credits,
     set_password_directly: !!password,
   });
 
