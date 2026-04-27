@@ -1,0 +1,1 @@
+REVOKE EXECUTE ON FUNCTION public.get_control_vendor_offerings() FROM anon;

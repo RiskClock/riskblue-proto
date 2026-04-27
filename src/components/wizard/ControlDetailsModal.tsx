@@ -1,5 +1,6 @@
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
+import type { ControlVendors } from "@/hooks/useControlVendorOfferings";
 
 interface ControlDetails {
   name: string;
@@ -11,6 +12,7 @@ interface ControlDetails {
   points?: number;
   oneTimeCost?: number;
   monthlyMaintCost?: number;
+  vendors?: ControlVendors;
 }
 
 interface ControlDetailsModalProps {
@@ -19,10 +21,10 @@ interface ControlDetailsModalProps {
   control: ControlDetails | null;
 }
 
-export const ControlDetailsModal = ({ 
-  isOpen, 
-  onClose, 
-  control 
+export const ControlDetailsModal = ({
+  isOpen,
+  onClose,
+  control
 }: ControlDetailsModalProps) => {
   if (!control) return null;
 
@@ -33,13 +35,22 @@ export const ControlDetailsModal = ({
     return `$${cost}`;
   };
 
+  // Build the author/vendors display.
+  const vendors = control.vendors;
+  const companies = vendors?.companies || (control.author ? [control.author] : []);
+  const renderVendor = (companyName: string) => {
+    const subs = vendors?.subOptionsByCompany.get(companyName.toLowerCase()) || [];
+    if (subs.length === 0) return companyName;
+    return `${companyName} (${subs.join(", ")})`;
+  };
+
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
       <DialogContent className="sm:max-w-lg max-h-[85vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="text-lg">{control.name}</DialogTitle>
         </DialogHeader>
-        
+
         <div className="space-y-4 pt-2">
           {/* Category & Points */}
           <div className="flex items-center gap-2 flex-wrap">
@@ -76,13 +87,19 @@ export const ControlDetailsModal = ({
             </div>
           )}
 
-          {/* Author & Responsible */}
-          {(control.author || control.responsible) && (
+          {/* Author / Vendors & Responsible */}
+          {(companies.length > 0 || control.responsible) && (
             <div className="grid grid-cols-2 gap-4 pt-2 border-t">
-              {control.author && (
+              {companies.length > 0 && (
                 <div>
-                  <label className="text-xs text-muted-foreground font-medium uppercase tracking-wide">Author</label>
-                  <p className="text-sm font-medium mt-1">{control.author}</p>
+                  <label className="text-xs text-muted-foreground font-medium uppercase tracking-wide">
+                    {companies.length > 1 ? `Authors (${companies.length})` : "Author"}
+                  </label>
+                  <div className="text-sm font-medium mt-1 space-y-0.5">
+                    {companies.map((c) => (
+                      <div key={c}>{renderVendor(c)}</div>
+                    ))}
+                  </div>
                 </div>
               )}
               {control.responsible && (

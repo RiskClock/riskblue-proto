@@ -17,6 +17,7 @@ import {
 } from "@/lib/costCalculator";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { format } from "date-fns";
+import { useVendorMapByControlName, type ControlVendors } from "@/hooks/useControlVendorOfferings";
 
 interface ControlPoints {
   points: number;
@@ -168,6 +169,7 @@ export const ExpandableListItem = ({
 }: ExpandableListItemProps) => {
   const [isExpanded, setIsExpanded] = useState(false);
   const [expandedInstanceIds, setExpandedInstanceIds] = useState<Set<string>>(new Set());
+  const vendorMap = useVendorMapByControlName();
   const [detailsModalOpen, setDetailsModalOpen] = useState(false);
   const [selectedDetailInstance, setSelectedDetailInstance] = useState<AnalysisItem | null>(null);
   const [controlModalOpen, setControlModalOpen] = useState(false);
@@ -181,6 +183,7 @@ export const ExpandableListItem = ({
     points?: number;
     oneTimeCost?: number;
     monthlyMaintCost?: number;
+    vendors?: ControlVendors;
   } | null>(null);
 
   const handleViewControlDetails = useCallback((controlName: string, e: React.MouseEvent) => {
@@ -195,10 +198,11 @@ export const ExpandableListItem = ({
       category: controlData?.category,
       points: controlData?.points,
       oneTimeCost: controlData?.oneTimeCost,
-      monthlyMaintCost: controlData?.monthlyMaintCost
+      monthlyMaintCost: controlData?.monthlyMaintCost,
+      vendors: vendorMap.get(controlName.toLowerCase()),
     });
     setControlModalOpen(true);
-  }, [getControlPoints]);
+  }, [getControlPoints, vendorMap]);
 
   // Find drive file for the selected instance (uses partial matching for flexibility)
   const findDriveFile = useCallback((fileName: string): DriveFileInfo | undefined => {
@@ -663,13 +667,24 @@ export const ExpandableListItem = ({
                           />
                           <div className="flex-1 min-w-0">
                             <span className="text-sm">{control}</span>
-                            {controlData && (controlData.author || controlData.responsible) && (
-                              <div className="text-xs text-muted-foreground mt-0.5">
-                                {controlData.author && <span>By: {controlData.author}</span>}
-                                {controlData.author && controlData.responsible && <span className="mx-1">•</span>}
-                                {controlData.responsible && <span>Responsible: {controlData.responsible}</span>}
-                              </div>
-                            )}
+                            {(() => {
+                              const vendors = vendorMap.get(control.toLowerCase());
+                              const vendorCount = vendors?.companies.length || 0;
+                              const byLabel =
+                                vendorCount > 1
+                                  ? `${vendorCount} vendors`
+                                  : vendorCount === 1
+                                    ? vendors!.companies[0]
+                                    : controlData?.author;
+                              if (!byLabel && !controlData?.responsible) return null;
+                              return (
+                                <div className="text-xs text-muted-foreground mt-0.5">
+                                  {byLabel && <span>By: {byLabel}</span>}
+                                  {byLabel && controlData?.responsible && <span className="mx-1">•</span>}
+                                  {controlData?.responsible && <span>Responsible: {controlData.responsible}</span>}
+                                </div>
+                              );
+                            })()}
                           </div>
                           <div className="flex items-center gap-2 flex-shrink-0">
                             {/* Derisk points first (weighted) - round for display only */}

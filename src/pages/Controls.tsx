@@ -4,8 +4,11 @@ import { supabase } from "@/integrations/supabase/client";
 import { useQuery } from "@tanstack/react-query";
 import { AppHeader } from "@/components/AppHeader";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Button } from "@/components/ui/button";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { useAccountType } from "@/hooks/useAccountType";
-import { ChevronDown, ChevronRight, Loader2 } from "lucide-react";
+import { ChevronDown, ChevronRight, Loader2, ShieldCheck, Mail, CheckCircle2 } from "lucide-react";
+import { toast } from "sonner";
 
 interface MitigationControl {
   id: string;
@@ -27,6 +30,8 @@ const CATEGORIES = [
 
 type CategoryKey = typeof CATEGORIES[number]["key"];
 
+const REQUEST_STORAGE_KEY = (userId: string) => `control-library-access-requested:${userId}`;
+
 export default function Controls() {
   const { user } = useAuth();
   const { isWMSV, company, loading: accountLoading } = useAccountType();
@@ -34,8 +39,19 @@ export default function Controls() {
   // Selections: Map<`${category}::${controlId}`, sub_options[]>
   const [selections, setSelections] = useState<Map<string, string[]>>(new Map());
   const [expandedControls, setExpandedControls] = useState<Set<string>>(new Set());
+  const [requesting, setRequesting] = useState(false);
+  const [hasRequested, setHasRequested] = useState(false);
 
-  // Fetch unique control IDs per category from the three tables
+  const hasCompany = !!(company && company.trim());
+  const showAccessGate = !accountLoading && isWMSV && !hasCompany;
+
+  useEffect(() => {
+    if (user?.id) {
+      setHasRequested(localStorage.getItem(REQUEST_STORAGE_KEY(user.id)) === "1");
+    }
+  }, [user?.id]);
+
+  // Fetch unique control IDs per category
   const { data: categoryControlIds = {}, isLoading: awpLoading } = useQuery({
     queryKey: ["controls-category-control-ids"],
     queryFn: async (): Promise<Record<CategoryKey, string[]>> => {
@@ -57,9 +73,9 @@ export default function Controls() {
         processes: collectUnique(processesRes.data),
       };
     },
+    enabled: !showAccessGate,
   });
 
-  // Fetch all mitigation controls
   const { data: allControls = [], isLoading: controlsLoading } = useQuery({
     queryKey: ["all-mitigation-controls"],
     queryFn: async (): Promise<MitigationControl[]> => {
@@ -71,20 +87,21 @@ export default function Controls() {
       if (error) throw error;
       return data || [];
     },
+    enabled: !showAccessGate,
   });
 
-  // Fetch existing selections
+  // Fetch existing selections for the user's company
   const { data: existingSelections = [], isLoading: selectionsLoading } = useQuery({
-    queryKey: ["wmsv-control-selections", user?.id],
+    queryKey: ["company-control-selections", company],
     queryFn: async () => {
       const { data, error } = await supabase
-        .from("wmsv_control_selections")
+        .from("company_control_selections")
         .select("*")
-        .eq("user_id", user!.id);
+        .ilike("company", company!);
       if (error) throw error;
       return data || [];
     },
-    enabled: !!user,
+    enabled: !!user && hasCompany,
   });
 
   const controlMap = useMemo(() => {
@@ -111,6 +128,31 @@ export default function Controls() {
 
   const makeKey = (category: string, controlId: string) => `${category}::${controlId}`;
 
+  const upsertSelection = async (category: CategoryKey, controlId: string, subs: string[]) => {
+    if (!company || !user) return;
+    await supabase.from("company_control_selections").upsert(
+      {
+        company,
+        category,
+        control_id: controlId,
+        sub_options: subs,
+        updated_by: user.id,
+        created_by: user.id,
+      },
+      { onConflict: "company,category,control_id" }
+    );
+  };
+
+  const removeSelection = async (category: CategoryKey, controlId: string) => {
+    if (!company) return;
+    await supabase
+      .from("company_control_selections")
+      .delete()
+      .ilike("company", company)
+      .eq("category", category)
+      .eq("control_id", controlId);
+  };
+
   const toggleControl = async (category: CategoryKey, controlId: string) => {
     const key = makeKey(category, controlId);
     const isSelected = selections.has(key);
@@ -119,26 +161,14 @@ export default function Controls() {
 
     if (isSelected) {
       setSelections(prev => { const n = new Map(prev); n.delete(key); return n; });
-      await supabase
-        .from("wmsv_control_selections")
-        .delete()
-        .eq("user_id", user!.id)
-        .eq("category", category)
-        .eq("control_id", controlId);
+      await removeSelection(category, controlId);
     } else {
-      // When selecting parent, select all sub-options and expand
       const defaultSubs = specialSubs ? [...specialSubs] : [];
       setSelections(prev => new Map(prev).set(key, defaultSubs));
       if (specialSubs) {
         setExpandedControls(prev => new Set(prev).add(key));
       }
-      await supabase.from("wmsv_control_selections").upsert({
-        user_id: user!.id,
-        awp_class_name: category,
-        category,
-        control_id: controlId,
-        sub_options: defaultSubs,
-      } as any, { onConflict: "user_id,category,control_id" });
+      await upsertSelection(category, controlId, defaultSubs);
     }
   };
 
@@ -150,27 +180,54 @@ export default function Controls() {
       : [...currentSubs, subOption];
 
     if (newSubs.length === 0) {
-      // All children unchecked → uncheck parent, but keep current expand/collapse state
       setSelections(prev => { const n = new Map(prev); n.delete(key); return n; });
-      await supabase
-        .from("wmsv_control_selections")
-        .delete()
-        .eq("user_id", user!.id)
-        .eq("category", category)
-        .eq("control_id", controlId);
+      await removeSelection(category, controlId);
     } else {
       setSelections(prev => new Map(prev).set(key, newSubs));
-      await supabase.from("wmsv_control_selections").upsert({
-        user_id: user!.id,
-        awp_class_name: category,
-        category,
-        control_id: controlId,
-        sub_options: newSubs,
-      } as any, { onConflict: "user_id,category,control_id" });
+      await upsertSelection(category, controlId, newSubs);
     }
   };
 
-  if (accountLoading || awpLoading || controlsLoading || selectionsLoading) {
+  const handleRequestAccess = async () => {
+    if (!user) return;
+    setRequesting(true);
+    try {
+      const fullName = (user.user_metadata?.display_name as string) || user.email?.split("@")[0] || "Unknown";
+      const workEmail = user.email || "";
+
+      // Persist request (idempotent-ish: insert one row)
+      await supabase.from("access_requests").insert({
+        full_name: fullName,
+        work_email: workEmail,
+        company_name: company || "(not set)",
+        request_type: "control_library",
+        requesting_user_id: user.id,
+        status: "pending",
+      } as any);
+
+      const { error } = await supabase.functions.invoke("notify-access-request", {
+        body: {
+          fullName,
+          workEmail,
+          companyName: company || "",
+          requestType: "control_library",
+          context: "WMSV user without company tried to access the Control Library page.",
+        },
+      });
+      if (error) throw error;
+
+      localStorage.setItem(REQUEST_STORAGE_KEY(user.id), "1");
+      setHasRequested(true);
+      toast.success("Request sent. We'll be in touch shortly.");
+    } catch (e: any) {
+      console.error(e);
+      toast.error(e?.message || "Failed to send request");
+    } finally {
+      setRequesting(false);
+    }
+  };
+
+  if (accountLoading) {
     return (
       <div className="min-h-screen bg-background">
         <AppHeader />
@@ -192,6 +249,66 @@ export default function Controls() {
     );
   }
 
+  // WMSV but no company → show access gate modal
+  if (showAccessGate) {
+    return (
+      <div className="min-h-screen bg-background">
+        <AppHeader />
+        <Dialog open={true} onOpenChange={() => { /* non-dismissable */ }}>
+          <DialogContent className="sm:max-w-lg" onInteractOutside={(e) => e.preventDefault()} onEscapeKeyDown={(e) => e.preventDefault()}>
+            <DialogHeader>
+              <div className="flex items-center gap-3 mb-1">
+                <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center">
+                  <ShieldCheck className="w-5 h-5 text-primary" />
+                </div>
+                <DialogTitle className="text-lg">Control Library</DialogTitle>
+              </div>
+              <DialogDescription className="text-sm leading-relaxed pt-2 space-y-3">
+                <p>
+                  The Control Library lets your company specify which water mitigation
+                  controls you can offer end customers. Your selections are surfaced inside
+                  RiskBlue's Water Mitigation Guideline (WMG) builder, so when a project
+                  needs a control your company supports, you appear as an available vendor.
+                </p>
+                <p className="text-foreground font-medium">
+                  Your account isn't yet configured to manage a company's Control Library.
+                </p>
+                <p>
+                  Request access and we'll set up your company so you can start managing your
+                  offered controls.
+                </p>
+              </DialogDescription>
+            </DialogHeader>
+            <DialogFooter className="mt-2">
+              {hasRequested ? (
+                <div className="flex items-center gap-2 text-sm text-emerald-600 dark:text-emerald-400">
+                  <CheckCircle2 className="w-4 h-4" />
+                  <span>Access requested. We'll reach out soon.</span>
+                </div>
+              ) : (
+                <Button onClick={handleRequestAccess} disabled={requesting} className="gap-2">
+                  {requesting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Mail className="w-4 h-4" />}
+                  {requesting ? "Sending request…" : "Request access"}
+                </Button>
+              )}
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      </div>
+    );
+  }
+
+  if (awpLoading || controlsLoading || selectionsLoading) {
+    return (
+      <div className="min-h-screen bg-background">
+        <AppHeader />
+        <div className="flex items-center justify-center py-20">
+          <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
+        </div>
+      </div>
+    );
+  }
+
   const renderControlList = (category: CategoryKey) => {
     const controlIds = (categoryControlIds as Record<CategoryKey, string[]>)[category] || [];
     const controls = allControls.filter(c => controlIds.includes(c.id));
@@ -204,7 +321,6 @@ export default function Controls() {
       const currentSubs = selections.get(key) || [];
 
       if (specialSubs) {
-        // Determine parent checkbox state
         const allChecked = isSelected && currentSubs.length === specialSubs.length;
         const someChecked = isSelected && currentSubs.length > 0 && currentSubs.length < specialSubs.length;
 
@@ -226,44 +342,29 @@ export default function Controls() {
               <Checkbox
                 checked={allChecked ? true : someChecked ? "indeterminate" : false}
                 indeterminate={someChecked}
-                onCheckedChange={() => {
+                onCheckedChange={async () => {
                   if (isSelected && allChecked) {
-                    // Uncheck parent → uncheck all children
-                    toggleControl(category, control.id);
+                    await toggleControl(category, control.id);
                   } else if (isSelected && someChecked) {
-                    // Partial → select all children
                     const allSubs = [...specialSubs];
                     setSelections(prev => new Map(prev).set(key, allSubs));
-                    supabase.from("wmsv_control_selections").upsert({
-                      user_id: user!.id,
-                      awp_class_name: category,
-                      category,
-                      control_id: control.id,
-                      sub_options: allSubs,
-                    } as any, { onConflict: "user_id,category,control_id" });
+                    await upsertSelection(category, control.id, allSubs);
                   } else {
-                    // Not selected → select all
-                    toggleControl(category, control.id);
+                    await toggleControl(category, control.id);
                   }
                 }}
               />
               <span
                 className="text-sm cursor-pointer select-none"
-                onClick={() => {
+                onClick={async () => {
                   if (isSelected && allChecked) {
-                    toggleControl(category, control.id);
+                    await toggleControl(category, control.id);
                   } else if (isSelected && someChecked) {
                     const allSubs = [...specialSubs];
                     setSelections(prev => new Map(prev).set(key, allSubs));
-                    supabase.from("wmsv_control_selections").upsert({
-                      user_id: user!.id,
-                      awp_class_name: category,
-                      category,
-                      control_id: control.id,
-                      sub_options: allSubs,
-                    } as any, { onConflict: "user_id,category,control_id" });
+                    await upsertSelection(category, control.id, allSubs);
                   } else {
-                    toggleControl(category, control.id);
+                    await toggleControl(category, control.id);
                   }
                 }}
               >
