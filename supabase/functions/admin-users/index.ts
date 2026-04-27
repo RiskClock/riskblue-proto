@@ -282,7 +282,9 @@ async function actionCreate(body: any, actor: { id: string | null; email: string
     return json({ success: false, error: createErr?.message || "Failed to create user" }, 500);
   }
 
-  // Upsert profile (handle_new_user trigger may have created it)
+  // Upsert profile (handle_new_user trigger may have created it).
+  // We seed credits_balance to 0 here and then route the initial grant through
+  // grant_credits() so an audit row is written.
   const { error: pErr } = await adminClient
     .from("profiles")
     .upsert(
@@ -292,11 +294,23 @@ async function actionCreate(body: any, actor: { id: string | null; email: string
         account_type: isWmsv ? "wmsv" : "standard",
         company,
         is_active: true,
-        credits_balance: credits,
+        credits_balance: 0,
       },
       { onConflict: "user_id" }
     );
   if (pErr) console.error("profile upsert err:", pErr);
+
+  if (credits > 0) {
+    const { error: grantErr } = await adminClient.rpc("grant_credits", {
+      p_user_id: created.user.id,
+      p_amount: credits,
+      p_reason: "initial_grant",
+      p_package_label: "Initial grant on account creation",
+      p_amount_cents: null,
+      p_stripe_session_id: null,
+    });
+    if (grantErr) console.error("initial grant err:", grantErr);
+  }
 
   // Assign tags
   try {
