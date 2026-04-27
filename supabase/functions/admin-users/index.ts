@@ -282,7 +282,9 @@ async function actionCreate(body: any, actor: { id: string | null; email: string
     return json({ success: false, error: createErr?.message || "Failed to create user" }, 500);
   }
 
-  // Upsert profile (handle_new_user trigger may have created it)
+  // Upsert profile (handle_new_user trigger may have created it).
+  // We seed credits_balance to 0 here and then route the initial grant through
+  // grant_credits() so an audit row is written.
   const { error: pErr } = await adminClient
     .from("profiles")
     .upsert(
@@ -292,11 +294,23 @@ async function actionCreate(body: any, actor: { id: string | null; email: string
         account_type: isWmsv ? "wmsv" : "standard",
         company,
         is_active: true,
-        credits_balance: credits,
+        credits_balance: 0,
       },
       { onConflict: "user_id" }
     );
   if (pErr) console.error("profile upsert err:", pErr);
+
+  if (credits > 0) {
+    const { error: grantErr } = await adminClient.rpc("grant_credits", {
+      p_user_id: created.user.id,
+      p_amount: credits,
+      p_reason: "initial_grant",
+      p_package_label: "Initial grant on account creation",
+      p_amount_cents: null,
+      p_stripe_session_id: null,
+    });
+    if (grantErr) console.error("initial grant err:", grantErr);
+  }
 
   // Assign tags
   try {
@@ -359,14 +373,30 @@ async function actionUpdate(body: any, actor: { id: string | null; email: string
   if (typeof body.name === "string") updates.display_name = body.name.trim();
   if (typeof body.company === "string") updates.company = body.company.trim() || null;
   if (typeof body.is_wmsv === "boolean") updates.account_type = body.is_wmsv ? "wmsv" : "standard";
+
+  // Credits are NOT written through the plain profile update — they go through
+  // admin_adjust_credits() so a row is logged in credit_transactions.
+  let newCreditsBalance: number | undefined;
   if (body.credits !== undefined && body.credits !== null && body.credits !== "") {
     const c = Number(body.credits);
-    if (Number.isFinite(c)) updates.credits_balance = Math.max(0, Math.floor(c));
+    if (Number.isFinite(c)) newCreditsBalance = Math.max(0, Math.floor(c));
   }
 
   if (Object.keys(updates).length > 0) {
     const { error } = await adminClient.from("profiles").update(updates).eq("user_id", userId);
     if (error) return json({ success: false, error: error.message }, 500);
+  }
+
+  if (newCreditsBalance !== undefined) {
+    const { error: adjErr } = await adminClient.rpc("admin_adjust_credits", {
+      p_user_id: userId,
+      p_new_balance: newCreditsBalance,
+      p_actor_user_id: actorId,
+      p_reason: "admin_adjust",
+    });
+    if (adjErr) return json({ success: false, error: adjErr.message }, 500);
+    // Mirror in updates so the activity-log "changes" payload reflects the new value.
+    updates.credits_balance = newCreditsBalance;
   }
 
   if (typeof body.name === "string") {

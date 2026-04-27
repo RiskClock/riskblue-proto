@@ -27,6 +27,7 @@ import NotFound from "./pages/NotFound";
 import { Loader2 } from "lucide-react";
 import { ExportProvider } from "./contexts/ExportContext";
 import { ExportProgressPanel } from "./components/export/ExportProgressPanel";
+import { PaymentTestModeBanner } from "./components/PaymentTestModeBanner";
 
 const queryClient = new QueryClient();
 
@@ -58,6 +59,7 @@ const App = () => (
         <AuthProvider>
           <ExportProvider>
             <ExportProgressPanel />
+            <PaymentTestModeBanner />
             <Routes>
             <Route path="/auth" element={<PublicRoute><Auth /></PublicRoute>} />
             <Route path="/projects" element={<ProtectedRoute><Projects /></ProtectedRoute>} />

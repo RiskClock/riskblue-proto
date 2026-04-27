@@ -98,3 +98,6 @@ verify_jwt = false
 
 [functions.payments-webhook]
 verify_jwt = false
+
+[functions.setup-credit-tax-codes]
+verify_jwt = false

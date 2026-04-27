@@ -2079,6 +2079,15 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      admin_adjust_credits: {
+        Args: {
+          p_actor_user_id: string
+          p_new_balance: number
+          p_reason?: string
+          p_user_id: string
+        }
+        Returns: Json
+      }
       claim_next_export_job: {
         Args: { p_worker_id: string }
         Returns: {
