@@ -468,7 +468,7 @@ export const LocationDetailsModal = ({
                   initialFitOverlayId={
                     resolvedOverlay && !didInitialFit ? OVERLAY_ID : undefined
                   }
-                  minScale={0.5}
+                  minScale={0.8}
                   maxScale={8}
                 />
               ) : (

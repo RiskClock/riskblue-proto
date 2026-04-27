@@ -552,7 +552,7 @@ function InstanceDetailModal({
                 overlays={overlays}
                 initialFit={resolvedOverlay ? "selection" : "page"}
                 initialFitOverlayId={resolvedOverlay ? OVERLAY_ID : undefined}
-                minScale={0.5}
+                minScale={0.8}
                 maxScale={8}
               />
             )}
@@ -714,7 +714,7 @@ function RawResultModal({ fileName, awpClassName, resultText, instanceCount, sou
                 layout="stacked-pages"
                 overlays={overlays}
                 initialFit="page"
-                minScale={0.5}
+                minScale={0.8}
                 maxScale={8}
               />
             )}
@@ -781,7 +781,7 @@ function FilePreviewModal({ file, sourceType, onClose }: FilePreviewModalProps) 
               source={source}
               layout="stacked-pages"
               initialFit="page"
-              minScale={0.5}
+              minScale={0.8}
               maxScale={8}
             />
           )}
