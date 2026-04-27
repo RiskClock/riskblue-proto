@@ -21,10 +21,10 @@ serve(async (req) => {
 
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const supabaseAnonKey = Deno.env.get("SUPABASE_ANON_KEY")!;
-    const lovableApiKey = Deno.env.get("LOVABLE_API_KEY")!;
+    const openaiApiKey = Deno.env.get("OPENAI_API_KEY");
 
-    if (!lovableApiKey) {
-      return new Response(JSON.stringify({ error: "LOVABLE_API_KEY not configured" }), {
+    if (!openaiApiKey) {
+      return new Response(JSON.stringify({ error: "OPENAI_API_KEY is not configured" }), {
         status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
@@ -40,7 +40,7 @@ serve(async (req) => {
       });
     }
 
-    const { analysisRequestId, awpClassName } = await req.json();
+    const { analysisRequestId, awpClassName, model = "gpt-5-mini" } = await req.json();
     if (!analysisRequestId || !awpClassName) {
       return new Response(JSON.stringify({ error: "Missing analysisRequestId or awpClassName" }), {
         status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -71,7 +71,6 @@ serve(async (req) => {
       let hasAccess = isRequestOwner;
 
       if (!hasAccess) {
-        // Check project ownership
         const { data: project } = await adminSupabase
           .from("projects")
           .select("user_id")
@@ -81,7 +80,6 @@ serve(async (req) => {
       }
 
       if (!hasAccess) {
-        // Check project membership
         const { data: membership } = await adminSupabase
           .from("project_user_roles")
           .select("id")
@@ -130,7 +128,6 @@ serve(async (req) => {
       fileNameMap[f.id] = f.name;
     }
 
-    // Build combined text
     const combinedText = results
       .map((r) => {
         const fileName = fileNameMap[r.file_id] || "Unknown file";
@@ -138,7 +135,6 @@ serve(async (req) => {
       })
       .join("\n\n");
 
-    // Call Lovable AI with tool calling for structured output
     const systemPrompt = `You are deduplicating construction drawing analysis results. You receive pipe-delimited tables from multiple drawing files showing identified rooms/assets.
 
 CRITICAL DEDUPLICATION RULE:
@@ -154,89 +150,116 @@ Only treat two entries as distinct if their Room Identifiers are genuinely diffe
 
 If an entry has no Room Identifier (empty or N/A), fall back to matching by Drawing Label + Floor (case-insensitive).
 
-Return ONLY unique instances after deduplication.`;
+Return ONLY unique instances after deduplication.
 
-    const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+HARD OUTPUT RULES:
+- Return only valid JSON. No markdown. No code fences. No commentary.
+- Top-level object MUST be { "instances": [...] }.
+- No null values anywhere. Use "" for unknown strings and 0 for unknown numbers.
+- Preserve the original Room Identifier / Plan Tag exactly in the "id" field whenever available — do NOT generate sequential codes.
+- Only include "pipe_diameter_mm" when it is known and greater than 0.`;
+
+    const userPrompt = `Here are the analysis results for "${awpClassName}" from ${results.length} drawing files:\n\n${combinedText}\n\nPlease consolidate and deduplicate these into a single list of unique instances.`;
+
+    const response = await fetch("https://api.openai.com/v1/responses", {
       method: "POST",
       headers: {
-        Authorization: `Bearer ${lovableApiKey}`,
+        "Authorization": `Bearer ${openaiApiKey}`,
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        model: "google/gemini-2.5-flash",
-        messages: [
+        model,
+        input: [
           { role: "system", content: systemPrompt },
-          { role: "user", content: `Here are the analysis results for "${awpClassName}" from ${results.length} drawing files:\n\n${combinedText}\n\nPlease consolidate and deduplicate these into a single list of unique instances.` },
+          { role: "user", content: userPrompt },
         ],
-        tools: [
-          {
-            type: "function",
-            function: {
-              name: "return_instances",
-              description: "Return the consolidated list of unique asset instances found across all analyzed drawings.",
-              parameters: {
-                type: "object",
-                properties: {
-                  instances: {
-                    type: "array",
-                    items: {
-                      type: "object",
-                      properties: {
-                        id: { type: "string", description: "The exact plan tag or room identifier as it appears on the drawing (e.g., SWC-B03, SWC-703, ER-101). Use the identifier from the drawing, NOT a generated sequential code." },
-                        name: { type: "string", description: "Drawing label or name (e.g., ELECTRICAL, MECHANICAL)" },
-                        floor: { type: "string", description: "Building floor or level (e.g., LOWER LEVEL, FOURTH FLOOR)" },
-                        area_sqft: { type: "number", description: "Area in square feet if available, or 0 if not specified" },
-                        notes: { type: "string", description: "Any additional notes about dimensions, features, or characteristics" },
-                        pipe_diameter_mm: { type: "number", description: "Pipe diameter in millimeters if this is a water system instance, or 0 if not applicable" },
-                      },
-                      required: ["id", "name", "floor", "area_sqft", "notes", "pipe_diameter_mm"],
-                      additionalProperties: false,
+        text: {
+          format: {
+            type: "json_schema",
+            name: "summarize_analysis_response",
+            strict: true,
+            schema: {
+              type: "object",
+              additionalProperties: false,
+              required: ["instances"],
+              properties: {
+                instances: {
+                  type: "array",
+                  items: {
+                    type: "object",
+                    additionalProperties: false,
+                    required: ["id", "name", "floor", "area_sqft", "notes", "pipe_diameter_mm"],
+                    properties: {
+                      id: { type: "string" },
+                      name: { type: "string" },
+                      floor: { type: "string" },
+                      area_sqft: { type: "number" },
+                      notes: { type: "string" },
+                      pipe_diameter_mm: { type: "number" },
                     },
                   },
                 },
-                required: ["instances"],
-                additionalProperties: false,
               },
             },
           },
-        ],
-        tool_choice: { type: "function", function: { name: "return_instances" } },
+        },
       }),
     });
 
     if (!response.ok) {
-      const errText = await response.text();
-      console.error("AI gateway error:", response.status, errText);
-
-      if (response.status === 429) {
-        return new Response(JSON.stringify({ error: "Rate limit exceeded, please try again later." }), {
-          status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" },
-        });
-      }
-      if (response.status === 402) {
-        return new Response(JSON.stringify({ error: "Payment required, please add credits." }), {
-          status: 402, headers: { ...corsHeaders, "Content-Type": "application/json" },
-        });
-      }
-
-      return new Response(JSON.stringify({ error: "AI summarization failed" }), {
+      const errorText = await response.text();
+      console.error("OpenAI summarization error:", response.status, errorText);
+      return new Response(JSON.stringify({ error: `OpenAI summarization failed: ${response.status}` }), {
         status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
-    const aiResult = await response.json();
+    const data = await response.json();
 
-    // Extract tool call result
-    let instances: any[] = [];
-    const toolCalls = aiResult.choices?.[0]?.message?.tool_calls;
-    if (toolCalls && toolCalls.length > 0) {
-      try {
-        const args = JSON.parse(toolCalls[0].function.arguments);
-        instances = args.instances || [];
-      } catch (e) {
-        console.error("Failed to parse tool call arguments:", e);
+    // Extract output text from Responses API (prefer output_text convenience field, fallback to traversal)
+    let outputText: string | undefined = data.output_text;
+    if (!outputText && Array.isArray(data.output)) {
+      for (const item of data.output) {
+        if (Array.isArray(item?.content)) {
+          for (const part of item.content) {
+            if (typeof part?.text === "string") {
+              outputText = (outputText || "") + part.text;
+            }
+          }
+        }
       }
     }
+
+    if (!outputText) {
+      console.error("OpenAI summarization returned no output_text", JSON.stringify(data).slice(0, 500));
+      return new Response(JSON.stringify({ error: "OpenAI summarization returned no output_text" }), {
+        status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    let parsed: any;
+    try {
+      parsed = JSON.parse(outputText);
+    } catch (e) {
+      console.error("Failed to parse OpenAI JSON output:", outputText.slice(0, 500));
+      return new Response(JSON.stringify({ error: "Invalid JSON from OpenAI" }), {
+        status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    const instances = Array.isArray(parsed.instances)
+      ? parsed.instances.map((item: any) => {
+          const pipe = Number(item?.pipe_diameter_mm ?? 0);
+          return {
+            id: String(item?.id ?? ""),
+            name: String(item?.name ?? ""),
+            floor: String(item?.floor ?? ""),
+            area_sqft: Number(item?.area_sqft ?? 0),
+            notes: String(item?.notes ?? ""),
+            ...(pipe > 0 ? { pipe_diameter_mm: pipe } : {}),
+          };
+        })
+      : [];
 
     return new Response(JSON.stringify({ instances }), {
       status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" },
