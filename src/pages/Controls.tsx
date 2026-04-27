@@ -7,7 +7,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { useAccountType } from "@/hooks/useAccountType";
-import { ChevronDown, ChevronRight, Loader2, ShieldCheck, Mail, CheckCircle2 } from "lucide-react";
+import { Loader2, ShieldCheck, Mail, CheckCircle2 } from "lucide-react";
 import { toast } from "sonner";
 
 interface MitigationControl {
@@ -323,10 +323,34 @@ export default function Controls() {
       if (specialSubs) {
         const allChecked = isSelected && currentSubs.length === specialSubs.length;
         const someChecked = isSelected && currentSubs.length > 0 && currentSubs.length < specialSubs.length;
+        const optionCount = specialSubs.length;
+
+        const handleParentToggle = async () => {
+          if (isSelected && allChecked) {
+            await toggleControl(category, control.id);
+          } else if (isSelected && someChecked) {
+            const allSubs = [...specialSubs];
+            setSelections(prev => new Map(prev).set(key, allSubs));
+            await upsertSelection(category, control.id, allSubs);
+          } else {
+            await toggleControl(category, control.id);
+          }
+        };
 
         return (
           <div key={control.id} className="space-y-1">
             <div className="flex items-center gap-2">
+              <Checkbox
+                checked={allChecked ? true : someChecked ? "indeterminate" : false}
+                indeterminate={someChecked}
+                onCheckedChange={handleParentToggle}
+              />
+              <span
+                className="text-sm cursor-pointer select-none flex-1"
+                onClick={handleParentToggle}
+              >
+                {control.name} ({optionCount} option{optionCount === 1 ? "" : "s"})
+              </span>
               <button
                 onClick={() => {
                   setExpandedControls(prev => {
@@ -335,44 +359,23 @@ export default function Controls() {
                     return n;
                   });
                 }}
-                className="text-muted-foreground hover:text-foreground"
+                className="text-muted-foreground hover:text-foreground p-0.5"
+                aria-label={isControlExpanded ? "Collapse options" : "Expand options"}
               >
-                {isControlExpanded ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronRight className="w-3.5 h-3.5" />}
+                {/* Triangle icon - rotates when expanded */}
+                <svg
+                  width="10"
+                  height="10"
+                  viewBox="0 0 10 10"
+                  className={`transition-transform ${isControlExpanded ? "rotate-180" : ""}`}
+                  fill="currentColor"
+                >
+                  <path d="M5 7.5L1 2.5h8z" />
+                </svg>
               </button>
-              <Checkbox
-                checked={allChecked ? true : someChecked ? "indeterminate" : false}
-                indeterminate={someChecked}
-                onCheckedChange={async () => {
-                  if (isSelected && allChecked) {
-                    await toggleControl(category, control.id);
-                  } else if (isSelected && someChecked) {
-                    const allSubs = [...specialSubs];
-                    setSelections(prev => new Map(prev).set(key, allSubs));
-                    await upsertSelection(category, control.id, allSubs);
-                  } else {
-                    await toggleControl(category, control.id);
-                  }
-                }}
-              />
-              <span
-                className="text-sm cursor-pointer select-none"
-                onClick={async () => {
-                  if (isSelected && allChecked) {
-                    await toggleControl(category, control.id);
-                  } else if (isSelected && someChecked) {
-                    const allSubs = [...specialSubs];
-                    setSelections(prev => new Map(prev).set(key, allSubs));
-                    await upsertSelection(category, control.id, allSubs);
-                  } else {
-                    await toggleControl(category, control.id);
-                  }
-                }}
-              >
-                {control.name}
-              </span>
             </div>
             {isControlExpanded && (
-              <div className="ml-10 space-y-1">
+              <div className="ml-6 space-y-1">
                 {specialSubs.map(sub => (
                   <div key={sub} className="flex items-center gap-2">
                     <Checkbox

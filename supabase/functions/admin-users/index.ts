@@ -95,6 +95,29 @@ async function findAuthUserByEmail(email: string) {
   return all.find((u) => u.email?.toLowerCase() === lower) || null;
 }
 
+// ---------- Activity logging ----------
+
+async function logAdminEvent(
+  targetUserId: string,
+  action: string,
+  actor: { id: string | null; email: string | null },
+  details: Record<string, unknown> = {}
+) {
+  try {
+    await adminClient.from("user_activity_logs").insert({
+      user_id: targetUserId,
+      action,
+      metadata: {
+        ...details,
+        actor_user_id: actor.id,
+        actor_email: actor.email,
+      },
+    });
+  } catch (e) {
+    console.error("logAdminEvent failed:", e);
+  }
+}
+
 // ---------- Actions ----------
 
 async function actionList() {
@@ -226,7 +249,8 @@ async function setUserTags(userId: string, tagNames: string[], assignedBy: strin
   if (error) throw error;
 }
 
-async function actionCreate(body: any, actorId: string | null) {
+async function actionCreate(body: any, actor: { id: string | null; email: string | null }) {
+  const actorId = actor.id;
   const email = String(body.email || "").trim().toLowerCase();
   const name = String(body.name || "").trim();
   const password = body.password ? String(body.password) : null;
@@ -310,10 +334,20 @@ async function actionCreate(body: any, actorId: string | null) {
     await sendEmail({ to: email, subject: "Welcome to RiskBlue — set your password", html });
   }
 
+  await logAdminEvent(created.user.id, "admin_user_created", actor, {
+    target_email: email,
+    target_name: name,
+    account_type: isWmsv ? "wmsv" : "standard",
+    company,
+    tags: tagNames,
+    set_password_directly: !!password,
+  });
+
   return json({ success: true, user_id: created.user.id });
 }
 
-async function actionUpdate(body: any, actorId: string | null) {
+async function actionUpdate(body: any, actor: { id: string | null; email: string | null }) {
+  const actorId = actor.id;
   const userId = String(body.user_id || "");
   if (!userId) return json({ success: false, error: "user_id required" }, 400);
 
@@ -341,10 +375,22 @@ async function actionUpdate(body: any, actorId: string | null) {
     }
   }
 
+  // Lookup target email for log
+  const { data: targetUser } = await adminClient.auth.admin.getUserById(userId);
+  await logAdminEvent(userId, "admin_user_updated", actor, {
+    target_email: targetUser?.user?.email || null,
+    changes: {
+      ...(typeof body.name === "string" ? { name: body.name.trim() } : {}),
+      ...(typeof body.company === "string" ? { company: body.company.trim() || null } : {}),
+      ...(typeof body.is_wmsv === "boolean" ? { account_type: body.is_wmsv ? "wmsv" : "standard" } : {}),
+      ...(Array.isArray(body.tags) ? { tags: body.tags } : {}),
+    },
+  });
+
   return json({ success: true });
 }
 
-async function actionDeactivate(body: any) {
+async function actionDeactivate(body: any, actor: { id: string | null; email: string | null }) {
   const userId = String(body.user_id || "");
   if (!userId) return json({ success: false, error: "user_id required" }, 400);
 
@@ -358,10 +404,15 @@ async function actionDeactivate(body: any) {
     .update({ is_active: false, deactivated_at: new Date().toISOString() })
     .eq("user_id", userId);
 
+  const { data: targetUser } = await adminClient.auth.admin.getUserById(userId);
+  await logAdminEvent(userId, "admin_user_deactivated", actor, {
+    target_email: targetUser?.user?.email || null,
+  });
+
   return json({ success: true });
 }
 
-async function actionReactivate(body: any) {
+async function actionReactivate(body: any, actor: { id: string | null; email: string | null }) {
   const userId = String(body.user_id || "");
   if (!userId) return json({ success: false, error: "user_id required" }, 400);
 
@@ -375,10 +426,15 @@ async function actionReactivate(body: any) {
     .update({ is_active: true, deactivated_at: null })
     .eq("user_id", userId);
 
+  const { data: targetUser } = await adminClient.auth.admin.getUserById(userId);
+  await logAdminEvent(userId, "admin_user_reactivated", actor, {
+    target_email: targetUser?.user?.email || null,
+  });
+
   return json({ success: true });
 }
 
-async function actionResetPassword(body: any) {
+async function actionResetPassword(body: any, actor: { id: string | null; email: string | null }) {
   const userId = String(body.user_id || "");
   if (!userId) return json({ success: false, error: "user_id required" }, 400);
 
@@ -421,6 +477,10 @@ async function actionResetPassword(body: any) {
     bcc: targetIsInternal ? undefined : INTERNAL_BCC,
   });
 
+  await logAdminEvent(userId, "admin_password_reset_sent", actor, {
+    target_email: email,
+  });
+
   return json({ success: true });
 }
 
@@ -444,19 +504,20 @@ Deno.serve(async (req) => {
     const body = await req.json().catch(() => ({}));
     const action = String(body.action || "");
 
+    const actor = { id: user.id, email: user.email ?? null };
     switch (action) {
       case "list":
         return json({ success: true, ...(await actionList()) });
       case "create":
-        return await actionCreate(body, user.id);
+        return await actionCreate(body, actor);
       case "update":
-        return await actionUpdate(body, user.id);
+        return await actionUpdate(body, actor);
       case "deactivate":
-        return await actionDeactivate(body);
+        return await actionDeactivate(body, actor);
       case "reactivate":
-        return await actionReactivate(body);
+        return await actionReactivate(body, actor);
       case "reset_password":
-        return await actionResetPassword(body);
+        return await actionResetPassword(body, actor);
       default:
         return json({ success: false, error: "Unknown action" }, 400);
     }
