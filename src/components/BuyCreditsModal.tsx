@@ -126,15 +126,17 @@ export const BuyCreditsModal = ({ open, onOpenChange, reason }: BuyCreditsModalP
             )}
             <div className="grid gap-4 md:grid-cols-3 mt-2">
               {PACKAGES.map((pkg) => {
-                // Bulk discount = savings vs. buying the same number of credits at the
-                // 20-pack base rate. Only shown for full (non-WMSV) pricing — the WMSV
-                // 70% promo is communicated once in the banner above.
-                const baseUnitPrice = PACKAGES[0].originalPriceUsd / PACKAGES[0].credits; // $ per credit at 20-pack rate
-                const undiscountedPrice = baseUnitPrice * pkg.credits;
-                const bulkDiscountPct = !isWMSV && pkg.id !== "pack_20"
-                  ? Math.round((1 - pkg.originalPriceUsd / undiscountedPrice) * 100)
-                  : 0;
+                // Baseline = buying the same number of credits at the 20-pack unit rate
+                // (no bulk discount). For WMSV, the 70% promo is shown once in the banner,
+                // so per-card we only surface the additional bulk savings on 100/500.
+                const baseUnit = isWMSV
+                  ? PACKAGES[0].priceUsd / PACKAGES[0].credits
+                  : PACKAGES[0].originalPriceUsd / PACKAGES[0].credits;
+                const undiscountedPrice = Math.round(baseUnit * pkg.credits);
                 const displayPrice = isWMSV ? pkg.priceUsd : pkg.originalPriceUsd;
+                const bulkDiscountPct = pkg.id !== "pack_20" && undiscountedPrice > displayPrice
+                  ? Math.round((1 - displayPrice / undiscountedPrice) * 100)
+                  : 0;
                 return (
                   <Card
                     key={pkg.id}
@@ -153,7 +155,7 @@ export const BuyCreditsModal = ({ open, onOpenChange, reason }: BuyCreditsModalP
                       <span className="text-2xl font-semibold text-primary">${displayPrice.toLocaleString()}</span>
                       {bulkDiscountPct > 0 && (
                         <span className="text-sm text-muted-foreground line-through">
-                          ${Math.round(undiscountedPrice).toLocaleString()}
+                          ${undiscountedPrice.toLocaleString()}
                         </span>
                       )}
                     </div>
