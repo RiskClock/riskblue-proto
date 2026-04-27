@@ -157,7 +157,7 @@ HARD OUTPUT RULES:
 - Top-level object MUST be { "instances": [...] }.
 - No null values anywhere. Use "" for unknown strings and 0 for unknown numbers.
 - Preserve the original Room Identifier / Plan Tag exactly in the "id" field whenever available — do NOT generate sequential codes.
-- Only include "pipe_diameter_mm" when it is known and greater than 0.`;
+- "pipe_diameter_mm" is REQUIRED on every item. Set it to 0 when unknown or not applicable (e.g., for non-water-system items). Only set it to a positive number when an actual pipe diameter in millimeters is known.`;
 
     const userPrompt = `Here are the analysis results for "${awpClassName}" from ${results.length} drawing files:\n\n${combinedText}\n\nPlease consolidate and deduplicate these into a single list of unique instances.`;
 
