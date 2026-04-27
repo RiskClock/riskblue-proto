@@ -348,6 +348,10 @@ const UserManagement = () => {
           va = a.tags[0]?.name.toLowerCase() || "\uffff";
           vb = b.tags[0]?.name.toLowerCase() || "\uffff";
           break;
+        case "credits":
+          va = a.credits_balance ?? 0;
+          vb = b.credits_balance ?? 0;
+          break;
         case "created_at":
         default:
           va = new Date(a.created_at).getTime();
