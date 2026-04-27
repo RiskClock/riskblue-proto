@@ -375,10 +375,22 @@ async function actionUpdate(body: any, actor: { id: string | null; email: string
     }
   }
 
+  // Lookup target email for log
+  const { data: targetUser } = await adminClient.auth.admin.getUserById(userId);
+  await logAdminEvent(userId, "admin_user_updated", actor, {
+    target_email: targetUser?.user?.email || null,
+    changes: {
+      ...(typeof body.name === "string" ? { name: body.name.trim() } : {}),
+      ...(typeof body.company === "string" ? { company: body.company.trim() || null } : {}),
+      ...(typeof body.is_wmsv === "boolean" ? { account_type: body.is_wmsv ? "wmsv" : "standard" } : {}),
+      ...(Array.isArray(body.tags) ? { tags: body.tags } : {}),
+    },
+  });
+
   return json({ success: true });
 }
 
-async function actionDeactivate(body: any) {
+async function actionDeactivate(body: any, actor: { id: string | null; email: string | null }) {
   const userId = String(body.user_id || "");
   if (!userId) return json({ success: false, error: "user_id required" }, 400);
 
@@ -392,10 +404,15 @@ async function actionDeactivate(body: any) {
     .update({ is_active: false, deactivated_at: new Date().toISOString() })
     .eq("user_id", userId);
 
+  const { data: targetUser } = await adminClient.auth.admin.getUserById(userId);
+  await logAdminEvent(userId, "admin_user_deactivated", actor, {
+    target_email: targetUser?.user?.email || null,
+  });
+
   return json({ success: true });
 }
 
-async function actionReactivate(body: any) {
+async function actionReactivate(body: any, actor: { id: string | null; email: string | null }) {
   const userId = String(body.user_id || "");
   if (!userId) return json({ success: false, error: "user_id required" }, 400);
 
@@ -409,10 +426,15 @@ async function actionReactivate(body: any) {
     .update({ is_active: true, deactivated_at: null })
     .eq("user_id", userId);
 
+  const { data: targetUser } = await adminClient.auth.admin.getUserById(userId);
+  await logAdminEvent(userId, "admin_user_reactivated", actor, {
+    target_email: targetUser?.user?.email || null,
+  });
+
   return json({ success: true });
 }
 
-async function actionResetPassword(body: any) {
+async function actionResetPassword(body: any, actor: { id: string | null; email: string | null }) {
   const userId = String(body.user_id || "");
   if (!userId) return json({ success: false, error: "user_id required" }, 400);
 
