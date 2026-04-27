@@ -628,17 +628,9 @@ const UserManagement = () => {
       <AlertDialog open={!!confirmAction} onOpenChange={(o) => !o && setConfirmAction(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>
-              {confirmAction?.type === "deactivate" && "Deactivate user?"}
-              {confirmAction?.type === "reactivate" && "Reactivate user?"}
-              {confirmAction?.type === "reset" && "Send password reset email?"}
-            </AlertDialogTitle>
+            <AlertDialogTitle>Send password reset email?</AlertDialogTitle>
             <AlertDialogDescription>
-              {confirmAction?.type === "deactivate" &&
-                `${confirmAction.user.email} will no longer be able to sign in.`}
-              {confirmAction?.type === "reactivate" &&
-                `${confirmAction.user.email} will be able to sign in again.`}
-              {confirmAction?.type === "reset" && (
+              {confirmAction && (
                 <>
                   An email with a reset link will be sent to {confirmAction.user.email}.
                   {!confirmAction.user.email.toLowerCase().endsWith("@riskclock.com") &&
@@ -653,13 +645,7 @@ const UserManagement = () => {
               disabled={actionMutation.isPending}
               onClick={() => {
                 if (!confirmAction) return;
-                const action =
-                  confirmAction.type === "deactivate"
-                    ? "deactivate"
-                    : confirmAction.type === "reactivate"
-                    ? "reactivate"
-                    : "reset_password";
-                actionMutation.mutate({ action, user_id: confirmAction.user.user_id });
+                actionMutation.mutate({ action: "reset_password", user_id: confirmAction.user.user_id });
               }}
             >
               {actionMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : "Confirm"}
