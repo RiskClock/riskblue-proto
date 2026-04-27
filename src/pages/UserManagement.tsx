@@ -1068,13 +1068,22 @@ function EditUserDialog({
   onOpenChange: (o: boolean) => void;
   companies: string[];
   availableTags: TagOption[];
-  onSubmit: (p: { name: string; is_wmsv: boolean; company: string | null; tags: string[] }) => void;
+  onSubmit: (p: {
+    name: string;
+    is_wmsv: boolean;
+    company: string | null;
+    tags: string[];
+    credits: number | null;
+    password: string | null;
+  }) => void;
   loading: boolean;
 }) {
   const [name, setName] = useState("");
   const [isWmsv, setIsWmsv] = useState(false);
   const [company, setCompany] = useState<string | null>(null);
   const [tags, setTags] = useState<string[]>([]);
+  const [credits, setCredits] = useState<string>("");
+  const [password, setPassword] = useState("");
 
   useEffect(() => {
     if (user) {
@@ -1082,8 +1091,13 @@ function EditUserDialog({
       setIsWmsv(user.account_type === "wmsv");
       setCompany(user.company || null);
       setTags(user.tags.map((t) => t.name));
+      setCredits(String(user.credits_balance ?? 0));
+      setPassword("");
     }
   }, [user]);
+
+  const creditsValid = credits.trim() === "" || (Number.isFinite(Number(credits)) && Number(credits) >= 0);
+  const pwdValid = password.length === 0 || password.length >= 8;
 
   return (
     <Dialog open={!!user} onOpenChange={onOpenChange}>
@@ -1097,10 +1111,34 @@ function EditUserDialog({
             <Label>Name</Label>
             <Input value={name} onChange={(e) => setName(e.target.value)} className="mt-1" />
           </div>
+          <div>
+            <Label>Credits</Label>
+            <Input
+              type="number"
+              min={0}
+              step={1}
+              value={credits}
+              onChange={(e) => setCredits(e.target.value)}
+              className="mt-1"
+            />
+          </div>
+          <div>
+            <Label>Set new password (optional)</Label>
+            <Input
+              type="text"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              placeholder="Leave empty to keep current password"
+              className="mt-1"
+            />
+            {password.length > 0 && password.length < 8 && (
+              <p className="text-xs text-destructive mt-1">Must be at least 8 characters</p>
+            )}
+          </div>
           <div className="flex items-center gap-2">
             <Checkbox id="edit-wmsv" checked={isWmsv} onCheckedChange={(v) => setIsWmsv(!!v)} />
             <Label htmlFor="edit-wmsv" className="cursor-pointer font-normal">
-              WMSV account
+              WMSV (Water Mitigation Solution Vendor) account
             </Label>
           </div>
           <div>
@@ -1119,14 +1157,143 @@ function EditUserDialog({
             Cancel
           </Button>
           <Button
-            onClick={() => onSubmit({ name: name.trim(), is_wmsv: isWmsv, company, tags })}
-            disabled={loading || !name.trim()}
+            onClick={() =>
+              onSubmit({
+                name: name.trim(),
+                is_wmsv: isWmsv,
+                company,
+                tags,
+                credits: credits.trim() === "" ? null : Math.max(0, Math.floor(Number(credits))),
+                password: password.length > 0 ? password : null,
+              })
+            }
+            disabled={loading || !name.trim() || !creditsValid || !pwdValid}
           >
             {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : "Save"}
           </Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
+  );
+}
+
+// ---------- Column edit dropdown (with drag-to-reorder) ----------
+
+function ColumnEditDropdown({
+  columnPrefs,
+  setColumnPrefs,
+}: {
+  columnPrefs: ColumnPrefs;
+  setColumnPrefs: React.Dispatch<React.SetStateAction<ColumnPrefs>>;
+}) {
+  const [open, setOpen] = useState(false);
+  const [dragId, setDragId] = useState<ColumnId | null>(null);
+  const [overId, setOverId] = useState<ColumnId | null>(null);
+
+  const labelFor = (id: ColumnId) => ALL_COLUMNS.find((c) => c.id === id)?.label || id;
+
+  const toggleVisible = (id: ColumnId) => {
+    if (id === "user") return;
+    setColumnPrefs((prev) => ({
+      ...prev,
+      visible: { ...prev.visible, [id]: !prev.visible[id] },
+    }));
+  };
+
+  const handleDrop = (targetId: ColumnId) => {
+    if (!dragId || dragId === targetId || dragId === "user" || targetId === "user") {
+      setDragId(null);
+      setOverId(null);
+      return;
+    }
+    setColumnPrefs((prev) => {
+      const order = [...prev.order];
+      const from = order.indexOf(dragId);
+      const to = order.indexOf(targetId);
+      if (from === -1 || to === -1) return prev;
+      order.splice(from, 1);
+      order.splice(to, 0, dragId);
+      // Force user first
+      const filtered = order.filter((id) => id !== "user");
+      return { ...prev, order: ["user", ...filtered] };
+    });
+    setDragId(null);
+    setOverId(null);
+  };
+
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <Button size="sm" variant="ghost" className="gap-1 -mr-2">
+          <Settings2 className="h-4 w-4" />
+          Edit
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent align="end" className="w-64 p-2">
+        <div className="text-xs font-medium text-muted-foreground px-2 py-1.5">
+          Show & reorder columns
+        </div>
+        <div className="space-y-0.5">
+          {columnPrefs.order.map((id) => {
+            const isUser = id === "user";
+            const isDraggingOver = overId === id && dragId && dragId !== id;
+            return (
+              <div
+                key={id}
+                draggable={!isUser}
+                onDragStart={(e) => {
+                  if (isUser) {
+                    e.preventDefault();
+                    return;
+                  }
+                  setDragId(id);
+                  e.dataTransfer.effectAllowed = "move";
+                }}
+                onDragOver={(e) => {
+                  if (isUser || !dragId) return;
+                  e.preventDefault();
+                  e.dataTransfer.dropEffect = "move";
+                  if (overId !== id) setOverId(id);
+                }}
+                onDragLeave={() => {
+                  if (overId === id) setOverId(null);
+                }}
+                onDrop={(e) => {
+                  e.preventDefault();
+                  handleDrop(id);
+                }}
+                onDragEnd={() => {
+                  setDragId(null);
+                  setOverId(null);
+                }}
+                className={cn(
+                  "flex items-center gap-2 rounded-md px-2 py-1.5 text-sm select-none",
+                  !isUser && "cursor-grab active:cursor-grabbing hover:bg-accent",
+                  isDraggingOver && "border border-primary/40 bg-primary/5",
+                  dragId === id && "opacity-50"
+                )}
+              >
+                <GripVertical
+                  className={cn(
+                    "h-4 w-4 shrink-0",
+                    isUser ? "opacity-25" : "text-muted-foreground"
+                  )}
+                />
+                <Checkbox
+                  checked={columnPrefs.visible[id]}
+                  disabled={isUser}
+                  onCheckedChange={() => toggleVisible(id)}
+                  onClick={(e) => e.stopPropagation()}
+                />
+                <span className={cn("flex-1", isUser && "text-muted-foreground")}>
+                  {labelFor(id)}
+                </span>
+              </div>
+            );
+          })}
+        </div>
+      </PopoverContent>
+    </Popover>
   );
 }
 
