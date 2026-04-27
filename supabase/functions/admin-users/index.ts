@@ -168,6 +168,7 @@ async function actionList() {
       company: p.company || null,
       is_active: isActive,
       deactivated_at: p.deactivated_at || null,
+      credits_balance: typeof p.credits_balance === "number" ? p.credits_balance : 0,
       has_profile: !!profileMap.get(u.id),
       tags,
     };
