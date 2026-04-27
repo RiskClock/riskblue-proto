@@ -10,7 +10,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { LogOut, Settings, FileText, BarChart3, Shield, Coins } from "lucide-react";
+import { LogOut, Settings, FileText, BarChart3, Shield, Coins, Users } from "lucide-react";
 import riskBlueLogo from "@/assets/logo-riskblue.png";
 import { useAccountType } from "@/hooks/useAccountType";
 import { useCredits } from "@/hooks/useCredits";
@@ -83,9 +83,13 @@ export const AppHeader = ({ leftContent }: AppHeaderProps) => {
               <DropdownMenuSeparator />
               {isInternalUser && (
                 <>
+                  <DropdownMenuItem onClick={() => navigate("/internal/users")} className="cursor-pointer">
+                    <Users className="h-4 w-4 mr-2" />
+                    User Management
+                  </DropdownMenuItem>
                   <DropdownMenuItem onClick={() => navigate("/configuration")} className="cursor-pointer">
                     <Settings className="h-4 w-4 mr-2" />
-                    Configuration
+                    AWP Configuration
                   </DropdownMenuItem>
                   <DropdownMenuItem onClick={() => navigate("/internal/analysis-queue")} className="cursor-pointer">
                     <FileText className="h-4 w-4 mr-2" />

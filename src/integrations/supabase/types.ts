@@ -1140,8 +1140,10 @@ export type Database = {
           company: string | null
           created_at: string
           credits_balance: number
+          deactivated_at: string | null
           display_name: string | null
           id: string
+          is_active: boolean
           updated_at: string
           user_id: string
         }
@@ -1151,8 +1153,10 @@ export type Database = {
           company?: string | null
           created_at?: string
           credits_balance?: number
+          deactivated_at?: string | null
           display_name?: string | null
           id?: string
+          is_active?: boolean
           updated_at?: string
           user_id: string
         }
@@ -1162,8 +1166,10 @@ export type Database = {
           company?: string | null
           created_at?: string
           credits_balance?: number
+          deactivated_at?: string | null
           display_name?: string | null
           id?: string
+          is_active?: boolean
           updated_at?: string
           user_id?: string
         }

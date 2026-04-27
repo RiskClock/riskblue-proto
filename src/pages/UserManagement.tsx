@@ -1,0 +1,781 @@
+import { useEffect, useMemo, useState } from "react";
+import { useNavigate } from "react-router-dom";
+import { useAuth } from "@/contexts/AuthContext";
+import { supabase } from "@/integrations/supabase/client";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { AppHeader } from "@/components/AppHeader";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Badge } from "@/components/ui/badge";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+  DialogDescription,
+} from "@/components/ui/dialog";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from "@/components/ui/command";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+  DropdownMenuSeparator,
+} from "@/components/ui/dropdown-menu";
+import { useToast } from "@/hooks/use-toast";
+import {
+  Plus,
+  Filter,
+  Search,
+  ArrowUpDown,
+  ArrowUp,
+  ArrowDown,
+  MoreHorizontal,
+  KeyRound,
+  Pencil,
+  UserX,
+  UserCheck,
+  Loader2,
+  Check,
+  ChevronsUpDown,
+  X,
+} from "lucide-react";
+import { format } from "date-fns";
+import { cn } from "@/lib/utils";
+
+interface UserRow {
+  user_id: string;
+  email: string;
+  display_name: string | null;
+  account_type: string;
+  company: string | null;
+  is_active: boolean;
+  deactivated_at: string | null;
+  created_at: string;
+  last_sign_in_at: string | null;
+  email_confirmed_at: string | null;
+  banned_until: string | null;
+  has_profile: boolean;
+}
+
+type SortKey = "created_at" | "email" | "company" | "last_sign_in_at" | "status";
+type SortDir = "asc" | "desc";
+
+const STATUS_OPTIONS = [
+  { value: "active", label: "Active" },
+  { value: "deactivated", label: "Deactivated" },
+  { value: "pending", label: "Account Created (Not Signed In)" },
+];
+
+function getStatus(u: UserRow): "active" | "deactivated" | "pending" {
+  if (!u.is_active) return "deactivated";
+  if (!u.last_sign_in_at) return "pending";
+  return "active";
+}
+
+function StatusBadge({ status }: { status: "active" | "deactivated" | "pending" }) {
+  if (status === "active") return <Badge variant="default" className="bg-emerald-600 hover:bg-emerald-600">Active</Badge>;
+  if (status === "deactivated") return <Badge variant="destructive">Deactivated</Badge>;
+  return <Badge variant="secondary">Pending First Sign-In</Badge>;
+}
+
+const UserManagement = () => {
+  const { user } = useAuth();
+  const navigate = useNavigate();
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+
+  const isInternal = !!user?.email?.toLowerCase().endsWith("@riskclock.com");
+
+  useEffect(() => {
+    if (user && !isInternal) navigate("/projects");
+  }, [user, isInternal, navigate]);
+
+  const { data, isLoading, error } = useQuery({
+    queryKey: ["admin-users"],
+    queryFn: async () => {
+      const { data, error } = await supabase.functions.invoke("admin-users", {
+        body: { action: "list" },
+      });
+      if (error) throw error;
+      if (!data?.success) throw new Error(data?.error || "Failed to load users");
+      return data as { users: UserRow[]; companies: string[] };
+    },
+    enabled: isInternal,
+  });
+
+  const users = data?.users || [];
+  const companies = data?.companies || [];
+
+  // ---- filters / sort ----
+  const [search, setSearch] = useState("");
+  const [filterCompany, setFilterCompany] = useState<string | null>(null);
+  const [filterStatus, setFilterStatus] = useState<string | null>(null);
+  const [sortKey, setSortKey] = useState<SortKey>("created_at");
+  const [sortDir, setSortDir] = useState<SortDir>("desc");
+
+  const filteredSorted = useMemo(() => {
+    let rows = [...users];
+    if (filterCompany) rows = rows.filter((u) => (u.company || "") === filterCompany);
+    if (filterStatus) rows = rows.filter((u) => getStatus(u) === filterStatus);
+    if (search.trim()) {
+      const q = search.trim().toLowerCase();
+      rows = rows.filter(
+        (u) =>
+          (u.display_name || "").toLowerCase().includes(q) ||
+          (u.email || "").toLowerCase().includes(q) ||
+          (u.company || "").toLowerCase().includes(q)
+      );
+    }
+    rows.sort((a, b) => {
+      let va: any;
+      let vb: any;
+      switch (sortKey) {
+        case "email":
+          va = (a.email || "").toLowerCase();
+          vb = (b.email || "").toLowerCase();
+          break;
+        case "company":
+          va = (a.company || "").toLowerCase();
+          vb = (b.company || "").toLowerCase();
+          break;
+        case "last_sign_in_at":
+          va = a.last_sign_in_at ? new Date(a.last_sign_in_at).getTime() : 0;
+          vb = b.last_sign_in_at ? new Date(b.last_sign_in_at).getTime() : 0;
+          break;
+        case "status":
+          va = getStatus(a);
+          vb = getStatus(b);
+          break;
+        case "created_at":
+        default:
+          va = new Date(a.created_at).getTime();
+          vb = new Date(b.created_at).getTime();
+      }
+      if (va < vb) return sortDir === "asc" ? -1 : 1;
+      if (va > vb) return sortDir === "asc" ? 1 : -1;
+      return 0;
+    });
+    return rows;
+  }, [users, search, filterCompany, filterStatus, sortKey, sortDir]);
+
+  const toggleSort = (key: SortKey) => {
+    if (sortKey === key) {
+      setSortDir(sortDir === "asc" ? "desc" : "asc");
+    } else {
+      setSortKey(key);
+      setSortDir(key === "created_at" || key === "last_sign_in_at" ? "desc" : "asc");
+    }
+  };
+
+  const SortIcon = ({ k }: { k: SortKey }) =>
+    sortKey !== k ? (
+      <ArrowUpDown className="h-3 w-3 ml-1 inline opacity-50" />
+    ) : sortDir === "asc" ? (
+      <ArrowUp className="h-3 w-3 ml-1 inline" />
+    ) : (
+      <ArrowDown className="h-3 w-3 ml-1 inline" />
+    );
+
+  // ---- modals ----
+  const [createOpen, setCreateOpen] = useState(false);
+  const [editing, setEditing] = useState<UserRow | null>(null);
+  const [confirmAction, setConfirmAction] = useState<{
+    type: "deactivate" | "reactivate" | "reset";
+    user: UserRow;
+  } | null>(null);
+
+  // ---- mutations ----
+  const invokeAction = async (body: any) => {
+    const { data, error } = await supabase.functions.invoke("admin-users", { body });
+    if (error) throw error;
+    if (!data?.success) throw new Error(data?.error || "Action failed");
+    return data;
+  };
+
+  const refresh = () => queryClient.invalidateQueries({ queryKey: ["admin-users"] });
+
+  const createMutation = useMutation({
+    mutationFn: invokeAction,
+    onSuccess: () => {
+      toast({ title: "User created" });
+      setCreateOpen(false);
+      refresh();
+    },
+    onError: (e: any) => toast({ title: "Error", description: e.message, variant: "destructive" }),
+  });
+  const updateMutation = useMutation({
+    mutationFn: invokeAction,
+    onSuccess: () => {
+      toast({ title: "User updated" });
+      setEditing(null);
+      refresh();
+    },
+    onError: (e: any) => toast({ title: "Error", description: e.message, variant: "destructive" }),
+  });
+  const actionMutation = useMutation({
+    mutationFn: invokeAction,
+    onSuccess: (_d, vars: any) => {
+      const t =
+        vars.action === "deactivate"
+          ? "User deactivated"
+          : vars.action === "reactivate"
+          ? "User reactivated"
+          : "Password reset email sent";
+      toast({ title: t });
+      setConfirmAction(null);
+      refresh();
+    },
+    onError: (e: any) => toast({ title: "Error", description: e.message, variant: "destructive" }),
+  });
+
+  if (!user) return null;
+  if (!isInternal) return null;
+
+  return (
+    <div className="min-h-screen bg-background">
+      <AppHeader />
+      <div className="container mx-auto px-6 py-8">
+        <div className="flex items-center justify-between mb-6">
+          <div>
+            <h1 className="text-3xl font-bold">User Management</h1>
+            <p className="text-muted-foreground mt-1">
+              {filteredSorted.length} of {users.length} user{users.length === 1 ? "" : "s"}
+            </p>
+          </div>
+          <div className="flex items-center gap-2">
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Input
+                placeholder="Search name, email, company"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                className="pl-9 w-72"
+              />
+            </div>
+
+            <Popover>
+              <PopoverTrigger asChild>
+                <Button variant="outline">
+                  <Filter className="h-4 w-4 mr-2" />
+                  Filter
+                  {(filterCompany || filterStatus) && (
+                    <Badge variant="secondary" className="ml-2 px-1.5">
+                      {(filterCompany ? 1 : 0) + (filterStatus ? 1 : 0)}
+                    </Badge>
+                  )}
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent align="end" className="w-72 space-y-4">
+                <div>
+                  <Label className="text-xs uppercase text-muted-foreground">Company</Label>
+                  <CompanyCombobox
+                    value={filterCompany}
+                    onChange={setFilterCompany}
+                    companies={companies}
+                    allowCreate={false}
+                    placeholder="All companies"
+                  />
+                </div>
+                <div>
+                  <Label className="text-xs uppercase text-muted-foreground">Status</Label>
+                  <select
+                    className="mt-1 w-full h-9 border rounded-md bg-background px-2 text-sm"
+                    value={filterStatus || ""}
+                    onChange={(e) => setFilterStatus(e.target.value || null)}
+                  >
+                    <option value="">All statuses</option>
+                    {STATUS_OPTIONS.map((o) => (
+                      <option key={o.value} value={o.value}>
+                        {o.label}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                {(filterCompany || filterStatus) && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="w-full"
+                    onClick={() => {
+                      setFilterCompany(null);
+                      setFilterStatus(null);
+                    }}
+                  >
+                    Clear filters
+                  </Button>
+                )}
+              </PopoverContent>
+            </Popover>
+
+            <Button onClick={() => setCreateOpen(true)}>
+              <Plus className="h-4 w-4 mr-2" />
+              New User
+            </Button>
+          </div>
+        </div>
+
+        {isLoading && (
+          <div className="flex items-center justify-center py-20">
+            <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+          </div>
+        )}
+
+        {error && (
+          <div className="rounded-md border border-destructive/30 bg-destructive/10 p-4 text-sm text-destructive">
+            {(error as Error).message}
+          </div>
+        )}
+
+        {!isLoading && !error && (
+          <div className="rounded-md border bg-card">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Name</TableHead>
+                  <TableHead className="cursor-pointer select-none" onClick={() => toggleSort("email")}>
+                    Email <SortIcon k="email" />
+                  </TableHead>
+                  <TableHead className="cursor-pointer select-none" onClick={() => toggleSort("company")}>
+                    Company <SortIcon k="company" />
+                  </TableHead>
+                  <TableHead>Type</TableHead>
+                  <TableHead className="cursor-pointer select-none" onClick={() => toggleSort("status")}>
+                    Status <SortIcon k="status" />
+                  </TableHead>
+                  <TableHead className="cursor-pointer select-none" onClick={() => toggleSort("created_at")}>
+                    Created <SortIcon k="created_at" />
+                  </TableHead>
+                  <TableHead className="cursor-pointer select-none" onClick={() => toggleSort("last_sign_in_at")}>
+                    Last Sign-In <SortIcon k="last_sign_in_at" />
+                  </TableHead>
+                  <TableHead className="w-12"></TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {filteredSorted.length === 0 && (
+                  <TableRow>
+                    <TableCell colSpan={8} className="text-center text-muted-foreground py-12">
+                      No users match your filters.
+                    </TableCell>
+                  </TableRow>
+                )}
+                {filteredSorted.map((u) => {
+                  const status = getStatus(u);
+                  return (
+                    <TableRow key={u.user_id}>
+                      <TableCell className="font-medium">{u.display_name || "—"}</TableCell>
+                      <TableCell className="text-muted-foreground">{u.email}</TableCell>
+                      <TableCell>{u.company || <span className="text-muted-foreground">—</span>}</TableCell>
+                      <TableCell>
+                        <Badge variant="outline">{u.account_type === "wmsv" ? "WMSV" : "Standard"}</Badge>
+                      </TableCell>
+                      <TableCell>
+                        <StatusBadge status={status} />
+                      </TableCell>
+                      <TableCell className="text-muted-foreground tabular-nums">
+                        {format(new Date(u.created_at), "MMM d, yyyy")}
+                      </TableCell>
+                      <TableCell className="text-muted-foreground tabular-nums">
+                        {u.last_sign_in_at ? format(new Date(u.last_sign_in_at), "MMM d, yyyy") : "Never"}
+                      </TableCell>
+                      <TableCell>
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button size="icon" variant="ghost">
+                              <MoreHorizontal className="h-4 w-4" />
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end">
+                            <DropdownMenuItem onClick={() => setEditing(u)}>
+                              <Pencil className="h-4 w-4 mr-2" />
+                              Edit
+                            </DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => setConfirmAction({ type: "reset", user: u })}>
+                              <KeyRound className="h-4 w-4 mr-2" />
+                              Reset Password
+                            </DropdownMenuItem>
+                            <DropdownMenuSeparator />
+                            {u.is_active ? (
+                              <DropdownMenuItem
+                                className="text-destructive focus:text-destructive"
+                                onClick={() => setConfirmAction({ type: "deactivate", user: u })}
+                              >
+                                <UserX className="h-4 w-4 mr-2" />
+                                Deactivate
+                              </DropdownMenuItem>
+                            ) : (
+                              <DropdownMenuItem onClick={() => setConfirmAction({ type: "reactivate", user: u })}>
+                                <UserCheck className="h-4 w-4 mr-2" />
+                                Reactivate
+                              </DropdownMenuItem>
+                            )}
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
+              </TableBody>
+            </Table>
+          </div>
+        )}
+      </div>
+
+      <CreateUserDialog
+        open={createOpen}
+        onOpenChange={setCreateOpen}
+        companies={companies}
+        onSubmit={(payload) => createMutation.mutate({ action: "create", ...payload })}
+        loading={createMutation.isPending}
+      />
+
+      <EditUserDialog
+        user={editing}
+        onOpenChange={(o) => !o && setEditing(null)}
+        companies={companies}
+        onSubmit={(payload) =>
+          updateMutation.mutate({ action: "update", user_id: editing!.user_id, ...payload })
+        }
+        loading={updateMutation.isPending}
+      />
+
+      <AlertDialog open={!!confirmAction} onOpenChange={(o) => !o && setConfirmAction(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              {confirmAction?.type === "deactivate" && "Deactivate user?"}
+              {confirmAction?.type === "reactivate" && "Reactivate user?"}
+              {confirmAction?.type === "reset" && "Send password reset email?"}
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              {confirmAction?.type === "deactivate" &&
+                `${confirmAction.user.email} will no longer be able to sign in.`}
+              {confirmAction?.type === "reactivate" &&
+                `${confirmAction.user.email} will be able to sign in again.`}
+              {confirmAction?.type === "reset" && (
+                <>
+                  An email with a reset link will be sent to {confirmAction.user.email}.
+                  {!confirmAction.user.email.toLowerCase().endsWith("@riskclock.com") &&
+                    " A copy will also be sent to qbo@riskclock.com."}
+                </>
+              )}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={actionMutation.isPending}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              disabled={actionMutation.isPending}
+              onClick={() => {
+                if (!confirmAction) return;
+                const action =
+                  confirmAction.type === "deactivate"
+                    ? "deactivate"
+                    : confirmAction.type === "reactivate"
+                    ? "reactivate"
+                    : "reset_password";
+                actionMutation.mutate({ action, user_id: confirmAction.user.user_id });
+              }}
+            >
+              {actionMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : "Confirm"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </div>
+  );
+};
+
+// ---------- Company combobox ----------
+
+function CompanyCombobox({
+  value,
+  onChange,
+  companies,
+  allowCreate = true,
+  placeholder = "Select company",
+}: {
+  value: string | null;
+  onChange: (v: string | null) => void;
+  companies: string[];
+  allowCreate?: boolean;
+  placeholder?: string;
+}) {
+  const [open, setOpen] = useState(false);
+  const [query, setQuery] = useState("");
+
+  const filtered = useMemo(() => {
+    if (!query.trim()) return companies;
+    const q = query.toLowerCase();
+    return companies.filter((c) => c.toLowerCase().includes(q));
+  }, [companies, query]);
+
+  const showCreate =
+    allowCreate &&
+    query.trim().length > 0 &&
+    !companies.some((c) => c.toLowerCase() === query.trim().toLowerCase());
+
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <Button variant="outline" role="combobox" className="w-full justify-between mt-1 font-normal">
+          {value || <span className="text-muted-foreground">{placeholder}</span>}
+          <ChevronsUpDown className="h-4 w-4 opacity-50" />
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent className="w-[--radix-popover-trigger-width] p-0" align="start">
+        <Command shouldFilter={false}>
+          <CommandInput placeholder="Search company..." value={query} onValueChange={setQuery} />
+          <CommandList>
+            <CommandEmpty>No companies found.</CommandEmpty>
+            {value && (
+              <CommandGroup>
+                <CommandItem
+                  onSelect={() => {
+                    onChange(null);
+                    setQuery("");
+                    setOpen(false);
+                  }}
+                >
+                  <X className="h-4 w-4 mr-2" />
+                  Clear
+                </CommandItem>
+              </CommandGroup>
+            )}
+            <CommandGroup>
+              {filtered.map((c) => (
+                <CommandItem
+                  key={c}
+                  onSelect={() => {
+                    onChange(c);
+                    setQuery("");
+                    setOpen(false);
+                  }}
+                >
+                  <Check className={cn("h-4 w-4 mr-2", value === c ? "opacity-100" : "opacity-0")} />
+                  {c}
+                </CommandItem>
+              ))}
+              {showCreate && (
+                <CommandItem
+                  onSelect={() => {
+                    onChange(query.trim());
+                    setQuery("");
+                    setOpen(false);
+                  }}
+                >
+                  <Plus className="h-4 w-4 mr-2" />
+                  Create "{query.trim()}"
+                </CommandItem>
+              )}
+            </CommandGroup>
+          </CommandList>
+        </Command>
+      </PopoverContent>
+    </Popover>
+  );
+}
+
+// ---------- Create dialog ----------
+
+function CreateUserDialog({
+  open,
+  onOpenChange,
+  companies,
+  onSubmit,
+  loading,
+}: {
+  open: boolean;
+  onOpenChange: (o: boolean) => void;
+  companies: string[];
+  onSubmit: (p: { email: string; name: string; password: string | null; is_wmsv: boolean; company: string | null }) => void;
+  loading: boolean;
+}) {
+  const [email, setEmail] = useState("");
+  const [name, setName] = useState("");
+  const [password, setPassword] = useState("");
+  const [isWmsv, setIsWmsv] = useState(false);
+  const [company, setCompany] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (open) {
+      setEmail("");
+      setName("");
+      setPassword("");
+      setIsWmsv(false);
+      setCompany(null);
+    }
+  }, [open]);
+
+  const submit = () => {
+    if (!email.trim() || !name.trim()) return;
+    onSubmit({
+      email: email.trim(),
+      name: name.trim(),
+      password: password.trim() || null,
+      is_wmsv: isWmsv,
+      company,
+    });
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Create new user</DialogTitle>
+          <DialogDescription>
+            If you don't set a password, the user will receive an email with a link to set one (expires in 3 days).
+          </DialogDescription>
+        </DialogHeader>
+        <div className="space-y-4">
+          <div>
+            <Label>Email</Label>
+            <Input
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              placeholder="user@example.com"
+              className="mt-1"
+            />
+          </div>
+          <div>
+            <Label>Name</Label>
+            <Input value={name} onChange={(e) => setName(e.target.value)} className="mt-1" />
+          </div>
+          <div>
+            <Label>Password (optional)</Label>
+            <Input
+              type="text"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              placeholder="Leave empty to send setup link"
+              className="mt-1"
+            />
+            {password && password.length > 0 && password.length < 8 && (
+              <p className="text-xs text-destructive mt-1">Must be at least 8 characters</p>
+            )}
+          </div>
+          <div className="flex items-center gap-2">
+            <Checkbox id="wmsv" checked={isWmsv} onCheckedChange={(v) => setIsWmsv(!!v)} />
+            <Label htmlFor="wmsv" className="cursor-pointer font-normal">
+              WMSV account
+            </Label>
+          </div>
+          <div>
+            <Label>Company (optional)</Label>
+            <CompanyCombobox value={company} onChange={setCompany} companies={companies} />
+          </div>
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={() => onOpenChange(false)} disabled={loading}>
+            Cancel
+          </Button>
+          <Button
+            onClick={submit}
+            disabled={loading || !email.trim() || !name.trim() || (password.length > 0 && password.length < 8)}
+          >
+            {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : "Create user"}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+// ---------- Edit dialog ----------
+
+function EditUserDialog({
+  user,
+  onOpenChange,
+  companies,
+  onSubmit,
+  loading,
+}: {
+  user: UserRow | null;
+  onOpenChange: (o: boolean) => void;
+  companies: string[];
+  onSubmit: (p: { name: string; is_wmsv: boolean; company: string | null }) => void;
+  loading: boolean;
+}) {
+  const [name, setName] = useState("");
+  const [isWmsv, setIsWmsv] = useState(false);
+  const [company, setCompany] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (user) {
+      setName(user.display_name || "");
+      setIsWmsv(user.account_type === "wmsv");
+      setCompany(user.company || null);
+    }
+  }, [user]);
+
+  return (
+    <Dialog open={!!user} onOpenChange={onOpenChange}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Edit user</DialogTitle>
+          <DialogDescription>{user?.email}</DialogDescription>
+        </DialogHeader>
+        <div className="space-y-4">
+          <div>
+            <Label>Name</Label>
+            <Input value={name} onChange={(e) => setName(e.target.value)} className="mt-1" />
+          </div>
+          <div className="flex items-center gap-2">
+            <Checkbox id="edit-wmsv" checked={isWmsv} onCheckedChange={(v) => setIsWmsv(!!v)} />
+            <Label htmlFor="edit-wmsv" className="cursor-pointer font-normal">
+              WMSV account
+            </Label>
+          </div>
+          <div>
+            <Label>Company</Label>
+            <CompanyCombobox value={company} onChange={setCompany} companies={companies} />
+          </div>
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={() => onOpenChange(false)} disabled={loading}>
+            Cancel
+          </Button>
+          <Button onClick={() => onSubmit({ name: name.trim(), is_wmsv: isWmsv, company })} disabled={loading || !name.trim()}>
+            {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : "Save"}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+export default UserManagement;
