@@ -3726,7 +3726,7 @@ export function AnalysisSection({ requestId, files, projectId, sourceType, isWMS
                               <div className="flex items-center justify-center">
                                 <Loader2 className="w-3 h-3 animate-spin text-muted-foreground" />
                               </div>
-                            ) : (
+                            ) : isInternal ? (
                               <Tooltip>
                                 <TooltipTrigger asChild>
                                   <Button
@@ -3747,7 +3747,7 @@ export function AnalysisSection({ requestId, files, projectId, sourceType, isWMS
                                   {isDisabled ? `${className} is disabled` : hasTriageResults ? `Re-triage ${className}` : `Triage ${className}`}
                                 </TooltipContent>
                               </Tooltip>
-                            )}
+                            ) : null}
                          </td>
                        );
                      })}
