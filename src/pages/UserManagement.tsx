@@ -325,7 +325,7 @@ const UserManagement = () => {
   const [createOpen, setCreateOpen] = useState(false);
   const [editing, setEditing] = useState<UserRow | null>(null);
   const [confirmAction, setConfirmAction] = useState<{
-    type: "deactivate" | "reactivate" | "reset";
+    type: "reset";
     user: UserRow;
   } | null>(null);
 
@@ -484,28 +484,16 @@ const UserManagement = () => {
 
         {!isLoading && !error && (
           <div className="rounded-md border bg-card">
-            <Table className="table-fixed">
-              <colgroup>
-                <col style={{ width: "180px" }} />
-                <col style={{ width: "240px" }} />
-                <col style={{ width: "160px" }} />
-                <col style={{ width: "240px" }} />
-                <col style={{ width: "100px" }} />
-                <col style={{ width: "130px" }} />
-                <col style={{ width: "130px" }} />
-                <col style={{ width: "130px" }} />
-                <col style={{ width: "56px" }} />
-              </colgroup>
+            <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Name</TableHead>
                   <TableHead className="cursor-pointer select-none" onClick={() => toggleSort("email")}>
-                    Email <SortIcon k="email" />
+                    User <SortIcon k="email" />
                   </TableHead>
                   <TableHead className="cursor-pointer select-none" onClick={() => toggleSort("company")}>
                     Company <SortIcon k="company" />
                   </TableHead>
-                  <TableHead className="cursor-pointer select-none" onClick={() => toggleSort("tags")}>
+                  <TableHead className="cursor-pointer select-none w-[180px]" onClick={() => toggleSort("tags")}>
                     Tags <SortIcon k="tags" />
                   </TableHead>
                   <TableHead>Type</TableHead>
@@ -518,31 +506,34 @@ const UserManagement = () => {
                   <TableHead className="cursor-pointer select-none" onClick={() => toggleSort("last_sign_in_at")}>
                     Last Sign-In <SortIcon k="last_sign_in_at" />
                   </TableHead>
-                  <TableHead></TableHead>
+                  <TableHead className="w-[56px]"></TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {filteredSorted.length === 0 && (
                   <TableRow>
-                    <TableCell colSpan={9} className="text-center text-muted-foreground py-12">
+                    <TableCell colSpan={8} className="text-center text-muted-foreground py-12">
                       No users match your filters.
                     </TableCell>
                   </TableRow>
                 )}
                 {filteredSorted.map((u) => {
                   const status = getStatus(u);
+                  const isDeactivated = status === "deactivated";
+                  // Apply opacity to all cells except the status pill cell
+                  const dim = isDeactivated ? "opacity-80" : "";
                   return (
                     <TableRow key={u.user_id}>
-                      <TableCell className="font-medium truncate" title={u.display_name || ""}>
-                        {u.display_name || "—"}
+                      <TableCell className={cn("font-medium", dim)}>
+                        <div className="flex flex-col">
+                          <span>{u.display_name || "—"}</span>
+                          <span className="text-xs text-muted-foreground">{u.email}</span>
+                        </div>
                       </TableCell>
-                      <TableCell className="text-muted-foreground truncate" title={u.email}>
-                        {u.email}
-                      </TableCell>
-                      <TableCell className="truncate" title={u.company || ""}>
+                      <TableCell className={dim}>
                         {u.company || <span className="text-muted-foreground">—</span>}
                       </TableCell>
-                      <TableCell>
+                      <TableCell className={dim}>
                         {u.tags.length === 0 ? (
                           <span className="text-muted-foreground text-xs">—</span>
                         ) : (
@@ -553,16 +544,16 @@ const UserManagement = () => {
                           </div>
                         )}
                       </TableCell>
-                      <TableCell>
+                      <TableCell className={dim}>
                         <Badge variant="outline">{u.account_type === "wmsv" ? "WMSV" : "Standard"}</Badge>
                       </TableCell>
                       <TableCell>
                         <StatusBadge status={status} />
                       </TableCell>
-                      <TableCell className="text-muted-foreground tabular-nums">
+                      <TableCell className={cn("text-muted-foreground tabular-nums whitespace-nowrap", dim)}>
                         {format(new Date(u.created_at), "MMM d, yyyy")}
                       </TableCell>
-                      <TableCell className="text-muted-foreground tabular-nums">
+                      <TableCell className={cn("text-muted-foreground tabular-nums whitespace-nowrap", dim)}>
                         {u.last_sign_in_at ? format(new Date(u.last_sign_in_at), "MMM d, yyyy") : "Never"}
                       </TableCell>
                       <TableCell>
@@ -585,13 +576,19 @@ const UserManagement = () => {
                             {u.is_active ? (
                               <DropdownMenuItem
                                 className="text-destructive focus:text-destructive"
-                                onClick={() => setConfirmAction({ type: "deactivate", user: u })}
+                                onClick={() =>
+                                  actionMutation.mutate({ action: "deactivate", user_id: u.user_id })
+                                }
                               >
                                 <UserX className="h-4 w-4 mr-2" />
                                 Deactivate
                               </DropdownMenuItem>
                             ) : (
-                              <DropdownMenuItem onClick={() => setConfirmAction({ type: "reactivate", user: u })}>
+                              <DropdownMenuItem
+                                onClick={() =>
+                                  actionMutation.mutate({ action: "reactivate", user_id: u.user_id })
+                                }
+                              >
                                 <UserCheck className="h-4 w-4 mr-2" />
                                 Reactivate
                               </DropdownMenuItem>
