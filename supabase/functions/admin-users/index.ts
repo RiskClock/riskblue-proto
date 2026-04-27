@@ -249,7 +249,8 @@ async function setUserTags(userId: string, tagNames: string[], assignedBy: strin
   if (error) throw error;
 }
 
-async function actionCreate(body: any, actorId: string | null) {
+async function actionCreate(body: any, actor: { id: string | null; email: string | null }) {
+  const actorId = actor.id;
   const email = String(body.email || "").trim().toLowerCase();
   const name = String(body.name || "").trim();
   const password = body.password ? String(body.password) : null;
@@ -333,10 +334,20 @@ async function actionCreate(body: any, actorId: string | null) {
     await sendEmail({ to: email, subject: "Welcome to RiskBlue — set your password", html });
   }
 
+  await logAdminEvent(created.user.id, "admin_user_created", actor, {
+    target_email: email,
+    target_name: name,
+    account_type: isWmsv ? "wmsv" : "standard",
+    company,
+    tags: tagNames,
+    set_password_directly: !!password,
+  });
+
   return json({ success: true, user_id: created.user.id });
 }
 
-async function actionUpdate(body: any, actorId: string | null) {
+async function actionUpdate(body: any, actor: { id: string | null; email: string | null }) {
+  const actorId = actor.id;
   const userId = String(body.user_id || "");
   if (!userId) return json({ success: false, error: "user_id required" }, 400);
 
