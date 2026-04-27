@@ -872,7 +872,7 @@ async function runPipeline(params: PipelineParams) {
             serviceKey,
             userToken,
             "summarize-analysis",
-            { analysisRequestId, awpClassName },
+            { analysisRequestId, awpClassName, model: analyzeModel || "gpt-5-mini" },
           );
           if (result.ok && Array.isArray(result.data?.instances)) {
             // Persist summary_data merge
