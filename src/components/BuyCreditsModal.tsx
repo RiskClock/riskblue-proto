@@ -8,7 +8,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useCredits } from "@/hooks/useCredits";
 import { useAccountType } from "@/hooks/useAccountType";
 import { EmbeddedCheckoutProvider, EmbeddedCheckout } from "@stripe/react-stripe-js";
-import { getStripe, stripeEnvironment, isPaymentsTestMode } from "@/lib/stripe";
+import { getStripe, stripeEnvironment } from "@/lib/stripe";
 
 interface BuyCreditsModalProps {
   open: boolean;
@@ -112,11 +112,7 @@ export const BuyCreditsModal = ({ open, onOpenChange, reason }: BuyCreditsModalP
           </DialogDescription>
         </DialogHeader>
 
-        {isPaymentsTestMode() && !clientSecret && (
-          <div className="rounded-md border border-warning/30 bg-warning/10 px-3 py-2 text-xs text-warning-foreground">
-            Test mode — use card <code className="font-mono">4242 4242 4242 4242</code> with any future expiry &amp; any CVC.
-          </div>
-        )}
+        {/* Sitewide PaymentTestModeBanner already warns when in sandbox; no inline notice needed here. */}
 
         {!clientSecret && (
           <>
