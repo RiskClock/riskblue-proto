@@ -95,6 +95,29 @@ async function findAuthUserByEmail(email: string) {
   return all.find((u) => u.email?.toLowerCase() === lower) || null;
 }
 
+// ---------- Activity logging ----------
+
+async function logAdminEvent(
+  targetUserId: string,
+  action: string,
+  actor: { id: string | null; email: string | null },
+  details: Record<string, unknown> = {}
+) {
+  try {
+    await adminClient.from("user_activity_logs").insert({
+      user_id: targetUserId,
+      action,
+      metadata: {
+        ...details,
+        actor_user_id: actor.id,
+        actor_email: actor.email,
+      },
+    });
+  } catch (e) {
+    console.error("logAdminEvent failed:", e);
+  }
+}
+
 // ---------- Actions ----------
 
 async function actionList() {
