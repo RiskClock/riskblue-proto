@@ -71,6 +71,7 @@ import {
   Loader2,
   Check,
   ChevronsUpDown,
+  X,
 } from "lucide-react";
 import { format } from "date-fns";
 import { cn } from "@/lib/utils";
@@ -776,8 +777,5 @@ function EditUserDialog({
     </Dialog>
   );
 }
-
-// X icon import (lucide)
-import { X } from "lucide-react";
 
 export default UserManagement;
