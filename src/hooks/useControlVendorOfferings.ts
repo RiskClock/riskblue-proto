@@ -77,13 +77,28 @@ export function buildVendorMapByControlId(
 }
 
 /**
- * Build a per-control-name vendor map (for places that only know the name).
- * Names are lowercased for lookup.
+ * Self-contained hook returning a Map keyed by lowercased control name.
+ * Fetches mitigation_controls and offerings, merges in author baselines.
  */
-export function useVendorMapByControlName(
-  controls: { id: string; name: string; author?: string | null }[]
-) {
+export function useVendorMapByControlName() {
   const { data: offerings = [] } = useControlVendorOfferings();
+
+  const { data: controls = [] } = useQuery({
+    queryKey: ["mitigation-controls-vendor-base"],
+    queryFn: async (): Promise<{ id: string; name: string; author: string | null }[]> => {
+      const { data, error } = await supabase
+        .from("mitigation_controls")
+        .select("id, name, author")
+        .eq("is_active", true);
+      if (error) {
+        console.error("Failed to load controls for vendor map:", error);
+        return [];
+      }
+      return (data || []) as any;
+    },
+    staleTime: 1000 * 60 * 30,
+  });
+
   return useMemo(() => {
     const byId = buildVendorMapByControlId(offerings, controls);
     const byName = new Map<string, ControlVendors>();
