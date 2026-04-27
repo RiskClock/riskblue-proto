@@ -106,10 +106,33 @@ async function actionList() {
 
   const profileMap = new Map((profiles || []).map((p) => [p.user_id, p]));
 
+  // Tags
+  const { data: tagsData } = await adminClient
+    .from("user_tags")
+    .select("id, name")
+    .order("name");
+  const allTags = (tagsData || []) as { id: string; name: string }[];
+  const tagById = new Map(allTags.map((t) => [t.id, t]));
+
+  const { data: assignments } = await adminClient
+    .from("user_tag_assignments")
+    .select("user_id, tag_id");
+  const tagsByUser = new Map<string, { id: string; name: string }[]>();
+  (assignments || []).forEach((a: any) => {
+    const t = tagById.get(a.tag_id);
+    if (!t) return;
+    const arr = tagsByUser.get(a.user_id) || [];
+    arr.push(t);
+    tagsByUser.set(a.user_id, arr);
+  });
+
   const users = authUsers.map((u) => {
     const p: any = profileMap.get(u.id) || {};
     const banned = !!u.banned_until && new Date(u.banned_until).getTime() > Date.now();
     const isActive = p.is_active !== false && !banned;
+    const tags = (tagsByUser.get(u.id) || []).sort((a, b) =>
+      a.name.localeCompare(b.name)
+    );
     return {
       user_id: u.id,
       email: u.email,
@@ -123,6 +146,7 @@ async function actionList() {
       is_active: isActive,
       deactivated_at: p.deactivated_at || null,
       has_profile: !!profileMap.get(u.id),
+      tags,
     };
   });
 
@@ -135,15 +159,80 @@ async function actionList() {
     )
   ).sort((a, b) => a.localeCompare(b));
 
-  return { users, companies };
+  return { users, companies, tags: allTags };
 }
 
-async function actionCreate(body: any) {
+async function ensureTagIds(tagNames: string[], userId: string | null): Promise<string[]> {
+  const cleaned = Array.from(
+    new Set(
+      tagNames
+        .map((n) => (n || "").trim())
+        .filter((n) => n.length > 0 && n.length <= 50)
+    )
+  );
+  if (cleaned.length === 0) return [];
+
+  // Find existing (case-insensitive)
+  const { data: existing } = await adminClient
+    .from("user_tags")
+    .select("id, name");
+  const existingMap = new Map(
+    (existing || []).map((t: any) => [t.name.toLowerCase(), t])
+  );
+
+  const ids: string[] = [];
+  for (const name of cleaned) {
+    const found = existingMap.get(name.toLowerCase());
+    if (found) {
+      ids.push(found.id);
+      continue;
+    }
+    const { data: created, error } = await adminClient
+      .from("user_tags")
+      .insert({ name, created_by: userId })
+      .select("id")
+      .single();
+    if (error) {
+      // Race: try to read again
+      const { data: again } = await adminClient
+        .from("user_tags")
+        .select("id, name")
+        .ilike("name", name)
+        .maybeSingle();
+      if (again) ids.push(again.id);
+      else throw error;
+    } else {
+      ids.push(created.id);
+    }
+  }
+  return ids;
+}
+
+async function setUserTags(userId: string, tagNames: string[], assignedBy: string | null) {
+  const tagIds = await ensureTagIds(tagNames, assignedBy);
+
+  // Replace existing
+  await adminClient.from("user_tag_assignments").delete().eq("user_id", userId);
+  if (tagIds.length === 0) return;
+
+  const rows = tagIds.map((tag_id) => ({
+    user_id: userId,
+    tag_id,
+    assigned_by: assignedBy,
+  }));
+  const { error } = await adminClient
+    .from("user_tag_assignments")
+    .insert(rows);
+  if (error) throw error;
+}
+
+async function actionCreate(body: any, actorId: string | null) {
   const email = String(body.email || "").trim().toLowerCase();
   const name = String(body.name || "").trim();
   const password = body.password ? String(body.password) : null;
   const isWmsv = !!body.is_wmsv;
   const company = body.company ? String(body.company).trim() : null;
+  const tagNames: string[] = Array.isArray(body.tags) ? body.tags : [];
 
   if (!email || !name) return json({ success: false, error: "Email and name are required" }, 400);
   if (password && password.length < 8) return json({ success: false, error: "Password must be at least 8 characters" }, 400);
@@ -182,6 +271,13 @@ async function actionCreate(body: any) {
     );
   if (pErr) console.error("profile upsert err:", pErr);
 
+  // Assign tags
+  try {
+    await setUserTags(created.user.id, tagNames, actorId);
+  } catch (e) {
+    console.error("setUserTags create err:", e);
+  }
+
   // Send email
   if (password) {
     const html = emailLayout(
@@ -217,7 +313,7 @@ async function actionCreate(body: any) {
   return json({ success: true, user_id: created.user.id });
 }
 
-async function actionUpdate(body: any) {
+async function actionUpdate(body: any, actorId: string | null) {
   const userId = String(body.user_id || "");
   if (!userId) return json({ success: false, error: "user_id required" }, 400);
 
@@ -235,6 +331,14 @@ async function actionUpdate(body: any) {
     await adminClient.auth.admin.updateUserById(userId, {
       user_metadata: { display_name: body.name.trim() },
     });
+  }
+
+  if (Array.isArray(body.tags)) {
+    try {
+      await setUserTags(userId, body.tags, actorId);
+    } catch (e: any) {
+      return json({ success: false, error: e?.message || "Failed to set tags" }, 500);
+    }
   }
 
   return json({ success: true });
@@ -344,9 +448,9 @@ Deno.serve(async (req) => {
       case "list":
         return json({ success: true, ...(await actionList()) });
       case "create":
-        return await actionCreate(body);
+        return await actionCreate(body, user.id);
       case "update":
-        return await actionUpdate(body);
+        return await actionUpdate(body, user.id);
       case "deactivate":
         return await actionDeactivate(body);
       case "reactivate":
