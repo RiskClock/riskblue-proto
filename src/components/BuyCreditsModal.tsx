@@ -120,14 +120,19 @@ export const BuyCreditsModal = ({ open, onOpenChange, reason }: BuyCreditsModalP
             {isWMSV && (
               <div className="rounded-lg border border-primary/30 bg-gradient-to-r from-primary/15 via-primary/10 to-primary/15 px-4 py-3 mt-2 flex items-center justify-center gap-2 shadow-sm">
                 <span className="text-sm font-semibold text-primary tracking-wide">
-                  Water Mitigation Solution Vendor Promotional Pricing
+                  Water Mitigation Solution Vendor Promotional Pricing — 70% off
                 </span>
               </div>
             )}
             <div className="grid gap-4 md:grid-cols-3 mt-2">
               {PACKAGES.map((pkg) => {
-                const discountPct = isWMSV
-                  ? Math.round((1 - pkg.priceUsd / pkg.originalPriceUsd) * 100)
+                // Bulk discount = savings vs. buying the same number of credits at the
+                // 20-pack base rate. Only shown for full (non-WMSV) pricing — the WMSV
+                // 70% promo is communicated once in the banner above.
+                const baseUnitPrice = PACKAGES[0].originalPriceUsd / PACKAGES[0].credits; // $ per credit at 20-pack rate
+                const undiscountedPrice = baseUnitPrice * pkg.credits;
+                const bulkDiscountPct = !isWMSV && pkg.id !== "pack_20"
+                  ? Math.round((1 - pkg.originalPriceUsd / undiscountedPrice) * 100)
                   : 0;
                 const displayPrice = isWMSV ? pkg.priceUsd : pkg.originalPriceUsd;
                 return (
@@ -135,9 +140,9 @@ export const BuyCreditsModal = ({ open, onOpenChange, reason }: BuyCreditsModalP
                     key={pkg.id}
                     className="relative overflow-hidden p-5 flex flex-col gap-3 transition-all border-primary/20 hover:border-primary/50 hover:shadow-lg hover:shadow-primary/10 bg-gradient-to-br from-card to-primary/5"
                   >
-                    {isWMSV && (
+                    {bulkDiscountPct > 0 && (
                       <div className="absolute top-0 right-0 bg-primary text-primary-foreground text-[10px] font-bold px-2 py-1 rounded-bl-lg">
-                        -{discountPct}%
+                        -{bulkDiscountPct}% OFF
                       </div>
                     )}
                     <div className="flex items-baseline gap-1">
@@ -146,9 +151,9 @@ export const BuyCreditsModal = ({ open, onOpenChange, reason }: BuyCreditsModalP
                     </div>
                     <div className="flex items-baseline gap-2">
                       <span className="text-2xl font-semibold text-primary">${displayPrice.toLocaleString()}</span>
-                      {isWMSV && (
+                      {bulkDiscountPct > 0 && (
                         <span className="text-sm text-muted-foreground line-through">
-                          ${pkg.originalPriceUsd.toLocaleString()}
+                          ${Math.round(undiscountedPrice).toLocaleString()}
                         </span>
                       )}
                     </div>
