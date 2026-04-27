@@ -1224,9 +1224,8 @@ function ColumnEditDropdown({
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
-        <Button size="sm" variant="ghost" className="gap-1 -mr-2">
+        <Button size="icon" variant="ghost" className="h-8 w-8" title="Edit columns">
           <Settings2 className="h-4 w-4" />
-          Edit
         </Button>
       </PopoverTrigger>
       <PopoverContent align="end" className="w-64 p-2">
