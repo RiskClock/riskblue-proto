@@ -257,6 +257,7 @@ async function actionCreate(body: any, actor: { id: string | null; email: string
   const isWmsv = !!body.is_wmsv;
   const company = body.company ? String(body.company).trim() : null;
   const tagNames: string[] = Array.isArray(body.tags) ? body.tags : [];
+  const credits = Number.isFinite(Number(body.credits)) ? Math.max(0, Math.floor(Number(body.credits))) : 20;
 
   if (!email || !name) return json({ success: false, error: "Email and name are required" }, 400);
   if (password && password.length < 8) return json({ success: false, error: "Password must be at least 8 characters" }, 400);
