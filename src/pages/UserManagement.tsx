@@ -73,6 +73,8 @@ import {
   ChevronsUpDown,
   X,
   RotateCcw,
+  Settings2,
+  GripVertical,
 } from "lucide-react";
 import { format } from "date-fns";
 import { cn } from "@/lib/utils";
