@@ -10,20 +10,14 @@ export function useAccountType() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("profiles")
-        .select("account_type")
+        .select("account_type, company")
         .eq("user_id", user!.id)
         .single();
       if (error) throw error;
 
-      const { data: raw } = await supabase
-        .from("profiles")
-        .select("*")
-        .eq("user_id", user!.id)
-        .single();
-
       return {
-        accountType: data?.account_type || "standard",
-        company: (raw as any)?.company as string | null,
+        accountType: (data?.account_type as string | null) || "standard",
+        company: (data as any)?.company as string | null,
       };
     },
     enabled: !!user,
