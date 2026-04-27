@@ -17,6 +17,7 @@ import {
 } from "@/lib/costCalculator";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { format } from "date-fns";
+import { useVendorMapByControlName, type ControlVendors } from "@/hooks/useControlVendorOfferings";
 
 interface ControlPoints {
   points: number;
