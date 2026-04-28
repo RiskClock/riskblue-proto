@@ -109,12 +109,12 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     try {
       logSupabaseStorageKeys("before logout storage keys");
 
-      // Prefer a global sign-out; fallback to local-only if the server session is already invalid.
-      try {
-        await supabase.auth.signOut();
-      } catch {
-        await supabase.auth.signOut({ scope: "local" });
-      }
+      // Always sign out LOCAL-ONLY so other origins (e.g., production vs preview)
+      // keep their session. A global signOut revokes the refresh token server-side
+      // and would log the user out everywhere.
+      await supabase.auth.signOut({ scope: "local" });
+    } catch {
+      // Even if the call fails, we still clear local storage below.
     } finally {
       // Always clear persisted tokens to prevent session rehydration on refresh.
       clearAuthStorage();
