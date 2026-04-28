@@ -618,6 +618,9 @@ async function runPipeline(params: PipelineParams) {
         },
       );
 
+      // Final flush so the last batch's progress + status are written.
+      await progress.finalize();
+
       // Final token flush
       await admin
         .from("analysis_requests")
@@ -832,6 +835,9 @@ async function runPipeline(params: PipelineParams) {
           }
         },
       );
+
+      // Final flush so the last batch's progress + status are written.
+      await progress.finalize();
 
       // Final token flush
       await admin
