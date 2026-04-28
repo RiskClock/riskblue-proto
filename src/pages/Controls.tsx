@@ -181,26 +181,32 @@ export default function Controls() {
     return m;
   }, [allControls]);
 
+  // Sync selections from DB ONCE per company load. Subsequent local edits are
+  // authoritative — a stale refetch (e.g. after logo invalidation, window focus)
+  // must NOT overwrite in-flight user edits.
+  const syncedCompanyRef = useRef<string | null>(null);
   useEffect(() => {
-    if (existingSelections.length > 0) {
-      const map = new Map<string, string[]>();
-      existingSelections.forEach((s: any) => {
-        const key = `${s.category}::${s.control_id}`;
-        map.set(key, (s.sub_options as string[]) || []);
-        const control = controlMap.get(s.control_id);
-        if (control && SPECIAL_CONTROLS[control.name]) {
-          setExpandedControls(prev => new Set(prev).add(key));
-        }
-      });
-      setSelections(map);
-    }
-  }, [existingSelections, controlMap]);
+    if (selectionsLoading) return;
+    if (!company) return;
+    if (syncedCompanyRef.current === company) return;
+    const map = new Map<string, string[]>();
+    existingSelections.forEach((s: any) => {
+      const key = `${s.category}::${s.control_id}`;
+      map.set(key, (s.sub_options as string[]) || []);
+      const control = controlMap.get(s.control_id);
+      if (control && SPECIAL_CONTROLS[control.name]) {
+        setExpandedControls(prev => new Set(prev).add(key));
+      }
+    });
+    setSelections(map);
+    syncedCompanyRef.current = company;
+  }, [existingSelections, controlMap, company, selectionsLoading]);
 
   const makeKey = (category: string, controlId: string) => `${category}::${controlId}`;
 
   const upsertSelection = async (category: CategoryKey, controlId: string, subs: string[]) => {
     if (!company || !user) return;
-    await supabase.from("company_control_selections").upsert(
+    const { error } = await supabase.from("company_control_selections").upsert(
       {
         company,
         category,
@@ -211,16 +217,22 @@ export default function Controls() {
       },
       { onConflict: "company,category,control_id" }
     );
+    if (error) {
+      toast.error((error as any)?.message || "Failed to save selection");
+    }
   };
 
   const removeSelection = async (category: CategoryKey, controlId: string) => {
     if (!company) return;
-    await supabase
+    const { error } = await supabase
       .from("company_control_selections")
       .delete()
       .ilike("company", company)
       .eq("category", category)
       .eq("control_id", controlId);
+    if (error) {
+      toast.error((error as any)?.message || "Failed to remove selection");
+    }
   };
 
   const toggleControl = async (category: CategoryKey, controlId: string) => {
