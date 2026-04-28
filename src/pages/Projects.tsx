@@ -341,20 +341,51 @@ const Projects = () => {
               </h1>
             </div>
             <div className="flex gap-3">
-              <Button onClick={handleNewProject}>Add New Project</Button>
+              {isWMSV && !controlsLoading && hasControls === false ? (
+                <TooltipProvider>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <span tabIndex={0}>
+                        <Button onClick={handleNewProject} disabled>Add New Project</Button>
+                      </span>
+                    </TooltipTrigger>
+                    <TooltipContent>
+                      <p>{company ? "Configure mitigation controls first" : "Account misconfiguration — contact support"}</p>
+                    </TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
+              ) : (
+                <Button onClick={handleNewProject}>Add New Project</Button>
+              )}
             </div>
           </div>
         </div>
 
-        {loading || !user || accountLoading ? (
+        {loading || !user || accountLoading || (isWMSV && controlsLoading) ? (
           <div className="text-center py-12">
             <p className="text-muted-foreground">Loading projects...</p>
           </div>
         ) : projects.length === 0 ? (
-          <div className="text-center py-12">
-            <p className="text-muted-foreground mb-4">No projects yet</p>
-            <Button onClick={handleNewProject}>Create your first project</Button>
-          </div>
+          isWMSV && !company ? (
+            <div className="text-center py-12">
+              <p className="text-muted-foreground mb-4">
+                Account misconfiguration detected. Please contact support to assign your company.
+              </p>
+              <Button asChild>
+                <a href="mailto:support@riskclock.com">Contact Support</a>
+              </Button>
+            </div>
+          ) : isWMSV && hasControls === false ? (
+            <div className="text-center py-12">
+              <p className="text-muted-foreground mb-4">Need to configure mitigation control</p>
+              <Button onClick={() => navigate("/controls")}>Configure Controls</Button>
+            </div>
+          ) : (
+            <div className="text-center py-12">
+              <p className="text-muted-foreground mb-4">No projects yet</p>
+              <Button onClick={handleNewProject}>Create your first project</Button>
+            </div>
+          )
         ) : (
           <div className="bg-card rounded-lg border overflow-hidden">
             <table className="w-full">
