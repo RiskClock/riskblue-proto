@@ -4246,7 +4246,7 @@ export function AnalysisSection({ requestId, files, projectId, sourceType, isWMS
       <BuyCreditsModal
         open={buyCreditsOpen}
         onOpenChange={setBuyCreditsOpen}
-        reason="You're out of scan credits. Buy more to start a triage."
+        reason={buyCreditsReason}
       />
 
       {/* Confirm delete file */}
