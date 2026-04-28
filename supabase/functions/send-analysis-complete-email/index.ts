@@ -1,5 +1,13 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import {
+  renderEmail,
+  renderGreeting,
+  renderParagraph,
+  renderSummaryTable,
+  strong,
+  escapeHtml,
+} from "../_shared/email-template.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -9,7 +17,6 @@ const corsHeaders = {
 
 const FROM_ADDRESS = "RiskBlue Notifications <notifications@riskclock.com>";
 const INTERNAL_BCC = "qbo@riskclock.com";
-const LOGO_URL = "https://qbzuchzqeefbzeldftvg.supabase.co/storage/v1/object/public/entity-images/email/logo-riskblue-white.png";
 
 interface AwpCount {
   awp_class_name: string;
