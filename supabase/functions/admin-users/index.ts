@@ -329,12 +329,16 @@ async function actionCreate(body: any, actor: { id: string | null; email: string
   if (password) {
     const html = emailLayout(
       "Welcome to RiskBlue",
-      `<p>Hi ${name},</p>
-      <p>An account has been created for you on RiskBlue.</p>
-      <p><strong>Email:</strong> ${email}<br/><strong>Temporary Password:</strong> <code style="background:#fff;padding:4px 8px;border:1px solid #e5e7eb;border-radius:4px;">${escapeHtml(password)}</code></p>
-      <p>You can sign in here:</p>
-      <div style="text-align:center;margin:24px 0;"><a href="${APP_URL}/auth" style="display:inline-block;background:#0066cc;color:#fff;padding:12px 28px;text-decoration:none;border-radius:6px;font-weight:600;">Sign In</a></div>
-      <p style="font-size:12px;color:#6b7280;">For security, please change your password after signing in.</p>`
+      [
+        renderGreeting(`Hi ${sharedEscapeHtml(name)},`),
+        renderParagraph("An account has been created for you on RiskBlue."),
+        renderKeyValueTable([
+          { label: "Email", value: sharedEscapeHtml(email) },
+          { label: "Temporary Password", value: renderCodeChip(password) },
+        ]),
+        renderNote("For security, please change your password after signing in."),
+      ].join(""),
+      { label: "Sign In", href: `${APP_URL}/auth` },
     );
     await sendEmail({ to: email, subject: "Your RiskBlue account", html });
   } else {
@@ -349,10 +353,16 @@ async function actionCreate(body: any, actor: { id: string | null; email: string
     const link = `${APP_URL}/reset-password?token=${token}`;
     const html = emailLayout(
       "Welcome to RiskBlue",
-      `<p>Hi ${name},</p>
-      <p>An account has been created for you on RiskBlue. Click the button below to set your password and get started.</p>
-      <div style="text-align:center;margin:30px 0;"><a href="${link}" style="display:inline-block;background:#0066cc;color:#fff;padding:14px 32px;text-decoration:none;border-radius:6px;font-weight:600;">Set Your Password</a></div>
-      <p style="font-size:14px;color:#6b7280;">This link expires in 3 days. If it expires, you can request a new password reset link from the sign-in page.</p>`
+      [
+        renderGreeting(`Hi ${sharedEscapeHtml(name)},`),
+        renderParagraph(
+          "An account has been created for you on RiskBlue. Click the button below to set your password and get started.",
+        ),
+        renderNote(
+          "This link expires in 3 days. If it expires, you can request a new password reset link from the sign-in page.",
+        ),
+      ].join(""),
+      { label: "Set Your Password", href: link },
     );
     await sendEmail({ to: email, subject: "Welcome to RiskBlue — set your password", html });
   }
