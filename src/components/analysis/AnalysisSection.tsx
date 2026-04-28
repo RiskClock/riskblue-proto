@@ -1856,8 +1856,45 @@ export function AnalysisSection({ requestId, files, projectId, sourceType, isWMS
   };
 
   const handleWmsvStartAnalysis = async () => {
+    const required = copiedFiles.length;
+    if (required === 0) return;
+
+    // Insufficient credits — open Buy Credits modal with explanation, do NOT start.
+    if (required > creditsBalance) {
+      setBuyCreditsReason(
+        `This analysis needs ${required} credit${required === 1 ? "" : "s"} (1 per file) but you only have ${creditsBalance}. Buy more credits to continue.`,
+      );
+      setBuyCreditsOpen(true);
+      return;
+    }
+
+    // Consume credits up-front (1 per file). Atomic, idempotent per call.
+    const userId = (await supabase.auth.getUser()).data.user?.id;
+    const { data: consumeData, error: consumeError } = await supabase.rpc(
+      "consume_credits" as any,
+      { p_user_id: userId, p_amount: required, p_analysis_request_id: requestId },
+    );
+    if (consumeError) {
+      toast({
+        title: "Couldn't check credit balance",
+        description: (consumeError as any)?.message ?? "Unknown error",
+        variant: "destructive",
+      });
+      return;
+    }
+    const result = consumeData as { success: boolean; balance: number; reason?: string } | null;
+    if (!result?.success) {
+      setBuyCreditsReason(
+        `This analysis needs ${required} credit${required === 1 ? "" : "s"} but you only have ${result?.balance ?? 0}. Buy more credits to continue.`,
+      );
+      setBuyCreditsOpen(true);
+      return;
+    }
+    queryClient.invalidateQueries({ queryKey: ["credits-balance"] });
+
     await startPipeline();
   };
+
 
   const handleWmsvStop = async () => {
     // Optimistic stop — keep active status, show "Stopping..."
