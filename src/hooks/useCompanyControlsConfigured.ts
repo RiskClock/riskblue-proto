@@ -3,7 +3,7 @@ import { supabase } from "@/integrations/supabase/client";
 
 /**
  * Checks whether a WMSV company has at least one entry in
- * company_control_selections. Returns null until the check completes.
+ * company_control_selections.
  */
 export function useCompanyControlsConfigured(company: string | null | undefined, enabled: boolean = true) {
   const normalized = (company || "").trim().toLowerCase();
@@ -11,15 +11,12 @@ export function useCompanyControlsConfigured(company: string | null | undefined,
     queryKey: ["company-controls-configured", normalized],
     queryFn: async () => {
       if (!normalized) return false;
-      const { data, error } = await supabase
+      const { count, error } = await supabase
         .from("company_control_selections")
         .select("id", { head: true, count: "exact" })
         .ilike("company", normalized);
       if (error) throw error;
-      // When using head:true with count:exact, count is on the response
-      // but supabase-js puts it on the response object.
-      const count = (data as any)?.length;
-      return Boolean(count && count > 0);
+      return (count ?? 0) > 0;
     },
     enabled: enabled && !!normalized,
     staleTime: 1000 * 30,
