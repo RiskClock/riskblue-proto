@@ -1877,9 +1877,11 @@ export function AnalysisSection({ requestId, files, projectId, sourceType, isWMS
     } catch (e) {
       // Rollback optimistic state
       optimisticStatusRef.current = null;
+      lastStartAtRef.current = 0;
       analyzeRunSyncRef.current = "idle";
       setAnalyzeV2Running(false);
       queryClient.setQueryData(["analysis-request-meta", requestId], prevMeta);
+      queryClient.setQueryData(["wmsv-analysis-request", projectId], prevWmsvMeta);
       toast({
         title: "Failed to start analysis",
         description: e instanceof Error ? e.message : "Unknown error",
