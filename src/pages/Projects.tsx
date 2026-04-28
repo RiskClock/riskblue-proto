@@ -254,6 +254,8 @@ const Projects = () => {
     logActivity("add_new_clicked");
     if (accountLoading) return;
     if (isWMSV) {
+      if (controlsLoading) return;
+      if (hasControls === false) return;
       setShowWMSVModal(true);
     } else {
       navigate("/project/new");
