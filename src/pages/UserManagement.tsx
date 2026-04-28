@@ -1050,7 +1050,7 @@ function CreateUserDialog({
           </Button>
           <Button
             onClick={submit}
-            disabled={loading || !email.trim() || !name.trim() || !creditsValid || (password.length > 0 && password.length < 6)}
+            disabled={loading || !email.trim() || !name.trim() || !creditsValid || !companyValid || (password.length > 0 && password.length < 6)}
           >
             {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : "Create user"}
           </Button>
