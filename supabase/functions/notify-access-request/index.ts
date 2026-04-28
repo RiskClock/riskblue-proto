@@ -44,49 +44,29 @@ const handler = async (req: Request): Promise<Response> => {
 
     console.log(`Sending ${requestType} notification for: ${fullName} (${workEmail})`);
 
-    const htmlBody = `
-<!DOCTYPE html>
-<html>
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-</head>
-<body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">
-  <div style="background: linear-gradient(135deg, #0066cc 0%, #004499 100%); padding: 30px; text-align: center; border-radius: 8px 8px 0 0;">
-    <h1 style="color: white; margin: 0; font-size: 24px;">${heading}</h1>
-  </div>
+    const detailRows: Array<{ label: string; value: string }> = [
+      { label: "Full Name", value: escapeHtml(fullName) },
+      {
+        label: "Work Email",
+        value: `<a href="mailto:${escapeHtml(workEmail)}" style="color:#3b82f6;text-decoration:none;">${escapeHtml(workEmail)}</a>`,
+      },
+      { label: "Company", value: escapeHtml(companyName || "(not set)") },
+    ];
+    if (context) {
+      detailRows.push({ label: "Context", value: escapeHtml(context) });
+    }
 
-  <div style="background: #f9fafb; padding: 30px; border: 1px solid #e5e7eb; border-top: none; border-radius: 0 0 8px 8px;">
-    <p style="font-size: 16px; margin-top: 0;">${intro}</p>
-
-    <table style="width: 100%; border-collapse: collapse; margin: 20px 0;">
-      <tr>
-        <td style="padding: 12px; border-bottom: 1px solid #e2e8f0; color: #6b7280; width: 140px;"><strong>Full Name</strong></td>
-        <td style="padding: 12px; border-bottom: 1px solid #e2e8f0; color: #1f2937;">${fullName}</td>
-      </tr>
-      <tr>
-        <td style="padding: 12px; border-bottom: 1px solid #e2e8f0; color: #6b7280;"><strong>Work Email</strong></td>
-        <td style="padding: 12px; border-bottom: 1px solid #e2e8f0; color: #1f2937;">
-          <a href="mailto:${workEmail}" style="color: #0066cc;">${workEmail}</a>
-        </td>
-      </tr>
-      <tr>
-        <td style="padding: 12px; border-bottom: 1px solid #e2e8f0; color: #6b7280;"><strong>Company</strong></td>
-        <td style="padding: 12px; border-bottom: 1px solid #e2e8f0; color: #1f2937;">${companyName || "(not set)"}</td>
-      </tr>
-      ${context ? `<tr>
-        <td style="padding: 12px; border-bottom: 1px solid #e2e8f0; color: #6b7280;"><strong>Context</strong></td>
-        <td style="padding: 12px; border-bottom: 1px solid #e2e8f0; color: #1f2937;">${context}</td>
-      </tr>` : ""}
-    </table>
-
-    <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 20px 0;">
-
-    <p style="font-size: 12px; color: #9ca3af; margin-bottom: 0;">You can view all access requests in the RiskBlue backend.</p>
-  </div>
-</body>
-</html>
-    `;
+    const htmlBody = renderEmail({
+      title: heading,
+      bodyHtml: [
+        renderParagraph(escapeHtml(intro)),
+        renderKeyValueTable(detailRows),
+        renderParagraph(
+          `<span style="color:#94a3b8;font-size:12px;">You can view all access requests in the RiskBlue backend.</span>`,
+          0,
+        ),
+      ].join(""),
+    });
 
     const response = await fetch("https://api.resend.com/emails", {
       method: "POST",
