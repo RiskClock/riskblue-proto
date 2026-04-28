@@ -204,38 +204,65 @@ export default function Controls() {
 
   const makeKey = (category: string, controlId: string) => `${category}::${controlId}`;
 
-  const upsertSelection = async (category: CategoryKey, controlId: string, subs: string[]) => {
+  // Per-key write queue: serialize writes so rapid toggles always end with the
+  // user's last intended state (prevents delete-then-insert races where a stale
+  // delete clobbers a fresh insert, or vice-versa).
+  const writeQueueRef = useRef<Map<string, Promise<void>>>(new Map());
+  // Track the latest intended state per key. null = deleted, array = subs.
+  const desiredStateRef = useRef<Map<string, string[] | null>>(new Map());
+
+  const flushWrite = async (category: CategoryKey, controlId: string, key: string) => {
     if (!company || !user) return;
-    const { error } = await supabase.from("company_control_selections").upsert(
-      {
-        company,
-        category,
-        control_id: controlId,
-        sub_options: subs,
-        updated_by: user.id,
-        created_by: user.id,
-      },
-      { onConflict: "company,category,control_id" }
-    );
-    if (error) {
-      toast.error((error as any)?.message || "Failed to save selection");
+    // Loop until the desired state is stable across a write — this collapses
+    // multiple rapid toggles into the final state.
+    while (true) {
+      const desired = desiredStateRef.current.get(key);
+      if (desired === undefined) return;
+      // Mark as in-flight by clearing; if another toggle arrives it will reset it.
+      desiredStateRef.current.delete(key);
+
+      if (desired === null) {
+        const { error } = await supabase
+          .from("company_control_selections")
+          .delete()
+          .ilike("company", company)
+          .eq("category", category)
+          .eq("control_id", controlId);
+        if (error) {
+          toast.error((error as any)?.message || "Failed to remove selection");
+        }
+      } else {
+        const { error } = await supabase.from("company_control_selections").upsert(
+          {
+            company,
+            category,
+            control_id: controlId,
+            sub_options: desired,
+            updated_by: user.id,
+            created_by: user.id,
+          },
+          { onConflict: "company,category,control_id" }
+        );
+        if (error) {
+          toast.error((error as any)?.message || "Failed to save selection");
+        }
+      }
+      // If a new desired state arrived during the write, loop again.
+      if (!desiredStateRef.current.has(key)) return;
     }
   };
 
-  const removeSelection = async (category: CategoryKey, controlId: string) => {
-    if (!company) return;
-    const { error } = await supabase
-      .from("company_control_selections")
-      .delete()
-      .ilike("company", company)
-      .eq("category", category)
-      .eq("control_id", controlId);
-    if (error) {
-      toast.error((error as any)?.message || "Failed to remove selection");
-    }
+  const enqueueWrite = (category: CategoryKey, controlId: string, desired: string[] | null) => {
+    const key = makeKey(category, controlId);
+    desiredStateRef.current.set(key, desired);
+    const prev = writeQueueRef.current.get(key) || Promise.resolve();
+    const next = prev
+      .catch(() => {})
+      .then(() => flushWrite(category, controlId, key));
+    writeQueueRef.current.set(key, next);
   };
 
-  const toggleControl = async (category: CategoryKey, controlId: string) => {
+  const toggleControl = (category: CategoryKey, controlId: string) => {
     const key = makeKey(category, controlId);
     const isSelected = selections.has(key);
     const control = controlMap.get(controlId);
@@ -243,18 +270,18 @@ export default function Controls() {
 
     if (isSelected) {
       setSelections(prev => { const n = new Map(prev); n.delete(key); return n; });
-      await removeSelection(category, controlId);
+      enqueueWrite(category, controlId, null);
     } else {
       const defaultSubs = specialSubs ? [...specialSubs] : [];
       setSelections(prev => new Map(prev).set(key, defaultSubs));
       if (specialSubs) {
         setExpandedControls(prev => new Set(prev).add(key));
       }
-      await upsertSelection(category, controlId, defaultSubs);
+      enqueueWrite(category, controlId, defaultSubs);
     }
   };
 
-  const toggleSubOption = async (category: CategoryKey, controlId: string, subOption: string) => {
+  const toggleSubOption = (category: CategoryKey, controlId: string, subOption: string) => {
     const key = makeKey(category, controlId);
     const currentSubs = selections.get(key) || [];
     const newSubs = currentSubs.includes(subOption)
@@ -263,10 +290,10 @@ export default function Controls() {
 
     if (newSubs.length === 0) {
       setSelections(prev => { const n = new Map(prev); n.delete(key); return n; });
-      await removeSelection(category, controlId);
+      enqueueWrite(category, controlId, null);
     } else {
       setSelections(prev => new Map(prev).set(key, newSubs));
-      await upsertSelection(category, controlId, newSubs);
+      enqueueWrite(category, controlId, newSubs);
     }
   };
 
@@ -539,7 +566,7 @@ export default function Controls() {
           } else if (isSelected && someChecked) {
             const allSubs = [...specialSubs];
             setSelections(prev => new Map(prev).set(key, allSubs));
-            await upsertSelection(category, control.id, allSubs);
+            enqueueWrite(category, control.id, allSubs);
           } else {
             await toggleControl(category, control.id);
           }
