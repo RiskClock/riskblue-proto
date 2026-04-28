@@ -206,7 +206,7 @@ export default function Controls() {
 
   const upsertSelection = async (category: CategoryKey, controlId: string, subs: string[]) => {
     if (!company || !user) return;
-    await supabase.from("company_control_selections").upsert(
+    const { error } = await supabase.from("company_control_selections").upsert(
       {
         company,
         category,
@@ -217,16 +217,22 @@ export default function Controls() {
       },
       { onConflict: "company,category,control_id" }
     );
+    if (error) {
+      toast.error((error as any)?.message || "Failed to save selection");
+    }
   };
 
   const removeSelection = async (category: CategoryKey, controlId: string) => {
     if (!company) return;
-    await supabase
+    const { error } = await supabase
       .from("company_control_selections")
       .delete()
       .ilike("company", company)
       .eq("category", category)
       .eq("control_id", controlId);
+    if (error) {
+      toast.error((error as any)?.message || "Failed to remove selection");
+    }
   };
 
   const toggleControl = async (category: CategoryKey, controlId: string) => {
