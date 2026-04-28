@@ -566,7 +566,7 @@ export default function Controls() {
           } else if (isSelected && someChecked) {
             const allSubs = [...specialSubs];
             setSelections(prev => new Map(prev).set(key, allSubs));
-            await upsertSelection(category, control.id, allSubs);
+            enqueueWrite(category, control.id, allSubs);
           } else {
             await toggleControl(category, control.id);
           }
