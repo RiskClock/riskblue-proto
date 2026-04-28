@@ -949,6 +949,9 @@ async function runPipeline(params: PipelineParams) {
         await summaryProgress.flush();
       }
 
+      // Final flush for summarize phase.
+      await summaryProgress.finalize();
+
       // Clear summarizing phase indicator
       await admin
         .from("analysis_requests")
