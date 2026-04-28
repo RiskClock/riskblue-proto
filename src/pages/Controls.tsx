@@ -543,7 +543,13 @@ export default function Controls() {
               />
               <span
                 className="text-sm cursor-pointer select-none flex-1"
-                onClick={handleParentToggle}
+                onClick={() => {
+                  setExpandedControls(prev => {
+                    const n = new Set(prev);
+                    if (n.has(key)) n.delete(key); else n.add(key);
+                    return n;
+                  });
+                }}
               >
                 {control.name} <span className="underline">({optionCount} option{optionCount === 1 ? "" : "s"})</span>
               </span>
