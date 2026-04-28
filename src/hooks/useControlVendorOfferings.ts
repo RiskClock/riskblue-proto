@@ -88,10 +88,10 @@ export function useVendorMapByControlName() {
 
   const { data: controls = [] } = useQuery({
     queryKey: ["mitigation-controls-vendor-base"],
-    queryFn: async (): Promise<{ id: string; name: string; author: string | null }[]> => {
+    queryFn: async (): Promise<{ id: string; name: string; vendor_name: string | null }[]> => {
       const { data, error } = await supabase
         .from("mitigation_controls")
-        .select("id, name, author")
+        .select("id, name, vendor_name")
         .eq("is_active", true);
       if (error) {
         console.error("Failed to load controls for vendor map:", error);
