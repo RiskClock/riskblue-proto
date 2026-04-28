@@ -409,7 +409,7 @@ async function actionUpdate(body: any, actor: { id: string | null; email: string
   let passwordChanged = false;
   if (body.password && String(body.password).length > 0) {
     const newPwd = String(body.password);
-    if (newPwd.length < 8) return json({ success: false, error: "Password must be at least 4 characters" }, 400);
+    if (newPwd.length < 4) return json({ success: false, error: "Password must be at least 4 characters" }, 400);
     const { error: pwdErr } = await adminClient.auth.admin.updateUserById(userId, {
       password: newPwd,
     });
