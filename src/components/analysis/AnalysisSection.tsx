@@ -2331,9 +2331,17 @@ export function AnalysisSection({ requestId, files, projectId, sourceType, isWMS
     setAnalyzeTokens(0);
     analyzeTokensRef.current = 0;
 
-    // Mark request as processing
-    await supabase.from("analysis_requests").update({ status: "processing" }).eq("id", requestId);
-    await queryClient.invalidateQueries({ queryKey: ["analysis-request-meta", requestId] });
+    // Optimistic mark as processing in both caches; backend writers own the
+    // authoritative row update. Avoids a redundant fetch racing the backend.
+    optimisticStatusRef.current = "processing";
+    lastStartAtRef.current = Date.now();
+    const v2Patch = { status: "processing", error_message: null };
+    queryClient.setQueryData(["analysis-request-meta", requestId], (old: any) => (
+      old ? { ...old, ...v2Patch } : old
+    ));
+    queryClient.setQueryData(["wmsv-analysis-request", projectId], (old: any) => (
+      old ? { ...old, ...v2Patch } : old
+    ));
 
     // Clear existing analysis results and summaries for enabled classes
     await Promise.all(
