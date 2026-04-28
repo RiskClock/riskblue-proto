@@ -160,8 +160,9 @@ export default function Logs() {
   const filteredLogs = useMemo(() => {
     if (!hideInternalUsers) return logsData?.logs || [];
     return (logsData?.logs || []).filter((log) => {
-      const email = userEmails.get(log.user_id) || "";
-      return !email.toLowerCase().endsWith("@riskclock.com");
+      const m = log.metadata || {};
+      const actorEmail = (m.actor_email as string) || userEmails.get(log.user_id) || "";
+      return !actorEmail.toLowerCase().endsWith("@riskclock.com");
     });
   }, [logsData?.logs, hideInternalUsers, userEmails]);
 
