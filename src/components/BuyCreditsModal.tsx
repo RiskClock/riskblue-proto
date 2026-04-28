@@ -140,9 +140,9 @@ export const BuyCreditsModal = ({ open, onOpenChange, reason }: BuyCreditsModalP
                     key={pkg.id}
                     className="relative overflow-hidden p-5 flex flex-col gap-3 transition-all border-primary/20 hover:border-primary/50 hover:shadow-lg hover:shadow-primary/10 bg-gradient-to-br from-card to-primary/5"
                   >
-                    {bulkDiscountPct > 0 && (
+                    {discountPct > 0 && (
                       <div className="absolute top-0 right-0 bg-primary text-primary-foreground text-[10px] font-bold px-2 py-1 rounded-bl-lg">
-                        -{bulkDiscountPct}% OFF
+                        -{discountPct}% OFF
                       </div>
                     )}
                     <div className="flex items-baseline gap-1">
@@ -151,7 +151,7 @@ export const BuyCreditsModal = ({ open, onOpenChange, reason }: BuyCreditsModalP
                     </div>
                     <div className="flex items-baseline gap-2">
                       <span className="text-2xl font-semibold text-primary">${displayPrice.toLocaleString()}</span>
-                      {bulkDiscountPct > 0 && (
+                      {showStrikethrough && (
                         <span className="text-sm text-muted-foreground line-through">
                           ${undiscountedPrice.toLocaleString()}
                         </span>
