@@ -1809,21 +1809,31 @@ export function AnalysisSection({ requestId, files, projectId, sourceType, isWMS
     // Start Analysis button) — 1 credit per file in the analysis request.
     // Internal restart-from-* menu items are dev/debug only and do not charge.
 
-    // Save previous cache for rollback
+    // Save previous caches for rollback
     const prevMeta = queryClient.getQueryData(["analysis-request-meta", requestId]);
+    const prevWmsvMeta = queryClient.getQueryData(["wmsv-analysis-request", projectId]);
 
     // Optimistic update BEFORE invoke
     optimisticStatusRef.current = "processing";
+    lastStartAtRef.current = Date.now();
     analyzeRunSyncRef.current = "starting";
     setAnalyzeV2Running(true);
-    queryClient.setQueryData(["analysis-request-meta", requestId], (old: any) => ({
-      ...old,
+    const optimisticPatch = {
       status: "processing",
       pipeline_phase: phaseOverride || "extracting",
       pipeline_progress_done: 0,
       pipeline_progress_total: copiedFiles.length,
       error_message: null,
+    };
+    queryClient.setQueryData(["analysis-request-meta", requestId], (old: any) => ({
+      ...old,
+      ...optimisticPatch,
     }));
+    // Also stamp the WMSV header's parallel cache so the badge transitions
+    // in lockstep and doesn't briefly show a stale `complete` from polling.
+    queryClient.setQueryData(["wmsv-analysis-request", projectId], (old: any) => (
+      old ? { ...old, ...optimisticPatch } : old
+    ));
 
     // Phase-aware clearing for visual feedback
     if (phaseOverride === "analyze") {
