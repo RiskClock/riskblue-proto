@@ -1006,8 +1006,8 @@ function CreateUserDialog({
               placeholder="Leave empty to send setup link"
               className="mt-1"
             />
-            {password && password.length > 0 && password.length < 8 && (
-              <p className="text-xs text-destructive mt-1">Must be at least 8 characters</p>
+            {password && password.length > 0 && password.length < 4 && (
+              <p className="text-xs text-destructive mt-1">Must be at least 4 characters</p>
             )}
           </div>
           <div>
@@ -1044,7 +1044,7 @@ function CreateUserDialog({
           </Button>
           <Button
             onClick={submit}
-            disabled={loading || !email.trim() || !name.trim() || !creditsValid || (password.length > 0 && password.length < 8)}
+            disabled={loading || !email.trim() || !name.trim() || !creditsValid || (password.length > 0 && password.length < 4)}
           >
             {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : "Create user"}
           </Button>
@@ -1097,7 +1097,7 @@ function EditUserDialog({
   }, [user]);
 
   const creditsValid = credits.trim() === "" || (Number.isFinite(Number(credits)) && Number(credits) >= 0);
-  const pwdValid = password.length === 0 || password.length >= 8;
+  const pwdValid = password.length === 0 || password.length >= 4;
 
   return (
     <Dialog open={!!user} onOpenChange={onOpenChange}>
@@ -1131,8 +1131,8 @@ function EditUserDialog({
               placeholder="Leave empty to keep current password"
               className="mt-1"
             />
-            {password.length > 0 && password.length < 8 && (
-              <p className="text-xs text-destructive mt-1">Must be at least 8 characters</p>
+            {password.length > 0 && password.length < 4 && (
+              <p className="text-xs text-destructive mt-1">Must be at least 4 characters</p>
             )}
           </div>
           <div className="flex items-center gap-2">
