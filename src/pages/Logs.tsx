@@ -160,8 +160,9 @@ export default function Logs() {
   const filteredLogs = useMemo(() => {
     if (!hideInternalUsers) return logsData?.logs || [];
     return (logsData?.logs || []).filter((log) => {
-      const email = userEmails.get(log.user_id) || "";
-      return !email.toLowerCase().endsWith("@riskclock.com");
+      const m = log.metadata || {};
+      const actorEmail = (m.actor_email as string) || userEmails.get(log.user_id) || "";
+      return !actorEmail.toLowerCase().endsWith("@riskclock.com");
     });
   }, [logsData?.logs, hideInternalUsers, userEmails]);
 
@@ -222,9 +223,9 @@ export default function Logs() {
       lines.push({ value: `Project: ${m.project_name}`, label: "project" });
     }
 
-    // Actor (for admin events)
-    if (m.actor_email && m.actor_email !== userEmails.get(log.user_id)) {
-      lines.push({ value: `By: ${m.actor_email}`, label: "actor" });
+    // Actor (for admin events) — surface here only if it differs from the User column
+    if (m.actor_email && m.actor_email !== (userEmails.get(log.user_id) || "")) {
+      // Actor will be shown in the User column; nothing additional here.
     }
 
     if (lines.length === 0) return <span className="text-muted-foreground">—</span>;
@@ -335,14 +336,21 @@ export default function Logs() {
                 </TableHeader>
                 <TableBody>
                   {filteredLogs.map((log) => {
-                    const email = userEmails.get(log.user_id) || profileMap.get(log.user_id) || "Unknown";
+                    const m = log.metadata || {};
+                    // User column = the account that performed the action.
+                    // For admin events, prefer actor_email; otherwise the row's user_id is the actor.
+                    const actorEmail =
+                      (m.actor_email as string) ||
+                      userEmails.get(log.user_id) ||
+                      profileMap.get(log.user_id) ||
+                      "Unknown";
                     return (
                       <TableRow key={log.id}>
                         <TableCell className="text-sm text-muted-foreground whitespace-nowrap w-px">
                           {format(new Date(log.created_at), "MMM d, yyyy h:mm a")}
                         </TableCell>
-                        <TableCell className="text-sm whitespace-nowrap w-px" title={email}>
-                          {email}
+                        <TableCell className="text-sm whitespace-nowrap w-px" title={actorEmail}>
+                          {actorEmail}
                         </TableCell>
                         <TableCell className="text-sm whitespace-nowrap w-px">
                           {formatAction(log.action)}

@@ -407,6 +407,23 @@ export default function Controls() {
     }
   };
 
+  const handleRemoveLogo = async () => {
+    if (!user || !company || !logoRow?.storage_path) return;
+    if (!window.confirm("Remove company logo?")) return;
+    setUploadingLogo(true);
+    try {
+      await supabase.storage.from("company-logos").remove([logoRow.storage_path]);
+      const { error } = await supabase.from("company_logos").delete().eq("company", company);
+      if (error) throw error;
+      toast.success("Logo removed");
+      queryClient.invalidateQueries({ queryKey: ["company-logo", company] });
+    } catch (e) {
+      toast.error((e as any)?.message || "Failed to remove logo");
+    } finally {
+      setUploadingLogo(false);
+    }
+  };
+
   if (accountLoading) {
     return (
       <div className="min-h-screen bg-background">
@@ -597,30 +614,45 @@ export default function Controls() {
       <main className="container mx-auto px-6 py-8">
         {/* Header: logo + title */}
         <div className="flex items-center gap-4 mb-4">
-          <button
-            type="button"
-            onClick={() => fileInputRef.current?.click()}
-            disabled={uploadingLogo}
-            className="group relative w-30 h-20 rounded-lg border border-dashed border-border bg-muted/30 hover:border-primary/60 hover:bg-muted/50 flex items-center justify-center overflow-hidden transition-colors"
+          <div
+            className="group relative rounded-lg border border-dashed border-border bg-muted/30 hover:border-primary/60 hover:bg-muted/50 overflow-hidden transition-colors"
             style={{ width: 120, height: 80 }}
-            aria-label={logoUrl ? "Replace company logo" : "Add logo"}
           >
-            {logoUrl ? (
-              <img src={logoUrl} alt={`${company} logo`} className="w-full h-full object-contain p-1" />
-            ) : (
-              <div className="flex flex-col items-center gap-1 text-muted-foreground">
-                <ImageIcon className="w-6 h-6" />
-                <span className="text-[10px]">Add logo</span>
-              </div>
-            )}
-            <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-              {uploadingLogo ? (
-                <Loader2 className="w-5 h-5 animate-spin text-white" />
+            <button
+              type="button"
+              onClick={() => fileInputRef.current?.click()}
+              disabled={uploadingLogo}
+              className="w-full h-full flex items-center justify-center"
+              aria-label={logoUrl ? "Replace company logo" : "Add logo"}
+            >
+              {logoUrl ? (
+                <img src={logoUrl} alt={`${company} logo`} className="w-full h-full object-contain p-1" />
               ) : (
-                <Upload className="w-5 h-5 text-white" />
+                <div className="flex flex-col items-center gap-1 text-muted-foreground">
+                  <ImageIcon className="w-6 h-6" />
+                  <span className="text-[10px]">Add logo</span>
+                </div>
               )}
-            </div>
-          </button>
+              <div className="pointer-events-none absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                {uploadingLogo ? (
+                  <Loader2 className="w-5 h-5 animate-spin text-white" />
+                ) : (
+                  <Upload className="w-5 h-5 text-white" />
+                )}
+              </div>
+            </button>
+            {logoUrl && !uploadingLogo && (
+              <button
+                type="button"
+                onClick={handleRemoveLogo}
+                className="absolute top-1 right-1 z-10 p-1 rounded bg-black/60 hover:bg-destructive text-white opacity-0 group-hover:opacity-100 transition-opacity"
+                aria-label="Remove company logo"
+                title="Remove logo"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+              </button>
+            )}
+          </div>
           <input
             ref={fileInputRef}
             type="file"
@@ -647,7 +679,7 @@ export default function Controls() {
               <strong>🛠️ This is your company's control catalog on RiskBlue.</strong>
             </p>
             <p className="text-sm text-muted-foreground whitespace-pre-line">
-              {`The controls you select here determine how your company appears when General Contractors, Carriers, and Brokers build Water Mitigation Guidelines. Only the controls you offer will be shown under your company name—positioning you as a qualified vendor for those capabilities.\n\nSelecting more relevant controls increases your visibility and likelihood of being chosen for projects.`}
+              {`The controls you select here determine how your company appears when General Contractors, Carriers, and Brokers build Water Mitigation Guidelines. Only the controls you offer will be shown under your company name, positioning you as a qualified vendor for those capabilities.\n\nSelecting more relevant controls increases your visibility and likelihood of being chosen for projects.`}
             </p>
           </div>
         )}

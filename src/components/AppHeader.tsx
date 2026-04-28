@@ -45,7 +45,7 @@ export const AppHeader = ({ leftContent }: AppHeaderProps) => {
           />
           {!accountLoading && (
             <span className="text-lg font-bold text-black">
-              {isWMSV ? "Workbench" : "Contractor Portal"}
+              {isWMSV ? "Workbench" : "Portal"}
             </span>
           )}
           {leftContent}
