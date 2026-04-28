@@ -2331,8 +2331,10 @@ export function AnalysisSection({ requestId, files, projectId, sourceType, isWMS
     setAnalyzeTokens(0);
     analyzeTokensRef.current = 0;
 
-    // Optimistic mark as processing in both caches; backend writers own the
-    // authoritative row update. Avoids a redundant fetch racing the backend.
+    // Optimistic stamp on both caches so badges/spinners flip immediately,
+    // then write the authoritative row. We deliberately skip the immediate
+    // `invalidateQueries` that used to race the DB write and pull back the
+    // stale `complete` status (plan §B).
     optimisticStatusRef.current = "processing";
     lastStartAtRef.current = Date.now();
     const v2Patch = { status: "processing", error_message: null };
@@ -2342,6 +2344,7 @@ export function AnalysisSection({ requestId, files, projectId, sourceType, isWMS
     queryClient.setQueryData(["wmsv-analysis-request", projectId], (old: any) => (
       old ? { ...old, ...v2Patch } : old
     ));
+    await supabase.from("analysis_requests").update({ status: "processing" }).eq("id", requestId);
 
     // Clear existing analysis results and summaries for enabled classes
     await Promise.all(
