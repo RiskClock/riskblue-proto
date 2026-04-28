@@ -66,6 +66,15 @@ export default function Controls() {
   const [uploadingLogo, setUploadingLogo] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  // Description banner dismissal
+  const [showDescription, setShowDescription] = useState(() =>
+    sessionStorage.getItem("riskblue_controls_description_dismissed") !== "true"
+  );
+  const handleDismissDescription = () => {
+    setShowDescription(false);
+    sessionStorage.setItem("riskblue_controls_description_dismissed", "true");
+  };
+
   const hasCompany = !!(company && company.trim());
   const showAccessGate = !accountLoading && isWMSV && !hasCompany;
 
