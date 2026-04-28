@@ -960,8 +960,11 @@ function CreateUserDialog({
   const creditsNum = Math.max(0, Math.floor(Number(credits) || 0));
   const creditsValid = credits.trim() !== "" && Number.isFinite(Number(credits)) && Number(credits) >= 0;
 
+  const companyRequired = isWmsv;
+  const companyValid = !companyRequired || !!(company && company.trim());
+
   const submit = () => {
-    if (!email.trim() || !name.trim() || !creditsValid) return;
+    if (!email.trim() || !name.trim() || !creditsValid || !companyValid) return;
     onSubmit({
       email: email.trim(),
       name: name.trim(),
@@ -1028,8 +1031,11 @@ function CreateUserDialog({
             </Label>
           </div>
           <div>
-            <Label>Company (optional)</Label>
+            <Label>Company{companyRequired ? "" : " (optional)"}</Label>
             <CompanyCombobox value={company} onChange={setCompany} companies={companies} />
+            {companyRequired && !companyValid && (
+              <p className="text-xs text-destructive mt-1">Company is required for WMSV accounts</p>
+            )}
           </div>
           <div>
             <Label>Tags (optional)</Label>
@@ -1044,7 +1050,7 @@ function CreateUserDialog({
           </Button>
           <Button
             onClick={submit}
-            disabled={loading || !email.trim() || !name.trim() || !creditsValid || (password.length > 0 && password.length < 6)}
+            disabled={loading || !email.trim() || !name.trim() || !creditsValid || !companyValid || (password.length > 0 && password.length < 6)}
           >
             {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : "Create user"}
           </Button>
