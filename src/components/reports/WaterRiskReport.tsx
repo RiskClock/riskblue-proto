@@ -145,6 +145,7 @@ interface ControlDetail {
   name: string;
   action: string;
   description: string;
+  vendors?: string[];
 }
 
 interface RiskTimelineChartData {
