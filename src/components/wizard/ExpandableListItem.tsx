@@ -14,6 +14,7 @@ import {
   parseDurationMonths,
   PricingTier,
   InstancePricingData
+  lookupPricingTier,
 } from "@/lib/costCalculator";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { format } from "date-fns";
