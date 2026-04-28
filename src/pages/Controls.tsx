@@ -66,6 +66,15 @@ export default function Controls() {
   const [uploadingLogo, setUploadingLogo] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  // Description banner dismissal
+  const [showDescription, setShowDescription] = useState(() =>
+    sessionStorage.getItem("riskblue_controls_description_dismissed") !== "true"
+  );
+  const handleDismissDescription = () => {
+    setShowDescription(false);
+    sessionStorage.setItem("riskblue_controls_description_dismissed", "true");
+  };
+
   const hasCompany = !!(company && company.trim());
   const showAccessGate = !accountLoading && isWMSV && !hasCompany;
 
@@ -592,15 +601,16 @@ export default function Controls() {
             type="button"
             onClick={() => fileInputRef.current?.click()}
             disabled={uploadingLogo}
-            className="group relative w-20 h-20 rounded-lg border border-dashed border-border bg-muted/30 hover:border-primary/60 hover:bg-muted/50 flex items-center justify-center overflow-hidden transition-colors"
-            aria-label={logoUrl ? "Replace company logo" : "Upload company logo"}
+            className="group relative w-30 h-20 rounded-lg border border-dashed border-border bg-muted/30 hover:border-primary/60 hover:bg-muted/50 flex items-center justify-center overflow-hidden transition-colors"
+            style={{ width: 120, height: 80 }}
+            aria-label={logoUrl ? "Replace company logo" : "Add logo"}
           >
             {logoUrl ? (
               <img src={logoUrl} alt={`${company} logo`} className="w-full h-full object-contain p-1" />
             ) : (
               <div className="flex flex-col items-center gap-1 text-muted-foreground">
                 <ImageIcon className="w-6 h-6" />
-                <span className="text-[10px]">Logo</span>
+                <span className="text-[10px]">Add logo</span>
               </div>
             )}
             <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
@@ -623,18 +633,24 @@ export default function Controls() {
           </h1>
         </div>
 
-        {/* Explanation */}
-        <div className="mb-8 max-w-4xl text-sm text-muted-foreground leading-relaxed space-y-2">
-          <p>
-            The control library allows Water Mitigation Solution Vendors to indicate which controls they can offer.
-          </p>
-          <p>
-            When users prepare and generate a Water Mitigation Grade report, the wizard will show the controls made available by the selected vendor. This helps users understand which mitigation measures, equipment, services, and response capabilities can be included in the report.
-          </p>
-          <p>
-            Controls with sub-options, such as sensor type or valve size, will show only the options the vendor has indicated they can offer. Controls and sub-options that are not selected in the control library will not be shown during report creation.
-          </p>
-        </div>
+        {/* Explanation - styled like the welcome banner on Projects */}
+        {showDescription && (
+          <div className="bg-muted/50 p-6 rounded-lg mb-8 relative max-w-4xl">
+            <button
+              onClick={handleDismissDescription}
+              className="absolute top-3 right-3 text-muted-foreground hover:text-foreground"
+              aria-label="Dismiss description"
+            >
+              <X className="h-4 w-4" />
+            </button>
+            <p className="text-sm text-foreground mb-3 pr-6">
+              <strong>🛠️ This is your company's control catalog on RiskBlue.</strong>
+            </p>
+            <p className="text-sm text-muted-foreground whitespace-pre-line">
+              {`The controls you select here determine how your company appears when General Contractors, Carriers, and Brokers build water mitigation guidelines. Only the controls you offer will be shown under your company name—positioning you as a qualified vendor for those capabilities.\n\nSelecting more relevant controls increases your visibility and likelihood of being chosen for projects.`}
+            </p>
+          </div>
+        )}
 
         {/* Controls grid */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-8 mb-10">

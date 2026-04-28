@@ -93,7 +93,7 @@ export const ControlDetailsModal = ({
               {companies.length > 0 && (
                 <div>
                   <label className="text-xs text-muted-foreground font-medium uppercase tracking-wide">
-                    {companies.length > 1 ? `Authors (${companies.length})` : "Author"}
+                    {companies.length > 1 ? `Vendors (${companies.length})` : "Vendor"}
                   </label>
                   <div className="text-sm font-medium mt-1 space-y-0.5">
                     {companies.map((c) => (
