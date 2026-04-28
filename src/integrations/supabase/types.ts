@@ -561,6 +561,39 @@ export type Database = {
         }
         Relationships: []
       }
+      company_contacts: {
+        Row: {
+          company: string
+          created_at: string
+          created_by: string | null
+          email: string
+          id: string
+          name: string
+          updated_at: string
+          updated_by: string | null
+        }
+        Insert: {
+          company: string
+          created_at?: string
+          created_by?: string | null
+          email: string
+          id?: string
+          name: string
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Update: {
+          company?: string
+          created_at?: string
+          created_by?: string | null
+          email?: string
+          id?: string
+          name?: string
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Relationships: []
+      }
       company_control_selections: {
         Row: {
           category: string
@@ -592,6 +625,27 @@ export type Database = {
           created_by?: string | null
           id?: string
           sub_options?: Json
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Relationships: []
+      }
+      company_logos: {
+        Row: {
+          company: string
+          storage_path: string
+          updated_at: string
+          updated_by: string | null
+        }
+        Insert: {
+          company: string
+          storage_path: string
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Update: {
+          company?: string
+          storage_path?: string
           updated_at?: string
           updated_by?: string | null
         }

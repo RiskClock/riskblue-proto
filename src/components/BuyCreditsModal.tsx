@@ -126,25 +126,23 @@ export const BuyCreditsModal = ({ open, onOpenChange, reason }: BuyCreditsModalP
             )}
             <div className="grid gap-4 md:grid-cols-3 mt-2">
               {PACKAGES.map((pkg) => {
-                // Baseline = buying the same number of credits at the 20-pack unit rate
-                // (no bulk discount). For WMSV, the 70% promo is shown once in the banner,
-                // so per-card we only surface the additional bulk savings on 100/500.
-                const baseUnit = isWMSV
-                  ? PACKAGES[0].priceUsd / PACKAGES[0].credits
-                  : PACKAGES[0].originalPriceUsd / PACKAGES[0].credits;
-                const undiscountedPrice = Math.round(baseUnit * pkg.credits);
+                // Strikethrough always shows the original full price ($100/$430/$1650)
+                // on every card, for both WMSV and non-WMSV. Discount badge shows on
+                // the 100 and 500 packs only, computed from the original baseline.
                 const displayPrice = isWMSV ? pkg.priceUsd : pkg.originalPriceUsd;
-                const bulkDiscountPct = pkg.id !== "pack_20" && undiscountedPrice > displayPrice
+                const undiscountedPrice = pkg.originalPriceUsd;
+                const discountPct = pkg.id !== "pack_20" && undiscountedPrice > displayPrice
                   ? Math.round((1 - displayPrice / undiscountedPrice) * 100)
                   : 0;
+                const showStrikethrough = undiscountedPrice > displayPrice;
                 return (
                   <Card
                     key={pkg.id}
                     className="relative overflow-hidden p-5 flex flex-col gap-3 transition-all border-primary/20 hover:border-primary/50 hover:shadow-lg hover:shadow-primary/10 bg-gradient-to-br from-card to-primary/5"
                   >
-                    {bulkDiscountPct > 0 && (
+                    {discountPct > 0 && (
                       <div className="absolute top-0 right-0 bg-primary text-primary-foreground text-[10px] font-bold px-2 py-1 rounded-bl-lg">
-                        -{bulkDiscountPct}% OFF
+                        -{discountPct}% OFF
                       </div>
                     )}
                     <div className="flex items-baseline gap-1">
@@ -153,7 +151,7 @@ export const BuyCreditsModal = ({ open, onOpenChange, reason }: BuyCreditsModalP
                     </div>
                     <div className="flex items-baseline gap-2">
                       <span className="text-2xl font-semibold text-primary">${displayPrice.toLocaleString()}</span>
-                      {bulkDiscountPct > 0 && (
+                      {showStrikethrough && (
                         <span className="text-sm text-muted-foreground line-through">
                           ${undiscountedPrice.toLocaleString()}
                         </span>

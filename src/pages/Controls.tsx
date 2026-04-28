@@ -1,18 +1,26 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { AppHeader } from "@/components/AppHeader";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { useAccountType } from "@/hooks/useAccountType";
-import { Loader2, ShieldCheck, Mail, CheckCircle2 } from "lucide-react";
+import { Loader2, ShieldCheck, Mail, CheckCircle2, Plus, Pencil, Trash2, Upload, ImageIcon, X, Check } from "lucide-react";
 import { toast } from "sonner";
+import { z } from "zod";
 
 interface MitigationControl {
   id: string;
   name: string;
+}
+
+interface CompanyContact {
+  id: string;
+  name: string;
+  email: string;
 }
 
 const SPECIAL_CONTROLS: Record<string, string[]> = {
@@ -32,15 +40,31 @@ type CategoryKey = typeof CATEGORIES[number]["key"];
 
 const REQUEST_STORAGE_KEY = (userId: string) => `control-library-access-requested:${userId}`;
 
+const contactSchema = z.object({
+  name: z.string().trim().min(1, "Name is required").max(100, "Name must be 100 characters or less"),
+  email: z.string().trim().email("Invalid email address").max(255, "Email must be 255 characters or less"),
+});
+
 export default function Controls() {
   const { user } = useAuth();
   const { isWMSV, company, loading: accountLoading } = useAccountType();
+  const queryClient = useQueryClient();
 
   // Selections: Map<`${category}::${controlId}`, sub_options[]>
   const [selections, setSelections] = useState<Map<string, string[]>>(new Map());
   const [expandedControls, setExpandedControls] = useState<Set<string>>(new Set());
   const [requesting, setRequesting] = useState(false);
   const [hasRequested, setHasRequested] = useState(false);
+
+  // Contacts UI state
+  const [editingContactId, setEditingContactId] = useState<string | null>(null);
+  const [draftName, setDraftName] = useState("");
+  const [draftEmail, setDraftEmail] = useState("");
+  const [adding, setAdding] = useState(false);
+
+  // Logo state
+  const [uploadingLogo, setUploadingLogo] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const hasCompany = !!(company && company.trim());
   const showAccessGate = !accountLoading && isWMSV && !hasCompany;
@@ -104,13 +128,50 @@ export default function Controls() {
     enabled: !!user && hasCompany,
   });
 
+  // Contacts
+  const { data: contacts = [], isLoading: contactsLoading } = useQuery({
+    queryKey: ["company-contacts", company],
+    queryFn: async (): Promise<CompanyContact[]> => {
+      const { data, error } = await supabase
+        .from("company_contacts")
+        .select("id, name, email")
+        .ilike("company", company!)
+        .order("created_at", { ascending: true });
+      if (error) throw error;
+      return data || [];
+    },
+    enabled: !!user && hasCompany,
+  });
+
+  // Logo
+  const { data: logoRow } = useQuery({
+    queryKey: ["company-logo", company],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("company_logos")
+        .select("storage_path")
+        .ilike("company", company!)
+        .maybeSingle();
+      if (error) throw error;
+      return data;
+    },
+    enabled: !!user && hasCompany,
+  });
+
+  const logoUrl = useMemo(() => {
+    if (!logoRow?.storage_path) return null;
+    const { data } = supabase.storage.from("company-logos").getPublicUrl(logoRow.storage_path);
+    // Cache-bust on update
+    return `${data.publicUrl}?t=${Date.now()}`;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [logoRow?.storage_path]);
+
   const controlMap = useMemo(() => {
     const m = new Map<string, MitigationControl>();
     allControls.forEach(c => m.set(c.id, c));
     return m;
   }, [allControls]);
 
-  // Populate selections from DB
   useEffect(() => {
     if (existingSelections.length > 0) {
       const map = new Map<string, string[]>();
@@ -195,7 +256,6 @@ export default function Controls() {
       const fullName = (user.user_metadata?.display_name as string) || user.email?.split("@")[0] || "Unknown";
       const workEmail = user.email || "";
 
-      // Persist request (idempotent-ish: insert one row)
       await supabase.from("access_requests").insert({
         full_name: fullName,
         work_email: workEmail,
@@ -211,7 +271,7 @@ export default function Controls() {
           workEmail,
           companyName: company || "",
           requestType: "control_library",
-          context: "WMSV user without company tried to access the Control Library page.",
+          context: "WMSV user without company tried to access the Marketplace Control Listing page.",
         },
       });
       if (error) throw error;
@@ -221,9 +281,120 @@ export default function Controls() {
       toast.success("Request sent. We'll be in touch shortly.");
     } catch (e: any) {
       console.error(e);
-      toast.error(e?.message || "Failed to send request");
+      toast.error((e as any)?.message || "Failed to send request");
     } finally {
       setRequesting(false);
+    }
+  };
+
+  // ============ Contact CRUD ============
+  const startAdd = () => {
+    setAdding(true);
+    setEditingContactId(null);
+    setDraftName("");
+    setDraftEmail("");
+  };
+
+  const startEdit = (c: CompanyContact) => {
+    setEditingContactId(c.id);
+    setAdding(false);
+    setDraftName(c.name);
+    setDraftEmail(c.email);
+  };
+
+  const cancelEdit = () => {
+    setAdding(false);
+    setEditingContactId(null);
+    setDraftName("");
+    setDraftEmail("");
+  };
+
+  const saveContact = async () => {
+    if (!company || !user) return;
+    const parsed = contactSchema.safeParse({ name: draftName, email: draftEmail });
+    if (!parsed.success) {
+      toast.error(parsed.error.issues[0]?.message || "Invalid input");
+      return;
+    }
+    try {
+      if (editingContactId) {
+        const { error } = await supabase
+          .from("company_contacts")
+          .update({ name: parsed.data.name, email: parsed.data.email, updated_by: user.id })
+          .eq("id", editingContactId);
+        if (error) throw error;
+        toast.success("Contact updated");
+      } else {
+        const { error } = await supabase.from("company_contacts").insert({
+          company,
+          name: parsed.data.name,
+          email: parsed.data.email,
+          created_by: user.id,
+          updated_by: user.id,
+        });
+        if (error) throw error;
+        toast.success("Contact added");
+      }
+      cancelEdit();
+      queryClient.invalidateQueries({ queryKey: ["company-contacts", company] });
+    } catch (e) {
+      toast.error((e as any)?.message || "Failed to save contact");
+    }
+  };
+
+  const deleteContact = async (id: string) => {
+    if (!confirm("Delete this contact?")) return;
+    try {
+      const { error } = await supabase.from("company_contacts").delete().eq("id", id);
+      if (error) throw error;
+      toast.success("Contact deleted");
+      queryClient.invalidateQueries({ queryKey: ["company-contacts", company] });
+    } catch (e) {
+      toast.error((e as any)?.message || "Failed to delete contact");
+    }
+  };
+
+  // ============ Logo upload ============
+  const handleLogoChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !company || !user) return;
+    if (!file.type.startsWith("image/")) {
+      toast.error("Please select an image file");
+      return;
+    }
+    if (file.size > 5 * 1024 * 1024) {
+      toast.error("Logo must be 5MB or smaller");
+      return;
+    }
+    setUploadingLogo(true);
+    try {
+      const slug = company.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "") || "company";
+      const ext = (file.name.split(".").pop() || "png").toLowerCase();
+      const path = `${slug}/logo-${Date.now()}.${ext}`;
+
+      const { error: upErr } = await supabase.storage
+        .from("company-logos")
+        .upload(path, file, { upsert: true, contentType: file.type });
+      if (upErr) throw upErr;
+
+      // Delete old file if exists
+      if (logoRow?.storage_path && logoRow.storage_path !== path) {
+        await supabase.storage.from("company-logos").remove([logoRow.storage_path]);
+      }
+
+      const { error: rowErr } = await supabase.from("company_logos").upsert(
+        { company, storage_path: path, updated_by: user.id, updated_at: new Date().toISOString() },
+        { onConflict: "company" }
+      );
+      if (rowErr) throw rowErr;
+
+      toast.success("Logo updated");
+      queryClient.invalidateQueries({ queryKey: ["company-logo", company] });
+    } catch (e) {
+      toast.error((e as any)?.message || "Failed to upload logo");
+    } finally {
+      setUploadingLogo(false);
+      if (fileInputRef.current) fileInputRef.current.value = "";
     }
   };
 
@@ -249,7 +420,6 @@ export default function Controls() {
     );
   }
 
-  // WMSV but no company → show access gate modal
   if (showAccessGate) {
     return (
       <div className="min-h-screen bg-background">
@@ -261,17 +431,17 @@ export default function Controls() {
                 <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center">
                   <ShieldCheck className="w-5 h-5 text-primary" />
                 </div>
-                <DialogTitle className="text-lg">Control Library</DialogTitle>
+                <DialogTitle className="text-lg">Marketplace Control Listing</DialogTitle>
               </div>
               <DialogDescription className="text-sm leading-relaxed pt-2 space-y-3">
                 <p>
-                  The Control Library lets your company specify which water mitigation
+                  The Marketplace Control Listing lets your company specify which water mitigation
                   controls you can offer end customers. Your selections are surfaced inside
                   RiskBlue's Water Mitigation Guideline (WMG) builder, so when a project
                   needs a control your company supports, you appear as an available vendor.
                 </p>
                 <p className="text-foreground font-medium">
-                  Your account isn't yet configured to manage a company's Control Library.
+                  Your account isn't yet configured to manage a company's Marketplace Control Listing.
                 </p>
                 <p>
                   Request access and we'll set up your company so you can start managing your
@@ -362,7 +532,6 @@ export default function Controls() {
                 className="text-muted-foreground hover:text-foreground p-0.5"
                 aria-label={isControlExpanded ? "Collapse options" : "Expand options"}
               >
-                {/* Triangle icon - rotates when expanded */}
                 <svg
                   width="10"
                   height="10"
@@ -417,8 +586,58 @@ export default function Controls() {
     <div className="min-h-screen bg-background">
       <AppHeader />
       <main className="container mx-auto px-6 py-8">
-        <h1 className="text-3xl font-bold text-foreground mb-8">{company ? `${company}'s Control Library` : "Control Library"}</h1>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+        {/* Header: logo + title */}
+        <div className="flex items-center gap-4 mb-4">
+          <button
+            type="button"
+            onClick={() => fileInputRef.current?.click()}
+            disabled={uploadingLogo}
+            className="group relative w-20 h-20 rounded-lg border border-dashed border-border bg-muted/30 hover:border-primary/60 hover:bg-muted/50 flex items-center justify-center overflow-hidden transition-colors"
+            aria-label={logoUrl ? "Replace company logo" : "Upload company logo"}
+          >
+            {logoUrl ? (
+              <img src={logoUrl} alt={`${company} logo`} className="w-full h-full object-contain p-1" />
+            ) : (
+              <div className="flex flex-col items-center gap-1 text-muted-foreground">
+                <ImageIcon className="w-6 h-6" />
+                <span className="text-[10px]">Logo</span>
+              </div>
+            )}
+            <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+              {uploadingLogo ? (
+                <Loader2 className="w-5 h-5 animate-spin text-white" />
+              ) : (
+                <Upload className="w-5 h-5 text-white" />
+              )}
+            </div>
+          </button>
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="image/*"
+            className="hidden"
+            onChange={handleLogoChange}
+          />
+          <h1 className="text-3xl font-bold text-foreground">
+            {company ? `${company}'s Marketplace Control Listing` : "Marketplace Control Listing"}
+          </h1>
+        </div>
+
+        {/* Explanation */}
+        <div className="mb-8 max-w-4xl text-sm text-muted-foreground leading-relaxed space-y-2">
+          <p>
+            The control library allows Water Mitigation Solution Vendors to indicate which controls they can offer.
+          </p>
+          <p>
+            When users prepare and generate a Water Mitigation Grade report, the wizard will show the controls made available by the selected vendor. This helps users understand which mitigation measures, equipment, services, and response capabilities can be included in the report.
+          </p>
+          <p>
+            Controls with sub-options, such as sensor type or valve size, will show only the options the vendor has indicated they can offer. Controls and sub-options that are not selected in the control library will not be shown during report creation.
+          </p>
+        </div>
+
+        {/* Controls grid */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-8 mb-10">
           {CATEGORIES.map(cat => (
             <div key={cat.key} className="bg-card rounded-lg border p-6">
               <h2 className="text-lg font-semibold text-foreground mb-4">{cat.label}</h2>
@@ -428,7 +647,128 @@ export default function Controls() {
             </div>
           ))}
         </div>
+
+        {/* Contacts */}
+        <div className="bg-card rounded-lg border p-6 max-w-3xl">
+          <div className="flex items-center justify-between mb-4">
+            <div>
+              <h2 className="text-lg font-semibold text-foreground">Contacts</h2>
+              <p className="text-xs text-muted-foreground mt-1">
+                People to reach out to about this vendor's offered controls.
+              </p>
+            </div>
+            {!adding && !editingContactId && (
+              <Button size="sm" variant="outline" onClick={startAdd} className="gap-1">
+                <Plus className="w-4 h-4" /> Add contact
+              </Button>
+            )}
+          </div>
+
+          {contactsLoading ? (
+            <div className="flex items-center justify-center py-6">
+              <Loader2 className="w-5 h-5 animate-spin text-muted-foreground" />
+            </div>
+          ) : (
+            <div className="space-y-2">
+              {contacts.length === 0 && !adding && (
+                <p className="text-sm text-muted-foreground py-2">No contacts yet.</p>
+              )}
+              {contacts.map((c) => {
+                const isEditing = editingContactId === c.id;
+                if (isEditing) {
+                  return (
+                    <ContactEditRow
+                      key={c.id}
+                      name={draftName}
+                      email={draftEmail}
+                      onName={setDraftName}
+                      onEmail={setDraftEmail}
+                      onSave={saveContact}
+                      onCancel={cancelEdit}
+                    />
+                  );
+                }
+                return (
+                  <div
+                    key={c.id}
+                    className="flex items-center gap-3 py-2 px-3 rounded-md border border-transparent hover:border-border hover:bg-muted/30"
+                  >
+                    <div className="flex-1 min-w-0 grid grid-cols-2 gap-3">
+                      <span className="text-sm font-medium truncate">{c.name}</span>
+                      <span className="text-sm text-muted-foreground truncate">{c.email}</span>
+                    </div>
+                    <Button size="icon" variant="ghost" onClick={() => startEdit(c)} aria-label="Edit contact">
+                      <Pencil className="w-4 h-4" />
+                    </Button>
+                    <Button size="icon" variant="ghost" onClick={() => deleteContact(c.id)} aria-label="Delete contact">
+                      <Trash2 className="w-4 h-4 text-destructive" />
+                    </Button>
+                  </div>
+                );
+              })}
+              {adding && (
+                <ContactEditRow
+                  name={draftName}
+                  email={draftEmail}
+                  onName={setDraftName}
+                  onEmail={setDraftEmail}
+                  onSave={saveContact}
+                  onCancel={cancelEdit}
+                />
+              )}
+            </div>
+          )}
+        </div>
       </main>
+    </div>
+  );
+}
+
+function ContactEditRow({
+  name,
+  email,
+  onName,
+  onEmail,
+  onSave,
+  onCancel,
+}: {
+  name: string;
+  email: string;
+  onName: (v: string) => void;
+  onEmail: (v: string) => void;
+  onSave: () => void;
+  onCancel: () => void;
+}) {
+  return (
+    <div className="flex items-center gap-2 py-2 px-3 rounded-md border border-primary/40 bg-primary/5">
+      <div className="flex-1 grid grid-cols-2 gap-2">
+        <Input
+          autoFocus
+          placeholder="Name"
+          value={name}
+          onChange={(e) => onName(e.target.value)}
+          maxLength={100}
+          className="h-8"
+        />
+        <Input
+          placeholder="Email"
+          type="email"
+          value={email}
+          onChange={(e) => onEmail(e.target.value)}
+          maxLength={255}
+          className="h-8"
+          onKeyDown={(e) => {
+            if (e.key === "Enter") onSave();
+            if (e.key === "Escape") onCancel();
+          }}
+        />
+      </div>
+      <Button size="icon" variant="ghost" onClick={onSave} aria-label="Save contact">
+        <Check className="w-4 h-4 text-emerald-600" />
+      </Button>
+      <Button size="icon" variant="ghost" onClick={onCancel} aria-label="Cancel">
+        <X className="w-4 h-4" />
+      </Button>
     </div>
   );
 }
