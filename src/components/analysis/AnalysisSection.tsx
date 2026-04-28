@@ -3420,14 +3420,6 @@ export function AnalysisSection({ requestId, files, projectId, sourceType, isWMS
                       <option value="7.2">RiskClock Engine 7.2 (Apr-2026)</option>
                       <option value="7.3-tp">RiskClock Engine 7.3 Technical Preview (May-2026)</option>
                     </select>
-                    {copiedFiles.length > 0 && (
-                      <span className="text-xs text-muted-foreground tabular-nums">
-                        {copiedFiles.length} credit{copiedFiles.length === 1 ? "" : "s"}{" "}
-                        <span className={creditsBalance < copiedFiles.length ? "text-destructive font-medium" : ""}>
-                          ({creditsBalance} available)
-                        </span>
-                      </span>
-                    )}
                     <Button
                       size="sm"
                       onClick={handleWmsvStartAnalysis}
@@ -3436,6 +3428,14 @@ export function AnalysisSection({ requestId, files, projectId, sourceType, isWMS
                       <Play className="w-4 h-4 mr-2" />
                       Start Analysis
                     </Button>
+                    {copiedFiles.length > 0 && (
+                      <span className="text-xs text-muted-foreground tabular-nums">
+                        {copiedFiles.length} credit{copiedFiles.length === 1 ? "" : "s"}{" "}
+                        <span className={creditsBalance < copiedFiles.length ? "text-destructive font-medium" : ""}>
+                          ({creditsBalance} available)
+                        </span>
+                      </span>
+                    )}
                     {isInternal && (
                       <DropdownMenu>
                         <DropdownMenuTrigger asChild>
