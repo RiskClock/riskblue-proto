@@ -78,20 +78,43 @@ export const WaterMitigationGuidelinesStep = ({ data, analysisItems = [], onBack
   const [pdfBlobForProcore, setPdfBlobForProcore] = useState<Blob | null>(null);
   const [pdfBlobForEpic, setPdfBlobForEpic] = useState<Blob | null>(null);
   const [pdfFileName, setPdfFileName] = useState("");
-  // Fetch control details for the appendix
+  // Fetch control details for the appendix (with merged Vendors per control)
   const { data: controlDetails = [] } = useQuery({
-    queryKey: ['mitigation-controls-details'],
+    queryKey: ['mitigation-controls-details-with-vendors'],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from('mitigation_controls')
-        .select('name, action, description')
-        .eq('is_active', true)
-        .order('name');
-      if (error) throw error;
-      return data.map(c => ({
+      const [controlsRes, offeringsRes] = await Promise.all([
+        supabase
+          .from('mitigation_controls')
+          .select('id, name, action, description, vendor_name')
+          .eq('is_active', true)
+          .order('name'),
+        supabase.rpc('get_control_vendor_offerings'),
+      ]);
+      if (controlsRes.error) throw controlsRes.error;
+      const offerings = ((offeringsRes.data as any[]) || []);
+
+      // Build companies-by-controlId map (legacy vendor_name + WMSV companies)
+      const companiesByControlId = new Map<string, string[]>();
+      for (const c of (controlsRes.data || []) as any[]) {
+        const seed: string[] = [];
+        const v = (c.vendor_name || "").trim();
+        if (v && v.toLowerCase() !== "riskclock") seed.push(v);
+        companiesByControlId.set(c.id, seed);
+      }
+      for (const o of offerings) {
+        const list = companiesByControlId.get(o.control_id) || [];
+        const lower = String(o.company || "").toLowerCase();
+        if (lower && !list.some((x) => x.toLowerCase() === lower)) {
+          list.push(o.company);
+        }
+        companiesByControlId.set(o.control_id, list);
+      }
+
+      return ((controlsRes.data || []) as any[]).map((c) => ({
         name: c.name,
         action: c.action,
-        description: c.description
+        description: c.description,
+        vendors: companiesByControlId.get(c.id) || [],
       }));
     }
   });
