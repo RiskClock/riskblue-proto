@@ -1038,6 +1038,11 @@ export function AnalysisSection({ requestId, files, projectId, sourceType, isWMS
   const [analyzeV2Running, setAnalyzeV2Running] = useState(false);
   const analyzeRunSyncRef = useRef<"idle" | "starting" | "running" | "stopping">("idle");
   const optimisticStatusRef = useRef<string | null>(null);
+  // Timestamp of the most recent local Start/Restart action. Used as a short
+  // post-start guard window (~1500ms) during which stale terminal rows
+  // (complete/failed) are ignored to prevent the spinner/badge from flickering.
+  const lastStartAtRef = useRef<number>(0);
+  const POST_START_GUARD_MS = 1500;
   const prevPipelinePhaseRef = useRef<string | null>(null);
   const [triagePhase, setTriagePhase] = useState<"extract" | "score" | null>(null);
   const [summaryGroupBy, setSummaryGroupBy] = useState<"awp" | "floor">("awp");
@@ -1254,8 +1259,21 @@ export function AnalysisSection({ requestId, files, projectId, sourceType, isWMS
     const dbStatus = (requestMeta as any).status as string;
     const isTerminal = dbStatus === "complete" || dbStatus === "failed";
 
-    // Status-precedence guard: if we have an optimistic status set,
-    // reject incoming data that has a lower rank (stale poll/realtime)
+    // Post-start guard: for ~1500ms after a local Start/Restart, ignore any
+    // stale `complete`/`failed` rows that may still be in flight from the
+    // previous run. complete→processing is a valid transition on restart, so
+    // we deliberately do NOT use pure rank logic — we use a time window keyed
+    // off the optimistic ref instead.
+    const inGuardWindow =
+      !!optimisticStatusRef.current &&
+      Date.now() - lastStartAtRef.current < POST_START_GUARD_MS;
+
+    if (inGuardWindow && isTerminal) {
+      return; // Ignore stale terminal during the start window.
+    }
+
+    // Status-precedence guard for non-terminal stale rows
+    // (e.g. `copied` arriving after we've optimistically set `processing`).
     if (optimisticStatusRef.current && !isTerminal) {
       const incomingRank = STATUS_RANK[dbStatus] ?? 0;
       const optimisticRank = STATUS_RANK[optimisticStatusRef.current] ?? 0;
@@ -1264,7 +1282,7 @@ export function AnalysisSection({ requestId, files, projectId, sourceType, isWMS
       }
     }
 
-    // DB has caught up or reached terminal — clear optimistic guard
+    // DB has caught up or reached terminal — clear optimistic guard.
     if (optimisticStatusRef.current) {
       const incomingRank = STATUS_RANK[dbStatus] ?? 0;
       const optimisticRank = STATUS_RANK[optimisticStatusRef.current] ?? 0;
@@ -1791,21 +1809,31 @@ export function AnalysisSection({ requestId, files, projectId, sourceType, isWMS
     // Start Analysis button) — 1 credit per file in the analysis request.
     // Internal restart-from-* menu items are dev/debug only and do not charge.
 
-    // Save previous cache for rollback
+    // Save previous caches for rollback
     const prevMeta = queryClient.getQueryData(["analysis-request-meta", requestId]);
+    const prevWmsvMeta = queryClient.getQueryData(["wmsv-analysis-request", projectId]);
 
     // Optimistic update BEFORE invoke
     optimisticStatusRef.current = "processing";
+    lastStartAtRef.current = Date.now();
     analyzeRunSyncRef.current = "starting";
     setAnalyzeV2Running(true);
-    queryClient.setQueryData(["analysis-request-meta", requestId], (old: any) => ({
-      ...old,
+    const optimisticPatch = {
       status: "processing",
       pipeline_phase: phaseOverride || "extracting",
       pipeline_progress_done: 0,
       pipeline_progress_total: copiedFiles.length,
       error_message: null,
+    };
+    queryClient.setQueryData(["analysis-request-meta", requestId], (old: any) => ({
+      ...old,
+      ...optimisticPatch,
     }));
+    // Also stamp the WMSV header's parallel cache so the badge transitions
+    // in lockstep and doesn't briefly show a stale `complete` from polling.
+    queryClient.setQueryData(["wmsv-analysis-request", projectId], (old: any) => (
+      old ? { ...old, ...optimisticPatch } : old
+    ));
 
     // Phase-aware clearing for visual feedback
     if (phaseOverride === "analyze") {
@@ -1849,9 +1877,11 @@ export function AnalysisSection({ requestId, files, projectId, sourceType, isWMS
     } catch (e) {
       // Rollback optimistic state
       optimisticStatusRef.current = null;
+      lastStartAtRef.current = 0;
       analyzeRunSyncRef.current = "idle";
       setAnalyzeV2Running(false);
       queryClient.setQueryData(["analysis-request-meta", requestId], prevMeta);
+      queryClient.setQueryData(["wmsv-analysis-request", projectId], prevWmsvMeta);
       toast({
         title: "Failed to start analysis",
         description: e instanceof Error ? e.message : "Unknown error",
@@ -2301,9 +2331,20 @@ export function AnalysisSection({ requestId, files, projectId, sourceType, isWMS
     setAnalyzeTokens(0);
     analyzeTokensRef.current = 0;
 
-    // Mark request as processing
+    // Optimistic stamp on both caches so badges/spinners flip immediately,
+    // then write the authoritative row. We deliberately skip the immediate
+    // `invalidateQueries` that used to race the DB write and pull back the
+    // stale `complete` status (plan §B).
+    optimisticStatusRef.current = "processing";
+    lastStartAtRef.current = Date.now();
+    const v2Patch = { status: "processing", error_message: null };
+    queryClient.setQueryData(["analysis-request-meta", requestId], (old: any) => (
+      old ? { ...old, ...v2Patch } : old
+    ));
+    queryClient.setQueryData(["wmsv-analysis-request", projectId], (old: any) => (
+      old ? { ...old, ...v2Patch } : old
+    ));
     await supabase.from("analysis_requests").update({ status: "processing" }).eq("id", requestId);
-    await queryClient.invalidateQueries({ queryKey: ["analysis-request-meta", requestId] });
 
     // Clear existing analysis results and summaries for enabled classes
     await Promise.all(
