@@ -2179,6 +2179,14 @@ export type Database = {
         Args: { p_analysis_request_id?: string; p_user_id: string }
         Returns: Json
       }
+      consume_credits: {
+        Args: {
+          p_amount: number
+          p_analysis_request_id?: string
+          p_user_id: string
+        }
+        Returns: Json
+      }
       get_control_vendor_offerings: {
         Args: never
         Returns: {
