@@ -1051,6 +1051,8 @@ export function AnalysisSection({ requestId, files, projectId, sourceType, isWMS
   // ---- Manual triage overrides ----
   const [triageOverrides, setTriageOverrides] = useState<Map<string, "include" | "exclude">>(new Map());
   const [buyCreditsOpen, setBuyCreditsOpen] = useState(false);
+  const [buyCreditsReason, setBuyCreditsReason] = useState<string>("You're out of scan credits. Buy more to start a triage.");
+  const { balance: creditsBalance } = useCredits();
   const inFlightCountRef = useRef(0);
   const MAX_CONCURRENT_TRIAGE = 10;
   const MAX_CONCURRENT_TRIAGE_SINGLE = 5;
