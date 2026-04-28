@@ -101,6 +101,7 @@ const handler = async (req: Request): Promise<Response> => {
         email: email.toLowerCase(),
         token,
         expires_at: expiresAt.toISOString(),
+        purpose: "password_reset",
       });
 
     if (insertError) {

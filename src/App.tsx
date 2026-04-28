@@ -16,6 +16,7 @@ import GoogleDriveConnect from "./pages/GoogleDriveConnect";
 import ProcoreConnect from "./pages/ProcoreConnect";
 import SharePointConnect from "./pages/SharePointConnect";
 import ResetPassword from "./pages/ResetPassword";
+import SetupAccount from "./pages/SetupAccount";
 import InternalAnalysisQueue from "./pages/InternalAnalysisQueue";
 import UserManagement from "./pages/UserManagement";
 import AnalysisRequestDetail from "./pages/AnalysisRequestDetail";
@@ -79,6 +80,7 @@ const App = () => (
             <Route path="/connect/procore" element={<ProcoreConnect />} />
             <Route path="/connect/sharepoint" element={<SharePointConnect />} />
             <Route path="/reset-password" element={<ResetPassword />} />
+            <Route path="/setup-account" element={<SetupAccount />} />
             <Route path="/credits/return" element={<CheckoutReturn />} />
             <Route path="/" element={<Navigate to="/projects" />} />
             <Route path="*" element={<NotFound />} />
