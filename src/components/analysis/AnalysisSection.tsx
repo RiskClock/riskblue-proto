@@ -1259,8 +1259,21 @@ export function AnalysisSection({ requestId, files, projectId, sourceType, isWMS
     const dbStatus = (requestMeta as any).status as string;
     const isTerminal = dbStatus === "complete" || dbStatus === "failed";
 
-    // Status-precedence guard: if we have an optimistic status set,
-    // reject incoming data that has a lower rank (stale poll/realtime)
+    // Post-start guard: for ~1500ms after a local Start/Restart, ignore any
+    // stale `complete`/`failed` rows that may still be in flight from the
+    // previous run. complete→processing is a valid transition on restart, so
+    // we deliberately do NOT use pure rank logic — we use a time window keyed
+    // off the optimistic ref instead.
+    const inGuardWindow =
+      !!optimisticStatusRef.current &&
+      Date.now() - lastStartAtRef.current < POST_START_GUARD_MS;
+
+    if (inGuardWindow && isTerminal) {
+      return; // Ignore stale terminal during the start window.
+    }
+
+    // Status-precedence guard for non-terminal stale rows
+    // (e.g. `copied` arriving after we've optimistically set `processing`).
     if (optimisticStatusRef.current && !isTerminal) {
       const incomingRank = STATUS_RANK[dbStatus] ?? 0;
       const optimisticRank = STATUS_RANK[optimisticStatusRef.current] ?? 0;
@@ -1269,7 +1282,7 @@ export function AnalysisSection({ requestId, files, projectId, sourceType, isWMS
       }
     }
 
-    // DB has caught up or reached terminal — clear optimistic guard
+    // DB has caught up or reached terminal — clear optimistic guard.
     if (optimisticStatusRef.current) {
       const incomingRank = STATUS_RANK[dbStatus] ?? 0;
       const optimisticRank = STATUS_RANK[optimisticStatusRef.current] ?? 0;
