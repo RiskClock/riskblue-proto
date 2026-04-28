@@ -704,7 +704,13 @@ export const ExpandableListItem = ({
                               variant="ghost"
                               size="sm"
                               className="h-6 w-6 p-0 text-muted-foreground hover:text-foreground"
-                              onClick={(e) => handleViewControlDetails(control, e)}
+                              onClick={(e) => {
+                                const tier = lookupPricingTier(control, instancePricingData, pricingTiers);
+                                handleViewControlDetails(control, e, {
+                                  oneTimeCost: tier ? Number(tier.one_time_cost) : (controlData?.oneTimeCost ?? 0),
+                                  monthlyMaintCost: tier ? Number(tier.monthly_cost) : (controlData?.monthlyMaintCost ?? 0),
+                                });
+                              }}
                               title="View control details"
                             >
                               <Info className="w-3.5 h-3.5" />
