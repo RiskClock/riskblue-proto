@@ -135,82 +135,27 @@ serve(async (req) => {
     const projectName = project?.name || "Untitled project";
     const recipientName = profile?.display_name || creatorEmail.split("@")[0];
 
-    // Build HTML
-    const tableRows = awpCounts.length > 0
-      ? awpCounts
-          .map(
-            (c) => `
-              <tr>
-                <td style="padding:10px 14px;border-bottom:1px solid #e5e7eb;color:#1e293b;font-size:14px;">${escapeHtml(c.awp_class_name)}</td>
-                <td style="padding:10px 14px;border-bottom:1px solid #e5e7eb;color:#1e293b;font-size:14px;text-align:right;font-variant-numeric:tabular-nums;">${c.count}</td>
-              </tr>`,
-          )
-          .join("")
-      : `<tr><td colspan="2" style="padding:14px;color:#64748b;font-size:14px;text-align:center;">No instances detected.</td></tr>`;
+    // Build HTML using shared template
+    const bodyHtml = [
+      renderGreeting(`Hi ${escapeHtml(recipientName)},`),
+      renderParagraph(
+        `Your drawing analysis for ${strong(projectName)} is complete. ` +
+          `We detected ${strong(`${totalInstances} instance${totalInstances === 1 ? "" : "s"}`)} ` +
+          `across ${strong(`${totalClasses} asset and water system class${totalClasses === 1 ? "" : "es"}`)}.`,
+      ),
+      renderSummaryTable(
+        { left: "Asset / Water System Class", right: "Instances" },
+        awpCounts.map((c) => ({ left: c.awp_class_name, right: c.count })),
+      ),
+    ].join("");
 
-    const html = `<!DOCTYPE html>
-<html>
-  <body style="margin:0;padding:0;background-color:#f1f5f9;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;">
-    <table width="100%" cellpadding="0" cellspacing="0" style="background-color:#f1f5f9;padding:32px 16px;">
-      <tr>
-        <td align="center">
-          <table width="600" cellpadding="0" cellspacing="0" style="max-width:600px;background-color:#ffffff;border-radius:12px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,0.05);">
-            <tr>
-              <td style="background:linear-gradient(135deg,#1e3a8a 0%,#3b82f6 100%);padding:28px 32px;">
-                <img src="${LOGO_URL}" alt="RiskBlue" width="120" style="display:block;margin:0 0 16px;border:0;outline:none;text-decoration:none;height:auto;" />
-                <h1 style="margin:0;color:#ffffff;font-size:22px;font-weight:600;letter-spacing:-0.01em;">Analysis Complete</h1>
-                <p style="margin:6px 0 0;color:#dbeafe;font-size:14px;">${escapeHtml(projectName)}</p>
-              </td>
-            </tr>
-            <tr>
-              <td style="padding:32px;">
-                <p style="margin:0 0 20px;color:#1e293b;font-size:15px;line-height:1.5;">Hi ${escapeHtml(recipientName)},</p>
-                <p style="margin:0 0 24px;color:#475569;font-size:14px;line-height:1.6;">
-                  Your drawing analysis for <strong style="color:#1e293b;">${escapeHtml(projectName)}</strong> is complete.
-                  We detected <strong style="color:#1e293b;">${totalInstances} instance${totalInstances === 1 ? "" : "s"}</strong>
-                  across <strong style="color:#1e293b;">${totalClasses} asset and water system class${totalClasses === 1 ? "" : "es"}</strong>.
-                </p>
-
-                <table width="100%" cellpadding="0" cellspacing="0" style="border:1px solid #e5e7eb;border-radius:8px;overflow:hidden;margin-bottom:28px;">
-                  <thead>
-                    <tr style="background-color:#f8fafc;">
-                      <th align="left" style="padding:12px 14px;color:#475569;font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:0.05em;border-bottom:1px solid #e5e7eb;">Asset / Water System Class</th>
-                      <th align="right" style="padding:12px 14px;color:#475569;font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:0.05em;border-bottom:1px solid #e5e7eb;">Instances</th>
-                    </tr>
-                  </thead>
-                  <tbody>${tableRows}</tbody>
-                </table>
-
-                <table width="100%" cellpadding="0" cellspacing="0">
-                  <tr>
-                    <td align="center">
-                      <a href="${projectUrl}" style="display:inline-block;background:linear-gradient(135deg,#1e3a8a 0%,#3b82f6 100%);color:#ffffff;text-decoration:none;padding:13px 28px;border-radius:8px;font-size:14px;font-weight:600;letter-spacing:0.01em;">
-                        View Project Details →
-                      </a>
-                    </td>
-                  </tr>
-                </table>
-
-                <p style="margin:32px 0 0;color:#94a3b8;font-size:12px;line-height:1.5;text-align:center;">
-                  Or open this link directly:<br/>
-                  <a href="${projectUrl}" style="color:#3b82f6;text-decoration:none;word-break:break-all;">${projectUrl}</a>
-                </p>
-              </td>
-            </tr>
-            <tr>
-              <td style="padding:20px 32px;background-color:#f8fafc;border-top:1px solid #e5e7eb;">
-                <p style="margin:0;color:#94a3b8;font-size:12px;line-height:1.5;text-align:center;">
-                  RiskBlue · Water Mitigation Risk Analysis
-                </p>
-              </td>
-            </tr>
-          </table>
-        </td>
-      </tr>
-    </table>
-  </body>
-</html>`;
-
+    const html = renderEmail({
+      title: "Analysis Complete",
+      subtitle: projectName,
+      bodyHtml,
+      cta: { label: "View Project Details", href: projectUrl },
+      ctaFallbackUrl: projectUrl,
+    });
     const subject = `Analysis complete: ${projectName} (${totalInstances} instance${totalInstances === 1 ? "" : "s"})`;
 
     const toRecipients = [creatorEmail.toLowerCase()];
