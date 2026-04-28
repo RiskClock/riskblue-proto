@@ -145,6 +145,7 @@ interface ControlDetail {
   name: string;
   action: string;
   description: string;
+  vendors?: string[];
 }
 
 interface RiskTimelineChartData {
@@ -1065,6 +1066,14 @@ export const WaterRiskReport = ({ data, analysisItems = [], controlDetails = [],
                             <span className="text-[11px] text-gray-700">{control.action}</span>
                           </div>
                         )}
+                        <div className="mt-1">
+                          <span className="text-[10px] font-semibold text-gray-600">Vendors: </span>
+                          <span className="text-[11px] text-gray-700">
+                            {control.vendors && control.vendors.length > 0
+                              ? control.vendors.join(", ")
+                              : "None listed"}
+                          </span>
+                        </div>
                       </div>
                     </div>
                   </div>

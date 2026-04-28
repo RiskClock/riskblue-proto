@@ -1081,11 +1081,12 @@ export type Database = {
           risk_tolerance: number | null
           systems_at_risk: string | null
           updated_at: string
+          vendor_name: string | null
         }
         Insert: {
           action: string
           application_component?: string | null
-          author: string
+          author?: string
           category: string
           concept_hours?: number | null
           created_at?: string
@@ -1107,6 +1108,7 @@ export type Database = {
           risk_tolerance?: number | null
           systems_at_risk?: string | null
           updated_at?: string
+          vendor_name?: string | null
         }
         Update: {
           action?: string
@@ -1133,6 +1135,7 @@ export type Database = {
           risk_tolerance?: number | null
           systems_at_risk?: string | null
           updated_at?: string
+          vendor_name?: string | null
         }
         Relationships: []
       }
