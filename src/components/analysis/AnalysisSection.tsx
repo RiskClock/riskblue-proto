@@ -3432,13 +3432,17 @@ export function AnalysisSection({ requestId, files, projectId, sourceType, isWMS
                     >
                       <Play className="w-4 h-4 mr-2" />
                       Start Analysis
+                      {copiedFiles.length > 0 && (
+                        <span className="ml-1 tabular-nums">
+                          ({copiedFiles.length} credit{copiedFiles.length === 1 ? "" : "s"})
+                        </span>
+                      )}
                     </Button>
                     {copiedFiles.length > 0 && (
-                      <span className="text-xs text-muted-foreground tabular-nums">
-                        {copiedFiles.length} credit{copiedFiles.length === 1 ? "" : "s"}{" "}
-                        <span className={creditsBalance < copiedFiles.length ? "text-destructive font-medium" : ""}>
-                          ({creditsBalance} available)
-                        </span>
+                      <span
+                        className={`text-xs tabular-nums ${creditsBalance < copiedFiles.length ? "text-destructive font-medium" : "text-muted-foreground"}`}
+                      >
+                        {creditsBalance} credit{creditsBalance === 1 ? "" : "s"} available
                       </span>
                     )}
                     {isInternal && (
