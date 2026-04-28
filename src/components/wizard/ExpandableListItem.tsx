@@ -186,7 +186,11 @@ export const ExpandableListItem = ({
     vendors?: ControlVendors;
   } | null>(null);
 
-  const handleViewControlDetails = useCallback((controlName: string, e: React.MouseEvent) => {
+  const handleViewControlDetails = useCallback((
+    controlName: string,
+    e: React.MouseEvent,
+    overrides?: { oneTimeCost?: number; monthlyMaintCost?: number }
+  ) => {
     e.stopPropagation();
     const controlData = getControlPoints?.(controlName);
     setSelectedControl({
@@ -197,8 +201,8 @@ export const ExpandableListItem = ({
       responsible: controlData?.responsible,
       category: controlData?.category,
       points: controlData?.points,
-      oneTimeCost: controlData?.oneTimeCost,
-      monthlyMaintCost: controlData?.monthlyMaintCost,
+      oneTimeCost: overrides?.oneTimeCost ?? controlData?.oneTimeCost,
+      monthlyMaintCost: overrides?.monthlyMaintCost ?? controlData?.monthlyMaintCost,
       vendors: vendorMap.get(controlName.toLowerCase()),
     });
     setControlModalOpen(true);
