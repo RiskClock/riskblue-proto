@@ -40,22 +40,25 @@ export function useControlVendorOfferings() {
 }
 
 /**
- * Build a per-controlId vendor map. Optionally merges in the original `author`
- * (from mitigation_controls.author) as a baseline vendor when no other company
- * with the same name is already counted.
+ * Build a per-controlId vendor map. Merges in the legacy `vendor_name`
+ * (from mitigation_controls.vendor_name) as a baseline vendor when no other
+ * company with the same name is already counted.
+ *
+ * Note: `author` is intentionally NOT used as a vendor seed — RiskClock authors
+ * all controls; vendors are independent companies that offer them.
  */
 export function buildVendorMapByControlId(
   offerings: VendorOffering[],
-  controls: { id: string; author?: string | null }[]
+  controls: { id: string; vendor_name?: string | null }[]
 ): Map<string, ControlVendors> {
   const map = new Map<string, ControlVendors>();
 
-  // Seed with author baselines
+  // Seed with legacy vendor baselines (preserved from pre-RiskClock author migration)
   for (const c of controls) {
-    const author = (c.author || "").trim();
+    const vendor = (c.vendor_name || "").trim();
     const entry: ControlVendors = { companies: [], subOptionsByCompany: new Map() };
-    if (author) {
-      entry.companies.push(author);
+    if (vendor && vendor.toLowerCase() !== "riskclock") {
+      entry.companies.push(vendor);
     }
     map.set(c.id, entry);
   }
