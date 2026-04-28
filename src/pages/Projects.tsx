@@ -73,7 +73,8 @@ const Projects = () => {
   const { toast } = useToast();
   useHeapIdentify();
   const { logActivity } = useActivityLogger();
-  const { isWMSV, loading: accountLoading } = useAccountType();
+  const { isWMSV, company, loading: accountLoading } = useAccountType();
+  const { hasControls, loading: controlsLoading } = useCompanyControlsConfigured(company, isWMSV);
   const [projects, setProjects] = useState<ProjectWithCreator[]>([]);
   const [showWMSVModal, setShowWMSVModal] = useState(false);
   const [loading, setLoading] = useState(true);
