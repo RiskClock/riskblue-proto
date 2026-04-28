@@ -14,6 +14,7 @@ import { Trash2, X } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { useAccountType } from "@/hooks/useAccountType";
+import { useCompanyControlsConfigured } from "@/hooks/useCompanyControlsConfigured";
 import { WMSVCreateProjectModal } from "@/components/WMSVCreateProjectModal";
 
 interface Project {
