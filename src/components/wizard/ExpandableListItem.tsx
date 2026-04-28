@@ -13,7 +13,7 @@ import {
   calculateTieredControlCost, 
   parseDurationMonths,
   PricingTier,
-  InstancePricingData
+  InstancePricingData,
   lookupPricingTier,
 } from "@/lib/costCalculator";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
