@@ -136,7 +136,12 @@ export function WMSVProjectDetail({ projectId, projectName }: WMSVProjectDetailP
     enabled: !!projectId,
     refetchInterval: (q: any) => {
       const status = q.state.data?.status;
-      return ACTIVE_STATUSES.includes(status) ? 5000 : false;
+      const phase = q.state.data?.pipeline_phase;
+      if (ACTIVE_STATUSES.includes(status)) return 5000;
+      // Keep polling while a background pipeline phase is still active
+      // (e.g. status="complete" but pipeline_phase="summarizing")
+      if (phase) return 5000;
+      return false;
     },
   });
 
