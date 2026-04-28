@@ -17,6 +17,7 @@ import { SharePointConnectionDialog } from "@/components/wizard/SharePointConnec
 import { UploadReviewModal } from "@/components/UploadReviewModal";
 import { ActiveExportModal } from "@/components/export/ActiveExportModal";
 import { useAnalysisExport } from "@/hooks/useAnalysisExport";
+import { useAccountType } from "@/hooks/useAccountType";
 
 const ACCEPTED_TYPES = ".pdf,.png,.jpg,.jpeg,.dwg,.dxf";
 
