@@ -1,4 +1,10 @@
 // Deno.serve used below
+import {
+  renderEmail,
+  renderParagraph,
+  renderKeyValueTable,
+  escapeHtml,
+} from "../_shared/email-template.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
