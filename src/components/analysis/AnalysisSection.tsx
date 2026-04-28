@@ -1215,10 +1215,15 @@ export function AnalysisSection({ requestId, files, projectId, sourceType, isWMS
         .single();
       return data;
     },
-    refetchInterval: (() => {
-      const s = queryClient.getQueryData<any>(["analysis-request-meta", requestId])?.status;
-      return ACTIVE_STATUSES.includes(s) ? 5000 : false;
-    })() as number | false,
+    refetchInterval: (query: any) => {
+      const s = query?.state?.data?.status;
+      const phase = query?.state?.data?.pipeline_phase;
+      // Keep polling while active, or while pipeline is still running a background phase
+      // (e.g. status="complete" but pipeline_phase="summarizing")
+      if (ACTIVE_STATUSES.includes(s)) return 5000;
+      if (phase) return 5000;
+      return false;
+    },
   });
   const [disabledDefaultsApplied, setDisabledDefaultsApplied] = useState(false);
   useEffect(() => {
