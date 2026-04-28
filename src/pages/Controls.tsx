@@ -407,6 +407,23 @@ export default function Controls() {
     }
   };
 
+  const handleRemoveLogo = async () => {
+    if (!user || !company || !logoRow?.storage_path) return;
+    if (!window.confirm("Remove company logo?")) return;
+    setUploadingLogo(true);
+    try {
+      await supabase.storage.from("company-logos").remove([logoRow.storage_path]);
+      const { error } = await supabase.from("company_logos").delete().eq("company", company);
+      if (error) throw error;
+      toast.success("Logo removed");
+      queryClient.invalidateQueries({ queryKey: ["company-logo", company] });
+    } catch (e) {
+      toast.error((e as any)?.message || "Failed to remove logo");
+    } finally {
+      setUploadingLogo(false);
+    }
+  };
+
   if (accountLoading) {
     return (
       <div className="min-h-screen bg-background">
