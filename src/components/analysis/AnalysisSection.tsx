@@ -68,6 +68,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Checkbox } from "@/components/ui/checkbox";
 import { BuyCreditsModal } from "@/components/BuyCreditsModal";
+import { useCredits } from "@/hooks/useCredits";
 import * as pdfjsLib from "pdfjs-dist";
 import { DrawingViewer } from "@/components/viewer";
 import type { DocumentSourceDescriptor, OverlayInput } from "@/components/viewer";
@@ -1050,6 +1051,8 @@ export function AnalysisSection({ requestId, files, projectId, sourceType, isWMS
   // ---- Manual triage overrides ----
   const [triageOverrides, setTriageOverrides] = useState<Map<string, "include" | "exclude">>(new Map());
   const [buyCreditsOpen, setBuyCreditsOpen] = useState(false);
+  const [buyCreditsReason, setBuyCreditsReason] = useState<string>("You're out of scan credits. Buy more to start a triage.");
+  const { balance: creditsBalance } = useCredits();
   const inFlightCountRef = useRef(0);
   const MAX_CONCURRENT_TRIAGE = 10;
   const MAX_CONCURRENT_TRIAGE_SINGLE = 5;
@@ -1779,34 +1782,9 @@ export function AnalysisSection({ requestId, files, projectId, sourceType, isWMS
 
   // Helper to start the backend pipeline
   const startPipeline = async (phaseOverride?: string) => {
-    // Credit gate — only the "triage" phase consumes a credit (per product spec).
-    // Per-AWP re-triage (handleTriageClass) is free.
-    if (phaseOverride === "triage") {
-      const { data: consumeData, error: consumeError } = await supabase.rpc(
-        "consume_credit",
-        { p_user_id: (await supabase.auth.getUser()).data.user?.id, p_analysis_request_id: requestId },
-      );
-      if (consumeError) {
-        toast({
-          title: "Couldn't check credit balance",
-          description: consumeError.message,
-          variant: "destructive",
-        });
-        return;
-      }
-      const result = consumeData as { success: boolean; balance: number; reason?: string } | null;
-      if (!result?.success) {
-        setBuyCreditsOpen(true);
-        toast({
-          title: "Out of credits",
-          description: "You need at least 1 credit to start a triage scan.",
-          variant: "destructive",
-        });
-        return;
-      }
-      // Refresh credit balance shown in header
-      queryClient.invalidateQueries({ queryKey: ["credits-balance"] });
-    }
+    // NOTE: Credit gating is handled in handleWmsvStartAnalysis (the user-facing
+    // Start Analysis button) — 1 credit per file in the analysis request.
+    // Internal restart-from-* menu items are dev/debug only and do not charge.
 
     // Save previous cache for rollback
     const prevMeta = queryClient.getQueryData(["analysis-request-meta", requestId]);
@@ -1878,8 +1856,45 @@ export function AnalysisSection({ requestId, files, projectId, sourceType, isWMS
   };
 
   const handleWmsvStartAnalysis = async () => {
+    const required = copiedFiles.length;
+    if (required === 0) return;
+
+    // Insufficient credits — open Buy Credits modal with explanation, do NOT start.
+    if (required > creditsBalance) {
+      setBuyCreditsReason(
+        `This analysis needs ${required} credit${required === 1 ? "" : "s"} (1 per file) but you only have ${creditsBalance}. Buy more credits to continue.`,
+      );
+      setBuyCreditsOpen(true);
+      return;
+    }
+
+    // Consume credits up-front (1 per file). Atomic, idempotent per call.
+    const userId = (await supabase.auth.getUser()).data.user?.id;
+    const { data: consumeData, error: consumeError } = await supabase.rpc(
+      "consume_credits" as any,
+      { p_user_id: userId, p_amount: required, p_analysis_request_id: requestId },
+    );
+    if (consumeError) {
+      toast({
+        title: "Couldn't check credit balance",
+        description: (consumeError as any)?.message ?? "Unknown error",
+        variant: "destructive",
+      });
+      return;
+    }
+    const result = consumeData as { success: boolean; balance: number; reason?: string } | null;
+    if (!result?.success) {
+      setBuyCreditsReason(
+        `This analysis needs ${required} credit${required === 1 ? "" : "s"} but you only have ${result?.balance ?? 0}. Buy more credits to continue.`,
+      );
+      setBuyCreditsOpen(true);
+      return;
+    }
+    queryClient.invalidateQueries({ queryKey: ["credits-balance"] });
+
     await startPipeline();
   };
+
 
   const handleWmsvStop = async () => {
     // Optimistic stop — keep active status, show "Stopping..."
@@ -3405,6 +3420,14 @@ export function AnalysisSection({ requestId, files, projectId, sourceType, isWMS
                       <option value="7.2">RiskClock Engine 7.2 (Apr-2026)</option>
                       <option value="7.3-tp">RiskClock Engine 7.3 Technical Preview (May-2026)</option>
                     </select>
+                    {copiedFiles.length > 0 && (
+                      <span className="text-xs text-muted-foreground tabular-nums">
+                        {copiedFiles.length} credit{copiedFiles.length === 1 ? "" : "s"}{" "}
+                        <span className={creditsBalance < copiedFiles.length ? "text-destructive font-medium" : ""}>
+                          ({creditsBalance} available)
+                        </span>
+                      </span>
+                    )}
                     <Button
                       size="sm"
                       onClick={handleWmsvStartAnalysis}
@@ -4223,7 +4246,7 @@ export function AnalysisSection({ requestId, files, projectId, sourceType, isWMS
       <BuyCreditsModal
         open={buyCreditsOpen}
         onOpenChange={setBuyCreditsOpen}
-        reason="You're out of scan credits. Buy more to start a triage."
+        reason={buyCreditsReason}
       />
 
       {/* Confirm delete file */}
