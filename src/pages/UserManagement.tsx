@@ -1031,8 +1031,11 @@ function CreateUserDialog({
             </Label>
           </div>
           <div>
-            <Label>Company (optional)</Label>
+            <Label>Company{companyRequired ? "" : " (optional)"}</Label>
             <CompanyCombobox value={company} onChange={setCompany} companies={companies} />
+            {companyRequired && !companyValid && (
+              <p className="text-xs text-destructive mt-1">Company is required for WMSV accounts</p>
+            )}
           </div>
           <div>
             <Label>Tags (optional)</Label>
