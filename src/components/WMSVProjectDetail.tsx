@@ -365,8 +365,8 @@ export function WMSVProjectDetail({ projectId, projectName }: WMSVProjectDetailP
         <div className="flex items-start justify-between mb-6">
           <h1 className="text-2xl font-bold text-foreground">{projectName}</h1>
           {request && (
-            <Badge variant="outline" className={statusColors[request.status] || ""}>
-              {statusLabels[request.status] || request.status}
+            <Badge variant="outline" className={statusColors[displayStatus || request.status] || ""}>
+              {statusLabels[displayStatus || request.status] || (displayStatus || request.status)}
             </Badge>
           )}
         </div>
