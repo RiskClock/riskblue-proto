@@ -335,14 +335,21 @@ export default function Logs() {
                 </TableHeader>
                 <TableBody>
                   {filteredLogs.map((log) => {
-                    const email = userEmails.get(log.user_id) || profileMap.get(log.user_id) || "Unknown";
+                    const m = log.metadata || {};
+                    // User column = the account that performed the action.
+                    // For admin events, prefer actor_email; otherwise the row's user_id is the actor.
+                    const actorEmail =
+                      (m.actor_email as string) ||
+                      userEmails.get(log.user_id) ||
+                      profileMap.get(log.user_id) ||
+                      "Unknown";
                     return (
                       <TableRow key={log.id}>
                         <TableCell className="text-sm text-muted-foreground whitespace-nowrap w-px">
                           {format(new Date(log.created_at), "MMM d, yyyy h:mm a")}
                         </TableCell>
-                        <TableCell className="text-sm whitespace-nowrap w-px" title={email}>
-                          {email}
+                        <TableCell className="text-sm whitespace-nowrap w-px" title={actorEmail}>
+                          {actorEmail}
                         </TableCell>
                         <TableCell className="text-sm whitespace-nowrap w-px">
                           {formatAction(log.action)}
