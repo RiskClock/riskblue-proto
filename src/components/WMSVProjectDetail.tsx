@@ -74,18 +74,21 @@ export function WMSVProjectDetail({ projectId, projectName }: WMSVProjectDetailP
   const [pendingFiles, setPendingFiles] = useState<File[]>([]);
   const [reviewOpen, setReviewOpen] = useState(false);
 
-  // Fetch user's enabled control selections
+  const { company } = useAccountType();
+  const normalizedCompany = (company || "").trim();
+
+  // Fetch the company's enabled control selections (shared across the company)
   const { data: controlSelections } = useQuery({
-    queryKey: ["wmsv-control-selections", user?.id],
+    queryKey: ["wmsv-company-control-selections", normalizedCompany.toLowerCase()],
     queryFn: async () => {
       const { data, error } = await supabase
-        .from("wmsv_control_selections")
+        .from("company_control_selections")
         .select("category, control_id")
-        .eq("user_id", user!.id);
+        .ilike("company", normalizedCompany);
       if (error) throw error;
       return data as Array<{ category: string; control_id: string }>;
     },
-    enabled: !!user?.id,
+    enabled: !!normalizedCompany,
     staleTime: 1000 * 60 * 10,
   });
 
