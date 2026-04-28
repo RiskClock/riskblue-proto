@@ -635,7 +635,7 @@ export default function Controls() {
 
         {/* Explanation - styled like the welcome banner on Projects */}
         {showDescription && (
-          <div className="bg-muted/50 p-6 rounded-lg mb-8 relative max-w-4xl">
+          <div className="bg-muted/50 p-6 rounded-lg mb-8 relative">
             <button
               onClick={handleDismissDescription}
               className="absolute top-3 right-3 text-muted-foreground hover:text-foreground"
@@ -647,7 +647,7 @@ export default function Controls() {
               <strong>🛠️ This is your company's control catalog on RiskBlue.</strong>
             </p>
             <p className="text-sm text-muted-foreground whitespace-pre-line">
-              {`The controls you select here determine how your company appears when General Contractors, Carriers, and Brokers build water mitigation guidelines. Only the controls you offer will be shown under your company name—positioning you as a qualified vendor for those capabilities.\n\nSelecting more relevant controls increases your visibility and likelihood of being chosen for projects.`}
+              {`The controls you select here determine how your company appears when General Contractors, Carriers, and Brokers build Water Mitigation Guidelines. Only the controls you offer will be shown under your company name—positioning you as a qualified vendor for those capabilities.\n\nSelecting more relevant controls increases your visibility and likelihood of being chosen for projects.`}
             </p>
           </div>
         )}
