@@ -87,29 +87,31 @@ export const ControlDetailsModal = ({
             </div>
           )}
 
-          {/* Author / Vendors & Responsible */}
-          {(companies.length > 0 || control.responsible) && (
-            <div className="grid grid-cols-2 gap-4 pt-2 border-t">
-              {companies.length > 0 && (
-                <div>
-                  <label className="text-xs text-muted-foreground font-medium uppercase tracking-wide">
-                    {companies.length > 1 ? `Vendors (${companies.length})` : "Vendor"}
-                  </label>
-                  <div className="text-sm font-medium mt-1 space-y-0.5">
-                    {companies.map((c) => (
-                      <div key={c}>{renderVendor(c)}</div>
-                    ))}
-                  </div>
+          {/* Author / Vendors / Responsible */}
+          <div className="grid grid-cols-3 gap-4 pt-2 border-t">
+            <div>
+              <label className="text-xs text-muted-foreground font-medium uppercase tracking-wide">Author</label>
+              <p className="text-sm font-medium mt-1">RiskClock</p>
+            </div>
+            <div>
+              <label className="text-xs text-muted-foreground font-medium uppercase tracking-wide">
+                {companies.length === 1 ? "Vendor" : `Vendors${companies.length > 1 ? ` (${companies.length})` : ""}`}
+              </label>
+              {companies.length > 0 ? (
+                <div className="text-sm font-medium mt-1 space-y-0.5">
+                  {companies.map((c) => (
+                    <div key={c}>{renderVendor(c)}</div>
+                  ))}
                 </div>
-              )}
-              {control.responsible && (
-                <div>
-                  <label className="text-xs text-muted-foreground font-medium uppercase tracking-wide">Responsible</label>
-                  <p className="text-sm font-medium mt-1">{control.responsible}</p>
-                </div>
+              ) : (
+                <p className="text-sm text-muted-foreground mt-1">—</p>
               )}
             </div>
-          )}
+            <div>
+              <label className="text-xs text-muted-foreground font-medium uppercase tracking-wide">Responsible</label>
+              <p className="text-sm font-medium mt-1">{control.responsible || "—"}</p>
+            </div>
+          </div>
         </div>
       </DialogContent>
     </Dialog>
