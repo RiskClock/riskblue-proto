@@ -1145,6 +1145,7 @@ export type Database = {
           email: string
           expires_at: string
           id: string
+          purpose: string
           token: string
           used: boolean | null
         }
@@ -1153,6 +1154,7 @@ export type Database = {
           email: string
           expires_at: string
           id?: string
+          purpose?: string
           token: string
           used?: boolean | null
         }
@@ -1161,6 +1163,7 @@ export type Database = {
           email?: string
           expires_at?: string
           id?: string
+          purpose?: string
           token?: string
           used?: boolean | null
         }
