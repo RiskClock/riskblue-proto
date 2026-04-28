@@ -1,4 +1,10 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import {
+  renderEmail,
+  renderGreeting,
+  renderParagraph,
+  renderNote,
+} from "../_shared/email-template.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -107,36 +113,20 @@ const handler = async (req: Request): Promise<Response> => {
     const resetLink = `${appUrl}/reset-password?token=${token}`;
 
     // Send the email via Resend
-    const htmlBody = `
-<!DOCTYPE html>
-<html>
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-</head>
-<body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">
-  <div style="background: linear-gradient(135deg, #0066cc 0%, #004499 100%); padding: 30px; text-align: center; border-radius: 8px 8px 0 0;">
-    <h1 style="color: white; margin: 0; font-size: 24px;">Reset Your Password</h1>
-  </div>
-  
-  <div style="background: #f9fafb; padding: 30px; border: 1px solid #e5e7eb; border-top: none; border-radius: 0 0 8px 8px;">
-    <p style="font-size: 16px; margin-top: 0;">Hi,</p>
-    
-    <p style="font-size: 16px;">We received a request to reset your password for your RiskBlue account. Click the button below to create a new password.</p>
-    
-    <div style="text-align: center; margin: 30px 0;">
-      <a href="${resetLink}" style="display: inline-block; background: #0066cc; color: white; padding: 14px 32px; text-decoration: none; border-radius: 6px; font-weight: 600; font-size: 16px;">Reset Password</a>
-    </div>
-    
-    <p style="font-size: 14px; color: #6b7280;">This link will expire in 1 hour.</p>
-    
-    <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 20px 0;">
-    
-    <p style="font-size: 12px; color: #9ca3af; margin-bottom: 0;">If you didn't request a password reset, you can safely ignore this email. Your password will remain unchanged.</p>
-  </div>
-</body>
-</html>
-    `;
+    const htmlBody = renderEmail({
+      title: "Reset Your Password",
+      bodyHtml: [
+        renderGreeting("Hi,"),
+        renderParagraph(
+          "We received a request to reset your password for your RiskBlue account. Click the button below to create a new password.",
+        ),
+        renderNote("This link will expire in 1 hour."),
+        renderNote(
+          "If you didn't request a password reset, you can safely ignore this email. Your password will remain unchanged.",
+        ),
+      ].join(""),
+      cta: { label: "Reset Password", href: resetLink },
+    });
 
     console.log(`Sending password reset email to ${email}`);
 

@@ -1,4 +1,13 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import {
+  renderEmail,
+  renderGreeting,
+  renderParagraph,
+  renderNote,
+  renderKeyValueTable,
+  renderCodeChip,
+  escapeHtml as sharedEscapeHtml,
+} from "../_shared/email-template.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -49,15 +58,12 @@ async function sendEmail(opts: {
   }
 }
 
-function emailLayout(title: string, bodyHtml: string) {
-  return `<!DOCTYPE html><html><body style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Arial,sans-serif;line-height:1.6;color:#333;max-width:600px;margin:0 auto;padding:20px;background:#ffffff;">
-  <div style="background:linear-gradient(135deg,#0066cc 0%,#004499 100%);padding:30px;text-align:center;border-radius:8px 8px 0 0;">
-    <h1 style="color:white;margin:0;font-size:22px;">${title}</h1>
-  </div>
-  <div style="background:#f9fafb;padding:30px;border:1px solid #e5e7eb;border-top:none;border-radius:0 0 8px 8px;">
-    ${bodyHtml}
-  </div>
-</body></html>`;
+function emailLayout(
+  title: string,
+  bodyHtml: string,
+  cta?: { label: string; href: string },
+) {
+  return renderEmail({ title, bodyHtml, cta });
 }
 
 async function getAuthedUser(req: Request) {
@@ -323,12 +329,16 @@ async function actionCreate(body: any, actor: { id: string | null; email: string
   if (password) {
     const html = emailLayout(
       "Welcome to RiskBlue",
-      `<p>Hi ${name},</p>
-      <p>An account has been created for you on RiskBlue.</p>
-      <p><strong>Email:</strong> ${email}<br/><strong>Temporary Password:</strong> <code style="background:#fff;padding:4px 8px;border:1px solid #e5e7eb;border-radius:4px;">${escapeHtml(password)}</code></p>
-      <p>You can sign in here:</p>
-      <div style="text-align:center;margin:24px 0;"><a href="${APP_URL}/auth" style="display:inline-block;background:#0066cc;color:#fff;padding:12px 28px;text-decoration:none;border-radius:6px;font-weight:600;">Sign In</a></div>
-      <p style="font-size:12px;color:#6b7280;">For security, please change your password after signing in.</p>`
+      [
+        renderGreeting(`Hi ${sharedEscapeHtml(name)},`),
+        renderParagraph("An account has been created for you on RiskBlue."),
+        renderKeyValueTable([
+          { label: "Email", value: sharedEscapeHtml(email) },
+          { label: "Temporary Password", value: renderCodeChip(password) },
+        ]),
+        renderNote("For security, please change your password after signing in."),
+      ].join(""),
+      { label: "Sign In", href: `${APP_URL}/auth` },
     );
     await sendEmail({ to: email, subject: "Your RiskBlue account", html });
   } else {
@@ -343,10 +353,16 @@ async function actionCreate(body: any, actor: { id: string | null; email: string
     const link = `${APP_URL}/reset-password?token=${token}`;
     const html = emailLayout(
       "Welcome to RiskBlue",
-      `<p>Hi ${name},</p>
-      <p>An account has been created for you on RiskBlue. Click the button below to set your password and get started.</p>
-      <div style="text-align:center;margin:30px 0;"><a href="${link}" style="display:inline-block;background:#0066cc;color:#fff;padding:14px 32px;text-decoration:none;border-radius:6px;font-weight:600;">Set Your Password</a></div>
-      <p style="font-size:14px;color:#6b7280;">This link expires in 3 days. If it expires, you can request a new password reset link from the sign-in page.</p>`
+      [
+        renderGreeting(`Hi ${sharedEscapeHtml(name)},`),
+        renderParagraph(
+          "An account has been created for you on RiskBlue. Click the button below to set your password and get started.",
+        ),
+        renderNote(
+          "This link expires in 3 days. If it expires, you can request a new password reset link from the sign-in page.",
+        ),
+      ].join(""),
+      { label: "Set Your Password", href: link },
     );
     await sendEmail({ to: email, subject: "Welcome to RiskBlue — set your password", html });
   }
