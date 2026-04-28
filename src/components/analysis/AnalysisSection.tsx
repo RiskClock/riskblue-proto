@@ -1038,6 +1038,11 @@ export function AnalysisSection({ requestId, files, projectId, sourceType, isWMS
   const [analyzeV2Running, setAnalyzeV2Running] = useState(false);
   const analyzeRunSyncRef = useRef<"idle" | "starting" | "running" | "stopping">("idle");
   const optimisticStatusRef = useRef<string | null>(null);
+  // Timestamp of the most recent local Start/Restart action. Used as a short
+  // post-start guard window (~1500ms) during which stale terminal rows
+  // (complete/failed) are ignored to prevent the spinner/badge from flickering.
+  const lastStartAtRef = useRef<number>(0);
+  const POST_START_GUARD_MS = 1500;
   const prevPipelinePhaseRef = useRef<string | null>(null);
   const [triagePhase, setTriagePhase] = useState<"extract" | "score" | null>(null);
   const [summaryGroupBy, setSummaryGroupBy] = useState<"awp" | "floor">("awp");
