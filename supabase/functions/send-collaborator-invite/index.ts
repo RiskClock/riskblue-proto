@@ -126,36 +126,19 @@ const handler = async (req: Request): Promise<Response> => {
       const inviteLink = `${appUrl}/accept-invite?token=${invitation.token}`;
       const roleDisplay = invitation.role === "admin" ? "Admin" : "Contributor";
 
-      const htmlBody = `
-<!DOCTYPE html>
-<html>
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-</head>
-<body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">
-  <div style="background: linear-gradient(135deg, #0066cc 0%, #004499 100%); padding: 30px; text-align: center; border-radius: 8px 8px 0 0;">
-    <h1 style="color: white; margin: 0; font-size: 24px;">You've Been Invited!</h1>
-  </div>
-  
-  <div style="background: #f9fafb; padding: 30px; border: 1px solid #e5e7eb; border-top: none; border-radius: 0 0 8px 8px;">
-    <p style="font-size: 16px; margin-top: 0;">Hi ${invitation.name},</p>
-    
-    <p style="font-size: 16px;">${invitedByName} has invited you to collaborate on the project <strong>"${projectName}"</strong> as a <strong>${roleDisplay}</strong>.</p>
-    
-    <div style="text-align: center; margin: 30px 0;">
-      <a href="${inviteLink}" style="display: inline-block; background: #0066cc; color: white; padding: 14px 32px; text-decoration: none; border-radius: 6px; font-weight: 600; font-size: 16px;">Accept Invitation</a>
-    </div>
-    
-    <p style="font-size: 14px; color: #6b7280;">This invitation will expire in 7 days.</p>
-    
-    <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 20px 0;">
-    
-    <p style="font-size: 12px; color: #9ca3af; margin-bottom: 0;">If you didn't expect this invitation, you can safely ignore this email.</p>
-  </div>
-</body>
-</html>
-      `;
+      const htmlBody = renderEmail({
+        title: "You've Been Invited",
+        subtitle: projectName,
+        bodyHtml: [
+          renderGreeting(`Hi ${escapeHtml(invitation.name)},`),
+          renderParagraph(
+            `${escapeHtml(invitedByName)} has invited you to collaborate on the project ${strong(`"${projectName}"`)} as a ${strong(roleDisplay)}.`,
+          ),
+          renderNote("This invitation will expire in 7 days."),
+          renderNote("If you didn't expect this invitation, you can safely ignore this email."),
+        ].join(""),
+        cta: { label: "Accept Invitation", href: inviteLink },
+      });
 
       console.log(`Sending invitation email to ${invitation.email}`);
 
