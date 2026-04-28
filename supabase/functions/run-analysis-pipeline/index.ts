@@ -99,20 +99,39 @@ function createProgressTracker(
   phase: string,
   total: number,
 ) {
+  const MIN_FLUSH_INTERVAL_MS = 750;
   let completed = 0;
   let lastWritten = -1;
+  let lastFlushAt = 0;
   let pendingFlush: Promise<void> | null = null;
+  let scheduledFlush: ReturnType<typeof setTimeout> | null = null;
 
-  async function doFlush(value: number) {
+  // includeStatus: true only on init() and the final flush of a phase.
+  // All intermediate progress writes skip the `status` field to avoid
+  // unnecessary realtime UPDATEs that cause UI flicker.
+  async function doFlush(value: number, includeStatus: boolean) {
+    const update: Record<string, unknown> = {
+      pipeline_phase: phase,
+      pipeline_progress_done: value,
+      pipeline_progress_total: total,
+    };
+    if (includeStatus) update.status = "processing";
     await admin
       .from("analysis_requests")
-      .update({
-        pipeline_phase: phase,
-        pipeline_progress_done: value,
-        pipeline_progress_total: total,
-        status: "processing",
-      } as any)
+      .update(update as any)
       .eq("id", requestId);
+  }
+
+  async function flushNow(force: boolean) {
+    const current = completed;
+    if (current <= lastWritten && !force) return;
+    lastWritten = current;
+    lastFlushAt = Date.now();
+    if (pendingFlush) await pendingFlush;
+    // Only the final flush per phase (force=true) writes status.
+    pendingFlush = doFlush(current, force);
+    await pendingFlush;
+    pendingFlush = null;
   }
 
   return {
@@ -121,18 +140,32 @@ function createProgressTracker(
       completed++;
     },
     async flush() {
-      const current = completed;
-      if (current <= lastWritten) return;
-      lastWritten = current;
-      // Await any pending flush to serialise DB writes
-      if (pendingFlush) await pendingFlush;
-      pendingFlush = doFlush(current);
-      await pendingFlush;
-      pendingFlush = null;
+      // Throttle: coalesce flushes to ≥MIN_FLUSH_INTERVAL_MS apart.
+      const now = Date.now();
+      const elapsed = now - lastFlushAt;
+      if (elapsed >= MIN_FLUSH_INTERVAL_MS) {
+        if (scheduledFlush) { clearTimeout(scheduledFlush); scheduledFlush = null; }
+        await flushNow(false);
+        return;
+      }
+      // Schedule a single trailing flush; later calls are absorbed.
+      if (!scheduledFlush) {
+        scheduledFlush = setTimeout(() => {
+          scheduledFlush = null;
+          flushNow(false).catch(() => {});
+        }, MIN_FLUSH_INTERVAL_MS - elapsed);
+      }
+    },
+    // Force the final write for a phase (cancels any trailing schedule).
+    async finalize() {
+      if (scheduledFlush) { clearTimeout(scheduledFlush); scheduledFlush = null; }
+      await flushNow(true);
     },
     async init() {
       lastWritten = 0;
-      await doFlush(0);
+      lastFlushAt = Date.now();
+      // Write status on init so the row enters processing immediately.
+      await doFlush(0, true);
     },
   };
 }
