@@ -342,29 +342,37 @@ async function actionCreate(body: any, actor: { id: string | null; email: string
     );
     await sendEmail({ to: email, subject: "Your RiskBlue account", html });
   } else {
-    // Generate setup token (3-day expiry, reuses password_reset_tokens)
+    // Generate account setup token (3-day expiry).
     const token = crypto.randomUUID();
     const expiresAt = new Date(Date.now() + 3 * 24 * 60 * 60 * 1000);
     await adminClient.from("password_reset_tokens").insert({
       email,
       token,
       expires_at: expiresAt.toISOString(),
+      purpose: "account_setup",
     });
-    const link = `${APP_URL}/reset-password?token=${token}`;
+    const link = `${APP_URL}/setup-account?token=${token}`;
     const html = emailLayout(
       "Welcome to RiskBlue",
       [
         renderGreeting(`Hi ${sharedEscapeHtml(name)},`),
         renderParagraph(
-          "An account has been created for you on RiskBlue. Click the button below to set your password and get started.",
+          "RiskBlue is a risk-mitigation planning platform for water systems and critical assets. Your administrator has created an account for you.",
+        ),
+        renderParagraph(
+          "Click the button below to set your password and access your projects.",
         ),
         renderNote(
-          "This link expires in 3 days. If it expires, you can request a new password reset link from the sign-in page.",
+          "This link expires in 3 days. If you didn't expect this email, you can safely ignore it.",
         ),
       ].join(""),
-      { label: "Set Your Password", href: link },
+      { label: "Set Up Your Account", href: link },
     );
-    await sendEmail({ to: email, subject: "Welcome to RiskBlue — set your password", html });
+    await sendEmail({
+      to: email,
+      subject: "Welcome to RiskBlue — set up your account",
+      html,
+    });
   }
 
   await logAdminEvent(created.user.id, "admin_user_created", actor, {
@@ -519,6 +527,7 @@ async function actionResetPassword(body: any, actor: { id: string | null; email:
     email: email.toLowerCase(),
     token,
     expires_at: expiresAt.toISOString(),
+    purpose: "password_reset",
   });
 
   const link = `${APP_URL}/reset-password?token=${token}`;
