@@ -222,9 +222,9 @@ export default function Logs() {
       lines.push({ value: `Project: ${m.project_name}`, label: "project" });
     }
 
-    // Actor (for admin events)
-    if (m.actor_email && m.actor_email !== userEmails.get(log.user_id)) {
-      lines.push({ value: `By: ${m.actor_email}`, label: "actor" });
+    // Actor (for admin events) — surface here only if it differs from the User column
+    if (m.actor_email && m.actor_email !== (userEmails.get(log.user_id) || "")) {
+      // Actor will be shown in the User column; nothing additional here.
     }
 
     if (lines.length === 0) return <span className="text-muted-foreground">—</span>;
