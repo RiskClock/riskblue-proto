@@ -960,8 +960,11 @@ function CreateUserDialog({
   const creditsNum = Math.max(0, Math.floor(Number(credits) || 0));
   const creditsValid = credits.trim() !== "" && Number.isFinite(Number(credits)) && Number(credits) >= 0;
 
+  const companyRequired = isWmsv;
+  const companyValid = !companyRequired || !!(company && company.trim());
+
   const submit = () => {
-    if (!email.trim() || !name.trim() || !creditsValid) return;
+    if (!email.trim() || !name.trim() || !creditsValid || !companyValid) return;
     onSubmit({
       email: email.trim(),
       name: name.trim(),
