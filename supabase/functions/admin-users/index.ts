@@ -531,10 +531,16 @@ async function actionResetPassword(body: any, actor: { id: string | null; email:
 
   const html = emailLayout(
     "Reset Your Password",
-    `<p>Hi ${escapeHtml(name)},</p>
-    <p>A password reset has been requested for your RiskBlue account. Click the button below to set a new password.</p>
-    <div style="text-align:center;margin:30px 0;"><a href="${link}" style="display:inline-block;background:#0066cc;color:#fff;padding:14px 32px;text-decoration:none;border-radius:6px;font-weight:600;">Reset Password</a></div>
-    <p style="font-size:14px;color:#6b7280;">This link expires in 3 days. If you didn't expect this, you can ignore this email.</p>`
+    [
+      renderGreeting(name ? `Hi ${sharedEscapeHtml(name)},` : "Hi,"),
+      renderParagraph(
+        "A password reset has been requested for your RiskBlue account. Click the button below to set a new password.",
+      ),
+      renderNote(
+        "This link expires in 3 days. If you didn't expect this, you can safely ignore this email.",
+      ),
+    ].join(""),
+    { label: "Reset Password", href: link },
   );
 
   // BCC qbo@riskclock.com only when target is NOT internal
