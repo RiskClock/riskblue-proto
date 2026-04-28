@@ -126,17 +126,15 @@ export const BuyCreditsModal = ({ open, onOpenChange, reason }: BuyCreditsModalP
             )}
             <div className="grid gap-4 md:grid-cols-3 mt-2">
               {PACKAGES.map((pkg) => {
-                // Baseline = buying the same number of credits at the 20-pack unit rate
-                // (no bulk discount). For WMSV, the 70% promo is shown once in the banner,
-                // so per-card we only surface the additional bulk savings on 100/500.
-                const baseUnit = isWMSV
-                  ? PACKAGES[0].priceUsd / PACKAGES[0].credits
-                  : PACKAGES[0].originalPriceUsd / PACKAGES[0].credits;
-                const undiscountedPrice = Math.round(baseUnit * pkg.credits);
+                // Strikethrough always shows the original full price ($100/$430/$1650)
+                // on every card, for both WMSV and non-WMSV. Discount badge shows on
+                // the 100 and 500 packs only, computed from the original baseline.
                 const displayPrice = isWMSV ? pkg.priceUsd : pkg.originalPriceUsd;
-                const bulkDiscountPct = pkg.id !== "pack_20" && undiscountedPrice > displayPrice
+                const undiscountedPrice = pkg.originalPriceUsd;
+                const discountPct = pkg.id !== "pack_20" && undiscountedPrice > displayPrice
                   ? Math.round((1 - displayPrice / undiscountedPrice) * 100)
                   : 0;
+                const showStrikethrough = undiscountedPrice > displayPrice;
                 return (
                   <Card
                     key={pkg.id}
