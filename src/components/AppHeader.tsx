@@ -98,6 +98,10 @@ export const AppHeader = ({ leftContent }: AppHeaderProps) => {
                   <DropdownMenuSeparator />
                 </>
               )}
+              <DropdownMenuItem onClick={() => setChangePasswordOpen(true)} className="cursor-pointer">
+                <KeyRound className="h-4 w-4 mr-2" />
+                Change Password
+              </DropdownMenuItem>
               <DropdownMenuItem onClick={signOut} className="cursor-pointer">
                 <LogOut className="h-4 w-4 mr-2" />
                 Logout
