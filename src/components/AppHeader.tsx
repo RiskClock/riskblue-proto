@@ -10,11 +10,12 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { LogOut, Settings, FileText, BarChart3, Shield, Coins, Users } from "lucide-react";
+import { LogOut, Settings, FileText, BarChart3, Shield, Coins, Users, KeyRound } from "lucide-react";
 import riskBlueLogo from "@/assets/logo-riskblue.png";
 import { useAccountType } from "@/hooks/useAccountType";
 import { useCredits } from "@/hooks/useCredits";
 import { BuyCreditsModal } from "@/components/BuyCreditsModal";
+import { ChangePasswordModal } from "@/components/ChangePasswordModal";
 
 interface AppHeaderProps {
   leftContent?: React.ReactNode;
@@ -28,6 +29,7 @@ export const AppHeader = ({ leftContent }: AppHeaderProps) => {
   const { isWMSV, loading: accountLoading } = useAccountType();
   const { balance: credits } = useCredits();
   const [buyOpen, setBuyOpen] = useState(false);
+  const [changePasswordOpen, setChangePasswordOpen] = useState(false);
 
   const isInternalUser = user?.email?.toLowerCase().endsWith("@riskclock.com") ?? false;
 
@@ -96,6 +98,10 @@ export const AppHeader = ({ leftContent }: AppHeaderProps) => {
                   <DropdownMenuSeparator />
                 </>
               )}
+              <DropdownMenuItem onClick={() => setChangePasswordOpen(true)} className="cursor-pointer">
+                <KeyRound className="h-4 w-4 mr-2" />
+                Change Password
+              </DropdownMenuItem>
               <DropdownMenuItem onClick={signOut} className="cursor-pointer">
                 <LogOut className="h-4 w-4 mr-2" />
                 Logout
@@ -105,6 +111,7 @@ export const AppHeader = ({ leftContent }: AppHeaderProps) => {
         </div>
       </div>
       <BuyCreditsModal open={buyOpen} onOpenChange={setBuyOpen} />
+      <ChangePasswordModal open={changePasswordOpen} onOpenChange={setChangePasswordOpen} />
     </header>
   );
 };
