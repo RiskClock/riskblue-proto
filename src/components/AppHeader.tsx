@@ -29,6 +29,7 @@ export const AppHeader = ({ leftContent }: AppHeaderProps) => {
   const { isWMSV, loading: accountLoading } = useAccountType();
   const { balance: credits } = useCredits();
   const [buyOpen, setBuyOpen] = useState(false);
+  const [changePasswordOpen, setChangePasswordOpen] = useState(false);
 
   const isInternalUser = user?.email?.toLowerCase().endsWith("@riskclock.com") ?? false;
 
