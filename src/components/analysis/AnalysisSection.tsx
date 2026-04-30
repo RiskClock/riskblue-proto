@@ -4079,24 +4079,26 @@ export function AnalysisSection({ requestId, files, projectId, sourceType, isWMS
             <div className="flex items-center gap-2">
               <FileText className="w-4 h-4 text-primary" />
               <h2 className="text-base font-semibold">Analysis Summary</h2>
-              <Button
-                size="sm"
-                variant={summaryRunning ? "destructive" : "outline"}
-                className="h-7 text-xs ml-2"
-                onClick={handleSummarizeAll}
-              >
-                {summaryRunning ? (
-                  <>
-                    <Square className="w-3 h-3 mr-1" />
-                    Stop
-                  </>
-                ) : (
-                  <>
-                    <Play className="w-3 h-3 mr-1" />
-                    Summarize Analysis Results
-                  </>
-                )}
-              </Button>
+              {!isWMSV && (
+                <Button
+                  size="sm"
+                  variant={summaryRunning ? "destructive" : "outline"}
+                  className="h-7 text-xs ml-2"
+                  onClick={handleSummarizeAll}
+                >
+                  {summaryRunning ? (
+                    <>
+                      <Square className="w-3 h-3 mr-1" />
+                      Stop
+                    </>
+                  ) : (
+                    <>
+                      <Play className="w-3 h-3 mr-1" />
+                      Summarize Analysis Results
+                    </>
+                  )}
+                </Button>
+              )}
             </div>
             {!isWMSV && (
               <div className="flex items-center gap-1">
