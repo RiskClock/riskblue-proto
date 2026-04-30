@@ -131,9 +131,11 @@ export const BuyCreditsModal = ({ open, onOpenChange, reason }: BuyCreditsModalP
                 // the 100 and 500 packs only, computed from the original baseline.
                 const displayPrice = isWMSV ? pkg.priceUsd : pkg.originalPriceUsd;
                 const undiscountedPrice = pkg.originalPriceUsd;
-                const discountPct = pkg.id !== "pack_20" && undiscountedPrice > displayPrice
-                  ? Math.round((1 - displayPrice / undiscountedPrice) * 100)
-                  : 0;
+                // Bulk savings vs the smallest pack's per-credit price.
+                // pack_100 → 13% off, pack_500 → 33% off.
+                const bulkDiscountPct =
+                  pkg.id === "pack_100" ? 13 : pkg.id === "pack_500" ? 33 : 0;
+                const discountPct = bulkDiscountPct;
                 const showStrikethrough = undiscountedPrice > displayPrice;
                 return (
                   <Card
