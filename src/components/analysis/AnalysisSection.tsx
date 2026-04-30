@@ -1766,7 +1766,7 @@ export function AnalysisSection({ requestId, files, projectId, sourceType, isWMS
     return sortedPromptsBase.filter(p => allowed.has(p.awp_class_name));
   }, [sortedPromptsBase, visibleAwpClasses]);
 
-  // Apply default disabled AWP classes (ERS, MRS, TWR, FS, SPSDD) when nothing has been persisted yet.
+  // Apply default disabled AWP classes (ERS, MRS, TWR, FS, SPSDD, DHW, HYD) when nothing has been persisted yet.
   const DEFAULT_DISABLED_AWP = useMemo(
     () => new Set([
       "Mechanical Riser",
@@ -1774,6 +1774,8 @@ export function AnalysisSection({ requestId, files, projectId, sourceType, isWMS
       "Temporary Water Run",
       "Fire Suppression System",
       "Sump Pit, Storm Drain & Drainage",
+      "Domestic Hot Water",
+      "Hydronics",
     ]),
     []
   );
