@@ -64,12 +64,6 @@ export const AppHeader = ({ leftContent }: AppHeaderProps) => {
               </Avatar>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-56">
-              {isWMSV && !isInternalUser && (
-                <DropdownMenuItem onClick={() => navigate("/controls")} className="cursor-pointer">
-                  <Shield className="h-4 w-4 mr-2" />
-                  Controls
-                </DropdownMenuItem>
-              )}
               <DropdownMenuItem
                 onClick={() => setBuyOpen(true)}
                 className="cursor-pointer"
