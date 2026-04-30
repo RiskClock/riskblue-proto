@@ -1047,6 +1047,16 @@ function CreateUserDialog({
               <TagPicker selected={tags} onChange={setTags} available={availableTags} />
             </div>
           </div>
+          <div className="flex items-center gap-2">
+            <Checkbox
+              id="send-welcome-email"
+              checked={sendWelcomeEmail}
+              onCheckedChange={(v) => setSendWelcomeEmail(!!v)}
+            />
+            <Label htmlFor="send-welcome-email" className="cursor-pointer font-normal">
+              Send welcome email to user
+            </Label>
+          </div>
         </div>
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)} disabled={loading}>
