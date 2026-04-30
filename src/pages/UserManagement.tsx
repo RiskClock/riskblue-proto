@@ -525,28 +525,23 @@ const UserManagement = () => {
               <PopoverContent align="end" className="w-80 space-y-4">
                 <div>
                   <Label className="text-xs uppercase text-muted-foreground">Company</Label>
-                  <CompanyCombobox
-                    value={filterCompany}
-                    onChange={setFilterCompany}
-                    companies={companies}
-                    allowCreate={false}
-                    placeholder="All companies"
+                  <MultiSelectChecklist
+                    options={companies.map((c) => ({ value: c, label: c }))}
+                    selected={filterCompanies}
+                    onChange={setFilterCompanies}
+                    allLabel="All companies"
+                    emptyLabel="No companies"
+                    searchable
                   />
                 </div>
                 <div>
                   <Label className="text-xs uppercase text-muted-foreground">Status</Label>
-                  <select
-                    className="mt-1 w-full h-9 border rounded-md bg-background px-2 text-sm"
-                    value={filterStatus || ""}
-                    onChange={(e) => setFilterStatus(e.target.value || null)}
-                  >
-                    <option value="">All statuses</option>
-                    {STATUS_OPTIONS.map((o) => (
-                      <option key={o.value} value={o.value}>
-                        {o.label}
-                      </option>
-                    ))}
-                  </select>
+                  <MultiSelectChecklist
+                    options={STATUS_OPTIONS}
+                    selected={filterStatuses}
+                    onChange={setFilterStatuses}
+                    allLabel="All statuses"
+                  />
                 </div>
                 <div>
                   <Label className="text-xs uppercase text-muted-foreground">Tags</Label>
