@@ -201,8 +201,8 @@ const DEFAULT_SORT_DIR: SortDir = "desc";
 
 interface PersistedPrefs {
   search: string;
-  filterCompany: string | null;
-  filterStatus: string | null;
+  filterCompanies: string[];
+  filterStatuses: string[];
   filterTags: string[]; // tag names
   sortKey: SortKey;
   sortDir: SortDir;
@@ -212,8 +212,8 @@ function loadPrefs(): PersistedPrefs {
   if (typeof window === "undefined") {
     return {
       search: "",
-      filterCompany: null,
-      filterStatus: null,
+      filterCompanies: [],
+      filterStatuses: [],
       filterTags: [],
       sortKey: DEFAULT_SORT_KEY,
       sortDir: DEFAULT_SORT_DIR,
@@ -223,10 +223,13 @@ function loadPrefs(): PersistedPrefs {
     const raw = window.localStorage.getItem(STORAGE_KEY);
     if (!raw) throw new Error("none");
     const parsed = JSON.parse(raw);
+    // Backwards compat: previously stored filterCompany/filterStatus as single string|null
+    const legacyCompany = typeof parsed.filterCompany === "string" ? [parsed.filterCompany] : [];
+    const legacyStatus = typeof parsed.filterStatus === "string" ? [parsed.filterStatus] : [];
     return {
       search: typeof parsed.search === "string" ? parsed.search : "",
-      filterCompany: parsed.filterCompany ?? null,
-      filterStatus: parsed.filterStatus ?? null,
+      filterCompanies: Array.isArray(parsed.filterCompanies) ? parsed.filterCompanies : legacyCompany,
+      filterStatuses: Array.isArray(parsed.filterStatuses) ? parsed.filterStatuses : legacyStatus,
       filterTags: Array.isArray(parsed.filterTags) ? parsed.filterTags : [],
       sortKey: parsed.sortKey || DEFAULT_SORT_KEY,
       sortDir: parsed.sortDir === "asc" ? "asc" : parsed.sortDir === "desc" ? "desc" : DEFAULT_SORT_DIR,
@@ -234,8 +237,8 @@ function loadPrefs(): PersistedPrefs {
   } catch {
     return {
       search: "",
-      filterCompany: null,
-      filterStatus: null,
+      filterCompanies: [],
+      filterStatuses: [],
       filterTags: [],
       sortKey: DEFAULT_SORT_KEY,
       sortDir: DEFAULT_SORT_DIR,
