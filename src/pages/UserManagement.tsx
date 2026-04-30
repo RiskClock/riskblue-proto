@@ -934,6 +934,7 @@ function CreateUserDialog({
     company: string | null;
     tags: string[];
     credits: number;
+    send_welcome_email: boolean;
   }) => void;
   loading: boolean;
 }) {
@@ -944,6 +945,7 @@ function CreateUserDialog({
   const [company, setCompany] = useState<string | null>(null);
   const [tags, setTags] = useState<string[]>([]);
   const [credits, setCredits] = useState<string>("20");
+  const [sendWelcomeEmail, setSendWelcomeEmail] = useState(true);
 
   useEffect(() => {
     if (open) {
@@ -954,6 +956,7 @@ function CreateUserDialog({
       setCompany(null);
       setTags([]);
       setCredits("20");
+      setSendWelcomeEmail(true);
     }
   }, [open]);
 
@@ -973,6 +976,7 @@ function CreateUserDialog({
       company,
       tags,
       credits: creditsNum,
+      send_welcome_email: sendWelcomeEmail,
     });
   };
 
