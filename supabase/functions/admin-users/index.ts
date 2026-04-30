@@ -387,6 +387,7 @@ async function actionCreate(body: any, actor: { id: string | null; email: string
     tags: tagNames,
     credits_balance: credits,
     set_password_directly: !!password,
+    welcome_email_sent: sendWelcomeEmail,
   });
 
   return json({ success: true, user_id: created.user.id });
