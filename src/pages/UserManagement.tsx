@@ -486,7 +486,7 @@ const UserManagement = () => {
   if (!isInternal) return null;
 
   const filterCount =
-    (filterCompany ? 1 : 0) + (filterStatus ? 1 : 0) + (filterTags.length > 0 ? 1 : 0);
+    (filterCompanies.length > 0 ? 1 : 0) + (filterStatuses.length > 0 ? 1 : 0) + (filterTags.length > 0 ? 1 : 0);
 
   return (
     <div className="min-h-screen bg-background">
