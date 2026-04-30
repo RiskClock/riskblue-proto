@@ -111,6 +111,7 @@ export const AppHeader = ({ leftContent }: AppHeaderProps) => {
         </div>
       </div>
       <BuyCreditsModal open={buyOpen} onOpenChange={setBuyOpen} />
+      <ChangePasswordModal open={changePasswordOpen} onOpenChange={setChangePasswordOpen} />
     </header>
   );
 };
