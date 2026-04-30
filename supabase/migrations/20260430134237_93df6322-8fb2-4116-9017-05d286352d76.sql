@@ -1,0 +1,1 @@
+UPDATE public.water_systems SET is_active = false, updated_at = now() WHERE name IN ('Domestic Hot Water', 'Hydronics');
