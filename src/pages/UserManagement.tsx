@@ -290,7 +290,7 @@ const UserManagement = () => {
 
   // ---- persisted filters / sort ----
   const [prefs, setPrefs] = useState<PersistedPrefs>(() => loadPrefs());
-  const { search, filterCompany, filterStatus, filterTags, sortKey, sortDir } = prefs;
+  const { search, filterCompanies, filterStatuses, filterTags, sortKey, sortDir } = prefs;
 
   useEffect(() => {
     try {
@@ -301,16 +301,22 @@ const UserManagement = () => {
   }, [prefs]);
 
   const setSearch = (v: string) => setPrefs((p) => ({ ...p, search: v }));
-  const setFilterCompany = (v: string | null) =>
-    setPrefs((p) => ({ ...p, filterCompany: v }));
-  const setFilterStatus = (v: string | null) =>
-    setPrefs((p) => ({ ...p, filterStatus: v }));
+  const setFilterCompanies = (v: string[]) =>
+    setPrefs((p) => ({ ...p, filterCompanies: v }));
+  const setFilterStatuses = (v: string[]) =>
+    setPrefs((p) => ({ ...p, filterStatuses: v }));
   const setFilterTags = (v: string[]) => setPrefs((p) => ({ ...p, filterTags: v }));
 
   const filteredSorted = useMemo(() => {
     let rows = [...users];
-    if (filterCompany) rows = rows.filter((u) => (u.company || "") === filterCompany);
-    if (filterStatus) rows = rows.filter((u) => getStatus(u) === filterStatus);
+    if (filterCompanies.length > 0) {
+      const set = new Set(filterCompanies);
+      rows = rows.filter((u) => set.has(u.company || ""));
+    }
+    if (filterStatuses.length > 0) {
+      const set = new Set(filterStatuses);
+      rows = rows.filter((u) => set.has(getStatus(u)));
+    }
     if (filterTags.length > 0) {
       const wanted = new Set(filterTags.map((t) => t.toLowerCase()));
       rows = rows.filter((u) =>
