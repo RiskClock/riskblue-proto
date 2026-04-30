@@ -4081,7 +4081,7 @@ export function AnalysisSection({ requestId, files, projectId, sourceType, isWMS
             <div className="flex items-center gap-2">
               <FileText className="w-4 h-4 text-primary" />
               <h2 className="text-base font-semibold">Analysis Summary</h2>
-              {!isWMSV && (
+              {isInternal && (
                 <Button
                   size="sm"
                   variant={summaryRunning ? "destructive" : "outline"}
