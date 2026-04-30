@@ -331,7 +331,9 @@ const Projects = () => {
                 <strong>👋 Welcome to RiskBlue!</strong>
               </p>
               <p className="text-sm text-muted-foreground">
-                RiskBlue helps builders identify project-specific water risks, determine the right mitigation strategies, and translate them into structured plans and coordinated execution. By unifying risk discovery, planning, and field operations, RiskBlue ensures consistent control, accountability, and rapid response across the entire water-mitigation lifecycle.
+                {isWMSV
+                  ? "RiskBlue provides a secure, access-controlled environment to identify project-specific water risks, define mitigation strategies, and execute structured plans. All data is processed within isolated project workspaces to ensure integrity, accountability, and protection."
+                  : "RiskBlue helps builders identify project-specific water risks, determine the right mitigation strategies, and translate them into structured plans and coordinated execution. By unifying risk discovery, planning, and field operations, RiskBlue ensures consistent control, accountability, and rapid response across the entire water-mitigation lifecycle."}
               </p>
             </div>
           )}
@@ -343,7 +345,7 @@ const Projects = () => {
               </h1>
             </div>
             <div className="flex gap-3">
-              {isWMSV && !controlsLoading && hasControls === false ? (
+              {isWMSV && !company ? (
                 <TooltipProvider>
                   <Tooltip>
                     <TooltipTrigger asChild>
@@ -352,7 +354,7 @@ const Projects = () => {
                       </span>
                     </TooltipTrigger>
                     <TooltipContent>
-                      <p>{company ? "Configure mitigation controls first" : "Account misconfiguration — contact support"}</p>
+                      <p>Account misconfiguration — contact support</p>
                     </TooltipContent>
                   </Tooltip>
                 </TooltipProvider>
@@ -363,7 +365,7 @@ const Projects = () => {
           </div>
         </div>
 
-        {loading || !user || accountLoading || (isWMSV && controlsLoading) ? (
+        {loading || !user || accountLoading ? (
           <div className="text-center py-12">
             <p className="text-muted-foreground">Loading projects...</p>
           </div>
@@ -376,11 +378,6 @@ const Projects = () => {
               <Button asChild>
                 <a href="mailto:support@riskclock.com">Contact Support</a>
               </Button>
-            </div>
-          ) : isWMSV && hasControls === false ? (
-            <div className="text-center py-12">
-              <p className="text-muted-foreground mb-4">Need to configure mitigation control</p>
-              <Button onClick={() => navigate("/controls")}>Configure Controls</Button>
             </div>
           ) : (
             <div className="text-center py-12">
