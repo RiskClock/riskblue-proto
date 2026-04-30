@@ -201,8 +201,8 @@ const DEFAULT_SORT_DIR: SortDir = "desc";
 
 interface PersistedPrefs {
   search: string;
-  filterCompany: string | null;
-  filterStatus: string | null;
+  filterCompanies: string[];
+  filterStatuses: string[];
   filterTags: string[]; // tag names
   sortKey: SortKey;
   sortDir: SortDir;
@@ -212,8 +212,8 @@ function loadPrefs(): PersistedPrefs {
   if (typeof window === "undefined") {
     return {
       search: "",
-      filterCompany: null,
-      filterStatus: null,
+      filterCompanies: [],
+      filterStatuses: [],
       filterTags: [],
       sortKey: DEFAULT_SORT_KEY,
       sortDir: DEFAULT_SORT_DIR,
@@ -223,10 +223,13 @@ function loadPrefs(): PersistedPrefs {
     const raw = window.localStorage.getItem(STORAGE_KEY);
     if (!raw) throw new Error("none");
     const parsed = JSON.parse(raw);
+    // Backwards compat: previously stored filterCompany/filterStatus as single string|null
+    const legacyCompany = typeof parsed.filterCompany === "string" ? [parsed.filterCompany] : [];
+    const legacyStatus = typeof parsed.filterStatus === "string" ? [parsed.filterStatus] : [];
     return {
       search: typeof parsed.search === "string" ? parsed.search : "",
-      filterCompany: parsed.filterCompany ?? null,
-      filterStatus: parsed.filterStatus ?? null,
+      filterCompanies: Array.isArray(parsed.filterCompanies) ? parsed.filterCompanies : legacyCompany,
+      filterStatuses: Array.isArray(parsed.filterStatuses) ? parsed.filterStatuses : legacyStatus,
       filterTags: Array.isArray(parsed.filterTags) ? parsed.filterTags : [],
       sortKey: parsed.sortKey || DEFAULT_SORT_KEY,
       sortDir: parsed.sortDir === "asc" ? "asc" : parsed.sortDir === "desc" ? "desc" : DEFAULT_SORT_DIR,
@@ -234,8 +237,8 @@ function loadPrefs(): PersistedPrefs {
   } catch {
     return {
       search: "",
-      filterCompany: null,
-      filterStatus: null,
+      filterCompanies: [],
+      filterStatuses: [],
       filterTags: [],
       sortKey: DEFAULT_SORT_KEY,
       sortDir: DEFAULT_SORT_DIR,
@@ -287,7 +290,7 @@ const UserManagement = () => {
 
   // ---- persisted filters / sort ----
   const [prefs, setPrefs] = useState<PersistedPrefs>(() => loadPrefs());
-  const { search, filterCompany, filterStatus, filterTags, sortKey, sortDir } = prefs;
+  const { search, filterCompanies, filterStatuses, filterTags, sortKey, sortDir } = prefs;
 
   useEffect(() => {
     try {
@@ -298,16 +301,22 @@ const UserManagement = () => {
   }, [prefs]);
 
   const setSearch = (v: string) => setPrefs((p) => ({ ...p, search: v }));
-  const setFilterCompany = (v: string | null) =>
-    setPrefs((p) => ({ ...p, filterCompany: v }));
-  const setFilterStatus = (v: string | null) =>
-    setPrefs((p) => ({ ...p, filterStatus: v }));
+  const setFilterCompanies = (v: string[]) =>
+    setPrefs((p) => ({ ...p, filterCompanies: v }));
+  const setFilterStatuses = (v: string[]) =>
+    setPrefs((p) => ({ ...p, filterStatuses: v }));
   const setFilterTags = (v: string[]) => setPrefs((p) => ({ ...p, filterTags: v }));
 
   const filteredSorted = useMemo(() => {
     let rows = [...users];
-    if (filterCompany) rows = rows.filter((u) => (u.company || "") === filterCompany);
-    if (filterStatus) rows = rows.filter((u) => getStatus(u) === filterStatus);
+    if (filterCompanies.length > 0) {
+      const set = new Set(filterCompanies);
+      rows = rows.filter((u) => set.has(u.company || ""));
+    }
+    if (filterStatuses.length > 0) {
+      const set = new Set(filterStatuses);
+      rows = rows.filter((u) => set.has(getStatus(u)));
+    }
     if (filterTags.length > 0) {
       const wanted = new Set(filterTags.map((t) => t.toLowerCase()));
       rows = rows.filter((u) =>
@@ -362,7 +371,7 @@ const UserManagement = () => {
       return 0;
     });
     return rows;
-  }, [users, search, filterCompany, filterStatus, filterTags, sortKey, sortDir]);
+  }, [users, search, filterCompanies, filterStatuses, filterTags, sortKey, sortDir]);
 
   const toggleSort = (key: SortKey) => {
     setPrefs((p) => {
@@ -389,8 +398,8 @@ const UserManagement = () => {
 
   const isDirty =
     !!search ||
-    !!filterCompany ||
-    !!filterStatus ||
+    filterCompanies.length > 0 ||
+    filterStatuses.length > 0 ||
     filterTags.length > 0 ||
     sortKey !== DEFAULT_SORT_KEY ||
     sortDir !== DEFAULT_SORT_DIR;
@@ -398,8 +407,8 @@ const UserManagement = () => {
   const resetAll = () => {
     setPrefs({
       search: "",
-      filterCompany: null,
-      filterStatus: null,
+      filterCompanies: [],
+      filterStatuses: [],
       filterTags: [],
       sortKey: DEFAULT_SORT_KEY,
       sortDir: DEFAULT_SORT_DIR,
@@ -477,7 +486,7 @@ const UserManagement = () => {
   if (!isInternal) return null;
 
   const filterCount =
-    (filterCompany ? 1 : 0) + (filterStatus ? 1 : 0) + (filterTags.length > 0 ? 1 : 0);
+    (filterCompanies.length > 0 ? 1 : 0) + (filterStatuses.length > 0 ? 1 : 0) + (filterTags.length > 0 ? 1 : 0);
 
   return (
     <div className="min-h-screen bg-background">
@@ -516,28 +525,23 @@ const UserManagement = () => {
               <PopoverContent align="end" className="w-80 space-y-4">
                 <div>
                   <Label className="text-xs uppercase text-muted-foreground">Company</Label>
-                  <CompanyCombobox
-                    value={filterCompany}
-                    onChange={setFilterCompany}
-                    companies={companies}
-                    allowCreate={false}
-                    placeholder="All companies"
+                  <MultiSelectChecklist
+                    options={companies.map((c) => ({ value: c, label: c }))}
+                    selected={filterCompanies}
+                    onChange={setFilterCompanies}
+                    allLabel="All companies"
+                    emptyLabel="No companies"
+                    searchable
                   />
                 </div>
                 <div>
                   <Label className="text-xs uppercase text-muted-foreground">Status</Label>
-                  <select
-                    className="mt-1 w-full h-9 border rounded-md bg-background px-2 text-sm"
-                    value={filterStatus || ""}
-                    onChange={(e) => setFilterStatus(e.target.value || null)}
-                  >
-                    <option value="">All statuses</option>
-                    {STATUS_OPTIONS.map((o) => (
-                      <option key={o.value} value={o.value}>
-                        {o.label}
-                      </option>
-                    ))}
-                  </select>
+                  <MultiSelectChecklist
+                    options={STATUS_OPTIONS}
+                    selected={filterStatuses}
+                    onChange={setFilterStatuses}
+                    allLabel="All statuses"
+                  />
                 </div>
                 <div>
                   <Label className="text-xs uppercase text-muted-foreground">Tags</Label>
@@ -821,6 +825,115 @@ const UserManagement = () => {
     </div>
   );
 };
+
+// ---------- Multi-select checklist ----------
+
+function MultiSelectChecklist({
+  options,
+  selected,
+  onChange,
+  allLabel,
+  emptyLabel = "No options",
+  searchable = false,
+}: {
+  options: { value: string; label: string }[];
+  selected: string[];
+  onChange: (v: string[]) => void;
+  allLabel: string;
+  emptyLabel?: string;
+  searchable?: boolean;
+}) {
+  const [open, setOpen] = useState(false);
+  const [query, setQuery] = useState("");
+  const allValues = options.map((o) => o.value);
+  const allChecked = options.length > 0 && selected.length === options.length;
+  const filtered = query
+    ? options.filter((o) => o.label.toLowerCase().includes(query.toLowerCase()))
+    : options;
+
+  const toggle = (value: string) => {
+    if (selected.includes(value)) {
+      onChange(selected.filter((v) => v !== value));
+    } else {
+      onChange([...selected, value]);
+    }
+  };
+
+  const triggerLabel =
+    selected.length === 0
+      ? allLabel
+      : selected.length === 1
+      ? options.find((o) => o.value === selected[0])?.label || selected[0]
+      : `${selected.length} selected`;
+
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <Button
+          variant="outline"
+          role="combobox"
+          className="mt-1 w-full justify-between font-normal h-9"
+        >
+          <span className={cn("truncate", selected.length === 0 && "text-muted-foreground")}>
+            {triggerLabel}
+          </span>
+          <ChevronsUpDown className="h-4 w-4 opacity-50 shrink-0 ml-2" />
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent className="w-[--radix-popover-trigger-width] p-0" align="start">
+        <div className="p-2 border-b flex items-center justify-between gap-2">
+          <button
+            type="button"
+            className="text-xs text-primary hover:underline"
+            onClick={() => onChange(allChecked ? [] : allValues)}
+            disabled={options.length === 0}
+          >
+            {allChecked ? "Uncheck all" : "Check all"}
+          </button>
+          {selected.length > 0 && (
+            <button
+              type="button"
+              className="text-xs text-muted-foreground hover:underline"
+              onClick={() => onChange([])}
+            >
+              Clear
+            </button>
+          )}
+        </div>
+        {searchable && options.length > 5 && (
+          <div className="p-2 border-b">
+            <Input
+              placeholder="Search..."
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              className="h-8 text-sm"
+            />
+          </div>
+        )}
+        <div className="max-h-64 overflow-y-auto py-1">
+          {filtered.length === 0 ? (
+            <div className="px-3 py-2 text-sm text-muted-foreground">{emptyLabel}</div>
+          ) : (
+            filtered.map((o) => {
+              const checked = selected.includes(o.value);
+              return (
+                <button
+                  type="button"
+                  key={o.value}
+                  onClick={() => toggle(o.value)}
+                  className="w-full flex items-center gap-2 px-3 py-1.5 text-sm hover:bg-accent text-left"
+                >
+                  <Checkbox checked={checked} className="pointer-events-none" />
+                  <span className="truncate">{o.label}</span>
+                </button>
+              );
+            })
+          )}
+        </div>
+      </PopoverContent>
+    </Popover>
+  );
+}
 
 // ---------- Company combobox ----------
 
