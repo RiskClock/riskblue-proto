@@ -265,6 +265,8 @@ async function actionCreate(body: any, actor: { id: string | null; email: string
   const company = body.company ? String(body.company).trim() : null;
   const tagNames: string[] = Array.isArray(body.tags) ? body.tags : [];
   const credits = Number.isFinite(Number(body.credits)) ? Math.max(0, Math.floor(Number(body.credits))) : 20;
+  // Default true to preserve prior behaviour for any caller not passing the flag.
+  const sendWelcomeEmail = body.send_welcome_email === undefined ? true : !!body.send_welcome_email;
 
   if (!email || !name) return json({ success: false, error: "Email and name are required" }, 400);
   if (password && password.length < 6) return json({ success: false, error: "Password must be at least 6 characters" }, 400);
