@@ -934,6 +934,7 @@ function CreateUserDialog({
     company: string | null;
     tags: string[];
     credits: number;
+    send_welcome_email: boolean;
   }) => void;
   loading: boolean;
 }) {
@@ -944,6 +945,7 @@ function CreateUserDialog({
   const [company, setCompany] = useState<string | null>(null);
   const [tags, setTags] = useState<string[]>([]);
   const [credits, setCredits] = useState<string>("20");
+  const [sendWelcomeEmail, setSendWelcomeEmail] = useState(true);
 
   useEffect(() => {
     if (open) {
@@ -954,6 +956,7 @@ function CreateUserDialog({
       setCompany(null);
       setTags([]);
       setCredits("20");
+      setSendWelcomeEmail(true);
     }
   }, [open]);
 
@@ -973,6 +976,7 @@ function CreateUserDialog({
       company,
       tags,
       credits: creditsNum,
+      send_welcome_email: sendWelcomeEmail,
     });
   };
 
@@ -1042,6 +1046,16 @@ function CreateUserDialog({
             <div className="mt-1">
               <TagPicker selected={tags} onChange={setTags} available={availableTags} />
             </div>
+          </div>
+          <div className="flex items-center gap-2">
+            <Checkbox
+              id="send-welcome-email"
+              checked={sendWelcomeEmail}
+              onCheckedChange={(v) => setSendWelcomeEmail(!!v)}
+            />
+            <Label htmlFor="send-welcome-email" className="cursor-pointer font-normal">
+              Send welcome email to user
+            </Label>
           </div>
         </div>
         <DialogFooter>

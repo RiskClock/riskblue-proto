@@ -265,6 +265,8 @@ async function actionCreate(body: any, actor: { id: string | null; email: string
   const company = body.company ? String(body.company).trim() : null;
   const tagNames: string[] = Array.isArray(body.tags) ? body.tags : [];
   const credits = Number.isFinite(Number(body.credits)) ? Math.max(0, Math.floor(Number(body.credits))) : 20;
+  // Default true to preserve prior behaviour for any caller not passing the flag.
+  const sendWelcomeEmail = body.send_welcome_email === undefined ? true : !!body.send_welcome_email;
 
   if (!email || !name) return json({ success: false, error: "Email and name are required" }, 400);
   if (password && password.length < 6) return json({ success: false, error: "Password must be at least 6 characters" }, 400);
@@ -326,53 +328,55 @@ async function actionCreate(body: any, actor: { id: string | null; email: string
   }
 
   // Send email
-  if (password) {
-    const html = emailLayout(
-      "Welcome to RiskBlue",
-      [
-        renderGreeting(`Hi ${sharedEscapeHtml(name)},`),
-        renderParagraph("An account has been created for you on RiskBlue."),
-        renderKeyValueTable([
-          { label: "Email", value: sharedEscapeHtml(email) },
-          { label: "Temporary Password", value: renderCodeChip(password) },
-        ]),
-        renderNote("For security, please change your password after signing in."),
-      ].join(""),
-      { label: "Sign In", href: `${APP_URL}/auth` },
-    );
-    await sendEmail({ to: email, subject: "Your RiskBlue account", html });
-  } else {
-    // Generate account setup token (3-day expiry).
-    const token = crypto.randomUUID();
-    const expiresAt = new Date(Date.now() + 3 * 24 * 60 * 60 * 1000);
-    await adminClient.from("password_reset_tokens").insert({
-      email,
-      token,
-      expires_at: expiresAt.toISOString(),
-      purpose: "account_setup",
-    });
-    const link = `${APP_URL}/setup-account?token=${token}`;
-    const html = emailLayout(
-      "Welcome to RiskBlue",
-      [
-        renderGreeting(`Hi ${sharedEscapeHtml(name)},`),
-        renderParagraph(
-          "RiskBlue is a risk-mitigation planning platform for water systems and critical assets. Your administrator has created an account for you.",
-        ),
-        renderParagraph(
-          "Click the button below to set your password and access your projects.",
-        ),
-        renderNote(
-          "This link expires in 3 days. If you didn't expect this email, you can safely ignore it.",
-        ),
-      ].join(""),
-      { label: "Set Up Your Account", href: link },
-    );
-    await sendEmail({
-      to: email,
-      subject: "Welcome to RiskBlue — set up your account",
-      html,
-    });
+  if (sendWelcomeEmail) {
+    if (password) {
+      const html = emailLayout(
+        "Welcome to RiskBlue",
+        [
+          renderGreeting(`Hi ${sharedEscapeHtml(name)},`),
+          renderParagraph("An account has been created for you on RiskBlue."),
+          renderKeyValueTable([
+            { label: "Email", value: sharedEscapeHtml(email) },
+            { label: "Temporary Password", value: renderCodeChip(password) },
+          ]),
+          renderNote("For security, please change your password after signing in."),
+        ].join(""),
+        { label: "Sign In", href: `${APP_URL}/auth` },
+      );
+      await sendEmail({ to: email, subject: "Your RiskBlue account", html });
+    } else {
+      // Generate account setup token (3-day expiry).
+      const token = crypto.randomUUID();
+      const expiresAt = new Date(Date.now() + 3 * 24 * 60 * 60 * 1000);
+      await adminClient.from("password_reset_tokens").insert({
+        email,
+        token,
+        expires_at: expiresAt.toISOString(),
+        purpose: "account_setup",
+      });
+      const link = `${APP_URL}/setup-account?token=${token}`;
+      const html = emailLayout(
+        "Welcome to RiskBlue",
+        [
+          renderGreeting(`Hi ${sharedEscapeHtml(name)},`),
+          renderParagraph(
+            "RiskBlue is a risk-mitigation planning platform for water systems and critical assets. Your administrator has created an account for you.",
+          ),
+          renderParagraph(
+            "Click the button below to set your password and access your projects.",
+          ),
+          renderNote(
+            "This link expires in 3 days. If you didn't expect this email, you can safely ignore it.",
+          ),
+        ].join(""),
+        { label: "Set Up Your Account", href: link },
+      );
+      await sendEmail({
+        to: email,
+        subject: "Welcome to RiskBlue — set up your account",
+        html,
+      });
+    }
   }
 
   await logAdminEvent(created.user.id, "admin_user_created", actor, {
@@ -383,6 +387,7 @@ async function actionCreate(body: any, actor: { id: string | null; email: string
     tags: tagNames,
     credits_balance: credits,
     set_password_directly: !!password,
+    welcome_email_sent: sendWelcomeEmail,
   });
 
   return json({ success: true, user_id: created.user.id });

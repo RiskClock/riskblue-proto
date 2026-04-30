@@ -77,47 +77,9 @@ export function WMSVProjectDetail({ projectId, projectName }: WMSVProjectDetailP
   const { company } = useAccountType();
   const normalizedCompany = (company || "").trim();
 
-  // Fetch the company's enabled control selections (shared across the company)
-  const { data: controlSelections } = useQuery({
-    queryKey: ["wmsv-company-control-selections", normalizedCompany.toLowerCase()],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from("company_control_selections")
-        .select("category, control_id")
-        .ilike("company", normalizedCompany);
-      if (error) throw error;
-      return data as Array<{ category: string; control_id: string }>;
-    },
-    enabled: !!normalizedCompany,
-    staleTime: 1000 * 60 * 10,
-  });
-
-  // Fetch AWP source tables with default_control_ids
-  const { data: awpSourceData } = useQuery({
-    queryKey: ["wmsv-awp-source-controls"],
-    queryFn: async () => {
-      const [a, w, p] = await Promise.all([
-        supabase.from("critical_assets").select("name, default_control_ids").eq("is_active", true),
-        supabase.from("water_systems").select("name, default_control_ids").eq("is_active", true),
-        supabase.from("processes").select("name, default_control_ids").eq("is_active", true),
-      ]);
-      return [
-        ...(a.data || []).map((x) => ({ name: x.name, controlIds: (x.default_control_ids as string[]) || [], category: "critical_assets" })),
-        ...(w.data || []).map((x) => ({ name: x.name, controlIds: (x.default_control_ids as string[]) || [], category: "water_systems" })),
-        ...(p.data || []).map((x) => ({ name: x.name, controlIds: (x.default_control_ids as string[]) || [], category: "processes" })),
-      ];
-    },
-    staleTime: 1000 * 60 * 30,
-  });
-
-  // Compute visible AWP classes: any class where at least one default control is enabled (cross-category)
-  const visibleAwpClasses = useMemo(() => {
-    if (!controlSelections || !awpSourceData) return undefined;
-    const enabledControlIds = new Set(controlSelections.map(sel => sel.control_id));
-    return awpSourceData
-      .filter((awp) => awp.controlIds.some((cid) => enabledControlIds.has(cid)))
-      .map((awp) => awp.name);
-  }, [controlSelections, awpSourceData]);
+  // Per product spec: WMSV users see ALL active AWP classes regardless of
+  // which controls their company has enabled.
+  const visibleAwpClasses = undefined;
 
   // Fetch the latest analysis request for this project
   const { data: request, isLoading: requestLoading } = useQuery({
@@ -392,7 +354,7 @@ export function WMSVProjectDetail({ projectId, projectName }: WMSVProjectDetailP
               {/* Upload / re-import actions — only show when no files yet */}
               {(request.status === "awaiting_upload" || request.status === "failed") && (!files || files.length === 0) && (
                 <div className="border rounded-lg p-6 space-y-4">
-                  <div className="text-center space-y-4">
+                  <div className="text-center space-y-4 max-w-3xl mx-auto">
                     <FileText className="w-12 h-12 text-muted-foreground/50 mx-auto" />
                     <div>
                       <h3 className="text-lg font-medium text-foreground">
@@ -400,8 +362,8 @@ export function WMSVProjectDetail({ projectId, projectName }: WMSVProjectDetailP
                       </h3>
                       <p className="text-sm text-muted-foreground mt-1">
                         {request.status === "failed"
-                          ? "Try importing the drawing files again from one of the sources below"
-                          : "Upload drawing files to begin analysis"}
+                          ? "Try importing the files again from one of the sources below"
+                          : "Upload files to a secure processing environment for confidential review. RiskBlue provides a secure, access-controlled environment to identify project-specific water risks, define mitigation strategies, and execute structured plans. All data is processed within isolated project workspaces to ensure integrity, accountability, and protection."}
                       </p>
                     </div>
                   </div>
