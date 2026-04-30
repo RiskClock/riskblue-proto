@@ -363,7 +363,7 @@ export function WMSVProjectDetail({ projectId, projectName }: WMSVProjectDetailP
                       <p className="text-sm text-muted-foreground mt-1">
                         {request.status === "failed"
                           ? "Try importing the files again from one of the sources below"
-                          : "Upload files to a secure processing environment for confidential review. RiskBlue provides a secure, access-controlled environment to identify project-specific water risks, define mitigation strategies, and execute structured plans. All data is processed within isolated project workspaces to ensure integrity, accountability, and protection."}
+                          : "Upload files to a secure processing environment. Files remain isolated to your project and are never shared across workspaces."}
                       </p>
                     </div>
                   </div>
