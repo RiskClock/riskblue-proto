@@ -371,7 +371,7 @@ const UserManagement = () => {
       return 0;
     });
     return rows;
-  }, [users, search, filterCompany, filterStatus, filterTags, sortKey, sortDir]);
+  }, [users, search, filterCompanies, filterStatuses, filterTags, sortKey, sortDir]);
 
   const toggleSort = (key: SortKey) => {
     setPrefs((p) => {
@@ -398,8 +398,8 @@ const UserManagement = () => {
 
   const isDirty =
     !!search ||
-    !!filterCompany ||
-    !!filterStatus ||
+    filterCompanies.length > 0 ||
+    filterStatuses.length > 0 ||
     filterTags.length > 0 ||
     sortKey !== DEFAULT_SORT_KEY ||
     sortDir !== DEFAULT_SORT_DIR;
@@ -407,8 +407,8 @@ const UserManagement = () => {
   const resetAll = () => {
     setPrefs({
       search: "",
-      filterCompany: null,
-      filterStatus: null,
+      filterCompanies: [],
+      filterStatuses: [],
       filterTags: [],
       sortKey: DEFAULT_SORT_KEY,
       sortDir: DEFAULT_SORT_DIR,
