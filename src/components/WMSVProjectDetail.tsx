@@ -324,7 +324,7 @@ export function WMSVProjectDetail({ projectId, projectName }: WMSVProjectDetailP
           Back to Projects
         </Button>
 
-        <div className="flex items-start justify-between mb-6">
+        <div className="flex items-start justify-between mb-2">
           <h1 className="text-2xl font-bold text-foreground">{projectName}</h1>
           {request && (
             <Badge variant="outline" className={statusColors[displayStatus || request.status] || ""}>
@@ -332,6 +332,9 @@ export function WMSVProjectDetail({ projectId, projectName }: WMSVProjectDetailP
             </Badge>
           )}
         </div>
+        <p className="text-sm text-muted-foreground mb-6 max-w-4xl">
+          All analyses are processed in a controlled, access-restricted environment with enforced data isolation and integrity safeguards. Results are exclusive to your project.
+        </p>
 
         {requestLoading ? (
           <div className="text-center py-12 text-muted-foreground">
