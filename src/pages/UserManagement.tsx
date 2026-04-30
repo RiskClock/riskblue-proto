@@ -1009,13 +1009,30 @@ function CreateUserDialog({
             <Input
               type="text"
               value={password}
-              onChange={(e) => setPassword(e.target.value)}
+              onChange={(e) => {
+                const v = e.target.value;
+                setPassword(v);
+                if (v.trim().length === 0) {
+                  setSendWelcomeEmail(true);
+                }
+              }}
               placeholder="Leave empty to send setup link"
               className="mt-1"
             />
             {password && password.length > 0 && password.length < 6 && (
               <p className="text-xs text-destructive mt-1">Must be at least 6 characters</p>
             )}
+            <div className="flex items-center gap-2 mt-2">
+              <Checkbox
+                id="send-welcome-email"
+                checked={sendWelcomeEmail}
+                disabled={password.trim().length === 0}
+                onCheckedChange={(v) => setSendWelcomeEmail(!!v)}
+              />
+              <Label htmlFor="send-welcome-email" className="cursor-pointer font-normal">
+                Send notification email
+              </Label>
+            </div>
           </div>
           <div>
             <Label>Credits</Label>
