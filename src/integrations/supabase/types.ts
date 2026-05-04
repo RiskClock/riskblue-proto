@@ -125,6 +125,69 @@ export type Database = {
           },
         ]
       }
+      analysis_pipeline_jobs: {
+        Row: {
+          analysis_request_id: string
+          analyze_model: string
+          attempts: number
+          awp_class_name: string
+          claimed_at: string | null
+          completed_at: string | null
+          created_at: string
+          error_message: string | null
+          file_id: string
+          id: string
+          max_attempts: number
+          next_attempt_at: string
+          prompt_content: string | null
+          started_at: string | null
+          status: string
+          tokens_used: number | null
+          updated_at: string
+          worker_id: string | null
+        }
+        Insert: {
+          analysis_request_id: string
+          analyze_model?: string
+          attempts?: number
+          awp_class_name: string
+          claimed_at?: string | null
+          completed_at?: string | null
+          created_at?: string
+          error_message?: string | null
+          file_id: string
+          id?: string
+          max_attempts?: number
+          next_attempt_at?: string
+          prompt_content?: string | null
+          started_at?: string | null
+          status?: string
+          tokens_used?: number | null
+          updated_at?: string
+          worker_id?: string | null
+        }
+        Update: {
+          analysis_request_id?: string
+          analyze_model?: string
+          attempts?: number
+          awp_class_name?: string
+          claimed_at?: string | null
+          completed_at?: string | null
+          created_at?: string
+          error_message?: string | null
+          file_id?: string
+          id?: string
+          max_attempts?: number
+          next_attempt_at?: string
+          prompt_content?: string | null
+          started_at?: string | null
+          status?: string
+          tokens_used?: number | null
+          updated_at?: string
+          worker_id?: string | null
+        }
+        Relationships: []
+      }
       analysis_request_files: {
         Row: {
           analysis_request_id: string
@@ -2148,6 +2211,35 @@ export type Database = {
         }
         Returns: Json
       }
+      claim_next_analysis_jobs: {
+        Args: { p_batch_size?: number; p_worker_id: string }
+        Returns: {
+          analysis_request_id: string
+          analyze_model: string
+          attempts: number
+          awp_class_name: string
+          claimed_at: string | null
+          completed_at: string | null
+          created_at: string
+          error_message: string | null
+          file_id: string
+          id: string
+          max_attempts: number
+          next_attempt_at: string
+          prompt_content: string | null
+          started_at: string | null
+          status: string
+          tokens_used: number | null
+          updated_at: string
+          worker_id: string | null
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "analysis_pipeline_jobs"
+          isOneToOne: false
+          isSetofReturn: true
+        }
+      }
       claim_next_export_job: {
         Args: { p_worker_id: string }
         Returns: {
@@ -2228,6 +2320,10 @@ export type Database = {
       is_internal_user: { Args: { _user_id: string }; Returns: boolean }
       is_project_member: {
         Args: { _project_id: string; _user_id: string }
+        Returns: boolean
+      }
+      try_lock_analysis_finalize: {
+        Args: { p_request_id: string }
         Returns: boolean
       }
       user_owns_company: { Args: { _company: string }; Returns: boolean }
