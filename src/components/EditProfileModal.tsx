@@ -140,7 +140,6 @@ export const EditProfileModal = ({ open, onOpenChange }: EditProfileModalProps) 
       <DialogContent>
         <DialogHeader>
           <DialogTitle>Edit Profile</DialogTitle>
-          <DialogDescription>Update your photo and name. Email cannot be changed.</DialogDescription>
         </DialogHeader>
         <form onSubmit={handleSubmit} className="space-y-5">
           <div className="flex items-center gap-4">
@@ -206,6 +205,13 @@ export const EditProfileModal = ({ open, onOpenChange }: EditProfileModalProps) 
           <div className="space-y-2">
             <Label htmlFor="email">Email</Label>
             <Input id="email" type="email" value={user?.email ?? ""} disabled />
+            <p className="text-xs text-muted-foreground">
+              To change your email, contact{" "}
+              <a href="mailto:support@riskclock.com" className="underline hover:text-foreground">
+                support@riskclock.com
+              </a>
+              .
+            </p>
           </div>
 
           <DialogFooter>
