@@ -1348,6 +1348,13 @@ export function AnalysisSection({ requestId, files, projectId, sourceType, isWMS
       )
       .on(
         "postgres_changes",
+        { event: "*", schema: "public", table: "analysis_results", filter: `analysis_request_id=eq.${requestId}` },
+        () => {
+          queryClient.invalidateQueries({ queryKey: ["analysis-results", requestId] });
+        }
+      )
+      .on(
+        "postgres_changes",
         { event: "*", schema: "public", table: "analysis_request_files", filter: `analysis_request_id=eq.${requestId}` },
         () => {
           supabase
