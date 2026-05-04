@@ -677,6 +677,18 @@ async function runPipeline(params: PipelineParams) {
 
     // ======================== PHASE 3: ANALYZE ========================
     if (runPhase("analyze")) {
+      // Defensive reconciliation: any triage rows still "processing" or "queued"
+      // at this point are orphans (the triage call crashed before updating).
+      // Mark them failed so the UI stops showing spinners on those cells.
+      await admin
+        .from("analysis_triage_results")
+        .update({
+          status: "failed",
+          error_message: "Triage did not complete (orphaned processing row)",
+        } as any)
+        .eq("analysis_request_id", analysisRequestId)
+        .in("status", ["processing", "queued"]);
+
       const { data: triageResults } = await admin
         .from("analysis_triage_results")
         .select("file_id, awp_class_name, status, score")
