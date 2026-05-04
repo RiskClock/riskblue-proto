@@ -426,11 +426,22 @@ async function checkFinalizeAllAnalyzing(
 ) {
   const { data: analyzing } = await admin
     .from("analysis_requests")
-    .select("id")
+    .select("id, pipeline_stop_requested")
     .eq("pipeline_phase", "analyzing")
     .limit(20);
 
   for (const row of (analyzing as any[]) || []) {
+    // If user requested stop, cancel any leftover pending jobs first
+    if (row.pipeline_stop_requested) {
+      await admin.from("analysis_pipeline_jobs")
+        .update({
+          status: "cancelled",
+          completed_at: new Date().toISOString(),
+          error_message: "Cancelled by user stop request",
+        } as any)
+        .eq("analysis_request_id", row.id)
+        .eq("status", "pending");
+    }
     await maybeFinalize(admin, supabaseUrl, serviceKey, row.id).catch(() => {});
   }
 }
