@@ -866,6 +866,26 @@ async function runPipeline(params: PipelineParams) {
         });
       }
 
+      // Pre-insert "processing" rows for every queued job so the UI shows
+      // spinners immediately, even before a worker picks the job up.
+      if (jobRows.length > 0) {
+        const placeholderRows = jobRows.map((j) => ({
+          analysis_request_id: j.analysis_request_id,
+          file_id: j.file_id,
+          awp_class_name: j.awp_class_name,
+          status: "processing",
+          result_text: null,
+          error_message: null,
+        }));
+        const PCHUNK = 500;
+        for (let i = 0; i < placeholderRows.length; i += PCHUNK) {
+          await admin.from("analysis_results").upsert(
+            placeholderRows.slice(i, i + PCHUNK),
+            { onConflict: "analysis_request_id,file_id,awp_class_name" },
+          );
+        }
+      }
+
       // Set phase=analyzing with totals so UI shows progress immediately
       const totalJobs = jobRows.length + immediateFailures.length;
       await admin
