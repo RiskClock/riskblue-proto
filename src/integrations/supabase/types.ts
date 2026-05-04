@@ -189,7 +189,15 @@ export type Database = {
           updated_at?: string
           worker_id?: string | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "analysis_pipeline_jobs_request_fk"
+            columns: ["analysis_request_id"]
+            isOneToOne: false
+            referencedRelation: "analysis_requests"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       analysis_request_files: {
         Row: {
@@ -2324,6 +2332,10 @@ export type Database = {
       is_internal_user: { Args: { _user_id: string }; Returns: boolean }
       is_project_member: {
         Args: { _project_id: string; _user_id: string }
+        Returns: boolean
+      }
+      seed_analysis_worker_secret: {
+        Args: { p_secret: string }
         Returns: boolean
       }
       try_lock_analysis_finalize: {

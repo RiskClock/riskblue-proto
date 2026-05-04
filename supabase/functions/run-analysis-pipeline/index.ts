@@ -697,6 +697,26 @@ async function runPipeline(params: PipelineParams) {
         promptByClass.set((p as any).awp_class_name, p);
       }
 
+      // Build a canonical order map for AWP classes so jobs are processed
+      // left-to-right matching the UI columns (Assets first by display_order,
+      // then Water Systems, then Processes).
+      const classOrderMap = new Map<string, number>();
+      const [assetsRes, systemsRes, processesRes] = await Promise.all([
+        admin.from("critical_assets").select("name, display_order").eq("is_active", true),
+        admin.from("water_systems").select("name, display_order").eq("is_active", true),
+        admin.from("processes").select("name, display_order").eq("is_active", true),
+      ]);
+      for (const a of (assetsRes.data as any[]) || []) {
+        classOrderMap.set(a.name, 0 * 1000 + (a.display_order ?? 999));
+      }
+      for (const s of (systemsRes.data as any[]) || []) {
+        classOrderMap.set(s.name, 1 * 1000 + (s.display_order ?? 999));
+      }
+      for (const p of (processesRes.data as any[]) || []) {
+        classOrderMap.set(p.name, 2 * 1000 + (p.display_order ?? 999));
+      }
+      const orderFor = (cn: string) => classOrderMap.get(cn) ?? 9999;
+
       const workQueue: WorkItem[] = [];
 
       for (const file of files) {
@@ -731,6 +751,15 @@ async function runPipeline(params: PipelineParams) {
           });
         }
       }
+
+      // Sort so jobs are inserted (and claimed) in canonical class order,
+      // then by file name for stable ordering within each class.
+      workQueue.sort((a, b) => {
+        const ao = orderFor(a.awpClassName);
+        const bo = orderFor(b.awpClassName);
+        if (ao !== bo) return ao - bo;
+        return a.fileName.localeCompare(b.fileName);
+      });
 
       console.log(
         `[pipeline] Phase 3: Analyze ${workQueue.length} eligible items`,
@@ -816,6 +845,7 @@ async function runPipeline(params: PipelineParams) {
           prompt_content: promptContent,
           analyze_model: analyzeModel,
           status: "pending",
+          sort_order: orderFor(item.awpClassName),
         });
       }
 
@@ -863,16 +893,32 @@ async function runPipeline(params: PipelineParams) {
       );
 
       // Kick the worker once now so it doesn't wait for the next cron tick.
+      // IMPORTANT: await the dispatch so the edge runtime doesn't cancel the
+      // in-flight request when this handler returns. We don't await the body
+      // (worker may take 50s) — just the initial connection.
       const workerSecret = Deno.env.get("ANALYSIS_WORKER_SECRET");
       if (workerSecret) {
-        fetch(`${supabaseUrl}/functions/v1/process-analysis-jobs`, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            apikey: serviceKey,
-            "x-worker-secret": workerSecret,
-          },
-        }).catch((e) => console.warn("[pipeline] worker kick failed:", e));
+        try {
+          const kickController = new AbortController();
+          const kickTimer = setTimeout(() => kickController.abort(), 2000);
+          await fetch(`${supabaseUrl}/functions/v1/process-analysis-jobs`, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              apikey: serviceKey,
+              "x-worker-secret": workerSecret,
+            },
+            signal: kickController.signal,
+          }).catch(() => {
+            // Aborting after 2s is expected — worker keeps running on its
+            // own edge instance. We just needed to ensure the request was
+            // sent before this function exits.
+          });
+          clearTimeout(kickTimer);
+        } catch (e) {
+          console.warn("[pipeline] worker kick failed:", e);
+        }
+        console.log("[pipeline] worker kick dispatched");
       }
 
       // If everything failed immediately (no jobs to run), finalize now.

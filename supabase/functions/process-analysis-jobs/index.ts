@@ -204,6 +204,19 @@ async function runJob(
     const attempts = job.attempts; // already incremented by claim RPC
     const maxAttempts = job.max_attempts ?? 3;
 
+    // Permanent: parent analysis_request was deleted — never retry, mark cancelled.
+    if (httpStatus === 404 || /Analysis request not found/i.test(msg)) {
+      await admin.from("analysis_pipeline_jobs")
+        .update({
+          status: "cancelled",
+          completed_at: new Date().toISOString(),
+          error_message: "Parent analysis request no longer exists",
+        } as any)
+        .eq("id", job.id);
+      console.warn(`[worker] job ${job.id} cancelled: parent request missing`);
+      return;
+    }
+
     if (attempts < maxAttempts) {
       // Exponential backoff: 30s, 60s, 120s
       const delaySec = 30 * Math.pow(2, attempts - 1);
