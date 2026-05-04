@@ -295,7 +295,12 @@ Deno.serve(async (req) => {
     const userToken = isInternalCall ? serviceKey : authHeader.replace("Bearer ", "");
 
     // ---- Phase-aware clear: only delete data relevant to the requested phase ----
-    if (phaseOverride === "analyze") {
+    if (phaseOverride === "summarize") {
+      // Internal worker re-invocation to run summary phase ONLY.
+      // CRITICAL: Do NOT clear any data here — analyze results must be preserved
+      // so summarize-analysis can read them. Skip directly to phase 4.
+      // (handled below by phase routing)
+    } else if (phaseOverride === "analyze") {
       // Only clear analysis results and summary — keep triage, extracted text, and OpenAI file caches
       await Promise.all([
         admin.from("analysis_results").delete().eq("analysis_request_id", analysisRequestId),
