@@ -570,8 +570,11 @@ async function runPipeline(params: PipelineParams) {
       // (Previous results already cleared at pipeline start)
 
       const triageItems: Array<{ fileId: string; fileName: string; prompt: any }> = [];
-      for (const prompt of prompts) {
-        for (const file of files) {
+      // File-major interleaving: process one (file × class) at a time across
+      // ALL classes before moving to the next file. This spreads visible
+      // triage spinners across every column instead of draining class-by-class.
+      for (const file of files) {
+        for (const prompt of prompts) {
           triageItems.push({ fileId: file.id, fileName: file.name, prompt });
         }
       }
