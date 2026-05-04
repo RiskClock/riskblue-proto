@@ -140,6 +140,7 @@ export type Database = {
           max_attempts: number
           next_attempt_at: string
           prompt_content: string | null
+          sort_order: number
           started_at: string | null
           status: string
           tokens_used: number | null
@@ -160,6 +161,7 @@ export type Database = {
           max_attempts?: number
           next_attempt_at?: string
           prompt_content?: string | null
+          sort_order?: number
           started_at?: string | null
           status?: string
           tokens_used?: number | null
@@ -180,6 +182,7 @@ export type Database = {
           max_attempts?: number
           next_attempt_at?: string
           prompt_content?: string | null
+          sort_order?: number
           started_at?: string | null
           status?: string
           tokens_used?: number | null
@@ -2227,6 +2230,7 @@ export type Database = {
           max_attempts: number
           next_attempt_at: string
           prompt_content: string | null
+          sort_order: number
           started_at: string | null
           status: string
           tokens_used: number | null
