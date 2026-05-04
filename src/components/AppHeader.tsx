@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import { useUserDisplayName } from "@/hooks/useUserDisplayName";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -10,12 +10,13 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { LogOut, Settings, FileText, BarChart3, Shield, Coins, Users, KeyRound } from "lucide-react";
+import { LogOut, Settings, FileText, BarChart3, Shield, Coins, Users, KeyRound, UserCog } from "lucide-react";
 import riskBlueLogo from "@/assets/logo-riskblue.png";
 import { useAccountType } from "@/hooks/useAccountType";
 import { useCredits } from "@/hooks/useCredits";
 import { BuyCreditsModal } from "@/components/BuyCreditsModal";
 import { ChangePasswordModal } from "@/components/ChangePasswordModal";
+import { EditProfileModal } from "@/components/EditProfileModal";
 
 interface AppHeaderProps {
   leftContent?: React.ReactNode;
@@ -25,11 +26,12 @@ export const AppHeader = ({ leftContent }: AppHeaderProps) => {
   const { user, signOut } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
-  const { getInitial } = useUserDisplayName();
+  const { getInitial, avatarUrl } = useUserDisplayName();
   const { isWMSV, loading: accountLoading } = useAccountType();
   const { balance: credits } = useCredits();
   const [buyOpen, setBuyOpen] = useState(false);
   const [changePasswordOpen, setChangePasswordOpen] = useState(false);
+  const [editProfileOpen, setEditProfileOpen] = useState(false);
 
   const isInternalUser = user?.email?.toLowerCase().endsWith("@riskclock.com") ?? false;
 
@@ -62,6 +64,7 @@ export const AppHeader = ({ leftContent }: AppHeaderProps) => {
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Avatar className="cursor-pointer">
+                {avatarUrl && <AvatarImage src={avatarUrl} alt="Profile photo" />}
                 <AvatarFallback>{getInitial()}</AvatarFallback>
               </Avatar>
             </DropdownMenuTrigger>
@@ -103,6 +106,10 @@ export const AppHeader = ({ leftContent }: AppHeaderProps) => {
                   <DropdownMenuSeparator />
                 </>
               )}
+              <DropdownMenuItem onClick={() => setEditProfileOpen(true)} className="cursor-pointer">
+                <UserCog className="h-4 w-4 mr-2" />
+                Edit Profile
+              </DropdownMenuItem>
               <DropdownMenuItem onClick={() => setChangePasswordOpen(true)} className="cursor-pointer">
                 <KeyRound className="h-4 w-4 mr-2" />
                 Change Password
@@ -117,6 +124,7 @@ export const AppHeader = ({ leftContent }: AppHeaderProps) => {
       </div>
       <BuyCreditsModal open={buyOpen} onOpenChange={setBuyOpen} />
       <ChangePasswordModal open={changePasswordOpen} onOpenChange={setChangePasswordOpen} />
+      <EditProfileModal open={editProfileOpen} onOpenChange={setEditProfileOpen} />
     </header>
   );
 };

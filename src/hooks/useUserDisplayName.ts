@@ -5,25 +5,46 @@ import { useAuth } from "@/contexts/AuthContext";
 export const useUserDisplayName = () => {
   const { user } = useAuth();
   const [displayName, setDisplayName] = useState<string | null>(null);
+  const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
 
   useEffect(() => {
     if (!user?.id) return;
 
-    supabase
-      .from("profiles")
-      .select("display_name")
-      .eq("user_id", user.id)
-      .single()
-      .then(({ data }) => {
-        if (data?.display_name) {
-          setDisplayName(data.display_name);
-        }
-      });
+    const load = () => {
+      supabase
+        .from("profiles")
+        .select("display_name, avatar_url")
+        .eq("user_id", user.id)
+        .single()
+        .then(({ data }) => {
+          setDisplayName(data?.display_name ?? null);
+          setAvatarUrl(data?.avatar_url ?? null);
+        });
+    };
+
+    load();
+
+    const channel = supabase
+      .channel(`profile-${user.id}`)
+      .on(
+        "postgres_changes",
+        { event: "UPDATE", schema: "public", table: "profiles", filter: `user_id=eq.${user.id}` },
+        (payload) => {
+          const next = payload.new as { display_name?: string | null; avatar_url?: string | null };
+          setDisplayName(next.display_name ?? null);
+          setAvatarUrl(next.avatar_url ?? null);
+        },
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
   }, [user?.id]);
 
   const getInitial = () => {
     return (displayName?.[0] || user?.email?.[0] || "?").toUpperCase();
   };
 
-  return { displayName, getInitial };
+  return { displayName, avatarUrl, getInitial };
 };
