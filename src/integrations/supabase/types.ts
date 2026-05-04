@@ -2326,6 +2326,10 @@ export type Database = {
         Args: { _project_id: string; _user_id: string }
         Returns: boolean
       }
+      seed_analysis_worker_secret: {
+        Args: { p_secret: string }
+        Returns: boolean
+      }
       try_lock_analysis_finalize: {
         Args: { p_request_id: string }
         Returns: boolean
