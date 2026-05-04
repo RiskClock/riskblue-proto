@@ -179,6 +179,10 @@ async function runJob(
         } as any)
         .eq("id", job.id);
 
+      // Live progress update: recount terminal jobs and persist to request row
+      // so the UI's realtime subscription sees the count climb in real time.
+      await updateProgress(admin, job.analysis_request_id);
+
       if (tokens && tokens > 0) {
         // Increment analyze_tokens_used atomically via select+update
         const { data: cur } = await admin
@@ -240,7 +244,39 @@ async function runJob(
         } as any)
         .eq("id", job.id);
       console.error(`[worker] job ${job.id} permanently failed after ${attempts} attempts: ${msg}`);
+      await updateProgress(admin, job.analysis_request_id);
     }
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Live progress updater — recounts terminal jobs and writes to request row
+// so the UI's realtime subscription animates the count as work completes.
+// ---------------------------------------------------------------------------
+async function updateProgress(
+  admin: ReturnType<typeof createClient>,
+  requestId: string,
+) {
+  try {
+    const { count: doneCount } = await admin
+      .from("analysis_pipeline_jobs")
+      .select("id", { count: "exact", head: true })
+      .eq("analysis_request_id", requestId)
+      .in("status", ["complete", "failed", "cancelled"]);
+
+    const { count: totalCount } = await admin
+      .from("analysis_pipeline_jobs")
+      .select("id", { count: "exact", head: true })
+      .eq("analysis_request_id", requestId);
+
+    await admin.from("analysis_requests")
+      .update({
+        pipeline_progress_done: doneCount ?? 0,
+        pipeline_progress_total: totalCount ?? 0,
+      } as any)
+      .eq("id", requestId);
+  } catch (e) {
+    console.warn(`[worker] updateProgress failed for ${requestId}:`, e);
   }
 }
 

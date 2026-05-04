@@ -295,7 +295,12 @@ Deno.serve(async (req) => {
     const userToken = isInternalCall ? serviceKey : authHeader.replace("Bearer ", "");
 
     // ---- Phase-aware clear: only delete data relevant to the requested phase ----
-    if (phaseOverride === "analyze") {
+    if (phaseOverride === "summarize") {
+      // Internal worker re-invocation to run summary phase ONLY.
+      // CRITICAL: Do NOT clear any data here — analyze results must be preserved
+      // so summarize-analysis can read them. Skip directly to phase 4.
+      // (handled below by phase routing)
+    } else if (phaseOverride === "analyze") {
       // Only clear analysis results and summary — keep triage, extracted text, and OpenAI file caches
       await Promise.all([
         admin.from("analysis_results").delete().eq("analysis_request_id", analysisRequestId),
@@ -329,17 +334,21 @@ Deno.serve(async (req) => {
     }
 
     // THEN set status to "processing" (this triggers realtime → refetch → rows are already gone)
-    await admin
-      .from("analysis_requests")
-      .update({
-        pipeline_stop_requested: false,
-        pipeline_phase: null,
-        pipeline_progress_done: 0,
-        pipeline_progress_total: 0,
-        status: "processing",
-        error_message: null,
-      } as any)
-      .eq("id", analysisRequestId);
+    // SKIP for summarize-phase internal re-invocation: data is already complete
+    // and we don't want to wipe progress / error state.
+    if (phaseOverride !== "summarize") {
+      await admin
+        .from("analysis_requests")
+        .update({
+          pipeline_stop_requested: false,
+          pipeline_phase: null,
+          pipeline_progress_done: 0,
+          pipeline_progress_total: 0,
+          status: "processing",
+          error_message: null,
+        } as any)
+        .eq("id", analysisRequestId);
+    }
 
     // Persist model selections and disabled classes
     const modelUpdates: Record<string, unknown> = {};
