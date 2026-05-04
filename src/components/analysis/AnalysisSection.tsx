@@ -1945,6 +1945,16 @@ export function AnalysisSection({ requestId, files, projectId, sourceType, isWMS
       .from("analysis_requests")
       .update({ pipeline_stop_requested: true } as any)
       .eq("id", requestId);
+    // Cancel any queued analysis jobs so the worker finalizes promptly.
+    await (supabase as any)
+      .from("analysis_pipeline_jobs")
+      .update({
+        status: "cancelled",
+        completed_at: new Date().toISOString(),
+        error_message: "Cancelled by user stop request",
+      })
+      .eq("analysis_request_id", requestId)
+      .eq("status", "pending");
     // Don't invalidate — realtime handles the final transition
   };
 
