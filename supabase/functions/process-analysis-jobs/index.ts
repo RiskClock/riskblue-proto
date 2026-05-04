@@ -179,6 +179,10 @@ async function runJob(
         } as any)
         .eq("id", job.id);
 
+      // Live progress update: recount terminal jobs and persist to request row
+      // so the UI's realtime subscription sees the count climb in real time.
+      await updateProgress(admin, job.analysis_request_id);
+
       if (tokens && tokens > 0) {
         // Increment analyze_tokens_used atomically via select+update
         const { data: cur } = await admin
