@@ -759,125 +759,140 @@ async function runPipeline(params: PipelineParams) {
         .update({ summary_data: summaryData } as any)
         .eq("id", analysisRequestId);
 
-      const progress = createProgressTracker(admin, analysisRequestId, "analyzing", workQueue.length);
-      await progress.init();
-
-      let analyzeTokens = 0;
-      let analyzeSuccesses = 0;
-      let analyzeFailures = 0;
-      let tokenUpdateCounter = 0;
-
-      const { stopped } = await runPool(
-        workQueue,
-        MAX_CONCURRENCY,
-        admin,
-        analysisRequestId,
-        progress,
-        async (item) => {
+      // Resolve any missing prompt contents up-front (sequential, small N)
+      const resolvedPrompts = new Map<string, string | null>();
+      for (const cn of [...new Set(workQueue.map((w) => w.awpClassName))]) {
+        const direct = promptByClass.get(cn)?.prompt_content || null;
+        if (direct) {
+          resolvedPrompts.set(cn, direct);
+          continue;
+        }
+        const driveId = promptByClass.get(cn)?.drive_file_id;
+        if (driveId) {
           try {
-            let promptContent = item.promptContent;
-            if (!promptContent) {
-              const resolveResult = await callFunction(
-                supabaseUrl,
-                serviceKey,
-                userToken,
-                "resolve-drive-doc",
-                {
-                  fileUrl: promptByClass.get(item.awpClassName)?.drive_file_id,
-                  exportContent: true,
-                },
-              );
-              if (resolveResult.ok && resolveResult.data?.content) {
-                promptContent = resolveResult.data.content;
-              }
-            }
-
-            if (!promptContent) {
-              const driveId = promptByClass.get(item.awpClassName)?.drive_file_id || "none";
-              console.warn(
-                `[pipeline] No prompt for ${item.awpClassName} (drive_file_id: ${driveId}), recording failure`,
-              );
-              analyzeFailures++;
-              await admin.from("analysis_results").insert({
-                analysis_request_id: analysisRequestId,
-                file_id: item.fileId,
-                awp_class_name: item.awpClassName,
-                status: "failed",
-                error_message: "No prompt content available for this class",
-              });
-              return;
-            }
-
-            const result = await callFunction(
+            const r = await callFunction(
               supabaseUrl,
               serviceKey,
               userToken,
-              "analyze-drawings",
-              {
-                analysisRequestId,
-                fileId: item.fileId,
-                awpClassName: item.awpClassName,
-                promptContent,
-                model: analyzeModel,
-              },
+              "resolve-drive-doc",
+              { fileUrl: driveId, exportContent: true },
             );
-
-            if (result.ok) {
-              analyzeSuccesses++;
-              if (result.data?.usage?.total_tokens) {
-                analyzeTokens += result.data.usage.total_tokens;
-                tokenUpdateCounter++;
-                if (tokenUpdateCounter >= 5) {
-                  tokenUpdateCounter = 0;
-                  await admin
-                    .from("analysis_requests")
-                    .update({ analyze_tokens_used: analyzeTokens } as any)
-                    .eq("id", analysisRequestId);
-                }
-              }
-            } else {
-              analyzeFailures++;
-              console.error(
-                `[pipeline] Analyze error for ${item.fileName}/${item.awpClassName}: ${result.status}`,
-              );
-            }
-          } catch (e) {
-            analyzeFailures++;
-            console.error(
-              `[pipeline] Analyze failed for ${item.fileName}/${item.awpClassName}:`,
-              e,
-            );
+            resolvedPrompts.set(cn, r.ok ? (r.data?.content || null) : null);
+          } catch {
+            resolvedPrompts.set(cn, null);
           }
-        },
-      );
-
-      // Final flush so the last batch's progress + status are written.
-      await progress.finalize();
-
-      // Final token flush
-      await admin
-        .from("analysis_requests")
-        .update({ analyze_tokens_used: analyzeTokens } as any)
-        .eq("id", analysisRequestId);
-
-      if (stopped) {
-        await handleStopped();
-        return;
+        } else {
+          resolvedPrompts.set(cn, null);
+        }
       }
 
-      // If ALL analyze items failed, set error
-      if (workQueue.length > 0 && analyzeSuccesses === 0) {
-        console.error(`[pipeline] All ${analyzeFailures} analyze items failed`);
-        await admin
-          .from("analysis_requests")
-          .update({
-            status: "started",
-            pipeline_phase: null,
-            pipeline_progress_done: 0,
-            pipeline_progress_total: 0,
-            error_message: `All ${analyzeFailures} analysis items failed. Please try again in a few minutes.`,
-          } as any)
-          .eq("id", analysisRequestId);
+      // Clear any old jobs for this request before inserting fresh ones
+      await admin
+        .from("analysis_pipeline_jobs")
+        .delete()
+        .eq("analysis_request_id", analysisRequestId);
+
+      // Build job rows. Items with no prompt content fail immediately as
+      // analysis_results rows (preserves prior behavior, no retries).
+      const jobRows: any[] = [];
+      const immediateFailures: any[] = [];
+
+      for (const item of workQueue) {
+        const promptContent = resolvedPrompts.get(item.awpClassName);
+        if (!promptContent) {
+          immediateFailures.push({
+            analysis_request_id: analysisRequestId,
+            file_id: item.fileId,
+            awp_class_name: item.awpClassName,
+            status: "failed",
+            error_message: "No prompt content available for this class",
+          });
+          continue;
+        }
+        jobRows.push({
+          analysis_request_id: analysisRequestId,
+          file_id: item.fileId,
+          awp_class_name: item.awpClassName,
+          prompt_content: promptContent,
+          analyze_model: analyzeModel,
+          status: "pending",
+        });
+      }
+
+      if (immediateFailures.length > 0) {
+        await admin.from("analysis_results").upsert(immediateFailures, {
+          onConflict: "analysis_request_id,file_id,awp_class_name",
+        });
+      }
+
+      // Set phase=analyzing with totals so UI shows progress immediately
+      const totalJobs = jobRows.length + immediateFailures.length;
+      await admin
+        .from("analysis_requests")
+        .update({
+          pipeline_phase: "analyzing",
+          pipeline_progress_done: immediateFailures.length,
+          pipeline_progress_total: totalJobs,
+          status: "processing",
+        } as any)
+        .eq("id", analysisRequestId);
+
+      // Bulk insert jobs in chunks (Postgres array param limits)
+      const CHUNK = 500;
+      for (let i = 0; i < jobRows.length; i += CHUNK) {
+        const slice = jobRows.slice(i, i + CHUNK);
+        const { error: insErr } = await admin
+          .from("analysis_pipeline_jobs")
+          .insert(slice);
+        if (insErr) {
+          console.error(`[pipeline] Failed to insert jobs chunk: ${insErr.message}`);
+          await admin
+            .from("analysis_requests")
+            .update({
+              status: "started",
+              pipeline_phase: null,
+              error_message: `Failed to enqueue analysis jobs: ${insErr.message}`,
+            } as any)
+            .eq("id", analysisRequestId);
+          return;
+        }
+      }
+
+      console.log(
+        `[pipeline] Phase 3: enqueued ${jobRows.length} jobs (${immediateFailures.length} immediate failures). Worker will process asynchronously.`,
+      );
+
+      // Kick the worker once now so it doesn't wait for the next cron tick.
+      const workerSecret = Deno.env.get("ANALYSIS_WORKER_SECRET");
+      if (workerSecret) {
+        fetch(`${supabaseUrl}/functions/v1/process-analysis-jobs`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            apikey: serviceKey,
+            "x-worker-secret": workerSecret,
+          },
+        }).catch((e) => console.warn("[pipeline] worker kick failed:", e));
+      }
+
+      // If everything failed immediately (no jobs to run), finalize now.
+      if (jobRows.length === 0) {
+        if (immediateFailures.length > 0) {
+          await admin
+            .from("analysis_requests")
+            .update({
+              status: "started",
+              pipeline_phase: null,
+              pipeline_progress_done: 0,
+              pipeline_progress_total: 0,
+              error_message: `All ${immediateFailures.length} analysis items failed: no prompt content available.`,
+            } as any)
+            .eq("id", analysisRequestId);
+          return;
+        }
+        // No work and no failures — fall through to summarize (nothing to do)
+      } else {
+        // Jobs are queued; worker will finalize + trigger summarize. Exit now.
         return;
       }
     }
