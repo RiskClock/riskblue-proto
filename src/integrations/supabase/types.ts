@@ -189,7 +189,15 @@ export type Database = {
           updated_at?: string
           worker_id?: string | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "analysis_pipeline_jobs_request_fk"
+            columns: ["analysis_request_id"]
+            isOneToOne: false
+            referencedRelation: "analysis_requests"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       analysis_request_files: {
         Row: {
