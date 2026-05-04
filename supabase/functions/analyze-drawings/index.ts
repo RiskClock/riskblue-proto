@@ -234,11 +234,8 @@ serve(async (req) => {
 
   try {
     const authHeader = req.headers.get("Authorization");
-    if (!authHeader) {
-      return new Response(JSON.stringify({ error: "Authentication required" }), {
-        status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
-    }
+    const internalInvocation = req.headers.get("x-internal-invocation");
+    const workerSecret = Deno.env.get("ANALYSIS_WORKER_SECRET");
 
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const supabaseAnonKey = Deno.env.get("SUPABASE_ANON_KEY")!;
@@ -251,18 +248,36 @@ serve(async (req) => {
       });
     }
 
-    const supabase = createClient(supabaseUrl, supabaseAnonKey, {
-      global: { headers: { Authorization: authHeader } },
-    });
+    // Internal worker path: service-role auth + matching secret. Skip user check.
+    const isInternalCall =
+      !!workerSecret &&
+      internalInvocation === workerSecret &&
+      authHeader === `Bearer ${supabaseServiceKey}`;
 
-    const { data: { user }, error: userError } = await supabase.auth.getUser();
-    if (userError || !user) {
-      return new Response(JSON.stringify({ error: "Invalid or expired token" }), {
-        status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" },
+    let isInternal = false;
+    let user: { id: string; email?: string | null } | null = null;
+
+    if (!isInternalCall) {
+      if (!authHeader) {
+        return new Response(JSON.stringify({ error: "Authentication required" }), {
+          status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      const supabase = createClient(supabaseUrl, supabaseAnonKey, {
+        global: { headers: { Authorization: authHeader } },
       });
-    }
 
-    const isInternal = user.email?.toLowerCase().endsWith("@riskclock.com") ?? false;
+      const { data: { user: authedUser }, error: userError } = await supabase.auth.getUser();
+      if (userError || !authedUser) {
+        return new Response(JSON.stringify({ error: "Invalid or expired token" }), {
+          status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      user = authedUser;
+      isInternal = authedUser.email?.toLowerCase().endsWith("@riskclock.com") ?? false;
+    }
 
     const { analysisRequestId, fileId, awpClassName, promptContent, model, openaiFileId: suppliedOpenaiFileId } = await req.json();
     if (!analysisRequestId || !fileId || !awpClassName || !promptContent) {
@@ -271,8 +286,8 @@ serve(async (req) => {
       });
     }
 
-    // Project-access check (internal users skip)
-    if (!isInternal) {
+    // Project-access check (internal users + internal-call skip)
+    if (!isInternalCall && !isInternal && user) {
       const adminForAuth = createClient(supabaseUrl, supabaseServiceKey);
       const { data: fileAccess } = await adminForAuth
         .from("analysis_request_files")
