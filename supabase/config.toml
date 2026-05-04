@@ -104,3 +104,6 @@ verify_jwt = false
 
 [functions.analyze-level3-schedule]
 verify_jwt = false
+
+[functions.process-analysis-jobs]
+verify_jwt = false
