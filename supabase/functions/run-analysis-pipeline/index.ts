@@ -994,6 +994,7 @@ async function runPipeline(params: PipelineParams) {
       await summaryProgress.init();
 
       // Sequentially summarize (low concurrency to avoid AI rate limits)
+      const internalSecret = Deno.env.get("ANALYSIS_WORKER_SECRET") || "";
       for (const awpClassName of classesToSummarize) {
         try {
           const result = await callFunction(
@@ -1002,6 +1003,9 @@ async function runPipeline(params: PipelineParams) {
             userToken,
             "summarize-analysis",
             { analysisRequestId, awpClassName, model: analyzeModel || "gpt-5-mini" },
+            phaseOverride === "summarize" && internalSecret
+              ? { "x-internal-invocation": internalSecret }
+              : {},
           );
           if (result.ok && Array.isArray(result.data?.instances)) {
             // Persist summary_data merge
