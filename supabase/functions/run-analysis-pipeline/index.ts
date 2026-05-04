@@ -22,6 +22,7 @@ async function callFunction(
   authToken: string,
   fnName: string,
   body: Record<string, unknown>,
+  extraHeaders: Record<string, string> = {},
 ): Promise<{ ok: boolean; status: number; data: any }> {
   const MAX_RETRIES = 3;
   const url = `${supabaseUrl}/functions/v1/${fnName}`;
@@ -35,6 +36,7 @@ async function callFunction(
           Authorization: `Bearer ${authToken}`,
           "Content-Type": "application/json",
           apikey: serviceKey,
+          ...extraHeaders,
         },
         body: JSON.stringify(body),
       });
@@ -992,6 +994,7 @@ async function runPipeline(params: PipelineParams) {
       await summaryProgress.init();
 
       // Sequentially summarize (low concurrency to avoid AI rate limits)
+      const internalSecret = Deno.env.get("ANALYSIS_WORKER_SECRET") || "";
       for (const awpClassName of classesToSummarize) {
         try {
           const result = await callFunction(
@@ -1000,6 +1003,9 @@ async function runPipeline(params: PipelineParams) {
             userToken,
             "summarize-analysis",
             { analysisRequestId, awpClassName, model: analyzeModel || "gpt-5-mini" },
+            phaseOverride === "summarize" && internalSecret
+              ? { "x-internal-invocation": internalSecret }
+              : {},
           );
           if (result.ok && Array.isArray(result.data?.instances)) {
             // Persist summary_data merge

@@ -22,6 +22,9 @@ serve(async (req) => {
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const supabaseAnonKey = Deno.env.get("SUPABASE_ANON_KEY")!;
     const openaiApiKey = Deno.env.get("OPENAI_API_KEY");
+    const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+    const workerSecret = Deno.env.get("ANALYSIS_WORKER_SECRET");
+    const internalInvocation = req.headers.get("x-internal-invocation");
 
     if (!openaiApiKey) {
       return new Response(JSON.stringify({ error: "OPENAI_API_KEY is not configured" }), {
@@ -29,15 +32,24 @@ serve(async (req) => {
       });
     }
 
-    const supabase = createClient(supabaseUrl, supabaseAnonKey, {
-      global: { headers: { Authorization: authHeader } },
-    });
+    // Internal worker re-invocation: skip user auth.
+    const isInternalCall =
+      !!workerSecret &&
+      internalInvocation === workerSecret &&
+      authHeader === `Bearer ${serviceKey}`;
 
-    const { data: { user }, error: userError } = await supabase.auth.getUser();
-    if (userError || !user) {
-      return new Response(JSON.stringify({ error: "Unauthorized" }), {
-        status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" },
+    let user: { id: string; email?: string } | null = null;
+    if (!isInternalCall) {
+      const supabase = createClient(supabaseUrl, supabaseAnonKey, {
+        global: { headers: { Authorization: authHeader } },
       });
+      const { data: { user: u }, error: userError } = await supabase.auth.getUser();
+      if (userError || !u) {
+        return new Response(JSON.stringify({ error: "Unauthorized" }), {
+          status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+      user = { id: u.id, email: u.email };
     }
 
     const { analysisRequestId, awpClassName, model = "gpt-5-mini" } = await req.json();
@@ -47,12 +59,11 @@ serve(async (req) => {
       });
     }
 
-    const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const adminSupabase = createClient(supabaseUrl, serviceKey);
 
     // --- Project-access auth: verify user is request owner, project owner, project member, or internal ---
-    const email = user.email;
-    const isInternal = email?.toLowerCase().endsWith("@riskclock.com") ?? false;
+    const email = user?.email;
+    const isInternal = isInternalCall || (email?.toLowerCase().endsWith("@riskclock.com") ?? false);
 
     if (!isInternal) {
       const { data: reqData, error: reqError } = await adminSupabase
