@@ -373,6 +373,29 @@ Return ONLY valid JSON: {"score": 0, "reason": "explanation under 100 words"}`;
     });
   } catch (error) {
     console.error("[triage] Unhandled error:", error);
+    // Best-effort: reconcile any "processing" triage row to "failed" so the
+    // UI doesn't show a permanent spinner. Use a fresh admin client since
+    // earlier scope may not be available depending on where the error fired.
+    try {
+      const supabaseUrl = Deno.env.get("SUPABASE_URL");
+      const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+      if (supabaseUrl && supabaseServiceKey) {
+        const body = await req.clone().json().catch(() => ({} as any));
+        const { analysisRequestId, fileId, awpClassName } = body || {};
+        if (analysisRequestId && fileId && awpClassName) {
+          const adminFix = createClient(supabaseUrl, supabaseServiceKey);
+          await adminFix.from("analysis_triage_results").update({
+            status: "failed",
+            error_message: `Triage crashed: ${error instanceof Error ? error.message : String(error)}`.slice(0, 1000),
+          }).eq("analysis_request_id", analysisRequestId)
+            .eq("file_id", fileId)
+            .eq("awp_class_name", awpClassName)
+            .eq("status", "processing");
+        }
+      }
+    } catch (cleanupErr) {
+      console.error("[triage] Failed to reconcile processing row on error:", cleanupErr);
+    }
     return new Response(JSON.stringify({ error: error instanceof Error ? error.message : "Unknown error" }), {
       status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
