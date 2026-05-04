@@ -248,35 +248,65 @@ Scoring guidance:
 Return ONLY valid JSON: {"score": 0, "reason": "explanation under 100 words"}`;
     }
 
-    const triageResponse = await fetch("https://api.openai.com/v1/responses", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${openaiApiKey}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        model: model || "gpt-5-nano",
-        input: [
-          {
-            type: "message",
-            role: "system",
-            content: [{ type: "input_text", text: "You are a construction drawing triage assistant. Follow ALL instructions in the user's prompt precisely, including any exclusion rules. If the prompt says to exclude certain items, do NOT count them as evidence. Score strictly based on what the prompt asks for." }],
+    // Retry on transient 5xx / network errors (OpenAI 502/503/504 are common)
+    let triageResponse: Response | null = null;
+    let lastErr = "";
+    const TRIAGE_MAX_ATTEMPTS = 3;
+    for (let attempt = 1; attempt <= TRIAGE_MAX_ATTEMPTS; attempt++) {
+      try {
+        triageResponse = await fetch("https://api.openai.com/v1/responses", {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${openaiApiKey}`,
+            "Content-Type": "application/json",
           },
-          {
-            type: "message",
-            role: "user",
-            content: [{ type: "input_text", text: triagePrompt }],
-          },
-        ],
-      }),
-    });
+          body: JSON.stringify({
+            model: model || "gpt-5-nano",
+            input: [
+              {
+                type: "message",
+                role: "system",
+                content: [{ type: "input_text", text: "You are a construction drawing triage assistant. Follow ALL instructions in the user's prompt precisely, including any exclusion rules. If the prompt says to exclude certain items, do NOT count them as evidence. Score strictly based on what the prompt asks for." }],
+              },
+              {
+                type: "message",
+                role: "user",
+                content: [{ type: "input_text", text: triagePrompt }],
+              },
+            ],
+          }),
+        });
+        if (triageResponse.ok) break;
+        // Retry on 5xx and 429; bail on 4xx (client errors)
+        if (triageResponse.status >= 500 || triageResponse.status === 429) {
+          lastErr = `HTTP ${triageResponse.status}`;
+          if (attempt < TRIAGE_MAX_ATTEMPTS) {
+            const delay = Math.pow(2, attempt) * 1000;
+            console.warn(`[triage] OpenAI ${lastErr}, retrying in ${delay}ms (attempt ${attempt}/${TRIAGE_MAX_ATTEMPTS})`);
+            await new Promise((r) => setTimeout(r, delay));
+            continue;
+          }
+        }
+        break;
+      } catch (netErr) {
+        lastErr = netErr instanceof Error ? netErr.message : String(netErr);
+        if (attempt < TRIAGE_MAX_ATTEMPTS) {
+          const delay = Math.pow(2, attempt) * 1000;
+          console.warn(`[triage] network error: ${lastErr}, retrying in ${delay}ms (attempt ${attempt}/${TRIAGE_MAX_ATTEMPTS})`);
+          await new Promise((r) => setTimeout(r, delay));
+          continue;
+        }
+        triageResponse = null;
+      }
+    }
 
-    if (!triageResponse.ok) {
-      const errText = await triageResponse.text();
-      console.error(`[triage] OpenAI triage call failed: ${errText}`);
+    if (!triageResponse || !triageResponse.ok) {
+      const errText = triageResponse ? await triageResponse.text() : lastErr;
+      const status = triageResponse?.status ?? 0;
+      console.error(`[triage] OpenAI triage call failed after retries: ${errText}`);
       await adminSupabase.from("analysis_triage_results").update({
         status: "failed",
-        error_message: `Triage API failed: ${triageResponse.status}`,
+        error_message: `Triage API failed: ${status || "network error"}`,
       }).eq("file_id", fileId).eq("analysis_request_id", analysisRequestId).eq("awp_class_name", awpClassName);
       return new Response(JSON.stringify({ error: "Triage failed" }), {
         status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
