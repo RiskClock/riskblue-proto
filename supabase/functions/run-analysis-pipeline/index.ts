@@ -22,6 +22,7 @@ async function callFunction(
   authToken: string,
   fnName: string,
   body: Record<string, unknown>,
+  extraHeaders: Record<string, string> = {},
 ): Promise<{ ok: boolean; status: number; data: any }> {
   const MAX_RETRIES = 3;
   const url = `${supabaseUrl}/functions/v1/${fnName}`;
@@ -35,6 +36,7 @@ async function callFunction(
           Authorization: `Bearer ${authToken}`,
           "Content-Type": "application/json",
           apikey: serviceKey,
+          ...extraHeaders,
         },
         body: JSON.stringify(body),
       });
