@@ -222,18 +222,31 @@ Deno.serve(async (req) => {
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const supabaseAnonKey = Deno.env.get("SUPABASE_ANON_KEY")!;
     const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+    const workerSecret = Deno.env.get("ANALYSIS_WORKER_SECRET");
+    const internalInvocation = req.headers.get("x-internal-invocation");
 
-    const userClient = createClient(supabaseUrl, supabaseAnonKey, {
-      global: { headers: { Authorization: authHeader } },
-    });
-    const {
-      data: { user },
-      error: userErr,
-    } = await userClient.auth.getUser();
-    if (userErr || !user) return json({ error: "Unauthorized" }, 401);
+    // Internal worker re-invocation: service-role + matching secret. Skips user auth.
+    const isInternalCall =
+      !!workerSecret &&
+      internalInvocation === workerSecret &&
+      authHeader === `Bearer ${serviceKey}`;
 
-    const isInternal =
-      user.email?.toLowerCase().endsWith("@riskclock.com") ?? false;
+    let isInternal = false;
+    let userId: string | null = null;
+
+    if (!isInternalCall) {
+      const userClient = createClient(supabaseUrl, supabaseAnonKey, {
+        global: { headers: { Authorization: authHeader } },
+      });
+      const {
+        data: { user },
+        error: userErr,
+      } = await userClient.auth.getUser();
+      if (userErr || !user) return json({ error: "Unauthorized" }, 401);
+      userId = user.id;
+      isInternal =
+        user.email?.toLowerCase().endsWith("@riskclock.com") ?? false;
+    }
 
     const body = await req.json();
     const {
@@ -266,18 +279,20 @@ Deno.serve(async (req) => {
     if (reqErr || !request)
       return json({ error: "Analysis request not found" }, 404);
 
-    if (!isInternal && (request as any).user_id !== user.id) {
+    if (!isInternalCall && !isInternal && userId && (request as any).user_id !== userId) {
       const { data: project } = await admin
         .from("projects")
         .select("user_id")
         .eq("id", (request as any).project_id)
         .single();
-      if (!project || (project as any).user_id !== user.id) {
+      if (!project || (project as any).user_id !== userId) {
         return json({ error: "Access denied" }, 403);
       }
     }
 
-    const userToken = authHeader.replace("Bearer ", "");
+    // For internal worker re-invocations (summarize phase), use the service key
+    // as the auth token for nested function calls (summarize-analysis etc.).
+    const userToken = isInternalCall ? serviceKey : authHeader.replace("Bearer ", "");
 
     // ---- Phase-aware clear: only delete data relevant to the requested phase ----
     if (phaseOverride === "analyze") {
