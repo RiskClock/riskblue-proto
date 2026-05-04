@@ -1043,10 +1043,13 @@ async function runPipeline(params: PipelineParams) {
       // Final flush for summarize phase.
       await summaryProgress.finalize();
 
-      // Clear summarizing phase indicator
+      // Clear summarizing phase indicator and ensure status is complete.
+      // (createProgressTracker.finalize() writes status='processing' on its
+      // final flush, so we must explicitly restore status='complete' here.)
       await admin
         .from("analysis_requests")
         .update({
+          status: "complete",
           pipeline_phase: null,
           pipeline_progress_done: 0,
           pipeline_progress_total: 0,
@@ -1057,6 +1060,7 @@ async function runPipeline(params: PipelineParams) {
       await admin
         .from("analysis_requests")
         .update({
+          status: "complete",
           pipeline_phase: null,
           pipeline_progress_done: 0,
           pipeline_progress_total: 0,
