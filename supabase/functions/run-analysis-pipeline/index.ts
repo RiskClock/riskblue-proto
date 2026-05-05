@@ -338,18 +338,34 @@ Deno.serve(async (req) => {
     // THEN set status to "processing" (this triggers realtime → refetch → rows are already gone)
     // SKIP for summarize-phase internal re-invocation: data is already complete
     // and we don't want to wipe progress / error state.
+    // Server-side run claim (per design note #3): generate analysis_run_id
+    // here and atomically stamp the row to processing+extracting. Frontend
+    // generates its own runId for optimistic UI but the SERVER value is the
+    // canonical one written to the DB.
+    let activeRunId: string | null = null;
     if (phaseOverride !== "summarize") {
+      activeRunId = crypto.randomUUID();
       await admin
         .from("analysis_requests")
         .update({
           pipeline_stop_requested: false,
-          pipeline_phase: null,
+          pipeline_phase: "extracting",
           pipeline_progress_done: 0,
           pipeline_progress_total: 0,
           status: "processing",
           error_message: null,
+          analysis_run_id: activeRunId,
+          started_at: new Date().toISOString(),
         } as any)
         .eq("id", analysisRequestId);
+    } else {
+      // Summarize re-invocation: read current run_id so summarize jobs guard against it.
+      const { data: cur } = await admin
+        .from("analysis_requests")
+        .select("analysis_run_id")
+        .eq("id", analysisRequestId)
+        .single();
+      activeRunId = (cur as any)?.analysis_run_id ?? null;
     }
 
     // Persist model selections and disabled classes
