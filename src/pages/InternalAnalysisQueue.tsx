@@ -260,7 +260,10 @@ export default function InternalAnalysisQueue() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {requests.map((request) => (
+                {requests.map((request) => {
+                  const uiState = deriveAnalysisUiState(request as any);
+                  const presentation = presentAnalysisUiState(uiState);
+                  return (
                   <TableRow key={request.id}>
                     <TableCell>
                       <Button variant="link" className="p-0 h-auto font-medium" onClick={() => navigate(`/project/${request.project_id}`)}>
@@ -273,8 +276,8 @@ export default function InternalAnalysisQueue() {
                       {format(new Date(request.created_at), "MMM d, yyyy HH:mm")}
                     </TableCell>
                     <TableCell>
-                      <Badge variant="outline" className={statusColors[request.status] || ""}>
-                        {statusLabels[request.status] || request.status}
+                      <Badge variant="outline" className={uiStateBadgeClass(uiState)}>
+                        {presentation.label}
                       </Badge>
                     </TableCell>
                     <TableCell>{request.file_count || 0}</TableCell>
