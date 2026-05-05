@@ -918,6 +918,7 @@ async function runPipeline(params: PipelineParams) {
         if (!promptContent) {
           immediateFailures.push({
             analysis_request_id: analysisRequestId,
+            analysis_run_id: activeRunId,
             file_id: item.fileId,
             awp_class_name: item.awpClassName,
             status: "failed",
