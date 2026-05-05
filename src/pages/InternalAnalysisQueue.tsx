@@ -36,6 +36,7 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import { format } from "date-fns";
+import { deriveAnalysisUiState, presentAnalysisUiState, uiStateBadgeClass } from "@/lib/analysisUiState";
 
 interface AnalysisRequest {
   id: string;
