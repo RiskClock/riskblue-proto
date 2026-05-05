@@ -3925,7 +3925,7 @@ export function AnalysisSection({ requestId, files, projectId, sourceType, isWMS
                         const triageKey = `${file.id}_${prompt.awp_class_name}`;
                         const triage = triageResults.get(triageKey);
 
-                        if (triage?.status === "processing") {
+                        if (triage?.status === "queued" || triage?.status === "pending" || triage?.status === "processing") {
                           return (
                             <td key={prompt.id} className={`w-14 px-2 py-2 text-center${disabledCls}`}>
                               <Loader2 className="w-3 h-3 animate-spin text-muted-foreground mx-auto" />
@@ -3944,8 +3944,9 @@ export function AnalysisSection({ requestId, files, projectId, sourceType, isWMS
                           let cellClass = `w-14 px-2 py-2 text-center ${isAnalyzingPhase ? 'cursor-default' : 'cursor-pointer'} transition-colors${disabledCls}`;
                           let overrideLabel = "";
 
-                          // Always show triage score background on the cell
-                          cellStyle = { backgroundColor: `rgba(34, 197, 94, ${triage.score / 100})` };
+                          // Always show triage score background on the cell, with opacity floor.
+                          const opacity = Math.max(0.15, Math.min(1, triage.score / 100));
+                          cellStyle = { backgroundColor: `rgba(34, 197, 94, ${opacity})` };
 
                           if (override === "exclude") {
                             overrideLabel = " (Manually excluded)";
