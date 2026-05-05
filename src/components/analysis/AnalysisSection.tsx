@@ -2273,19 +2273,9 @@ export function AnalysisSection({ requestId, files, projectId, sourceType, isWMS
     setAnalyzeTokens(0);
     analyzeTokensRef.current = 0;
 
-    // Optimistic stamp on both caches so badges/spinners flip immediately,
-    // then write the authoritative row. We deliberately skip the immediate
-    // `invalidateQueries` that used to race the DB write and pull back the
-    // stale `complete` status (plan §B).
-    optimisticStatusRef.current = "processing";
-    lastStartAtRef.current = Date.now();
-    const v2Patch = { status: "processing", error_message: null };
-    queryClient.setQueryData(["analysis-request-meta", requestId], (old: any) => (
-      old ? { ...old, ...v2Patch } : old
-    ));
-    queryClient.setQueryData(["wmsv-analysis-request", projectId], (old: any) => (
-      old ? { ...old, ...v2Patch } : old
-    ));
+    // Mark Start as locally pending; the canonical hook masks stale rows
+    // until the row's analysis_run_id changes (or 30s safety timeout).
+    requestState.beginLocalStart();
     await supabase.from("analysis_requests").update({ status: "processing" }).eq("id", requestId);
 
     // Clear existing analysis results and summaries for enabled classes
