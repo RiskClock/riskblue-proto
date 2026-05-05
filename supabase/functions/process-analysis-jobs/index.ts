@@ -313,25 +313,48 @@ async function runJob(
 async function updateProgress(
   admin: ReturnType<typeof createClient>,
   requestId: string,
+  runId: string | null,
 ) {
   try {
-    const { count: doneCount } = await admin
+    // Verify the run is still current; otherwise skip — we don't want stale
+    // workers overwriting progress for a newer run.
+    if (runId) {
+      const { data: cur } = await admin
+        .from("analysis_requests")
+        .select("analysis_run_id")
+        .eq("id", requestId)
+        .single();
+      if ((cur as any)?.analysis_run_id && (cur as any).analysis_run_id !== runId) {
+        console.warn(`[worker] updateProgress skipped: run mismatch for ${requestId}`);
+        return;
+      }
+    }
+
+    const baseDone = admin
       .from("analysis_pipeline_jobs")
       .select("id", { count: "exact", head: true })
       .eq("analysis_request_id", requestId)
       .in("status", ["complete", "failed", "cancelled"]);
-
-    const { count: totalCount } = await admin
+    const baseTotal = admin
       .from("analysis_pipeline_jobs")
       .select("id", { count: "exact", head: true })
       .eq("analysis_request_id", requestId);
 
-    await admin.from("analysis_requests")
+    const { count: doneCount } = runId
+      ? await baseDone.eq("analysis_run_id", runId)
+      : await baseDone;
+    const { count: totalCount } = runId
+      ? await baseTotal.eq("analysis_run_id", runId)
+      : await baseTotal;
+
+    let q = admin.from("analysis_requests")
       .update({
         pipeline_progress_done: doneCount ?? 0,
         pipeline_progress_total: totalCount ?? 0,
       } as any)
       .eq("id", requestId);
+    if (runId) q = q.eq("analysis_run_id", runId);
+    await q;
   } catch (e) {
     console.warn(`[worker] updateProgress failed for ${requestId}:`, e);
   }
@@ -339,53 +362,65 @@ async function updateProgress(
 
 // ---------------------------------------------------------------------------
 // Finalize (with advisory lock so only one worker progresses past this)
+// All counts are scoped to the supplied analysis_run_id so stale jobs from
+// previous runs cannot affect finalization.
 // ---------------------------------------------------------------------------
 async function maybeFinalize(
   admin: ReturnType<typeof createClient>,
   supabaseUrl: string,
   serviceKey: string,
   requestId: string,
+  runId: string | null,
 ) {
-  // Quick pre-check: any pending/processing jobs left?
-  const { count: pendingCount, error: countErr } = await admin
-    .from("analysis_pipeline_jobs")
-    .select("id", { count: "exact", head: true })
-    .eq("analysis_request_id", requestId)
-    .in("status", ["pending", "processing"]);
+  // Verify the run is still current. If a newer run has started, abandon.
+  if (runId) {
+    const { data: curRun } = await admin
+      .from("analysis_requests")
+      .select("analysis_run_id")
+      .eq("id", requestId)
+      .single();
+    if ((curRun as any)?.analysis_run_id && (curRun as any).analysis_run_id !== runId) {
+      console.warn(`[worker] maybeFinalize skipped: run mismatch for ${requestId}`);
+      return;
+    }
+  }
+
+  const buildQ = (statuses: string[]) => {
+    let q = admin
+      .from("analysis_pipeline_jobs")
+      .select("id", { count: "exact", head: true })
+      .eq("analysis_request_id", requestId);
+    if (statuses.length > 0) q = q.in("status", statuses);
+    if (runId) q = q.eq("analysis_run_id", runId);
+    return q;
+  };
+
+  // Quick pre-check: any pending/processing jobs left for this run?
+  const { count: pendingCount, error: countErr } = await buildQ(["pending", "processing"]);
 
   if (countErr) {
     console.error("[worker] finalize count error:", countErr);
     return;
   }
 
-  // Update progress (count terminal jobs)
-  const { count: doneCount } = await admin
-    .from("analysis_pipeline_jobs")
-    .select("id", { count: "exact", head: true })
-    .eq("analysis_request_id", requestId)
-    .in("status", ["complete", "failed", "cancelled"]);
+  // Update progress (count terminal jobs in this run)
+  const { count: doneCount } = await buildQ(["complete", "failed", "cancelled"]);
+  const { count: totalCount } = await buildQ([]);
 
-  const { count: totalCount } = await admin
-    .from("analysis_pipeline_jobs")
-    .select("id", { count: "exact", head: true })
-    .eq("analysis_request_id", requestId);
-
-  await admin.from("analysis_requests")
-    .update({
-      pipeline_progress_done: doneCount ?? 0,
-      pipeline_progress_total: totalCount ?? 0,
-    } as any)
-    .eq("id", requestId);
+  {
+    let q = admin.from("analysis_requests")
+      .update({
+        pipeline_progress_done: doneCount ?? 0,
+        pipeline_progress_total: totalCount ?? 0,
+      } as any)
+      .eq("id", requestId);
+    if (runId) q = q.eq("analysis_run_id", runId);
+    await q;
+  }
 
   if ((pendingCount ?? 0) > 0) return;
 
   // All jobs in terminal state. Try to acquire advisory lock for finalize.
-  // pg_try_advisory_xact_lock requires a transaction; supabase-js single
-  // call runs inside an implicit one, so the lock auto-releases at end.
-  // However we need the work after the lock check to be in the SAME txn.
-  // Easiest: do the gate via a SELECT that combines the lock + status check
-  // and only proceeds if both pass. We rely on the lock ensuring only one
-  // worker enters this path concurrently for this request.
   const { data: lockRow, error: lockErr } = await admin.rpc(
     "try_lock_analysis_finalize",
     { p_request_id: requestId },
@@ -394,100 +429,90 @@ async function maybeFinalize(
     console.error("[worker] advisory lock error:", lockErr);
     return;
   }
-  // Note: in PostgREST each RPC call is its own txn, so the lock is already
-  // released after this returned. Re-check status as the canonical guard.
   if (lockRow !== true) return;
 
-  // Re-check: another worker may have just transitioned status away from analyzing
+  // Re-check: another worker may have just transitioned phase / a new run started
   const { data: cur } = await admin
     .from("analysis_requests")
-    .select("status, pipeline_phase, pipeline_stop_requested")
+    .select("status, pipeline_phase, pipeline_stop_requested, analysis_run_id")
     .eq("id", requestId)
     .single();
 
   const curPhase = (cur as any)?.pipeline_phase;
-  if (curPhase !== "analyzing") {
-    // Already past analyze phase (or never in it via this path) — skip
+  if (curPhase !== "analyzing") return;
+
+  // Run-id guard: skip if a newer run is now active
+  if (runId && (cur as any)?.analysis_run_id && (cur as any).analysis_run_id !== runId) {
+    console.warn(`[worker] finalize skipped: run mismatch (now=${(cur as any).analysis_run_id})`);
     return;
   }
 
-  // Atomically transition phase: only proceed if still 'analyzing'
-  const { data: claimed, error: claimErr } = await admin
+  // Atomically transition phase: only proceed if still 'analyzing' AND run matches
+  let claimQ = admin
     .from("analysis_requests")
     .update({ pipeline_phase: "summarizing" } as any)
     .eq("id", requestId)
-    .eq("pipeline_phase", "analyzing")
-    .select("id")
-    .maybeSingle();
+    .eq("pipeline_phase", "analyzing");
+  if (runId) claimQ = claimQ.eq("analysis_run_id", runId);
+  const { data: claimed, error: claimErr } = await claimQ.select("id").maybeSingle();
 
   if (claimErr || !claimed) return; // someone else got here first
 
-  console.log(`[worker] finalizing request ${requestId}`);
+  console.log(`[worker] finalizing request ${requestId} (run=${runId})`);
 
-  // Counts for terminal-state semantics
-  const { count: completeJobs } = await admin
-    .from("analysis_pipeline_jobs")
-    .select("id", { count: "exact", head: true })
-    .eq("analysis_request_id", requestId)
-    .eq("status", "complete");
-
-  const { count: failedJobs } = await admin
-    .from("analysis_pipeline_jobs")
-    .select("id", { count: "exact", head: true })
-    .eq("analysis_request_id", requestId)
-    .eq("status", "failed");
-
-  const { count: cancelledJobs } = await admin
-    .from("analysis_pipeline_jobs")
-    .select("id", { count: "exact", head: true })
-    .eq("analysis_request_id", requestId)
-    .eq("status", "cancelled");
+  // Counts for terminal-state semantics — scoped to this run
+  const { count: completeJobs } = await buildQ(["complete"]);
+  const { count: failedJobs } = await buildQ(["failed"]);
+  const { count: cancelledJobs } = await buildQ(["cancelled"]);
 
   const totalJobs = (completeJobs ?? 0) + (failedJobs ?? 0) + (cancelledJobs ?? 0);
   const stopRequested = !!(cur as any)?.pipeline_stop_requested;
 
   // If user pressed stop -> mark as 'started' (paused)
   if (stopRequested) {
-    await admin.from("analysis_requests").update({
+    let q = admin.from("analysis_requests").update({
       status: "started",
       pipeline_phase: null,
       pipeline_progress_done: 0,
       pipeline_progress_total: 0,
     } as any).eq("id", requestId);
+    if (runId) q = q.eq("analysis_run_id", runId);
+    await q;
     return;
   }
 
   // All failed (no completes) -> stop with error, no summarize
   if ((completeJobs ?? 0) === 0 && (failedJobs ?? 0) > 0) {
-    await admin.from("analysis_requests").update({
+    let q = admin.from("analysis_requests").update({
       status: "started",
       pipeline_phase: null,
       pipeline_progress_done: 0,
       pipeline_progress_total: 0,
       error_message: `All ${failedJobs} analysis items failed. Please try again in a few minutes.`,
     } as any).eq("id", requestId);
+    if (runId) q = q.eq("analysis_run_id", runId);
+    await q;
     return;
   }
 
-  // Mark as complete and dispatch summarize via run-analysis-pipeline (phase=summarize)
-  // (run-analysis-pipeline already has a summarize phase that runs after analyze).
-  // Easier: just call summarize-analysis directly per class here.
   const errorMsg =
     (failedJobs ?? 0) > 0
       ? `${failedJobs} of ${totalJobs} items failed during analysis`
       : null;
 
-  await admin.from("analysis_requests").update({
-    status: "complete",
-    pipeline_phase: "summarizing",
-    pipeline_progress_done: 0,
-    pipeline_progress_total: 0,
-    error_message: errorMsg,
-  } as any).eq("id", requestId);
+  {
+    let q = admin.from("analysis_requests").update({
+      status: "complete",
+      pipeline_phase: "summarizing",
+      pipeline_progress_done: 0,
+      pipeline_progress_total: 0,
+      error_message: errorMsg,
+    } as any).eq("id", requestId);
+    if (runId) q = q.eq("analysis_run_id", runId);
+    await q;
+  }
 
-  // Trigger run-analysis-pipeline with phaseOverride=summarize so existing
-  // logic handles summary + email dispatch.
-  // We don't await — fire-and-forget so this worker invocation can return.
+  // Trigger run-analysis-pipeline with phaseOverride=summarize
   fireAndForgetSummarize(supabaseUrl, serviceKey, requestId).catch((e) =>
     console.error("[worker] summarize dispatch failed:", e),
   );
