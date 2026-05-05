@@ -1245,80 +1245,23 @@ export function AnalysisSection({ requestId, files, projectId, sourceType, isWMS
 
   // (Default-disabled AWP classes are applied below, after sortedPrompts is defined.)
 
-  // Hydrate analyzeV2Running from DB status on mount/navigation
-  // Also auto-clear when DB status transitions to complete while we're showing "running"
-  const [hydratedProcessing, setHydratedProcessing] = useState(false);
+  // Hydrate analyzeV2Running from canonical request state.
+  // Stale-row protection lives inside useAnalysisRequestState (run-id mask).
   const hasTriggeredResumeRef = useRef(false);
   useEffect(() => {
-    if (!requestMeta) return;
-    const dbStatus = (requestMeta as any).status as string;
-    const isTerminal = dbStatus === "complete" || dbStatus === "failed";
-
-    // Post-start guard: for ~1500ms after a local Start/Restart, ignore any
-    // stale `complete`/`failed` rows that may still be in flight from the
-    // previous run. complete→processing is a valid transition on restart, so
-    // we deliberately do NOT use pure rank logic — we use a time window keyed
-    // off the optimistic ref instead.
-    const inGuardWindow =
-      !!optimisticStatusRef.current &&
-      Date.now() - lastStartAtRef.current < POST_START_GUARD_MS;
-
-    if (inGuardWindow && isTerminal) {
-      return; // Ignore stale terminal during the start window.
-    }
-
-    // Status-precedence guard for non-terminal stale rows
-    // (e.g. `copied` arriving after we've optimistically set `processing`).
-    if (optimisticStatusRef.current && !isTerminal) {
-      const incomingRank = STATUS_RANK[dbStatus] ?? 0;
-      const optimisticRank = STATUS_RANK[optimisticStatusRef.current] ?? 0;
-      if (incomingRank < optimisticRank) {
-        return; // Ignore stale regression
-      }
-    }
-
-    // DB has caught up or reached terminal — clear optimistic guard.
-    if (optimisticStatusRef.current) {
-      const incomingRank = STATUS_RANK[dbStatus] ?? 0;
-      const optimisticRank = STATUS_RANK[optimisticStatusRef.current] ?? 0;
-      if (incomingRank >= optimisticRank || isTerminal) {
-        optimisticStatusRef.current = null;
-      }
-    }
-
-    if (!hydratedProcessing) {
-      if (dbStatus === "processing") {
-        analyzeRunSyncRef.current = "running";
-        setAnalyzeV2Running(true);
-      } else if (isTerminal || dbStatus === "started") {
-        analyzeRunSyncRef.current = "idle";
-        setAnalyzeV2Running(false);
-        setAnalyzeV2Stopping(false);
-        setAnalyzingClasses(new Set());
-        setClassFileStatuses({});
-        optimisticStatusRef.current = null;
-      }
-      setHydratedProcessing(true);
-      return;
-    }
-
-    if (dbStatus === "processing") {
+    const isRunning = requestState.isRunning;
+    const isTerminal = requestState.isTerminal;
+    if (isRunning) {
       analyzeRunSyncRef.current = "running";
-      if (!analyzeV2Running) {
-        setAnalyzeV2Running(true);
-      }
-      return;
-    }
-
-    if (isTerminal || dbStatus === "started") {
+      if (!analyzeV2Running) setAnalyzeV2Running(true);
+    } else if (isTerminal || requestState.uiState === "ready") {
       analyzeRunSyncRef.current = "idle";
-      setAnalyzeV2Running(false);
+      if (analyzeV2Running) setAnalyzeV2Running(false);
       setAnalyzeV2Stopping(false);
-      setAnalyzingClasses(new Set());
-      setClassFileStatuses({});
-      optimisticStatusRef.current = null;
+      setAnalyzingClasses((prev) => (prev.size ? new Set() : prev));
+      setClassFileStatuses((prev) => (Object.keys(prev).length ? {} : prev));
     }
-  }, [requestMeta, hydratedProcessing, analyzeV2Running]);
+  }, [requestState.isRunning, requestState.isTerminal, requestState.uiState, analyzeV2Running]);
 
   // ---- Realtime subscriptions ----
   useEffect(() => {
