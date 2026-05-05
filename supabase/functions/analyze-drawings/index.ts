@@ -279,7 +279,7 @@ serve(async (req) => {
       isInternal = authedUser.email?.toLowerCase().endsWith("@riskclock.com") ?? false;
     }
 
-    const { analysisRequestId, fileId, awpClassName, promptContent, model, openaiFileId: suppliedOpenaiFileId } = await req.json();
+    const { analysisRequestId, analysisRunId, fileId, awpClassName, promptContent, model, openaiFileId: suppliedOpenaiFileId } = await req.json();
     if (!analysisRequestId || !fileId || !awpClassName || !promptContent) {
       return new Response(JSON.stringify({ error: "Missing required fields" }), {
         status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -328,7 +328,7 @@ serve(async (req) => {
 
     const { data: request, error: reqError } = await adminSupabase
       .from("analysis_requests")
-      .select("source_type")
+      .select("source_type, analysis_run_id")
       .eq("id", analysisRequestId)
       .single();
 
@@ -336,6 +336,21 @@ serve(async (req) => {
       return new Response(JSON.stringify({ error: "Analysis request not found" }), {
         status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
+    }
+
+    // Run-id guard: abort if a newer run has started for this request.
+    if (
+      analysisRunId &&
+      (request as any).analysis_run_id &&
+      (request as any).analysis_run_id !== analysisRunId
+    ) {
+      console.warn(
+        `[analyze-drawings] run mismatch — job=${analysisRunId} current=${(request as any).analysis_run_id}; aborting`,
+      );
+      return new Response(
+        JSON.stringify({ error: "Superseded by a newer analysis run", currentRunId: (request as any).analysis_run_id }),
+        { status: 409, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+      );
     }
 
     const { data: fileRecord, error: fileError } = await adminSupabase
@@ -548,6 +563,25 @@ serve(async (req) => {
     }
 
     const { resultText, usage } = apiResult as { resultText: string; usage: Record<string, number> | null };
+
+    // Final run-id re-check before writing the result. The OpenAI call may
+    // have taken a while; a newer run could have started in the meantime.
+    if (analysisRunId) {
+      const { data: cur } = await adminSupabase
+        .from("analysis_requests")
+        .select("analysis_run_id")
+        .eq("id", analysisRequestId)
+        .single();
+      if ((cur as any)?.analysis_run_id && (cur as any).analysis_run_id !== analysisRunId) {
+        console.warn(
+          `[analyze-drawings] post-API run mismatch — discarding result for file ${fileId}/${awpClassName}`,
+        );
+        return new Response(
+          JSON.stringify({ error: "Superseded by a newer analysis run" }),
+          { status: 409, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+        );
+      }
+    }
 
     // Store result
     await adminSupabase.from("analysis_results")

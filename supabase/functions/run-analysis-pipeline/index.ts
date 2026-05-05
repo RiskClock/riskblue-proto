@@ -402,6 +402,7 @@ Deno.serve(async (req) => {
       triageModel: triageModel || "gpt-5-nano",
       analyzeModel: analyzeModel || "gpt-5-mini",
       phaseOverride,
+      activeRunId,
     });
 
     if (typeof (globalThis as any).EdgeRuntime?.waitUntil === "function") {
@@ -435,6 +436,7 @@ interface PipelineParams {
   triageModel: string;
   analyzeModel: string;
   phaseOverride?: string;
+  activeRunId: string | null;
 }
 
 async function runPipeline(params: PipelineParams) {
@@ -448,6 +450,7 @@ async function runPipeline(params: PipelineParams) {
     triageModel,
     analyzeModel,
     phaseOverride,
+    activeRunId,
   } = params;
 
   const MAX_CONCURRENCY = 5;
@@ -882,6 +885,7 @@ async function runPipeline(params: PipelineParams) {
         }
         jobRows.push({
           analysis_request_id: analysisRequestId,
+          analysis_run_id: activeRunId,
           file_id: item.fileId,
           awp_class_name: item.awpClassName,
           prompt_content: promptContent,
@@ -1053,29 +1057,40 @@ async function runPipeline(params: PipelineParams) {
             serviceKey,
             userToken,
             "summarize-analysis",
-            { analysisRequestId, awpClassName, model: analyzeModel || "gpt-5-mini" },
+            { analysisRequestId, analysisRunId: activeRunId, awpClassName, model: analyzeModel || "gpt-5-mini" },
             phaseOverride === "summarize" && internalSecret
               ? { "x-internal-invocation": internalSecret }
               : {},
           );
           if (result.ok && Array.isArray(result.data?.instances)) {
-            // Persist summary_data merge
+            // Persist summary_data merge — guarded by run id so a newer run's
+            // summary_data isn't clobbered by stale results.
             const { data: reqMeta } = await admin
               .from("analysis_requests")
-              .select("summary_data")
+              .select("summary_data, analysis_run_id")
               .eq("id", analysisRequestId)
               .single();
-            const existing =
-              ((reqMeta as any)?.summary_data as Record<string, unknown>) || {};
-            await admin
-              .from("analysis_requests")
-              .update({
-                summary_data: {
-                  ...existing,
-                  [awpClassName]: result.data.instances,
-                } as any,
-              })
-              .eq("id", analysisRequestId);
+            const curRun = (reqMeta as any)?.analysis_run_id ?? null;
+            if (activeRunId && curRun && curRun !== activeRunId) {
+              console.warn(`[pipeline] summarize: run mismatch, skipping persist for ${awpClassName}`);
+            } else {
+              const existing =
+                ((reqMeta as any)?.summary_data as Record<string, unknown>) || {};
+              let q = admin
+                .from("analysis_requests")
+                .update({
+                  summary_data: {
+                    ...existing,
+                    [awpClassName]: result.data.instances,
+                  } as any,
+                })
+                .eq("id", analysisRequestId);
+              if (activeRunId) q = q.eq("analysis_run_id", activeRunId);
+              await q;
+            }
+          } else if (result.status === 409) {
+            console.warn(`[pipeline] summarize superseded for ${awpClassName} — aborting summary phase`);
+            return;
           } else {
             console.warn(
               `[pipeline] Summarize failed for ${awpClassName}: ${result.status}`,

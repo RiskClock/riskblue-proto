@@ -52,7 +52,7 @@ serve(async (req) => {
       user = { id: u.id, email: u.email };
     }
 
-    const { analysisRequestId, awpClassName, model = "gpt-5-mini" } = await req.json();
+    const { analysisRequestId, analysisRunId, awpClassName, model = "gpt-5-mini" } = await req.json();
     if (!analysisRequestId || !awpClassName) {
       return new Response(JSON.stringify({ error: "Missing analysisRequestId or awpClassName" }), {
         status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -60,6 +60,21 @@ serve(async (req) => {
     }
 
     const adminSupabase = createClient(supabaseUrl, serviceKey);
+
+    // Run-id guard: abort if a newer run has started.
+    if (analysisRunId) {
+      const { data: curRun } = await adminSupabase
+        .from("analysis_requests")
+        .select("analysis_run_id")
+        .eq("id", analysisRequestId)
+        .single();
+      if ((curRun as any)?.analysis_run_id && (curRun as any).analysis_run_id !== analysisRunId) {
+        return new Response(
+          JSON.stringify({ error: "Superseded by a newer analysis run" }),
+          { status: 409, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+        );
+      }
+    }
 
     // --- Project-access auth: verify user is request owner, project owner, project member, or internal ---
     const email = user?.email;
