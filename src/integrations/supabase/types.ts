@@ -356,6 +356,7 @@ export type Database = {
       analysis_results: {
         Row: {
           analysis_request_id: string
+          analysis_run_id: string | null
           awp_class_name: string
           created_at: string
           error_message: string | null
@@ -367,6 +368,7 @@ export type Database = {
         }
         Insert: {
           analysis_request_id: string
+          analysis_run_id?: string | null
           awp_class_name: string
           created_at?: string
           error_message?: string | null
@@ -378,6 +380,7 @@ export type Database = {
         }
         Update: {
           analysis_request_id?: string
+          analysis_run_id?: string | null
           awp_class_name?: string
           created_at?: string
           error_message?: string | null
@@ -449,6 +452,7 @@ export type Database = {
       analysis_triage_results: {
         Row: {
           analysis_request_id: string
+          analysis_run_id: string | null
           awp_class_name: string
           created_at: string
           error_message: string | null
@@ -462,6 +466,7 @@ export type Database = {
         }
         Insert: {
           analysis_request_id: string
+          analysis_run_id?: string | null
           awp_class_name: string
           created_at?: string
           error_message?: string | null
@@ -475,6 +480,7 @@ export type Database = {
         }
         Update: {
           analysis_request_id?: string
+          analysis_run_id?: string | null
           awp_class_name?: string
           created_at?: string
           error_message?: string | null

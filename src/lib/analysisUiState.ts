@@ -107,17 +107,17 @@ export function presentAnalysisUiState(state: AnalysisUiState): UiStatePresentat
   const isTerminal = state === "complete" || state === "failed";
 
   const map: Record<AnalysisUiState, { label: string; button: string }> = {
-    awaiting_upload: { label: "Awaiting File Upload", button: "Add files to continue" },
-    uploading: { label: "Uploading files…", button: "Uploading files…" },
-    copying: { label: "Copying files…", button: "Copying files…" },
+    awaiting_upload: { label: "Awaiting File Upload", button: "Add Files to Continue" },
+    uploading: { label: "Uploading Files", button: "Uploading Files" },
+    copying: { label: "Copying Files", button: "Copying Files" },
     ready: { label: "Ready for Analysis", button: "Start Analysis" },
-    awaiting_credits: { label: "Insufficient Credits", button: "Buy credits" },
-    starting: { label: "Starting analysis…", button: "Starting analysis…" },
-    extracting: { label: "Extracting drawing text…", button: "Extracting drawing text…" },
-    triaging: { label: "Classifying drawings…", button: "Classifying drawings…" },
-    analyzing: { label: "Analyzing drawings…", button: "Analyzing drawings…" },
-    summarizing: { label: "Summarizing findings…", button: "Summarizing findings…" },
-    stopping: { label: "Stopping analysis…", button: "Stopping analysis…" },
+    awaiting_credits: { label: "Insufficient Credits", button: "Buy Credits" },
+    starting: { label: "Starting Analysis", button: "Starting Analysis" },
+    extracting: { label: "Extracting Context", button: "Extracting Context" },
+    triaging: { label: "Triaging Drawings", button: "Triaging Drawings" },
+    analyzing: { label: "Analyzing Content", button: "Analyzing Content" },
+    summarizing: { label: "Summarizing Findings", button: "Summarizing Findings" },
+    stopping: { label: "Stopping Analysis", button: "Stopping Analysis" },
     complete: { label: "Analysis Complete", button: "Re-run Analysis" },
     failed: { label: "Failed", button: "Retry Analysis" },
   };

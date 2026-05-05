@@ -296,56 +296,13 @@ Deno.serve(async (req) => {
     // as the auth token for nested function calls (summarize-analysis etc.).
     const userToken = isInternalCall ? serviceKey : authHeader.replace("Bearer ", "");
 
-    // ---- Phase-aware clear: only delete data relevant to the requested phase ----
-    if (phaseOverride === "summarize") {
-      // Internal worker re-invocation to run summary phase ONLY.
-      // CRITICAL: Do NOT clear any data here — analyze results must be preserved
-      // so summarize-analysis can read them. Skip directly to phase 4.
-      // (handled below by phase routing)
-    } else if (phaseOverride === "analyze") {
-      // Only clear analysis results and summary — keep triage, extracted text, and OpenAI file caches
-      await Promise.all([
-        admin.from("analysis_results").delete().eq("analysis_request_id", analysisRequestId),
-        admin.from("analysis_requests")
-          .update({ analyze_tokens_used: 0, summary_data: {} } as any)
-          .eq("id", analysisRequestId),
-      ]);
-    } else if (phaseOverride === "triage") {
-      // Clear triage + analysis results, but keep extracted text and OpenAI file IDs
-      await Promise.all([
-        admin.from("analysis_triage_results").delete().eq("analysis_request_id", analysisRequestId),
-        admin.from("analysis_results").delete().eq("analysis_request_id", analysisRequestId),
-        admin.from("analysis_triage_overrides").delete().eq("analysis_request_id", analysisRequestId),
-        admin.from("analysis_requests")
-          .update({ triage_tokens_used: 0, analyze_tokens_used: 0, summary_data: {} } as any)
-          .eq("id", analysisRequestId),
-      ]);
-    } else {
-      // Full clear: delete everything including extracted text and OpenAI file caches
-      await Promise.all([
-        admin.from("analysis_triage_results").delete().eq("analysis_request_id", analysisRequestId),
-        admin.from("analysis_results").delete().eq("analysis_request_id", analysisRequestId),
-        admin.from("analysis_triage_overrides").delete().eq("analysis_request_id", analysisRequestId),
-        admin.from("analysis_request_files")
-          .update({ extracted_text: null, openai_file_id: null, openai_file_status: null } as any)
-          .eq("analysis_request_id", analysisRequestId),
-        admin.from("analysis_requests")
-          .update({ triage_tokens_used: 0, analyze_tokens_used: 0, summary_data: {} } as any)
-          .eq("id", analysisRequestId),
-      ]);
-    }
-
-    // THEN set status to "processing" (this triggers realtime → refetch → rows are already gone)
-    // SKIP for summarize-phase internal re-invocation: data is already complete
-    // and we don't want to wipe progress / error state.
-    // Server-side run claim (per design note #3): generate analysis_run_id
-    // here and atomically stamp the row to processing+extracting. Frontend
-    // generates its own runId for optimistic UI but the SERVER value is the
-    // canonical one written to the DB.
+    // ---- Run claim FIRST: stamp the new analysis_run_id atomically before
+    // any destructive cleanup. If claim fails we abort and leave prior data
+    // intact. (Per Phase B note #1.)
     let activeRunId: string | null = null;
     if (phaseOverride !== "summarize") {
       activeRunId = crypto.randomUUID();
-      await admin
+      const { error: claimErr } = await admin
         .from("analysis_requests")
         .update({
           pipeline_stop_requested: false,
@@ -358,6 +315,10 @@ Deno.serve(async (req) => {
           started_at: new Date().toISOString(),
         } as any)
         .eq("id", analysisRequestId);
+      if (claimErr) {
+        console.error("[pipeline] Run claim failed:", claimErr);
+        return json({ error: "Failed to claim analysis run" }, 500);
+      }
     } else {
       // Summarize re-invocation: read current run_id so summarize jobs guard against it.
       const { data: cur } = await admin
@@ -366,6 +327,87 @@ Deno.serve(async (req) => {
         .eq("id", analysisRequestId)
         .single();
       activeRunId = (cur as any)?.analysis_run_id ?? null;
+    }
+
+    // ---- Phase-aware cleanup, scoped to PRIOR runs only (run_id IS NULL OR <> activeRunId)
+    // Cancel stale in-flight jobs first (don't hard-delete them) so workers can detect
+    // the mismatch and skip writes. Then delete prior-run result/triage rows.
+    if (phaseOverride === "summarize") {
+      // Internal worker re-invocation to run summary phase ONLY.
+      // CRITICAL: Do NOT clear any data here — analyze results must be preserved
+      // so summarize-analysis can read them. Skip directly to phase 4.
+    } else {
+      // Cancel any stale pending/processing jobs from prior runs
+      if (activeRunId) {
+        await admin
+          .from("analysis_pipeline_jobs")
+          .update({ status: "cancelled", completed_at: new Date().toISOString(), error_message: "Superseded by a newer analysis run" } as any)
+          .eq("analysis_request_id", analysisRequestId)
+          .neq("analysis_run_id", activeRunId)
+          .in("status", ["pending", "processing"]);
+        // Also cancel rows where run_id is NULL (legacy / never stamped)
+        await admin
+          .from("analysis_pipeline_jobs")
+          .update({ status: "cancelled", completed_at: new Date().toISOString(), error_message: "Superseded by a newer analysis run" } as any)
+          .eq("analysis_request_id", analysisRequestId)
+          .is("analysis_run_id", null)
+          .in("status", ["pending", "processing"]);
+      }
+
+      const deleteStaleResults = async () => {
+        if (!activeRunId) return;
+        // Delete prior-run analysis_results
+        await admin.from("analysis_results")
+          .delete()
+          .eq("analysis_request_id", analysisRequestId)
+          .neq("analysis_run_id", activeRunId);
+        await admin.from("analysis_results")
+          .delete()
+          .eq("analysis_request_id", analysisRequestId)
+          .is("analysis_run_id", null);
+      };
+      const deleteStaleTriage = async () => {
+        if (!activeRunId) return;
+        await admin.from("analysis_triage_results")
+          .delete()
+          .eq("analysis_request_id", analysisRequestId)
+          .neq("analysis_run_id", activeRunId);
+        await admin.from("analysis_triage_results")
+          .delete()
+          .eq("analysis_request_id", analysisRequestId)
+          .is("analysis_run_id", null);
+      };
+
+      if (phaseOverride === "analyze") {
+        await Promise.all([
+          deleteStaleResults(),
+          admin.from("analysis_requests")
+            .update({ analyze_tokens_used: 0, summary_data: {} } as any)
+            .eq("id", analysisRequestId),
+        ]);
+      } else if (phaseOverride === "triage") {
+        await Promise.all([
+          deleteStaleTriage(),
+          deleteStaleResults(),
+          admin.from("analysis_triage_overrides").delete().eq("analysis_request_id", analysisRequestId),
+          admin.from("analysis_requests")
+            .update({ triage_tokens_used: 0, analyze_tokens_used: 0, summary_data: {} } as any)
+            .eq("id", analysisRequestId),
+        ]);
+      } else {
+        // Full clear: delete prior-run rows + extracted text + OpenAI file caches
+        await Promise.all([
+          deleteStaleTriage(),
+          deleteStaleResults(),
+          admin.from("analysis_triage_overrides").delete().eq("analysis_request_id", analysisRequestId),
+          admin.from("analysis_request_files")
+            .update({ extracted_text: null, openai_file_id: null, openai_file_status: null } as any)
+            .eq("analysis_request_id", analysisRequestId),
+          admin.from("analysis_requests")
+            .update({ triage_tokens_used: 0, analyze_tokens_used: 0, summary_data: {} } as any)
+            .eq("id", analysisRequestId),
+        ]);
+      }
     }
 
     // Persist model selections and disabled classes
@@ -625,6 +667,7 @@ async function runPipeline(params: PipelineParams) {
               "triage-drawings",
               {
                 analysisRequestId,
+                analysisRunId: activeRunId,
                 fileId: item.fileId,
                 awpClassName: item.prompt.awp_class_name,
                 assetType: item.prompt.category,
@@ -876,6 +919,7 @@ async function runPipeline(params: PipelineParams) {
         if (!promptContent) {
           immediateFailures.push({
             analysis_request_id: analysisRequestId,
+            analysis_run_id: activeRunId,
             file_id: item.fileId,
             awp_class_name: item.awpClassName,
             status: "failed",
@@ -906,6 +950,7 @@ async function runPipeline(params: PipelineParams) {
       if (jobRows.length > 0) {
         const placeholderRows = jobRows.map((j) => ({
           analysis_request_id: j.analysis_request_id,
+          analysis_run_id: activeRunId,
           file_id: j.file_id,
           awp_class_name: j.awp_class_name,
           status: "processing",
