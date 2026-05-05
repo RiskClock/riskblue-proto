@@ -51,12 +51,11 @@ export interface AnalysisRequestState extends UiStatePresentation {
   progress: { done: number; total: number };
   runId: string | null;
   /**
-   * Caller-controlled: mark a Start/Retry click in flight. Pass the runId
-   * generated client-side (must match what the backend will write).
-   * Until DB confirms a row with this runId, mismatched older rows will be
-   * suppressed and the UI displays "starting".
+   * Caller-controlled: mark a Start/Retry click in flight. Until the DB row
+   * shows an analysis_run_id that differs from the one captured at click time
+   * (or a newer started_at), older rows are masked as "starting".
    */
-  beginLocalStart: (runId: string) => void;
+  beginLocalStart: (clientRunId?: string) => void;
   /** Clear local pending if Start failed before backend wrote anything. */
   clearLocalStart: () => void;
 }
