@@ -1003,15 +1003,15 @@ function ExtractedTextBody({ fileId, localText }: { fileId: string; localText?: 
 // ---------------------------------------------------------------------------
 
 const ACTIVE_STATUSES = ["pending", "copying", "copied", "started", "processing"];
-const STATUS_RANK: Record<string, number> = {
-  awaiting_upload: 0, pending: 1, copying: 1, copied: 2, started: 3, processing: 4, stopping: 4, complete: 5, failed: 5,
-};
 
 export function AnalysisSection({ requestId, files, projectId, sourceType, isWMSV, visibleAwpClasses, onAddFileUpload, onAddFileDrive, onAddFileProcore, onAddFileSharePoint }: AnalysisSectionProps) {
   const { toast } = useToast();
   const { user } = useAuth();
   const isInternal = (user?.email?.toLowerCase().endsWith("@riskclock.com")) ?? false;
   const queryClient = useQueryClient();
+
+  // Canonical analysis-request state (status, phase, run id, ui label).
+  const requestState = useAnalysisRequestState(requestId);
 
   // ---- New state architecture ----
   const [analyzingClasses, setAnalyzingClasses] = useState<Set<string>>(new Set());
