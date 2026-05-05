@@ -1863,11 +1863,9 @@ export function AnalysisSection({ requestId, files, projectId, sourceType, isWMS
 
 
   const handleWmsvStop = async () => {
-    // Optimistic stop — keep active status, show "Stopping..."
-    optimisticStatusRef.current = "stopping";
     setAnalyzeV2Stopping(true);
-    queryClient.setQueryData(["analysis-request-meta", requestId], (old: any) => ({
-      ...old,
+    queryClient.setQueryData(queryKeyForRequest, (old: any) => ({
+      ...(old || {}),
       pipeline_stop_requested: true,
     }));
     await supabase
