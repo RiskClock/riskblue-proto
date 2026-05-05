@@ -413,7 +413,7 @@ Deno.serve(async (req) => {
       );
     }
 
-    return json({ status: "started", analysisRequestId }, 202);
+    return json({ status: "started", analysisRequestId, analysisRunId: activeRunId }, 202);
   } catch (e) {
     console.error("[pipeline] Handler error:", e);
     return json(
