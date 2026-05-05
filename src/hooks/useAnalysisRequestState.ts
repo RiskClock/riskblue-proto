@@ -68,19 +68,10 @@ export function useAnalysisRequestState(requestId: string | null | undefined): A
   const queryKey = useMemo(() => ["analysis-request-row", requestId], [requestId]);
   const [realtimeReady, setRealtimeReady] = useState(false);
 
-  // Local pending start tracking
-  const localStartRunIdRef = useRef<string | null>(null);
-  const [localStartTick, setLocalStartTick] = useState(0); // forces re-render when ref flips
-
-  const beginLocalStart = useCallback((runId: string) => {
-    localStartRunIdRef.current = runId;
-    setLocalStartTick((t) => t + 1);
-  }, []);
-
-  const clearLocalStart = useCallback(() => {
-    localStartRunIdRef.current = null;
-    setLocalStartTick((t) => t + 1);
-  }, []);
+  // Local pending start tracking — captures the run id seen at click time so
+  // we can detect when the DB has moved on to a newer run.
+  const localPendingRef = useRef<{ priorRunId: string | null; clickedAt: number } | null>(null);
+  const [localPendingTick, setLocalPendingTick] = useState(0);
 
   const { data: rawRow } = useQuery<AnalysisRequestRow | null>({
     queryKey,
@@ -95,7 +86,6 @@ export function useAnalysisRequestState(requestId: string | null | undefined): A
       if (error) throw error;
       return (data as unknown as AnalysisRequestRow) ?? null;
     },
-    // Polling fallback: only when realtime channel isn't SUBSCRIBED AND the row is active.
     refetchInterval: (query: any) => {
       const data = query?.state?.data as AnalysisRequestRow | null;
       if (!data) return false;
@@ -106,6 +96,23 @@ export function useAnalysisRequestState(requestId: string | null | undefined): A
       return false;
     },
   });
+
+  const beginLocalStart = useCallback(
+    (_clientRunId?: string) => {
+      const cached = queryClient.getQueryData<AnalysisRequestRow | null>(queryKey);
+      localPendingRef.current = {
+        priorRunId: cached?.analysis_run_id ?? null,
+        clickedAt: Date.now(),
+      };
+      setLocalPendingTick((t) => t + 1);
+    },
+    [queryClient, queryKey],
+  );
+
+  const clearLocalStart = useCallback(() => {
+    localPendingRef.current = null;
+    setLocalPendingTick((t) => t + 1);
+  }, []);
 
   // Realtime subscription — single channel per requestId
   useEffect(() => {
@@ -119,7 +126,6 @@ export function useAnalysisRequestState(requestId: string | null | undefined): A
         { event: "UPDATE", schema: "public", table: "analysis_requests", filter: `id=eq.${requestId}` },
         (payload) => {
           const next = payload.new as AnalysisRequestRow;
-          // Apply directly to cache for instant updates (avoids a refetch round-trip).
           queryClient.setQueryData(queryKey, next);
         },
       )
@@ -133,40 +139,45 @@ export function useAnalysisRequestState(requestId: string | null | undefined): A
     };
   }, [requestId, queryClient, queryKey]);
 
-  // ---- Reconcile: apply pending-start mask only while runId mismatches ----
-  // Per design note #6: do NOT broadly suppress mismatched run_ids. Only mask
-  // while a local Start click is pending and the DB has not yet written the
-  // new run_id.
-  void localStartTick; // re-render trigger
-  const localPendingRunId = localStartRunIdRef.current;
+  void localPendingTick;
+  const pending = localPendingRef.current;
   const dbRunId = rawRow?.analysis_run_id ?? null;
 
-  // Auto-clear local pending once DB confirms (or moves to a newer run).
+  // Auto-clear once the DB shows a different (newer) run id than the one
+  // captured at click time. Also auto-clear after a hard 30s safety timeout.
   useEffect(() => {
-    if (!localPendingRunId) return;
-    if (dbRunId === localPendingRunId) {
-      // DB confirmed our run — drop the mask.
-      localStartRunIdRef.current = null;
-      setLocalStartTick((t) => t + 1);
+    if (!pending) return;
+    if (dbRunId && dbRunId !== pending.priorRunId) {
+      localPendingRef.current = null;
+      setLocalPendingTick((t) => t + 1);
+      return;
     }
-  }, [localPendingRunId, dbRunId]);
+    const elapsed = Date.now() - pending.clickedAt;
+    const remaining = Math.max(0, 30_000 - elapsed);
+    const t = setTimeout(() => {
+      localPendingRef.current = null;
+      setLocalPendingTick((t) => t + 1);
+    }, remaining);
+    return () => clearTimeout(t);
+  }, [pending, dbRunId]);
 
   const effectiveRow: AnalysisRequestRow | null = useMemo(() => {
     if (!rawRow) return null;
-    if (!localPendingRunId) return rawRow;
-    if (dbRunId === localPendingRunId) return rawRow;
-    // DB still reflects an older run (or null). Mask it as "starting" but
-    // preserve all other fields so progress/totals don't blink.
-    return {
-      ...rawRow,
-      status: "processing",
-      pipeline_phase: null, // forces deriveAnalysisUiState → "starting"
-      pipeline_progress_done: 0,
-      pipeline_progress_total: rawRow.pipeline_progress_total ?? 0,
-      pipeline_stop_requested: false,
-      error_message: null,
-    };
-  }, [rawRow, localPendingRunId, dbRunId]);
+    if (!pending) return rawRow;
+    // DB still on the prior run → mask as "starting" while preserving totals.
+    if (!dbRunId || dbRunId === pending.priorRunId) {
+      return {
+        ...rawRow,
+        status: "processing",
+        pipeline_phase: null,
+        pipeline_progress_done: 0,
+        pipeline_progress_total: rawRow.pipeline_progress_total ?? 0,
+        pipeline_stop_requested: false,
+        error_message: null,
+      };
+    }
+    return rawRow;
+  }, [rawRow, pending, dbRunId]);
 
   const uiState = deriveAnalysisUiState(effectiveRow);
   const presentation = presentAnalysisUiState(uiState);
