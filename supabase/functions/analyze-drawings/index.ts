@@ -370,6 +370,7 @@ serve(async (req) => {
       .from("analysis_results")
       .upsert({
         analysis_request_id: analysisRequestId,
+        analysis_run_id: analysisRunId ?? null,
         file_id: fileId,
         awp_class_name: awpClassName,
         status: "processing",
