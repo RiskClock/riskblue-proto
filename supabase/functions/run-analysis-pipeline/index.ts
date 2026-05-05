@@ -948,6 +948,7 @@ async function runPipeline(params: PipelineParams) {
       if (jobRows.length > 0) {
         const placeholderRows = jobRows.map((j) => ({
           analysis_request_id: j.analysis_request_id,
+          analysis_run_id: activeRunId,
           file_id: j.file_id,
           awp_class_name: j.awp_class_name,
           status: "processing",
