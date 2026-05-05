@@ -8,6 +8,8 @@ import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { AppHeader } from "@/components/AppHeader";
 import { AnalysisSection } from "@/components/analysis/AnalysisSection";
+import { useAnalysisRequestState } from "@/hooks/useAnalysisRequestState";
+import { uiStateBadgeClass } from "@/lib/analysisUiState";
 import { useHeapIdentify } from "@/hooks/useHeapIdentify";
 import { useToast } from "@/hooks/use-toast";
 import { ArrowLeft, Loader2, ShieldAlert, Upload, FileText, CheckCircle2, Circle, Download } from "lucide-react";
