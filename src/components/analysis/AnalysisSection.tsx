@@ -1152,15 +1152,16 @@ export function AnalysisSection({ requestId, files, projectId, sourceType, isWMS
     })() as number | false,
   });
 
-  // Hydrate triage results into map
+  // Hydrate triage results into map (always sync from DB; backend-driven runs
+  // leave the local triageRunning flag false, so gating on it dropped updates).
   useEffect(() => {
-    if (!triageData || triageRunning) return;
+    if (!triageData) return;
     const map = new Map<string, TriageResult>();
     for (const r of triageData) {
       map.set(`${r.file_id}_${r.awp_class_name}`, r);
     }
     setTriageResults(map);
-  }, [triageData, triageRunning]);
+  }, [triageData]);
 
   // Fetch triage overrides from DB
   const { data: overridesData } = useQuery({
