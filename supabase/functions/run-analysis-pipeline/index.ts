@@ -1073,14 +1073,14 @@ async function runPipeline(params: PipelineParams) {
     }
 
     // ======================== PHASE 4: SUMMARIZE (background) ========================
-    // Mark analysis as complete first so the UI unblocks immediately,
-    // then run deduplication/summarization for every class that has results,
-    // and finally dispatch the completion email with the summarized counts.
+    // Mark phase=summarizing but keep status=processing — the UI must not
+    // see status=complete until summarization actually finishes (or is
+    // explicitly skipped because there are no results to summarize).
     console.log("[pipeline] Phases 1-3 complete, starting background summarize");
     await admin
       .from("analysis_requests")
       .update({
-        status: "complete",
+        status: "processing",
         pipeline_phase: "summarizing",
         pipeline_progress_done: 0,
         pipeline_progress_total: 0,
