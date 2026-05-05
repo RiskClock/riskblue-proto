@@ -1115,14 +1115,18 @@ export function AnalysisSection({ requestId, files, projectId, sourceType, isWMS
     enabled: !!projectId,
   });
 
+  const currentRunId = requestState.runId;
+
   const { data: results } = useQuery({
-    queryKey: ["analysis-results", requestId],
+    queryKey: ["analysis-results", requestId, currentRunId],
     queryFn: async () => {
-      const { data, error } = await supabase
+      let q = supabase
         .from("analysis_results")
         .select("*")
         .eq("analysis_request_id", requestId)
         .order("created_at");
+      if (currentRunId) q = q.eq("analysis_run_id", currentRunId);
+      const { data, error } = await q;
       if (error) throw error;
       return data as AnalysisResult[];
     },
@@ -1131,12 +1135,14 @@ export function AnalysisSection({ requestId, files, projectId, sourceType, isWMS
 
   // Fetch existing triage results
   const { data: triageData } = useQuery({
-    queryKey: ["triage-results", requestId],
+    queryKey: ["triage-results", requestId, currentRunId],
     queryFn: async () => {
-      const { data, error } = await supabase
+      let q = supabase
         .from("analysis_triage_results")
         .select("file_id, awp_class_name, status, score, reason, error_message, instances")
         .eq("analysis_request_id", requestId);
+      if (currentRunId) q = q.eq("analysis_run_id", currentRunId);
+      const { data, error } = await q;
       if (error) throw error;
       return data as TriageResult[];
     },
