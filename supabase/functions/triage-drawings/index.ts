@@ -40,7 +40,7 @@ Deno.serve(async (req) => {
 
     // Parse body early so we have fileId for authorization
     const body = await req.json();
-    const { analysisRequestId, fileId, awpClassName, assetType, drawingName, action, promptContent, model } = body;
+    const { analysisRequestId, analysisRunId, fileId, awpClassName, assetType, drawingName, action, promptContent, model } = body;
 
     if (!fileId) {
       return new Response(JSON.stringify({ error: "Missing fileId" }), {
@@ -178,9 +178,24 @@ Deno.serve(async (req) => {
       });
     }
 
+    // Run-id guard: skip if a newer run is now active for this request
+    if (analysisRunId) {
+      const { data: curReq } = await adminSupabase
+        .from("analysis_requests")
+        .select("analysis_run_id")
+        .eq("id", analysisRequestId)
+        .single();
+      if ((curReq as any)?.analysis_run_id && (curReq as any).analysis_run_id !== analysisRunId) {
+        return new Response(JSON.stringify({ error: "Superseded by a newer analysis run", currentRunId: (curReq as any).analysis_run_id }), {
+          status: 409, headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+    }
+
     // Upsert triage result as processing
     await adminSupabase.from("analysis_triage_results").upsert({
       analysis_request_id: analysisRequestId,
+      analysis_run_id: analysisRunId ?? null,
       file_id: fileId,
       awp_class_name: awpClassName,
       status: "processing",
