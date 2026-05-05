@@ -128,6 +128,7 @@ export type Database = {
       analysis_pipeline_jobs: {
         Row: {
           analysis_request_id: string
+          analysis_run_id: string | null
           analyze_model: string
           attempts: number
           awp_class_name: string
@@ -149,6 +150,7 @@ export type Database = {
         }
         Insert: {
           analysis_request_id: string
+          analysis_run_id?: string | null
           analyze_model?: string
           attempts?: number
           awp_class_name: string
@@ -170,6 +172,7 @@ export type Database = {
         }
         Update: {
           analysis_request_id?: string
+          analysis_run_id?: string | null
           analyze_model?: string
           attempts?: number
           awp_class_name?: string
@@ -263,6 +266,7 @@ export type Database = {
       }
       analysis_requests: {
         Row: {
+          analysis_run_id: string | null
           analyze_model: string | null
           analyze_tokens_used: number | null
           created_at: string
@@ -277,6 +281,7 @@ export type Database = {
           pipeline_stop_requested: boolean
           project_id: string
           source_type: string
+          started_at: string | null
           status: string
           storage_path: string | null
           summary_data: Json | null
@@ -287,6 +292,7 @@ export type Database = {
           user_id: string
         }
         Insert: {
+          analysis_run_id?: string | null
           analyze_model?: string | null
           analyze_tokens_used?: number | null
           created_at?: string
@@ -301,6 +307,7 @@ export type Database = {
           pipeline_stop_requested?: boolean
           project_id: string
           source_type?: string
+          started_at?: string | null
           status?: string
           storage_path?: string | null
           summary_data?: Json | null
@@ -311,6 +318,7 @@ export type Database = {
           user_id: string
         }
         Update: {
+          analysis_run_id?: string | null
           analyze_model?: string | null
           analyze_tokens_used?: number | null
           created_at?: string
@@ -325,6 +333,7 @@ export type Database = {
           pipeline_stop_requested?: boolean
           project_id?: string
           source_type?: string
+          started_at?: string | null
           status?: string
           storage_path?: string | null
           summary_data?: Json | null
@@ -2226,6 +2235,7 @@ export type Database = {
         Args: { p_batch_size?: number; p_worker_id: string }
         Returns: {
           analysis_request_id: string
+          analysis_run_id: string | null
           analyze_model: string
           attempts: number
           awp_class_name: string
