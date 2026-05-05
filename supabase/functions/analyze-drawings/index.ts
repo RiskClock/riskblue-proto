@@ -279,7 +279,7 @@ serve(async (req) => {
       isInternal = authedUser.email?.toLowerCase().endsWith("@riskclock.com") ?? false;
     }
 
-    const { analysisRequestId, fileId, awpClassName, promptContent, model, openaiFileId: suppliedOpenaiFileId } = await req.json();
+    const { analysisRequestId, analysisRunId, fileId, awpClassName, promptContent, model, openaiFileId: suppliedOpenaiFileId } = await req.json();
     if (!analysisRequestId || !fileId || !awpClassName || !promptContent) {
       return new Response(JSON.stringify({ error: "Missing required fields" }), {
         status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
