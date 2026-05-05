@@ -4,6 +4,7 @@ import { supabase } from "@/integrations/supabase/client";
 import type { RealtimeChannel } from "@supabase/supabase-js";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
+import { useAnalysisRequestState } from "@/hooks/useAnalysisRequestState";
 import { Button } from "@/components/ui/button";
 import {
   Table,
@@ -1002,15 +1003,15 @@ function ExtractedTextBody({ fileId, localText }: { fileId: string; localText?: 
 // ---------------------------------------------------------------------------
 
 const ACTIVE_STATUSES = ["pending", "copying", "copied", "started", "processing"];
-const STATUS_RANK: Record<string, number> = {
-  awaiting_upload: 0, pending: 1, copying: 1, copied: 2, started: 3, processing: 4, stopping: 4, complete: 5, failed: 5,
-};
 
 export function AnalysisSection({ requestId, files, projectId, sourceType, isWMSV, visibleAwpClasses, onAddFileUpload, onAddFileDrive, onAddFileProcore, onAddFileSharePoint }: AnalysisSectionProps) {
   const { toast } = useToast();
   const { user } = useAuth();
   const isInternal = (user?.email?.toLowerCase().endsWith("@riskclock.com")) ?? false;
   const queryClient = useQueryClient();
+
+  // Canonical analysis-request state (status, phase, run id, ui label).
+  const requestState = useAnalysisRequestState(requestId);
 
   // ---- New state architecture ----
   const [analyzingClasses, setAnalyzingClasses] = useState<Set<string>>(new Set());
@@ -1037,12 +1038,6 @@ export function AnalysisSection({ requestId, files, projectId, sourceType, isWMS
   const [uploadingFileIds, setUploadingFileIds] = useState<Set<string>>(new Set());
   const [analyzeV2Running, setAnalyzeV2Running] = useState(false);
   const analyzeRunSyncRef = useRef<"idle" | "starting" | "running" | "stopping">("idle");
-  const optimisticStatusRef = useRef<string | null>(null);
-  // Timestamp of the most recent local Start/Restart action. Used as a short
-  // post-start guard window (~1500ms) during which stale terminal rows
-  // (complete/failed) are ignored to prevent the spinner/badge from flickering.
-  const lastStartAtRef = useRef<number>(0);
-  const POST_START_GUARD_MS = 1500;
   const prevPipelinePhaseRef = useRef<string | null>(null);
   const [triagePhase, setTriagePhase] = useState<"extract" | "score" | null>(null);
   const [summaryGroupBy, setSummaryGroupBy] = useState<"awp" | "floor">("awp");
@@ -1250,80 +1245,23 @@ export function AnalysisSection({ requestId, files, projectId, sourceType, isWMS
 
   // (Default-disabled AWP classes are applied below, after sortedPrompts is defined.)
 
-  // Hydrate analyzeV2Running from DB status on mount/navigation
-  // Also auto-clear when DB status transitions to complete while we're showing "running"
-  const [hydratedProcessing, setHydratedProcessing] = useState(false);
+  // Hydrate analyzeV2Running from canonical request state.
+  // Stale-row protection lives inside useAnalysisRequestState (run-id mask).
   const hasTriggeredResumeRef = useRef(false);
   useEffect(() => {
-    if (!requestMeta) return;
-    const dbStatus = (requestMeta as any).status as string;
-    const isTerminal = dbStatus === "complete" || dbStatus === "failed";
-
-    // Post-start guard: for ~1500ms after a local Start/Restart, ignore any
-    // stale `complete`/`failed` rows that may still be in flight from the
-    // previous run. complete→processing is a valid transition on restart, so
-    // we deliberately do NOT use pure rank logic — we use a time window keyed
-    // off the optimistic ref instead.
-    const inGuardWindow =
-      !!optimisticStatusRef.current &&
-      Date.now() - lastStartAtRef.current < POST_START_GUARD_MS;
-
-    if (inGuardWindow && isTerminal) {
-      return; // Ignore stale terminal during the start window.
-    }
-
-    // Status-precedence guard for non-terminal stale rows
-    // (e.g. `copied` arriving after we've optimistically set `processing`).
-    if (optimisticStatusRef.current && !isTerminal) {
-      const incomingRank = STATUS_RANK[dbStatus] ?? 0;
-      const optimisticRank = STATUS_RANK[optimisticStatusRef.current] ?? 0;
-      if (incomingRank < optimisticRank) {
-        return; // Ignore stale regression
-      }
-    }
-
-    // DB has caught up or reached terminal — clear optimistic guard.
-    if (optimisticStatusRef.current) {
-      const incomingRank = STATUS_RANK[dbStatus] ?? 0;
-      const optimisticRank = STATUS_RANK[optimisticStatusRef.current] ?? 0;
-      if (incomingRank >= optimisticRank || isTerminal) {
-        optimisticStatusRef.current = null;
-      }
-    }
-
-    if (!hydratedProcessing) {
-      if (dbStatus === "processing") {
-        analyzeRunSyncRef.current = "running";
-        setAnalyzeV2Running(true);
-      } else if (isTerminal || dbStatus === "started") {
-        analyzeRunSyncRef.current = "idle";
-        setAnalyzeV2Running(false);
-        setAnalyzeV2Stopping(false);
-        setAnalyzingClasses(new Set());
-        setClassFileStatuses({});
-        optimisticStatusRef.current = null;
-      }
-      setHydratedProcessing(true);
-      return;
-    }
-
-    if (dbStatus === "processing") {
+    const isRunning = requestState.isRunning;
+    const isTerminal = requestState.isTerminal;
+    if (isRunning) {
       analyzeRunSyncRef.current = "running";
-      if (!analyzeV2Running) {
-        setAnalyzeV2Running(true);
-      }
-      return;
-    }
-
-    if (isTerminal || dbStatus === "started") {
+      if (!analyzeV2Running) setAnalyzeV2Running(true);
+    } else if (isTerminal || requestState.uiState === "ready") {
       analyzeRunSyncRef.current = "idle";
-      setAnalyzeV2Running(false);
+      if (analyzeV2Running) setAnalyzeV2Running(false);
       setAnalyzeV2Stopping(false);
-      setAnalyzingClasses(new Set());
-      setClassFileStatuses({});
-      optimisticStatusRef.current = null;
+      setAnalyzingClasses((prev) => (prev.size ? new Set() : prev));
+      setClassFileStatuses((prev) => (Object.keys(prev).length ? {} : prev));
     }
-  }, [requestMeta, hydratedProcessing, analyzeV2Running]);
+  }, [requestState.isRunning, requestState.isTerminal, requestState.uiState, analyzeV2Running]);
 
   // ---- Realtime subscriptions ----
   useEffect(() => {
@@ -1818,31 +1756,15 @@ export function AnalysisSection({ requestId, files, projectId, sourceType, isWMS
     // Start Analysis button) — 1 credit per file in the analysis request.
     // Internal restart-from-* menu items are dev/debug only and do not charge.
 
-    // Save previous caches for rollback
-    const prevMeta = queryClient.getQueryData(["analysis-request-meta", requestId]);
-    const prevWmsvMeta = queryClient.getQueryData(["wmsv-analysis-request", projectId]);
-
-    // Optimistic update BEFORE invoke
-    optimisticStatusRef.current = "processing";
-    lastStartAtRef.current = Date.now();
+    // Generate a client-side run id and mark Start as locally pending so the
+    // canonical state hook masks any stale rows from a previous run until the
+    // backend writes the new analysis_run_id.
+    const localRunId = (typeof crypto !== "undefined" && "randomUUID" in crypto)
+      ? crypto.randomUUID()
+      : `${Date.now()}-${Math.random()}`;
+    requestState.beginLocalStart(localRunId);
     analyzeRunSyncRef.current = "starting";
     setAnalyzeV2Running(true);
-    const optimisticPatch = {
-      status: "processing",
-      pipeline_phase: phaseOverride || "extracting",
-      pipeline_progress_done: 0,
-      pipeline_progress_total: copiedFiles.length,
-      error_message: null,
-    };
-    queryClient.setQueryData(["analysis-request-meta", requestId], (old: any) => ({
-      ...old,
-      ...optimisticPatch,
-    }));
-    // Also stamp the WMSV header's parallel cache so the badge transitions
-    // in lockstep and doesn't briefly show a stale `complete` from polling.
-    queryClient.setQueryData(["wmsv-analysis-request", projectId], (old: any) => (
-      old ? { ...old, ...optimisticPatch } : old
-    ));
 
     // Phase-aware clearing for visual feedback
     if (phaseOverride === "analyze") {
@@ -1882,15 +1804,15 @@ export function AnalysisSection({ requestId, files, projectId, sourceType, isWMS
       if (response.error) {
         throw new Error(response.error.message);
       }
-      // Success — realtime will handle further updates
+      // The hook auto-clears the local pending mask once the DB row carries
+      // any non-null analysis_run_id from this start (see hook's auto-clear).
+      // We can't know the server's run id here, so just leave the mask in
+      // place — it will fall away on the next row update.
     } catch (e) {
-      // Rollback optimistic state
-      optimisticStatusRef.current = null;
-      lastStartAtRef.current = 0;
+      // Rollback local pending state
+      requestState.clearLocalStart();
       analyzeRunSyncRef.current = "idle";
       setAnalyzeV2Running(false);
-      queryClient.setQueryData(["analysis-request-meta", requestId], prevMeta);
-      queryClient.setQueryData(["wmsv-analysis-request", projectId], prevWmsvMeta);
       toast({
         title: "Failed to start analysis",
         description: e instanceof Error ? e.message : "Unknown error",
@@ -1941,11 +1863,12 @@ export function AnalysisSection({ requestId, files, projectId, sourceType, isWMS
 
 
   const handleWmsvStop = async () => {
-    // Optimistic stop — keep active status, show "Stopping..."
-    optimisticStatusRef.current = "stopping";
     setAnalyzeV2Stopping(true);
+    queryClient.setQueryData(["analysis-request-row", requestId], (old: any) => (
+      old ? { ...old, pipeline_stop_requested: true } : old
+    ));
     queryClient.setQueryData(["analysis-request-meta", requestId], (old: any) => ({
-      ...old,
+      ...(old || {}),
       pipeline_stop_requested: true,
     }));
     await supabase
@@ -2350,19 +2273,9 @@ export function AnalysisSection({ requestId, files, projectId, sourceType, isWMS
     setAnalyzeTokens(0);
     analyzeTokensRef.current = 0;
 
-    // Optimistic stamp on both caches so badges/spinners flip immediately,
-    // then write the authoritative row. We deliberately skip the immediate
-    // `invalidateQueries` that used to race the DB write and pull back the
-    // stale `complete` status (plan §B).
-    optimisticStatusRef.current = "processing";
-    lastStartAtRef.current = Date.now();
-    const v2Patch = { status: "processing", error_message: null };
-    queryClient.setQueryData(["analysis-request-meta", requestId], (old: any) => (
-      old ? { ...old, ...v2Patch } : old
-    ));
-    queryClient.setQueryData(["wmsv-analysis-request", projectId], (old: any) => (
-      old ? { ...old, ...v2Patch } : old
-    ));
+    // Mark Start as locally pending; the canonical hook masks stale rows
+    // until the row's analysis_run_id changes (or 30s safety timeout).
+    requestState.beginLocalStart();
     await supabase.from("analysis_requests").update({ status: "processing" }).eq("id", requestId);
 
     // Clear existing analysis results and summaries for enabled classes
@@ -3432,14 +3345,15 @@ export function AnalysisSection({ requestId, files, projectId, sourceType, isWMS
 
   const anyAnalyzing = analyzingClasses.size > 0;
   // Pipeline-driven state from DB
-  const pipelinePhase = (requestMeta as any)?.pipeline_phase as string | null;
-  const pipelineDone = ((requestMeta as any)?.pipeline_progress_done as number) || 0;
-  const pipelineTotal = ((requestMeta as any)?.pipeline_progress_total as number) || 0;
-  const dbStatus = (requestMeta as any)?.status as string | undefined;
-  const dbErrorMessage = (requestMeta as any)?.error_message as string | null;
-  const pipelineRunning = dbStatus === "processing" && !!pipelinePhase;
-  const pipelinePhaseLabel = pipelinePhase === "extracting" ? "Extracting Context…" : pipelinePhase === "triaging" ? "Triaging…" : pipelinePhase === "analyzing" ? "Analyzing…" : "Processing…";
-  const wmsvRunning = analyzeV2Running || pipelineRunning || analyzeV2Stopping;
+  // ---- Canonical UI state (single source of truth) ----
+  const pipelinePhase = requestState.pipelinePhase;
+  const pipelineDone = requestState.progress.done;
+  const pipelineTotal = requestState.progress.total;
+  const dbStatus = requestState.status || undefined;
+  const dbErrorMessage = requestState.row?.error_message ?? null;
+  const pipelineRunning = requestState.isRunning;
+  const pipelinePhaseLabel = requestState.label;
+  const wmsvRunning = pipelineRunning || analyzeV2Stopping;
   const wmsvPhaseLabel = analyzeV2Stopping ? "Stopping…" : pipelinePhaseLabel;
 
   return (
