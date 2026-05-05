@@ -179,7 +179,112 @@ export function useAnalysisRequestState(requestId: string | null | undefined): A
     return rawRow;
   }, [rawRow, pending, dbRunId]);
 
-  const uiState = deriveAnalysisUiState(effectiveRow);
+  // ---------------------------------------------------------------------
+  // Active-work counts scoped by the current analysis_run_id.
+  // Used to override status='complete' while jobs/triage are still active,
+  // and to surface "Syncing Analysis State" until counts have loaded.
+  // ---------------------------------------------------------------------
+  const effectiveRunId = effectiveRow?.analysis_run_id ?? null;
+
+  const countsKey = useMemo(
+    () => ["analysis-counts", requestId, effectiveRunId] as const,
+    [requestId, effectiveRunId],
+  );
+
+  const { data: counts, isFetched: countsFetched } = useQuery({
+    queryKey: countsKey,
+    enabled: !!requestId && !!effectiveRunId,
+    queryFn: async () => {
+      const [jobsActive, triageActive] = await Promise.all([
+        supabase
+          .from("analysis_pipeline_jobs")
+          .select("id", { count: "exact", head: true })
+          .eq("analysis_request_id", requestId!)
+          .eq("analysis_run_id", effectiveRunId!)
+          .in("status", ["pending", "processing"]),
+        supabase
+          .from("analysis_triage_results")
+          .select("id", { count: "exact", head: true })
+          .eq("analysis_request_id", requestId!)
+          .eq("analysis_run_id", effectiveRunId!)
+          .in("status", ["queued", "pending", "processing"]),
+      ]);
+      return {
+        jobsActive: jobsActive.count ?? 0,
+        triageActive: triageActive.count ?? 0,
+      };
+    },
+    refetchInterval: (query: any) => {
+      const data = query?.state?.data as { jobsActive: number; triageActive: number } | undefined;
+      const row = effectiveRow;
+      if (!row) return false;
+      if (realtimeReady) return false;
+      if (ACTIVE_STATUSES.has(row.status) || row.pipeline_phase) return POLL_FALLBACK_MS;
+      if (data && (data.jobsActive > 0 || data.triageActive > 0)) return POLL_FALLBACK_MS;
+      return false;
+    },
+  });
+
+  // Realtime invalidation for counts — exact run-scoped key.
+  useEffect(() => {
+    if (!requestId || !effectiveRunId) return;
+    const channel: RealtimeChannel = supabase
+      .channel(`analysis-counts-${requestId}-${effectiveRunId}`)
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "analysis_pipeline_jobs", filter: `analysis_request_id=eq.${requestId}` },
+        () => queryClient.invalidateQueries({ queryKey: countsKey }),
+      )
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "analysis_triage_results", filter: `analysis_request_id=eq.${requestId}` },
+        () => queryClient.invalidateQueries({ queryKey: countsKey }),
+      )
+      .subscribe();
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [requestId, effectiveRunId, queryClient, countsKey]);
+
+  const derivedUiState = deriveAnalysisUiState(effectiveRow);
+
+  // -------------------- Explicit precedence --------------------
+  // 1. counts not yet loaded AND row says complete → syncing
+  // 2. starting/extracting → keep derived
+  // 3. active triage > 0 → triaging
+  // 4. active jobs > 0 → analyzing
+  // 5. pipeline_phase=summarizing → summarizing
+  // 6. summary_data.no_eligible_drawings && complete → no_eligible_drawings
+  // 7. status=complete && no active counts → complete
+  // 8. otherwise derived
+  let uiState: AnalysisUiState = derivedUiState;
+  const status = effectiveRow?.status ?? "";
+  const phase = effectiveRow?.pipeline_phase ?? "";
+  const noEligible =
+    !!(effectiveRow?.summary_data as any)?.no_eligible_drawings;
+
+  if (effectiveRow && effectiveRunId) {
+    const hasCounts = countsFetched && !!counts;
+    const jobsActive = counts?.jobsActive ?? 0;
+    const triageActive = counts?.triageActive ?? 0;
+
+    if (status === "complete" && !hasCounts && !noEligible) {
+      uiState = "syncing";
+    } else if (derivedUiState === "starting" || derivedUiState === "extracting") {
+      // keep
+    } else if (triageActive > 0) {
+      uiState = "triaging";
+    } else if (jobsActive > 0) {
+      uiState = "analyzing";
+    } else if (phase === "summarizing") {
+      uiState = "summarizing";
+    } else if (status === "complete" && noEligible) {
+      uiState = "no_eligible_drawings";
+    } else if (status === "complete") {
+      uiState = "complete";
+    }
+  }
+
   const presentation = presentAnalysisUiState(uiState);
 
   return {

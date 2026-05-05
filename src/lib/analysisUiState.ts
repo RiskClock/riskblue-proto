@@ -18,6 +18,8 @@ export type AnalysisUiState =
   | "analyzing"
   | "summarizing"
   | "stopping"
+  | "syncing"
+  | "no_eligible_drawings"
   | "complete"
   | "failed";
 
@@ -104,7 +106,8 @@ const RUNNING_STATES: ReadonlySet<AnalysisUiState> = new Set([
 
 export function presentAnalysisUiState(state: AnalysisUiState): UiStatePresentation {
   const isRunning = RUNNING_STATES.has(state);
-  const isTerminal = state === "complete" || state === "failed";
+  const isTerminal =
+    state === "complete" || state === "failed" || state === "no_eligible_drawings";
 
   const map: Record<AnalysisUiState, { label: string; button: string }> = {
     awaiting_upload: { label: "Awaiting File Upload", button: "Add Files to Continue" },
@@ -118,6 +121,8 @@ export function presentAnalysisUiState(state: AnalysisUiState): UiStatePresentat
     analyzing: { label: "Analyzing Content", button: "Analyzing Content" },
     summarizing: { label: "Summarizing Findings", button: "Summarizing Findings" },
     stopping: { label: "Stopping Analysis", button: "Stopping Analysis" },
+    syncing: { label: "Syncing Analysis State", button: "Syncing Analysis State" },
+    no_eligible_drawings: { label: "No Eligible Drawings Found", button: "Re-run Analysis" },
     complete: { label: "Analysis Complete", button: "Re-run Analysis" },
     failed: { label: "Failed", button: "Retry Analysis" },
   };
@@ -132,7 +137,8 @@ export function presentAnalysisUiState(state: AnalysisUiState): UiStatePresentat
     canStart: state === "ready" || isTerminal,
     canStop: isRunning && state !== "starting" && state !== "stopping",
     canUpload: state === "awaiting_upload" || state === "ready" || isTerminal,
-    showSpinner: isRunning || state === "copying" || state === "uploading",
+    showSpinner:
+      isRunning || state === "copying" || state === "uploading" || state === "syncing",
   };
 }
 
@@ -153,6 +159,9 @@ export function uiStateBadgeClass(state: AnalysisUiState): string {
       return "bg-blue-100 text-blue-800 border-blue-300";
     case "stopping":
       return "bg-orange-100 text-orange-800 border-orange-300";
+    case "no_eligible_drawings":
+      return "bg-amber-100 text-amber-900 border-amber-300";
+    case "syncing":
     case "starting":
     case "extracting":
     case "triaging":

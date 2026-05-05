@@ -1047,7 +1047,25 @@ async function runPipeline(params: PipelineParams) {
             .eq("id", analysisRequestId);
           return;
         }
-        // No work and no failures — fall through to summarize (nothing to do)
+        // No work and no failures — flag this run as "no eligible drawings".
+        // Frontend uses this marker (and only this marker) to render
+        // "No Eligible Drawings Found" instead of the normal complete state.
+        try {
+          const { data: rm } = await admin
+            .from("analysis_requests")
+            .select("summary_data")
+            .eq("id", analysisRequestId)
+            .single();
+          const sd = ((rm as any)?.summary_data as Record<string, unknown>) || {};
+          sd.no_eligible_drawings = true;
+          await admin
+            .from("analysis_requests")
+            .update({ summary_data: sd } as any)
+            .eq("id", analysisRequestId);
+        } catch (e) {
+          console.warn("[pipeline] failed to set no_eligible_drawings flag:", e);
+        }
+        // Fall through to summarize (which will be a no-op).
       } else {
         // Jobs are queued; worker will finalize + trigger summarize. Exit now.
         return;
@@ -1055,14 +1073,14 @@ async function runPipeline(params: PipelineParams) {
     }
 
     // ======================== PHASE 4: SUMMARIZE (background) ========================
-    // Mark analysis as complete first so the UI unblocks immediately,
-    // then run deduplication/summarization for every class that has results,
-    // and finally dispatch the completion email with the summarized counts.
+    // Mark phase=summarizing but keep status=processing — the UI must not
+    // see status=complete until summarization actually finishes (or is
+    // explicitly skipped because there are no results to summarize).
     console.log("[pipeline] Phases 1-3 complete, starting background summarize");
     await admin
       .from("analysis_requests")
       .update({
-        status: "complete",
+        status: "processing",
         pipeline_phase: "summarizing",
         pipeline_progress_done: 0,
         pipeline_progress_total: 0,
