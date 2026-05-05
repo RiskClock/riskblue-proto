@@ -60,8 +60,12 @@ Deno.serve(async (req) => {
 
   console.log(`[worker ${workerId}] claimed ${jobs.length} jobs`);
 
-  // Track requests touched so we can finalize once at the end
-  const touchedRequests = new Set<string>(jobs.map((j) => j.analysis_request_id));
+  // Track (request, run_id) pairs touched so we can finalize once at the end
+  const touchedKeys = new Map<string, { requestId: string; runId: string | null }>();
+  for (const j of jobs) {
+    const key = `${j.analysis_request_id}::${j.analysis_run_id ?? ""}`;
+    touchedKeys.set(key, { requestId: j.analysis_request_id, runId: j.analysis_run_id ?? null });
+  }
 
   // 2. Process in parallel (batch-size already bounded)
   await Promise.all(
@@ -71,9 +75,9 @@ Deno.serve(async (req) => {
     ),
   );
 
-  // 3. Try finalization for each touched request (single-trigger guarded)
-  for (const requestId of touchedRequests) {
-    await maybeFinalize(admin, supabaseUrl, serviceKey, requestId).catch((e) =>
+  // 3. Try finalization for each touched (request, run) (single-trigger guarded)
+  for (const { requestId, runId } of touchedKeys.values()) {
+    await maybeFinalize(admin, supabaseUrl, serviceKey, requestId, runId).catch((e) =>
       console.error(`[worker] finalize check for ${requestId} threw:`, e),
     );
   }
