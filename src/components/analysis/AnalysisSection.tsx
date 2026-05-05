@@ -1756,31 +1756,15 @@ export function AnalysisSection({ requestId, files, projectId, sourceType, isWMS
     // Start Analysis button) — 1 credit per file in the analysis request.
     // Internal restart-from-* menu items are dev/debug only and do not charge.
 
-    // Save previous caches for rollback
-    const prevMeta = queryClient.getQueryData(["analysis-request-meta", requestId]);
-    const prevWmsvMeta = queryClient.getQueryData(["wmsv-analysis-request", projectId]);
-
-    // Optimistic update BEFORE invoke
-    optimisticStatusRef.current = "processing";
-    lastStartAtRef.current = Date.now();
+    // Generate a client-side run id and mark Start as locally pending so the
+    // canonical state hook masks any stale rows from a previous run until the
+    // backend writes the new analysis_run_id.
+    const localRunId = (typeof crypto !== "undefined" && "randomUUID" in crypto)
+      ? crypto.randomUUID()
+      : `${Date.now()}-${Math.random()}`;
+    requestState.beginLocalStart(localRunId);
     analyzeRunSyncRef.current = "starting";
     setAnalyzeV2Running(true);
-    const optimisticPatch = {
-      status: "processing",
-      pipeline_phase: phaseOverride || "extracting",
-      pipeline_progress_done: 0,
-      pipeline_progress_total: copiedFiles.length,
-      error_message: null,
-    };
-    queryClient.setQueryData(["analysis-request-meta", requestId], (old: any) => ({
-      ...old,
-      ...optimisticPatch,
-    }));
-    // Also stamp the WMSV header's parallel cache so the badge transitions
-    // in lockstep and doesn't briefly show a stale `complete` from polling.
-    queryClient.setQueryData(["wmsv-analysis-request", projectId], (old: any) => (
-      old ? { ...old, ...optimisticPatch } : old
-    ));
 
     // Phase-aware clearing for visual feedback
     if (phaseOverride === "analyze") {
@@ -1820,15 +1804,15 @@ export function AnalysisSection({ requestId, files, projectId, sourceType, isWMS
       if (response.error) {
         throw new Error(response.error.message);
       }
-      // Success — realtime will handle further updates
+      // The hook auto-clears the local pending mask once the DB row carries
+      // any non-null analysis_run_id from this start (see hook's auto-clear).
+      // We can't know the server's run id here, so just leave the mask in
+      // place — it will fall away on the next row update.
     } catch (e) {
-      // Rollback optimistic state
-      optimisticStatusRef.current = null;
-      lastStartAtRef.current = 0;
+      // Rollback local pending state
+      requestState.clearLocalStart();
       analyzeRunSyncRef.current = "idle";
       setAnalyzeV2Running(false);
-      queryClient.setQueryData(["analysis-request-meta", requestId], prevMeta);
-      queryClient.setQueryData(["wmsv-analysis-request", projectId], prevWmsvMeta);
       toast({
         title: "Failed to start analysis",
         description: e instanceof Error ? e.message : "Unknown error",
