@@ -564,6 +564,25 @@ serve(async (req) => {
 
     const { resultText, usage } = apiResult as { resultText: string; usage: Record<string, number> | null };
 
+    // Final run-id re-check before writing the result. The OpenAI call may
+    // have taken a while; a newer run could have started in the meantime.
+    if (analysisRunId) {
+      const { data: cur } = await adminSupabase
+        .from("analysis_requests")
+        .select("analysis_run_id")
+        .eq("id", analysisRequestId)
+        .single();
+      if ((cur as any)?.analysis_run_id && (cur as any).analysis_run_id !== analysisRunId) {
+        console.warn(
+          `[analyze-drawings] post-API run mismatch — discarding result for file ${fileId}/${awpClassName}`,
+        );
+        return new Response(
+          JSON.stringify({ error: "Superseded by a newer analysis run" }),
+          { status: 409, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+        );
+      }
+    }
+
     // Store result
     await adminSupabase.from("analysis_results")
       .update({ status: "complete", result_text: resultText })
