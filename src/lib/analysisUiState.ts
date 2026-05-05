@@ -18,6 +18,8 @@ export type AnalysisUiState =
   | "analyzing"
   | "summarizing"
   | "stopping"
+  | "syncing"
+  | "no_eligible_drawings"
   | "complete"
   | "failed";
 
