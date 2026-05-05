@@ -3840,7 +3840,7 @@ export function AnalysisSection({ requestId, files, projectId, sourceType, isWMS
                         // Helper: look up triage background for pass-2 cells
                         const triageForBg = triageResults.get(`${file.id}_${className}`);
                         const triageBgStyle: React.CSSProperties = triageForBg?.status === 'complete' && triageForBg.score !== null
-                          ? { backgroundColor: `rgba(34, 197, 94, ${triageForBg.score / 100})` }
+                          ? { backgroundColor: `rgba(34, 197, 94, ${Math.max(0.15, Math.min(1, triageForBg.score / 100))})` }
                           : {};
 
                         if (val === "loading") {
