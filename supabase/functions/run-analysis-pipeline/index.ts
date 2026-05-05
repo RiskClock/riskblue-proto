@@ -436,6 +436,7 @@ interface PipelineParams {
   triageModel: string;
   analyzeModel: string;
   phaseOverride?: string;
+  activeRunId: string | null;
 }
 
 async function runPipeline(params: PipelineParams) {
@@ -449,6 +450,7 @@ async function runPipeline(params: PipelineParams) {
     triageModel,
     analyzeModel,
     phaseOverride,
+    activeRunId,
   } = params;
 
   const MAX_CONCURRENCY = 5;
