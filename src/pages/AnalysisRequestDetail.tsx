@@ -68,6 +68,7 @@ export default function AnalysisRequestDetail() {
   const [showSharePointDialog, setShowSharePointDialog] = useState(false);
 
   const isInternal = user?.email?.toLowerCase().endsWith("@riskclock.com") ?? false;
+  const requestState = useAnalysisRequestState(requestId);
 
   const isImporting = (s?: string) => s === "pending" || s === "copying";
 
