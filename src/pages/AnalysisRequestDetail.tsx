@@ -8,6 +8,9 @@ import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { AppHeader } from "@/components/AppHeader";
 import { AnalysisSection } from "@/components/analysis/AnalysisSection";
+import { AnalysisDebugPanel } from "@/components/analysis/AnalysisDebugPanel";
+import { useAnalysisRequestState } from "@/hooks/useAnalysisRequestState";
+import { uiStateBadgeClass } from "@/lib/analysisUiState";
 import { useHeapIdentify } from "@/hooks/useHeapIdentify";
 import { useToast } from "@/hooks/use-toast";
 import { ArrowLeft, Loader2, ShieldAlert, Upload, FileText, CheckCircle2, Circle, Download } from "lucide-react";
@@ -66,6 +69,7 @@ export default function AnalysisRequestDetail() {
   const [showSharePointDialog, setShowSharePointDialog] = useState(false);
 
   const isInternal = user?.email?.toLowerCase().endsWith("@riskclock.com") ?? false;
+  const requestState = useAnalysisRequestState(requestId);
 
   const isImporting = (s?: string) => s === "pending" || s === "copying";
 
@@ -222,10 +226,13 @@ export default function AnalysisRequestDetail() {
                   Submitted by {request.user_email} on {format(new Date(request.created_at), "MMM d, yyyy 'at' HH:mm")}
                 </p>
               </div>
-              <Badge variant="outline" className={statusColors[request.status] || ""}>
-                {statusLabels[request.status] || request.status}
+              <Badge variant="outline" className={uiStateBadgeClass(requestState.uiState)}>
+                {requestState.label}
               </Badge>
             </div>
+
+            {/* DEBUG PANEL — temporary instrumentation */}
+            <AnalysisDebugPanel requestId={requestId!} requestState={requestState} rawRequest={request} />
 
             {request.error_message && (
               <div className="bg-destructive/10 border border-destructive/20 rounded-lg p-4">
