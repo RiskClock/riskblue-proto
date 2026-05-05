@@ -667,6 +667,7 @@ async function runPipeline(params: PipelineParams) {
               "triage-drawings",
               {
                 analysisRequestId,
+                analysisRunId: activeRunId,
                 fileId: item.fileId,
                 awpClassName: item.prompt.awp_class_name,
                 assetType: item.prompt.category,
