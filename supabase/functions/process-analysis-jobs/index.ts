@@ -557,14 +557,15 @@ async function checkFinalizeAllAnalyzing(
 ) {
   const { data: analyzing } = await admin
     .from("analysis_requests")
-    .select("id, pipeline_stop_requested")
+    .select("id, pipeline_stop_requested, analysis_run_id")
     .eq("pipeline_phase", "analyzing")
     .limit(20);
 
   for (const row of (analyzing as any[]) || []) {
-    // If user requested stop, cancel any leftover pending jobs first
+    const runId = row.analysis_run_id ?? null;
+    // If user requested stop, cancel any leftover pending jobs for this run
     if (row.pipeline_stop_requested) {
-      await admin.from("analysis_pipeline_jobs")
+      let q = admin.from("analysis_pipeline_jobs")
         .update({
           status: "cancelled",
           completed_at: new Date().toISOString(),
@@ -572,7 +573,9 @@ async function checkFinalizeAllAnalyzing(
         } as any)
         .eq("analysis_request_id", row.id)
         .eq("status", "pending");
+      if (runId) q = q.eq("analysis_run_id", runId);
+      await q;
     }
-    await maybeFinalize(admin, supabaseUrl, serviceKey, row.id).catch(() => {});
+    await maybeFinalize(admin, supabaseUrl, serviceKey, row.id, runId).catch(() => {});
   }
 }
