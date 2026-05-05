@@ -85,7 +85,7 @@ Deno.serve(async (req) => {
   return json({
     claimed: jobs.length,
     elapsed_ms: Date.now() - startedAt,
-    requests_touched: [...touchedRequests],
+    requests_touched: [...touchedKeys.values()].map((v) => v.requestId),
   });
 });
 
