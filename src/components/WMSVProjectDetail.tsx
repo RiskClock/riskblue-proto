@@ -109,31 +109,8 @@ export function WMSVProjectDetail({ projectId, projectName }: WMSVProjectDetailP
     },
   });
 
-  // ---- Status flicker guard ----
-  // When AnalysisSection optimistically stamps this cache to `processing`,
-  // a stale `complete`/`failed` row may still arrive from realtime/polling
-  // for a brief window. Latch the last time we saw an active state and
-  // suppress terminal regressions for ~1500ms after.
-  const POST_ACTIVE_GUARD_MS = 1500;
-  const lastActiveAtRef = useRef<number>(0);
-  const lastDisplayStatusRef = useRef<string | null>(null);
-  useEffect(() => {
-    const s = (request as any)?.status as string | undefined;
-    if (s && ACTIVE_STATUSES.includes(s)) {
-      lastActiveAtRef.current = Date.now();
-    }
-  }, [request]);
-  const displayStatus = useMemo<string | undefined>(() => {
-    const s = (request as any)?.status as string | undefined;
-    if (!s) return s;
-    const isTerminal = s === "complete" || s === "failed";
-    const inGuardWindow = Date.now() - lastActiveAtRef.current < POST_ACTIVE_GUARD_MS;
-    if (isTerminal && inGuardWindow && lastDisplayStatusRef.current && ACTIVE_STATUSES.includes(lastDisplayStatusRef.current)) {
-      return lastDisplayStatusRef.current;
-    }
-    lastDisplayStatusRef.current = s;
-    return s;
-  }, [request]);
+  // Canonical analysis-request state (single source of truth).
+  const analysisState = useAnalysisRequestState(request?.id ?? null);
 
   // Realtime subscription for analysis_requests changes
   useEffect(() => {
