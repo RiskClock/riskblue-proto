@@ -402,6 +402,7 @@ Deno.serve(async (req) => {
       triageModel: triageModel || "gpt-5-nano",
       analyzeModel: analyzeModel || "gpt-5-mini",
       phaseOverride,
+      activeRunId,
     });
 
     if (typeof (globalThis as any).EdgeRuntime?.waitUntil === "function") {
