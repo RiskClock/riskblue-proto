@@ -225,8 +225,8 @@ export default function AnalysisRequestDetail() {
                   Submitted by {request.user_email} on {format(new Date(request.created_at), "MMM d, yyyy 'at' HH:mm")}
                 </p>
               </div>
-              <Badge variant="outline" className={statusColors[request.status] || ""}>
-                {statusLabels[request.status] || request.status}
+              <Badge variant="outline" className={uiStateBadgeClass(requestState.uiState)}>
+                {requestState.label}
               </Badge>
             </div>
 
