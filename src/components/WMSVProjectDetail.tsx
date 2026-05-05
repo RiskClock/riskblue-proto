@@ -18,6 +18,8 @@ import { UploadReviewModal } from "@/components/UploadReviewModal";
 import { ActiveExportModal } from "@/components/export/ActiveExportModal";
 import { useAnalysisExport } from "@/hooks/useAnalysisExport";
 import { useAccountType } from "@/hooks/useAccountType";
+import { useAnalysisRequestState } from "@/hooks/useAnalysisRequestState";
+import { uiStateBadgeClass } from "@/lib/analysisUiState";
 
 const ACCEPTED_TYPES = ".pdf,.png,.jpg,.jpeg,.dwg,.dxf";
 
