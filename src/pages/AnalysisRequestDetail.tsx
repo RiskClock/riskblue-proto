@@ -8,6 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { AppHeader } from "@/components/AppHeader";
 import { AnalysisSection } from "@/components/analysis/AnalysisSection";
+import { AnalysisDebugPanel } from "@/components/analysis/AnalysisDebugPanel";
 import { useAnalysisRequestState } from "@/hooks/useAnalysisRequestState";
 import { uiStateBadgeClass } from "@/lib/analysisUiState";
 import { useHeapIdentify } from "@/hooks/useHeapIdentify";
