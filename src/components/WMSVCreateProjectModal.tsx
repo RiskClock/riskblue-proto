@@ -119,21 +119,24 @@ export function WMSVCreateProjectModal({ open, onOpenChange, onCreated }: WMSVCr
     if (!name.trim() || !user) return;
     setCreating(true);
 
+    const projectName = name.trim();
+    const selectedFiles = files;
+    const hasFiles = selectedFiles.length > 0;
+
     try {
+      // Create project + analysis_request synchronously so we have IDs to track
       let projectId = pendingProjectId;
       if (!projectId) {
         const { data: project, error: projectError } = await supabase
           .from("projects")
-          .insert({ name: name.trim(), user_id: user.id })
+          .insert({ name: projectName, user_id: user.id })
           .select()
           .single();
         if (projectError) throw projectError;
         projectId = project.id;
       }
 
-      const hasFiles = files.length > 0;
       let requestId = pendingRequestId;
-
       if (!requestId) {
         const { data: req, error: rErr } = await supabase
           .from("analysis_requests")
@@ -141,8 +144,8 @@ export function WMSVCreateProjectModal({ open, onOpenChange, onCreated }: WMSVCr
             project_id: projectId,
             user_id: user.id,
             source_type: "manual_upload",
-            status: hasFiles ? "pending" : "awaiting_upload",
-            file_count: files.length,
+            status: hasFiles ? "copying" : "awaiting_upload",
+            file_count: selectedFiles.length,
           })
           .select()
           .single();
@@ -151,41 +154,101 @@ export function WMSVCreateProjectModal({ open, onOpenChange, onCreated }: WMSVCr
       } else if (hasFiles) {
         await supabase
           .from("analysis_requests")
-          .update({ status: "pending", file_count: files.length })
+          .update({ status: "copying", file_count: selectedFiles.length })
           .eq("id", requestId);
       }
 
+      // If there are files, register placeholder rows synchronously so the
+      // project detail page shows them immediately as "uploading".
+      let placeholderRows: Array<{ id: string; name: string; storage_path: string; size: number; file: File }> = [];
       if (hasFiles) {
-        let totalBytes = 0;
-        for (const file of files) {
-          const filePath = `${projectId}/${requestId}/${file.name}`;
-          const { error: uploadError } = await supabase.storage
-            .from("uploaded-drawings")
-            .upload(filePath, file);
-          if (uploadError) throw uploadError;
-          totalBytes += file.size;
-
-          await supabase.from("analysis_request_files").insert({
-            analysis_request_id: requestId,
-            drive_file_id: `manual_${Date.now()}_${file.name}`,
-            name: file.name,
-            mime_type: file.type || "application/octet-stream",
-            size_bytes: file.size,
-            relative_path: file.name,
-            storage_path: filePath,
-            copy_status: "copied",
-          });
-        }
-
-        await supabase
-          .from("analysis_requests")
-          .update({ status: "copied", total_size_bytes: totalBytes })
-          .eq("id", requestId);
+        const inserts = selectedFiles.map((file) => ({
+          analysis_request_id: requestId!,
+          drive_file_id: `manual_${Date.now()}_${Math.random().toString(36).slice(2)}_${file.name}`,
+          name: file.name,
+          mime_type: file.type || "application/octet-stream",
+          size_bytes: file.size,
+          relative_path: file.name,
+          storage_path: `${projectId}/${requestId}/${file.name}`,
+          copy_status: "pending" as const,
+        }));
+        const { data: inserted, error: insErr } = await supabase
+          .from("analysis_request_files")
+          .insert(inserts)
+          .select("id, name, storage_path");
+        if (insErr) throw insErr;
+        placeholderRows = (inserted || []).map((row, i) => ({
+          id: row.id,
+          name: row.name,
+          storage_path: row.storage_path!,
+          size: selectedFiles[i].size,
+          file: selectedFiles[i],
+        }));
       }
 
-      toast({ title: "Project Created", description: `"${name.trim()}" created successfully.` });
+      // Close modal immediately and let the parent navigate / refresh
+      toast({ title: "Project Created", description: `"${projectName}" created successfully.` });
       onOpenChange(false);
       onCreated();
+
+      // Background uploads (do not await)
+      if (hasFiles && placeholderRows.length > 0) {
+        const reqId = requestId!;
+        (async () => {
+          let copied = 0;
+          let totalBytes = 0;
+          const failures: string[] = [];
+
+          for (const row of placeholderRows) {
+            const { error: uploadError } = await supabase.storage
+              .from("uploaded-drawings")
+              .upload(row.storage_path, row.file, { upsert: true });
+
+            if (uploadError) {
+              failures.push(`${row.name}: ${uploadError.message}`);
+              await supabase
+                .from("analysis_request_files")
+                .update({ copy_status: "failed" })
+                .eq("id", row.id);
+            } else {
+              copied++;
+              totalBytes += row.size;
+              await supabase
+                .from("analysis_request_files")
+                .update({ copy_status: "copied" })
+                .eq("id", row.id);
+            }
+          }
+
+          const finalStatus = copied > 0 ? "copied" : "failed";
+          const finalError = failures.length > 0
+            ? `${failures[0]}${failures.length > 1 ? ` (+${failures.length - 1} more)` : ""}`
+            : null;
+
+          await supabase
+            .from("analysis_requests")
+            .update({
+              status: finalStatus,
+              total_size_bytes: totalBytes,
+              file_count: copied,
+              error_message: finalError,
+            })
+            .eq("id", reqId);
+
+          if (failures.length === 0) {
+            toast({
+              title: "Upload Complete",
+              description: `${copied} file(s) uploaded to "${projectName}".`,
+            });
+          } else {
+            toast({
+              title: copied > 0 ? "Some uploads failed" : "Upload Failed",
+              description: `${copied}/${placeholderRows.length} uploaded for "${projectName}". ${finalError}`,
+              variant: "destructive",
+            });
+          }
+        })();
+      }
     } catch (error) {
       toast({
         title: "Creation Failed",
