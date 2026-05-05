@@ -306,8 +306,8 @@ export function WMSVProjectDetail({ projectId, projectName }: WMSVProjectDetailP
         <div className="flex items-center gap-3 mb-2 flex-wrap">
           <h1 className="text-2xl font-bold text-foreground">{projectName}</h1>
           {request && (
-            <Badge variant="outline" className={statusColors[displayStatus || request.status] || ""}>
-              {statusLabels[displayStatus || request.status] || (displayStatus || request.status)}
+            <Badge variant="outline" className={uiStateBadgeClass(analysisState.uiState)}>
+              {analysisState.label}
             </Badge>
           )}
         </div>
