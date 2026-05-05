@@ -1864,7 +1864,10 @@ export function AnalysisSection({ requestId, files, projectId, sourceType, isWMS
 
   const handleWmsvStop = async () => {
     setAnalyzeV2Stopping(true);
-    queryClient.setQueryData(queryKeyForRequest, (old: any) => ({
+    queryClient.setQueryData(["analysis-request-row", requestId], (old: any) => (
+      old ? { ...old, pipeline_stop_requested: true } : old
+    ));
+    queryClient.setQueryData(["analysis-request-meta", requestId], (old: any) => ({
       ...(old || {}),
       pipeline_stop_requested: true,
     }));
