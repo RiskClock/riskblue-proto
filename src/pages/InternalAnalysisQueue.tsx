@@ -316,7 +316,8 @@ export default function InternalAnalysisQueue() {
                       </div>
                     </TableCell>
                   </TableRow>
-                ))}
+                  );
+                })}
               </TableBody>
             </Table>
           </div>
