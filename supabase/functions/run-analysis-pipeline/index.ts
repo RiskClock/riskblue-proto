@@ -882,6 +882,7 @@ async function runPipeline(params: PipelineParams) {
         }
         jobRows.push({
           analysis_request_id: analysisRequestId,
+          analysis_run_id: activeRunId,
           file_id: item.fileId,
           awp_class_name: item.awpClassName,
           prompt_content: promptContent,
