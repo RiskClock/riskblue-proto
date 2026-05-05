@@ -328,7 +328,7 @@ serve(async (req) => {
 
     const { data: request, error: reqError } = await adminSupabase
       .from("analysis_requests")
-      .select("source_type")
+      .select("source_type, analysis_run_id")
       .eq("id", analysisRequestId)
       .single();
 
@@ -336,6 +336,21 @@ serve(async (req) => {
       return new Response(JSON.stringify({ error: "Analysis request not found" }), {
         status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
+    }
+
+    // Run-id guard: abort if a newer run has started for this request.
+    if (
+      analysisRunId &&
+      (request as any).analysis_run_id &&
+      (request as any).analysis_run_id !== analysisRunId
+    ) {
+      console.warn(
+        `[analyze-drawings] run mismatch — job=${analysisRunId} current=${(request as any).analysis_run_id}; aborting`,
+      );
+      return new Response(
+        JSON.stringify({ error: "Superseded by a newer analysis run", currentRunId: (request as any).analysis_run_id }),
+        { status: 409, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+      );
     }
 
     const { data: fileRecord, error: fileError } = await adminSupabase
