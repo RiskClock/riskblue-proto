@@ -1047,7 +1047,25 @@ async function runPipeline(params: PipelineParams) {
             .eq("id", analysisRequestId);
           return;
         }
-        // No work and no failures — fall through to summarize (nothing to do)
+        // No work and no failures — flag this run as "no eligible drawings".
+        // Frontend uses this marker (and only this marker) to render
+        // "No Eligible Drawings Found" instead of the normal complete state.
+        try {
+          const { data: rm } = await admin
+            .from("analysis_requests")
+            .select("summary_data")
+            .eq("id", analysisRequestId)
+            .single();
+          const sd = ((rm as any)?.summary_data as Record<string, unknown>) || {};
+          sd.no_eligible_drawings = true;
+          await admin
+            .from("analysis_requests")
+            .update({ summary_data: sd } as any)
+            .eq("id", analysisRequestId);
+        } catch (e) {
+          console.warn("[pipeline] failed to set no_eligible_drawings flag:", e);
+        }
+        // Fall through to summarize (which will be a no-op).
       } else {
         // Jobs are queued; worker will finalize + trigger summarize. Exit now.
         return;
