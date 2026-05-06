@@ -78,6 +78,9 @@ Deno.serve(async (req) => {
 
   // 3. Try finalization for each touched (request, run) (single-trigger guarded)
   for (const { requestId, runId } of touchedKeys.values()) {
+    await maybeFinalizeTriage(admin, supabaseUrl, serviceKey, requestId, runId).catch((e) =>
+      console.error(`[worker] triage finalize for ${requestId} threw:`, e),
+    );
     await maybeFinalize(admin, supabaseUrl, serviceKey, requestId, runId).catch((e) =>
       console.error(`[worker] finalize check for ${requestId} threw:`, e),
     );
