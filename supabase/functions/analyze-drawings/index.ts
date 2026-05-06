@@ -284,7 +284,7 @@ serve(async (req) => {
       isInternal = authedUser.email?.toLowerCase().endsWith("@riskclock.com") ?? false;
     }
 
-    const { analysisRequestId, analysisRunId: bodyAnalysisRunId, fileId, awpClassName, promptContent, model, openaiFileId: suppliedOpenaiFileId } = await req.json();
+    const { analysisRequestId, analysisRunId: bodyAnalysisRunId, fileId, sheetId, awpClassName, promptContent, model, openaiFileId: suppliedOpenaiFileId } = await req.json();
     let analysisRunId: string | null = bodyAnalysisRunId ?? null;
     if (!analysisRequestId || !fileId || !awpClassName || !promptContent) {
       return new Response(JSON.stringify({ error: "Missing required fields" }), {
@@ -293,7 +293,7 @@ serve(async (req) => {
     }
     if (!analysisRunId) {
       console.warn(
-        `[analyze-drawings] MISSING analysisRunId in request body — request=${analysisRequestId} file=${fileId} class=${awpClassName}. Will derive from analysis_requests row.`,
+        `[analyze-drawings] MISSING analysisRunId in request body — request=${analysisRequestId} file=${fileId} sheet=${sheetId ?? "-"} class=${awpClassName}. Will derive from analysis_requests row.`,
       );
     }
 
