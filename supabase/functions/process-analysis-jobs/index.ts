@@ -68,9 +68,23 @@ Deno.serve(async (req) => {
     touchedKeys.set(key, { requestId: j.analysis_request_id, runId: j.analysis_run_id ?? null });
   }
 
-  // 2. Process in parallel (batch-size already bounded)
+  // 2. Process jobs. Split jobs load full PDFs into memory (pdf-lib) and
+  // running multiple in parallel against the same parent PDF blew the
+  // edge-runtime memory limit. Run split jobs serially; other kinds in
+  // parallel as before.
+  const splitJobs = jobs.filter((j) => j.job_kind === "split_pdf_chunk");
+  const otherJobs = jobs.filter((j) => j.job_kind !== "split_pdf_chunk");
+
+  for (const job of splitJobs) {
+    try {
+      await runJob(admin, supabaseUrl, serviceKey, job, MAX_RUN_MS - (Date.now() - startedAt));
+    } catch (e) {
+      console.error(`[worker] split job ${job.id} threw:`, e);
+    }
+  }
+
   await Promise.all(
-    jobs.map((job) =>
+    otherJobs.map((job) =>
       runJob(admin, supabaseUrl, serviceKey, job, MAX_RUN_MS - (Date.now() - startedAt))
         .catch((e) => console.error(`[worker] job ${job.id} threw:`, e)),
     ),
