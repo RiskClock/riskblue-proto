@@ -1402,6 +1402,7 @@ async function runPipeline(params: PipelineParams) {
           awp_class_name: item.awpClassName,
           prompt_content: promptContent,
           analyze_model: analyzeModel,
+          job_kind: "analyze",
           status: "pending",
           sort_order: orderFor(item.awpClassName),
         });
