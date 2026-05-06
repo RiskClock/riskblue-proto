@@ -1430,8 +1430,37 @@ async function runPipeline(params: PipelineParams) {
         });
       }
 
-      // Pre-insert "processing" rows for every queued job so the UI shows
-      // spinners immediately, even before a worker picks the job up.
+      // Insert analyze jobs FIRST (before placeholders + phase change) so
+      // a duplicate-key or other DB error doesn't leave permanent spinners
+      // and a stranded "analyzing" phase.
+      const CHUNK = 500;
+      for (let i = 0; i < jobRows.length; i += CHUNK) {
+        const slice = jobRows.slice(i, i + CHUNK);
+        const { error: insErr } = await admin
+          .from("analysis_pipeline_jobs")
+          .insert(slice);
+        if (insErr) {
+          console.error(`[pipeline] Failed to insert jobs chunk: ${insErr.message}`);
+          await admin
+            .from("analysis_pipeline_jobs")
+            .delete()
+            .eq("analysis_request_id", analysisRequestId)
+            .eq("job_kind", "analyze");
+          await admin
+            .from("analysis_requests")
+            .update({
+              status: "started",
+              pipeline_phase: null,
+              pipeline_progress_done: 0,
+              pipeline_progress_total: 0,
+              error_message: `Failed to enqueue analysis jobs: ${insErr.message}`,
+            } as any)
+            .eq("id", analysisRequestId);
+          return;
+        }
+      }
+
+      // Pre-insert "processing" placeholders so UI shows spinners immediately.
       if (jobRows.length > 0) {
         const placeholderRows = jobRows.map((j) => ({
           analysis_request_id: j.analysis_request_id,
@@ -1451,7 +1480,6 @@ async function runPipeline(params: PipelineParams) {
         }
       }
 
-      // Set phase=analyzing with totals so UI shows progress immediately
       const totalJobs = jobRows.length + immediateFailures.length;
       await admin
         .from("analysis_requests")
@@ -1462,27 +1490,6 @@ async function runPipeline(params: PipelineParams) {
           status: "processing",
         } as any)
         .eq("id", analysisRequestId);
-
-      // Bulk insert jobs in chunks (Postgres array param limits)
-      const CHUNK = 500;
-      for (let i = 0; i < jobRows.length; i += CHUNK) {
-        const slice = jobRows.slice(i, i + CHUNK);
-        const { error: insErr } = await admin
-          .from("analysis_pipeline_jobs")
-          .insert(slice);
-        if (insErr) {
-          console.error(`[pipeline] Failed to insert jobs chunk: ${insErr.message}`);
-          await admin
-            .from("analysis_requests")
-            .update({
-              status: "started",
-              pipeline_phase: null,
-              error_message: `Failed to enqueue analysis jobs: ${insErr.message}`,
-            } as any)
-            .eq("id", analysisRequestId);
-          return;
-        }
-      }
 
       console.log(
         `[pipeline] Phase 3: enqueued ${jobRows.length} jobs (${immediateFailures.length} immediate failures). Worker will process asynchronously.`,
