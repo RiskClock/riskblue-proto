@@ -561,20 +561,20 @@ async function fireAndForgetSummarize(
 // Periodic safety net: any analyzing requests with all jobs terminal but
 // not finalized (e.g. cron ran with no jobs to claim) — finalize them.
 // ---------------------------------------------------------------------------
-async function checkFinalizeAllAnalyzing(
+async function checkFinalizeAll(
   admin: ReturnType<typeof createClient>,
   supabaseUrl: string,
   serviceKey: string,
 ) {
-  const { data: analyzing } = await admin
+  const { data: rows } = await admin
     .from("analysis_requests")
-    .select("id, pipeline_stop_requested, analysis_run_id")
-    .eq("pipeline_phase", "analyzing")
-    .limit(20);
+    .select("id, pipeline_phase, pipeline_stop_requested, analysis_run_id")
+    .in("pipeline_phase", ["analyzing", "triaging"])
+    .limit(40);
 
-  for (const row of (analyzing as any[]) || []) {
+  for (const row of (rows as any[]) || []) {
     const runId = row.analysis_run_id ?? null;
-    // If user requested stop, cancel any leftover pending jobs for this run
+    const phase = row.pipeline_phase;
     if (row.pipeline_stop_requested) {
       let q = admin.from("analysis_pipeline_jobs")
         .update({
@@ -587,7 +587,11 @@ async function checkFinalizeAllAnalyzing(
       if (runId) q = q.eq("analysis_run_id", runId);
       await q;
     }
-    await maybeFinalize(admin, supabaseUrl, serviceKey, row.id, runId).catch(() => {});
+    if (phase === "triaging") {
+      await maybeFinalizeTriage(admin, supabaseUrl, serviceKey, row.id, runId).catch(() => {});
+    } else {
+      await maybeFinalize(admin, supabaseUrl, serviceKey, row.id, runId).catch(() => {});
+    }
   }
 }
 
