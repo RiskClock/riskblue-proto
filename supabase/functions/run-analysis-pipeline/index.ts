@@ -583,17 +583,6 @@ async function runPipeline(params: PipelineParams) {
       return;
     }
 
-    // Fetch AWP prompts
-    const { data: allPrompts } = await admin
-      .from("awp_class_prompts")
-      .select("*")
-      .not("drive_file_id", "is", null);
-
-    if (!allPrompts || allPrompts.length === 0) {
-      await markNoEligibleDrawings(admin, analysisRequestId, activeRunId);
-      return;
-    }
-
     // Filter prompts using enabledAwpClasses as the single source of truth
     let prompts: any[];
     const drawingDetectable = allPrompts.filter((p: any) => p.detection_method !== "always");
