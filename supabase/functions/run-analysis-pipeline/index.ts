@@ -472,6 +472,38 @@ async function runSplitPhase(params: {
         `[pipeline][split] ${parent.name}: ${pageCount} pages → ${Math.ceil(pageCount / SPLIT_CHUNK_PAGES)} chunks`,
       );
 
+      // Single-page short-circuit: upsert one sheet pointing to the parent
+      // storage path; no chunk job needed.
+      if (pageCount === 1) {
+        const { error: upErr } = await admin
+          .from("analysis_request_sheets")
+          .upsert(
+            {
+              analysis_request_id: analysisRequestId,
+              parent_file_id: parent.id,
+              page_index: 1,
+              name: parent.name,
+              storage_path: parent.storage_path,
+              extract_status: "pending",
+              extract_error: null,
+            } as any,
+            { onConflict: "parent_file_id,page_index" },
+          );
+        if (upErr) {
+          console.error(`[pipeline][split] single-page upsert failed for ${parent.name}: ${upErr.message}`);
+          await admin
+            .from("analysis_request_files")
+            .update({ split_status: "failed" } as any)
+            .eq("id", parent.id);
+        } else {
+          await admin
+            .from("analysis_request_files")
+            .update({ split_status: "split" } as any)
+            .eq("id", parent.id);
+        }
+        continue;
+      }
+
       for (let from = 0; from < pageCount; from += SPLIT_CHUNK_PAGES) {
         const to = Math.min(pageCount - 1, from + SPLIT_CHUNK_PAGES - 1);
         chunkRows.push({
