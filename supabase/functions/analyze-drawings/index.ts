@@ -613,9 +613,10 @@ serve(async (req) => {
       }
     }
 
-    // Store result
+    // Store result — also stamp analysis_run_id to repair any prior orphaned
+    // upsert that may have left the row with a NULL run id.
     await adminSupabase.from("analysis_results")
-      .update({ status: "complete", result_text: resultText })
+      .update({ status: "complete", result_text: resultText, analysis_run_id: analysisRunId })
       .eq("file_id", fileId)
       .eq("analysis_request_id", analysisRequestId)
       .eq("awp_class_name", awpClassName);
