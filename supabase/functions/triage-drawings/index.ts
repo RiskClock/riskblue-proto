@@ -227,29 +227,77 @@ Deno.serve(async (req) => {
 
     // Resolve parent file id (always set so legacy joins keep working)
     const parentFileId = sheetRecord ? sheetRecord.parent_file_id : fileRecord.id;
-    const triageKey = sheetRecord
-      ? { analysis_request_id: analysisRequestId, sheet_id: sheetRecord.id, awp_class_name: awpClassName }
-      : { analysis_request_id: analysisRequestId, file_id: parentFileId, awp_class_name: awpClassName };
 
-    // Upsert triage row as processing
-    if (sheetRecord) {
-      await adminSupabase.from("analysis_triage_results").upsert({
+    // -----------------------------------------------------------------------
+    // Sole-writer helper: writes the FINAL triage row for this (request,
+    // unit, class). Implemented as select-then-insert/update because the
+    // unique constraints on analysis_triage_results are *partial* indexes
+    // (sheet mode vs legacy file mode) which PostgREST onConflict cannot
+    // target reliably. We always check .error and surface failures.
+    // -----------------------------------------------------------------------
+    const writeTriageRow = async (payload: {
+      status: string;
+      score?: number | null;
+      reason?: string | null;
+      sheet_role?: string | null;
+      error_message?: string | null;
+    }) => {
+      const baseRow = {
         analysis_request_id: analysisRequestId,
         analysis_run_id: analysisRunId ?? null,
         file_id: parentFileId,
-        sheet_id: sheetRecord.id,
+        sheet_id: sheetRecord ? sheetRecord.id : null,
         awp_class_name: awpClassName,
-        status: "processing",
-      }, { onConflict: "analysis_request_id,sheet_id,awp_class_name" });
-    } else {
-      await adminSupabase.from("analysis_triage_results").upsert({
-        analysis_request_id: analysisRequestId,
-        analysis_run_id: analysisRunId ?? null,
-        file_id: parentFileId,
-        awp_class_name: awpClassName,
-        status: "processing",
-      }, { onConflict: "analysis_request_id,file_id,awp_class_name" });
-    }
+        status: payload.status,
+        score: payload.score ?? null,
+        reason: payload.reason ?? null,
+        sheet_role: payload.sheet_role ?? null,
+        error_message: payload.error_message ?? null,
+      };
+
+      const findExisting = async () => {
+        let q = adminSupabase
+          .from("analysis_triage_results")
+          .select("id")
+          .eq("analysis_request_id", analysisRequestId)
+          .eq("awp_class_name", awpClassName);
+        if (sheetRecord) q = q.eq("sheet_id", sheetRecord.id);
+        else q = q.eq("file_id", parentFileId).is("sheet_id", null);
+        const { data, error } = await q.maybeSingle();
+        if (error) console.error(`[triage] lookup failed for ${awpClassName}: ${error.message}`);
+        return (data as any)?.id ?? null;
+      };
+
+      const existingId = await findExisting();
+      if (existingId) {
+        const { error: updErr } = await adminSupabase
+          .from("analysis_triage_results").update(baseRow as any).eq("id", existingId);
+        if (updErr) {
+          console.error(`[triage] update failed for ${awpClassName}: ${updErr.message}`);
+          return { ok: false, error: updErr.message };
+        }
+        return { ok: true };
+      }
+
+      const { error: insErr } = await adminSupabase
+        .from("analysis_triage_results").insert(baseRow as any);
+      if (insErr) {
+        // Race: someone inserted between SELECT and INSERT. Re-select & update.
+        const raceId = await findExisting();
+        if (raceId) {
+          const { error: updErr2 } = await adminSupabase
+            .from("analysis_triage_results").update(baseRow as any).eq("id", raceId);
+          if (updErr2) {
+            console.error(`[triage] race-update failed: ${updErr2.message}`);
+            return { ok: false, error: updErr2.message };
+          }
+          return { ok: true };
+        }
+        console.error(`[triage] insert failed for ${awpClassName}: ${insErr.message}`);
+        return { ok: false, error: insErr.message };
+      }
+      return { ok: true };
+    };
 
     // Get extracted text from sheet or file. If missing, extract now (fallback).
     const sourceUnit = sheetRecord || fileRecord;
@@ -352,21 +400,14 @@ ${roleInstructions}`;
       }
     }
 
-    const failTriage = async (msg: string) => {
-      const upd = { status: "failed", error_message: msg };
-      let q = adminSupabase.from("analysis_triage_results").update(upd as any)
-        .eq("analysis_request_id", analysisRequestId)
-        .eq("awp_class_name", awpClassName);
-      if (sheetRecord) q = q.eq("sheet_id", sheetRecord.id);
-      else q = q.eq("file_id", parentFileId);
-      await q;
-    };
-
     if (!triageResponse || !triageResponse.ok) {
       const errText = triageResponse ? await triageResponse.text() : lastErr;
       const status = triageResponse?.status ?? 0;
       console.error(`[triage] OpenAI failed: ${errText}`);
-      await failTriage(`Triage API failed: ${status || "network error"}`);
+      await writeTriageRow({
+        status: "failed",
+        error_message: `Triage API failed: ${status || "network error"}`,
+      });
       return new Response(JSON.stringify({ error: "Triage failed" }), {
         status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
@@ -412,15 +453,14 @@ ${roleInstructions}`;
       sheetRole = score >= 50 ? "analysis_sheet" : "irrelevant";
     }
 
-    const updatePatch: Record<string, unknown> = {
+    const writeRes = await writeTriageRow({
       status: "complete", score, reason, sheet_role: sheetRole,
-    };
-    let q = adminSupabase.from("analysis_triage_results").update(updatePatch as any)
-      .eq("analysis_request_id", analysisRequestId)
-      .eq("awp_class_name", awpClassName);
-    if (sheetRecord) q = q.eq("sheet_id", sheetRecord.id);
-    else q = q.eq("file_id", parentFileId);
-    await q;
+    });
+    if (!writeRes.ok) {
+      return new Response(JSON.stringify({ error: `Failed to persist triage result: ${writeRes.error}` }), {
+        status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
 
     console.log(`[triage] Complete: ${sheetLabel} class=${awpClassName} score=${score} role=${sheetRole}`);
 
@@ -440,23 +480,46 @@ ${roleInstructions}`;
       const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
       if (supabaseUrl && supabaseServiceKey) {
         const body = await req.clone().json().catch(() => ({} as any));
-        const { analysisRequestId, fileId, sheetId, awpClassName } = body || {};
+        const { analysisRequestId, analysisRunId, fileId, sheetId, awpClassName } = body || {};
         if (analysisRequestId && awpClassName && (fileId || sheetId)) {
           const adminFix = createClient(supabaseUrl, supabaseServiceKey);
-          let q = adminFix.from("analysis_triage_results").update({
-            status: "failed",
-            error_message: `Triage crashed: ${error instanceof Error ? error.message : String(error)}`.slice(0, 1000),
-          } as any)
+          // Resolve parent file id for the failed row.
+          let parentFileId = fileId as string | null;
+          if (sheetId) {
+            const { data: s } = await adminFix
+              .from("analysis_request_sheets")
+              .select("parent_file_id").eq("id", sheetId).single();
+            parentFileId = (s as any)?.parent_file_id ?? null;
+          }
+          // Find existing row, then update or insert a failed one.
+          let lookup = adminFix
+            .from("analysis_triage_results").select("id")
             .eq("analysis_request_id", analysisRequestId)
-            .eq("awp_class_name", awpClassName)
-            .eq("status", "processing");
-          if (sheetId) q = q.eq("sheet_id", sheetId);
-          else q = q.eq("file_id", fileId);
-          await q;
+            .eq("awp_class_name", awpClassName);
+          if (sheetId) lookup = lookup.eq("sheet_id", sheetId);
+          else lookup = lookup.eq("file_id", parentFileId).is("sheet_id", null);
+          const { data: existing } = await lookup.maybeSingle();
+
+          const errMsg = `Triage crashed: ${error instanceof Error ? error.message : String(error)}`.slice(0, 1000);
+          const failedRow = {
+            analysis_request_id: analysisRequestId,
+            analysis_run_id: analysisRunId ?? null,
+            file_id: parentFileId,
+            sheet_id: sheetId ?? null,
+            awp_class_name: awpClassName,
+            status: "failed",
+            error_message: errMsg,
+          };
+          if (existing && (existing as any).id) {
+            await adminFix.from("analysis_triage_results")
+              .update(failedRow as any).eq("id", (existing as any).id);
+          } else if (parentFileId) {
+            await adminFix.from("analysis_triage_results").insert(failedRow as any);
+          }
         }
       }
     } catch (cleanupErr) {
-      console.error("[triage] Failed to reconcile processing row on error:", cleanupErr);
+      console.error("[triage] Failed to write failed triage row on error:", cleanupErr);
     }
     return new Response(JSON.stringify({ error: error instanceof Error ? error.message : "Unknown error" }), {
       status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
