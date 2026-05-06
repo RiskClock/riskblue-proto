@@ -1097,7 +1097,7 @@ async function runPipeline(params: PipelineParams) {
       );
 
       const triageJobRows: any[] = [];
-      for (const file of orderedFiles) {
+      orderedFiles.forEach((file: any, fileIdx: number) => {
         for (const prompt of prompts) {
           const triagePromptContent =
             (prompt as any).triage_prompt_content ||
@@ -1112,10 +1112,12 @@ async function runPipeline(params: PipelineParams) {
             analyze_model: triageModel,
             job_kind: "triage",
             status: "pending",
-            sort_order: orderForTriage((prompt as any).awp_class_name),
+            // File-first sort: process all classes for one file before moving
+            // on, so the UI fills horizontally (row by row).
+            sort_order: fileIdx * 1000 + orderForTriage((prompt as any).awp_class_name),
           });
         }
-      }
+      });
 
       console.log(
         `[pipeline] Phase 2: enqueueing ${triageJobRows.length} triage jobs (${files.length} files × ${prompts.length} classes)`,
@@ -1146,6 +1148,39 @@ async function runPipeline(params: PipelineParams) {
         }
       }
 
+      // IMPORTANT: insert jobs BEFORE setting phase=triaging. Otherwise the
+      // cron worker may tick during this window, see 0 triage jobs in
+      // pending/processing, and prematurely run maybeFinalizeTriage which
+      // flips the phase and causes a 0/0 progress flicker.
+      const TCHUNK = 500;
+      for (let i = 0; i < triageJobRows.length; i += TCHUNK) {
+        const slice = triageJobRows.slice(i, i + TCHUNK);
+        const { error: insErr } = await admin
+          .from("analysis_pipeline_jobs")
+          .insert(slice);
+        if (insErr) {
+          console.error(`[pipeline] Failed to insert triage jobs chunk: ${insErr.message}`);
+          // Reconcile: clear the spinner placeholders we just wrote so the
+          // UI doesn't show permanent spinners on every cell.
+          await admin
+            .from("analysis_triage_results")
+            .delete()
+            .eq("analysis_request_id", analysisRequestId)
+            .eq("status", "processing");
+          await admin
+            .from("analysis_requests")
+            .update({
+              status: "started",
+              pipeline_phase: null,
+              pipeline_progress_done: 0,
+              pipeline_progress_total: 0,
+              error_message: `Failed to enqueue triage jobs: ${insErr.message}`,
+            } as any)
+            .eq("id", analysisRequestId);
+          return;
+        }
+      }
+
       await admin
         .from("analysis_requests")
         .update({
@@ -1155,27 +1190,6 @@ async function runPipeline(params: PipelineParams) {
           status: "processing",
         } as any)
         .eq("id", analysisRequestId);
-
-      // Bulk insert in chunks
-      const TCHUNK = 500;
-      for (let i = 0; i < triageJobRows.length; i += TCHUNK) {
-        const slice = triageJobRows.slice(i, i + TCHUNK);
-        const { error: insErr } = await admin
-          .from("analysis_pipeline_jobs")
-          .insert(slice);
-        if (insErr) {
-          console.error(`[pipeline] Failed to insert triage jobs chunk: ${insErr.message}`);
-          await admin
-            .from("analysis_requests")
-            .update({
-              status: "started",
-              pipeline_phase: null,
-              error_message: `Failed to enqueue triage jobs: ${insErr.message}`,
-            } as any)
-            .eq("id", analysisRequestId);
-          return;
-        }
-      }
 
       // Kick the worker so it doesn't wait for the next cron tick.
       const workerSecretEnv = Deno.env.get("ANALYSIS_WORKER_SECRET");
@@ -1416,8 +1430,37 @@ async function runPipeline(params: PipelineParams) {
         });
       }
 
-      // Pre-insert "processing" rows for every queued job so the UI shows
-      // spinners immediately, even before a worker picks the job up.
+      // Insert analyze jobs FIRST (before placeholders + phase change) so
+      // a duplicate-key or other DB error doesn't leave permanent spinners
+      // and a stranded "analyzing" phase.
+      const CHUNK = 500;
+      for (let i = 0; i < jobRows.length; i += CHUNK) {
+        const slice = jobRows.slice(i, i + CHUNK);
+        const { error: insErr } = await admin
+          .from("analysis_pipeline_jobs")
+          .insert(slice);
+        if (insErr) {
+          console.error(`[pipeline] Failed to insert jobs chunk: ${insErr.message}`);
+          await admin
+            .from("analysis_pipeline_jobs")
+            .delete()
+            .eq("analysis_request_id", analysisRequestId)
+            .eq("job_kind", "analyze");
+          await admin
+            .from("analysis_requests")
+            .update({
+              status: "started",
+              pipeline_phase: null,
+              pipeline_progress_done: 0,
+              pipeline_progress_total: 0,
+              error_message: `Failed to enqueue analysis jobs: ${insErr.message}`,
+            } as any)
+            .eq("id", analysisRequestId);
+          return;
+        }
+      }
+
+      // Pre-insert "processing" placeholders so UI shows spinners immediately.
       if (jobRows.length > 0) {
         const placeholderRows = jobRows.map((j) => ({
           analysis_request_id: j.analysis_request_id,
@@ -1437,7 +1480,6 @@ async function runPipeline(params: PipelineParams) {
         }
       }
 
-      // Set phase=analyzing with totals so UI shows progress immediately
       const totalJobs = jobRows.length + immediateFailures.length;
       await admin
         .from("analysis_requests")
@@ -1448,27 +1490,6 @@ async function runPipeline(params: PipelineParams) {
           status: "processing",
         } as any)
         .eq("id", analysisRequestId);
-
-      // Bulk insert jobs in chunks (Postgres array param limits)
-      const CHUNK = 500;
-      for (let i = 0; i < jobRows.length; i += CHUNK) {
-        const slice = jobRows.slice(i, i + CHUNK);
-        const { error: insErr } = await admin
-          .from("analysis_pipeline_jobs")
-          .insert(slice);
-        if (insErr) {
-          console.error(`[pipeline] Failed to insert jobs chunk: ${insErr.message}`);
-          await admin
-            .from("analysis_requests")
-            .update({
-              status: "started",
-              pipeline_phase: null,
-              error_message: `Failed to enqueue analysis jobs: ${insErr.message}`,
-            } as any)
-            .eq("id", analysisRequestId);
-          return;
-        }
-      }
 
       console.log(
         `[pipeline] Phase 3: enqueued ${jobRows.length} jobs (${immediateFailures.length} immediate failures). Worker will process asynchronously.`,

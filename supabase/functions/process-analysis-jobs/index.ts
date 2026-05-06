@@ -432,6 +432,12 @@ async function maybeFinalize(
 
   if ((pendingCount ?? 0) > 0) return;
 
+  // Safety: zero analyze jobs visible (cron raced with pipeline insert) — skip.
+  if ((totalCount ?? 0) === 0) {
+    console.warn(`[worker] maybeFinalize: no analyze jobs visible yet for ${requestId}; skipping`);
+    return;
+  }
+
   // All jobs in terminal state. Try to acquire advisory lock for finalize.
   const { data: lockRow, error: lockErr } = await admin.rpc(
     "try_lock_analysis_finalize",
@@ -1089,6 +1095,14 @@ async function maybeFinalizeTriage(
 
   const { count: pendingCount } = await buildQ(["pending", "processing"]);
   if ((pendingCount ?? 0) > 0) return;
+
+  // Safety: if there are zero triage jobs at all (e.g. cron tick raced with
+  // pipeline insert), do NOT finalize — wait for jobs to land.
+  const { count: anyCount } = await buildQ([]);
+  if ((anyCount ?? 0) === 0) {
+    console.warn(`[worker] maybeFinalizeTriage: no triage jobs visible yet for ${requestId}; skipping`);
+    return;
+  }
 
   // Stop-requested: pause
   if ((cur as any).pipeline_stop_requested) {
