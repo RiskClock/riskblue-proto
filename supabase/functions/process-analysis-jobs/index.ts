@@ -928,6 +928,7 @@ async function runTriageJob(
         analysisRequestId: job.analysis_request_id,
         analysisRunId: job.analysis_run_id ?? null,
         fileId: job.file_id,
+        sheetId: job.sheet_id ?? null,
         awpClassName: job.awp_class_name,
         drawingName,
         promptContent: job.prompt_content,
