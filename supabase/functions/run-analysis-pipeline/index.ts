@@ -1318,13 +1318,18 @@ async function runPipeline(params: PipelineParams) {
       // Final flush for summarize phase.
       await summaryProgress.finalize();
 
+      // Run integrity check before flipping to complete.
+      await runIntegrityCheck(admin, analysisRequestId, activeRunId);
+
       // Clear summarizing phase indicator and ensure status is complete.
       // (createProgressTracker.finalize() writes status='processing' on its
       // final flush, so we must explicitly restore status='complete' here.)
       await safeWriteComplete(admin, analysisRequestId, activeRunId);
     } catch (sumPhaseErr) {
       console.warn("[pipeline] Summarize phase failed (non-fatal):", sumPhaseErr);
+      await runIntegrityCheck(admin, analysisRequestId, activeRunId);
       await safeWriteComplete(admin, analysisRequestId, activeRunId);
+    }
     }
 
     // Completion email (after summary so it can include deduped counts)
