@@ -1020,6 +1020,13 @@ async function runPipeline(params: PipelineParams) {
       }
       const allowed = new Set(enabledAwpClasses);
       prompts = drawingDetectable.filter((p: any) => allowed.has(p.awp_class_name));
+    } else if (Array.isArray(disabledAwpClasses)) {
+      const disabled = new Set(disabledAwpClasses.filter((v): v is string => typeof v === "string"));
+      prompts = drawingDetectable.filter((p: any) => !disabled.has(p.awp_class_name));
+      if (prompts.length === 0) {
+        await markNoEligibleDrawings(admin, analysisRequestId, activeRunId);
+        return;
+      }
     } else {
       // Fallback: no filtering (legacy callers)
       prompts = drawingDetectable;
