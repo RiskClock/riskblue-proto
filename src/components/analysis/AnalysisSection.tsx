@@ -1358,6 +1358,57 @@ export function AnalysisSection({ requestId, files, projectId, sourceType, isWMS
     return () => { cancelled = true; };
   }, [requestId, files.length]);
 
+  // ---- Sheet-based extraction tracking (sheet-normalized mode) ----
+  // For each parent file we track how many sheets are still pending vs total.
+  // Drives:
+  //   - spinner stays visible while ANY sheet of the file is not yet extracted
+  //   - "Processed" badge appears only once ALL sheets of the file are extracted
+  const { data: sheetStatusData } = useQuery({
+    queryKey: ["analysis-sheet-status", requestId],
+    enabled: !!requestId,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("analysis_request_sheets")
+        .select("parent_file_id, extract_status")
+        .eq("analysis_request_id", requestId);
+      if (error) throw error;
+      return (data ?? []) as Array<{ parent_file_id: string; extract_status: string }>;
+    },
+    refetchInterval: (query: any) => {
+      const phase = (queryClient.getQueryData(["analysis-request-meta", requestId]) as any)?.pipeline_phase;
+      if (phase === "extracting" || phase === "splitting") return 3000;
+      return false;
+    },
+  });
+
+  // Realtime invalidation for sheet status
+  useEffect(() => {
+    if (!requestId) return;
+    const channel: RealtimeChannel = supabase
+      .channel(`analysis-sheets-${requestId}`)
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "analysis_request_sheets", filter: `analysis_request_id=eq.${requestId}` },
+        () => queryClient.invalidateQueries({ queryKey: ["analysis-sheet-status", requestId] }),
+      )
+      .subscribe();
+    return () => { supabase.removeChannel(channel); };
+  }, [requestId, queryClient]);
+
+  // Map<fileId, { pending: number; total: number }>
+  const sheetProgressByFile = useMemo(() => {
+    const m = new Map<string, { pending: number; total: number }>();
+    for (const s of sheetStatusData ?? []) {
+      const cur = m.get(s.parent_file_id) ?? { pending: 0, total: 0 };
+      cur.total += 1;
+      if (s.extract_status !== "extracted" && s.extract_status !== "skipped") {
+        cur.pending += 1;
+      }
+      m.set(s.parent_file_id, cur);
+    }
+    return m;
+  }, [sheetStatusData]);
+
   // Refresh extraction badges when pipeline phase transitions OUT of "extracting"
   useEffect(() => {
     const currentPhase = (requestMeta as any)?.pipeline_phase as string | null;
