@@ -22,7 +22,6 @@ Deno.serve(async (req) => {
     const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const openaiApiKey = Deno.env.get("OPENAI_API_KEY")!;
 
-    // Internal worker path: service-role auth + matching secret. Skip user check.
     const isInternalCall =
       !!workerSecret &&
       internalInvocation === workerSecret &&
@@ -50,52 +49,79 @@ Deno.serve(async (req) => {
       isInternal = authedUser.email?.toLowerCase().endsWith("@riskclock.com") ?? false;
     }
 
-    // Parse body early so we have fileId for authorization
     const body = await req.json();
-    const { analysisRequestId, analysisRunId, fileId, awpClassName, assetType, drawingName, action, promptContent, model } = body;
-
-    if (!fileId) {
-      return new Response(JSON.stringify({ error: "Missing fileId" }), {
-        status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
-    }
+    const {
+      analysisRequestId,
+      analysisRunId,
+      fileId,
+      sheetId,
+      awpClassName,
+      drawingName,
+      action,
+      promptContent,
+      model,
+    } = body;
 
     const adminSupabase = createClient(supabaseUrl, supabaseServiceKey);
 
-    // ========== Authorization ==========
-    if (!isInternalCall && !isInternal && user) {
-      // Resolve access: fileId → analysis_request → project
-      const { data: fileAccess, error: fileAccessError } = await adminSupabase
+    // ========== Resolve unit (sheet > file) ==========
+    // When sheetId is provided, the unit of work is a single sheet (page).
+    // Otherwise, fall back to legacy file-level behavior.
+    let sheetRecord: any = null;
+    let fileRecord: any = null;
+
+    if (sheetId) {
+      const { data, error } = await adminSupabase
+        .from("analysis_request_sheets")
+        .select("*, analysis_requests!inner(source_type, project_id, user_id)")
+        .eq("id", sheetId)
+        .single();
+      if (error || !data) {
+        return new Response(JSON.stringify({ error: "Sheet not found" }), {
+          status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+      sheetRecord = data;
+      const { data: parent } = await adminSupabase
         .from("analysis_request_files")
-        .select("analysis_request_id, analysis_requests!inner(project_id, user_id)")
+        .select("*, analysis_requests!inner(source_type)")
+        .eq("id", sheetRecord.parent_file_id)
+        .single();
+      fileRecord = parent;
+    } else {
+      if (!fileId) {
+        return new Response(JSON.stringify({ error: "Missing fileId or sheetId" }), {
+          status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+      const { data, error } = await adminSupabase
+        .from("analysis_request_files")
+        .select("*, analysis_requests!inner(source_type, project_id, user_id)")
         .eq("id", fileId)
         .single();
-
-      if (fileAccessError || !fileAccess) {
+      if (error || !data) {
         return new Response(JSON.stringify({ error: "File not found" }), {
           status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       }
+      fileRecord = data;
+    }
 
-      const arData = fileAccess.analysis_requests as any;
-      const projectId = arData.project_id;
-      const requestOwner = arData.user_id;
-
-      let allowed = requestOwner === user.id;
-
+    // ========== Authorization ==========
+    if (!isInternalCall && !isInternal && user) {
+      const arData = (sheetRecord || fileRecord).analysis_requests as any;
+      let allowed = arData.user_id === user.id;
       if (!allowed) {
         const { data: project } = await adminSupabase
-          .from("projects").select("user_id").eq("id", projectId).single();
-        allowed = project?.user_id === user.id;
+          .from("projects").select("user_id").eq("id", arData.project_id).single();
+        allowed = (project as any)?.user_id === user.id;
       }
-
       if (!allowed) {
         const { data: role } = await adminSupabase
           .from("project_user_roles").select("id")
-          .eq("project_id", projectId).eq("user_id", user.id).maybeSingle();
+          .eq("project_id", arData.project_id).eq("user_id", user.id).maybeSingle();
         allowed = !!role;
       }
-
       if (!allowed) {
         return new Response(JSON.stringify({ error: "Access denied" }), {
           status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -103,78 +129,78 @@ Deno.serve(async (req) => {
       }
     }
 
-    // Look up the file record
-    const { data: fileRecord, error: fileError } = await adminSupabase
-      .from("analysis_request_files")
-      .select("*, analysis_requests!inner(source_type)")
-      .eq("id", fileId)
-      .single();
-
-    if (fileError || !fileRecord) {
-      return new Response(JSON.stringify({ error: "File not found" }), {
-        status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
-    }
+    const sourceType = (fileRecord as any).analysis_requests?.source_type;
+    const bucket = sourceType === "manual_upload" ? "uploaded-drawings" : "drive-analysis-files";
 
     // ========== ACTION: EXTRACT ==========
     if (action === "extract") {
-      // Check if already cached
-      if (fileRecord.extracted_text !== null && fileRecord.extracted_text !== undefined) {
+      const target = sheetRecord || fileRecord;
+      const targetTable = sheetRecord ? "analysis_request_sheets" : "analysis_request_files";
+      const cached = target.extracted_text;
+      if (cached !== null && cached !== undefined && cached.length > 0) {
+        if (sheetRecord) {
+          await adminSupabase.from("analysis_request_sheets")
+            .update({ extract_status: "extracted" }).eq("id", sheetRecord.id);
+        }
         return new Response(JSON.stringify({
-          status: "extracted",
-          fileId,
-          textLength: (fileRecord.extracted_text as string).length,
-          cached: true,
-        }), {
-          status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" },
-        });
+          status: "extracted", textLength: (cached as string).length, cached: true,
+        }), { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } });
       }
 
-      const storagePath = fileRecord.storage_path as string | null;
+      const storagePath = target.storage_path as string | null;
       if (!storagePath) {
+        if (sheetRecord) {
+          await adminSupabase.from("analysis_request_sheets")
+            .update({ extract_status: "failed", extract_error: "no storage_path" }).eq("id", sheetRecord.id);
+        }
         return new Response(JSON.stringify({ error: "No storage path" }), {
           status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       }
 
-      const sourceType = (fileRecord as any).analysis_requests?.source_type;
-      const bucket = sourceType === "manual_upload" ? "uploaded-drawings" : "drive-analysis-files";
-
       const { data: fileData, error: downloadError } = await adminSupabase.storage
-        .from(bucket)
-        .download(storagePath);
+        .from(bucket).download(storagePath);
 
       if (downloadError || !fileData) {
+        if (sheetRecord) {
+          await adminSupabase.from("analysis_request_sheets")
+            .update({ extract_status: "failed", extract_error: downloadError?.message || "download" })
+            .eq("id", sheetRecord.id);
+        }
         return new Response(JSON.stringify({ error: `Download failed: ${downloadError?.message}` }), {
           status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       }
 
       let extractedText = "";
+      let extractError: string | null = null;
       try {
         const arrayBuffer = await fileData.arrayBuffer();
         const parsed = await pdfParse(Buffer.from(arrayBuffer));
         extractedText = parsed.text || "";
-      } catch (e) {
-        console.error(`[triage] pdf-parse failed for file ${fileId}:`, e);
+      } catch (e: any) {
+        console.error(`[triage] pdf-parse failed for ${targetTable} ${target.id}:`, e);
         extractedText = "";
+        extractError = e?.message || String(e);
       }
 
-      // Cache in DB
-      await adminSupabase.from("analysis_request_files")
-        .update({ extracted_text: extractedText })
-        .eq("id", fileId);
-
-      console.log(`[triage] Extracted text for file ${fileId} (${extractedText.length} chars)`);
+      if (sheetRecord) {
+        await adminSupabase.from("analysis_request_sheets")
+          .update({
+            extracted_text: extractedText,
+            extract_status: extractError ? "failed" : "extracted",
+            extract_error: extractError,
+          })
+          .eq("id", sheetRecord.id);
+      } else {
+        await adminSupabase.from("analysis_request_files")
+          .update({ extracted_text: extractedText })
+          .eq("id", fileRecord.id);
+      }
 
       return new Response(JSON.stringify({
-        status: "extracted",
-        fileId,
-        textLength: extractedText.length,
-        cached: false,
-      }), {
-        status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+        status: "extracted", textLength: extractedText.length, cached: false,
+      }), { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
 
     // ========== ACTION: TRIAGE (default) ==========
@@ -183,20 +209,15 @@ Deno.serve(async (req) => {
         status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
-
     if (!openaiApiKey) {
       return new Response(JSON.stringify({ error: "OPENAI_API_KEY not configured" }), {
         status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
-    // Run-id guard: skip if a newer run is now active for this request
     if (analysisRunId) {
       const { data: curReq } = await adminSupabase
-        .from("analysis_requests")
-        .select("analysis_run_id")
-        .eq("id", analysisRequestId)
-        .single();
+        .from("analysis_requests").select("analysis_run_id").eq("id", analysisRequestId).single();
       if ((curReq as any)?.analysis_run_id && (curReq as any).analysis_run_id !== analysisRunId) {
         return new Response(JSON.stringify({ error: "Superseded by a newer analysis run", currentRunId: (curReq as any).analysis_run_id }), {
           status: 409, headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -204,78 +225,96 @@ Deno.serve(async (req) => {
       }
     }
 
-    // Upsert triage result as processing
-    await adminSupabase.from("analysis_triage_results").upsert({
-      analysis_request_id: analysisRequestId,
-      analysis_run_id: analysisRunId ?? null,
-      file_id: fileId,
-      awp_class_name: awpClassName,
-      status: "processing",
-    }, { onConflict: "analysis_request_id,file_id,awp_class_name" });
+    // Resolve parent file id (always set so legacy joins keep working)
+    const parentFileId = sheetRecord ? sheetRecord.parent_file_id : fileRecord.id;
+    const triageKey = sheetRecord
+      ? { analysis_request_id: analysisRequestId, sheet_id: sheetRecord.id, awp_class_name: awpClassName }
+      : { analysis_request_id: analysisRequestId, file_id: parentFileId, awp_class_name: awpClassName };
 
-    // Get cached extracted text
-    let extractedText = fileRecord.extracted_text as string | null;
+    // Upsert triage row as processing
+    if (sheetRecord) {
+      await adminSupabase.from("analysis_triage_results").upsert({
+        analysis_request_id: analysisRequestId,
+        analysis_run_id: analysisRunId ?? null,
+        file_id: parentFileId,
+        sheet_id: sheetRecord.id,
+        awp_class_name: awpClassName,
+        status: "processing",
+      }, { onConflict: "analysis_request_id,sheet_id,awp_class_name" });
+    } else {
+      await adminSupabase.from("analysis_triage_results").upsert({
+        analysis_request_id: analysisRequestId,
+        analysis_run_id: analysisRunId ?? null,
+        file_id: parentFileId,
+        awp_class_name: awpClassName,
+        status: "processing",
+      }, { onConflict: "analysis_request_id,file_id,awp_class_name" });
+    }
 
-    // If not cached, extract now (fallback — Phase 1 should have done this)
+    // Get extracted text from sheet or file. If missing, extract now (fallback).
+    const sourceUnit = sheetRecord || fileRecord;
+    let extractedText: string | null = sourceUnit.extracted_text ?? null;
     if (extractedText === null || extractedText === undefined) {
-      const storagePath = fileRecord.storage_path as string | null;
+      const storagePath = sourceUnit.storage_path as string | null;
       if (storagePath) {
-        const sourceType = (fileRecord as any).analysis_requests?.source_type;
-        const bucket = sourceType === "manual_upload" ? "uploaded-drawings" : "drive-analysis-files";
         const { data: fileData } = await adminSupabase.storage.from(bucket).download(storagePath);
         if (fileData) {
           try {
             const arrayBuffer = await fileData.arrayBuffer();
             const parsed = await pdfParse(Buffer.from(arrayBuffer));
             extractedText = parsed.text || "";
-          } catch {
-            extractedText = "";
+          } catch { extractedText = ""; }
+          if (sheetRecord) {
+            await adminSupabase.from("analysis_request_sheets")
+              .update({ extracted_text: extractedText, extract_status: "extracted" })
+              .eq("id", sheetRecord.id);
+          } else {
+            await adminSupabase.from("analysis_request_files")
+              .update({ extracted_text: extractedText }).eq("id", fileRecord.id);
           }
-          await adminSupabase.from("analysis_request_files")
-            .update({ extracted_text: extractedText })
-            .eq("id", fileId);
         }
       }
       if (extractedText === null) extractedText = "";
     }
 
-    // Build triage prompt
-    const fileName = fileRecord.name as string;
-    const displayName = drawingName || fileName;
+    const sheetLabel = sheetRecord
+      ? `${fileRecord?.name ?? "document"} — Page ${sheetRecord.page_index}`
+      : (drawingName || fileRecord.name);
+
+    const roleInstructions = `
+
+You are evaluating a SINGLE construction drawing sheet (one page).
+
+In addition to the relevance score, classify the sheet's role for this AWP class with EXACTLY one of:
+  - "analysis_sheet": Contains the actual installed / designed instances of this class (this is what we want to count).
+  - "context_sheet": Supports interpretation but does not contain countable instances (e.g. legends, schedules, riser diagrams, key plans, abbreviation lists, drawing lists, cover sheets when they enumerate equipment).
+  - "irrelevant": Belongs to another discipline / unrelated to this class.
+
+Drawing lists, legends, schedules and risers are NEVER analysis_sheet.
+
+Return ONLY valid JSON: {"score":0,"reason":"...","sheet_role":"analysis_sheet|context_sheet|irrelevant"}`;
 
     let triagePrompt: string;
-
     if (promptContent) {
       triagePrompt = `${promptContent}
 
-Drawing file name: ${displayName}
+Drawing sheet: ${sheetLabel}
 
-Extracted text from PDF:
+Extracted text from this sheet:
 ${(extractedText || "(no text extracted)").slice(0, 10000)}
-
-Return ONLY valid JSON: {"score":0,"confidence":0,"reason":"","evidence":[]}`;
+${roleInstructions}`;
     } else {
-      triagePrompt = `You are helping triage construction drawing files based on whether a critical asset or water system might be present in the file for deeper analysis.
+      triagePrompt = `You are helping triage construction drawing sheets based on whether a critical asset or water system might be present in the sheet for deeper analysis.
 
-Estimate how likely this drawing file is to contain evidence of: ${awpClassName}
+Estimate how likely this drawing sheet is to contain evidence of: ${awpClassName}
 
-Drawing file name:
-${displayName}
+Drawing sheet: ${sheetLabel}
 
 Quick text extracted from the PDF:
 ${(extractedText || "(no text extracted)").slice(0, 10000)}
-
-Scoring guidance:
-- Use filename and extracted text only
-- Be conservative
-- High scores require direct clues
-- Low scores should be used if the file appears to belong to another discipline or system
-- If the evidence is weak or ambiguous, return a middling score rather than a high score
-
-Return ONLY valid JSON: {"score": 0, "reason": "explanation under 100 words"}`;
+${roleInstructions}`;
     }
 
-    // Retry on transient 5xx / network errors (OpenAI 502/503/504 are common)
     let triageResponse: Response | null = null;
     let lastErr = "";
     const TRIAGE_MAX_ATTEMPTS = 3;
@@ -283,34 +322,22 @@ Return ONLY valid JSON: {"score": 0, "reason": "explanation under 100 words"}`;
       try {
         triageResponse = await fetch("https://api.openai.com/v1/responses", {
           method: "POST",
-          headers: {
-            Authorization: `Bearer ${openaiApiKey}`,
-            "Content-Type": "application/json",
-          },
+          headers: { Authorization: `Bearer ${openaiApiKey}`, "Content-Type": "application/json" },
           body: JSON.stringify({
             model: model || "gpt-5-nano",
             input: [
-              {
-                type: "message",
-                role: "system",
-                content: [{ type: "input_text", text: "You are a construction drawing triage assistant. Follow ALL instructions in the user's prompt precisely, including any exclusion rules. If the prompt says to exclude certain items, do NOT count them as evidence. Score strictly based on what the prompt asks for." }],
-              },
-              {
-                type: "message",
-                role: "user",
-                content: [{ type: "input_text", text: triagePrompt }],
-              },
+              { type: "message", role: "system",
+                content: [{ type: "input_text", text: "You are a construction drawing triage assistant. Follow ALL instructions in the user's prompt precisely, including any exclusion rules and the sheet_role classification. Score strictly based on what the prompt asks for." }] },
+              { type: "message", role: "user",
+                content: [{ type: "input_text", text: triagePrompt }] },
             ],
           }),
         });
         if (triageResponse.ok) break;
-        // Retry on 5xx and 429; bail on 4xx (client errors)
         if (triageResponse.status >= 500 || triageResponse.status === 429) {
           lastErr = `HTTP ${triageResponse.status}`;
           if (attempt < TRIAGE_MAX_ATTEMPTS) {
-            const delay = Math.pow(2, attempt) * 1000;
-            console.warn(`[triage] OpenAI ${lastErr}, retrying in ${delay}ms (attempt ${attempt}/${TRIAGE_MAX_ATTEMPTS})`);
-            await new Promise((r) => setTimeout(r, delay));
+            await new Promise((r) => setTimeout(r, Math.pow(2, attempt) * 1000));
             continue;
           }
         }
@@ -318,23 +345,28 @@ Return ONLY valid JSON: {"score": 0, "reason": "explanation under 100 words"}`;
       } catch (netErr) {
         lastErr = netErr instanceof Error ? netErr.message : String(netErr);
         if (attempt < TRIAGE_MAX_ATTEMPTS) {
-          const delay = Math.pow(2, attempt) * 1000;
-          console.warn(`[triage] network error: ${lastErr}, retrying in ${delay}ms (attempt ${attempt}/${TRIAGE_MAX_ATTEMPTS})`);
-          await new Promise((r) => setTimeout(r, delay));
+          await new Promise((r) => setTimeout(r, Math.pow(2, attempt) * 1000));
           continue;
         }
         triageResponse = null;
       }
     }
 
+    const failTriage = async (msg: string) => {
+      const upd = { status: "failed", error_message: msg };
+      let q = adminSupabase.from("analysis_triage_results").update(upd as any)
+        .eq("analysis_request_id", analysisRequestId)
+        .eq("awp_class_name", awpClassName);
+      if (sheetRecord) q = q.eq("sheet_id", sheetRecord.id);
+      else q = q.eq("file_id", parentFileId);
+      await q;
+    };
+
     if (!triageResponse || !triageResponse.ok) {
       const errText = triageResponse ? await triageResponse.text() : lastErr;
       const status = triageResponse?.status ?? 0;
-      console.error(`[triage] OpenAI triage call failed after retries: ${errText}`);
-      await adminSupabase.from("analysis_triage_results").update({
-        status: "failed",
-        error_message: `Triage API failed: ${status || "network error"}`,
-      }).eq("file_id", fileId).eq("analysis_request_id", analysisRequestId).eq("awp_class_name", awpClassName);
+      console.error(`[triage] OpenAI failed: ${errText}`);
+      await failTriage(`Triage API failed: ${status || "network error"}`);
       return new Response(JSON.stringify({ error: "Triage failed" }), {
         status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
@@ -343,81 +375,84 @@ Return ONLY valid JSON: {"score": 0, "reason": "explanation under 100 words"}`;
     const triageResult = await triageResponse.json();
     const usage = triageResult.usage || {};
 
-    // Extract response text
     let responseText = "";
     if (triageResult.output) {
       for (const item of triageResult.output) {
         if (item.type === "message" && item.content) {
-          for (const content of item.content) {
-            if (content.type === "output_text") {
-              responseText += content.text;
-            }
+          for (const c of item.content) {
+            if (c.type === "output_text") responseText += c.text;
           }
         }
       }
     }
 
-    // Parse JSON response
     let score = 0;
     let reason = "";
+    let sheetRole: string | null = null;
     try {
-      const jsonMatch = responseText.match(/\{[\s\S]*\}/);
-      if (jsonMatch) {
-        const parsed = JSON.parse(jsonMatch[0]);
-        let rawScore = parseFloat(parsed.score) || 0;
-        if (rawScore > 0 && rawScore <= 1) rawScore = Math.round(rawScore * 100);
-        score = Math.max(0, Math.min(100, Math.round(rawScore)));
+      const m = responseText.match(/\{[\s\S]*\}/);
+      if (m) {
+        const parsed = JSON.parse(m[0]);
+        let raw = parseFloat(parsed.score) || 0;
+        if (raw > 0 && raw <= 1) raw = Math.round(raw * 100);
+        score = Math.max(0, Math.min(100, Math.round(raw)));
         reason = parsed.reason || "";
+        const r = (parsed.sheet_role || "").toString().toLowerCase().trim();
+        if (r === "analysis_sheet" || r === "context_sheet" || r === "irrelevant") {
+          sheetRole = r;
+        }
       }
     } catch (e) {
-      console.error(`[triage] Failed to parse triage response: ${responseText}`);
+      console.error(`[triage] parse failed: ${responseText}`);
       reason = "Could not parse AI response";
     }
 
-    // Update triage result
-    await adminSupabase.from("analysis_triage_results").update({
-      status: "complete",
-      score,
-      reason,
-    }).eq("file_id", fileId).eq("analysis_request_id", analysisRequestId).eq("awp_class_name", awpClassName);
+    // Default sheet_role from score if model didn't return one (legacy/file-level mode also benefits)
+    if (sheetRole === null) {
+      sheetRole = score >= 50 ? "analysis_sheet" : "irrelevant";
+    }
 
-    console.log(`[triage] Complete: file=${fileName}, class=${awpClassName}, score=${score}, reason=${reason}`);
+    const updatePatch: Record<string, unknown> = {
+      status: "complete", score, reason, sheet_role: sheetRole,
+    };
+    let q = adminSupabase.from("analysis_triage_results").update(updatePatch as any)
+      .eq("analysis_request_id", analysisRequestId)
+      .eq("awp_class_name", awpClassName);
+    if (sheetRecord) q = q.eq("sheet_id", sheetRecord.id);
+    else q = q.eq("file_id", parentFileId);
+    await q;
+
+    console.log(`[triage] Complete: ${sheetLabel} class=${awpClassName} score=${score} role=${sheetRole}`);
 
     return new Response(JSON.stringify({
-      status: "complete",
-      score,
-      reason,
-      instances: null,
-      fileId,
-      awpClassName,
+      status: "complete", score, reason, sheet_role: sheetRole, instances: null,
+      fileId: parentFileId, sheetId: sheetRecord?.id ?? null, awpClassName,
       usage: {
         input_tokens: usage.input_tokens || 0,
         output_tokens: usage.output_tokens || 0,
         total_tokens: usage.total_tokens || 0,
       },
-    }), {
-      status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" },
-    });
+    }), { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } });
   } catch (error) {
     console.error("[triage] Unhandled error:", error);
-    // Best-effort: reconcile any "processing" triage row to "failed" so the
-    // UI doesn't show a permanent spinner. Use a fresh admin client since
-    // earlier scope may not be available depending on where the error fired.
     try {
       const supabaseUrl = Deno.env.get("SUPABASE_URL");
       const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
       if (supabaseUrl && supabaseServiceKey) {
         const body = await req.clone().json().catch(() => ({} as any));
-        const { analysisRequestId, fileId, awpClassName } = body || {};
-        if (analysisRequestId && fileId && awpClassName) {
+        const { analysisRequestId, fileId, sheetId, awpClassName } = body || {};
+        if (analysisRequestId && awpClassName && (fileId || sheetId)) {
           const adminFix = createClient(supabaseUrl, supabaseServiceKey);
-          await adminFix.from("analysis_triage_results").update({
+          let q = adminFix.from("analysis_triage_results").update({
             status: "failed",
             error_message: `Triage crashed: ${error instanceof Error ? error.message : String(error)}`.slice(0, 1000),
-          }).eq("analysis_request_id", analysisRequestId)
-            .eq("file_id", fileId)
+          } as any)
+            .eq("analysis_request_id", analysisRequestId)
             .eq("awp_class_name", awpClassName)
             .eq("status", "processing");
+          if (sheetId) q = q.eq("sheet_id", sheetId);
+          else q = q.eq("file_id", fileId);
+          await q;
         }
       }
     } catch (cleanupErr) {
