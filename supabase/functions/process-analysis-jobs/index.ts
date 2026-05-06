@@ -642,6 +642,21 @@ async function runSplitPdfChunk(
   const pageFrom: number = Number.isInteger(job.page_from) ? job.page_from : 0;
   const pageTo: number = Number.isInteger(job.page_to) ? job.page_to : pageFrom;
 
+  // Honor stop-requested before doing any work
+  const { data: reqStop } = await admin
+    .from("analysis_requests")
+    .select("pipeline_stop_requested")
+    .eq("id", job.analysis_request_id)
+    .single();
+  if ((reqStop as any)?.pipeline_stop_requested) {
+    await updateJobGuarded(admin, job, {
+      status: "cancelled",
+      completed_at: new Date().toISOString(),
+      error_message: "Cancelled by user stop request",
+    });
+    return;
+  }
+
   console.log(
     `[split] job=${job.id} parent=${parentFileId} pages=${pageFrom}..${pageTo}`,
   );
