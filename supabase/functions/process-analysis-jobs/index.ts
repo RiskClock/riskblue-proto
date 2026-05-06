@@ -1055,6 +1055,45 @@ async function runTriageJob(
       // Live progress (counts terminal triage jobs for this run)
       await updateTriageProgress(admin, job.analysis_request_id, job.analysis_run_id);
 
+      // Bulk short-circuit: if this triage just hit >=100, mark all sibling
+      // pending triage jobs (same request + file + class) as complete so we
+      // don't burn through the queue page-by-page.
+      try {
+        const { data: hit } = await admin
+          .from("analysis_triage_results")
+          .select("score")
+          .eq("analysis_request_id", job.analysis_request_id)
+          .eq("file_id", job.file_id)
+          .eq("awp_class_name", job.awp_class_name)
+          .eq("status", "complete")
+          .gte("score", 100)
+          .limit(1)
+          .maybeSingle();
+        if (hit) {
+          let q = admin
+            .from("analysis_pipeline_jobs")
+            .update({
+              status: "complete",
+              completed_at: new Date().toISOString(),
+              error_message: "Short-circuited: sibling sheet scored >=100",
+            } as any)
+            .eq("analysis_request_id", job.analysis_request_id)
+            .eq("file_id", job.file_id)
+            .eq("awp_class_name", job.awp_class_name)
+            .eq("job_type", "triage")
+            .eq("status", "pending");
+          if (job.analysis_run_id) q = q.eq("analysis_run_id", job.analysis_run_id);
+          const { data: updated, error: bulkErr } = await q.select("id");
+          const n = updated?.length ?? 0;
+          if (!bulkErr && n > 0) {
+            console.log(`[worker][triage] short-circuited ${n} sibling jobs for file=${job.file_id} class=${job.awp_class_name}`);
+            await updateTriageProgress(admin, job.analysis_request_id, job.analysis_run_id);
+          }
+        }
+      } catch (e) {
+        console.warn(`[worker][triage] bulk short-circuit failed (non-fatal): ${(e as any)?.message || e}`);
+      }
+
       if (tokens && tokens > 0) {
         const { data: cur } = await admin
           .from("analysis_requests")
