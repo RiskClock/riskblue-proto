@@ -1,0 +1,1 @@
+ALTER TABLE public.analysis_requests ALTER COLUMN sheet_normalization_enabled SET DEFAULT true;
