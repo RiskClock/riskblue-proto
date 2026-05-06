@@ -1428,13 +1428,14 @@ export function AnalysisSection({ requestId, files, projectId, sourceType, isWMS
     return m;
   }, [sheetStatusData]);
 
-  // Refresh extraction badges when pipeline phase transitions OUT of "extracting"
+  // Refresh extraction badges on every pipeline phase transition (not only out of "extracting").
+  // This ensures non-sheet-mode runs get the Processed badge once extract completes.
   useEffect(() => {
     const currentPhase = (requestMeta as any)?.pipeline_phase as string | null;
     const prev = prevPipelinePhaseRef.current;
     prevPipelinePhaseRef.current = currentPhase;
 
-    if (prev === "extracting" && currentPhase !== "extracting" && requestId) {
+    if (prev !== currentPhase && requestId) {
       supabase
         .from("analysis_request_files")
         .select("id")
@@ -1445,6 +1446,30 @@ export function AnalysisSection({ requestId, files, projectId, sourceType, isWMS
         });
     }
   }, [(requestMeta as any)?.pipeline_phase, requestId]);
+
+  // Realtime: keep extractedFileIds fresh as parent files get extracted_text written.
+  useEffect(() => {
+    if (!requestId) return;
+    const channel: RealtimeChannel = supabase
+      .channel(`analysis-files-extracted-${requestId}`)
+      .on(
+        "postgres_changes",
+        { event: "UPDATE", schema: "public", table: "analysis_request_files", filter: `analysis_request_id=eq.${requestId}` },
+        (payload: any) => {
+          const row = payload?.new;
+          if (row?.id && row?.extracted_text) {
+            setExtractedFileIds((prev) => {
+              if (prev.has(row.id)) return prev;
+              const next = new Set(prev);
+              next.add(row.id);
+              return next;
+            });
+          }
+        },
+      )
+      .subscribe();
+    return () => { supabase.removeChannel(channel); };
+  }, [requestId]);
 
   const savedSummaryData = useMemo(() => {
     return (requestMeta?.summary_data as unknown as Record<string, SummarizedInstance[]>) || {};
