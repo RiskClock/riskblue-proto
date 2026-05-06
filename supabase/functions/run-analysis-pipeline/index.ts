@@ -692,12 +692,14 @@ Deno.serve(async (req) => {
     const body = await req.json();
     const {
       analysisRequestId,
+      action,
       enabledAwpClasses,
       triageModel,
       analyzeModel,
       phaseOverride,
     } = body as {
       analysisRequestId: string;
+      action?: string;
       enabledAwpClasses?: string[];
       triageModel?: string;
       analyzeModel?: string;
@@ -713,7 +715,7 @@ Deno.serve(async (req) => {
     // Verify analysis request exists and user has access
     const { data: request, error: reqErr } = await admin
       .from("analysis_requests")
-      .select("project_id, user_id, status")
+      .select("project_id, user_id, status, disabled_awp_classes")
       .eq("id", analysisRequestId)
       .single();
 
@@ -729,6 +731,45 @@ Deno.serve(async (req) => {
       if (!project || (project as any).user_id !== userId) {
         return json({ error: "Access denied" }, 403);
       }
+    }
+
+    if (action === "stop") {
+      const stopPatch = {
+        status: "cancelled",
+        completed_at: new Date().toISOString(),
+        error_message: "Cancelled by user stop request",
+      } as any;
+      await admin
+        .from("analysis_requests")
+        .update({ pipeline_stop_requested: true } as any)
+        .eq("id", analysisRequestId);
+      await admin
+        .from("analysis_pipeline_jobs")
+        .update(stopPatch)
+        .eq("analysis_request_id", analysisRequestId)
+        .in("status", ["pending", "processing"]);
+      await admin
+        .from("analysis_triage_results")
+        .update({ status: "failed", reason: "Cancelled by user stop request", error_message: "Cancelled by user stop request" } as any)
+        .eq("analysis_request_id", analysisRequestId)
+        .in("status", ["queued", "pending", "processing"]);
+      await admin
+        .from("analysis_results")
+        .update({ status: "failed", error_message: "Cancelled by user stop request" } as any)
+        .eq("analysis_request_id", analysisRequestId)
+        .eq("status", "processing");
+      await admin
+        .from("analysis_requests")
+        .update({
+          status: "started",
+          pipeline_phase: null,
+          pipeline_stop_requested: false,
+          pipeline_progress_done: 0,
+          pipeline_progress_total: 0,
+          error_message: "Stopped by user",
+        } as any)
+        .eq("id", analysisRequestId);
+      return json({ status: "stopped", analysisRequestId });
     }
 
     // For internal worker re-invocations (summarize phase), use the service key
@@ -882,6 +923,7 @@ Deno.serve(async (req) => {
       userToken,
       analysisRequestId,
       enabledAwpClasses,
+      disabledAwpClasses: (request as any)?.disabled_awp_classes,
       triageModel: triageModel || "gpt-5-nano",
       analyzeModel: analyzeModel || "gpt-5-mini",
       phaseOverride,
@@ -916,6 +958,7 @@ interface PipelineParams {
   userToken: string;
   analysisRequestId: string;
   enabledAwpClasses?: string[];
+  disabledAwpClasses?: unknown;
   triageModel: string;
   analyzeModel: string;
   phaseOverride?: string;
@@ -930,6 +973,7 @@ async function runPipeline(params: PipelineParams) {
     userToken,
     analysisRequestId,
     enabledAwpClasses,
+    disabledAwpClasses,
     triageModel,
     analyzeModel,
     phaseOverride,
@@ -976,6 +1020,13 @@ async function runPipeline(params: PipelineParams) {
       }
       const allowed = new Set(enabledAwpClasses);
       prompts = drawingDetectable.filter((p: any) => allowed.has(p.awp_class_name));
+    } else if (Array.isArray(disabledAwpClasses)) {
+      const disabled = new Set(disabledAwpClasses.filter((v): v is string => typeof v === "string"));
+      prompts = drawingDetectable.filter((p: any) => !disabled.has(p.awp_class_name));
+      if (prompts.length === 0) {
+        await markNoEligibleDrawings(admin, analysisRequestId, activeRunId);
+        return;
+      }
     } else {
       // Fallback: no filtering (legacy callers)
       prompts = drawingDetectable;

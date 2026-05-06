@@ -1249,7 +1249,7 @@ export function AnalysisSection({ requestId, files, projectId, sourceType, isWMS
       analyzeTokensRef.current = at;
     }
     const disabled = (requestMeta as any).disabled_awp_classes as string[] | null;
-    if (disabled && disabled.length > 0) {
+    if (Array.isArray(disabled)) {
       setDisabledColumns(new Set(disabled));
       setDisabledDefaultsApplied(true);
     }
@@ -1740,7 +1740,7 @@ export function AnalysisSection({ requestId, files, projectId, sourceType, isWMS
     if (disabledDefaultsApplied) return;
     if (!requestMeta) return;
     const persisted = (requestMeta as any).disabled_awp_classes as string[] | null;
-    if (persisted && persisted.length > 0) return;
+    if (Array.isArray(persisted)) return;
     if (!sortedPrompts || sortedPrompts.length === 0) return;
     const namesPresent = sortedPrompts
       .map((p) => p.awp_class_name)
@@ -1800,7 +1800,7 @@ export function AnalysisSection({ requestId, files, projectId, sourceType, isWMS
     try {
       // Compute enabledAwpClasses as the single source of truth
       const enabledAwpClasses = sortedPrompts
-        .filter(p => !disabledColumns.has(p.awp_class_name))
+        .filter(p => !disabledColumnsRef.current.has(p.awp_class_name))
         .map(p => p.awp_class_name);
 
       const response = await supabase.functions.invoke("run-analysis-pipeline", {
@@ -1877,6 +1877,7 @@ export function AnalysisSection({ requestId, files, projectId, sourceType, isWMS
   const handleWmsvStop = async () => {
     setAnalyzeV2Stopping(true);
     try {
+      requestState.clearLocalStart();
       queryClient.setQueryData(["analysis-request-row", requestId], (old: any) => (
         old ? { ...old, pipeline_stop_requested: true } : old
       ));
@@ -1884,45 +1885,23 @@ export function AnalysisSection({ requestId, files, projectId, sourceType, isWMS
         ...(old || {}),
         pipeline_stop_requested: true,
       }));
-      await supabase
-        .from("analysis_requests")
-        .update({ pipeline_stop_requested: true } as any)
-        .eq("id", requestId);
-      // Cancel any pending OR processing pipeline jobs.
-      await (supabase as any)
-        .from("analysis_pipeline_jobs")
-        .update({
-          status: "cancelled",
-          completed_at: new Date().toISOString(),
-          error_message: "Cancelled by user stop request",
-        })
-        .eq("analysis_request_id", requestId)
-        .in("status", ["pending", "processing"]);
-      // Cancel any in-flight triage rows so triageActive drops to 0 and
-      // the derived UI state can leave "triaging".
-      await (supabase as any)
-        .from("analysis_triage_results")
-        .update({
-          status: "failed",
-          reason: "Cancelled by user stop request",
-        })
-        .eq("analysis_request_id", requestId)
-        .in("status", ["queued", "pending", "processing"]);
-      // Always reset the request row regardless of phase so the spinner
-      // exits immediately. The worker's next finalize pass is a no-op.
-      await (supabase as any)
-        .from("analysis_requests")
-        .update({
-          status: "started",
-          pipeline_phase: null,
-          pipeline_stop_requested: false,
-          pipeline_progress_done: 0,
-          pipeline_progress_total: 0,
-          error_message: "Stopped by user",
-        })
-        .eq("id", requestId);
-      queryClient.invalidateQueries({ queryKey: ["analysis-request-row", requestId] });
-      queryClient.invalidateQueries({ queryKey: ["analysis-counts", requestId] });
+      const response = await supabase.functions.invoke("run-analysis-pipeline", {
+        body: { analysisRequestId: requestId, action: "stop" },
+      });
+      if (response.error) throw new Error(response.error.message);
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["analysis-request-row", requestId] }),
+        queryClient.invalidateQueries({ queryKey: ["analysis-request-meta", requestId] }),
+        queryClient.invalidateQueries({ queryKey: ["analysis-counts", requestId] }),
+        queryClient.invalidateQueries({ queryKey: ["triage-results", requestId] }),
+        queryClient.invalidateQueries({ queryKey: ["analysis-results", requestId] }),
+      ]);
+    } catch (error) {
+      toast({
+        title: "Stop failed",
+        description: (error as any)?.message ?? "Could not stop analysis",
+        variant: "destructive",
+      });
     } finally {
       setAnalyzeV2Stopping(false);
     }
@@ -2230,6 +2209,7 @@ export function AnalysisSection({ requestId, files, projectId, sourceType, isWMS
       } else {
         next.add(awpClassName);
       }
+      disabledColumnsRef.current = next;
       // Persist to DB
       supabase
         .from("analysis_requests")
