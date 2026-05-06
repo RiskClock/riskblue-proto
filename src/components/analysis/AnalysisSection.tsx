@@ -3455,11 +3455,7 @@ export function AnalysisSection({ requestId, files, projectId, sourceType, isWMS
   // Freeze the visible counter at last non-zero values during phase transitions
   // (e.g. extracting → triaging briefly reports 0/0 before the next phase
   // initializes its totals). Counter resets when the run starts or stops.
-  const lastCounterRef = useRef<{ done: number; total: number; phase: string | null }>({
-    done: 0,
-    total: 0,
-    phase: null,
-  });
+  // (lastCounterRef declared above the early return to keep hook order stable.)
   if (pipelineRunning) {
     if (rawPipelineTotal > 0) {
       lastCounterRef.current = { done: rawPipelineDone, total: rawPipelineTotal, phase: pipelinePhase };
