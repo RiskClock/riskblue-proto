@@ -1157,13 +1157,30 @@ export function AnalysisSection({ requestId, files, projectId, sourceType, isWMS
     })() as number | false,
   });
 
-  // Hydrate triage results into map (always sync from DB; backend-driven runs
-  // leave the local triageRunning flag false, so gating on it dropped updates).
+  // Hydrate triage results into map. In sheet-normalized mode there is one
+  // triage row per (file, class, sheet) — we collapse to the MAX score per
+  // (file, class) so a single high-scoring page keeps the cell highlighted
+  // even if other pages of the same file score low. The MAX represents the
+  // strongest evidence that the file is worth a deep Phase-3 analysis.
   useEffect(() => {
     if (!triageData) return;
     const map = new Map<string, TriageResult>();
     for (const r of triageData) {
-      map.set(`${r.file_id}_${r.awp_class_name}`, r);
+      const key = `${r.file_id}_${r.awp_class_name}`;
+      const existing = map.get(key);
+      const existingScore = existing?.score ?? -1;
+      const newScore = r.score ?? -1;
+      // Prefer 'complete' rows over pending/queued/processing; among completes
+      // prefer the higher score; preserve highest 'instances' as a tiebreaker.
+      const existingRank = existing?.status === "complete" ? 1 : 0;
+      const newRank = r.status === "complete" ? 1 : 0;
+      if (
+        !existing ||
+        newRank > existingRank ||
+        (newRank === existingRank && newScore > existingScore)
+      ) {
+        map.set(key, r);
+      }
     }
     setTriageResults(map);
   }, [triageData]);
