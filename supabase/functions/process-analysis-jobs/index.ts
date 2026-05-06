@@ -210,7 +210,7 @@ async function runJob(
 
   try {
     const controller = new AbortController();
-    const timeoutMs = Math.max(15_000, Math.min(remainingMs - 5_000, 45_000));
+    const timeoutMs = Math.max(15_000, Math.min(remainingMs - 5_000, 300_000));
     const timer = setTimeout(() => controller.abort(), timeoutMs);
 
     const res = await fetch(url, {
@@ -979,7 +979,7 @@ async function runTriageJob(
 
   try {
     const controller = new AbortController();
-    const timeoutMs = Math.max(15_000, Math.min(remainingMs - 5_000, 60_000));
+    const timeoutMs = Math.max(15_000, Math.min(remainingMs - 5_000, 300_000));
     const timer = setTimeout(() => controller.abort(), timeoutMs);
 
     const res = await fetch(url, {
