@@ -735,6 +735,38 @@ async function runPipeline(params: PipelineParams) {
         .eq("id", analysisRequestId);
     }
 
+    // ======================== PHASE 0: SPLIT (sheet normalization v1) ========================
+    // Behind feature flag analysis_requests.sheet_normalization_enabled.
+    // Counts pages per parent PDF, enqueues bounded split_pdf_chunk jobs so the
+    // worker normalizes parents into single-page sheets. Idempotent — re-running
+    // upserts on (parent_file_id, page_index) and skips parents already 'split'.
+    if (!phaseOverride || phaseOverride === "extract" || phaseOverride === "split") {
+      try {
+        const { data: reqRow } = await admin
+          .from("analysis_requests")
+          .select("sheet_normalization_enabled, source_type")
+          .eq("id", analysisRequestId)
+          .single();
+        const flagOn = !!(reqRow as any)?.sheet_normalization_enabled;
+        const sourceType = (reqRow as any)?.source_type;
+        if (flagOn) {
+          await runSplitPhase({
+            admin,
+            analysisRequestId,
+            activeRunId,
+            sourceType,
+            files: files as any[],
+          });
+          if (await shouldStop(admin, analysisRequestId)) {
+            await handleStopped();
+            return;
+          }
+        }
+      } catch (e) {
+        console.error("[pipeline] SPLIT phase error (non-fatal, continuing):", e);
+      }
+    }
+
     // ======================== PHASE 1: EXTRACT ========================
     if (runPhase("extract")) {
       console.log(
