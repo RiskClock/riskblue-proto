@@ -1083,9 +1083,10 @@ async function runTriageJob(
             .eq("job_type", "triage")
             .eq("status", "pending");
           if (job.analysis_run_id) q = q.eq("analysis_run_id", job.analysis_run_id);
-          const { error: bulkErr, count } = await q.select("id", { count: "exact", head: true });
-          if (!bulkErr && (count ?? 0) > 0) {
-            console.log(`[worker][triage] short-circuited ${count} sibling jobs for file=${job.file_id} class=${job.awp_class_name}`);
+          const { data: updated, error: bulkErr } = await q.select("id");
+          const n = updated?.length ?? 0;
+          if (!bulkErr && n > 0) {
+            console.log(`[worker][triage] short-circuited ${n} sibling jobs for file=${job.file_id} class=${job.awp_class_name}`);
             await updateTriageProgress(admin, job.analysis_request_id, job.analysis_run_id);
           }
         }
