@@ -1330,7 +1330,6 @@ async function runPipeline(params: PipelineParams) {
       await runIntegrityCheck(admin, analysisRequestId, activeRunId);
       await safeWriteComplete(admin, analysisRequestId, activeRunId);
     }
-    }
 
     // Completion email (after summary so it can include deduped counts)
     try {
