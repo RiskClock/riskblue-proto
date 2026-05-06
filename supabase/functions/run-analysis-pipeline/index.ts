@@ -629,6 +629,7 @@ async function runSplitPhase(params: {
       } as any)
       .eq("id", analysisRequestId);
     throw new Error(msg);
+  }
 
   // Final summary
   const { data: finalRows } = await admin
