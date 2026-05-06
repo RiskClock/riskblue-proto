@@ -739,7 +739,17 @@ Deno.serve(async (req) => {
     // any destructive cleanup. If claim fails we abort and leave prior data
     // intact. (Per Phase B note #1.)
     let activeRunId: string | null = null;
-    if (phaseOverride !== "summarize") {
+    if (phaseOverride === "summarize" || phaseOverride === "analyze") {
+      // Re-invocation continuing an existing run (summarize after analyze, or
+      // analyze after triage finalize). Preserve current analysis_run_id so
+      // results stamped under the previous phase remain visible.
+      const { data: cur } = await admin
+        .from("analysis_requests")
+        .select("analysis_run_id")
+        .eq("id", analysisRequestId)
+        .single();
+      activeRunId = (cur as any)?.analysis_run_id ?? null;
+    } else {
       activeRunId = crypto.randomUUID();
       const { error: claimErr } = await admin
         .from("analysis_requests")
@@ -758,14 +768,6 @@ Deno.serve(async (req) => {
         console.error("[pipeline] Run claim failed:", claimErr);
         return json({ error: "Failed to claim analysis run" }, 500);
       }
-    } else {
-      // Summarize re-invocation: read current run_id so summarize jobs guard against it.
-      const { data: cur } = await admin
-        .from("analysis_requests")
-        .select("analysis_run_id")
-        .eq("id", analysisRequestId)
-        .single();
-      activeRunId = (cur as any)?.analysis_run_id ?? null;
     }
 
     // ---- Phase-aware cleanup, scoped to PRIOR runs only (run_id IS NULL OR <> activeRunId)
@@ -1076,120 +1078,132 @@ async function runPipeline(params: PipelineParams) {
       }
     }
 
-    // ======================== PHASE 2: TRIAGE ========================
+    // ======================== PHASE 2: TRIAGE (queued) ========================
     if (runPhase("triage")) {
-      // (Previous results already cleared at pipeline start)
+      // Build canonical class ordering map (used by both triage + analyze sort_order).
+      const classOrderMap = new Map<string, number>();
+      const [assetsRes2, systemsRes2, processesRes2] = await Promise.all([
+        admin.from("critical_assets").select("name, display_order").eq("is_active", true),
+        admin.from("water_systems").select("name, display_order").eq("is_active", true),
+        admin.from("processes").select("name, display_order").eq("is_active", true),
+      ]);
+      for (const a of (assetsRes2.data as any[]) || []) classOrderMap.set(a.name, 0 * 1000 + (a.display_order ?? 999));
+      for (const s of (systemsRes2.data as any[]) || []) classOrderMap.set(s.name, 1 * 1000 + (s.display_order ?? 999));
+      for (const p of (processesRes2.data as any[]) || []) classOrderMap.set(p.name, 2 * 1000 + (p.display_order ?? 999));
+      const orderForTriage = (cn: string) => classOrderMap.get(cn) ?? 9999;
 
-      const triageItems: Array<{ fileId: string; fileName: string; prompt: any }> = [];
-      // File-major ordering: dispatch all classes for file 1, then file 2, etc.
-      // With N concurrent workers this still starts at the top of the file
-      // list, but progress fills in row-by-row (horizontally) rather than
-      // column-by-column.
       const orderedFiles = [...files].sort((a: any, b: any) =>
         (a.name || "").localeCompare(b.name || ""),
       );
+
+      const triageJobRows: any[] = [];
       for (const file of orderedFiles) {
         for (const prompt of prompts) {
-          triageItems.push({ fileId: file.id, fileName: file.name, prompt });
+          const triagePromptContent =
+            (prompt as any).triage_prompt_content ||
+            (prompt as any).prompt_content ||
+            null;
+          triageJobRows.push({
+            analysis_request_id: analysisRequestId,
+            analysis_run_id: activeRunId,
+            file_id: file.id,
+            awp_class_name: (prompt as any).awp_class_name,
+            prompt_content: triagePromptContent,
+            analyze_model: triageModel,
+            job_kind: "triage",
+            status: "pending",
+            sort_order: orderForTriage((prompt as any).awp_class_name),
+          });
         }
       }
 
       console.log(
-        `[pipeline] Phase 2: Triage ${triageItems.length} items (${files.length} files × ${prompts.length} classes)`,
+        `[pipeline] Phase 2: enqueueing ${triageJobRows.length} triage jobs (${files.length} files × ${prompts.length} classes)`,
       );
 
-      const progress = createProgressTracker(admin, analysisRequestId, "triaging", triageItems.length);
-      await progress.init();
-
-      let triageTokens = 0;
-      let triageSuccesses = 0;
-      let triageFailures = 0;
-      let tokenUpdateCounter = 0;
-
-      const { stopped } = await runPool(
-        triageItems,
-        MAX_CONCURRENCY,
-        admin,
-        analysisRequestId,
-        progress,
-        async (item) => {
-          try {
-            const result = await callFunction(
-              supabaseUrl,
-              serviceKey,
-              userToken,
-              "triage-drawings",
-              {
-                analysisRequestId,
-                analysisRunId: activeRunId,
-                fileId: item.fileId,
-                awpClassName: item.prompt.awp_class_name,
-                assetType: item.prompt.category,
-                drawingName: item.fileName,
-                promptContent:
-                  item.prompt.triage_prompt_content ||
-                  item.prompt.prompt_content ||
-                  null,
-                action: "triage",
-                model: triageModel,
-              },
-            );
-            if (result.ok) {
-              triageSuccesses++;
-              if (result.data?.usage?.total_tokens) {
-                triageTokens += result.data.usage.total_tokens;
-                tokenUpdateCounter++;
-                if (tokenUpdateCounter >= 5) {
-                  tokenUpdateCounter = 0;
-                  await admin
-                    .from("analysis_requests")
-                    .update({ triage_tokens_used: triageTokens } as any)
-                    .eq("id", analysisRequestId);
-                }
-              }
-            } else {
-              triageFailures++;
-              console.error(
-                `[pipeline] Triage error for ${item.fileName}/${item.prompt.awp_class_name}: ${result.status} ${JSON.stringify(result.data)}`,
-              );
-            }
-          } catch (e) {
-            triageFailures++;
-            console.error(
-              `[pipeline] Triage failed for ${item.fileName}/${item.prompt.awp_class_name}:`,
-              e,
-            );
-          }
-        },
-      );
-
-      // Final flush so the last batch's progress + status are written.
-      await progress.finalize();
-
-      // Final token flush
+      // Clear stale triage jobs for this request before insert
       await admin
-        .from("analysis_requests")
-        .update({ triage_tokens_used: triageTokens } as any)
-        .eq("id", analysisRequestId);
+        .from("analysis_pipeline_jobs")
+        .delete()
+        .eq("analysis_request_id", analysisRequestId)
+        .eq("job_kind", "triage");
 
-      if (stopped) {
-        await handleStopped();
-        return;
+      // Pre-insert "processing" rows so the UI shows spinners immediately
+      if (triageJobRows.length > 0) {
+        const placeholderRows = triageJobRows.map((j) => ({
+          analysis_request_id: j.analysis_request_id,
+          analysis_run_id: activeRunId,
+          file_id: j.file_id,
+          awp_class_name: j.awp_class_name,
+          status: "processing",
+        }));
+        const PCHUNK = 500;
+        for (let i = 0; i < placeholderRows.length; i += PCHUNK) {
+          await admin.from("analysis_triage_results").upsert(
+            placeholderRows.slice(i, i + PCHUNK),
+            { onConflict: "analysis_request_id,file_id,awp_class_name" },
+          );
+        }
       }
 
-      // If ALL triage items failed, stop with error
-      if (triageItems.length > 0 && triageSuccesses === 0) {
-        console.error(`[pipeline] All ${triageFailures} triage items failed`);
-        await admin
-          .from("analysis_requests")
-          .update({
-            status: "started",
-            pipeline_phase: null,
-            pipeline_progress_done: 0,
-            pipeline_progress_total: 0,
-            error_message: `All ${triageFailures} triage items failed. This may be due to rate limiting — please try again in a few minutes.`,
-          } as any)
-          .eq("id", analysisRequestId);
+      await admin
+        .from("analysis_requests")
+        .update({
+          pipeline_phase: "triaging",
+          pipeline_progress_done: 0,
+          pipeline_progress_total: triageJobRows.length,
+          status: "processing",
+        } as any)
+        .eq("id", analysisRequestId);
+
+      // Bulk insert in chunks
+      const TCHUNK = 500;
+      for (let i = 0; i < triageJobRows.length; i += TCHUNK) {
+        const slice = triageJobRows.slice(i, i + TCHUNK);
+        const { error: insErr } = await admin
+          .from("analysis_pipeline_jobs")
+          .insert(slice);
+        if (insErr) {
+          console.error(`[pipeline] Failed to insert triage jobs chunk: ${insErr.message}`);
+          await admin
+            .from("analysis_requests")
+            .update({
+              status: "started",
+              pipeline_phase: null,
+              error_message: `Failed to enqueue triage jobs: ${insErr.message}`,
+            } as any)
+            .eq("id", analysisRequestId);
+          return;
+        }
+      }
+
+      // Kick the worker so it doesn't wait for the next cron tick.
+      const workerSecretEnv = Deno.env.get("ANALYSIS_WORKER_SECRET");
+      if (workerSecretEnv) {
+        try {
+          const kickController = new AbortController();
+          const kickTimer = setTimeout(() => kickController.abort(), 2000);
+          await fetch(`${supabaseUrl}/functions/v1/process-analysis-jobs`, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              apikey: serviceKey,
+              "x-worker-secret": workerSecretEnv,
+            },
+            signal: kickController.signal,
+          }).catch(() => {});
+          clearTimeout(kickTimer);
+        } catch (e) {
+          console.warn("[pipeline] triage worker kick failed:", e);
+        }
+        console.log("[pipeline] triage worker kick dispatched");
+      }
+
+      if (triageJobRows.length === 0) {
+        // No items — fall through to analyze (likely no eligible items).
+        console.log("[pipeline] Phase 2: no triage items — proceeding inline to analyze");
+      } else {
+        // Worker will finalize triage and re-invoke pipeline with phaseOverride='analyze'.
         return;
       }
     }
@@ -1357,11 +1371,13 @@ async function runPipeline(params: PipelineParams) {
         }
       }
 
-      // Clear any old jobs for this request before inserting fresh ones
+      // Clear any old analyze jobs for this request before inserting fresh ones.
+      // Scope to analyze-kind jobs so we don't wipe completed triage jobs.
       await admin
         .from("analysis_pipeline_jobs")
         .delete()
-        .eq("analysis_request_id", analysisRequestId);
+        .eq("analysis_request_id", analysisRequestId)
+        .or("job_kind.is.null,job_kind.eq.analyze");
 
       // Build job rows. Items with no prompt content fail immediately as
       // analysis_results rows (preserves prior behavior, no retries).
@@ -1388,6 +1404,7 @@ async function runPipeline(params: PipelineParams) {
           awp_class_name: item.awpClassName,
           prompt_content: promptContent,
           analyze_model: analyzeModel,
+          job_kind: "analyze",
           status: "pending",
           sort_order: orderFor(item.awpClassName),
         });
