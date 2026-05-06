@@ -1063,35 +1063,95 @@ async function runPipeline(params: PipelineParams) {
         .eq("id", analysisRequestId);
     }
 
-    // ======================== PHASE 0: SPLIT (sheet normalization v1) ========================
-    // Behind feature flag analysis_requests.sheet_normalization_enabled.
-    // Counts pages per parent PDF, enqueues bounded split_pdf_chunk jobs so the
-    // worker normalizes parents into single-page sheets. Idempotent — re-running
-    // upserts on (parent_file_id, page_index) and skips parents already 'split'.
-    if (!phaseOverride || phaseOverride === "extract" || phaseOverride === "split") {
+    // ======================== PHASE 0: SPLIT (sheet normalization) ========================
+    // Sheet normalization is ON BY DEFAULT for every PDF upload. The flag
+    // analysis_requests.sheet_normalization_enabled remains as an emergency
+    // rollback override (set to false to skip normalization for non-PDF flows
+    // or legacy debugging). Every PDF parent is normalized into 1..N sheet
+    // rows; the parent file is then a container only — extract/triage/analyze
+    // never run against parent PDFs.
+    const { data: reqRow0 } = await admin
+      .from("analysis_requests")
+      .select("sheet_normalization_enabled, source_type")
+      .eq("id", analysisRequestId)
+      .single();
+    const sheetFlagOn = (reqRow0 as any)?.sheet_normalization_enabled !== false;
+    const sourceType0 = (reqRow0 as any)?.source_type;
+
+    const pdfFiles = (files as any[]).filter(
+      (f) =>
+        f.mime_type === "application/pdf" ||
+        (f.name || "").toLowerCase().endsWith(".pdf"),
+    );
+
+    if (
+      sheetFlagOn &&
+      pdfFiles.length > 0 &&
+      (!phaseOverride || phaseOverride === "extract" || phaseOverride === "split")
+    ) {
       try {
-        const { data: reqRow } = await admin
-          .from("analysis_requests")
-          .select("sheet_normalization_enabled, source_type")
-          .eq("id", analysisRequestId)
-          .single();
-        const flagOn = !!(reqRow as any)?.sheet_normalization_enabled;
-        const sourceType = (reqRow as any)?.source_type;
-        if (flagOn) {
-          await runSplitPhase({
-            admin,
-            analysisRequestId,
-            activeRunId,
-            sourceType,
-            files: files as any[],
-          });
-          if (await shouldStop(admin, analysisRequestId)) {
-            await handleStopped();
-            return;
-          }
+        await runSplitPhase({
+          admin,
+          analysisRequestId,
+          activeRunId,
+          sourceType: sourceType0,
+          files: pdfFiles,
+        });
+        if (await shouldStop(admin, analysisRequestId)) {
+          await handleStopped();
+          return;
         }
-      } catch (e) {
-        console.error("[pipeline] SPLIT phase error (non-fatal, continuing):", e);
+      } catch (e: any) {
+        // Hard fail: do NOT fall back to legacy file-level PDF triage.
+        const msg = `Sheet normalization failed: ${e?.message ?? String(e)}`;
+        console.error(`[pipeline] ${msg}`);
+        await admin
+          .from("analysis_requests")
+          .update({
+            status: "failed",
+            pipeline_phase: "splitting",
+            error_message: msg,
+          } as any)
+          .eq("id", analysisRequestId);
+        return;
+      }
+
+      // Post-split invariant check: every PDF parent must have at least one
+      // sheet row, and none may be in 'failed' split_status. If so, fail
+      // hard rather than silently triaging the parent PDF.
+      const { data: postParents } = await admin
+        .from("analysis_request_files")
+        .select("id, name, split_status")
+        .in("id", pdfFiles.map((p: any) => p.id));
+      const { data: postSheets } = await admin
+        .from("analysis_request_sheets")
+        .select("parent_file_id")
+        .eq("analysis_request_id", analysisRequestId);
+      const sheetCountByParent = new Map<string, number>();
+      for (const r of (postSheets || []) as any[]) {
+        sheetCountByParent.set(
+          r.parent_file_id,
+          (sheetCountByParent.get(r.parent_file_id) || 0) + 1,
+        );
+      }
+      const badParents = (postParents || []).filter((p: any) => {
+        if (p.split_status === "failed") return true;
+        if ((sheetCountByParent.get(p.id) || 0) === 0) return true;
+        return false;
+      });
+      if (badParents.length > 0) {
+        const names = badParents.map((p: any) => p.name).join(", ");
+        const msg = `Sheet normalization produced no sheets for: ${names}. Aborting — PDFs are never analyzed at the parent level.`;
+        console.error(`[pipeline] ${msg}`);
+        await admin
+          .from("analysis_requests")
+          .update({
+            status: "failed",
+            pipeline_phase: "splitting",
+            error_message: msg,
+          } as any)
+          .eq("id", analysisRequestId);
+        return;
       }
     }
 
@@ -1099,13 +1159,6 @@ async function runPipeline(params: PipelineParams) {
     // Determine if this run should iterate over sheets (one row per page) or
     // legacy file-level units. When useSheets=true, the parent PDF is treated
     // as a container only; extraction/triage/analyze act on sheets.
-    const { data: reqFlagRow } = await admin
-      .from("analysis_requests")
-      .select("sheet_normalization_enabled")
-      .eq("id", analysisRequestId)
-      .single();
-    const sheetFlagOn = !!(reqFlagRow as any)?.sheet_normalization_enabled;
-
     let sheets: any[] = [];
     if (sheetFlagOn) {
       const { data: sheetRows } = await admin
@@ -1116,7 +1169,23 @@ async function runPipeline(params: PipelineParams) {
         .order("page_index", { ascending: true });
       sheets = (sheetRows as any[]) || [];
     }
+
+    // Sheet-mode for the run: enabled when normalization is on AND we have
+    // any sheets. In that mode, PDF parents are excluded from legacy
+    // file-level processing — they are containers only.
     const useSheets = sheetFlagOn && sheets.length > 0;
+
+    // When sheet-mode is active, strip PDF parents from `files` so legacy
+    // file-level units never include them. Non-PDF files (if any) still flow
+    // through the legacy file path.
+    if (useSheets) {
+      const pdfParentIds = new Set(pdfFiles.map((p: any) => p.id));
+      for (let i = files.length - 1; i >= 0; i--) {
+        if (pdfParentIds.has((files[i] as any).id)) {
+          files.splice(i, 1);
+        }
+      }
+    }
     console.log(
       `[pipeline] sheet-mode=${useSheets} (flag=${sheetFlagOn} sheets=${sheets.length} files=${files.length})`,
     );
