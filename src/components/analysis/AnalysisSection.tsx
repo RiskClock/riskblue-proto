@@ -1827,7 +1827,8 @@ export function AnalysisSection({ requestId, files, projectId, sourceType, isWMS
     if (disabledDefaultsApplied) return;
     if (!requestMeta) return;
     const persisted = (requestMeta as any).disabled_awp_classes as string[] | null;
-    if (Array.isArray(persisted)) return;
+    // Skip defaults only when user has an explicit non-empty selection persisted.
+    if (Array.isArray(persisted) && persisted.length > 0) return;
     if (!sortedPrompts || sortedPrompts.length === 0) return;
     const namesPresent = sortedPrompts
       .map((p) => p.awp_class_name)
