@@ -1887,7 +1887,8 @@ export function AnalysisSection({ requestId, files, projectId, sourceType, isWMS
       .from("analysis_requests")
       .update({ pipeline_stop_requested: true } as any)
       .eq("id", requestId);
-    // Cancel any queued analysis jobs so the worker finalizes promptly.
+    // Cancel any pending OR processing jobs (incl. split_pdf_chunk whose worker
+    // may have been killed by a memory limit) so the worker finalizes promptly.
     await (supabase as any)
       .from("analysis_pipeline_jobs")
       .update({
@@ -1896,8 +1897,23 @@ export function AnalysisSection({ requestId, files, projectId, sourceType, isWMS
         error_message: "Cancelled by user stop request",
       })
       .eq("analysis_request_id", requestId)
-      .eq("status", "pending");
-    // Don't invalidate — realtime handles the final transition
+      .in("status", ["pending", "processing"]);
+    // If the row was stuck in a non-terminal phase with no active worker, also
+    // reset it directly so the UI exits the "stopping" spinner immediately.
+    await (supabase as any)
+      .from("analysis_requests")
+      .update({
+        status: "started",
+        pipeline_phase: null,
+        pipeline_stop_requested: false,
+        pipeline_progress_done: 0,
+        pipeline_progress_total: 0,
+        error_message: "Stopped by user",
+      })
+      .eq("id", requestId)
+      .in("pipeline_phase", ["splitting", "extracting"]);
+    queryClient.invalidateQueries({ queryKey: ["analysis-request-row", requestId] });
+    queryClient.invalidateQueries({ queryKey: ["analysis-counts", requestId] });
   };
 
   // Helper to get the best prefix for a class name
