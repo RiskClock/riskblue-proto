@@ -453,16 +453,30 @@ serve(async (req) => {
         ? "application/pdf"
         : storedMime ?? "application/octet-stream";
 
-    // Guardrail: only PDFs produce PDF-point bboxes
-    if (effectiveMime !== "application/pdf") {
-      await adminSupabase.from("analysis_results")
-        .update({
-          status: "failed",
-          error_message: `Detection requires a PDF file. File type: ${effectiveMime}`,
-        })
-        .eq("file_id", fileId)
+    // Helper: scope analysis_results updates to the right unit (sheet vs legacy file).
+    // CRITICAL: in legacy mode we MUST also filter `sheet_id IS NULL` so we don't
+    // accidentally clobber every sheet row that shares this parent file + class.
+    const scopeResultsUpdate = (q: any) => {
+      let scoped = q
         .eq("analysis_request_id", analysisRequestId)
         .eq("awp_class_name", awpClassName);
+      if (sheetId) {
+        scoped = scoped.eq("sheet_id", sheetId);
+      } else {
+        scoped = scoped.eq("file_id", fileId).is("sheet_id", null);
+      }
+      return scoped;
+    };
+
+    // Guardrail: only PDFs produce PDF-point bboxes
+    if (effectiveMime !== "application/pdf") {
+      await scopeResultsUpdate(
+        adminSupabase.from("analysis_results")
+          .update({
+            status: "failed",
+            error_message: `Detection requires a PDF file. File type: ${effectiveMime}`,
+          })
+      );
       return new Response(
         JSON.stringify({ error: `Detection requires a PDF file for PDF-point bboxes. File type: ${effectiveMime}` }),
         { status: 422, headers: { ...corsHeaders, "Content-Type": "application/json" } }
@@ -502,16 +516,16 @@ serve(async (req) => {
         openaiApiKey,
         fileRecord,
         fileId,
+        sheetId: sheetId ?? null,
         storageBucket,
         effectiveMime,
       });
 
       if ("error" in uploadResult) {
-        await adminSupabase.from("analysis_results")
-          .update({ status: "failed", error_message: uploadResult.error })
-          .eq("file_id", fileId)
-          .eq("analysis_request_id", analysisRequestId)
-          .eq("awp_class_name", awpClassName);
+        await scopeResultsUpdate(
+          adminSupabase.from("analysis_results")
+            .update({ status: "failed", error_message: uploadResult.error })
+        );
         return new Response(JSON.stringify({ error: uploadResult.error }), {
           status: uploadResult.httpStatus, headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
@@ -535,26 +549,35 @@ serve(async (req) => {
       model: model || undefined,
     });
 
-    // Handle Responses API HTTP errors
-    if ("httpStatus" in apiResult) {
-      if (isInvalidFileError(apiResult.httpStatus, apiResult.parsedError)) {
-        // Invalidate the cache so the next run performs a fresh upload
+    // Helper: invalidate the cached OpenAI file id on the right unit (sheet vs parent)
+    const invalidateUnitCache = async () => {
+      if (sheetId) {
+        await adminSupabase.from("analysis_request_sheets")
+          .update({ openai_file_status: "invalid" })
+          .eq("id", sheetId);
+      } else {
         await adminSupabase.from("analysis_request_files")
           .update({ openai_file_status: "invalid" })
           .eq("id", fileId);
       }
+    };
+
+    // Handle Responses API HTTP errors
+    if ("httpStatus" in apiResult) {
+      if (isInvalidFileError(apiResult.httpStatus, apiResult.parsedError)) {
+        await invalidateUnitCache();
+      }
 
       const errMsg = `OpenAI Responses API failed (${apiResult.httpStatus}): ${apiResult.errText}`;
-      await adminSupabase.from("analysis_results")
-        .update({
-          status: "failed",
-          error_message: isInvalidFileError(apiResult.httpStatus, apiResult.parsedError)
-            ? "Cached OpenAI file was rejected — re-analyze to re-upload"
-            : errMsg,
-        })
-        .eq("file_id", fileId)
-        .eq("analysis_request_id", analysisRequestId)
-        .eq("awp_class_name", awpClassName);
+      await scopeResultsUpdate(
+        adminSupabase.from("analysis_results")
+          .update({
+            status: "failed",
+            error_message: isInvalidFileError(apiResult.httpStatus, apiResult.parsedError)
+              ? "Cached OpenAI file was rejected — re-analyze to re-upload"
+              : errMsg,
+          })
+      );
 
       return new Response(JSON.stringify({ error: errMsg }), {
         status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -565,12 +588,10 @@ serve(async (req) => {
     // Raster fallback detection — auto re-upload and retry (once)
     // ------------------------------------------------------------------
     if (isRasterFallback(apiResult.resultText) && usedCacheHit) {
-      console.warn(`[analyze-drawings] Raster fallback detected for file ${fileId} (${fileRecord.name}) — cache hit returned stale file. Re-uploading PDF bytes and retrying.`);
+      console.warn(`[analyze-drawings] Raster fallback detected for file ${fileId} sheet ${sheetId ?? "-"} (${fileRecord.name}) — cache hit returned stale file. Re-uploading PDF bytes and retrying.`);
 
-      // Invalidate the stale cached file
-      await adminSupabase.from("analysis_request_files")
-        .update({ openai_file_status: "invalid" })
-        .eq("id", fileId);
+      // Invalidate the stale cached file on the unit (sheet or parent)
+      await invalidateUnitCache();
 
       // Re-upload fresh PDF bytes from storage
       const reuploadResult = await uploadPdfToOpenAI({
@@ -578,19 +599,19 @@ serve(async (req) => {
         openaiApiKey,
         fileRecord,
         fileId,
+        sheetId: sheetId ?? null,
         storageBucket,
         effectiveMime,
       });
 
       if ("error" in reuploadResult) {
-        await adminSupabase.from("analysis_results")
-          .update({
-            status: "failed",
-            error_message: `Re-upload after raster fallback failed: ${reuploadResult.error}`,
-          })
-          .eq("file_id", fileId)
-          .eq("analysis_request_id", analysisRequestId)
-          .eq("awp_class_name", awpClassName);
+        await scopeResultsUpdate(
+          adminSupabase.from("analysis_results")
+            .update({
+              status: "failed",
+              error_message: `Re-upload after raster fallback failed: ${reuploadResult.error}`,
+            })
+        );
         return new Response(JSON.stringify({ error: reuploadResult.error }), {
           status: reuploadResult.httpStatus, headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
@@ -599,7 +620,6 @@ serve(async (req) => {
       openaiFileId = reuploadResult.openaiFileId;
       console.log(`[analyze-drawings] Retrying Responses API with fresh upload file_id=${openaiFileId}, blobMime=application/pdf`);
 
-      // Retry the Responses API with the freshly uploaded file
       const retryResult = await callResponsesApi({
         openaiApiKey,
         openaiFileId,
@@ -612,19 +632,17 @@ serve(async (req) => {
 
       if ("httpStatus" in retryResult) {
         const errMsg = `Retry after raster fallback failed (${retryResult.httpStatus}): ${retryResult.errText}`;
-        await adminSupabase.from("analysis_results")
-          .update({ status: "failed", error_message: errMsg })
-          .eq("file_id", fileId)
-          .eq("analysis_request_id", analysisRequestId)
-          .eq("awp_class_name", awpClassName);
+        await scopeResultsUpdate(
+          adminSupabase.from("analysis_results")
+            .update({ status: "failed", error_message: errMsg })
+        );
         return new Response(JSON.stringify({ error: errMsg }), {
           status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       }
 
-      // Use the retry result going forward
       apiResult = retryResult;
-      console.log(`[analyze-drawings] Retry succeeded for file ${fileId} (${fileRecord.name})`);
+      console.log(`[analyze-drawings] Retry succeeded for file ${fileId} sheet ${sheetId ?? "-"} (${fileRecord.name})`);
     }
 
     const { resultText, usage } = apiResult as { resultText: string; usage: Record<string, number> | null };
@@ -650,11 +668,10 @@ serve(async (req) => {
 
     // Store result — also stamp analysis_run_id to repair any prior orphaned
     // upsert that may have left the row with a NULL run id.
-    await adminSupabase.from("analysis_results")
-      .update({ status: "complete", result_text: resultText, analysis_run_id: analysisRunId })
-      .eq("file_id", fileId)
-      .eq("analysis_request_id", analysisRequestId)
-      .eq("awp_class_name", awpClassName);
+    await scopeResultsUpdate(
+      adminSupabase.from("analysis_results")
+        .update({ status: "complete", result_text: resultText, error_message: null, analysis_run_id: analysisRunId })
+    );
 
     return new Response(JSON.stringify({
       status: "complete",
