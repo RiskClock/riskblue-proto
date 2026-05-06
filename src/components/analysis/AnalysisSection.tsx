@@ -2209,6 +2209,7 @@ export function AnalysisSection({ requestId, files, projectId, sourceType, isWMS
       } else {
         next.add(awpClassName);
       }
+      disabledColumnsRef.current = next;
       // Persist to DB
       supabase
         .from("analysis_requests")
