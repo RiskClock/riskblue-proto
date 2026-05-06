@@ -1179,13 +1179,6 @@ async function runPipeline(params: PipelineParams) {
           .insert(slice);
         if (insErr) {
           console.error(`[pipeline] Failed to insert triage jobs chunk: ${insErr.message}`);
-          // Reconcile: clear the spinner placeholders we just wrote so the
-          // UI doesn't show permanent spinners on every cell.
-          await admin
-            .from("analysis_triage_results")
-            .delete()
-            .eq("analysis_request_id", analysisRequestId)
-            .eq("status", "processing");
           await admin
             .from("analysis_requests")
             .update({
