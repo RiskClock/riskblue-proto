@@ -200,11 +200,24 @@ async function safeWriteComplete(
       return;
     }
   }
+  // Preserve final progress counters so the UI can display 100% on completion.
+  // Read current done/total and mirror done=total unless caller overrides.
+  let finalDone: number | null = null;
+  let finalTotal: number | null = null;
+  try {
+    const { data: cur } = await admin
+      .from("analysis_requests")
+      .select("pipeline_progress_done, pipeline_progress_total")
+      .eq("id", requestId)
+      .single();
+    finalTotal = (cur as any)?.pipeline_progress_total ?? 0;
+    finalDone = finalTotal ?? 0;
+  } catch (_) { /* ignore */ }
   const update: Record<string, unknown> = {
     status: "complete",
     pipeline_phase: null,
-    pipeline_progress_done: 0,
-    pipeline_progress_total: 0,
+    pipeline_progress_done: finalDone ?? 0,
+    pipeline_progress_total: finalTotal ?? 0,
     ...extraFields,
   };
   let q = admin.from("analysis_requests").update(update as any).eq("id", requestId);
