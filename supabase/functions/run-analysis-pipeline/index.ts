@@ -173,6 +173,65 @@ function createProgressTracker(
 }
 
 // ---------------------------------------------------------------------------
+// Run-id-guarded terminal write helpers.
+// `safeWriteComplete` only writes status='complete' if the row's current
+// analysis_run_id still matches the active run. Prevents stale background
+// invocations (or early-exit branches) from flickering the UI to "complete"
+// while a newer run is in flight.
+// ---------------------------------------------------------------------------
+async function safeWriteComplete(
+  admin: ReturnType<typeof createClient>,
+  requestId: string,
+  activeRunId: string | null,
+  extraFields: Record<string, unknown> = {},
+) {
+  // Re-read current run id and abort if superseded.
+  if (activeRunId) {
+    const { data: cur } = await admin
+      .from("analysis_requests")
+      .select("analysis_run_id")
+      .eq("id", requestId)
+      .single();
+    const dbRunId = (cur as any)?.analysis_run_id ?? null;
+    if (dbRunId && dbRunId !== activeRunId) {
+      console.warn(
+        `[pipeline] safeWriteComplete: run mismatch (active=${activeRunId} db=${dbRunId}); skipping complete write`,
+      );
+      return;
+    }
+  }
+  const update: Record<string, unknown> = {
+    status: "complete",
+    pipeline_phase: null,
+    pipeline_progress_done: 0,
+    pipeline_progress_total: 0,
+    ...extraFields,
+  };
+  let q = admin.from("analysis_requests").update(update as any).eq("id", requestId);
+  if (activeRunId) q = q.eq("analysis_run_id", activeRunId);
+  await q;
+}
+
+async function markNoEligibleDrawings(
+  admin: ReturnType<typeof createClient>,
+  requestId: string,
+  activeRunId: string | null,
+) {
+  try {
+    const { data: rm } = await admin
+      .from("analysis_requests")
+      .select("summary_data")
+      .eq("id", requestId)
+      .single();
+    const sd = ((rm as any)?.summary_data as Record<string, unknown>) || {};
+    sd.no_eligible_drawings = true;
+    await safeWriteComplete(admin, requestId, activeRunId, { summary_data: sd });
+  } catch (e) {
+    console.warn("[pipeline] markNoEligibleDrawings failed:", e);
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Concurrent worker pool with stop checks
 // ---------------------------------------------------------------------------
 async function runPool<T>(
