@@ -958,6 +958,7 @@ interface PipelineParams {
   userToken: string;
   analysisRequestId: string;
   enabledAwpClasses?: string[];
+  disabledAwpClasses?: unknown;
   triageModel: string;
   analyzeModel: string;
   phaseOverride?: string;
@@ -972,6 +973,7 @@ async function runPipeline(params: PipelineParams) {
     userToken,
     analysisRequestId,
     enabledAwpClasses,
+    disabledAwpClasses,
     triageModel,
     analyzeModel,
     phaseOverride,
