@@ -3429,6 +3429,14 @@ export function AnalysisSection({ requestId, files, projectId, sourceType, isWMS
     );
   }
 
+  // Freeze the visible counter at last non-zero values during phase transitions.
+  // MUST be declared before any early return to keep hook order stable.
+  const lastCounterRef = useRef<{ done: number; total: number; phase: string | null }>({
+    done: 0,
+    total: 0,
+    phase: null,
+  });
+
   if (!prompts?.length) return null;
 
   const anyAnalyzing = analyzingClasses.size > 0;
