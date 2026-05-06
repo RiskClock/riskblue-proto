@@ -55,7 +55,7 @@ Deno.serve(async (req) => {
   if (jobs.length === 0) {
     // Nothing to do — but still check finalization for any "analyzing" requests
     // whose jobs all completed between cron ticks.
-    await checkFinalizeAllAnalyzing(admin, supabaseUrl, serviceKey);
+    await checkFinalizeAll(admin, supabaseUrl, serviceKey);
     return json({ claimed: 0, finalized_check: true });
   }
 
