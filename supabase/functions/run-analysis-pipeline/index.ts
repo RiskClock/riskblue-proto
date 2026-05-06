@@ -1162,26 +1162,10 @@ async function runPipeline(params: PipelineParams) {
         .eq("analysis_request_id", analysisRequestId)
         .eq("job_kind", "triage");
 
-      // Pre-insert "processing" rows so the UI shows spinners immediately
-      if (triageJobRows.length > 0) {
-        const placeholderRows = triageJobRows.map((j) => ({
-          analysis_request_id: j.analysis_request_id,
-          analysis_run_id: activeRunId,
-          file_id: j.file_id,
-          sheet_id: j.sheet_id,
-          awp_class_name: j.awp_class_name,
-          status: "processing",
-        }));
-        const PCHUNK = 500;
-        for (let i = 0; i < placeholderRows.length; i += PCHUNK) {
-          await admin.from("analysis_triage_results").upsert(
-            placeholderRows.slice(i, i + PCHUNK),
-            { onConflict: useSheets
-                ? "analysis_request_id,sheet_id,awp_class_name"
-                : "analysis_request_id,file_id,awp_class_name" },
-          );
-        }
-      }
+      // NOTE: We intentionally do NOT pre-insert placeholder triage rows.
+      // The triage worker is the SOLE writer of analysis_triage_results — it
+      // upserts the final row (success or failure) once the model returns.
+      // Spinner UX is driven by analysis_pipeline_jobs status instead.
 
       // IMPORTANT: insert jobs BEFORE setting phase=triaging. Otherwise the
       // cron worker may tick during this window, see 0 triage jobs in
