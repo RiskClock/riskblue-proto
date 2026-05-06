@@ -3860,28 +3860,54 @@ export function AnalysisSection({ requestId, files, projectId, sourceType, isWMS
                           >
                             {file.name}
                           </button>
-                           {extractingFileIds.has(file.id) && (
-                             <Loader2 className="w-3 h-3 animate-spin text-muted-foreground flex-shrink-0" />
-                           )}
-                             {uploadingFileIds.has(file.id) && !extractingFileIds.has(file.id) && pipelinePhase !== "analyzing" && (
-                               <Tooltip>
-                                 <TooltipTrigger asChild>
-                                   <span className="inline-flex items-center gap-1 text-[10px] text-muted-foreground flex-shrink-0">
-                                     <Loader2 className="w-3 h-3 animate-spin" />
-                                     Uploading
-                                   </span>
-                                 </TooltipTrigger>
-                                 <TooltipContent>Uploading file to analysis service</TooltipContent>
-                               </Tooltip>
-                             )}
-                          {extractedFileIds.has(file.id) && !extractingFileIds.has(file.id) && (
-                            <button
-                              className="inline-flex items-center rounded-full border border-emerald-300 bg-emerald-100 px-1.5 py-px text-[10px] font-medium text-emerald-800 leading-tight flex-shrink-0 cursor-pointer hover:bg-emerald-200 transition-colors"
-                              onClick={() => setExtractedTextFile(file)}
-                            >
-                              Processed
-                            </button>
-                          )}
+                          {(() => {
+                            const sp = sheetProgressByFile.get(file.id);
+                            // Sheet-mode: spinner if any sheet of this file is still pending
+                            const sheetExtracting = !!sp && sp.pending > 0;
+                            // Sheet-mode: processed when ALL sheets are extracted
+                            const sheetAllDone = !!sp && sp.total > 0 && sp.pending === 0;
+                            // Legacy fallback (non-sheet-mode runs)
+                            const legacyExtracting = extractingFileIds.has(file.id);
+                            const legacyExtracted = extractedFileIds.has(file.id);
+                            const showSpinner = sheetExtracting || (legacyExtracting && !sp);
+                            const showProcessed =
+                              (sp ? sheetAllDone : legacyExtracted) && !showSpinner;
+                            return (
+                              <>
+                                {showSpinner && (
+                                  <Tooltip>
+                                    <TooltipTrigger asChild>
+                                      <Loader2 className="w-3 h-3 animate-spin text-muted-foreground flex-shrink-0" />
+                                    </TooltipTrigger>
+                                    {sp && (
+                                      <TooltipContent>
+                                        Extracting context: {sp.total - sp.pending}/{sp.total} pages
+                                      </TooltipContent>
+                                    )}
+                                  </Tooltip>
+                                )}
+                                {uploadingFileIds.has(file.id) && !showSpinner && pipelinePhase !== "analyzing" && (
+                                  <Tooltip>
+                                    <TooltipTrigger asChild>
+                                      <span className="inline-flex items-center gap-1 text-[10px] text-muted-foreground flex-shrink-0">
+                                        <Loader2 className="w-3 h-3 animate-spin" />
+                                        Uploading
+                                      </span>
+                                    </TooltipTrigger>
+                                    <TooltipContent>Uploading file to analysis service</TooltipContent>
+                                  </Tooltip>
+                                )}
+                                {showProcessed && (
+                                  <button
+                                    className="inline-flex items-center rounded-full border border-emerald-300 bg-emerald-100 px-1.5 py-px text-[10px] font-medium text-emerald-800 leading-tight flex-shrink-0 cursor-pointer hover:bg-emerald-200 transition-colors"
+                                    onClick={() => setExtractedTextFile(file)}
+                                  >
+                                    Processed
+                                  </button>
+                                )}
+                              </>
+                            );
+                          })()}
                           {!pipelineRunning && (
                             <Tooltip>
                               <TooltipTrigger asChild>
