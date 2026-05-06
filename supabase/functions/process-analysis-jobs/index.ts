@@ -729,13 +729,14 @@ async function runSplitPdfChunk(
       if (upErr) throw new Error(`upload: ${upErr.message}`);
 
       // Idempotent upsert keyed by (parent_file_id, page_index)
+      // page_index is stored as 1-based to match human page numbers.
       const { error: upsertErr } = await admin
         .from("analysis_request_sheets")
         .upsert(
           {
             analysis_request_id: requestId,
             parent_file_id: parentFileId,
-            page_index: pageIndex,
+            page_index: pageNumber,
             name: sheetName,
             storage_path: storagePath,
             extract_status: "pending",
