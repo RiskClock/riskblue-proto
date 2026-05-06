@@ -63,7 +63,7 @@ Deno.serve(async (req) => {
     const adminSupabase = createClient(supabaseUrl, supabaseServiceKey);
 
     // ========== Authorization ==========
-    if (!isInternal) {
+    if (!isInternalCall && !isInternal && user) {
       // Resolve access: fileId → analysis_request → project
       const { data: fileAccess, error: fileAccessError } = await adminSupabase
         .from("analysis_request_files")
