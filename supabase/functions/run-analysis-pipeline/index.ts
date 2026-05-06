@@ -1097,7 +1097,7 @@ async function runPipeline(params: PipelineParams) {
       );
 
       const triageJobRows: any[] = [];
-      for (const file of orderedFiles) {
+      orderedFiles.forEach((file: any, fileIdx: number) => {
         for (const prompt of prompts) {
           const triagePromptContent =
             (prompt as any).triage_prompt_content ||
@@ -1112,10 +1112,12 @@ async function runPipeline(params: PipelineParams) {
             analyze_model: triageModel,
             job_kind: "triage",
             status: "pending",
-            sort_order: orderForTriage((prompt as any).awp_class_name),
+            // File-first sort: process all classes for one file before moving
+            // on, so the UI fills horizontally (row by row).
+            sort_order: fileIdx * 1000 + orderForTriage((prompt as any).awp_class_name),
           });
         }
-      }
+      });
 
       console.log(
         `[pipeline] Phase 2: enqueueing ${triageJobRows.length} triage jobs (${files.length} files × ${prompts.length} classes)`,
