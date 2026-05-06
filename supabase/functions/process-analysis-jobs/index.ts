@@ -1163,7 +1163,21 @@ async function fireAndForgetAnalyze(
     analysisRequestId,
     phaseOverride: "analyze",
   };
-  if (reqRow?.enabled_awp_classes) body.enabledAwpClasses = reqRow.enabled_awp_classes;
+  // Derive enabledAwpClasses from disabled_awp_classes by re-reading prompts.
+  try {
+    const admin = createClient(supabaseUrl, serviceKey);
+    const { data: allPrompts } = await admin
+      .from("awp_class_prompts")
+      .select("awp_class_name, detection_method")
+      .not("drive_file_id", "is", null);
+    const disabled = new Set<string>(reqRow?.disabled_awp_classes || []);
+    const enabled = ((allPrompts as any[]) || [])
+      .filter((p) => p.detection_method !== "always" && !disabled.has(p.awp_class_name))
+      .map((p) => p.awp_class_name);
+    if (enabled.length > 0) body.enabledAwpClasses = enabled;
+  } catch (e) {
+    console.warn("[worker] could not derive enabledAwpClasses for analyze dispatch:", e);
+  }
   if (reqRow?.triage_model) body.triageModel = reqRow.triage_model;
   if (reqRow?.analyze_model) body.analyzeModel = reqRow.analyze_model;
 
