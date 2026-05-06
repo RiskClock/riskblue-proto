@@ -376,6 +376,226 @@ async function runPool<T>(
 // ---------------------------------------------------------------------------
 // Main handler
 // ---------------------------------------------------------------------------
+// ---------------------------------------------------------------------------
+// SPLIT PHASE (sheet normalization v1)
+// Counts pages per parent PDF (via pdf-lib structural load — no rendering),
+// stamps expected_page_count, and enqueues bounded split_pdf_chunk jobs.
+// Then polls the analysis_pipeline_jobs queue until all chunk jobs are
+// terminal. Idempotent: re-running upserts sheet rows by (parent, page_index)
+// and skips parents already marked 'split'.
+// ---------------------------------------------------------------------------
+const SPLIT_CHUNK_PAGES = 8;
+const SPLIT_POLL_INTERVAL_MS = 3_000;
+const SPLIT_POLL_TIMEOUT_MS = 10 * 60 * 1000; // 10 min hard cap
+
+async function runSplitPhase(params: {
+  admin: ReturnType<typeof createClient>;
+  analysisRequestId: string;
+  activeRunId: string | null;
+  sourceType: string | null;
+  files: any[];
+}): Promise<void> {
+  const { admin, analysisRequestId, activeRunId, sourceType, files } = params;
+
+  // Filter to PDF parents that haven't been fully split yet.
+  const pdfParents = files.filter(
+    (f: any) =>
+      (f.mime_type === "application/pdf" ||
+        (f.name || "").toLowerCase().endsWith(".pdf")) &&
+      f.split_status !== "split",
+  );
+
+  console.log(
+    `[pipeline][split] ${pdfParents.length}/${files.length} PDF parents need normalization`,
+  );
+
+  if (pdfParents.length === 0) return;
+
+  await admin
+    .from("analysis_requests")
+    .update({
+      pipeline_phase: "splitting",
+      pipeline_progress_done: 0,
+      pipeline_progress_total: pdfParents.length,
+      status: "processing",
+    } as any)
+    .eq("id", analysisRequestId);
+
+  const bucket =
+    sourceType === "manual_upload" ? "uploaded-drawings" : "drive-analysis-files";
+
+  // Count pages and enqueue chunk jobs (sequential — small N parents, page
+  // count is a structural-only pdf-lib load which is fast).
+  type ChunkRow = {
+    analysis_request_id: string;
+    analysis_run_id: string | null;
+    file_id: string; // = parent (worker uses parent_file_id, but file_id NOT NULL)
+    parent_file_id: string;
+    awp_class_name: string;
+    job_kind: string;
+    page_from: number;
+    page_to: number;
+    status: string;
+    sort_order: number;
+    analyze_model: string;
+  };
+  const chunkRows: ChunkRow[] = [];
+
+  for (const parent of pdfParents) {
+    try {
+      const { data: blob, error: dlErr } = await admin.storage
+        .from(bucket)
+        .download(parent.storage_path);
+      if (dlErr || !blob) {
+        await admin
+          .from("analysis_request_files")
+          .update({ split_status: "failed" } as any)
+          .eq("id", parent.id);
+        console.error(
+          `[pipeline][split] download failed for ${parent.name}: ${dlErr?.message ?? "unknown"}`,
+        );
+        continue;
+      }
+      const ab = await blob.arrayBuffer();
+      const doc = await PDFDocument.load(ab, { ignoreEncryption: true });
+      const pageCount = doc.getPageCount();
+
+      await admin
+        .from("analysis_request_files")
+        .update({
+          expected_page_count: pageCount,
+          split_status: pageCount > 0 ? "splitting" : "failed",
+        } as any)
+        .eq("id", parent.id);
+
+      console.log(
+        `[pipeline][split] ${parent.name}: ${pageCount} pages → ${Math.ceil(pageCount / SPLIT_CHUNK_PAGES)} chunks`,
+      );
+
+      for (let from = 0; from < pageCount; from += SPLIT_CHUNK_PAGES) {
+        const to = Math.min(pageCount - 1, from + SPLIT_CHUNK_PAGES - 1);
+        chunkRows.push({
+          analysis_request_id: analysisRequestId,
+          analysis_run_id: activeRunId,
+          file_id: parent.id,
+          parent_file_id: parent.id,
+          awp_class_name: "__split__",
+          job_kind: "split_pdf_chunk",
+          page_from: from,
+          page_to: to,
+          status: "pending",
+          sort_order: 0, // run before analyze jobs
+          analyze_model: "n/a",
+        });
+      }
+    } catch (e: any) {
+      console.error(
+        `[pipeline][split] page-count failed for ${parent.name}:`,
+        e?.message ?? e,
+      );
+      await admin
+        .from("analysis_request_files")
+        .update({ split_status: "failed" } as any)
+        .eq("id", parent.id);
+    }
+  }
+
+  if (chunkRows.length === 0) {
+    console.warn("[pipeline][split] no chunks enqueued");
+    return;
+  }
+
+  // Bulk insert chunk jobs
+  const CHUNK = 500;
+  for (let i = 0; i < chunkRows.length; i += CHUNK) {
+    const slice = chunkRows.slice(i, i + CHUNK);
+    const { error: insErr } = await admin
+      .from("analysis_pipeline_jobs")
+      .insert(slice as any);
+    if (insErr) {
+      console.error("[pipeline][split] insert chunk jobs failed:", insErr.message);
+      throw insErr;
+    }
+  }
+  console.log(
+    `[pipeline][split] enqueued ${chunkRows.length} split_pdf_chunk jobs across ${pdfParents.length} parents`,
+  );
+
+  // Kick worker
+  const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
+  const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+  const workerSecret = Deno.env.get("ANALYSIS_WORKER_SECRET");
+  if (workerSecret) {
+    try {
+      const c = new AbortController();
+      const t = setTimeout(() => c.abort(), 2000);
+      await fetch(`${supabaseUrl}/functions/v1/process-analysis-jobs`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          apikey: serviceKey,
+          "x-worker-secret": workerSecret,
+        },
+        signal: c.signal,
+      }).catch(() => {});
+      clearTimeout(t);
+    } catch (_) { /* swallow */ }
+  }
+
+  // Poll until all split jobs are terminal (or timeout)
+  const parentIds = new Set(pdfParents.map((p: any) => p.id));
+  const startedAt = Date.now();
+  while (Date.now() - startedAt < SPLIT_POLL_TIMEOUT_MS) {
+    if (await shouldStop(admin, analysisRequestId)) return;
+
+    const { count: pendingCount } = await admin
+      .from("analysis_pipeline_jobs")
+      .select("id", { count: "exact", head: true })
+      .eq("analysis_request_id", analysisRequestId)
+      .eq("job_kind", "split_pdf_chunk")
+      .in("status", ["pending", "processing"]);
+
+    // Update progress (parents whose split_status is terminal)
+    const { data: parentRows } = await admin
+      .from("analysis_request_files")
+      .select("id, split_status")
+      .in("id", [...parentIds]);
+    const doneParents = (parentRows || []).filter(
+      (r: any) => r.split_status === "split" || r.split_status === "split_partial" || r.split_status === "failed",
+    ).length;
+    await admin
+      .from("analysis_requests")
+      .update({
+        pipeline_phase: "splitting",
+        pipeline_progress_done: doneParents,
+        pipeline_progress_total: pdfParents.length,
+      } as any)
+      .eq("id", analysisRequestId);
+
+    if ((pendingCount ?? 0) === 0) break;
+    await new Promise((r) => setTimeout(r, SPLIT_POLL_INTERVAL_MS));
+  }
+
+  // Final summary
+  const { data: finalRows } = await admin
+    .from("analysis_request_files")
+    .select("id, name, split_status, expected_page_count")
+    .in("id", [...parentIds]);
+  const { data: sheetCounts } = await admin
+    .from("analysis_request_sheets")
+    .select("parent_file_id")
+    .eq("analysis_request_id", analysisRequestId);
+  const counts = new Map<string, number>();
+  for (const r of (sheetCounts || []) as any[]) {
+    counts.set(r.parent_file_id, (counts.get(r.parent_file_id) || 0) + 1);
+  }
+  for (const r of (finalRows || []) as any[]) {
+    console.log(
+      `[pipeline][split][report] ${r.name}: status=${r.split_status} sheets=${counts.get(r.id) ?? 0}/${r.expected_page_count ?? "?"}`,
+    );
+  }
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
