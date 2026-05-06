@@ -125,6 +125,10 @@ async function runJob(
   job: any,
   remainingMs: number,
 ) {
+  if (job.job_kind === "split_pdf_chunk") {
+    return runSplitPdfChunk(admin, job);
+  }
+
   // Short-circuit if a complete result already exists (idempotency guard)
   const { data: existingComplete } = await admin
     .from("analysis_results")
