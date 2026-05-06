@@ -1011,7 +1011,11 @@ export function AnalysisSection({ requestId, files, projectId, sourceType, isWMS
   const queryClient = useQueryClient();
 
   // Canonical analysis-request state (status, phase, run id, ui label).
-  const requestState = useAnalysisRequestState(requestId);
+  // Prefer the shared instance from a surrounding provider so the badge in
+  // WMSVProjectDetail and this section share one local-pending mask.
+  const sharedRequestState = useSharedAnalysisRequestState();
+  const localRequestState = useAnalysisRequestState(sharedRequestState ? null : requestId);
+  const requestState = sharedRequestState ?? localRequestState;
 
   // ---- New state architecture ----
   const [analyzingClasses, setAnalyzingClasses] = useState<Set<string>>(new Set());
