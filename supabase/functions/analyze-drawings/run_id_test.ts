@@ -15,7 +15,7 @@ import {
   assertEquals,
   assert,
 } from "https://deno.land/std@0.224.0/assert/mod.ts";
-import { resolveAnalysisRunId } from "./index.ts";
+import { resolveAnalysisRunId } from "./run-id.ts";
 
 Deno.test("body run id present — uses body, not flagged as backfill", () => {
   const r = resolveAnalysisRunId("run-A", "run-A");
