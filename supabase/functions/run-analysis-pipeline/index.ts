@@ -667,7 +667,7 @@ async function runPipeline(params: PipelineParams) {
     // Fetch files
     const { data: files } = await admin
       .from("analysis_request_files")
-      .select("id, name, storage_path, copy_status, extracted_text")
+      .select("id, name, storage_path, copy_status, extracted_text, mime_type, split_status, expected_page_count")
       .eq("analysis_request_id", analysisRequestId)
       .eq("copy_status", "copied")
       .not("storage_path", "is", null);
