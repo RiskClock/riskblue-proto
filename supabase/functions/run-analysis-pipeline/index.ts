@@ -1118,12 +1118,17 @@ async function runPipeline(params: PipelineParams) {
       for (const p of (processesRes2.data as any[]) || []) classOrderMap.set(p.name, 2 * 1000 + (p.display_order ?? 999));
       const orderForTriage = (cn: string) => classOrderMap.get(cn) ?? 9999;
 
-      const orderedFiles = [...files].sort((a: any, b: any) =>
-        (a.name || "").localeCompare(b.name || ""),
-      );
+      // Build triage units: one per (sheet|file, class).
+      // In sheet-mode, file_id is the parent_file_id (kept for legacy joins) and sheet_id identifies the unit.
+      type TriageUnit = { fileId: string; sheetId: string | null; name: string };
+      const triageUnits: TriageUnit[] = useSheets
+        ? sheets.map((s: any) => ({ fileId: s.parent_file_id, sheetId: s.id, name: s.name }))
+        : [...files]
+            .sort((a: any, b: any) => (a.name || "").localeCompare(b.name || ""))
+            .map((f: any) => ({ fileId: f.id, sheetId: null, name: f.name }));
 
       const triageJobRows: any[] = [];
-      orderedFiles.forEach((file: any, fileIdx: number) => {
+      triageUnits.forEach((u, unitIdx) => {
         for (const prompt of prompts) {
           const triagePromptContent =
             (prompt as any).triage_prompt_content ||
@@ -1132,21 +1137,22 @@ async function runPipeline(params: PipelineParams) {
           triageJobRows.push({
             analysis_request_id: analysisRequestId,
             analysis_run_id: activeRunId,
-            file_id: file.id,
+            file_id: u.fileId,
+            sheet_id: u.sheetId,
+            parent_file_id: useSheets ? u.fileId : null,
             awp_class_name: (prompt as any).awp_class_name,
             prompt_content: triagePromptContent,
             analyze_model: triageModel,
             job_kind: "triage",
             status: "pending",
-            // File-first sort: process all classes for one file before moving
-            // on, so the UI fills horizontally (row by row).
-            sort_order: fileIdx * 1000 + orderForTriage((prompt as any).awp_class_name),
+            // Unit-first sort: process all classes for one unit before moving on.
+            sort_order: unitIdx * 1000 + orderForTriage((prompt as any).awp_class_name),
           });
         }
       });
 
       console.log(
-        `[pipeline] Phase 2: enqueueing ${triageJobRows.length} triage jobs (${files.length} files × ${prompts.length} classes)`,
+        `[pipeline] Phase 2: enqueueing ${triageJobRows.length} triage jobs (${triageUnits.length} ${useSheets ? "sheets" : "files"} × ${prompts.length} classes)`,
       );
 
       // Clear stale triage jobs for this request before insert
@@ -1162,6 +1168,7 @@ async function runPipeline(params: PipelineParams) {
           analysis_request_id: j.analysis_request_id,
           analysis_run_id: activeRunId,
           file_id: j.file_id,
+          sheet_id: j.sheet_id,
           awp_class_name: j.awp_class_name,
           status: "processing",
         }));
@@ -1169,7 +1176,9 @@ async function runPipeline(params: PipelineParams) {
         for (let i = 0; i < placeholderRows.length; i += PCHUNK) {
           await admin.from("analysis_triage_results").upsert(
             placeholderRows.slice(i, i + PCHUNK),
-            { onConflict: "analysis_request_id,file_id,awp_class_name" },
+            { onConflict: useSheets
+                ? "analysis_request_id,sheet_id,awp_class_name"
+                : "analysis_request_id,file_id,awp_class_name" },
           );
         }
       }
