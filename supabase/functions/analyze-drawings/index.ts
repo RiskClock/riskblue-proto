@@ -279,11 +279,17 @@ serve(async (req) => {
       isInternal = authedUser.email?.toLowerCase().endsWith("@riskclock.com") ?? false;
     }
 
-    const { analysisRequestId, analysisRunId, fileId, awpClassName, promptContent, model, openaiFileId: suppliedOpenaiFileId } = await req.json();
+    const { analysisRequestId, analysisRunId: bodyAnalysisRunId, fileId, awpClassName, promptContent, model, openaiFileId: suppliedOpenaiFileId } = await req.json();
+    let analysisRunId: string | null = bodyAnalysisRunId ?? null;
     if (!analysisRequestId || !fileId || !awpClassName || !promptContent) {
       return new Response(JSON.stringify({ error: "Missing required fields" }), {
         status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
+    }
+    if (!analysisRunId) {
+      console.warn(
+        `[analyze-drawings] MISSING analysisRunId in request body — request=${analysisRequestId} file=${fileId} class=${awpClassName}. Will derive from analysis_requests row.`,
+      );
     }
 
     // Project-access check (internal users + internal-call skip)
