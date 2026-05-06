@@ -453,15 +453,14 @@ ${roleInstructions}`;
       sheetRole = score >= 50 ? "analysis_sheet" : "irrelevant";
     }
 
-    const updatePatch: Record<string, unknown> = {
+    const writeRes = await writeTriageRow({
       status: "complete", score, reason, sheet_role: sheetRole,
-    };
-    let q = adminSupabase.from("analysis_triage_results").update(updatePatch as any)
-      .eq("analysis_request_id", analysisRequestId)
-      .eq("awp_class_name", awpClassName);
-    if (sheetRecord) q = q.eq("sheet_id", sheetRecord.id);
-    else q = q.eq("file_id", parentFileId);
-    await q;
+    });
+    if (!writeRes.ok) {
+      return new Response(JSON.stringify({ error: `Failed to persist triage result: ${writeRes.error}` }), {
+        status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
 
     console.log(`[triage] Complete: ${sheetLabel} class=${awpClassName} score=${score} role=${sheetRole}`);
 
