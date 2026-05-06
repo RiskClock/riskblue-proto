@@ -3414,7 +3414,7 @@ export function AnalysisSection({ requestId, files, projectId, sourceType, isWMS
                     <span className="text-sm font-medium text-foreground">{wmsvPhaseLabel}</span>
                     {!analyzeV2Stopping && (
                       <span className="text-xs text-muted-foreground tabular-nums">
-                        {pipelineDone}/{pipelineTotal} {pipelinePhase === "extracting" ? "files" : "items"}
+                        {pipelineDone}/{pipelineTotal} {pipelinePhase === "extracting" ? "pages" : "items"}
                       </span>
                     )}
                     <Button
@@ -3504,7 +3504,7 @@ export function AnalysisSection({ requestId, files, projectId, sourceType, isWMS
                   <Loader2 className="w-4 h-4 animate-spin text-primary" />
                   <span className="text-sm font-medium text-foreground">{pipelinePhaseLabel}</span>
                   <span className="text-xs text-muted-foreground tabular-nums">
-                    {pipelineDone}/{pipelineTotal} {pipelinePhase === "extracting" ? "files" : "items"}
+                    {pipelineDone}/{pipelineTotal} {pipelinePhase === "extracting" ? "pages" : "items"}
                   </span>
                   <Button
                     size="sm"
