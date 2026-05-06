@@ -953,13 +953,30 @@ function ExtractedTextBody({ fileId, localText }: { fileId: string; localText?: 
     if (localText) { setText(localText); setLoading(false); return; }
     let cancelled = false;
     (async () => {
-      const { data } = await supabase
+      // Try parent file first
+      const { data: fileRow } = await supabase
         .from("analysis_request_files")
         .select("extracted_text")
         .eq("id", fileId)
         .single();
+      let combined = (fileRow?.extracted_text as string) || "";
+
+      // Fallback: concatenate per-sheet extracted_text (split files)
+      if (!combined) {
+        const { data: sheets } = await supabase
+          .from("analysis_request_sheets")
+          .select("page_index, extracted_text")
+          .eq("parent_file_id", fileId)
+          .order("page_index");
+        if (sheets && sheets.length > 0) {
+          combined = sheets
+            .filter((s: any) => s.extracted_text)
+            .map((s: any) => `--- Page ${s.page_index} ---\n${s.extracted_text}`)
+            .join("\n\n");
+        }
+      }
       if (!cancelled) {
-        setText((data?.extracted_text as string) || null);
+        setText(combined || null);
         setLoading(false);
       }
     })();
