@@ -3945,9 +3945,21 @@ export function AnalysisSection({ requestId, files, projectId, sourceType, isWMS
                             // Legacy fallback (non-sheet-mode runs)
                             const legacyExtracting = extractingFileIds.has(file.id);
                             const legacyExtracted = extractedFileIds.has(file.id);
-                            const showSpinner = sheetExtracting || (legacyExtracting && !sp);
+                            // Pipeline-phase fallback: while phase is extract/split, show spinner
+                            // for any file not yet marked processed.
+                            const pipelineExtracting =
+                              (pipelinePhase === "extracting" || pipelinePhase === "splitting") &&
+                              !legacyExtracted && !sheetAllDone;
+                            // Once we've moved past extract phase, treat all files as processed
+                            // (any file that reached triage/analyze must have completed extract).
+                            const pastExtract =
+                              pipelinePhase === "triaging" ||
+                              pipelinePhase === "analyzing" ||
+                              pipelinePhase === "summarizing" ||
+                              dbStatus === "complete";
+                            const showSpinner = sheetExtracting || legacyExtracting || pipelineExtracting;
                             const showProcessed =
-                              (sp ? sheetAllDone : legacyExtracted) && !showSpinner;
+                              !showSpinner && (sheetAllDone || legacyExtracted || pastExtract);
                             return (
                               <>
                                 {showSpinner && (
@@ -3955,11 +3967,11 @@ export function AnalysisSection({ requestId, files, projectId, sourceType, isWMS
                                     <TooltipTrigger asChild>
                                       <Loader2 className="w-3 h-3 animate-spin text-muted-foreground flex-shrink-0" />
                                     </TooltipTrigger>
-                                    {sp && (
-                                      <TooltipContent>
-                                        Extracting context: {sp.total - sp.pending}/{sp.total} pages
-                                      </TooltipContent>
-                                    )}
+                                    <TooltipContent>
+                                      {sp
+                                        ? `Extracting context: ${sp.total - sp.pending}/${sp.total} pages`
+                                        : "Extracting context"}
+                                    </TooltipContent>
                                   </Tooltip>
                                 )}
                                 {uploadingFileIds.has(file.id) && !showSpinner && pipelinePhase !== "analyzing" && (
