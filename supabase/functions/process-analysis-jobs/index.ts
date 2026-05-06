@@ -128,6 +128,9 @@ async function runJob(
   if (job.job_kind === "split_pdf_chunk") {
     return runSplitPdfChunk(admin, job);
   }
+  if (job.job_kind === "triage") {
+    return runTriageJob(admin, supabaseUrl, serviceKey, job, remainingMs);
+  }
 
   // Short-circuit if a complete result already exists (idempotency guard)
   const { data: existingComplete } = await admin
