@@ -715,7 +715,7 @@ Deno.serve(async (req) => {
     // Verify analysis request exists and user has access
     const { data: request, error: reqErr } = await admin
       .from("analysis_requests")
-      .select("project_id, user_id, status")
+      .select("project_id, user_id, status, disabled_awp_classes")
       .eq("id", analysisRequestId)
       .single();
 
@@ -922,7 +922,7 @@ Deno.serve(async (req) => {
       serviceKey,
       userToken,
       analysisRequestId,
-      enabledAwpClasses,
+      enabledAwpClasses: enabledAwpClasses ?? deriveEnabledFromDisabled((request as any)?.disabled_awp_classes),
       triageModel: triageModel || "gpt-5-nano",
       analyzeModel: analyzeModel || "gpt-5-mini",
       phaseOverride,
