@@ -400,21 +400,14 @@ ${roleInstructions}`;
       }
     }
 
-    const failTriage = async (msg: string) => {
-      const upd = { status: "failed", error_message: msg };
-      let q = adminSupabase.from("analysis_triage_results").update(upd as any)
-        .eq("analysis_request_id", analysisRequestId)
-        .eq("awp_class_name", awpClassName);
-      if (sheetRecord) q = q.eq("sheet_id", sheetRecord.id);
-      else q = q.eq("file_id", parentFileId);
-      await q;
-    };
-
     if (!triageResponse || !triageResponse.ok) {
       const errText = triageResponse ? await triageResponse.text() : lastErr;
       const status = triageResponse?.status ?? 0;
       console.error(`[triage] OpenAI failed: ${errText}`);
-      await failTriage(`Triage API failed: ${status || "network error"}`);
+      await writeTriageRow({
+        status: "failed",
+        error_message: `Triage API failed: ${status || "network error"}`,
+      });
       return new Response(JSON.stringify({ error: "Triage failed" }), {
         status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
