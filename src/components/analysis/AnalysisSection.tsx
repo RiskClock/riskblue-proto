@@ -1283,7 +1283,9 @@ export function AnalysisSection({ requestId, files, projectId, sourceType, isWMS
       analyzeTokensRef.current = at;
     }
     const disabled = (requestMeta as any).disabled_awp_classes as string[] | null;
-    if (Array.isArray(disabled)) {
+    // Treat empty array same as null — apply DEFAULT_DISABLED_AWP later.
+    // Only honor a persisted non-empty selection as the user's explicit choice.
+    if (Array.isArray(disabled) && disabled.length > 0) {
       setDisabledColumns(new Set(disabled));
       setDisabledDefaultsApplied(true);
     }
@@ -1426,13 +1428,14 @@ export function AnalysisSection({ requestId, files, projectId, sourceType, isWMS
     return m;
   }, [sheetStatusData]);
 
-  // Refresh extraction badges when pipeline phase transitions OUT of "extracting"
+  // Refresh extraction badges on every pipeline phase transition (not only out of "extracting").
+  // This ensures non-sheet-mode runs get the Processed badge once extract completes.
   useEffect(() => {
     const currentPhase = (requestMeta as any)?.pipeline_phase as string | null;
     const prev = prevPipelinePhaseRef.current;
     prevPipelinePhaseRef.current = currentPhase;
 
-    if (prev === "extracting" && currentPhase !== "extracting" && requestId) {
+    if (prev !== currentPhase && requestId) {
       supabase
         .from("analysis_request_files")
         .select("id")
@@ -1443,6 +1446,30 @@ export function AnalysisSection({ requestId, files, projectId, sourceType, isWMS
         });
     }
   }, [(requestMeta as any)?.pipeline_phase, requestId]);
+
+  // Realtime: keep extractedFileIds fresh as parent files get extracted_text written.
+  useEffect(() => {
+    if (!requestId) return;
+    const channel: RealtimeChannel = supabase
+      .channel(`analysis-files-extracted-${requestId}`)
+      .on(
+        "postgres_changes",
+        { event: "UPDATE", schema: "public", table: "analysis_request_files", filter: `analysis_request_id=eq.${requestId}` },
+        (payload: any) => {
+          const row = payload?.new;
+          if (row?.id && row?.extracted_text) {
+            setExtractedFileIds((prev) => {
+              if (prev.has(row.id)) return prev;
+              const next = new Set(prev);
+              next.add(row.id);
+              return next;
+            });
+          }
+        },
+      )
+      .subscribe();
+    return () => { supabase.removeChannel(channel); };
+  }, [requestId]);
 
   const savedSummaryData = useMemo(() => {
     return (requestMeta?.summary_data as unknown as Record<string, SummarizedInstance[]>) || {};
@@ -1825,7 +1852,8 @@ export function AnalysisSection({ requestId, files, projectId, sourceType, isWMS
     if (disabledDefaultsApplied) return;
     if (!requestMeta) return;
     const persisted = (requestMeta as any).disabled_awp_classes as string[] | null;
-    if (Array.isArray(persisted)) return;
+    // Skip defaults only when user has an explicit non-empty selection persisted.
+    if (Array.isArray(persisted) && persisted.length > 0) return;
     if (!sortedPrompts || sortedPrompts.length === 0) return;
     const namesPresent = sortedPrompts
       .map((p) => p.awp_class_name)
@@ -1883,9 +1911,9 @@ export function AnalysisSection({ requestId, files, projectId, sourceType, isWMS
     }
 
     try {
-      // Compute enabledAwpClasses as the single source of truth
+      // Compute enabledAwpClasses from live state (not the ref, which lags by one render)
       const enabledAwpClasses = sortedPrompts
-        .filter(p => !disabledColumnsRef.current.has(p.awp_class_name))
+        .filter(p => !disabledColumns.has(p.awp_class_name))
         .map(p => p.awp_class_name);
 
       const response = await supabase.functions.invoke("run-analysis-pipeline", {
@@ -3917,9 +3945,21 @@ export function AnalysisSection({ requestId, files, projectId, sourceType, isWMS
                             // Legacy fallback (non-sheet-mode runs)
                             const legacyExtracting = extractingFileIds.has(file.id);
                             const legacyExtracted = extractedFileIds.has(file.id);
-                            const showSpinner = sheetExtracting || (legacyExtracting && !sp);
+                            // Pipeline-phase fallback: while phase is extract/split, show spinner
+                            // for any file not yet marked processed.
+                            const pipelineExtracting =
+                              (pipelinePhase === "extracting" || pipelinePhase === "splitting") &&
+                              !legacyExtracted && !sheetAllDone;
+                            // Once we've moved past extract phase, treat all files as processed
+                            // (any file that reached triage/analyze must have completed extract).
+                            const pastExtract =
+                              pipelinePhase === "triaging" ||
+                              pipelinePhase === "analyzing" ||
+                              pipelinePhase === "summarizing" ||
+                              dbStatus === "complete";
+                            const showSpinner = sheetExtracting || legacyExtracting || pipelineExtracting;
                             const showProcessed =
-                              (sp ? sheetAllDone : legacyExtracted) && !showSpinner;
+                              !showSpinner && (sheetAllDone || legacyExtracted || pastExtract);
                             return (
                               <>
                                 {showSpinner && (
@@ -3927,11 +3967,11 @@ export function AnalysisSection({ requestId, files, projectId, sourceType, isWMS
                                     <TooltipTrigger asChild>
                                       <Loader2 className="w-3 h-3 animate-spin text-muted-foreground flex-shrink-0" />
                                     </TooltipTrigger>
-                                    {sp && (
-                                      <TooltipContent>
-                                        Extracting context: {sp.total - sp.pending}/{sp.total} pages
-                                      </TooltipContent>
-                                    )}
+                                    <TooltipContent>
+                                      {sp
+                                        ? `Extracting context: ${sp.total - sp.pending}/${sp.total} pages`
+                                        : "Extracting context"}
+                                    </TooltipContent>
                                   </Tooltip>
                                 )}
                                 {uploadingFileIds.has(file.id) && !showSpinner && pipelinePhase !== "analyzing" && (
