@@ -29,18 +29,10 @@ export function AnalysisRequestStateProvider({
 }
 
 /**
- * Returns the shared analysis-request state if a provider is present,
- * otherwise falls back to a local hook instance scoped to `requestId`.
- * The fallback keeps existing call sites (e.g. AnalysisRequestDetail page)
- * working without code changes.
+ * Returns the shared state from a surrounding `AnalysisRequestStateProvider`,
+ * or `null` if no provider is mounted. Callers can fall back to a local
+ * `useAnalysisRequestState(requestId)` when this returns null.
  */
-export function useSharedAnalysisRequestState(
-  requestId: string | null | undefined,
-): AnalysisRequestState {
-  const ctx = useContext(AnalysisRequestStateContext);
-  // Hooks must be called unconditionally — but we can only use the local one
-  // when there is no provider. Use a stable rule: always create a local
-  // instance with the same requestId; prefer the context value when present.
-  const local = useAnalysisRequestState(ctx ? null : requestId);
-  return ctx ?? local;
+export function useSharedAnalysisRequestState(): AnalysisRequestState | null {
+  return useContext(AnalysisRequestStateContext);
 }
