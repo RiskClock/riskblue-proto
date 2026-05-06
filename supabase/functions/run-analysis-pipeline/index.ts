@@ -225,6 +225,97 @@ async function safeWriteComplete(
   await q;
 }
 
+// ---------------------------------------------------------------------------
+// Run integrity check.
+// After a run completes, scan analysis_results for the request and flag any
+// rows whose analysis_run_id is NULL or doesn't match the active run. These
+// are orphans that the run-scoped frontend query will hide. We log loudly,
+// stamp summary_data.run_integrity for admin/internal visibility, and (when
+// rows are clearly orphaned with NULL run id from this same active run) we
+// repair them by stamping the active run id.
+// ---------------------------------------------------------------------------
+async function runIntegrityCheck(
+  admin: ReturnType<typeof createClient>,
+  requestId: string,
+  activeRunId: string | null,
+): Promise<{ orphanCount: number; mismatchCount: number; repaired: number }> {
+  const summary = { orphanCount: 0, mismatchCount: 0, repaired: 0 };
+  if (!activeRunId) {
+    console.warn(`[pipeline] runIntegrityCheck: no activeRunId for request=${requestId}; skipping`);
+    return summary;
+  }
+  try {
+    const { data: rows, error } = await admin
+      .from("analysis_results")
+      .select("id, analysis_run_id, awp_class_name, file_id, status")
+      .eq("analysis_request_id", requestId);
+    if (error) {
+      console.warn(`[pipeline] runIntegrityCheck query failed for ${requestId}:`, error.message);
+      return summary;
+    }
+    const orphans: string[] = [];
+    const mismatches: Array<{ id: string; run: string | null; class: string }> = [];
+    for (const r of (rows || []) as any[]) {
+      if (r.analysis_run_id == null) {
+        orphans.push(r.id);
+      } else if (r.analysis_run_id !== activeRunId) {
+        mismatches.push({ id: r.id, run: r.analysis_run_id, class: r.awp_class_name });
+      }
+    }
+    summary.orphanCount = orphans.length;
+    summary.mismatchCount = mismatches.length;
+
+    if (orphans.length > 0) {
+      console.error(
+        `[pipeline][INTEGRITY] ${orphans.length} orphan analysis_results (run_id IS NULL) for request=${requestId} run=${activeRunId}. Repairing.`,
+      );
+      const { error: repairErr, count } = await admin
+        .from("analysis_results")
+        .update({ analysis_run_id: activeRunId } as any, { count: "exact" })
+        .in("id", orphans)
+        .is("analysis_run_id", null);
+      if (repairErr) {
+        console.error(`[pipeline][INTEGRITY] repair failed:`, repairErr.message);
+      } else {
+        summary.repaired = count ?? orphans.length;
+        console.warn(`[pipeline][INTEGRITY] repaired ${summary.repaired} orphan rows`);
+      }
+    }
+    if (mismatches.length > 0) {
+      console.error(
+        `[pipeline][INTEGRITY] ${mismatches.length} mismatched analysis_results for request=${requestId} active=${activeRunId} sample=${JSON.stringify(mismatches.slice(0, 5))}`,
+      );
+    }
+
+    // Stamp summary_data with integrity report (admin visibility only;
+    // frontend does not surface this).
+    try {
+      const { data: cur } = await admin
+        .from("analysis_requests")
+        .select("summary_data")
+        .eq("id", requestId)
+        .single();
+      const sd = ((cur as any)?.summary_data as Record<string, unknown>) || {};
+      sd.run_integrity = {
+        run_id: activeRunId,
+        checked_at: new Date().toISOString(),
+        orphan_count: summary.orphanCount,
+        mismatch_count: summary.mismatchCount,
+        repaired: summary.repaired,
+      };
+      await admin
+        .from("analysis_requests")
+        .update({ summary_data: sd } as any)
+        .eq("id", requestId);
+    } catch (e) {
+      console.warn(`[pipeline][INTEGRITY] failed to stamp summary_data:`, e);
+    }
+  } catch (e) {
+    console.error(`[pipeline][INTEGRITY] unexpected error:`, e);
+  }
+  return summary;
+}
+
 async function markNoEligibleDrawings(
   admin: ReturnType<typeof createClient>,
   requestId: string,
