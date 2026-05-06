@@ -145,6 +145,7 @@ export type Database = {
           page_to: number | null
           parent_file_id: string | null
           prompt_content: string | null
+          sheet_id: string | null
           sort_order: number
           started_at: string | null
           status: string
@@ -171,6 +172,7 @@ export type Database = {
           page_to?: number | null
           parent_file_id?: string | null
           prompt_content?: string | null
+          sheet_id?: string | null
           sort_order?: number
           started_at?: string | null
           status?: string
@@ -197,6 +199,7 @@ export type Database = {
           page_to?: number | null
           parent_file_id?: string | null
           prompt_content?: string | null
+          sheet_id?: string | null
           sort_order?: number
           started_at?: string | null
           status?: string
@@ -217,6 +220,13 @@ export type Database = {
             columns: ["analysis_request_id"]
             isOneToOne: false
             referencedRelation: "analysis_requests"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "analysis_pipeline_jobs_sheet_id_fkey"
+            columns: ["sheet_id"]
+            isOneToOne: false
+            referencedRelation: "analysis_request_sheets"
             referencedColumns: ["id"]
           },
         ]
@@ -2399,6 +2409,7 @@ export type Database = {
           page_to: number | null
           parent_file_id: string | null
           prompt_content: string | null
+          sheet_id: string | null
           sort_order: number
           started_at: string | null
           status: string
