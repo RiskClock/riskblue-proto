@@ -279,11 +279,17 @@ serve(async (req) => {
       isInternal = authedUser.email?.toLowerCase().endsWith("@riskclock.com") ?? false;
     }
 
-    const { analysisRequestId, analysisRunId, fileId, awpClassName, promptContent, model, openaiFileId: suppliedOpenaiFileId } = await req.json();
+    const { analysisRequestId, analysisRunId: bodyAnalysisRunId, fileId, awpClassName, promptContent, model, openaiFileId: suppliedOpenaiFileId } = await req.json();
+    let analysisRunId: string | null = bodyAnalysisRunId ?? null;
     if (!analysisRequestId || !fileId || !awpClassName || !promptContent) {
       return new Response(JSON.stringify({ error: "Missing required fields" }), {
         status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
+    }
+    if (!analysisRunId) {
+      console.warn(
+        `[analyze-drawings] MISSING analysisRunId in request body — request=${analysisRequestId} file=${fileId} class=${awpClassName}. Will derive from analysis_requests row.`,
+      );
     }
 
     // Project-access check (internal users + internal-call skip)
@@ -338,19 +344,42 @@ serve(async (req) => {
       });
     }
 
+    const currentDbRunId = (request as any).analysis_run_id ?? null;
+
     // Run-id guard: abort if a newer run has started for this request.
     if (
       analysisRunId &&
-      (request as any).analysis_run_id &&
-      (request as any).analysis_run_id !== analysisRunId
+      currentDbRunId &&
+      currentDbRunId !== analysisRunId
     ) {
       console.warn(
-        `[analyze-drawings] run mismatch — job=${analysisRunId} current=${(request as any).analysis_run_id}; aborting`,
+        `[analyze-drawings] run mismatch — job=${analysisRunId} current=${currentDbRunId}; aborting`,
       );
       return new Response(
-        JSON.stringify({ error: "Superseded by a newer analysis run", currentRunId: (request as any).analysis_run_id }),
+        JSON.stringify({ error: "Superseded by a newer analysis run", currentRunId: currentDbRunId }),
         { status: 409, headers: { ...corsHeaders, "Content-Type": "application/json" } },
       );
+    }
+
+    // Backfill missing analysisRunId from the current request row. If we
+    // still cannot determine a run id, fail loudly rather than writing an
+    // orphaned result row (analysis_run_id=NULL would be filtered out by
+    // the run-scoped frontend query — that is exactly the bug we are fixing).
+    if (!analysisRunId) {
+      if (currentDbRunId) {
+        analysisRunId = currentDbRunId;
+        console.warn(
+          `[analyze-drawings] backfilled analysisRunId from request row -> ${analysisRunId} (request=${analysisRequestId} file=${fileId} class=${awpClassName})`,
+        );
+      } else {
+        console.error(
+          `[analyze-drawings] FATAL: no analysisRunId in body and none on request row — refusing to write orphaned result. request=${analysisRequestId} file=${fileId} class=${awpClassName}`,
+        );
+        return new Response(
+          JSON.stringify({ error: "No analysis_run_id available; refusing to write orphaned result" }),
+          { status: 409, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+        );
+      }
     }
 
     const { data: fileRecord, error: fileError } = await adminSupabase
@@ -365,12 +394,12 @@ serve(async (req) => {
       });
     }
 
-    // Mark as processing
+    // Mark as processing — analysisRunId is guaranteed non-null at this point.
     await adminSupabase
       .from("analysis_results")
       .upsert({
         analysis_request_id: analysisRequestId,
-        analysis_run_id: analysisRunId ?? null,
+        analysis_run_id: analysisRunId,
         file_id: fileId,
         awp_class_name: awpClassName,
         status: "processing",
@@ -584,9 +613,10 @@ serve(async (req) => {
       }
     }
 
-    // Store result
+    // Store result — also stamp analysis_run_id to repair any prior orphaned
+    // upsert that may have left the row with a NULL run id.
     await adminSupabase.from("analysis_results")
-      .update({ status: "complete", result_text: resultText })
+      .update({ status: "complete", result_text: resultText, analysis_run_id: analysisRunId })
       .eq("file_id", fileId)
       .eq("analysis_request_id", analysisRequestId)
       .eq("awp_class_name", awpClassName);

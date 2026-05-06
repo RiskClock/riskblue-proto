@@ -19,6 +19,7 @@ import { ActiveExportModal } from "@/components/export/ActiveExportModal";
 import { useAnalysisExport } from "@/hooks/useAnalysisExport";
 import { useAccountType } from "@/hooks/useAccountType";
 import { useAnalysisRequestState } from "@/hooks/useAnalysisRequestState";
+import { AnalysisRequestStateValueProvider } from "@/contexts/AnalysisRequestStateContext";
 import { uiStateBadgeClass } from "@/lib/analysisUiState";
 
 const ACCEPTED_TYPES = ".pdf,.png,.jpg,.jpeg,.dwg,.dxf";
@@ -428,18 +429,20 @@ export function WMSVProjectDetail({ projectId, projectName }: WMSVProjectDetailP
               {/* Analysis section */}
               {files && files.length > 0 && !isImporting(request.status) && (
                 <>
-                  <AnalysisSection
-                    requestId={request.id}
-                    files={files}
-                    projectId={projectId}
-                    sourceType={request.source_type}
-                    isWMSV={true}
-                    visibleAwpClasses={visibleAwpClasses}
-                    onAddFileUpload={() => fileInputRef.current?.click()}
-                    onAddFileDrive={() => setShowDriveDialog(true)}
-                    onAddFileProcore={() => setShowProcoreDialog(true)}
-                    onAddFileSharePoint={() => setShowSharePointDialog(true)}
-                  />
+                  <AnalysisRequestStateValueProvider value={analysisState}>
+                    <AnalysisSection
+                      requestId={request.id}
+                      files={files}
+                      projectId={projectId}
+                      sourceType={request.source_type}
+                      isWMSV={true}
+                      visibleAwpClasses={visibleAwpClasses}
+                      onAddFileUpload={() => fileInputRef.current?.click()}
+                      onAddFileDrive={() => setShowDriveDialog(true)}
+                      onAddFileProcore={() => setShowProcoreDialog(true)}
+                      onAddFileSharePoint={() => setShowSharePointDialog(true)}
+                    />
+                  </AnalysisRequestStateValueProvider>
                   <input
                     ref={fileInputRef}
                     type="file"
