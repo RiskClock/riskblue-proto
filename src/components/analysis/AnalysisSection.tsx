@@ -1249,7 +1249,7 @@ export function AnalysisSection({ requestId, files, projectId, sourceType, isWMS
       analyzeTokensRef.current = at;
     }
     const disabled = (requestMeta as any).disabled_awp_classes as string[] | null;
-    if (disabled && disabled.length > 0) {
+    if (Array.isArray(disabled)) {
       setDisabledColumns(new Set(disabled));
       setDisabledDefaultsApplied(true);
     }
@@ -1740,7 +1740,7 @@ export function AnalysisSection({ requestId, files, projectId, sourceType, isWMS
     if (disabledDefaultsApplied) return;
     if (!requestMeta) return;
     const persisted = (requestMeta as any).disabled_awp_classes as string[] | null;
-    if (persisted && persisted.length > 0) return;
+    if (Array.isArray(persisted)) return;
     if (!sortedPrompts || sortedPrompts.length === 0) return;
     const namesPresent = sortedPrompts
       .map((p) => p.awp_class_name)
@@ -1800,7 +1800,7 @@ export function AnalysisSection({ requestId, files, projectId, sourceType, isWMS
     try {
       // Compute enabledAwpClasses as the single source of truth
       const enabledAwpClasses = sortedPrompts
-        .filter(p => !disabledColumns.has(p.awp_class_name))
+        .filter(p => !disabledColumnsRef.current.has(p.awp_class_name))
         .map(p => p.awp_class_name);
 
       const response = await supabase.functions.invoke("run-analysis-pipeline", {
