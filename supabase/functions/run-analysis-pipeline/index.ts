@@ -773,15 +773,15 @@ async function runPipeline(params: PipelineParams) {
       // (Previous results already cleared at pipeline start)
 
       const triageItems: Array<{ fileId: string; fileName: string; prompt: any }> = [];
-      // Class-major interleaving: with N concurrent workers, this dispatches
-      // the first N files (top-to-bottom) before moving to the next class.
-      // Visible effect: triage spinners advance row-by-row down the file list,
-      // matching the order shown in the UI.
+      // File-major ordering: dispatch all classes for file 1, then file 2, etc.
+      // With N concurrent workers this still starts at the top of the file
+      // list, but progress fills in row-by-row (horizontally) rather than
+      // column-by-column.
       const orderedFiles = [...files].sort((a: any, b: any) =>
         (a.name || "").localeCompare(b.name || ""),
       );
-      for (const prompt of prompts) {
-        for (const file of orderedFiles) {
+      for (const file of orderedFiles) {
+        for (const prompt of prompts) {
           triageItems.push({ fileId: file.id, fileName: file.name, prompt });
         }
       }
