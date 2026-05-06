@@ -568,15 +568,18 @@ async function runPipeline(params: PipelineParams) {
       .not("storage_path", "is", null);
 
     if (!files || files.length === 0) {
-      await admin
-        .from("analysis_requests")
-        .update({
-          status: "complete",
-          pipeline_phase: null,
-          pipeline_progress_done: 0,
-          pipeline_progress_total: 0,
-        } as any)
-        .eq("id", analysisRequestId);
+      await markNoEligibleDrawings(admin, analysisRequestId, activeRunId);
+      return;
+    }
+
+    // Fetch AWP prompts
+    const { data: allPrompts } = await admin
+      .from("awp_class_prompts")
+      .select("*")
+      .not("drive_file_id", "is", null);
+
+    if (!allPrompts || allPrompts.length === 0) {
+      await markNoEligibleDrawings(admin, analysisRequestId, activeRunId);
       return;
     }
 
