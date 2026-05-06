@@ -227,29 +227,77 @@ Deno.serve(async (req) => {
 
     // Resolve parent file id (always set so legacy joins keep working)
     const parentFileId = sheetRecord ? sheetRecord.parent_file_id : fileRecord.id;
-    const triageKey = sheetRecord
-      ? { analysis_request_id: analysisRequestId, sheet_id: sheetRecord.id, awp_class_name: awpClassName }
-      : { analysis_request_id: analysisRequestId, file_id: parentFileId, awp_class_name: awpClassName };
 
-    // Upsert triage row as processing
-    if (sheetRecord) {
-      await adminSupabase.from("analysis_triage_results").upsert({
+    // -----------------------------------------------------------------------
+    // Sole-writer helper: writes the FINAL triage row for this (request,
+    // unit, class). Implemented as select-then-insert/update because the
+    // unique constraints on analysis_triage_results are *partial* indexes
+    // (sheet mode vs legacy file mode) which PostgREST onConflict cannot
+    // target reliably. We always check .error and surface failures.
+    // -----------------------------------------------------------------------
+    const writeTriageRow = async (payload: {
+      status: string;
+      score?: number | null;
+      reason?: string | null;
+      sheet_role?: string | null;
+      error_message?: string | null;
+    }) => {
+      const baseRow = {
         analysis_request_id: analysisRequestId,
         analysis_run_id: analysisRunId ?? null,
         file_id: parentFileId,
-        sheet_id: sheetRecord.id,
+        sheet_id: sheetRecord ? sheetRecord.id : null,
         awp_class_name: awpClassName,
-        status: "processing",
-      }, { onConflict: "analysis_request_id,sheet_id,awp_class_name" });
-    } else {
-      await adminSupabase.from("analysis_triage_results").upsert({
-        analysis_request_id: analysisRequestId,
-        analysis_run_id: analysisRunId ?? null,
-        file_id: parentFileId,
-        awp_class_name: awpClassName,
-        status: "processing",
-      }, { onConflict: "analysis_request_id,file_id,awp_class_name" });
-    }
+        status: payload.status,
+        score: payload.score ?? null,
+        reason: payload.reason ?? null,
+        sheet_role: payload.sheet_role ?? null,
+        error_message: payload.error_message ?? null,
+      };
+
+      const findExisting = async () => {
+        let q = adminSupabase
+          .from("analysis_triage_results")
+          .select("id")
+          .eq("analysis_request_id", analysisRequestId)
+          .eq("awp_class_name", awpClassName);
+        if (sheetRecord) q = q.eq("sheet_id", sheetRecord.id);
+        else q = q.eq("file_id", parentFileId).is("sheet_id", null);
+        const { data, error } = await q.maybeSingle();
+        if (error) console.error(`[triage] lookup failed for ${awpClassName}: ${error.message}`);
+        return (data as any)?.id ?? null;
+      };
+
+      const existingId = await findExisting();
+      if (existingId) {
+        const { error: updErr } = await adminSupabase
+          .from("analysis_triage_results").update(baseRow as any).eq("id", existingId);
+        if (updErr) {
+          console.error(`[triage] update failed for ${awpClassName}: ${updErr.message}`);
+          return { ok: false, error: updErr.message };
+        }
+        return { ok: true };
+      }
+
+      const { error: insErr } = await adminSupabase
+        .from("analysis_triage_results").insert(baseRow as any);
+      if (insErr) {
+        // Race: someone inserted between SELECT and INSERT. Re-select & update.
+        const raceId = await findExisting();
+        if (raceId) {
+          const { error: updErr2 } = await adminSupabase
+            .from("analysis_triage_results").update(baseRow as any).eq("id", raceId);
+          if (updErr2) {
+            console.error(`[triage] race-update failed: ${updErr2.message}`);
+            return { ok: false, error: updErr2.message };
+          }
+          return { ok: true };
+        }
+        console.error(`[triage] insert failed for ${awpClassName}: ${insErr.message}`);
+        return { ok: false, error: insErr.message };
+      }
+      return { ok: true };
+    };
 
     // Get extracted text from sheet or file. If missing, extract now (fallback).
     const sourceUnit = sheetRecord || fileRecord;
