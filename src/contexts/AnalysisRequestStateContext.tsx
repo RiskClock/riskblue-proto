@@ -13,6 +13,7 @@ import {
  */
 const AnalysisRequestStateContext = createContext<AnalysisRequestState | null>(null);
 
+/** Provider that creates its own hook instance from `requestId`. */
 export function AnalysisRequestStateProvider({
   requestId,
   children,
@@ -21,6 +22,21 @@ export function AnalysisRequestStateProvider({
   children: ReactNode;
 }) {
   const value = useAnalysisRequestState(requestId);
+  return (
+    <AnalysisRequestStateContext.Provider value={value}>
+      {children}
+    </AnalysisRequestStateContext.Provider>
+  );
+}
+
+/** Provider for callers that already hold a hook instance and want to share it. */
+export function AnalysisRequestStateValueProvider({
+  value,
+  children,
+}: {
+  value: AnalysisRequestState;
+  children: ReactNode;
+}) {
   return (
     <AnalysisRequestStateContext.Provider value={value}>
       {children}
