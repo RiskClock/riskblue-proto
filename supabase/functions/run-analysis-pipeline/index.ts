@@ -1369,11 +1369,13 @@ async function runPipeline(params: PipelineParams) {
         }
       }
 
-      // Clear any old jobs for this request before inserting fresh ones
+      // Clear any old analyze jobs for this request before inserting fresh ones.
+      // Scope to analyze-kind jobs so we don't wipe completed triage jobs.
       await admin
         .from("analysis_pipeline_jobs")
         .delete()
-        .eq("analysis_request_id", analysisRequestId);
+        .eq("analysis_request_id", analysisRequestId)
+        .or("job_kind.is.null,job_kind.eq.analyze");
 
       // Build job rows. Items with no prompt content fail immediately as
       // analysis_results rows (preserves prior behavior, no retries).
