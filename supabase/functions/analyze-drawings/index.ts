@@ -516,16 +516,16 @@ serve(async (req) => {
         openaiApiKey,
         fileRecord,
         fileId,
+        sheetId: sheetId ?? null,
         storageBucket,
         effectiveMime,
       });
 
       if ("error" in uploadResult) {
-        await adminSupabase.from("analysis_results")
-          .update({ status: "failed", error_message: uploadResult.error })
-          .eq("file_id", fileId)
-          .eq("analysis_request_id", analysisRequestId)
-          .eq("awp_class_name", awpClassName);
+        await scopeResultsUpdate(
+          adminSupabase.from("analysis_results")
+            .update({ status: "failed", error_message: uploadResult.error })
+        );
         return new Response(JSON.stringify({ error: uploadResult.error }), {
           status: uploadResult.httpStatus, headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
