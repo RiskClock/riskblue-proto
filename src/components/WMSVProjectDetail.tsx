@@ -311,7 +311,7 @@ export function WMSVProjectDetail({ projectId, projectName }: WMSVProjectDetailP
             </Badge>
           )}
         </div>
-        <p className="text-sm text-muted-foreground mb-6 max-w-4xl">
+        <p className="text-sm text-muted-foreground mb-6">
           All analyses are processed in a controlled, access-restricted environment with enforced data isolation and integrity safeguards. Results are exclusive to your project.
         </p>
 
