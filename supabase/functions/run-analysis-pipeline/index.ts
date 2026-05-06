@@ -922,7 +922,8 @@ Deno.serve(async (req) => {
       serviceKey,
       userToken,
       analysisRequestId,
-      enabledAwpClasses: enabledAwpClasses ?? deriveEnabledFromDisabled((request as any)?.disabled_awp_classes),
+      enabledAwpClasses,
+      disabledAwpClasses: (request as any)?.disabled_awp_classes,
       triageModel: triageModel || "gpt-5-nano",
       analyzeModel: analyzeModel || "gpt-5-mini",
       phaseOverride,
@@ -946,29 +947,6 @@ Deno.serve(async (req) => {
     );
   }
 });
-
-const KNOWN_DRAWING_AWP_CLASSES = [
-  "Electrical Room",
-  "Elevator Pit",
-  "Mechanical Room",
-  "Electrical Riser",
-  "Mechanical Riser",
-  "Kitchen & Washroom",
-  "Domestic Hot Water",
-  "Domestic Cold Water",
-  "Temporary Water Run",
-  "Hydronics",
-  "Fire Suppression System",
-  "Sump Pit, Storm Drain & Drainage",
-  "Suite",
-  "Mass Timber and Millwork",
-];
-
-function deriveEnabledFromDisabled(disabledAwpClasses: unknown): string[] | undefined {
-  if (!Array.isArray(disabledAwpClasses)) return undefined;
-  const disabled = new Set(disabledAwpClasses.filter((v): v is string => typeof v === "string"));
-  return KNOWN_DRAWING_AWP_CLASSES.filter((name) => !disabled.has(name));
-}
 
 // ---------------------------------------------------------------------------
 // Pipeline orchestrator
