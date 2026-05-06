@@ -608,6 +608,28 @@ async function runSplitPhase(params: {
     await new Promise((r) => setTimeout(r, SPLIT_POLL_INTERVAL_MS));
   }
 
+  // Timeout guard: if jobs are still pending/processing after the hard cap,
+  // mark the request failed and raise so the pipeline does NOT silently
+  // continue into extract/triage with half-normalized parents.
+  const { count: stillPending } = await admin
+    .from("analysis_pipeline_jobs")
+    .select("id", { count: "exact", head: true })
+    .eq("analysis_request_id", analysisRequestId)
+    .eq("job_kind", "split_pdf_chunk")
+    .in("status", ["pending", "processing"]);
+  if ((stillPending ?? 0) > 0) {
+    const msg = `split timeout: ${stillPending} chunk job(s) still pending after ${Math.round(SPLIT_POLL_TIMEOUT_MS / 1000)}s`;
+    console.error(`[pipeline][split] ${msg}`);
+    await admin
+      .from("analysis_requests")
+      .update({
+        status: "failed",
+        pipeline_phase: "splitting",
+        error_message: msg,
+      } as any)
+      .eq("id", analysisRequestId);
+    throw new Error(msg);
+
   // Final summary
   const { data: finalRows } = await admin
     .from("analysis_request_files")
