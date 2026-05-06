@@ -341,15 +341,19 @@ async function updateProgress(
       }
     }
 
+    // Scope to analyze jobs only (exclude triage / split_pdf_chunk) so the
+    // progress count matches the analyze-phase total set by the pipeline.
     const baseDone = admin
       .from("analysis_pipeline_jobs")
       .select("id", { count: "exact", head: true })
       .eq("analysis_request_id", requestId)
+      .or("job_kind.is.null,job_kind.eq.analyze")
       .in("status", ["complete", "failed", "cancelled"]);
     const baseTotal = admin
       .from("analysis_pipeline_jobs")
       .select("id", { count: "exact", head: true })
-      .eq("analysis_request_id", requestId);
+      .eq("analysis_request_id", requestId)
+      .or("job_kind.is.null,job_kind.eq.analyze");
 
     const { count: doneCount } = runId
       ? await baseDone.eq("analysis_run_id", runId)
