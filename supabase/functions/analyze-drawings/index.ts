@@ -378,28 +378,63 @@ serve(async (req) => {
       );
     }
 
-    const { data: fileRecord, error: fileError } = await adminSupabase
+    // Fetch unit: sheet (preferred) or legacy file. We always need a parent
+    // file row for source_type/bucket, mime, name and OpenAI cache fields when
+    // operating in legacy mode. In sheet-mode the OpenAI cache lives on the sheet.
+    let sheetRecord: any = null;
+    const { data: parentFileRecord, error: fileError } = await adminSupabase
       .from("analysis_request_files")
       .select("*")
       .eq("id", fileId)
       .single();
-
-    if (fileError || !fileRecord) {
+    if (fileError || !parentFileRecord) {
       return new Response(JSON.stringify({ error: "File not found" }), {
         status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
+    if (sheetId) {
+      const { data: sh, error: sErr } = await adminSupabase
+        .from("analysis_request_sheets")
+        .select("*")
+        .eq("id", sheetId)
+        .single();
+      if (sErr || !sh) {
+        return new Response(JSON.stringify({ error: "Sheet not found" }), {
+          status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+      sheetRecord = sh;
+    }
+
+    // The unit whose storage_path / openai cache we use:
+    const unit: any = sheetRecord || parentFileRecord;
+    // Used for name, mime fallback:
+    const fileRecord: any = { ...parentFileRecord, ...(sheetRecord ? {
+      // Override storage + cache fields so the rest of this function uses sheet bytes.
+      storage_path: sheetRecord.storage_path,
+      openai_file_id: sheetRecord.openai_file_id,
+      openai_file_uploaded_at: sheetRecord.openai_file_uploaded_at,
+      openai_file_expires_at: sheetRecord.openai_file_expires_at,
+      openai_file_status: sheetRecord.openai_file_status,
+      name: sheetRecord.name || parentFileRecord.name,
+    } : {}) };
 
     // Mark as processing — analysisRunId is guaranteed non-null at this point.
+    const upsertRow: Record<string, unknown> = {
+      analysis_request_id: analysisRequestId,
+      analysis_run_id: analysisRunId,
+      file_id: fileId,
+      sheet_id: sheetId ?? null,
+      awp_class_name: awpClassName,
+      status: "processing",
+    };
     await adminSupabase
       .from("analysis_results")
-      .upsert({
-        analysis_request_id: analysisRequestId,
-        analysis_run_id: analysisRunId,
-        file_id: fileId,
-        awp_class_name: awpClassName,
-        status: "processing",
-      }, { onConflict: "analysis_request_id,file_id,awp_class_name" });
+      .upsert(upsertRow, {
+        onConflict: sheetId
+          ? "analysis_request_id,sheet_id,awp_class_name"
+          : "analysis_request_id,file_id,awp_class_name",
+      });
 
     // ------------------------------------------------------------------
     // Determine effective MIME type (Procore often stores octet-stream)
