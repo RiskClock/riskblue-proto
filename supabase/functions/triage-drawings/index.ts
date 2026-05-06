@@ -132,6 +132,69 @@ Deno.serve(async (req) => {
     const sourceType = (fileRecord as any).analysis_requests?.source_type;
     const bucket = sourceType === "manual_upload" ? "uploaded-drawings" : "drive-analysis-files";
 
+    // ========== GUARD: never run against parent PDFs in sheet-mode ==========
+    // Sheet normalization is ON BY DEFAULT for all new analyses. A PDF parent
+    // must be split into sheet rows first; triage/extract must be called with
+    // sheetId, not fileId. If we ever receive a file-level call for a PDF
+    // parent under normalization, fail fast — calling pdfParse on a full
+    // combined PDF would OOM the worker (WORKER_RESOURCE_LIMIT).
+    if (!sheetRecord && fileRecord) {
+      const f = fileRecord as any;
+      const isPdf =
+        f.mime_type === "application/pdf" ||
+        (f.name || "").toLowerCase().endsWith(".pdf");
+      let normalizationOn = true;
+      try {
+        const { data: arRow } = await adminSupabase
+          .from("analysis_requests")
+          .select("sheet_normalization_enabled")
+          .eq("id", f.analysis_request_id)
+          .single();
+        normalizationOn = (arRow as any)?.sheet_normalization_enabled !== false;
+      } catch (_) { /* default true */ }
+
+      if (isPdf && normalizationOn) {
+        const msg =
+          `Refusing to ${action === "extract" ? "extract" : "triage"} parent PDF "${f.name}" at file-level: ` +
+          `sheet normalization is enabled. This PDF must be split into sheet rows first (pass sheetId, not fileId).`;
+        console.error(`[triage] ${msg}`);
+        if (action !== "extract" && analysisRequestId && awpClassName) {
+          try {
+            const errMsg = msg.slice(0, 1000);
+            const { data: existing } = await adminSupabase
+              .from("analysis_triage_results")
+              .select("id")
+              .eq("analysis_request_id", analysisRequestId)
+              .eq("file_id", f.id)
+              .is("sheet_id", null)
+              .eq("awp_class_name", awpClassName)
+              .maybeSingle();
+            const failedRow = {
+              analysis_request_id: analysisRequestId,
+              analysis_run_id: analysisRunId ?? null,
+              file_id: f.id,
+              sheet_id: null,
+              awp_class_name: awpClassName,
+              status: "failed",
+              error_message: errMsg,
+            };
+            if ((existing as any)?.id) {
+              await adminSupabase.from("analysis_triage_results")
+                .update(failedRow as any).eq("id", (existing as any).id);
+            } else {
+              await adminSupabase.from("analysis_triage_results").insert(failedRow as any);
+            }
+          } catch (e) {
+            console.error("[triage] failed to persist parent-PDF guard row:", e);
+          }
+        }
+        return new Response(
+          JSON.stringify({ error: msg, code: "PARENT_PDF_NOT_ALLOWED" }),
+          { status: 422, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+        );
+      }
+    }
+
     // ========== ACTION: EXTRACT ==========
     if (action === "extract") {
       const target = sheetRecord || fileRecord;
