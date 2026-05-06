@@ -1886,9 +1886,9 @@ export function AnalysisSection({ requestId, files, projectId, sourceType, isWMS
     }
 
     try {
-      // Compute enabledAwpClasses as the single source of truth
+      // Compute enabledAwpClasses from live state (not the ref, which lags by one render)
       const enabledAwpClasses = sortedPrompts
-        .filter(p => !disabledColumnsRef.current.has(p.awp_class_name))
+        .filter(p => !disabledColumns.has(p.awp_class_name))
         .map(p => p.awp_class_name);
 
       const response = await supabase.functions.invoke("run-analysis-pipeline", {
