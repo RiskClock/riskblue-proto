@@ -947,6 +947,29 @@ Deno.serve(async (req) => {
   }
 });
 
+const KNOWN_DRAWING_AWP_CLASSES = [
+  "Electrical Room",
+  "Elevator Pit",
+  "Mechanical Room",
+  "Electrical Riser",
+  "Mechanical Riser",
+  "Kitchen & Washroom",
+  "Domestic Hot Water",
+  "Domestic Cold Water",
+  "Temporary Water Run",
+  "Hydronics",
+  "Fire Suppression System",
+  "Sump Pit, Storm Drain & Drainage",
+  "Suite",
+  "Mass Timber and Millwork",
+];
+
+function deriveEnabledFromDisabled(disabledAwpClasses: unknown): string[] | undefined {
+  if (!Array.isArray(disabledAwpClasses)) return undefined;
+  const disabled = new Set(disabledAwpClasses.filter((v): v is string => typeof v === "string"));
+  return KNOWN_DRAWING_AWP_CLASSES.filter((name) => !disabled.has(name));
+}
+
 // ---------------------------------------------------------------------------
 // Pipeline orchestrator
 // ---------------------------------------------------------------------------
