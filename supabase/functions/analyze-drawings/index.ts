@@ -59,6 +59,28 @@ function isInvalidFileError(httpStatus: number, parsedError: Record<string, unkn
   );
 }
 
+// ---------------------------------------------------------------------------
+// Pure helper: resolve which analysis_run_id to use for this job.
+// Centralizes "missing body run id → derive from DB" so it can be unit-tested
+// without an HTTP server. Exported for the regression test.
+// ---------------------------------------------------------------------------
+export type RunIdResolution =
+  | { kind: "ok"; runId: string; backfilled: boolean }
+  | { kind: "mismatch"; currentDbRunId: string }
+  | { kind: "none" };
+
+export function resolveAnalysisRunId(
+  bodyRunId: string | null | undefined,
+  currentDbRunId: string | null | undefined,
+): RunIdResolution {
+  const body = bodyRunId ?? null;
+  const db = currentDbRunId ?? null;
+  if (body && db && body !== db) return { kind: "mismatch", currentDbRunId: db };
+  if (body) return { kind: "ok", runId: body, backfilled: false };
+  if (db) return { kind: "ok", runId: db, backfilled: true };
+  return { kind: "none" };
+}
+
 /**
  * Returns true if the model's result text indicates it only received a raster
  * image (i.e. the PDF bytes were not attached).
