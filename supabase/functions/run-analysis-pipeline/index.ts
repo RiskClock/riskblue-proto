@@ -649,23 +649,22 @@ async function runPipeline(params: PipelineParams) {
       const progress = createProgressTracker(admin, analysisRequestId, "extracting", files.length);
       await progress.init();
 
-      const { stopped } = await runPool(
-        files,
-        MAX_CONCURRENCY,
-        admin,
-        analysisRequestId,
-        progress,
-        async (file) => {
-          try {
-            await callFunction(supabaseUrl, serviceKey, userToken, "triage-drawings", {
-              fileId: file.id,
-              action: "extract",
-            });
-          } catch (e) {
-            console.error(`[pipeline] Extract failed for ${file.name}:`, e);
-          }
-        },
-      );
+      // Sequential, top-to-bottom (matches file-list order). Gives the UI a
+      // single visible "current file" spinner that walks down the rows.
+      let stopped = false;
+      for (const file of files) {
+        if (await shouldStop(admin, analysisRequestId)) { stopped = true; break; }
+        try {
+          await callFunction(supabaseUrl, serviceKey, userToken, "triage-drawings", {
+            fileId: (file as any).id,
+            action: "extract",
+          });
+        } catch (e) {
+          console.error(`[pipeline] Extract failed for ${(file as any).name}:`, e);
+        }
+        progress.increment();
+        await progress.flush();
+      }
 
       // Final flush so the last batch's progress + status are written.
       await progress.finalize();
