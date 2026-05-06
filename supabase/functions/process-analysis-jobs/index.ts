@@ -1090,6 +1090,14 @@ async function maybeFinalizeTriage(
   const { count: pendingCount } = await buildQ(["pending", "processing"]);
   if ((pendingCount ?? 0) > 0) return;
 
+  // Safety: if there are zero triage jobs at all (e.g. cron tick raced with
+  // pipeline insert), do NOT finalize — wait for jobs to land.
+  const { count: anyCount } = await buildQ([]);
+  if ((anyCount ?? 0) === 0) {
+    console.warn(`[worker] maybeFinalizeTriage: no triage jobs visible yet for ${requestId}; skipping`);
+    return;
+  }
+
   // Stop-requested: pause
   if ((cur as any).pipeline_stop_requested) {
     let q = admin.from("analysis_requests").update({
