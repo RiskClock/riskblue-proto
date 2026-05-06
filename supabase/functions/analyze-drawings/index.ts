@@ -82,10 +82,11 @@ async function uploadPdfToOpenAI(params: {
   openaiApiKey: string;
   fileRecord: Record<string, unknown>;
   fileId: string;
+  sheetId: string | null;
   storageBucket: string;
   effectiveMime: string;
 }): Promise<{ openaiFileId: string } | { error: string; httpStatus: number }> {
-  const { adminSupabase, openaiApiKey, fileRecord, fileId, storageBucket, effectiveMime } = params;
+  const { adminSupabase, openaiApiKey, fileRecord, fileId, sheetId, storageBucket, effectiveMime } = params;
 
   const storagePath = fileRecord.storage_path as string | null;
   if (!storagePath) {
@@ -101,13 +102,13 @@ async function uploadPdfToOpenAI(params: {
   }
 
   const pdfBlob = new Blob([await fileData.arrayBuffer()], { type: effectiveMime });
-  console.log(`[analyze-drawings] Uploading to OpenAI: name=${fileRecord.name}, mime=${effectiveMime}, blobSize=${pdfBlob.size} bytes`);
+  console.log(`[analyze-drawings] Uploading to OpenAI: name=${fileRecord.name}, mime=${effectiveMime}, blobSize=${pdfBlob.size} bytes, sheetId=${sheetId ?? "-"}`);
 
   const uploadForm = new FormData();
   uploadForm.append("file", pdfBlob, fileRecord.name as string);
   uploadForm.append("purpose", "assistants");
   uploadForm.append("expires_after[anchor]", "created_at");
-  uploadForm.append("expires_after[seconds]", "259200"); // 3 days
+  uploadForm.append("expires_after[seconds]", "259200");
 
   const uploadResponse = await fetch("https://api.openai.com/v1/files", {
     method: "POST",
@@ -128,17 +129,20 @@ async function uploadPdfToOpenAI(params: {
       ? new Date(uploadResult.expires_at * 1000).toISOString()
       : null;
 
-  // Persist fresh cache metadata
-  await adminSupabase.from("analysis_request_files")
-    .update({
-      openai_file_id: openaiFileId,
-      openai_file_uploaded_at: new Date().toISOString(),
-      openai_file_expires_at: openaiExpiresAt,
-      openai_file_status: "active",
-    })
-    .eq("id", fileId);
+  // Persist fresh cache metadata on the unit (sheet in sheet-mode, else parent file)
+  const cachePatch = {
+    openai_file_id: openaiFileId,
+    openai_file_uploaded_at: new Date().toISOString(),
+    openai_file_expires_at: openaiExpiresAt,
+    openai_file_status: "active",
+  };
+  if (sheetId) {
+    await adminSupabase.from("analysis_request_sheets").update(cachePatch).eq("id", sheetId);
+  } else {
+    await adminSupabase.from("analysis_request_files").update(cachePatch).eq("id", fileId);
+  }
 
-  console.log(`[analyze-drawings] Uploaded file ${fileId} to OpenAI as ${openaiFileId} (expires_at: ${openaiExpiresAt ?? "not returned"})`);
+  console.log(`[analyze-drawings] Uploaded ${sheetId ? `sheet ${sheetId}` : `file ${fileId}`} to OpenAI as ${openaiFileId} (expires_at: ${openaiExpiresAt ?? "not returned"})`);
 
   return { openaiFileId };
 }
@@ -284,7 +288,7 @@ serve(async (req) => {
       isInternal = authedUser.email?.toLowerCase().endsWith("@riskclock.com") ?? false;
     }
 
-    const { analysisRequestId, analysisRunId: bodyAnalysisRunId, fileId, awpClassName, promptContent, model, openaiFileId: suppliedOpenaiFileId } = await req.json();
+    const { analysisRequestId, analysisRunId: bodyAnalysisRunId, fileId, sheetId, awpClassName, promptContent, model, openaiFileId: suppliedOpenaiFileId } = await req.json();
     let analysisRunId: string | null = bodyAnalysisRunId ?? null;
     if (!analysisRequestId || !fileId || !awpClassName || !promptContent) {
       return new Response(JSON.stringify({ error: "Missing required fields" }), {
@@ -293,7 +297,7 @@ serve(async (req) => {
     }
     if (!analysisRunId) {
       console.warn(
-        `[analyze-drawings] MISSING analysisRunId in request body — request=${analysisRequestId} file=${fileId} class=${awpClassName}. Will derive from analysis_requests row.`,
+        `[analyze-drawings] MISSING analysisRunId in request body — request=${analysisRequestId} file=${fileId} sheet=${sheetId ?? "-"} class=${awpClassName}. Will derive from analysis_requests row.`,
       );
     }
 
@@ -378,28 +382,63 @@ serve(async (req) => {
       );
     }
 
-    const { data: fileRecord, error: fileError } = await adminSupabase
+    // Fetch unit: sheet (preferred) or legacy file. We always need a parent
+    // file row for source_type/bucket, mime, name and OpenAI cache fields when
+    // operating in legacy mode. In sheet-mode the OpenAI cache lives on the sheet.
+    let sheetRecord: any = null;
+    const { data: parentFileRecord, error: fileError } = await adminSupabase
       .from("analysis_request_files")
       .select("*")
       .eq("id", fileId)
       .single();
-
-    if (fileError || !fileRecord) {
+    if (fileError || !parentFileRecord) {
       return new Response(JSON.stringify({ error: "File not found" }), {
         status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
+    if (sheetId) {
+      const { data: sh, error: sErr } = await adminSupabase
+        .from("analysis_request_sheets")
+        .select("*")
+        .eq("id", sheetId)
+        .single();
+      if (sErr || !sh) {
+        return new Response(JSON.stringify({ error: "Sheet not found" }), {
+          status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+      sheetRecord = sh;
+    }
+
+    // The unit whose storage_path / openai cache we use:
+    const unit: any = sheetRecord || parentFileRecord;
+    // Used for name, mime fallback:
+    const fileRecord: any = { ...parentFileRecord, ...(sheetRecord ? {
+      // Override storage + cache fields so the rest of this function uses sheet bytes.
+      storage_path: sheetRecord.storage_path,
+      openai_file_id: sheetRecord.openai_file_id,
+      openai_file_uploaded_at: sheetRecord.openai_file_uploaded_at,
+      openai_file_expires_at: sheetRecord.openai_file_expires_at,
+      openai_file_status: sheetRecord.openai_file_status,
+      name: sheetRecord.name || parentFileRecord.name,
+    } : {}) };
 
     // Mark as processing — analysisRunId is guaranteed non-null at this point.
+    const upsertRow: Record<string, unknown> = {
+      analysis_request_id: analysisRequestId,
+      analysis_run_id: analysisRunId,
+      file_id: fileId,
+      sheet_id: sheetId ?? null,
+      awp_class_name: awpClassName,
+      status: "processing",
+    };
     await adminSupabase
       .from("analysis_results")
-      .upsert({
-        analysis_request_id: analysisRequestId,
-        analysis_run_id: analysisRunId,
-        file_id: fileId,
-        awp_class_name: awpClassName,
-        status: "processing",
-      }, { onConflict: "analysis_request_id,file_id,awp_class_name" });
+      .upsert(upsertRow, {
+        onConflict: sheetId
+          ? "analysis_request_id,sheet_id,awp_class_name"
+          : "analysis_request_id,file_id,awp_class_name",
+      });
 
     // ------------------------------------------------------------------
     // Determine effective MIME type (Procore often stores octet-stream)

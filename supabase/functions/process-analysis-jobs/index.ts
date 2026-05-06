@@ -135,15 +135,17 @@ async function runJob(
     return runTriageJob(admin, supabaseUrl, serviceKey, job, remainingMs);
   }
 
-  // Short-circuit if a complete result already exists (idempotency guard)
-  const { data: existingComplete } = await admin
+  // Short-circuit if a complete result already exists (idempotency guard).
+  // In sheet-mode the unit-of-work is the sheet, so guard by sheet_id when set.
+  let existingQ = admin
     .from("analysis_results")
     .select("id, status")
     .eq("analysis_request_id", job.analysis_request_id)
-    .eq("file_id", job.file_id)
     .eq("awp_class_name", job.awp_class_name)
-    .eq("status", "complete")
-    .maybeSingle();
+    .eq("status", "complete");
+  if (job.sheet_id) existingQ = existingQ.eq("sheet_id", job.sheet_id);
+  else existingQ = existingQ.eq("file_id", job.file_id).is("sheet_id", null);
+  const { data: existingComplete } = await existingQ.maybeSingle();
 
   if (existingComplete) {
     await updateJobGuarded(admin, job, {
@@ -209,6 +211,7 @@ async function runJob(
         analysisRequestId: job.analysis_request_id,
         analysisRunId: job.analysis_run_id ?? null,
         fileId: job.file_id,
+        sheetId: job.sheet_id ?? null,
         awpClassName: job.awp_class_name,
         promptContent: job.prompt_content,
         model: job.analyze_model,
@@ -925,6 +928,7 @@ async function runTriageJob(
         analysisRequestId: job.analysis_request_id,
         analysisRunId: job.analysis_run_id ?? null,
         fileId: job.file_id,
+        sheetId: job.sheet_id ?? null,
         awpClassName: job.awp_class_name,
         drawingName,
         promptContent: job.prompt_content,

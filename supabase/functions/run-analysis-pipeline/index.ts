@@ -1045,31 +1045,57 @@ async function runPipeline(params: PipelineParams) {
     }
 
     // ======================== PHASE 1: EXTRACT ========================
+    // Determine if this run should iterate over sheets (one row per page) or
+    // legacy file-level units. When useSheets=true, the parent PDF is treated
+    // as a container only; extraction/triage/analyze act on sheets.
+    const { data: reqFlagRow } = await admin
+      .from("analysis_requests")
+      .select("sheet_normalization_enabled")
+      .eq("id", analysisRequestId)
+      .single();
+    const sheetFlagOn = !!(reqFlagRow as any)?.sheet_normalization_enabled;
+
+    let sheets: any[] = [];
+    if (sheetFlagOn) {
+      const { data: sheetRows } = await admin
+        .from("analysis_request_sheets")
+        .select("id, parent_file_id, page_index, name, storage_path, extract_status, extracted_text")
+        .eq("analysis_request_id", analysisRequestId)
+        .order("parent_file_id", { ascending: true })
+        .order("page_index", { ascending: true });
+      sheets = (sheetRows as any[]) || [];
+    }
+    const useSheets = sheetFlagOn && sheets.length > 0;
+    console.log(
+      `[pipeline] sheet-mode=${useSheets} (flag=${sheetFlagOn} sheets=${sheets.length} files=${files.length})`,
+    );
+
     if (runPhase("extract")) {
+      const units: Array<{ id: string; name: string; kind: "sheet" | "file" }> = useSheets
+        ? sheets.map((s: any) => ({ id: s.id, name: s.name, kind: "sheet" as const }))
+        : files.map((f: any) => ({ id: f.id, name: f.name, kind: "file" as const }));
+
       console.log(
-        `[pipeline] Phase 1: Extract context for ${files.length} files`,
+        `[pipeline] Phase 1: Extract context for ${units.length} ${useSheets ? "sheets" : "files"}`,
       );
-      const progress = createProgressTracker(admin, analysisRequestId, "extracting", files.length);
+      const progress = createProgressTracker(admin, analysisRequestId, "extracting", units.length);
       await progress.init();
 
-      // Sequential, top-to-bottom (matches file-list order). Gives the UI a
-      // single visible "current file" spinner that walks down the rows.
       let stopped = false;
-      for (const file of files) {
+      for (const u of units) {
         if (await shouldStop(admin, analysisRequestId)) { stopped = true; break; }
         try {
-          await callFunction(supabaseUrl, serviceKey, userToken, "triage-drawings", {
-            fileId: (file as any).id,
-            action: "extract",
-          });
+          const body: Record<string, unknown> = { action: "extract" };
+          if (u.kind === "sheet") body.sheetId = u.id;
+          else body.fileId = u.id;
+          await callFunction(supabaseUrl, serviceKey, userToken, "triage-drawings", body);
         } catch (e) {
-          console.error(`[pipeline] Extract failed for ${(file as any).name}:`, e);
+          console.error(`[pipeline] Extract failed for ${u.name}:`, e);
         }
         progress.increment();
         await progress.flush();
       }
 
-      // Final flush so the last batch's progress + status are written.
       await progress.finalize();
 
       if (stopped) {
@@ -1092,12 +1118,17 @@ async function runPipeline(params: PipelineParams) {
       for (const p of (processesRes2.data as any[]) || []) classOrderMap.set(p.name, 2 * 1000 + (p.display_order ?? 999));
       const orderForTriage = (cn: string) => classOrderMap.get(cn) ?? 9999;
 
-      const orderedFiles = [...files].sort((a: any, b: any) =>
-        (a.name || "").localeCompare(b.name || ""),
-      );
+      // Build triage units: one per (sheet|file, class).
+      // In sheet-mode, file_id is the parent_file_id (kept for legacy joins) and sheet_id identifies the unit.
+      type TriageUnit = { fileId: string; sheetId: string | null; name: string };
+      const triageUnits: TriageUnit[] = useSheets
+        ? sheets.map((s: any) => ({ fileId: s.parent_file_id, sheetId: s.id, name: s.name }))
+        : [...files]
+            .sort((a: any, b: any) => (a.name || "").localeCompare(b.name || ""))
+            .map((f: any) => ({ fileId: f.id, sheetId: null, name: f.name }));
 
       const triageJobRows: any[] = [];
-      orderedFiles.forEach((file: any, fileIdx: number) => {
+      triageUnits.forEach((u, unitIdx) => {
         for (const prompt of prompts) {
           const triagePromptContent =
             (prompt as any).triage_prompt_content ||
@@ -1106,21 +1137,22 @@ async function runPipeline(params: PipelineParams) {
           triageJobRows.push({
             analysis_request_id: analysisRequestId,
             analysis_run_id: activeRunId,
-            file_id: file.id,
+            file_id: u.fileId,
+            sheet_id: u.sheetId,
+            parent_file_id: useSheets ? u.fileId : null,
             awp_class_name: (prompt as any).awp_class_name,
             prompt_content: triagePromptContent,
             analyze_model: triageModel,
             job_kind: "triage",
             status: "pending",
-            // File-first sort: process all classes for one file before moving
-            // on, so the UI fills horizontally (row by row).
-            sort_order: fileIdx * 1000 + orderForTriage((prompt as any).awp_class_name),
+            // Unit-first sort: process all classes for one unit before moving on.
+            sort_order: unitIdx * 1000 + orderForTriage((prompt as any).awp_class_name),
           });
         }
       });
 
       console.log(
-        `[pipeline] Phase 2: enqueueing ${triageJobRows.length} triage jobs (${files.length} files × ${prompts.length} classes)`,
+        `[pipeline] Phase 2: enqueueing ${triageJobRows.length} triage jobs (${triageUnits.length} ${useSheets ? "sheets" : "files"} × ${prompts.length} classes)`,
       );
 
       // Clear stale triage jobs for this request before insert
@@ -1136,6 +1168,7 @@ async function runPipeline(params: PipelineParams) {
           analysis_request_id: j.analysis_request_id,
           analysis_run_id: activeRunId,
           file_id: j.file_id,
+          sheet_id: j.sheet_id,
           awp_class_name: j.awp_class_name,
           status: "processing",
         }));
@@ -1143,7 +1176,9 @@ async function runPipeline(params: PipelineParams) {
         for (let i = 0; i < placeholderRows.length; i += PCHUNK) {
           await admin.from("analysis_triage_results").upsert(
             placeholderRows.slice(i, i + PCHUNK),
-            { onConflict: "analysis_request_id,file_id,awp_class_name" },
+            { onConflict: useSheets
+                ? "analysis_request_id,sheet_id,awp_class_name"
+                : "analysis_request_id,file_id,awp_class_name" },
           );
         }
       }
@@ -1238,7 +1273,7 @@ async function runPipeline(params: PipelineParams) {
 
       const { data: triageResults } = await admin
         .from("analysis_triage_results")
-        .select("file_id, awp_class_name, status, score")
+        .select("file_id, sheet_id, awp_class_name, status, score, sheet_role")
         .eq("analysis_request_id", analysisRequestId);
 
       const { data: overrides } = await admin
@@ -1246,6 +1281,7 @@ async function runPipeline(params: PipelineParams) {
         .select("file_id, awp_class_name, override_type")
         .eq("analysis_request_id", analysisRequestId);
 
+      // Override map keyed by file_id (parent in sheet-mode) + class.
       const overrideMap = new Map<string, string>();
       for (const o of overrides || []) {
         overrideMap.set(
@@ -1255,11 +1291,13 @@ async function runPipeline(params: PipelineParams) {
       }
 
       interface WorkItem {
-        fileId: string;
-        fileName: string;
+        fileId: string;          // parent file id (always set)
+        sheetId: string | null;  // sheet id when useSheets
+        unitName: string;
         awpClassName: string;
         promptContent: string | null;
         triagePromptContent: string | null;
+        contextText: string | null; // injected context_sheet excerpts
       }
 
       const promptByClass = new Map<string, any>();
@@ -1287,52 +1325,124 @@ async function runPipeline(params: PipelineParams) {
       }
       const orderFor = (cn: string) => classOrderMap.get(cn) ?? 9999;
 
+      // Index sheets by id and by parent for context-sheet lookups.
+      const sheetById = new Map<string, any>();
+      const sheetsByParent = new Map<string, any[]>();
+      if (useSheets) {
+        for (const s of sheets) {
+          sheetById.set(s.id, s);
+          const arr = sheetsByParent.get(s.parent_file_id) || [];
+          arr.push(s);
+          sheetsByParent.set(s.parent_file_id, arr);
+        }
+      }
+
+      // Build context_sheet text per (parent_file_id, awp_class_name), capped
+      // to ~6KB total per analyze unit. Key = `${parentId}::${class}`.
+      const CONTEXT_CAP_BYTES = 6_000;
+      const contextByParentClass = new Map<string, string>();
+      if (useSheets) {
+        for (const t of (triageResults || []) as any[]) {
+          if (t.sheet_role !== "context_sheet") continue;
+          const sh = sheetById.get(t.sheet_id);
+          if (!sh) continue;
+          const txt = (sh.extracted_text || "").trim();
+          if (!txt) continue;
+          const key = `${sh.parent_file_id}::${t.awp_class_name}`;
+          const existing = contextByParentClass.get(key) || "";
+          const remaining = CONTEXT_CAP_BYTES - existing.length;
+          if (remaining <= 200) continue;
+          const header = `\n\n--- Context: ${sh.name} (page ${sh.page_index}) ---\n`;
+          const slice = (header + txt).slice(0, remaining);
+          contextByParentClass.set(key, existing + slice);
+        }
+      }
+
       const workQueue: WorkItem[] = [];
 
-      for (const file of files) {
-        for (const prompt of prompts) {
-          const key = `${file.id}_${(prompt as any).awp_class_name}`;
-          const override = overrideMap.get(key);
-          const triage = (triageResults || []).find(
-            (t: any) =>
-              t.file_id === file.id &&
-              t.awp_class_name === (prompt as any).awp_class_name,
-          );
+      if (useSheets) {
+        // One analyze unit per (analysis-role sheet, class).
+        for (const t of (triageResults || []) as any[]) {
+          if (t.sheet_role !== "analysis_sheet") continue;
+          const sh = sheetById.get(t.sheet_id);
+          if (!sh) continue;
+          const prompt = promptByClass.get(t.awp_class_name);
+          if (!prompt) continue;
 
-          let eligible = false;
+          const overrideKey = `${sh.parent_file_id}_${t.awp_class_name}`;
+          const override = overrideMap.get(overrideKey);
           if (override === "exclude") continue;
-          if (override === "include") eligible = true;
+
+          let eligible = override === "include";
           if (
             !eligible &&
-            (triage as any)?.status === "complete" &&
-            (triage as any)?.score !== null &&
-            (triage as any).score >= 50
+            t.status === "complete" &&
+            t.score !== null &&
+            t.score >= 50
           ) {
             eligible = true;
           }
           if (!eligible) continue;
 
           workQueue.push({
-            fileId: file.id,
-            fileName: file.name,
-            awpClassName: (prompt as any).awp_class_name,
+            fileId: sh.parent_file_id,
+            sheetId: sh.id,
+            unitName: sh.name,
+            awpClassName: t.awp_class_name,
             promptContent: (prompt as any).prompt_content || null,
             triagePromptContent: (prompt as any).triage_prompt_content || null,
+            contextText: contextByParentClass.get(`${sh.parent_file_id}::${t.awp_class_name}`) || null,
           });
+        }
+      } else {
+        for (const file of files) {
+          for (const prompt of prompts) {
+            const key = `${file.id}_${(prompt as any).awp_class_name}`;
+            const override = overrideMap.get(key);
+            const triage = (triageResults || []).find(
+              (t: any) =>
+                t.file_id === file.id &&
+                !t.sheet_id &&
+                t.awp_class_name === (prompt as any).awp_class_name,
+            );
+
+            let eligible = false;
+            if (override === "exclude") continue;
+            if (override === "include") eligible = true;
+            if (
+              !eligible &&
+              (triage as any)?.status === "complete" &&
+              (triage as any)?.score !== null &&
+              (triage as any).score >= 50
+            ) {
+              eligible = true;
+            }
+            if (!eligible) continue;
+
+            workQueue.push({
+              fileId: file.id,
+              sheetId: null,
+              unitName: file.name,
+              awpClassName: (prompt as any).awp_class_name,
+              promptContent: (prompt as any).prompt_content || null,
+              triagePromptContent: (prompt as any).triage_prompt_content || null,
+              contextText: null,
+            });
+          }
         }
       }
 
       // Sort so jobs are inserted (and claimed) in canonical class order,
-      // then by file name for stable ordering within each class.
+      // then by unit name for stable ordering within each class.
       workQueue.sort((a, b) => {
         const ao = orderFor(a.awpClassName);
         const bo = orderFor(b.awpClassName);
         if (ao !== bo) return ao - bo;
-        return a.fileName.localeCompare(b.fileName);
+        return a.unitName.localeCompare(b.unitName);
       });
 
       console.log(
-        `[pipeline] Phase 3: Analyze ${workQueue.length} eligible items`,
+        `[pipeline] Phase 3: Analyze ${workQueue.length} eligible items (sheet-mode=${useSheets})`,
       );
 
       // Clear existing analysis results for eligible classes
@@ -1386,7 +1496,6 @@ async function runPipeline(params: PipelineParams) {
       }
 
       // Clear any old analyze jobs for this request before inserting fresh ones.
-      // Scope to analyze-kind jobs so we don't wipe completed triage jobs.
       await admin
         .from("analysis_pipeline_jobs")
         .delete()
@@ -1405,18 +1514,25 @@ async function runPipeline(params: PipelineParams) {
             analysis_request_id: analysisRequestId,
             analysis_run_id: activeRunId,
             file_id: item.fileId,
+            sheet_id: item.sheetId,
             awp_class_name: item.awpClassName,
             status: "failed",
             error_message: "No prompt content available for this class",
           });
           continue;
         }
+        // Inject capped context-sheet text when present.
+        const finalPrompt = item.contextText
+          ? `${promptContent}\n\n[Supporting context from related sheets in the same document; use only as reference, do NOT count instances from these excerpts]\n${item.contextText}`
+          : promptContent;
         jobRows.push({
           analysis_request_id: analysisRequestId,
           analysis_run_id: activeRunId,
           file_id: item.fileId,
+          sheet_id: item.sheetId,
+          parent_file_id: item.sheetId ? item.fileId : null,
           awp_class_name: item.awpClassName,
-          prompt_content: promptContent,
+          prompt_content: finalPrompt,
           analyze_model: analyzeModel,
           job_kind: "analyze",
           status: "pending",
@@ -1426,13 +1542,13 @@ async function runPipeline(params: PipelineParams) {
 
       if (immediateFailures.length > 0) {
         await admin.from("analysis_results").upsert(immediateFailures, {
-          onConflict: "analysis_request_id,file_id,awp_class_name",
+          onConflict: useSheets
+            ? "analysis_request_id,sheet_id,awp_class_name"
+            : "analysis_request_id,file_id,awp_class_name",
         });
       }
 
-      // Insert analyze jobs FIRST (before placeholders + phase change) so
-      // a duplicate-key or other DB error doesn't leave permanent spinners
-      // and a stranded "analyzing" phase.
+      // Insert analyze jobs FIRST (before placeholders + phase change).
       const CHUNK = 500;
       for (let i = 0; i < jobRows.length; i += CHUNK) {
         const slice = jobRows.slice(i, i + CHUNK);
@@ -1466,6 +1582,7 @@ async function runPipeline(params: PipelineParams) {
           analysis_request_id: j.analysis_request_id,
           analysis_run_id: activeRunId,
           file_id: j.file_id,
+          sheet_id: j.sheet_id,
           awp_class_name: j.awp_class_name,
           status: "processing",
           result_text: null,
@@ -1475,7 +1592,9 @@ async function runPipeline(params: PipelineParams) {
         for (let i = 0; i < placeholderRows.length; i += PCHUNK) {
           await admin.from("analysis_results").upsert(
             placeholderRows.slice(i, i + PCHUNK),
-            { onConflict: "analysis_request_id,file_id,awp_class_name" },
+            { onConflict: useSheets
+                ? "analysis_request_id,sheet_id,awp_class_name"
+                : "analysis_request_id,file_id,awp_class_name" },
           );
         }
       }
