@@ -841,3 +841,344 @@ async function persistSplitProgress(
     console.warn(`[split] persistSplitProgress failed for ${parentFileId}:`, e);
   }
 }
+
+// ---------------------------------------------------------------------------
+// TRIAGE JOB HANDLER (Phase 2 via queue)
+// Calls triage-drawings using internal service-role auth + worker secret.
+// triage-drawings already upserts analysis_triage_results — we just track the
+// job lifecycle (retry / token accumulation / finalize transition).
+// ---------------------------------------------------------------------------
+async function runTriageJob(
+  admin: ReturnType<typeof createClient>,
+  supabaseUrl: string,
+  serviceKey: string,
+  job: any,
+  remainingMs: number,
+) {
+  // Honor stop + run-id supersede
+  const { data: reqRow } = await admin
+    .from("analysis_requests")
+    .select("pipeline_stop_requested, status, analysis_run_id")
+    .eq("id", job.analysis_request_id)
+    .single();
+
+  if (
+    job.analysis_run_id &&
+    (reqRow as any)?.analysis_run_id &&
+    (reqRow as any).analysis_run_id !== job.analysis_run_id
+  ) {
+    await updateJobGuarded(admin, job, {
+      status: "cancelled",
+      completed_at: new Date().toISOString(),
+      error_message: "Superseded by a newer analysis run",
+    });
+    return;
+  }
+  if ((reqRow as any)?.pipeline_stop_requested) {
+    await updateJobGuarded(admin, job, {
+      status: "cancelled",
+      completed_at: new Date().toISOString(),
+      error_message: "Cancelled by user stop request",
+    });
+    return;
+  }
+
+  // Fetch file name for displayName
+  let drawingName: string | null = null;
+  try {
+    const { data: f } = await admin
+      .from("analysis_request_files")
+      .select("name")
+      .eq("id", job.file_id)
+      .single();
+    drawingName = (f as any)?.name ?? null;
+  } catch {}
+
+  const url = `${supabaseUrl}/functions/v1/triage-drawings`;
+  let httpStatus = 0;
+  let respJson: any = null;
+
+  try {
+    const controller = new AbortController();
+    const timeoutMs = Math.max(15_000, Math.min(remainingMs - 5_000, 60_000));
+    const timer = setTimeout(() => controller.abort(), timeoutMs);
+
+    const res = await fetch(url, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${serviceKey}`,
+        "Content-Type": "application/json",
+        apikey: serviceKey,
+        "x-internal-invocation": Deno.env.get("ANALYSIS_WORKER_SECRET")!,
+      },
+      body: JSON.stringify({
+        analysisRequestId: job.analysis_request_id,
+        analysisRunId: job.analysis_run_id ?? null,
+        fileId: job.file_id,
+        awpClassName: job.awp_class_name,
+        drawingName,
+        promptContent: job.prompt_content,
+        action: "triage",
+        model: job.analyze_model,
+      }),
+      signal: controller.signal,
+    });
+    clearTimeout(timer);
+
+    httpStatus = res.status;
+    try { respJson = await res.json(); } catch {}
+
+    if (httpStatus === 409) {
+      await updateJobGuarded(admin, job, {
+        status: "cancelled",
+        completed_at: new Date().toISOString(),
+        error_message: "Superseded by a newer analysis run",
+      });
+      return;
+    }
+
+    if (res.ok) {
+      const tokens = (respJson?.usage?.total_tokens as number | undefined) ?? null;
+      const wrote = await updateJobGuarded(admin, job, {
+        status: "complete",
+        completed_at: new Date().toISOString(),
+        tokens_used: tokens,
+        error_message: null,
+      });
+      if (wrote === 0) return;
+
+      // Live progress (counts terminal triage jobs for this run)
+      await updateTriageProgress(admin, job.analysis_request_id, job.analysis_run_id);
+
+      if (tokens && tokens > 0) {
+        const { data: cur } = await admin
+          .from("analysis_requests")
+          .select("triage_tokens_used, analysis_run_id")
+          .eq("id", job.analysis_request_id)
+          .single();
+        if (
+          !job.analysis_run_id ||
+          !(cur as any)?.analysis_run_id ||
+          (cur as any).analysis_run_id === job.analysis_run_id
+        ) {
+          const next = ((cur as any)?.triage_tokens_used ?? 0) + tokens;
+          let q = admin
+            .from("analysis_requests")
+            .update({ triage_tokens_used: next } as any)
+            .eq("id", job.analysis_request_id);
+          if (job.analysis_run_id) q = q.eq("analysis_run_id", job.analysis_run_id);
+          await q;
+        }
+      }
+      return;
+    }
+
+    throw new Error(
+      `triage-drawings ${httpStatus}: ${typeof respJson === "object" ? JSON.stringify(respJson) : "no body"}`,
+    );
+  } catch (e: any) {
+    const msg = e?.message || String(e);
+    const attempts = job.attempts;
+    const maxAttempts = job.max_attempts ?? 3;
+
+    if (httpStatus === 404 || /Analysis request not found/i.test(msg)) {
+      await updateJobGuarded(admin, job, {
+        status: "cancelled",
+        completed_at: new Date().toISOString(),
+        error_message: "Parent analysis request no longer exists",
+      });
+      return;
+    }
+
+    if (attempts < maxAttempts) {
+      const delaySec = 30 * Math.pow(2, attempts - 1);
+      const nextAt = new Date(Date.now() + delaySec * 1000).toISOString();
+      await updateJobGuarded(admin, job, {
+        status: "pending",
+        worker_id: null,
+        claimed_at: null,
+        next_attempt_at: nextAt,
+        error_message: msg.slice(0, 1000),
+      });
+      console.warn(`[worker][triage] job ${job.id} failed attempt ${attempts}/${maxAttempts}, retry at ${nextAt}: ${msg}`);
+    } else {
+      const wrote = await updateJobGuarded(admin, job, {
+        status: "failed",
+        completed_at: new Date().toISOString(),
+        error_message: msg.slice(0, 1000),
+      });
+      console.error(`[worker][triage] job ${job.id} permanently failed after ${attempts} attempts: ${msg}`);
+      if (wrote > 0) await updateTriageProgress(admin, job.analysis_request_id, job.analysis_run_id);
+    }
+  }
+}
+
+async function updateTriageProgress(
+  admin: ReturnType<typeof createClient>,
+  requestId: string,
+  runId: string | null,
+) {
+  try {
+    if (runId) {
+      const { data: cur } = await admin
+        .from("analysis_requests")
+        .select("analysis_run_id, pipeline_phase")
+        .eq("id", requestId)
+        .single();
+      if ((cur as any)?.analysis_run_id && (cur as any).analysis_run_id !== runId) return;
+      if ((cur as any)?.pipeline_phase !== "triaging") return;
+    }
+    const buildQ = (statuses: string[]) => {
+      let q = admin
+        .from("analysis_pipeline_jobs")
+        .select("id", { count: "exact", head: true })
+        .eq("analysis_request_id", requestId)
+        .eq("job_kind", "triage");
+      if (statuses.length > 0) q = q.in("status", statuses);
+      if (runId) q = q.eq("analysis_run_id", runId);
+      return q;
+    };
+    const { count: doneCount } = await buildQ(["complete", "failed", "cancelled"]);
+    const { count: totalCount } = await buildQ([]);
+
+    let q = admin.from("analysis_requests")
+      .update({
+        pipeline_progress_done: doneCount ?? 0,
+        pipeline_progress_total: totalCount ?? 0,
+      } as any)
+      .eq("id", requestId);
+    if (runId) q = q.eq("analysis_run_id", runId);
+    await q;
+  } catch (e) {
+    console.warn(`[worker] updateTriageProgress failed for ${requestId}:`, e);
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Triage finalizer — when all triage jobs are terminal, transition into Phase 3
+// by re-invoking run-analysis-pipeline with phaseOverride='analyze'.
+// ---------------------------------------------------------------------------
+async function maybeFinalizeTriage(
+  admin: ReturnType<typeof createClient>,
+  supabaseUrl: string,
+  serviceKey: string,
+  requestId: string,
+  runId: string | null,
+) {
+  // Verify run is still current
+  const { data: cur } = await admin
+    .from("analysis_requests")
+    .select("status, pipeline_phase, pipeline_stop_requested, analysis_run_id, enabled_awp_classes, disabled_awp_classes, triage_model, analyze_model")
+    .eq("id", requestId)
+    .single();
+
+  if (!cur) return;
+  if ((cur as any).pipeline_phase !== "triaging") return;
+  if (runId && (cur as any).analysis_run_id && (cur as any).analysis_run_id !== runId) return;
+
+  const buildQ = (statuses: string[]) => {
+    let q = admin
+      .from("analysis_pipeline_jobs")
+      .select("id", { count: "exact", head: true })
+      .eq("analysis_request_id", requestId)
+      .eq("job_kind", "triage");
+    if (statuses.length > 0) q = q.in("status", statuses);
+    if (runId) q = q.eq("analysis_run_id", runId);
+    return q;
+  };
+
+  const { count: pendingCount } = await buildQ(["pending", "processing"]);
+  if ((pendingCount ?? 0) > 0) return;
+
+  // Stop-requested: pause
+  if ((cur as any).pipeline_stop_requested) {
+    let q = admin.from("analysis_requests").update({
+      status: "started",
+      pipeline_phase: null,
+      pipeline_progress_done: 0,
+      pipeline_progress_total: 0,
+    } as any).eq("id", requestId);
+    if (runId) q = q.eq("analysis_run_id", runId);
+    await q;
+    return;
+  }
+
+  // Acquire advisory lock so only one worker triggers Phase 3
+  const { data: lockRow } = await admin.rpc(
+    "try_lock_analysis_finalize",
+    { p_request_id: requestId },
+  );
+  if (lockRow !== true) return;
+
+  // Re-check phase under lock
+  const { data: cur2 } = await admin
+    .from("analysis_requests")
+    .select("pipeline_phase, analysis_run_id")
+    .eq("id", requestId)
+    .single();
+  if ((cur2 as any)?.pipeline_phase !== "triaging") return;
+  if (runId && (cur2 as any)?.analysis_run_id !== runId) return;
+
+  // Atomically transition to a transient phase so siblings don't double-fire
+  let claimQ = admin
+    .from("analysis_requests")
+    .update({ pipeline_phase: "extracting" } as any)  // will be reset by analyze entry
+    .eq("id", requestId)
+    .eq("pipeline_phase", "triaging");
+  if (runId) claimQ = claimQ.eq("analysis_run_id", runId);
+  const { data: claimed } = await claimQ.select("id").maybeSingle();
+  if (!claimed) return;
+
+  const { count: completeJobs } = await buildQ(["complete"]);
+  const { count: failedJobs } = await buildQ(["failed"]);
+
+  // All failed -> stop
+  if ((completeJobs ?? 0) === 0 && (failedJobs ?? 0) > 0) {
+    let q = admin.from("analysis_requests").update({
+      status: "started",
+      pipeline_phase: null,
+      pipeline_progress_done: 0,
+      pipeline_progress_total: 0,
+      error_message: `All ${failedJobs} triage items failed. Please try again in a few minutes.`,
+    } as any).eq("id", requestId);
+    if (runId) q = q.eq("analysis_run_id", runId);
+    await q;
+    return;
+  }
+
+  console.log(`[worker] finalizing triage for ${requestId} (run=${runId}) -> dispatching analyze phase`);
+  fireAndForgetAnalyze(supabaseUrl, serviceKey, requestId, cur).catch((e) =>
+    console.error("[worker] analyze dispatch failed:", e),
+  );
+}
+
+async function fireAndForgetAnalyze(
+  supabaseUrl: string,
+  serviceKey: string,
+  analysisRequestId: string,
+  reqRow: any,
+) {
+  const url = `${supabaseUrl}/functions/v1/run-analysis-pipeline`;
+  const body: Record<string, unknown> = {
+    analysisRequestId,
+    phaseOverride: "analyze",
+  };
+  if (reqRow?.enabled_awp_classes) body.enabledAwpClasses = reqRow.enabled_awp_classes;
+  if (reqRow?.triage_model) body.triageModel = reqRow.triage_model;
+  if (reqRow?.analyze_model) body.analyzeModel = reqRow.analyze_model;
+
+  const res = await fetch(url, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${serviceKey}`,
+      "Content-Type": "application/json",
+      apikey: serviceKey,
+      "x-internal-invocation": Deno.env.get("ANALYSIS_WORKER_SECRET")!,
+    },
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) {
+    const txt = await res.text().catch(() => "");
+    console.warn("[worker] analyze dispatch non-OK", res.status, txt);
+  }
+}
