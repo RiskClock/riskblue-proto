@@ -1876,44 +1876,56 @@ export function AnalysisSection({ requestId, files, projectId, sourceType, isWMS
 
   const handleWmsvStop = async () => {
     setAnalyzeV2Stopping(true);
-    queryClient.setQueryData(["analysis-request-row", requestId], (old: any) => (
-      old ? { ...old, pipeline_stop_requested: true } : old
-    ));
-    queryClient.setQueryData(["analysis-request-meta", requestId], (old: any) => ({
-      ...(old || {}),
-      pipeline_stop_requested: true,
-    }));
-    await supabase
-      .from("analysis_requests")
-      .update({ pipeline_stop_requested: true } as any)
-      .eq("id", requestId);
-    // Cancel any pending OR processing jobs (incl. split_pdf_chunk whose worker
-    // may have been killed by a memory limit) so the worker finalizes promptly.
-    await (supabase as any)
-      .from("analysis_pipeline_jobs")
-      .update({
-        status: "cancelled",
-        completed_at: new Date().toISOString(),
-        error_message: "Cancelled by user stop request",
-      })
-      .eq("analysis_request_id", requestId)
-      .in("status", ["pending", "processing"]);
-    // If the row was stuck in a non-terminal phase with no active worker, also
-    // reset it directly so the UI exits the "stopping" spinner immediately.
-    await (supabase as any)
-      .from("analysis_requests")
-      .update({
-        status: "started",
-        pipeline_phase: null,
-        pipeline_stop_requested: false,
-        pipeline_progress_done: 0,
-        pipeline_progress_total: 0,
-        error_message: "Stopped by user",
-      })
-      .eq("id", requestId)
-      .in("pipeline_phase", ["splitting", "extracting"]);
-    queryClient.invalidateQueries({ queryKey: ["analysis-request-row", requestId] });
-    queryClient.invalidateQueries({ queryKey: ["analysis-counts", requestId] });
+    try {
+      queryClient.setQueryData(["analysis-request-row", requestId], (old: any) => (
+        old ? { ...old, pipeline_stop_requested: true } : old
+      ));
+      queryClient.setQueryData(["analysis-request-meta", requestId], (old: any) => ({
+        ...(old || {}),
+        pipeline_stop_requested: true,
+      }));
+      await supabase
+        .from("analysis_requests")
+        .update({ pipeline_stop_requested: true } as any)
+        .eq("id", requestId);
+      // Cancel any pending OR processing pipeline jobs.
+      await (supabase as any)
+        .from("analysis_pipeline_jobs")
+        .update({
+          status: "cancelled",
+          completed_at: new Date().toISOString(),
+          error_message: "Cancelled by user stop request",
+        })
+        .eq("analysis_request_id", requestId)
+        .in("status", ["pending", "processing"]);
+      // Cancel any in-flight triage rows so triageActive drops to 0 and
+      // the derived UI state can leave "triaging".
+      await (supabase as any)
+        .from("analysis_triage_results")
+        .update({
+          status: "failed",
+          reason: "Cancelled by user stop request",
+        })
+        .eq("analysis_request_id", requestId)
+        .in("status", ["queued", "pending", "processing"]);
+      // Always reset the request row regardless of phase so the spinner
+      // exits immediately. The worker's next finalize pass is a no-op.
+      await (supabase as any)
+        .from("analysis_requests")
+        .update({
+          status: "started",
+          pipeline_phase: null,
+          pipeline_stop_requested: false,
+          pipeline_progress_done: 0,
+          pipeline_progress_total: 0,
+          error_message: "Stopped by user",
+        })
+        .eq("id", requestId);
+      queryClient.invalidateQueries({ queryKey: ["analysis-request-row", requestId] });
+      queryClient.invalidateQueries({ queryKey: ["analysis-counts", requestId] });
+    } finally {
+      setAnalyzeV2Stopping(false);
+    }
   };
 
   // Helper to get the best prefix for a class name
