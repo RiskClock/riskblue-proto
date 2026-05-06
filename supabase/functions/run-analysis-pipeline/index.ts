@@ -1224,26 +1224,10 @@ async function runPipeline(params: PipelineParams) {
       // Clear summarizing phase indicator and ensure status is complete.
       // (createProgressTracker.finalize() writes status='processing' on its
       // final flush, so we must explicitly restore status='complete' here.)
-      await admin
-        .from("analysis_requests")
-        .update({
-          status: "complete",
-          pipeline_phase: null,
-          pipeline_progress_done: 0,
-          pipeline_progress_total: 0,
-        } as any)
-        .eq("id", analysisRequestId);
+      await safeWriteComplete(admin, analysisRequestId, activeRunId);
     } catch (sumPhaseErr) {
       console.warn("[pipeline] Summarize phase failed (non-fatal):", sumPhaseErr);
-      await admin
-        .from("analysis_requests")
-        .update({
-          status: "complete",
-          pipeline_phase: null,
-          pipeline_progress_done: 0,
-          pipeline_progress_total: 0,
-        } as any)
-        .eq("id", analysisRequestId);
+      await safeWriteComplete(admin, analysisRequestId, activeRunId);
     }
 
     // Completion email (after summary so it can include deduped counts)
