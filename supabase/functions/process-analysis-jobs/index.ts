@@ -584,3 +584,248 @@ async function checkFinalizeAllAnalyzing(
     await maybeFinalize(admin, supabaseUrl, serviceKey, row.id, runId).catch(() => {});
   }
 }
+
+// ---------------------------------------------------------------------------
+// SPLIT PHASE (sheet normalization v1)
+// Handles a `split_pdf_chunk` job: downloads the parent PDF, extracts a bounded
+// page range, writes one single-page PDF per page to storage, upserts a row in
+// analysis_request_sheets keyed by (parent_file_id, page_index) for idempotency.
+// Single-page parents and non-PDF files should be handled by the pipeline (no
+// chunk job enqueued) — but defensively we no-op any chunk we can't handle.
+// ---------------------------------------------------------------------------
+async function runSplitPdfChunk(
+  admin: ReturnType<typeof createClient>,
+  job: any,
+) {
+  const startedAt = Date.now();
+  const SOFT_DEADLINE_MS = 40_000;
+
+  const parentFileId: string = job.parent_file_id || job.file_id;
+  const pageFrom: number = Number.isInteger(job.page_from) ? job.page_from : 0;
+  const pageTo: number = Number.isInteger(job.page_to) ? job.page_to : pageFrom;
+
+  console.log(
+    `[split] job=${job.id} parent=${parentFileId} pages=${pageFrom}..${pageTo}`,
+  );
+
+  // Fetch parent file + analysis source_type to pick bucket
+  const { data: parent, error: parentErr } = await admin
+    .from("analysis_request_files")
+    .select(
+      "id, name, mime_type, storage_path, analysis_request_id, expected_page_count, analysis_requests!inner(source_type, project_id)",
+    )
+    .eq("id", parentFileId)
+    .single();
+
+  if (parentErr || !parent) {
+    await updateJobGuarded(admin, job, {
+      status: "failed",
+      completed_at: new Date().toISOString(),
+      error_message: `Parent file not found: ${parentErr?.message ?? "unknown"}`,
+    });
+    return;
+  }
+
+  const sourceType = (parent as any).analysis_requests?.source_type;
+  const bucket =
+    sourceType === "manual_upload" ? "uploaded-drawings" : "drive-analysis-files";
+  const requestId: string = (parent as any).analysis_request_id;
+  const parentName: string = (parent as any).name || "document.pdf";
+  const parentStoragePath: string = (parent as any).storage_path;
+
+  if (!parentStoragePath) {
+    await updateJobGuarded(admin, job, {
+      status: "failed",
+      completed_at: new Date().toISOString(),
+      error_message: "Parent file has no storage_path",
+    });
+    return;
+  }
+
+  // Download parent PDF
+  const { data: blob, error: dlErr } = await admin.storage
+    .from(bucket)
+    .download(parentStoragePath);
+  if (dlErr || !blob) {
+    await updateJobGuarded(admin, job, {
+      status: "failed",
+      completed_at: new Date().toISOString(),
+      error_message: `Download failed: ${dlErr?.message ?? "unknown"}`,
+    });
+    return;
+  }
+
+  let srcDoc: any;
+  try {
+    const ab = await blob.arrayBuffer();
+    srcDoc = await PDFDocument.load(ab, { ignoreEncryption: true });
+  } catch (e: any) {
+    await updateJobGuarded(admin, job, {
+      status: "failed",
+      completed_at: new Date().toISOString(),
+      error_message: `pdf-lib load failed: ${e?.message ?? String(e)}`,
+    });
+    return;
+  }
+
+  const totalPages = srcDoc.getPageCount();
+  const fromIdx = Math.max(0, pageFrom);
+  const toIdx = Math.min(totalPages - 1, pageTo);
+  console.log(
+    `[split] job=${job.id} parent has ${totalPages} pages, splitting ${fromIdx}..${toIdx}`,
+  );
+
+  // Derive base storage prefix for sheets: {parentDir}/_sheets/{parentFileId}/page-XXXX.pdf
+  // parentStoragePath = "<projectId>/<requestId>/<relative>".
+  // We strip the filename and place sheets next to source dir under _sheets/<parentFileId>.
+  const lastSlash = parentStoragePath.lastIndexOf("/");
+  const parentDir =
+    lastSlash >= 0 ? parentStoragePath.slice(0, lastSlash) : parentStoragePath;
+  const sheetPrefix = `${parentDir}/_sheets/${parentFileId}`;
+  const baseName = parentName.replace(/\.pdf$/i, "");
+
+  let okCount = 0;
+  const failures: Array<{ page: number; error: string }> = [];
+
+  for (let pageIndex = fromIdx; pageIndex <= toIdx; pageIndex++) {
+    if (Date.now() - startedAt > SOFT_DEADLINE_MS) {
+      // Re-queue remainder by failing-with-retry: mark this chunk pending with
+      // a tighter range so the next worker tick picks up where we left off.
+      const remainingFrom = pageIndex;
+      console.warn(
+        `[split] job=${job.id} hit soft deadline at page ${pageIndex}; rescheduling ${remainingFrom}..${toIdx}`,
+      );
+      await admin
+        .from("analysis_pipeline_jobs")
+        .update({
+          status: "pending",
+          worker_id: null,
+          claimed_at: null,
+          page_from: remainingFrom,
+          next_attempt_at: new Date(Date.now() + 2_000).toISOString(),
+          error_message: `Resumed at page ${remainingFrom} after deadline`,
+        } as any)
+        .eq("id", job.id);
+      // Persist completed sheets count progress on parent file
+      await persistSplitProgress(admin, parentFileId, requestId);
+      return;
+    }
+
+    const pageNumber = pageIndex + 1;
+    const sheetName = `${baseName} — p${pageNumber}.pdf`;
+    const storagePath = `${sheetPrefix}/page-${String(pageNumber).padStart(4, "0")}.pdf`;
+
+    try {
+      const newDoc = await PDFDocument.create();
+      const [copied] = await newDoc.copyPages(srcDoc, [pageIndex]);
+      newDoc.addPage(copied);
+      const bytes = await newDoc.save();
+
+      const { error: upErr } = await admin.storage.from(bucket).upload(
+        storagePath,
+        new Blob([bytes], { type: "application/pdf" }),
+        { contentType: "application/pdf", upsert: true },
+      );
+      if (upErr) throw new Error(`upload: ${upErr.message}`);
+
+      // Idempotent upsert keyed by (parent_file_id, page_index)
+      const { error: upsertErr } = await admin
+        .from("analysis_request_sheets")
+        .upsert(
+          {
+            analysis_request_id: requestId,
+            parent_file_id: parentFileId,
+            page_index: pageIndex,
+            name: sheetName,
+            storage_path: storagePath,
+            extract_status: "pending",
+            extract_error: null,
+          } as any,
+          { onConflict: "parent_file_id,page_index" },
+        );
+      if (upsertErr) throw new Error(`upsert: ${upsertErr.message}`);
+
+      okCount++;
+    } catch (e: any) {
+      const msg = e?.message ?? String(e);
+      console.error(
+        `[split] job=${job.id} page ${pageIndex} failed: ${msg}`,
+      );
+      failures.push({ page: pageIndex, error: msg });
+    }
+  }
+
+  // Persist a per-parent split status snapshot
+  await persistSplitProgress(admin, parentFileId, requestId);
+
+  if (failures.length === 0) {
+    await updateJobGuarded(admin, job, {
+      status: "complete",
+      completed_at: new Date().toISOString(),
+      error_message: null,
+    });
+    console.log(
+      `[split] job=${job.id} done: ${okCount} pages written (${fromIdx}..${toIdx})`,
+    );
+  } else {
+    // Partial success — mark failed with a summary; pipeline can still proceed
+    // with the sheets that did upsert.
+    await updateJobGuarded(admin, job, {
+      status: "failed",
+      completed_at: new Date().toISOString(),
+      error_message:
+        `Split partial: ${okCount} ok, ${failures.length} failed. ` +
+        failures
+          .slice(0, 3)
+          .map((f) => `p${f.page}:${f.error}`)
+          .join("; "),
+    });
+  }
+}
+
+async function persistSplitProgress(
+  admin: ReturnType<typeof createClient>,
+  parentFileId: string,
+  requestId: string,
+) {
+  try {
+    const { count: doneCount } = await admin
+      .from("analysis_request_sheets")
+      .select("id", { count: "exact", head: true })
+      .eq("parent_file_id", parentFileId);
+
+    const { data: parent } = await admin
+      .from("analysis_request_files")
+      .select("expected_page_count")
+      .eq("id", parentFileId)
+      .single();
+
+    const expected = (parent as any)?.expected_page_count ?? null;
+
+    // Determine if any chunk job for this parent is still pending/processing
+    const { count: pendingChunks } = await admin
+      .from("analysis_pipeline_jobs")
+      .select("id", { count: "exact", head: true })
+      .eq("analysis_request_id", requestId)
+      .eq("parent_file_id", parentFileId)
+      .eq("job_kind", "split_pdf_chunk")
+      .in("status", ["pending", "processing"]);
+
+    let split_status = "splitting";
+    if ((pendingChunks ?? 0) === 0) {
+      if (expected != null && (doneCount ?? 0) >= expected) {
+        split_status = "split";
+      } else {
+        // No chunks pending but didn't reach expected count — mark with errors
+        split_status = expected != null ? "split_partial" : "split";
+      }
+    }
+
+    await admin
+      .from("analysis_request_files")
+      .update({ split_status } as any)
+      .eq("id", parentFileId);
+  } catch (e) {
+    console.warn(`[split] persistSplitProgress failed for ${parentFileId}:`, e);
+  }
+}
