@@ -453,16 +453,30 @@ serve(async (req) => {
         ? "application/pdf"
         : storedMime ?? "application/octet-stream";
 
-    // Guardrail: only PDFs produce PDF-point bboxes
-    if (effectiveMime !== "application/pdf") {
-      await adminSupabase.from("analysis_results")
-        .update({
-          status: "failed",
-          error_message: `Detection requires a PDF file. File type: ${effectiveMime}`,
-        })
-        .eq("file_id", fileId)
+    // Helper: scope analysis_results updates to the right unit (sheet vs legacy file).
+    // CRITICAL: in legacy mode we MUST also filter `sheet_id IS NULL` so we don't
+    // accidentally clobber every sheet row that shares this parent file + class.
+    const scopeResultsUpdate = (q: any) => {
+      let scoped = q
         .eq("analysis_request_id", analysisRequestId)
         .eq("awp_class_name", awpClassName);
+      if (sheetId) {
+        scoped = scoped.eq("sheet_id", sheetId);
+      } else {
+        scoped = scoped.eq("file_id", fileId).is("sheet_id", null);
+      }
+      return scoped;
+    };
+
+    // Guardrail: only PDFs produce PDF-point bboxes
+    if (effectiveMime !== "application/pdf") {
+      await scopeResultsUpdate(
+        adminSupabase.from("analysis_results")
+          .update({
+            status: "failed",
+            error_message: `Detection requires a PDF file. File type: ${effectiveMime}`,
+          })
+      );
       return new Response(
         JSON.stringify({ error: `Detection requires a PDF file for PDF-point bboxes. File type: ${effectiveMime}` }),
         { status: 422, headers: { ...corsHeaders, "Content-Type": "application/json" } }
