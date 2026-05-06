@@ -138,8 +138,12 @@ export type Database = {
           error_message: string | null
           file_id: string
           id: string
+          job_kind: string
           max_attempts: number
           next_attempt_at: string
+          page_from: number | null
+          page_to: number | null
+          parent_file_id: string | null
           prompt_content: string | null
           sort_order: number
           started_at: string | null
@@ -160,8 +164,12 @@ export type Database = {
           error_message?: string | null
           file_id: string
           id?: string
+          job_kind?: string
           max_attempts?: number
           next_attempt_at?: string
+          page_from?: number | null
+          page_to?: number | null
+          parent_file_id?: string | null
           prompt_content?: string | null
           sort_order?: number
           started_at?: string | null
@@ -182,8 +190,12 @@ export type Database = {
           error_message?: string | null
           file_id?: string
           id?: string
+          job_kind?: string
           max_attempts?: number
           next_attempt_at?: string
+          page_from?: number | null
+          page_to?: number | null
+          parent_file_id?: string | null
           prompt_content?: string | null
           sort_order?: number
           started_at?: string | null
@@ -193,6 +205,13 @@ export type Database = {
           worker_id?: string | null
         }
         Relationships: [
+          {
+            foreignKeyName: "analysis_pipeline_jobs_parent_file_id_fkey"
+            columns: ["parent_file_id"]
+            isOneToOne: false
+            referencedRelation: "analysis_request_files"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "analysis_pipeline_jobs_request_fk"
             columns: ["analysis_request_id"]
@@ -208,6 +227,7 @@ export type Database = {
           copy_status: string
           created_at: string
           drive_file_id: string
+          expected_page_count: number | null
           extracted_text: string | null
           id: string
           mime_type: string
@@ -218,6 +238,7 @@ export type Database = {
           openai_file_uploaded_at: string | null
           relative_path: string
           size_bytes: number | null
+          split_status: string
           storage_path: string | null
         }
         Insert: {
@@ -225,6 +246,7 @@ export type Database = {
           copy_status?: string
           created_at?: string
           drive_file_id: string
+          expected_page_count?: number | null
           extracted_text?: string | null
           id?: string
           mime_type: string
@@ -235,6 +257,7 @@ export type Database = {
           openai_file_uploaded_at?: string | null
           relative_path: string
           size_bytes?: number | null
+          split_status?: string
           storage_path?: string | null
         }
         Update: {
@@ -242,6 +265,7 @@ export type Database = {
           copy_status?: string
           created_at?: string
           drive_file_id?: string
+          expected_page_count?: number | null
           extracted_text?: string | null
           id?: string
           mime_type?: string
@@ -252,6 +276,7 @@ export type Database = {
           openai_file_uploaded_at?: string | null
           relative_path?: string
           size_bytes?: number | null
+          split_status?: string
           storage_path?: string | null
         }
         Relationships: [
@@ -260,6 +285,96 @@ export type Database = {
             columns: ["analysis_request_id"]
             isOneToOne: false
             referencedRelation: "analysis_requests"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      analysis_request_sheets: {
+        Row: {
+          analysis_request_id: string
+          created_at: string
+          discipline: string | null
+          drawing_type: string | null
+          extract_error: string | null
+          extract_status: string
+          extracted_text: string | null
+          floor_or_level: string | null
+          id: string
+          metadata_confidence: number | null
+          metadata_source: string | null
+          name: string
+          openai_file_expires_at: string | null
+          openai_file_id: string | null
+          openai_file_status: string | null
+          openai_file_uploaded_at: string | null
+          page_index: number
+          parent_file_id: string
+          sheet_number: string | null
+          sheet_title: string | null
+          storage_path: string | null
+          updated_at: string
+        }
+        Insert: {
+          analysis_request_id: string
+          created_at?: string
+          discipline?: string | null
+          drawing_type?: string | null
+          extract_error?: string | null
+          extract_status?: string
+          extracted_text?: string | null
+          floor_or_level?: string | null
+          id?: string
+          metadata_confidence?: number | null
+          metadata_source?: string | null
+          name: string
+          openai_file_expires_at?: string | null
+          openai_file_id?: string | null
+          openai_file_status?: string | null
+          openai_file_uploaded_at?: string | null
+          page_index: number
+          parent_file_id: string
+          sheet_number?: string | null
+          sheet_title?: string | null
+          storage_path?: string | null
+          updated_at?: string
+        }
+        Update: {
+          analysis_request_id?: string
+          created_at?: string
+          discipline?: string | null
+          drawing_type?: string | null
+          extract_error?: string | null
+          extract_status?: string
+          extracted_text?: string | null
+          floor_or_level?: string | null
+          id?: string
+          metadata_confidence?: number | null
+          metadata_source?: string | null
+          name?: string
+          openai_file_expires_at?: string | null
+          openai_file_id?: string | null
+          openai_file_status?: string | null
+          openai_file_uploaded_at?: string | null
+          page_index?: number
+          parent_file_id?: string
+          sheet_number?: string | null
+          sheet_title?: string | null
+          storage_path?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "analysis_request_sheets_analysis_request_id_fkey"
+            columns: ["analysis_request_id"]
+            isOneToOne: false
+            referencedRelation: "analysis_requests"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "analysis_request_sheets_parent_file_id_fkey"
+            columns: ["parent_file_id"]
+            isOneToOne: false
+            referencedRelation: "analysis_request_files"
             referencedColumns: ["id"]
           },
         ]
@@ -280,6 +395,7 @@ export type Database = {
           pipeline_progress_total: number
           pipeline_stop_requested: boolean
           project_id: string
+          sheet_normalization_enabled: boolean
           source_type: string
           started_at: string | null
           status: string
@@ -306,6 +422,7 @@ export type Database = {
           pipeline_progress_total?: number
           pipeline_stop_requested?: boolean
           project_id: string
+          sheet_normalization_enabled?: boolean
           source_type?: string
           started_at?: string | null
           status?: string
@@ -332,6 +449,7 @@ export type Database = {
           pipeline_progress_total?: number
           pipeline_stop_requested?: boolean
           project_id?: string
+          sheet_normalization_enabled?: boolean
           source_type?: string
           started_at?: string | null
           status?: string
@@ -363,6 +481,7 @@ export type Database = {
           file_id: string
           id: string
           result_text: string | null
+          sheet_id: string | null
           status: string
           updated_at: string
         }
@@ -375,6 +494,7 @@ export type Database = {
           file_id: string
           id?: string
           result_text?: string | null
+          sheet_id?: string | null
           status?: string
           updated_at?: string
         }
@@ -387,6 +507,7 @@ export type Database = {
           file_id?: string
           id?: string
           result_text?: string | null
+          sheet_id?: string | null
           status?: string
           updated_at?: string
         }
@@ -403,6 +524,13 @@ export type Database = {
             columns: ["file_id"]
             isOneToOne: false
             referencedRelation: "analysis_request_files"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "analysis_results_sheet_id_fkey"
+            columns: ["sheet_id"]
+            isOneToOne: false
+            referencedRelation: "analysis_request_sheets"
             referencedColumns: ["id"]
           },
         ]
@@ -461,6 +589,8 @@ export type Database = {
           instances: number | null
           reason: string | null
           score: number | null
+          sheet_id: string | null
+          sheet_role: string | null
           status: string
           updated_at: string
         }
@@ -475,6 +605,8 @@ export type Database = {
           instances?: number | null
           reason?: string | null
           score?: number | null
+          sheet_id?: string | null
+          sheet_role?: string | null
           status?: string
           updated_at?: string
         }
@@ -489,6 +621,8 @@ export type Database = {
           instances?: number | null
           reason?: string | null
           score?: number | null
+          sheet_id?: string | null
+          sheet_role?: string | null
           status?: string
           updated_at?: string
         }
@@ -505,6 +639,13 @@ export type Database = {
             columns: ["file_id"]
             isOneToOne: false
             referencedRelation: "analysis_request_files"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "analysis_triage_results_sheet_id_fkey"
+            columns: ["sheet_id"]
+            isOneToOne: false
+            referencedRelation: "analysis_request_sheets"
             referencedColumns: ["id"]
           },
         ]
@@ -2251,8 +2392,12 @@ export type Database = {
           error_message: string | null
           file_id: string
           id: string
+          job_kind: string
           max_attempts: number
           next_attempt_at: string
+          page_from: number | null
+          page_to: number | null
+          parent_file_id: string | null
           prompt_content: string | null
           sort_order: number
           started_at: string | null
