@@ -1157,13 +1157,30 @@ export function AnalysisSection({ requestId, files, projectId, sourceType, isWMS
     })() as number | false,
   });
 
-  // Hydrate triage results into map (always sync from DB; backend-driven runs
-  // leave the local triageRunning flag false, so gating on it dropped updates).
+  // Hydrate triage results into map. In sheet-normalized mode there is one
+  // triage row per (file, class, sheet) — we collapse to the MAX score per
+  // (file, class) so a single high-scoring page keeps the cell highlighted
+  // even if other pages of the same file score low. The MAX represents the
+  // strongest evidence that the file is worth a deep Phase-3 analysis.
   useEffect(() => {
     if (!triageData) return;
     const map = new Map<string, TriageResult>();
     for (const r of triageData) {
-      map.set(`${r.file_id}_${r.awp_class_name}`, r);
+      const key = `${r.file_id}_${r.awp_class_name}`;
+      const existing = map.get(key);
+      const existingScore = existing?.score ?? -1;
+      const newScore = r.score ?? -1;
+      // Prefer 'complete' rows over pending/queued/processing; among completes
+      // prefer the higher score; preserve highest 'instances' as a tiebreaker.
+      const existingRank = existing?.status === "complete" ? 1 : 0;
+      const newRank = r.status === "complete" ? 1 : 0;
+      if (
+        !existing ||
+        newRank > existingRank ||
+        (newRank === existingRank && newScore > existingScore)
+      ) {
+        map.set(key, r);
+      }
     }
     setTriageResults(map);
   }, [triageData]);
@@ -1340,6 +1357,57 @@ export function AnalysisSection({ requestId, files, projectId, sourceType, isWMS
     })();
     return () => { cancelled = true; };
   }, [requestId, files.length]);
+
+  // ---- Sheet-based extraction tracking (sheet-normalized mode) ----
+  // For each parent file we track how many sheets are still pending vs total.
+  // Drives:
+  //   - spinner stays visible while ANY sheet of the file is not yet extracted
+  //   - "Processed" badge appears only once ALL sheets of the file are extracted
+  const { data: sheetStatusData } = useQuery({
+    queryKey: ["analysis-sheet-status", requestId],
+    enabled: !!requestId,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("analysis_request_sheets")
+        .select("parent_file_id, extract_status")
+        .eq("analysis_request_id", requestId);
+      if (error) throw error;
+      return (data ?? []) as Array<{ parent_file_id: string; extract_status: string }>;
+    },
+    refetchInterval: (query: any) => {
+      const phase = (queryClient.getQueryData(["analysis-request-meta", requestId]) as any)?.pipeline_phase;
+      if (phase === "extracting" || phase === "splitting") return 3000;
+      return false;
+    },
+  });
+
+  // Realtime invalidation for sheet status
+  useEffect(() => {
+    if (!requestId) return;
+    const channel: RealtimeChannel = supabase
+      .channel(`analysis-sheets-${requestId}`)
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "analysis_request_sheets", filter: `analysis_request_id=eq.${requestId}` },
+        () => queryClient.invalidateQueries({ queryKey: ["analysis-sheet-status", requestId] }),
+      )
+      .subscribe();
+    return () => { supabase.removeChannel(channel); };
+  }, [requestId, queryClient]);
+
+  // Map<fileId, { pending: number; total: number }>
+  const sheetProgressByFile = useMemo(() => {
+    const m = new Map<string, { pending: number; total: number }>();
+    for (const s of sheetStatusData ?? []) {
+      const cur = m.get(s.parent_file_id) ?? { pending: 0, total: 0 };
+      cur.total += 1;
+      if (s.extract_status !== "extracted" && s.extract_status !== "skipped") {
+        cur.pending += 1;
+      }
+      m.set(s.parent_file_id, cur);
+    }
+    return m;
+  }, [sheetStatusData]);
 
   // Refresh extraction badges when pipeline phase transitions OUT of "extracting"
   useEffect(() => {
@@ -3367,14 +3435,41 @@ export function AnalysisSection({ requestId, files, projectId, sourceType, isWMS
   // Pipeline-driven state from DB
   // ---- Canonical UI state (single source of truth) ----
   const pipelinePhase = requestState.pipelinePhase;
-  const pipelineDone = requestState.progress.done;
-  const pipelineTotal = requestState.progress.total;
+  const rawPipelineDone = requestState.progress.done;
+  const rawPipelineTotal = requestState.progress.total;
   const dbStatus = requestState.status || undefined;
   const dbErrorMessage = requestState.row?.error_message ?? null;
   const pipelineRunning = requestState.isRunning;
   const pipelinePhaseLabel = requestState.label;
   const wmsvRunning = pipelineRunning || analyzeV2Stopping;
   const wmsvPhaseLabel = analyzeV2Stopping ? "Stopping…" : pipelinePhaseLabel;
+
+  // Freeze the visible counter at last non-zero values during phase transitions
+  // (e.g. extracting → triaging briefly reports 0/0 before the next phase
+  // initializes its totals). Counter resets when the run starts or stops.
+  const lastCounterRef = useRef<{ done: number; total: number; phase: string | null }>({
+    done: 0,
+    total: 0,
+    phase: null,
+  });
+  if (pipelineRunning) {
+    if (rawPipelineTotal > 0) {
+      lastCounterRef.current = { done: rawPipelineDone, total: rawPipelineTotal, phase: pipelinePhase };
+    } else if (lastCounterRef.current.phase !== pipelinePhase) {
+      // Phase just changed; freeze the previous (done, total) until the new
+      // phase reports a non-zero total.
+      lastCounterRef.current = {
+        done: lastCounterRef.current.total, // show prior phase as "complete"
+        total: lastCounterRef.current.total,
+        phase: lastCounterRef.current.phase,
+      };
+    }
+  } else {
+    lastCounterRef.current = { done: 0, total: 0, phase: null };
+  }
+  const pipelineDone = rawPipelineTotal > 0 ? rawPipelineDone : lastCounterRef.current.done;
+  const pipelineTotal = rawPipelineTotal > 0 ? rawPipelineTotal : lastCounterRef.current.total;
+
 
   return (
     <TooltipProvider delayDuration={0}>
@@ -3792,28 +3887,54 @@ export function AnalysisSection({ requestId, files, projectId, sourceType, isWMS
                           >
                             {file.name}
                           </button>
-                           {extractingFileIds.has(file.id) && (
-                             <Loader2 className="w-3 h-3 animate-spin text-muted-foreground flex-shrink-0" />
-                           )}
-                             {uploadingFileIds.has(file.id) && !extractingFileIds.has(file.id) && pipelinePhase !== "analyzing" && (
-                               <Tooltip>
-                                 <TooltipTrigger asChild>
-                                   <span className="inline-flex items-center gap-1 text-[10px] text-muted-foreground flex-shrink-0">
-                                     <Loader2 className="w-3 h-3 animate-spin" />
-                                     Uploading
-                                   </span>
-                                 </TooltipTrigger>
-                                 <TooltipContent>Uploading file to analysis service</TooltipContent>
-                               </Tooltip>
-                             )}
-                          {extractedFileIds.has(file.id) && !extractingFileIds.has(file.id) && (
-                            <button
-                              className="inline-flex items-center rounded-full border border-emerald-300 bg-emerald-100 px-1.5 py-px text-[10px] font-medium text-emerald-800 leading-tight flex-shrink-0 cursor-pointer hover:bg-emerald-200 transition-colors"
-                              onClick={() => setExtractedTextFile(file)}
-                            >
-                              Processed
-                            </button>
-                          )}
+                          {(() => {
+                            const sp = sheetProgressByFile.get(file.id);
+                            // Sheet-mode: spinner if any sheet of this file is still pending
+                            const sheetExtracting = !!sp && sp.pending > 0;
+                            // Sheet-mode: processed when ALL sheets are extracted
+                            const sheetAllDone = !!sp && sp.total > 0 && sp.pending === 0;
+                            // Legacy fallback (non-sheet-mode runs)
+                            const legacyExtracting = extractingFileIds.has(file.id);
+                            const legacyExtracted = extractedFileIds.has(file.id);
+                            const showSpinner = sheetExtracting || (legacyExtracting && !sp);
+                            const showProcessed =
+                              (sp ? sheetAllDone : legacyExtracted) && !showSpinner;
+                            return (
+                              <>
+                                {showSpinner && (
+                                  <Tooltip>
+                                    <TooltipTrigger asChild>
+                                      <Loader2 className="w-3 h-3 animate-spin text-muted-foreground flex-shrink-0" />
+                                    </TooltipTrigger>
+                                    {sp && (
+                                      <TooltipContent>
+                                        Extracting context: {sp.total - sp.pending}/{sp.total} pages
+                                      </TooltipContent>
+                                    )}
+                                  </Tooltip>
+                                )}
+                                {uploadingFileIds.has(file.id) && !showSpinner && pipelinePhase !== "analyzing" && (
+                                  <Tooltip>
+                                    <TooltipTrigger asChild>
+                                      <span className="inline-flex items-center gap-1 text-[10px] text-muted-foreground flex-shrink-0">
+                                        <Loader2 className="w-3 h-3 animate-spin" />
+                                        Uploading
+                                      </span>
+                                    </TooltipTrigger>
+                                    <TooltipContent>Uploading file to analysis service</TooltipContent>
+                                  </Tooltip>
+                                )}
+                                {showProcessed && (
+                                  <button
+                                    className="inline-flex items-center rounded-full border border-emerald-300 bg-emerald-100 px-1.5 py-px text-[10px] font-medium text-emerald-800 leading-tight flex-shrink-0 cursor-pointer hover:bg-emerald-200 transition-colors"
+                                    onClick={() => setExtractedTextFile(file)}
+                                  >
+                                    Processed
+                                  </button>
+                                )}
+                              </>
+                            );
+                          })()}
                           {!pipelineRunning && (
                             <Tooltip>
                               <TooltipTrigger asChild>
