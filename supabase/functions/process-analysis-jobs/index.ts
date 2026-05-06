@@ -962,6 +962,31 @@ async function runTriageJob(
     return;
   }
 
+  // Early-exit: if any sibling sheet of the same parent file + AWP class has
+  // already scored >=100, the file is conclusively positive — no need to triage
+  // the remaining pages. Mark this job complete (without an inserted triage row;
+  // the existing 100% sibling already qualifies the file for Phase 3).
+  try {
+    const { data: maxRow } = await admin
+      .from("analysis_triage_results")
+      .select("score")
+      .eq("analysis_request_id", job.analysis_request_id)
+      .eq("file_id", job.file_id)
+      .eq("awp_class_name", job.awp_class_name)
+      .eq("status", "complete")
+      .gte("score", 100)
+      .limit(1)
+      .maybeSingle();
+    if (maxRow) {
+      await updateJobGuarded(admin, job, {
+        status: "complete",
+        completed_at: new Date().toISOString(),
+        error_message: null,
+      });
+      return;
+    }
+  } catch { /* non-fatal — proceed with triage */ }
+
   // Fetch file name for displayName
   let drawingName: string | null = null;
   try {
