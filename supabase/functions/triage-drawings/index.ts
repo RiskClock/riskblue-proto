@@ -480,23 +480,46 @@ ${roleInstructions}`;
       const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
       if (supabaseUrl && supabaseServiceKey) {
         const body = await req.clone().json().catch(() => ({} as any));
-        const { analysisRequestId, fileId, sheetId, awpClassName } = body || {};
+        const { analysisRequestId, analysisRunId, fileId, sheetId, awpClassName } = body || {};
         if (analysisRequestId && awpClassName && (fileId || sheetId)) {
           const adminFix = createClient(supabaseUrl, supabaseServiceKey);
-          let q = adminFix.from("analysis_triage_results").update({
-            status: "failed",
-            error_message: `Triage crashed: ${error instanceof Error ? error.message : String(error)}`.slice(0, 1000),
-          } as any)
+          // Resolve parent file id for the failed row.
+          let parentFileId = fileId as string | null;
+          if (sheetId) {
+            const { data: s } = await adminFix
+              .from("analysis_request_sheets")
+              .select("parent_file_id").eq("id", sheetId).single();
+            parentFileId = (s as any)?.parent_file_id ?? null;
+          }
+          // Find existing row, then update or insert a failed one.
+          let lookup = adminFix
+            .from("analysis_triage_results").select("id")
             .eq("analysis_request_id", analysisRequestId)
-            .eq("awp_class_name", awpClassName)
-            .eq("status", "processing");
-          if (sheetId) q = q.eq("sheet_id", sheetId);
-          else q = q.eq("file_id", fileId);
-          await q;
+            .eq("awp_class_name", awpClassName);
+          if (sheetId) lookup = lookup.eq("sheet_id", sheetId);
+          else lookup = lookup.eq("file_id", parentFileId).is("sheet_id", null);
+          const { data: existing } = await lookup.maybeSingle();
+
+          const errMsg = `Triage crashed: ${error instanceof Error ? error.message : String(error)}`.slice(0, 1000);
+          const failedRow = {
+            analysis_request_id: analysisRequestId,
+            analysis_run_id: analysisRunId ?? null,
+            file_id: parentFileId,
+            sheet_id: sheetId ?? null,
+            awp_class_name: awpClassName,
+            status: "failed",
+            error_message: errMsg,
+          };
+          if (existing && (existing as any).id) {
+            await adminFix.from("analysis_triage_results")
+              .update(failedRow as any).eq("id", (existing as any).id);
+          } else if (parentFileId) {
+            await adminFix.from("analysis_triage_results").insert(failedRow as any);
+          }
         }
       }
     } catch (cleanupErr) {
-      console.error("[triage] Failed to reconcile processing row on error:", cleanupErr);
+      console.error("[triage] Failed to write failed triage row on error:", cleanupErr);
     }
     return new Response(JSON.stringify({ error: error instanceof Error ? error.message : "Unknown error" }), {
       status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
