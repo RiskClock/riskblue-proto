@@ -739,7 +739,17 @@ Deno.serve(async (req) => {
     // any destructive cleanup. If claim fails we abort and leave prior data
     // intact. (Per Phase B note #1.)
     let activeRunId: string | null = null;
-    if (phaseOverride !== "summarize") {
+    if (phaseOverride === "summarize" || phaseOverride === "analyze") {
+      // Re-invocation continuing an existing run (summarize after analyze, or
+      // analyze after triage finalize). Preserve current analysis_run_id so
+      // results stamped under the previous phase remain visible.
+      const { data: cur } = await admin
+        .from("analysis_requests")
+        .select("analysis_run_id")
+        .eq("id", analysisRequestId)
+        .single();
+      activeRunId = (cur as any)?.analysis_run_id ?? null;
+    } else {
       activeRunId = crypto.randomUUID();
       const { error: claimErr } = await admin
         .from("analysis_requests")
@@ -758,14 +768,6 @@ Deno.serve(async (req) => {
         console.error("[pipeline] Run claim failed:", claimErr);
         return json({ error: "Failed to claim analysis run" }, 500);
       }
-    } else {
-      // Summarize re-invocation: read current run_id so summarize jobs guard against it.
-      const { data: cur } = await admin
-        .from("analysis_requests")
-        .select("analysis_run_id")
-        .eq("id", analysisRequestId)
-        .single();
-      activeRunId = (cur as any)?.analysis_run_id ?? null;
     }
 
     // ---- Phase-aware cleanup, scoped to PRIOR runs only (run_id IS NULL OR <> activeRunId)
