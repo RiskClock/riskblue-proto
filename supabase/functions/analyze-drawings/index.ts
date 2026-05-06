@@ -350,40 +350,31 @@ serve(async (req) => {
 
     const currentDbRunId = (request as any).analysis_run_id ?? null;
 
-    // Run-id guard: abort if a newer run has started for this request.
-    if (
-      analysisRunId &&
-      currentDbRunId &&
-      currentDbRunId !== analysisRunId
-    ) {
+    // Resolve the run id via shared helper (covered by run_id_test.ts).
+    const resolved = resolveAnalysisRunId(analysisRunId, currentDbRunId);
+    if (resolved.kind === "mismatch") {
       console.warn(
-        `[analyze-drawings] run mismatch — job=${analysisRunId} current=${currentDbRunId}; aborting`,
+        `[analyze-drawings] run mismatch — job=${analysisRunId} current=${resolved.currentDbRunId}; aborting`,
       );
       return new Response(
-        JSON.stringify({ error: "Superseded by a newer analysis run", currentRunId: currentDbRunId }),
+        JSON.stringify({ error: "Superseded by a newer analysis run", currentRunId: resolved.currentDbRunId }),
         { status: 409, headers: { ...corsHeaders, "Content-Type": "application/json" } },
       );
     }
-
-    // Backfill missing analysisRunId from the current request row. If we
-    // still cannot determine a run id, fail loudly rather than writing an
-    // orphaned result row (analysis_run_id=NULL would be filtered out by
-    // the run-scoped frontend query — that is exactly the bug we are fixing).
-    if (!analysisRunId) {
-      if (currentDbRunId) {
-        analysisRunId = currentDbRunId;
-        console.warn(
-          `[analyze-drawings] backfilled analysisRunId from request row -> ${analysisRunId} (request=${analysisRequestId} file=${fileId} class=${awpClassName})`,
-        );
-      } else {
-        console.error(
-          `[analyze-drawings] FATAL: no analysisRunId in body and none on request row — refusing to write orphaned result. request=${analysisRequestId} file=${fileId} class=${awpClassName}`,
-        );
-        return new Response(
-          JSON.stringify({ error: "No analysis_run_id available; refusing to write orphaned result" }),
-          { status: 409, headers: { ...corsHeaders, "Content-Type": "application/json" } },
-        );
-      }
+    if (resolved.kind === "none") {
+      console.error(
+        `[analyze-drawings] FATAL: no analysisRunId in body and none on request row — refusing to write orphaned result. request=${analysisRequestId} file=${fileId} class=${awpClassName}`,
+      );
+      return new Response(
+        JSON.stringify({ error: "No analysis_run_id available; refusing to write orphaned result" }),
+        { status: 409, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+      );
+    }
+    analysisRunId = resolved.runId;
+    if (resolved.backfilled) {
+      console.warn(
+        `[analyze-drawings] backfilled analysisRunId from request row -> ${analysisRunId} (request=${analysisRequestId} file=${fileId} class=${awpClassName})`,
+      );
     }
 
     const { data: fileRecord, error: fileError } = await adminSupabase
