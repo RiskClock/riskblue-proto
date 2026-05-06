@@ -1045,31 +1045,57 @@ async function runPipeline(params: PipelineParams) {
     }
 
     // ======================== PHASE 1: EXTRACT ========================
+    // Determine if this run should iterate over sheets (one row per page) or
+    // legacy file-level units. When useSheets=true, the parent PDF is treated
+    // as a container only; extraction/triage/analyze act on sheets.
+    const { data: reqFlagRow } = await admin
+      .from("analysis_requests")
+      .select("sheet_normalization_enabled")
+      .eq("id", analysisRequestId)
+      .single();
+    const sheetFlagOn = !!(reqFlagRow as any)?.sheet_normalization_enabled;
+
+    let sheets: any[] = [];
+    if (sheetFlagOn) {
+      const { data: sheetRows } = await admin
+        .from("analysis_request_sheets")
+        .select("id, parent_file_id, page_index, name, storage_path, extract_status, extracted_text")
+        .eq("analysis_request_id", analysisRequestId)
+        .order("parent_file_id", { ascending: true })
+        .order("page_index", { ascending: true });
+      sheets = (sheetRows as any[]) || [];
+    }
+    const useSheets = sheetFlagOn && sheets.length > 0;
+    console.log(
+      `[pipeline] sheet-mode=${useSheets} (flag=${sheetFlagOn} sheets=${sheets.length} files=${files.length})`,
+    );
+
     if (runPhase("extract")) {
+      const units: Array<{ id: string; name: string; kind: "sheet" | "file" }> = useSheets
+        ? sheets.map((s: any) => ({ id: s.id, name: s.name, kind: "sheet" as const }))
+        : files.map((f: any) => ({ id: f.id, name: f.name, kind: "file" as const }));
+
       console.log(
-        `[pipeline] Phase 1: Extract context for ${files.length} files`,
+        `[pipeline] Phase 1: Extract context for ${units.length} ${useSheets ? "sheets" : "files"}`,
       );
-      const progress = createProgressTracker(admin, analysisRequestId, "extracting", files.length);
+      const progress = createProgressTracker(admin, analysisRequestId, "extracting", units.length);
       await progress.init();
 
-      // Sequential, top-to-bottom (matches file-list order). Gives the UI a
-      // single visible "current file" spinner that walks down the rows.
       let stopped = false;
-      for (const file of files) {
+      for (const u of units) {
         if (await shouldStop(admin, analysisRequestId)) { stopped = true; break; }
         try {
-          await callFunction(supabaseUrl, serviceKey, userToken, "triage-drawings", {
-            fileId: (file as any).id,
-            action: "extract",
-          });
+          const body: Record<string, unknown> = { action: "extract" };
+          if (u.kind === "sheet") body.sheetId = u.id;
+          else body.fileId = u.id;
+          await callFunction(supabaseUrl, serviceKey, userToken, "triage-drawings", body);
         } catch (e) {
-          console.error(`[pipeline] Extract failed for ${(file as any).name}:`, e);
+          console.error(`[pipeline] Extract failed for ${u.name}:`, e);
         }
         progress.increment();
         await progress.flush();
       }
 
-      // Final flush so the last batch's progress + status are written.
       await progress.finalize();
 
       if (stopped) {
