@@ -1283,7 +1283,9 @@ export function AnalysisSection({ requestId, files, projectId, sourceType, isWMS
       analyzeTokensRef.current = at;
     }
     const disabled = (requestMeta as any).disabled_awp_classes as string[] | null;
-    if (Array.isArray(disabled)) {
+    // Treat empty array same as null — apply DEFAULT_DISABLED_AWP later.
+    // Only honor a persisted non-empty selection as the user's explicit choice.
+    if (Array.isArray(disabled) && disabled.length > 0) {
       setDisabledColumns(new Set(disabled));
       setDisabledDefaultsApplied(true);
     }
