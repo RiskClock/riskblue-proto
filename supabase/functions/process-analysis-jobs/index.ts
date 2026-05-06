@@ -400,7 +400,8 @@ async function maybeFinalize(
     let q = admin
       .from("analysis_pipeline_jobs")
       .select("id", { count: "exact", head: true })
-      .eq("analysis_request_id", requestId);
+      .eq("analysis_request_id", requestId)
+      .or("job_kind.is.null,job_kind.eq.analyze");
     if (statuses.length > 0) q = q.in("status", statuses);
     if (runId) q = q.eq("analysis_run_id", runId);
     return q;
