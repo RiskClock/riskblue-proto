@@ -60,8 +60,9 @@ function isInvalidFileError(httpStatus: number, parsedError: Record<string, unkn
 }
 
 // Run-id resolution helper lives in ./run-id.ts so it can be unit-tested
-// without booting the full edge function. Re-exported here for callers.
-export { resolveAnalysisRunId, type RunIdResolution } from "./run-id.ts";
+// without booting the full edge function. Import for local use AND re-export.
+import { resolveAnalysisRunId, type RunIdResolution } from "./run-id.ts";
+export { resolveAnalysisRunId, type RunIdResolution };
 
 /**
  * Returns true if the model's result text indicates it only received a raster
