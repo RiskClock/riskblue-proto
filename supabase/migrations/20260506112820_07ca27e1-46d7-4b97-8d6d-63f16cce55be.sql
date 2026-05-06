@@ -1,0 +1,2 @@
+ALTER TABLE public.analysis_pipeline_jobs DROP CONSTRAINT analysis_pipeline_jobs_job_kind_check;
+ALTER TABLE public.analysis_pipeline_jobs ADD CONSTRAINT analysis_pipeline_jobs_job_kind_check CHECK (job_kind = ANY (ARRAY['analyze'::text, 'split_pdf_chunk'::text, 'triage'::text]));
