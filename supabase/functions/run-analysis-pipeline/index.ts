@@ -173,6 +173,65 @@ function createProgressTracker(
 }
 
 // ---------------------------------------------------------------------------
+// Run-id-guarded terminal write helpers.
+// `safeWriteComplete` only writes status='complete' if the row's current
+// analysis_run_id still matches the active run. Prevents stale background
+// invocations (or early-exit branches) from flickering the UI to "complete"
+// while a newer run is in flight.
+// ---------------------------------------------------------------------------
+async function safeWriteComplete(
+  admin: ReturnType<typeof createClient>,
+  requestId: string,
+  activeRunId: string | null,
+  extraFields: Record<string, unknown> = {},
+) {
+  // Re-read current run id and abort if superseded.
+  if (activeRunId) {
+    const { data: cur } = await admin
+      .from("analysis_requests")
+      .select("analysis_run_id")
+      .eq("id", requestId)
+      .single();
+    const dbRunId = (cur as any)?.analysis_run_id ?? null;
+    if (dbRunId && dbRunId !== activeRunId) {
+      console.warn(
+        `[pipeline] safeWriteComplete: run mismatch (active=${activeRunId} db=${dbRunId}); skipping complete write`,
+      );
+      return;
+    }
+  }
+  const update: Record<string, unknown> = {
+    status: "complete",
+    pipeline_phase: null,
+    pipeline_progress_done: 0,
+    pipeline_progress_total: 0,
+    ...extraFields,
+  };
+  let q = admin.from("analysis_requests").update(update as any).eq("id", requestId);
+  if (activeRunId) q = q.eq("analysis_run_id", activeRunId);
+  await q;
+}
+
+async function markNoEligibleDrawings(
+  admin: ReturnType<typeof createClient>,
+  requestId: string,
+  activeRunId: string | null,
+) {
+  try {
+    const { data: rm } = await admin
+      .from("analysis_requests")
+      .select("summary_data")
+      .eq("id", requestId)
+      .single();
+    const sd = ((rm as any)?.summary_data as Record<string, unknown>) || {};
+    sd.no_eligible_drawings = true;
+    await safeWriteComplete(admin, requestId, activeRunId, { summary_data: sd });
+  } catch (e) {
+    console.warn("[pipeline] markNoEligibleDrawings failed:", e);
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Concurrent worker pool with stop checks
 // ---------------------------------------------------------------------------
 async function runPool<T>(
@@ -509,15 +568,7 @@ async function runPipeline(params: PipelineParams) {
       .not("storage_path", "is", null);
 
     if (!files || files.length === 0) {
-      await admin
-        .from("analysis_requests")
-        .update({
-          status: "complete",
-          pipeline_phase: null,
-          pipeline_progress_done: 0,
-          pipeline_progress_total: 0,
-        } as any)
-        .eq("id", analysisRequestId);
+      await markNoEligibleDrawings(admin, analysisRequestId, activeRunId);
       return;
     }
 
@@ -528,13 +579,18 @@ async function runPipeline(params: PipelineParams) {
       .not("drive_file_id", "is", null);
 
     if (!allPrompts || allPrompts.length === 0) {
-      await admin
-        .from("analysis_requests")
-        .update({
-          status: "complete",
-          pipeline_phase: null,
-        } as any)
-        .eq("id", analysisRequestId);
+      await markNoEligibleDrawings(admin, analysisRequestId, activeRunId);
+      return;
+    }
+
+    // Fetch AWP prompts
+    const { data: allPrompts } = await admin
+      .from("awp_class_prompts")
+      .select("*")
+      .not("drive_file_id", "is", null);
+
+    if (!allPrompts || allPrompts.length === 0) {
+      await markNoEligibleDrawings(admin, analysisRequestId, activeRunId);
       return;
     }
 
@@ -544,13 +600,7 @@ async function runPipeline(params: PipelineParams) {
 
     if (enabledAwpClasses !== undefined) {
       if (enabledAwpClasses.length === 0) {
-        await admin
-          .from("analysis_requests")
-          .update({
-            status: "complete",
-            pipeline_phase: null,
-          } as any)
-          .eq("id", analysisRequestId);
+        await markNoEligibleDrawings(admin, analysisRequestId, activeRunId);
         return;
       }
       const allowed = new Set(enabledAwpClasses);
@@ -599,23 +649,22 @@ async function runPipeline(params: PipelineParams) {
       const progress = createProgressTracker(admin, analysisRequestId, "extracting", files.length);
       await progress.init();
 
-      const { stopped } = await runPool(
-        files,
-        MAX_CONCURRENCY,
-        admin,
-        analysisRequestId,
-        progress,
-        async (file) => {
-          try {
-            await callFunction(supabaseUrl, serviceKey, userToken, "triage-drawings", {
-              fileId: file.id,
-              action: "extract",
-            });
-          } catch (e) {
-            console.error(`[pipeline] Extract failed for ${file.name}:`, e);
-          }
-        },
-      );
+      // Sequential, top-to-bottom (matches file-list order). Gives the UI a
+      // single visible "current file" spinner that walks down the rows.
+      let stopped = false;
+      for (const file of files) {
+        if (await shouldStop(admin, analysisRequestId)) { stopped = true; break; }
+        try {
+          await callFunction(supabaseUrl, serviceKey, userToken, "triage-drawings", {
+            fileId: (file as any).id,
+            action: "extract",
+          });
+        } catch (e) {
+          console.error(`[pipeline] Extract failed for ${(file as any).name}:`, e);
+        }
+        progress.increment();
+        await progress.flush();
+      }
 
       // Final flush so the last batch's progress + status are written.
       await progress.finalize();
@@ -1175,26 +1224,10 @@ async function runPipeline(params: PipelineParams) {
       // Clear summarizing phase indicator and ensure status is complete.
       // (createProgressTracker.finalize() writes status='processing' on its
       // final flush, so we must explicitly restore status='complete' here.)
-      await admin
-        .from("analysis_requests")
-        .update({
-          status: "complete",
-          pipeline_phase: null,
-          pipeline_progress_done: 0,
-          pipeline_progress_total: 0,
-        } as any)
-        .eq("id", analysisRequestId);
+      await safeWriteComplete(admin, analysisRequestId, activeRunId);
     } catch (sumPhaseErr) {
       console.warn("[pipeline] Summarize phase failed (non-fatal):", sumPhaseErr);
-      await admin
-        .from("analysis_requests")
-        .update({
-          status: "complete",
-          pipeline_phase: null,
-          pipeline_progress_done: 0,
-          pipeline_progress_total: 0,
-        } as any)
-        .eq("id", analysisRequestId);
+      await safeWriteComplete(admin, analysisRequestId, activeRunId);
     }
 
     // Completion email (after summary so it can include deduped counts)

@@ -1,83 +1,109 @@
-# Analysis State Stabilization — Phase C
+## Diagnosis (from code + console log)
 
-## Goal
-
-Stop "Analysis Complete" from appearing while current-run work is still active, hydrate UI correctly on refresh, make triage grid cells show live progress (spinner → green-by-score), and add an explicit terminal state for runs where triage finds nothing to analyze.
-
-## 1. Backend — `run-analysis-pipeline` (belt-and-suspenders)
-
-Two precise corrections; nothing else changes.
-
-### 1a. Don't write `status='complete'` until summarize has actually finished
-
-Today, when phases 1–3 finish, the pipeline immediately writes:
-
+The console at the moment of the bug shows:
 ```
-status: 'complete'
-pipeline_phase: 'summarizing'
+uiState: "complete", runId: be704859..., status: "complete",
+pipelinePhase: null, progress: 0/0
 ```
 
-…then runs summarization and writes `status: 'complete', pipeline_phase: null` again at the end. The intermediate `status='complete'` is what causes the premature-Complete flicker.
+This proves the visible state is being read from a row where `status='complete'` AND `analysis_run_id` is the prior run's id. Two root causes are responsible for the five bugs:
 
-Fix: keep `status='processing'` while `pipeline_phase='summarizing'` is running. Only flip to `status='complete'` after the summarize loop finishes (the existing final write at the bottom of the summarize block already does this).
+**Root cause A — backend can write `status='complete'` without advancing `analysis_run_id`.**
+In `run-analysis-pipeline/index.ts`, several early-exit branches (`no files` L515, `no prompts` L534, `enabledAwpClasses empty` L550, summary edge cases L994/L1042/L1181) write `status='complete'` while leaving the run_id and phase as-is. So after Start, the request can flicker to "complete" while the new run is technically active.
 
-### 1b. Mark "no eligible drawings" explicitly
+**Root cause B — local-pending mask in `useAnalysisRequestState` releases too early.**
+The mask drops as soon as `dbRunId !== priorRunId`. But the very first DB write of the new run sets `pipeline_phase='extracting'` AND can be immediately followed by an early-exit `status='complete'` write. There is also a window where realtime delivers an old "complete" row before the run-claim update arrives. Result: the badge briefly shows "Analysis Complete".
 
-When triage produces zero eligible work items (`workQueue.length === 0`), set an explicit marker before the final complete write:
+**Root cause C — extraction is concurrent (Phase 1 uses `runPool` with concurrency 5).** That breaks bug #2's expectation of top-to-bottom processing.
 
-```ts
-summary_data.no_eligible_drawings = true
-```
+**Bugs 3/4/5 (no spinner / no green fill / no result):** the cell render code is correct, but it depends on `triageResults` and `results` queries being scoped to the correct, live `analysis_run_id`. When root cause A fires, the request row carries `status='complete'` and the frontend never enters the running branch, so the user perceives "no spinner / no fill / no result" — even though the data may eventually populate. Once the badge is fixed, these will surface naturally; we will additionally guarantee the queries refetch when run_id changes.
 
-The frontend uses this marker — and ONLY this marker — to render "No Eligible Drawings Found". We never infer it from job/triage counts.
+---
 
-## 2. Frontend — `useAnalysisRequestState`
+## Plan
 
-Add two count queries scoped by the current `analysis_run_id`:
+### 1. Backend: never write `status='complete'` while a run is in flight
 
-- `analysis_pipeline_jobs`: total + active (`status IN ('pending','processing')`) for the active run.
-- `analysis_triage_results`: total + active (`status IN ('queued','pending','processing')`) for the active run.
+File: `supabase/functions/run-analysis-pipeline/index.ts`
 
-Realtime: subscribe to `INSERT/UPDATE` on both tables filtered by `analysis_request_id`, and invalidate the exact run-scoped query key `['analysis-counts', requestId, currentRunId]` (no prefix-only invalidation).
+- Replace every early-exit `status: 'complete'` write inside `runPipeline` (no files, no prompts, empty enabled set) with a clear failure-safe write:
+  - If there is genuinely nothing to do, write `status: 'complete'`, `pipeline_phase: null`, AND `summary_data: { ...prev, no_eligible_drawings: true }`. This already maps to the `no_eligible_drawings` UI state.
+  - Wrap each of these terminal writes with the existing `try_lock_analysis_finalize` advisory-lock pattern so a stale background invocation cannot finalize a superseded run.
+- Add a hard guard before any `status: 'complete'` write: re-read `analysis_run_id` from the row and abort the write if it no longer matches `activeRunId`.
 
-### Precedence (explicit, top wins)
+### 2. Backend: process Phase 1 extraction sequentially in file-list order
 
-1. Counts not yet loaded AND row says `complete` → `syncing`
-2. Derived state is one of `starting / extracting` → keep as-is
-3. Active triage rows > 0 → `triaging`
-4. Active job rows > 0 → `analyzing`
-5. `pipeline_phase === 'summarizing'` → `summarizing`
-6. `summary_data.no_eligible_drawings === true` AND `status === 'complete'` → `no_eligible_drawings`
-7. `status === 'complete'` AND no active counts → `complete`
-8. Otherwise → derived state
+File: `supabase/functions/run-analysis-pipeline/index.ts`
 
-We do NOT classify "no eligible" from `triage_total > 0 && jobs_total === 0` — that is temporarily true between triage finishing and jobs being inserted. Only the backend marker is trusted.
+- In Phase 1 (Extract), replace `runPool(files, MAX_CONCURRENCY=5, ...)` with a sequential loop that walks `files` in the same order they were fetched (which is the persisted file order). Keep stop-check between iterations.
+- Phase 2 (Triage) and Phase 3 (Analyze) keep their current pool concurrency — they are not part of bug #2.
 
-## 3. Frontend — `src/lib/analysisUiState.ts`
+### 3. Frontend hook: harden the local-pending mask + add a "settling" guard
 
-Add states:
+File: `src/hooks/useAnalysisRequestState.ts`
 
-- `syncing` — label "Syncing Analysis State", spinner, neither running nor terminal, `canStart=false`.
-- `no_eligible_drawings` — label "No Eligible Drawings Found", button "Re-run Analysis", `isTerminal=true`, `canStart=true`. Amber/neutral badge, distinct from `complete`.
+- Hold the local-pending mask until BOTH conditions are true:
+  - `dbRunId !== priorRunId`, AND
+  - `effectiveRow.pipeline_phase` is one of `extracting | triaging | analyzing | summarizing` OR `effectiveRow.status` is `processing`.
+- If the new row arrives with `status='complete'` and `pipeline_phase=null` AND counts have not yet loaded for the new run_id → keep `uiState='syncing'` (already supported by the helper) instead of releasing to `complete`.
+- Bump `beginLocalStart` to also track an explicit `clientRunId`; on auto-clear, only release after seeing a row whose run_id matches a "running" shape (above) or after the 30s safety timeout.
 
-`deriveAnalysisUiState` itself stays pure; the new overrides apply only inside the hook.
+### 4. Frontend hook: invalidate run-scoped queries on run_id change
 
-## 4. Frontend — `AnalysisSection.tsx` (triage grid cells)
+File: `src/hooks/useAnalysisRequestState.ts` (and `AnalysisSection.tsx` consumers)
 
-- Remove the `triageRunning` gate in the triage hydration effect — backend-driven runs leave the local flag false, so live updates were being dropped.
-- Treat `status IN ('queued','pending','processing')` as spinner cells (currently only `processing` renders a spinner).
-- Apply opacity floor on completed triage cells: `Math.max(0.15, Math.min(1, score / 100))`.
-- Existing realtime invalidation already triggers on `analysis_triage_results` changes; switch the invalidation to match the run-scoped key.
+- When `effectiveRow.analysis_run_id` changes, invalidate the exact query keys used by the grid:
+  - `["triage-results", requestId, currentRunId]`
+  - `["analysis-results", requestId, currentRunId]`
+  - `["analysis-counts", requestId, currentRunId]`
+- This guarantees triage spinners (bug 3), green-fill cells (bug 4), and analyze counts (bug 5) refetch the moment the run flips.
 
-## 5. Files
+### 5. Frontend: cell renderers — explicit precedence per cell
 
-- `supabase/functions/run-analysis-pipeline/index.ts` — keep `status='processing'` during summarize, set `summary_data.no_eligible_drawings` flag when applicable.
-- `src/lib/analysisUiState.ts` — add `syncing`, `no_eligible_drawings`.
-- `src/hooks/useAnalysisRequestState.ts` — count queries, realtime, precedence override.
-- `src/components/analysis/AnalysisSection.tsx` — drop `triageRunning` gate, spinner for queued/pending, opacity floor.
+File: `src/components/analysis/AnalysisSection.tsx` (`countForCell` + the per-cell JSX in the grid body)
 
-## 6. Acceptance
+Make per-cell precedence explicit, in this order, per `(file, class)` pair:
+1. **Active run, triage row in `queued|pending|processing`** → spinner (bug 3 fix; ensure all three statuses are matched — `queued` is currently included).
+2. **Active run, triage row complete with score** → green fill, opacity = `max(0.15, score/100)` (bug 4 — already implemented; ensure the `results?.find` lookup is also scoped to `currentRunId` so an absent result doesn't replace the green fill with an empty cell).
+3. **Active run, analyze row in processing** → spinner (preserves bug 3 behavior in Phase 3).
+4. **Active run, analyze row complete** → numeric count (bug 5 — verify `countForCell` is reading the run-scoped `results` array, not a stale one).
+5. Fallback: empty cell.
 
-- Start Analysis → Starting → Extracting → Triaging (cell spinners → green by score) → Analyzing → Summarizing → Complete. No flicker to Complete in between.
-- Hard refresh mid-run shows current phase, or briefly "Syncing Analysis State". Never "Analysis Complete" while work is active.
-- Run where triage scores everything <50 ends in "No Eligible Drawings Found", not "Analysis Complete".
+Confirm `countForCell` only consults the run-scoped `results` array; no other source.
+
+### 6. Phase-1 visual cue: highlight the currently-processing file row
+
+File: `src/components/analysis/AnalysisSection.tsx`
+
+- Drive `extractingFileIds` from `pipeline_jobs`/per-file extract status during Phase 1 (already partially wired). With sequential extraction, only one file id will be active at a time, naturally producing the top-to-bottom feedback.
+
+### 7. Keep the debug panel for internal users only
+
+File: `src/pages/AnalysisRequestDetail.tsx`
+
+- Wrap `<AnalysisDebugPanel ... />` with the existing `isInternal` check so it remains visible only for `@riskclock.com` accounts. No removal.
+
+### 8. Verification protocol (after implementation)
+
+Before declaring done, capture and confirm via the (still-internal) debug panel for one WMSV run:
+
+1. Immediately after Start: request row shows `status='processing'`, `pipeline_phase='extracting'`, new `analysis_run_id`. Badge: **Starting Analysis** → **Extracting Context**.
+2. During Phase 1: only one file row spinner visible at a time, walking top-to-bottom.
+3. During Phase 2: triage rows appear with `status='processing'` and matching new `analysis_run_id`; cells show spinners; on complete they fill green by score.
+4. During Phase 3: analyzing cells spin then resolve to numeric counts.
+5. No "Analysis Complete" badge appears at any point until counts of active jobs/triage = 0 AND row `status='complete'`.
+
+---
+
+## Technical notes
+
+- The existing `useAnalysisRequestState.ts` already implements `syncing`, `no_eligible_drawings`, run-scoped count queries, and explicit precedence — so the hook changes are tightening the gates that already exist, not rewriting them.
+- The `triage-drawings` and `analyze-drawings` edge functions already stamp `analysis_run_id` and reject superseded runs with 409. No schema changes needed.
+- No DB migration required.
+
+## Files to change
+
+- `supabase/functions/run-analysis-pipeline/index.ts`
+- `src/hooks/useAnalysisRequestState.ts`
+- `src/components/analysis/AnalysisSection.tsx`
+- `src/pages/AnalysisRequestDetail.tsx`

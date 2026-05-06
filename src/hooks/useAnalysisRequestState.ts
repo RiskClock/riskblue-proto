@@ -142,12 +142,19 @@ export function useAnalysisRequestState(requestId: string | null | undefined): A
   void localPendingTick;
   const pending = localPendingRef.current;
   const dbRunId = rawRow?.analysis_run_id ?? null;
+  const dbStatus = rawRow?.status ?? "";
+  const dbPhase = rawRow?.pipeline_phase ?? "";
+  const RUNNING_PHASES = new Set(["extracting", "triaging", "analyzing", "summarizing"]);
+  const dbLooksRunning =
+    dbStatus === "processing" || RUNNING_PHASES.has(dbPhase);
 
-  // Auto-clear once the DB shows a different (newer) run id than the one
-  // captured at click time. Also auto-clear after a hard 30s safety timeout.
+  // Auto-clear once the DB shows a different (newer) run id AND that row
+  // looks like an in-flight run (status=processing or running phase). This
+  // prevents a stale `status=complete` row from flickering through before
+  // the new run actually starts. Also auto-clear after a 30s safety timeout.
   useEffect(() => {
     if (!pending) return;
-    if (dbRunId && dbRunId !== pending.priorRunId) {
+    if (dbRunId && dbRunId !== pending.priorRunId && dbLooksRunning) {
       localPendingRef.current = null;
       setLocalPendingTick((t) => t + 1);
       return;
@@ -159,7 +166,7 @@ export function useAnalysisRequestState(requestId: string | null | undefined): A
       setLocalPendingTick((t) => t + 1);
     }, remaining);
     return () => clearTimeout(t);
-  }, [pending, dbRunId]);
+  }, [pending, dbRunId, dbLooksRunning]);
 
   const effectiveRow: AnalysisRequestRow | null = useMemo(() => {
     if (!rawRow) return null;
@@ -245,6 +252,19 @@ export function useAnalysisRequestState(requestId: string | null | undefined): A
       supabase.removeChannel(channel);
     };
   }, [requestId, effectiveRunId, queryClient, countsKey]);
+
+  // When the active run id changes, invalidate every run-scoped grid query
+  // so triage spinners, green-fill cells, and analyze counts refetch the
+  // moment the new run begins.
+  const lastInvalidatedRunRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!requestId) return;
+    if (effectiveRunId === lastInvalidatedRunRef.current) return;
+    lastInvalidatedRunRef.current = effectiveRunId;
+    queryClient.invalidateQueries({ queryKey: ["triage-results", requestId] });
+    queryClient.invalidateQueries({ queryKey: ["analysis-results", requestId] });
+    queryClient.invalidateQueries({ queryKey: ["analysis-counts", requestId] });
+  }, [requestId, effectiveRunId, queryClient]);
 
   const derivedUiState = deriveAnalysisUiState(effectiveRow);
 
