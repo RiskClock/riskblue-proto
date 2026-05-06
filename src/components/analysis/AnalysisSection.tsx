@@ -3438,14 +3438,6 @@ export function AnalysisSection({ requestId, files, projectId, sourceType, isWMS
 
   // ---- Early returns ----
 
-  if (promptsLoading) {
-    return (
-      <div className="flex items-center justify-center py-8">
-        <Loader2 className="w-6 h-6 animate-spin" />
-      </div>
-    );
-  }
-
   // Freeze the visible counter at last non-zero values during phase transitions.
   // MUST be declared before any early return to keep hook order stable.
   const lastCounterRef = useRef<{ done: number; total: number; phase: string | null }>({
@@ -3453,6 +3445,14 @@ export function AnalysisSection({ requestId, files, projectId, sourceType, isWMS
     total: 0,
     phase: null,
   });
+
+  if (promptsLoading) {
+    return (
+      <div className="flex items-center justify-center py-8">
+        <Loader2 className="w-6 h-6 animate-spin" />
+      </div>
+    );
+  }
 
   if (!prompts?.length) return null;
 
