@@ -597,8 +597,21 @@ async function checkFinalizeAll(
   const { data: rows } = await admin
     .from("analysis_requests")
     .select("id, pipeline_phase, pipeline_stop_requested, analysis_run_id")
-    .in("pipeline_phase", ["analyzing", "triaging"])
+    .in("pipeline_phase", ["splitting", "extracting", "analyzing", "triaging"])
     .limit(40);
+
+  // Reap stuck "processing" jobs whose worker died (e.g. memory limit) and
+  // hasn't progressed in > 5 min. Without this, a stop press appears to hang.
+  const STUCK_MS = 5 * 60_000;
+  await admin
+    .from("analysis_pipeline_jobs")
+    .update({
+      status: "cancelled",
+      completed_at: new Date().toISOString(),
+      error_message: "Reaped: worker did not progress within timeout",
+    } as any)
+    .eq("status", "processing")
+    .lt("claimed_at", new Date(Date.now() - STUCK_MS).toISOString());
 
   for (const row of (rows as any[]) || []) {
     const runId = row.analysis_run_id ?? null;
@@ -611,13 +624,37 @@ async function checkFinalizeAll(
           error_message: "Cancelled by user stop request",
         } as any)
         .eq("analysis_request_id", row.id)
-        .eq("status", "pending");
+        .in("status", ["pending", "processing"]);
       if (runId) q = q.eq("analysis_run_id", runId);
       await q;
+
+      // For split/extract phases (no maybeFinalize coverage), reset the row
+      // directly once no jobs remain pending/processing.
+      if (phase === "splitting" || phase === "extracting") {
+        const { count: remaining } = await admin
+          .from("analysis_pipeline_jobs")
+          .select("id", { count: "exact", head: true })
+          .eq("analysis_request_id", row.id)
+          .in("status", ["pending", "processing"]);
+        if ((remaining ?? 0) === 0) {
+          await admin
+            .from("analysis_requests")
+            .update({
+              status: "started",
+              pipeline_phase: null,
+              pipeline_stop_requested: false,
+              pipeline_progress_done: 0,
+              pipeline_progress_total: 0,
+              error_message: "Stopped by user during " + phase + " phase",
+            } as any)
+            .eq("id", row.id);
+        }
+        continue;
+      }
     }
     if (phase === "triaging") {
       await maybeFinalizeTriage(admin, supabaseUrl, serviceKey, row.id, runId).catch(() => {});
-    } else {
+    } else if (phase === "analyzing") {
       await maybeFinalize(admin, supabaseUrl, serviceKey, row.id, runId).catch(() => {});
     }
   }
