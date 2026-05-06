@@ -590,13 +590,7 @@ async function runPipeline(params: PipelineParams) {
       .not("drive_file_id", "is", null);
 
     if (!allPrompts || allPrompts.length === 0) {
-      await admin
-        .from("analysis_requests")
-        .update({
-          status: "complete",
-          pipeline_phase: null,
-        } as any)
-        .eq("id", analysisRequestId);
+      await markNoEligibleDrawings(admin, analysisRequestId, activeRunId);
       return;
     }
 
@@ -606,13 +600,7 @@ async function runPipeline(params: PipelineParams) {
 
     if (enabledAwpClasses !== undefined) {
       if (enabledAwpClasses.length === 0) {
-        await admin
-          .from("analysis_requests")
-          .update({
-            status: "complete",
-            pipeline_phase: null,
-          } as any)
-          .eq("id", analysisRequestId);
+        await markNoEligibleDrawings(admin, analysisRequestId, activeRunId);
         return;
       }
       const allowed = new Set(enabledAwpClasses);
