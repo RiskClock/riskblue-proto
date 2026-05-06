@@ -549,26 +549,35 @@ serve(async (req) => {
       model: model || undefined,
     });
 
-    // Handle Responses API HTTP errors
-    if ("httpStatus" in apiResult) {
-      if (isInvalidFileError(apiResult.httpStatus, apiResult.parsedError)) {
-        // Invalidate the cache so the next run performs a fresh upload
+    // Helper: invalidate the cached OpenAI file id on the right unit (sheet vs parent)
+    const invalidateUnitCache = async () => {
+      if (sheetId) {
+        await adminSupabase.from("analysis_request_sheets")
+          .update({ openai_file_status: "invalid" })
+          .eq("id", sheetId);
+      } else {
         await adminSupabase.from("analysis_request_files")
           .update({ openai_file_status: "invalid" })
           .eq("id", fileId);
       }
+    };
+
+    // Handle Responses API HTTP errors
+    if ("httpStatus" in apiResult) {
+      if (isInvalidFileError(apiResult.httpStatus, apiResult.parsedError)) {
+        await invalidateUnitCache();
+      }
 
       const errMsg = `OpenAI Responses API failed (${apiResult.httpStatus}): ${apiResult.errText}`;
-      await adminSupabase.from("analysis_results")
-        .update({
-          status: "failed",
-          error_message: isInvalidFileError(apiResult.httpStatus, apiResult.parsedError)
-            ? "Cached OpenAI file was rejected — re-analyze to re-upload"
-            : errMsg,
-        })
-        .eq("file_id", fileId)
-        .eq("analysis_request_id", analysisRequestId)
-        .eq("awp_class_name", awpClassName);
+      await scopeResultsUpdate(
+        adminSupabase.from("analysis_results")
+          .update({
+            status: "failed",
+            error_message: isInvalidFileError(apiResult.httpStatus, apiResult.parsedError)
+              ? "Cached OpenAI file was rejected — re-analyze to re-upload"
+              : errMsg,
+          })
+      );
 
       return new Response(JSON.stringify({ error: errMsg }), {
         status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -579,12 +588,10 @@ serve(async (req) => {
     // Raster fallback detection — auto re-upload and retry (once)
     // ------------------------------------------------------------------
     if (isRasterFallback(apiResult.resultText) && usedCacheHit) {
-      console.warn(`[analyze-drawings] Raster fallback detected for file ${fileId} (${fileRecord.name}) — cache hit returned stale file. Re-uploading PDF bytes and retrying.`);
+      console.warn(`[analyze-drawings] Raster fallback detected for file ${fileId} sheet ${sheetId ?? "-"} (${fileRecord.name}) — cache hit returned stale file. Re-uploading PDF bytes and retrying.`);
 
-      // Invalidate the stale cached file
-      await adminSupabase.from("analysis_request_files")
-        .update({ openai_file_status: "invalid" })
-        .eq("id", fileId);
+      // Invalidate the stale cached file on the unit (sheet or parent)
+      await invalidateUnitCache();
 
       // Re-upload fresh PDF bytes from storage
       const reuploadResult = await uploadPdfToOpenAI({
@@ -592,19 +599,19 @@ serve(async (req) => {
         openaiApiKey,
         fileRecord,
         fileId,
+        sheetId: sheetId ?? null,
         storageBucket,
         effectiveMime,
       });
 
       if ("error" in reuploadResult) {
-        await adminSupabase.from("analysis_results")
-          .update({
-            status: "failed",
-            error_message: `Re-upload after raster fallback failed: ${reuploadResult.error}`,
-          })
-          .eq("file_id", fileId)
-          .eq("analysis_request_id", analysisRequestId)
-          .eq("awp_class_name", awpClassName);
+        await scopeResultsUpdate(
+          adminSupabase.from("analysis_results")
+            .update({
+              status: "failed",
+              error_message: `Re-upload after raster fallback failed: ${reuploadResult.error}`,
+            })
+        );
         return new Response(JSON.stringify({ error: reuploadResult.error }), {
           status: reuploadResult.httpStatus, headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
@@ -613,7 +620,6 @@ serve(async (req) => {
       openaiFileId = reuploadResult.openaiFileId;
       console.log(`[analyze-drawings] Retrying Responses API with fresh upload file_id=${openaiFileId}, blobMime=application/pdf`);
 
-      // Retry the Responses API with the freshly uploaded file
       const retryResult = await callResponsesApi({
         openaiApiKey,
         openaiFileId,
@@ -626,19 +632,17 @@ serve(async (req) => {
 
       if ("httpStatus" in retryResult) {
         const errMsg = `Retry after raster fallback failed (${retryResult.httpStatus}): ${retryResult.errText}`;
-        await adminSupabase.from("analysis_results")
-          .update({ status: "failed", error_message: errMsg })
-          .eq("file_id", fileId)
-          .eq("analysis_request_id", analysisRequestId)
-          .eq("awp_class_name", awpClassName);
+        await scopeResultsUpdate(
+          adminSupabase.from("analysis_results")
+            .update({ status: "failed", error_message: errMsg })
+        );
         return new Response(JSON.stringify({ error: errMsg }), {
           status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       }
 
-      // Use the retry result going forward
       apiResult = retryResult;
-      console.log(`[analyze-drawings] Retry succeeded for file ${fileId} (${fileRecord.name})`);
+      console.log(`[analyze-drawings] Retry succeeded for file ${fileId} sheet ${sheetId ?? "-"} (${fileRecord.name})`);
     }
 
     const { resultText, usage } = apiResult as { resultText: string; usage: Record<string, number> | null };
