@@ -5,6 +5,7 @@ import type { RealtimeChannel } from "@supabase/supabase-js";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
 import { useAnalysisRequestState } from "@/hooks/useAnalysisRequestState";
+import { useSharedAnalysisRequestState } from "@/contexts/AnalysisRequestStateContext";
 import { Button } from "@/components/ui/button";
 import {
   Table,
