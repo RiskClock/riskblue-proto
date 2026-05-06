@@ -82,10 +82,11 @@ async function uploadPdfToOpenAI(params: {
   openaiApiKey: string;
   fileRecord: Record<string, unknown>;
   fileId: string;
+  sheetId: string | null;
   storageBucket: string;
   effectiveMime: string;
 }): Promise<{ openaiFileId: string } | { error: string; httpStatus: number }> {
-  const { adminSupabase, openaiApiKey, fileRecord, fileId, storageBucket, effectiveMime } = params;
+  const { adminSupabase, openaiApiKey, fileRecord, fileId, sheetId, storageBucket, effectiveMime } = params;
 
   const storagePath = fileRecord.storage_path as string | null;
   if (!storagePath) {
@@ -101,13 +102,13 @@ async function uploadPdfToOpenAI(params: {
   }
 
   const pdfBlob = new Blob([await fileData.arrayBuffer()], { type: effectiveMime });
-  console.log(`[analyze-drawings] Uploading to OpenAI: name=${fileRecord.name}, mime=${effectiveMime}, blobSize=${pdfBlob.size} bytes`);
+  console.log(`[analyze-drawings] Uploading to OpenAI: name=${fileRecord.name}, mime=${effectiveMime}, blobSize=${pdfBlob.size} bytes, sheetId=${sheetId ?? "-"}`);
 
   const uploadForm = new FormData();
   uploadForm.append("file", pdfBlob, fileRecord.name as string);
   uploadForm.append("purpose", "assistants");
   uploadForm.append("expires_after[anchor]", "created_at");
-  uploadForm.append("expires_after[seconds]", "259200"); // 3 days
+  uploadForm.append("expires_after[seconds]", "259200");
 
   const uploadResponse = await fetch("https://api.openai.com/v1/files", {
     method: "POST",
@@ -128,17 +129,20 @@ async function uploadPdfToOpenAI(params: {
       ? new Date(uploadResult.expires_at * 1000).toISOString()
       : null;
 
-  // Persist fresh cache metadata
-  await adminSupabase.from("analysis_request_files")
-    .update({
-      openai_file_id: openaiFileId,
-      openai_file_uploaded_at: new Date().toISOString(),
-      openai_file_expires_at: openaiExpiresAt,
-      openai_file_status: "active",
-    })
-    .eq("id", fileId);
+  // Persist fresh cache metadata on the unit (sheet in sheet-mode, else parent file)
+  const cachePatch = {
+    openai_file_id: openaiFileId,
+    openai_file_uploaded_at: new Date().toISOString(),
+    openai_file_expires_at: openaiExpiresAt,
+    openai_file_status: "active",
+  };
+  if (sheetId) {
+    await adminSupabase.from("analysis_request_sheets").update(cachePatch).eq("id", sheetId);
+  } else {
+    await adminSupabase.from("analysis_request_files").update(cachePatch).eq("id", fileId);
+  }
 
-  console.log(`[analyze-drawings] Uploaded file ${fileId} to OpenAI as ${openaiFileId} (expires_at: ${openaiExpiresAt ?? "not returned"})`);
+  console.log(`[analyze-drawings] Uploaded ${sheetId ? `sheet ${sheetId}` : `file ${fileId}`} to OpenAI as ${openaiFileId} (expires_at: ${openaiExpiresAt ?? "not returned"})`);
 
   return { openaiFileId };
 }
