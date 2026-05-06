@@ -253,6 +253,19 @@ export function useAnalysisRequestState(requestId: string | null | undefined): A
     };
   }, [requestId, effectiveRunId, queryClient, countsKey]);
 
+  // When the active run id changes, invalidate every run-scoped grid query
+  // so triage spinners, green-fill cells, and analyze counts refetch the
+  // moment the new run begins.
+  const lastInvalidatedRunRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!requestId) return;
+    if (effectiveRunId === lastInvalidatedRunRef.current) return;
+    lastInvalidatedRunRef.current = effectiveRunId;
+    queryClient.invalidateQueries({ queryKey: ["triage-results", requestId] });
+    queryClient.invalidateQueries({ queryKey: ["analysis-results", requestId] });
+    queryClient.invalidateQueries({ queryKey: ["analysis-counts", requestId] });
+  }, [requestId, effectiveRunId, queryClient]);
+
   const derivedUiState = deriveAnalysisUiState(effectiveRow);
 
   // -------------------- Explicit precedence --------------------
