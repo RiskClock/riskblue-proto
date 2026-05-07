@@ -1642,8 +1642,9 @@ async function runPipeline(params: PipelineParams) {
           analysis_request_id: analysisRequestId,
           analysis_run_id: activeRunId,
           file_id: item.fileId,
-          sheet_id: item.sheetId,
-          parent_file_id: item.sheetId ? item.fileId : null,
+          sheet_id: item.sheetId, // null in sheet-mode after Phase 3 redesign (file-level analyze)
+          parent_file_id: useSheets ? item.fileId : null,
+          accepted_pages: useSheets ? item.acceptedPages : null,
           awp_class_name: item.awpClassName,
           prompt_content: finalPrompt,
           analyze_model: analyzeModel,
@@ -1653,11 +1654,13 @@ async function runPipeline(params: PipelineParams) {
         });
       }
 
+      // Analyze rows are always keyed at the file level now (sheet_id IS NULL),
+      // so use the legacy partial-unique index in both modes.
+      const RESULTS_ONCONFLICT = "analysis_request_id,file_id,awp_class_name";
+
       if (immediateFailures.length > 0) {
         await admin.from("analysis_results").upsert(immediateFailures, {
-          onConflict: useSheets
-            ? "analysis_request_id,sheet_id,awp_class_name"
-            : "analysis_request_id,file_id,awp_class_name",
+          onConflict: RESULTS_ONCONFLICT,
         });
       }
 
@@ -1705,9 +1708,7 @@ async function runPipeline(params: PipelineParams) {
         for (let i = 0; i < placeholderRows.length; i += PCHUNK) {
           await admin.from("analysis_results").upsert(
             placeholderRows.slice(i, i + PCHUNK),
-            { onConflict: useSheets
-                ? "analysis_request_id,sheet_id,awp_class_name"
-                : "analysis_request_id,file_id,awp_class_name" },
+            { onConflict: RESULTS_ONCONFLICT },
           );
         }
       }
