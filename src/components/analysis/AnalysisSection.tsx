@@ -3601,12 +3601,6 @@ export function AnalysisSection({ requestId, files, projectId, sourceType, isWMS
   const showCounter =
     pipelinePhase !== "dispatching_analyze" && pipelineTotal > 0;
   void triageBreakdown;
-  const triageBreakdownSuffix = triageBreakdownVisible
-    ? ` (${triageBreakdown!.triaged} triaged · ${triageBreakdown!.shortCircuited} skipped via short-circuit)`
-    : "";
-  const triageBreakdownTooltip = triageBreakdownVisible
-    ? `${triageBreakdown!.triaged} drawings triaged by AI; ${triageBreakdown!.shortCircuited} auto-completed because a sibling page in the same file already scored 100% for this class.`
-    : "";
 
 
   return (
