@@ -1580,8 +1580,7 @@ async function runPipeline(params: PipelineParams) {
             if (overrideMap.get(ovKey) === "exclude") continue;
             const isEligible =
               overrideMap.get(ovKey) === "include" ||
-              (t.status === "complete" && t.score !== null && t.score >= 50) ||
-              t.sheet_role === "analysis_sheet";
+              (t.status === "complete" && t.score !== null && t.score >= 50);
             if (!isEligible) continue;
             const k = `${sh.parent_file_id}::${t.awp_class_name}`;
             const prev = rawElig.get(k);
