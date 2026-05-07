@@ -56,6 +56,9 @@ export function deriveAnalysisUiState(row: AnalysisRowLike | null | undefined): 
     if (phase === "extracting") return "extracting";
     if (phase === "triaging") return "triaging";
     if (phase === "analyzing") return "analyzing";
+    // Transient phase set by the triage finalizer between triage completion
+    // and analyze invocation. Treat as analyzing for UI continuity.
+    if (phase === "dispatching_analyze") return "analyzing";
     if (phase === "summarizing") return "summarizing";
     // status=processing with no/unknown phase → treat as starting
     return "starting";
