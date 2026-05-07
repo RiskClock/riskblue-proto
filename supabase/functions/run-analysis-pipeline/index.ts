@@ -1435,24 +1435,26 @@ async function runPipeline(params: PipelineParams) {
         }
       }
 
-      // Phase 3 sheet-mode redesign: collapse sheet-level analyze units into ONE
-      // analyze job per (parent_file_id, awp_class_name). The full parent PDF is
-      // sent to analyze-drawings (sheet_id = null). Page-level provenance from
-      // triage is recorded in `acceptedPages` for debugging only — it is NOT
-      // passed to the model as a focus hint, since short-circuiting may have
-      // skipped sibling pages that also contain the class.
+      // Phase 3 sheet-mode (per-sheet chunking): emit ONE analyze job per
+      // (sheet_id, class). Each job uploads only the per-sheet PDF artifact
+      // (~1MB) instead of the full parent PDF (which can be 40MB+ and exceed
+      // the worker abort timeout). analyze-drawings already supports sheetId
+      // and downloads the sheet's storage_path when present.
       //
-      // We no longer concatenate context_sheet text per analyze unit because the
-      // model now sees the full parent PDF and can read its own context.
+      // Eligibility: per-sheet score >= 50, OR an include override on the
+      // (parent_file, class) pair (overrides apply at the parent-file level
+      // and admit every accepted sheet of that file).
 
       const workQueue: WorkItem[] = [];
 
       if (useSheets) {
-        // Group accepted (analysis_sheet) triage rows by (parent_file_id, class).
-        // A file/class is "accepted" if any sheet of that file/class scored >=50,
-        // OR has an explicit include override.
-        type Acc = { parentFileId: string; awpClassName: string; parentName: string; pages: Set<number> };
-        const acceptedByKey = new Map<string, Acc>();
+        // Track which (file, class) pairs have an include override so we can
+        // also admit any sheets of those pairs that did not individually pass
+        // the score threshold but were flagged as analysis_sheet by triage.
+        const includedKeys = new Set<string>();
+        for (const [k, v] of overrideMap.entries()) {
+          if (v === "include") includedKeys.add(k);
+        }
 
         for (const t of (triageResults || []) as any[]) {
           const sh = sheetById.get(t.sheet_id);
@@ -1462,11 +1464,9 @@ async function runPipeline(params: PipelineParams) {
           const override = overrideMap.get(overrideKey);
           if (override === "exclude") continue;
 
-          // Strict eligibility: include override OR score >= 50.
-          // We intentionally do NOT fall back on `sheet_role === "analysis_sheet"`,
-          // because the triage model can label a low-score page as analysis_sheet
-          // and that would let low-confidence pairs through (e.g. score=20).
-          // The canonical rule is the 50% score threshold.
+          // Strict eligibility: include override OR per-sheet score >= 50.
+          // No `sheet_role === "analysis_sheet"` fallback — the canonical
+          // rule is the 50% score threshold.
           let eligible = override === "include";
           if (
             !eligible &&
@@ -1478,36 +1478,25 @@ async function runPipeline(params: PipelineParams) {
           }
           if (!eligible) continue;
 
-          const key = `${sh.parent_file_id}::${t.awp_class_name}`;
-          let acc = acceptedByKey.get(key);
-          if (!acc) {
-            const parentFile = files.find((f: any) => f.id === sh.parent_file_id);
-            acc = {
-              parentFileId: sh.parent_file_id,
-              awpClassName: t.awp_class_name,
-              parentName: parentFile?.name || sh.name,
-              pages: new Set<number>(),
-            };
-            acceptedByKey.set(key, acc);
-          }
-          // page_index is 0-based in our schema; expose as 1-based PDF page numbers.
-          if (typeof sh.page_index === "number") {
-            acc.pages.add(sh.page_index + 1);
-          }
-        }
-
-        for (const acc of acceptedByKey.values()) {
-          const prompt = promptByClass.get(acc.awpClassName);
+          const prompt = promptByClass.get(t.awp_class_name);
           if (!prompt) continue;
+
+          const parentFile = files.find((f: any) => f.id === sh.parent_file_id);
+          const parentName = parentFile?.name || sh.name;
+          const pageNum = typeof sh.page_index === "number" ? sh.page_index + 1 : 0;
+          const sheetLabel = sh.sheet_number
+            ? `${parentName} — ${sh.sheet_number}`
+            : `${parentName} — p${pageNum}`;
+
           workQueue.push({
-            fileId: acc.parentFileId,
-            sheetId: null,
-            unitName: acc.parentName,
-            awpClassName: acc.awpClassName,
+            fileId: sh.parent_file_id,
+            sheetId: sh.id,
+            unitName: sheetLabel,
+            awpClassName: t.awp_class_name,
             promptContent: (prompt as any).prompt_content || null,
             triagePromptContent: (prompt as any).triage_prompt_content || null,
             contextText: null,
-            acceptedPages: [...acc.pages].sort((a, b) => a - b),
+            acceptedPages: pageNum > 0 ? [pageNum] : [],
           });
         }
       } else {
