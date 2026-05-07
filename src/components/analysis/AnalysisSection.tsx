@@ -802,6 +802,7 @@ interface FilePreviewModalProps {
 function FilePreviewModal({ file, sourceType, onClose }: FilePreviewModalProps) {
   const bucket = sourceType === "manual_upload" ? "uploaded-drawings" : "drive-analysis-files";
   const storagePath = file.storage_path ?? null;
+  const [page, setPage] = useState(1);
 
   // Hint mime type from filename so PDF vs image is detected even if storage
   // doesn't return Content-Type. The shared loader falls back to blob.type.
@@ -834,7 +835,9 @@ function FilePreviewModal({ file, sourceType, onClose }: FilePreviewModalProps) 
           ) : (
             <DrawingViewer
               source={source}
-              layout="stacked-pages"
+              layout="single-page"
+              page={page}
+              onPageChange={setPage}
               initialFit="page"
               minScale={0.8}
               maxScale={8}
