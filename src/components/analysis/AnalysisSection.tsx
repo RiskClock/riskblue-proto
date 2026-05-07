@@ -3450,12 +3450,17 @@ export function AnalysisSection({ requestId, files, projectId, sourceType, isWMS
 
   type CellValue = "loading" | "failed" | number | null;
 
+  /**
+   * Returns the per-file raw mention count derived from result_text.
+   * Used by the cell renderer; the cell separately decides whether to
+   * substitute the deduped class-level summary count (and show a tooltip)
+   * when exactly one file contributed to that class.
+   */
   const countForCell = (fileId: string, className: string): CellValue => {
     const liveStatus = classFileStatuses[className]?.[fileId];
     if (liveStatus === "processing") return "loading";
     if (liveStatus === "failed") return "failed";
 
-    // Fall back to DB results
     const result = results?.find((r) => r.file_id === fileId && r.awp_class_name === className);
     if (!result) return null;
     if (result.status === "processing") return "loading";
@@ -3465,6 +3470,29 @@ export function AnalysisSection({ requestId, files, projectId, sourceType, isWMS
       return parsed.length;
     }
     return null;
+  };
+
+  /**
+   * For a (fileId, className) cell, return the deduped count to display when
+   * the class maps unambiguously to ONE complete-result file (the common
+   * single-parent-PDF case). Returns null if multiple files contributed —
+   * caller should fall back to the per-file raw count without implying the
+   * class total belongs to that one file.
+   */
+  const dedupedCountForCell = (
+    fileId: string,
+    className: string,
+  ): { deduped: number; raw: number } | null => {
+    const summary = summarizedInstances[className];
+    if (!summary || !Array.isArray(summary)) return null;
+    if (summarizing[className]) return null;
+    const completeForClass = (results || []).filter(
+      (r) => r.awp_class_name === className && r.status === "complete" && r.result_text,
+    );
+    if (completeForClass.length !== 1) return null;
+    if (completeForClass[0].file_id !== fileId) return null;
+    const raw = parseResultText(completeForClass[0].result_text || "").length;
+    return { deduped: summary.length, raw };
   };
 
   const getResultsForClass = (className: string) =>
