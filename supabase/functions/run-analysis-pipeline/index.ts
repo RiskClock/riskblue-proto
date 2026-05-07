@@ -1435,37 +1435,29 @@ async function runPipeline(params: PipelineParams) {
         }
       }
 
-      // Build context_sheet text per (parent_file_id, awp_class_name), capped
-      // to ~6KB total per analyze unit. Key = `${parentId}::${class}`.
-      const CONTEXT_CAP_BYTES = 6_000;
-      const contextByParentClass = new Map<string, string>();
-      if (useSheets) {
-        for (const t of (triageResults || []) as any[]) {
-          if (t.sheet_role !== "context_sheet") continue;
-          const sh = sheetById.get(t.sheet_id);
-          if (!sh) continue;
-          const txt = (sh.extracted_text || "").trim();
-          if (!txt) continue;
-          const key = `${sh.parent_file_id}::${t.awp_class_name}`;
-          const existing = contextByParentClass.get(key) || "";
-          const remaining = CONTEXT_CAP_BYTES - existing.length;
-          if (remaining <= 200) continue;
-          const header = `\n\n--- Context: ${sh.name} (page ${sh.page_index}) ---\n`;
-          const slice = (header + txt).slice(0, remaining);
-          contextByParentClass.set(key, existing + slice);
-        }
-      }
+      // Phase 3 sheet-mode redesign: collapse sheet-level analyze units into ONE
+      // analyze job per (parent_file_id, awp_class_name). The full parent PDF is
+      // sent to analyze-drawings (sheet_id = null). Page-level provenance from
+      // triage is recorded in `acceptedPages` for debugging only — it is NOT
+      // passed to the model as a focus hint, since short-circuiting may have
+      // skipped sibling pages that also contain the class.
+      //
+      // We no longer concatenate context_sheet text per analyze unit because the
+      // model now sees the full parent PDF and can read its own context.
 
       const workQueue: WorkItem[] = [];
 
       if (useSheets) {
-        // One analyze unit per (analysis-role sheet, class).
+        // Group accepted (analysis_sheet) triage rows by (parent_file_id, class).
+        // A file/class is "accepted" if any sheet of that file/class scored >=50,
+        // OR has an explicit include override.
+        type Acc = { parentFileId: string; awpClassName: string; parentName: string; pages: Set<number> };
+        const acceptedByKey = new Map<string, Acc>();
+
         for (const t of (triageResults || []) as any[]) {
           if (t.sheet_role !== "analysis_sheet") continue;
           const sh = sheetById.get(t.sheet_id);
           if (!sh) continue;
-          const prompt = promptByClass.get(t.awp_class_name);
-          if (!prompt) continue;
 
           const overrideKey = `${sh.parent_file_id}_${t.awp_class_name}`;
           const override = overrideMap.get(overrideKey);
@@ -1482,14 +1474,36 @@ async function runPipeline(params: PipelineParams) {
           }
           if (!eligible) continue;
 
+          const key = `${sh.parent_file_id}::${t.awp_class_name}`;
+          let acc = acceptedByKey.get(key);
+          if (!acc) {
+            const parentFile = files.find((f: any) => f.id === sh.parent_file_id);
+            acc = {
+              parentFileId: sh.parent_file_id,
+              awpClassName: t.awp_class_name,
+              parentName: parentFile?.name || sh.name,
+              pages: new Set<number>(),
+            };
+            acceptedByKey.set(key, acc);
+          }
+          // page_index is 0-based in our schema; expose as 1-based PDF page numbers.
+          if (typeof sh.page_index === "number") {
+            acc.pages.add(sh.page_index + 1);
+          }
+        }
+
+        for (const acc of acceptedByKey.values()) {
+          const prompt = promptByClass.get(acc.awpClassName);
+          if (!prompt) continue;
           workQueue.push({
-            fileId: sh.parent_file_id,
-            sheetId: sh.id,
-            unitName: sh.name,
-            awpClassName: t.awp_class_name,
+            fileId: acc.parentFileId,
+            sheetId: null,
+            unitName: acc.parentName,
+            awpClassName: acc.awpClassName,
             promptContent: (prompt as any).prompt_content || null,
             triagePromptContent: (prompt as any).triage_prompt_content || null,
-            contextText: contextByParentClass.get(`${sh.parent_file_id}::${t.awp_class_name}`) || null,
+            contextText: null,
+            acceptedPages: [...acc.pages].sort((a, b) => a - b),
           });
         }
       } else {
@@ -1525,6 +1539,7 @@ async function runPipeline(params: PipelineParams) {
               promptContent: (prompt as any).prompt_content || null,
               triagePromptContent: (prompt as any).triage_prompt_content || null,
               contextText: null,
+              acceptedPages: [],
             });
           }
         }
