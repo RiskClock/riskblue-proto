@@ -1571,11 +1571,8 @@ async function runPipeline(params: PipelineParams) {
               overrideMap.get(ovKey) === "include" ||
               (t.status === "complete" && t.score !== null && t.score >= 50);
             if (!isEligible) continue;
-            const k = `${sh.parent_file_id}::${t.awp_class_name}`;
-            const prev = rawElig.get(k);
-            if (!prev || (t.score ?? -1) > prev.score) {
-              rawElig.set(k, { score: t.score ?? -1, role: t.sheet_role });
-            }
+            const k = `${sh.parent_file_id}::${sh.id}::${t.awp_class_name}`;
+            rawElig.set(k, { score: t.score ?? -1, role: t.sheet_role });
           }
           const builtKeys = new Set(eligibleKeys);
           const missing: string[] = [];
