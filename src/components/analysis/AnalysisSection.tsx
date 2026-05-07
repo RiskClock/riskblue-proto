@@ -767,7 +767,9 @@ function RawResultModal({ fileName, awpClassName, resultText, instanceCount, sou
             ) : (
               <DrawingViewer
                 source={source}
-                layout="stacked-pages"
+                layout="single-page"
+                page={multiPagePage}
+                onPageChange={setMultiPagePage}
                 overlays={overlays}
                 initialFit="page"
                 minScale={0.8}
