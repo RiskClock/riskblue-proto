@@ -3743,9 +3743,24 @@ export function AnalysisSection({ requestId, files, projectId, sourceType, isWMS
                 <div className="flex items-center gap-3">
                   <Loader2 className="w-4 h-4 animate-spin text-primary" />
                   <span className="text-sm font-medium text-foreground">{pipelinePhaseLabel}</span>
-                  <span className="text-xs text-muted-foreground tabular-nums">
-                    {pipelineDone}/{pipelineTotal} {pipelinePhase === "extracting" ? "pages" : "items"}
-                  </span>
+                  {showCounter ? (
+                    triageBreakdownVisible ? (
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <span className="text-xs text-muted-foreground tabular-nums cursor-help">
+                            {pipelineDone}/{pipelineTotal} {pipelineUnit}{triageBreakdownSuffix}
+                          </span>
+                        </TooltipTrigger>
+                        <TooltipContent>{triageBreakdownTooltip}</TooltipContent>
+                      </Tooltip>
+                    ) : (
+                      <span className="text-xs text-muted-foreground tabular-nums">
+                        {pipelineDone}/{pipelineTotal} {pipelineUnit}
+                      </span>
+                    )
+                  ) : (
+                    <span className="text-xs text-muted-foreground tabular-nums">…</span>
+                  )}
                   <Button
                     size="sm"
                     variant="destructive"
