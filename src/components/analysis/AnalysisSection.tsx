@@ -3562,27 +3562,20 @@ export function AnalysisSection({ requestId, files, projectId, sourceType, isWMS
   const wmsvRunning = pipelineRunning || analyzeV2Stopping;
   const wmsvPhaseLabel = analyzeV2Stopping ? "Stopping…" : pipelinePhaseLabel;
 
-  // Freeze the visible counter at last non-zero values during phase transitions
-  // (e.g. extracting → triaging briefly reports 0/0 before the next phase
-  // initializes its totals). Counter resets when the run starts or stops.
-  // (lastCounterRef declared above the early return to keep hook order stable.)
+  // Track the phase that produced the last (done, total) so we never carry
+  // a triage count into the analyze phase. When the phase changes but the
+  // new phase hasn't written totals yet, render "…" instead of stale numbers.
   if (pipelineRunning) {
     if (rawPipelineTotal > 0) {
       lastCounterRef.current = { done: rawPipelineDone, total: rawPipelineTotal, phase: pipelinePhase };
-    } else if (lastCounterRef.current.phase !== pipelinePhase) {
-      // Phase just changed; freeze the previous (done, total) until the new
-      // phase reports a non-zero total.
-      lastCounterRef.current = {
-        done: lastCounterRef.current.total, // show prior phase as "complete"
-        total: lastCounterRef.current.total,
-        phase: lastCounterRef.current.phase,
-      };
     }
   } else {
     lastCounterRef.current = { done: 0, total: 0, phase: null };
   }
-  const pipelineDone = rawPipelineTotal > 0 ? rawPipelineDone : lastCounterRef.current.done;
-  const pipelineTotal = rawPipelineTotal > 0 ? rawPipelineTotal : lastCounterRef.current.total;
+  const countersMatchPhase =
+    rawPipelineTotal > 0 && lastCounterRef.current.phase === pipelinePhase;
+  const pipelineDone = countersMatchPhase ? rawPipelineDone : 0;
+  const pipelineTotal = countersMatchPhase ? rawPipelineTotal : 0;
 
   // Phase-aware unit label — "items" was ambiguous when the chip carried over
   // a triage count into the analyze phase.
