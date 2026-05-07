@@ -587,6 +587,7 @@ function RawResultModal({ fileName, awpClassName, resultText, instanceCount, sou
   const [resolveLoading, setResolveLoading] = useState(false);
   const [resolveError, setResolveError] = useState<string | null>(null);
   const [overlays, setOverlays] = useState<OverlayInput[]>([]);
+  const [multiPagePage, setMultiPagePage] = useState(1);
 
   const bucket = sourceType === "manual_upload" ? "uploaded-drawings" : "drive-analysis-files";
   const storagePath = sourceFile?.storage_path ?? null;
