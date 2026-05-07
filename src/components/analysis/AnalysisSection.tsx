@@ -4096,24 +4096,37 @@ export function AnalysisSection({ requestId, files, projectId, sourceType, isWMS
                           const result = results?.find(
                             (r) => r.file_id === file.id && r.awp_class_name === className && r.status === "complete" && r.result_text
                           );
+                          const dedup = dedupedCountForCell(file.id, className);
+                          const display = dedup ? dedup.deduped : val;
+                          const showDedupTooltip = !!dedup && dedup.deduped !== dedup.raw;
+                          const button = (
+                            <button
+                              className="text-sm font-semibold text-white hover:underline"
+                              onClick={() => {
+                                if (result?.result_text) {
+                                  setRawResultModal({
+                                    fileName: file.name,
+                                    awpClassName: className,
+                                    resultText: result.result_text,
+                                    instanceCount: val,
+                                    sourceFile: file,
+                                  });
+                                }
+                              }}
+                            >
+                              {display}
+                            </button>
+                          );
                           return (
                             <td key={prompt.id} className={`w-14 px-2 py-2 text-center${disabledCls}`} style={triageBgStyle}>
-                              <button
-                                className="text-sm font-semibold text-white hover:underline"
-                                onClick={() => {
-                                  if (result?.result_text) {
-                                    setRawResultModal({
-                                      fileName: file.name,
-                                      awpClassName: className,
-                                      resultText: result.result_text,
-                                      instanceCount: val,
-                                      sourceFile: file,
-                                    });
-                                  }
-                                }}
-                              >
-                                {val}
-                              </button>
+                              {showDedupTooltip ? (
+                                <Tooltip>
+                                  <TooltipTrigger asChild><span>{button}</span></TooltipTrigger>
+                                  <TooltipContent>
+                                    {dedup!.deduped} unique room{dedup!.deduped === 1 ? "" : "s"} · {dedup!.raw} raw mention{dedup!.raw === 1 ? "" : "s"}
+                                  </TooltipContent>
+                                </Tooltip>
+                              ) : button}
                             </td>
                           );
                         }
