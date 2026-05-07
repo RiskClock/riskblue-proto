@@ -306,6 +306,8 @@ export const DrawingViewer = forwardRef<DrawingViewerApi, DrawingViewerProps>(
                       onPrev: () => onPageChange?.(Math.max(1, page - 1)),
                       onNext: () =>
                         onPageChange?.(Math.min(totalPages, page + 1)),
+                      onJump: (n) =>
+                        onPageChange?.(Math.max(1, Math.min(totalPages, n))),
                     }
                   : undefined
               }

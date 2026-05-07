@@ -587,6 +587,7 @@ function RawResultModal({ fileName, awpClassName, resultText, instanceCount, sou
   const [resolveLoading, setResolveLoading] = useState(false);
   const [resolveError, setResolveError] = useState<string | null>(null);
   const [overlays, setOverlays] = useState<OverlayInput[]>([]);
+  const [multiPagePage, setMultiPagePage] = useState(1);
 
   const bucket = sourceType === "manual_upload" ? "uploaded-drawings" : "drive-analysis-files";
   const storagePath = sourceFile?.storage_path ?? null;
@@ -766,7 +767,9 @@ function RawResultModal({ fileName, awpClassName, resultText, instanceCount, sou
             ) : (
               <DrawingViewer
                 source={source}
-                layout="stacked-pages"
+                layout="single-page"
+                page={multiPagePage}
+                onPageChange={setMultiPagePage}
                 overlays={overlays}
                 initialFit="page"
                 minScale={0.8}
@@ -802,6 +805,7 @@ interface FilePreviewModalProps {
 function FilePreviewModal({ file, sourceType, onClose }: FilePreviewModalProps) {
   const bucket = sourceType === "manual_upload" ? "uploaded-drawings" : "drive-analysis-files";
   const storagePath = file.storage_path ?? null;
+  const [page, setPage] = useState(1);
 
   // Hint mime type from filename so PDF vs image is detected even if storage
   // doesn't return Content-Type. The shared loader falls back to blob.type.
@@ -834,7 +838,9 @@ function FilePreviewModal({ file, sourceType, onClose }: FilePreviewModalProps) 
           ) : (
             <DrawingViewer
               source={source}
-              layout="stacked-pages"
+              layout="single-page"
+              page={page}
+              onPageChange={setPage}
               initialFit="page"
               minScale={0.8}
               maxScale={8}
@@ -3444,12 +3450,17 @@ export function AnalysisSection({ requestId, files, projectId, sourceType, isWMS
 
   type CellValue = "loading" | "failed" | number | null;
 
+  /**
+   * Returns the per-file raw mention count derived from result_text.
+   * Used by the cell renderer; the cell separately decides whether to
+   * substitute the deduped class-level summary count (and show a tooltip)
+   * when exactly one file contributed to that class.
+   */
   const countForCell = (fileId: string, className: string): CellValue => {
     const liveStatus = classFileStatuses[className]?.[fileId];
     if (liveStatus === "processing") return "loading";
     if (liveStatus === "failed") return "failed";
 
-    // Fall back to DB results
     const result = results?.find((r) => r.file_id === fileId && r.awp_class_name === className);
     if (!result) return null;
     if (result.status === "processing") return "loading";
@@ -3459,6 +3470,29 @@ export function AnalysisSection({ requestId, files, projectId, sourceType, isWMS
       return parsed.length;
     }
     return null;
+  };
+
+  /**
+   * For a (fileId, className) cell, return the deduped count to display when
+   * the class maps unambiguously to ONE complete-result file (the common
+   * single-parent-PDF case). Returns null if multiple files contributed —
+   * caller should fall back to the per-file raw count without implying the
+   * class total belongs to that one file.
+   */
+  const dedupedCountForCell = (
+    fileId: string,
+    className: string,
+  ): { deduped: number; raw: number } | null => {
+    const summary = summarizedInstances[className];
+    if (!summary || !Array.isArray(summary)) return null;
+    if (summarizing[className]) return null;
+    const completeForClass = (results || []).filter(
+      (r) => r.awp_class_name === className && r.status === "complete" && r.result_text,
+    );
+    if (completeForClass.length !== 1) return null;
+    if (completeForClass[0].file_id !== fileId) return null;
+    const raw = parseResultText(completeForClass[0].result_text || "").length;
+    return { deduped: summary.length, raw };
   };
 
   const getResultsForClass = (className: string) =>
@@ -4062,24 +4096,37 @@ export function AnalysisSection({ requestId, files, projectId, sourceType, isWMS
                           const result = results?.find(
                             (r) => r.file_id === file.id && r.awp_class_name === className && r.status === "complete" && r.result_text
                           );
+                          const dedup = dedupedCountForCell(file.id, className);
+                          const display = dedup ? dedup.deduped : val;
+                          const showDedupTooltip = !!dedup && dedup.deduped !== dedup.raw;
+                          const button = (
+                            <button
+                              className="text-sm font-semibold text-white hover:underline"
+                              onClick={() => {
+                                if (result?.result_text) {
+                                  setRawResultModal({
+                                    fileName: file.name,
+                                    awpClassName: className,
+                                    resultText: result.result_text,
+                                    instanceCount: val,
+                                    sourceFile: file,
+                                  });
+                                }
+                              }}
+                            >
+                              {display}
+                            </button>
+                          );
                           return (
                             <td key={prompt.id} className={`w-14 px-2 py-2 text-center${disabledCls}`} style={triageBgStyle}>
-                              <button
-                                className="text-sm font-semibold text-white hover:underline"
-                                onClick={() => {
-                                  if (result?.result_text) {
-                                    setRawResultModal({
-                                      fileName: file.name,
-                                      awpClassName: className,
-                                      resultText: result.result_text,
-                                      instanceCount: val,
-                                      sourceFile: file,
-                                    });
-                                  }
-                                }}
-                              >
-                                {val}
-                              </button>
+                              {showDedupTooltip ? (
+                                <Tooltip>
+                                  <TooltipTrigger asChild><span>{button}</span></TooltipTrigger>
+                                  <TooltipContent>
+                                    {dedup!.deduped} unique room{dedup!.deduped === 1 ? "" : "s"} · {dedup!.raw} raw mention{dedup!.raw === 1 ? "" : "s"}
+                                  </TooltipContent>
+                                </Tooltip>
+                              ) : button}
                             </td>
                           );
                         }

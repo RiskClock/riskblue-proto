@@ -37,11 +37,18 @@ const DEFAULTS: Required<PdfRasterOptions> = {
   rerasterAboveScale: 2.5,
 };
 
+// Module-level caches keyed by Blob identity. Because useDocumentSource
+// memoizes resolved blobs in its own LRU, reopening the same source returns
+// the SAME Blob instance — so these WeakMaps act as effective per-source
+// caches without needing string keys.
+const pdfDocCache = new WeakMap<Blob, Promise<pdfjsLib.PDFDocumentProxy>>();
+const pagesCache = new WeakMap<Blob, RasterPage[]>();
+
 /**
- * Loads a PDF blob/array buffer and renders all pages at a base scale.
- * Provides a `rerasterPage(pageNum, cssScale)` callback to upgrade a single
- * page after transform settle. Skips reraster if requested resolution would
- * exceed the per-page pixel budget.
+ * Loads a PDF blob/array buffer and renders pages at a base scale.
+ * Renders incrementally — pages stream into state as they finish so the first
+ * page becomes visible quickly. Provides `rerasterPage(pageNum, cssScale)` to
+ * upgrade a single page on settle.
  */
 export function usePdfPageRaster(
   source: ArrayBuffer | Blob | null,
@@ -65,9 +72,32 @@ export function usePdfPageRaster(
       setLoading(true);
       setError(null);
       try {
-        const data =
-          source instanceof Blob ? await source.arrayBuffer() : source;
-        const pdf = await pdfjsLib.getDocument({ data }).promise;
+        const blobKey = source instanceof Blob ? source : null;
+
+        // Fast path: previously fully rasterized for this exact Blob.
+        if (blobKey) {
+          const cachedPages = pagesCache.get(blobKey);
+          if (cachedPages && cachedPages.length > 0) {
+            const cachedPdf = await pdfDocCache.get(blobKey);
+            if (cachedPdf) pdfRef.current = cachedPdf;
+            if (!cancelled) {
+              setPages(cachedPages);
+              setLoading(false);
+            }
+            return;
+          }
+        }
+
+        // Resolve / cache the PDFDocumentProxy
+        let pdfPromise: Promise<pdfjsLib.PDFDocumentProxy> | undefined =
+          blobKey ? pdfDocCache.get(blobKey) : undefined;
+        if (!pdfPromise) {
+          const data =
+            source instanceof Blob ? await source.arrayBuffer() : source;
+          pdfPromise = pdfjsLib.getDocument({ data }).promise;
+          if (blobKey) pdfDocCache.set(blobKey, pdfPromise);
+        }
+        const pdf = await pdfPromise;
         pdfRef.current = pdf;
 
         const out: RasterPage[] = [];
@@ -87,15 +117,21 @@ export function usePdfPageRaster(
           } as any).promise;
 
           if (cancelled) return;
-          out.push({
+          const rasterPage: RasterPage = {
             pageNum: i,
             imageUrl: canvas.toDataURL("image/png"),
             pixelSize: { w: viewport.width, h: viewport.height },
             pdfSize: { w: baseViewport.width, h: baseViewport.height },
             viewport,
-          });
+          };
+          out.push(rasterPage);
+          // Stream: push page into state as soon as it's ready.
+          setPages((prev) => [...prev, rasterPage]);
+          if (i === 1) setLoading(false);
+          // Yield to event loop so UI can paint.
+          await new Promise((r) => setTimeout(r, 0));
         }
-        if (!cancelled) setPages(out);
+        if (!cancelled && blobKey) pagesCache.set(blobKey, out);
       } catch (e) {
         if (!cancelled) setError(e instanceof Error ? e.message : String(e));
       } finally {
@@ -103,6 +139,7 @@ export function usePdfPageRaster(
       }
     };
 
+    setPages([]);
     load();
     return () => {
       cancelled = true;
