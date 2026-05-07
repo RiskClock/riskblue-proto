@@ -3620,20 +3620,9 @@ export function AnalysisSection({ requestId, files, projectId, sourceType, isWMS
                     <Loader2 className="w-4 h-4 animate-spin text-primary" />
                     <span className="text-sm font-medium text-foreground">{wmsvPhaseLabel}</span>
                     {!analyzeV2Stopping && showCounter && (
-                      triageBreakdownVisible ? (
-                        <Tooltip>
-                          <TooltipTrigger asChild>
-                            <span className="text-xs text-muted-foreground tabular-nums cursor-help">
-                              {pipelineDone}/{pipelineTotal} {pipelineUnit}{triageBreakdownSuffix}
-                            </span>
-                          </TooltipTrigger>
-                          <TooltipContent>{triageBreakdownTooltip}</TooltipContent>
-                        </Tooltip>
-                      ) : (
-                        <span className="text-xs text-muted-foreground tabular-nums">
-                          {pipelineDone}/{pipelineTotal} {pipelineUnit}
-                        </span>
-                      )
+                      <span className="text-xs text-muted-foreground tabular-nums">
+                        {pipelineDone}/{pipelineTotal} {pipelineUnit}
+                      </span>
                     )}
                     {!analyzeV2Stopping && !showCounter && (
                       <span className="text-xs text-muted-foreground tabular-nums">…</span>
