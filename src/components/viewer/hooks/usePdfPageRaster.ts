@@ -56,6 +56,10 @@ export function usePdfPageRaster(
 ) {
   const opts = { ...DEFAULTS, ...options };
   const [pages, setPages] = useState<RasterPage[]>([]);
+  // Total page count from the PDF document — known as soon as pdf.js parses
+  // the document structure (before rasterization). Lets the UI show
+  // "Page 1 / 54" immediately instead of ticking up 1 → 54 as pages render.
+  const [totalPages, setTotalPages] = useState(0);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const pdfRef = useRef<pdfjsLib.PDFDocumentProxy | null>(null);
