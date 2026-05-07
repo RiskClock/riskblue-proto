@@ -3520,23 +3520,28 @@ export function AnalysisSection({ requestId, files, projectId, sourceType, isWMS
     if (liveStatus === "processing") return "loading";
     if (liveStatus === "failed") return "failed";
 
-    const result = results?.find((r) => r.file_id === fileId && r.awp_class_name === className);
-    if (!result) return null;
-    if (result.status === "processing") return "loading";
-    if (result.status === "failed") return "failed";
-    if (result.status === "complete" && result.result_text) {
-      const parsed = parseResultText(result.result_text);
-      return parsed.length;
+    // In sheet-mode there can be multiple analysis_results rows per parent
+    // file (one per accepted sheet). Aggregate them: any processing -> loading;
+    // any failed and none complete -> failed; sum mention counts across
+    // complete rows.
+    const rowsForCell = (results || []).filter((r) => r.file_id === fileId && r.awp_class_name === className);
+    if (rowsForCell.length === 0) return null;
+    if (rowsForCell.some((r) => r.status === "processing")) return "loading";
+    const completeRows = rowsForCell.filter((r) => r.status === "complete" && r.result_text);
+    if (completeRows.length === 0) {
+      if (rowsForCell.some((r) => r.status === "failed")) return "failed";
+      return null;
     }
-    return null;
+    let total = 0;
+    for (const r of completeRows) total += parseResultText(r.result_text || "").length;
+    return total;
   };
 
   /**
    * For a (fileId, className) cell, return the deduped count to display when
-   * the class maps unambiguously to ONE complete-result file (the common
-   * single-parent-PDF case). Returns null if multiple files contributed —
-   * caller should fall back to the per-file raw count without implying the
-   * class total belongs to that one file.
+   * the class maps unambiguously to ONE complete-result parent file (the
+   * common single-PDF case). Returns null if multiple parent files
+   * contributed — caller should fall back to the per-file raw count.
    */
   const dedupedCountForCell = (
     fileId: string,
@@ -3548,9 +3553,12 @@ export function AnalysisSection({ requestId, files, projectId, sourceType, isWMS
     const completeForClass = (results || []).filter(
       (r) => r.awp_class_name === className && r.status === "complete" && r.result_text,
     );
-    if (completeForClass.length !== 1) return null;
-    if (completeForClass[0].file_id !== fileId) return null;
-    const raw = parseResultText(completeForClass[0].result_text || "").length;
+    if (completeForClass.length === 0) return null;
+    const distinctFileIds = new Set(completeForClass.map((r) => r.file_id));
+    if (distinctFileIds.size !== 1) return null;
+    if (!distinctFileIds.has(fileId)) return null;
+    let raw = 0;
+    for (const r of completeForClass) raw += parseResultText(r.result_text || "").length;
     return { deduped: summary.length, raw };
   };
 
