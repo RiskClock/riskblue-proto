@@ -1554,7 +1554,7 @@ async function runPipeline(params: PipelineParams) {
       try {
         const triageCount = (triageResults || []).length;
         const sheetSize = sheetById.size;
-        const eligibleKeys = workQueue.map((w) => `${w.fileId}::${w.awpClassName}`);
+        const eligibleKeys = workQueue.map((w) => `${w.fileId}::${w.sheetId ?? "-"}::${w.awpClassName}`);
         console.log(
           `[pipeline][DEBUG] triageResults=${triageCount} sheetById.size=${sheetSize} workQueue=${workQueue.length} keys=${JSON.stringify(eligibleKeys)}`,
         );
