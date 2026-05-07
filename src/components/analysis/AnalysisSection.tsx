@@ -3584,6 +3584,43 @@ export function AnalysisSection({ requestId, files, projectId, sourceType, isWMS
   const pipelineDone = rawPipelineTotal > 0 ? rawPipelineDone : lastCounterRef.current.done;
   const pipelineTotal = rawPipelineTotal > 0 ? rawPipelineTotal : lastCounterRef.current.total;
 
+  // Phase-aware unit label — "items" was ambiguous when the chip carried over
+  // a triage count into the analyze phase.
+  const pipelineUnit = (() => {
+    switch (pipelinePhase) {
+      case "splitting":
+      case "extracting":
+        return "pages";
+      case "triaging":
+        return "drawings";
+      case "dispatching_analyze":
+      case "analyzing":
+      case "summarizing":
+        return "classes";
+      default:
+        return "items";
+    }
+  })();
+
+  // While transitioning from triage → analyze (phase=dispatching_analyze) the
+  // backend has not yet written the analyze-phase totals. Suppress the stale
+  // triage count so it doesn't read "Analyzing Content 54/54 items".
+  const showCounter =
+    pipelinePhase !== "dispatching_analyze" && pipelineTotal > 0;
+
+  // Short-circuit breakdown — only relevant during the triage phase, where the
+  // raw "X/Y drawings" can leap due to bulk sibling completion.
+  const triageBreakdownVisible =
+    pipelinePhase === "triaging" &&
+    !!triageBreakdown &&
+    (triageBreakdown.shortCircuited ?? 0) > 0;
+  const triageBreakdownSuffix = triageBreakdownVisible
+    ? ` (${triageBreakdown!.triaged} triaged · ${triageBreakdown!.shortCircuited} skipped via short-circuit)`
+    : "";
+  const triageBreakdownTooltip = triageBreakdownVisible
+    ? `${triageBreakdown!.triaged} drawings triaged by AI; ${triageBreakdown!.shortCircuited} auto-completed because a sibling page in the same file already scored 100% for this class.`
+    : "";
+
 
   return (
     <TooltipProvider delayDuration={0}>
