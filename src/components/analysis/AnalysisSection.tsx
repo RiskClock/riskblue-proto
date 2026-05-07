@@ -72,7 +72,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { BuyCreditsModal } from "@/components/BuyCreditsModal";
 import { useCredits } from "@/hooks/useCredits";
 import * as pdfjsLib from "pdfjs-dist";
-import { DrawingViewer } from "@/components/viewer";
+import { DrawingViewer, prewarmDocumentSource } from "@/components/viewer";
 import type { DocumentSourceDescriptor, OverlayInput } from "@/components/viewer";
 
 // Configure PDF.js worker (idempotent — safe to call multiple times)
@@ -1543,6 +1543,34 @@ export function AnalysisSection({ requestId, files, projectId, sourceType, isWMS
 
   const copiedFiles = files.filter((f) => f.copy_status === "copied" && f.storage_path);
 
+  // Prefetch first few drawings into the viewer's blob cache as soon as the
+  // file list is known. Subsequent preview-modal opens hit the cache and
+  // resolve instantly instead of waiting on a fresh signed-URL + download.
+  // Idle-time, capped to 3 files to avoid burning bandwidth on large runs.
+  useEffect(() => {
+    if (copiedFiles.length === 0) return;
+    const bucket =
+      sourceType === "manual_upload" ? "uploaded-drawings" : "drive-analysis-files";
+    const targets = copiedFiles
+      .slice(0, 3)
+      .filter((f) => f.storage_path)
+      .map((f) => ({
+        kind: "supabase-storage" as const,
+        bucket,
+        path: f.storage_path!,
+      }));
+    const ric =
+      (window as any).requestIdleCallback ??
+      ((cb: () => void) => setTimeout(cb, 1000));
+    const cic =
+      (window as any).cancelIdleCallback ??
+      ((id: any) => clearTimeout(id));
+    const handle = ric(() => {
+      for (const t of targets) prewarmDocumentSource(t);
+    });
+    return () => cic(handle);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [copiedFiles.map((f) => f.id).join(","), sourceType]);
   // Auto-resume: when we hydrate as "processing" but have no active scheduler,
   // rebuild the work queue from incomplete cells and restart.
   useEffect(() => {
@@ -3577,19 +3605,22 @@ export function AnalysisSection({ requestId, files, projectId, sourceType, isWMS
   const pipelineDone = countersMatchPhase ? rawPipelineDone : 0;
   const pipelineTotal = countersMatchPhase ? rawPipelineTotal : 0;
 
-  // Phase-aware unit label — "items" was ambiguous when the chip carried over
-  // a triage count into the analyze phase.
+  // Phase-aware unit label. Counts are per-job, not per-drawing — the triage
+  // phase enqueues one job per (page × class) and the analyze phase enqueues
+  // one job per (file × class) that survived triage. Using "drawings" or
+  // "classes" was misleading because the totals don't match either entity
+  // 1:1. "checks" reflects what's actually being counted.
   const pipelineUnit = (() => {
     switch (pipelinePhase) {
       case "splitting":
       case "extracting":
         return "pages";
       case "triaging":
-        return "drawings";
+        return "page checks";
       case "dispatching_analyze":
       case "analyzing":
       case "summarizing":
-        return "classes";
+        return "checks";
       default:
         return "items";
     }
@@ -4294,6 +4325,28 @@ export function AnalysisSection({ requestId, files, projectId, sourceType, isWMS
                                   </span>
                                 </TooltipTrigger>
                                 <TooltipContent>Triage failed</TooltipContent>
+                              </Tooltip>
+                            </td>
+                          );
+                        }
+
+                        // Queued fallback: while the pipeline is mid-flight
+                        // (triage running, transitioning to analyze, or
+                        // analyzing) and this enabled cell has no triage
+                        // row and no analyze result yet, show a faint spinner
+                        // so the cell doesn't appear "done" prematurely.
+                        const inFlightPhase =
+                          pipelinePhase === "triaging" ||
+                          pipelinePhase === "dispatching_analyze" ||
+                          pipelinePhase === "analyzing";
+                        if (inFlightPhase && !isColDisabled && val === null) {
+                          return (
+                            <td key={prompt.id} className={`w-14 px-2 py-2 text-center${disabledCls}`}>
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <Loader2 className="w-3 h-3 animate-spin text-muted-foreground/60 mx-auto" />
+                                </TooltipTrigger>
+                                <TooltipContent>Queued</TooltipContent>
                               </Tooltip>
                             </td>
                           );

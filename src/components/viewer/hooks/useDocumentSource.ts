@@ -78,6 +78,53 @@ function writeCache(key: string, entry: BlobCacheEntry) {
   }
 }
 
+/**
+ * Idle-time prefetch: download a descriptor's blob into the module-level LRU
+ * cache so a subsequent useDocumentSource(descriptor) call hits cache and
+ * resolves immediately. Safe to call repeatedly — no-op when already cached.
+ * Errors are swallowed (best-effort warming).
+ */
+export async function prewarmDocumentSource(
+  descriptor: DocumentSourceDescriptor
+): Promise<void> {
+  const cacheKey = descriptorKey(descriptor);
+  if (!cacheKey) return;
+  if (readCache(cacheKey)) return;
+  try {
+    let blob: Blob | null = null;
+    let mimeType = (descriptor as any).mimeType ?? "application/octet-stream";
+    if (descriptor.kind === "url") {
+      const r = await fetch(descriptor.url);
+      if (!r.ok) return;
+      blob = await r.blob();
+      mimeType = descriptor.mimeType ?? blob.type ?? mimeType;
+    } else if (descriptor.kind === "drive") {
+      const isGoogleDoc = (descriptor.mimeType ?? "").includes("google-apps");
+      const url = isGoogleDoc
+        ? `https://www.googleapis.com/drive/v3/files/${descriptor.fileId}/export?mimeType=application/pdf`
+        : `https://www.googleapis.com/drive/v3/files/${descriptor.fileId}?alt=media`;
+      const r = await fetch(url, {
+        headers: { Authorization: `Bearer ${descriptor.accessToken}` },
+      });
+      if (!r.ok) return;
+      blob = await r.blob();
+      mimeType = isGoogleDoc ? "application/pdf" : descriptor.mimeType ?? blob.type ?? mimeType;
+    } else if (descriptor.kind === "supabase-storage") {
+      const { data, error: e } = await supabase.storage
+        .from(descriptor.bucket)
+        .createSignedUrl(descriptor.path, 3600);
+      if (e || !data?.signedUrl) return;
+      const r = await fetch(data.signedUrl);
+      if (!r.ok) return;
+      blob = await r.blob();
+      mimeType = descriptor.mimeType ?? blob.type ?? mimeType;
+    }
+    if (blob) writeCache(cacheKey, { blob, mime: mimeType, ts: Date.now() });
+  } catch {
+    // best-effort — ignore
+  }
+}
+
 export function useDocumentSource(
   descriptor: DocumentSourceDescriptor | null,
   enabled: boolean = true

@@ -1,65 +1,64 @@
-## Goal
-Resolve three issues observed on Test6:
-1. Badge shows "Analyzing Content 54/54 items" while the run is actually still in triage / dispatching analyze — phase + unit label are ambiguous.
-2. Triage progress chip jumps from ~5/54 to 54/54 instantly because bulk short-circuit updates are counted as if pages were triaged.
-3. Email + UI report "0 instances / No Eligible Drawings" even though pages scored 100 — Phase 3 dropped them because the triage model classified every page as `sheet_role = context_sheet`.
 
-## Issue 1 — Phase label & unit clarity (frontend only)
+## Investigation findings
 
-`AnalysisSection.tsx` lines 3565–3576 and 3656–3666 currently render:
-```
-{pipelinePhaseLabel}   {done}/{total} {phase === "extracting" ? "pages" : "items"}
-```
+### 1. Total page count "ticks up" instead of showing total immediately
+**Where:** `src/components/wizard/ProjectFilesUpload.tsx` calls `extractPDFData()` which streams page-by-page progress. There IS already an `onPageCountKnown` callback (line 229) that fires once pdf.js loads the document — but the **upload modal** displays `pageCount` from `pdfMetadata.pageCount` (lines 732, 1060) which is initialized to `0` (line 211) and only set inside the per-page progress callback rather than from `onPageCountKnown`.
 
-Changes:
-- Replace the binary `pages | items` with a phase-specific unit:
-  - `extracting` / `splitting` → `pages`
-  - `triaging` → `drawings`
-  - `analyzing` / `dispatching_analyze` → `classes`
-  - `summarizing` → `classes`
-- When `pipelinePhase === "dispatching_analyze"`, show the label `Preparing Analysis` (new entry in `presentAnalysisUiState`) instead of mapping it to `Analyzing Content`. This eliminates the moment where the chip says "Analyzing Content 54/54 items" while triage progress is still on screen.
-- When the phase changes, reset the displayed `done/total` to render `—/—` for one tick instead of carrying the previous phase's numbers (avoids the "54/54" carry-over into the analyze phase). Implemented by gating the chip render on `pipelinePhase` matching the phase that set the counts; if the phase just transitioned and progress is still 54/54 from triage, render `…` until the next pipeline tick writes the analyze totals.
+**Fix:** Use the `onPageCountKnown` callback to set `pageCount` immediately on PDF open, before the per-page text extraction loop runs. The total will then appear instantly while only the "processed" counter ticks up.
 
-No backend or schema changes for Issue 1.
+---
 
-## Issue 2 — Distinguish short-circuited pages from triaged pages
+### 2. PDF takes long to load when entering the analysis page
+**Where:** `useDocumentSource` already has an in-memory LRU blob cache, and `usePdfPageRaster` has a `WeakMap` cache keyed by Blob — but both are populated only when the user **opens** the preview modal. There is no prefetch when the user lands on the analysis page.
 
-`process-analysis-jobs/index.ts` `updateTriageProgress` counts every terminal triage job. After a bulk short-circuit, 49 jobs flip terminal in one update and the chip leaps from 5/54 to 54/54 — looking as if all pages were triaged.
+**Fix (frontend-only prewarm):** In `AnalysisSection.tsx` (or a new `usePrefetchDrawingPreviews` hook), once the file list loads, kick off background `useDocumentSource`/`usePdfPageRaster` for the first ~3-5 files. Use `requestIdleCallback` so it doesn't block initial render. Subsequent modal opens will hit the cache and feel instant.
 
-Changes (frontend-only, no schema change):
-- Show a clarifying suffix when short-circuit jobs exist: `54/54 drawings (5 triaged · 49 skipped via short-circuit)`. Source the `skipped` count from `analysis_pipeline_jobs` where `error_message LIKE 'Short-circuited%'` and `job_kind='triage'`, scoped to the current `analysis_run_id`. Cache via React Query keyed by `["triage-progress-breakdown", requestId, runId]`, polled at the same cadence as the existing pipeline-progress query, and invalidated on the `analysis_pipeline_jobs` realtime subscription that already exists.
-- Tooltip on the chip: `"5 drawings triaged by AI; 49 auto-completed because a sibling page in the same file already scored 100% for this class."`
+Optional: also persist the rasterized first page as a thumbnail data-URL in `sessionStorage` keyed by storage path, so reopening the page doesn't re-download.
 
-No backend changes — the data is already in `analysis_pipeline_jobs.error_message`.
+---
 
-## Issue 3 — Score-100 pages dropped because of sheet_role classification
-
-`run-analysis-pipeline/index.ts` line 1458 hard-filters Phase 3 work queue:
+### 3. "Triaging Drawings 12 drawings" with 1 file
+**Where:** `src/components/analysis/AnalysisSection.tsx` line 3582-3596:
 ```ts
-if (t.sheet_role !== "analysis_sheet") continue;
+case "triaging":  return "drawings";
 ```
-Test6's triage returned all 5 rows as `context_sheet`, including two with `score = 100`. Result: empty workQueue → `no_eligible_drawings: true` → email "0 instances".
+But the actual counter (`pipeline_progress_total`) set at line 1321 of `run-analysis-pipeline/index.ts` is **`triageJobRows.length`**, which equals `pages × enabled-classes` (one triage job per page per class). For a 12-page PDF with 1 enabled class that's 12; with 4 classes it's 48.
 
-This is incorrect: a page scoring 100 against the AWP class is, by definition, an analysis sheet for that class regardless of how the model self-labeled `sheet_role`. Score + manual override should outrank the model's own role classification.
+**The label is wrong, not the count.** "12 drawings" should read "12 pages" (or more precisely, "12 triage tasks"). With multiple classes the count is `pages × classes`, so "pages" alone is also incomplete.
 
-Changes:
-- In the `useSheets` branch of the Phase 3 builder (lines 1457–1493), promote a row to `analysis_sheet` when EITHER:
-  - the model returned `sheet_role === "analysis_sheet"`, OR
-  - `override === "include"`, OR
-  - `score >= 50` (the same eligibility threshold already used for non-sheet mode at line 1528)
-- Concretely: replace the early `continue` on `sheet_role !== "analysis_sheet"` with a combined eligibility test that first computes `eligible` from override/score (mirroring the non-sheet branch), then accepts the row regardless of `sheet_role`. Keep the existing `override === "exclude"` short-circuit.
-- This restores parity between sheet-mode and file-mode and stops silently dropping high-confidence pages.
+**Fix:** Change the triage unit from `"drawings"` to `"pages"` if `enabledClasses.length === 1`, otherwise `"page checks"` (or `"items"`). Cleanest: always say `"page checks"` during triage. Same fix for any other place that says "drawings" while counting per-page-per-class jobs.
 
-Also tighten the triage prompt (`triage-drawings/index.ts` lines ~395–406) so that when the page contains real installed instances of the class, `sheet_role` MUST be `analysis_sheet` and not `context_sheet`. Add a one-line constraint: `If score >= 50 the page MUST be classified as analysis_sheet unless it is exclusively a legend/schedule/riser/keyplan/coversheet listing equipment that lives elsewhere.` This reduces the rate at which the model both scores 100 and labels `context_sheet`.
+---
 
-## Verification
+### 4. Per-cell spinner disappears mid-way during triage
+**Where:** Cell spinner (line 4225) is shown only when `triage?.status === "queued" | "pending" | "processing"`. The triage row exists in `analysis_pipeline_jobs`, NOT `analysis_results`. Once a triage job for `(file, class)` completes (or is short-circuit-skipped), the spinner correctly hides — but the cell goes blank if no `analysis_results` row exists yet for that `(file, class)` pair (analyze placeholders aren't inserted until phase 3 starts).
 
-1. Refresh Test6 mid-run: chip never reads "Analyzing Content 54/54 items"; instead shows `Triaging Drawings X/54 drawings`, then `Preparing Analysis …`, then `Analyzing Content X/N classes`.
-2. After a short-circuit fires on page 2, chip shows `54/54 drawings (5 triaged · 49 skipped via short-circuit)` with tooltip.
-3. Re-run a single-file PDF where the model returns `sheet_role=context_sheet` but `score=100`: Phase 3 dispatches an analyze job for that file/class; final email reports a non-zero instance count if the class is actually present.
-4. Existing tests in `supabase/functions/analyze-drawings/run_id_test.ts` still pass; no schema migration required.
+So during the gap between **"this triage job finished"** and **"phase 3 inserts analyze placeholder"**, the cell renders empty. With horizontal short-circuit collapsing remaining triage jobs to `done`, this gap can be quite visible.
 
-## Out of scope
-- No DB migration.
-- No change to short-circuit logic itself (it is working correctly).
-- Triage model selection is unchanged; only the prompt language is tightened.
+**Fix:** While `pipelinePhase ∈ {triaging, dispatching_analyze}`, if the cell has no triage job in flight AND no analyze result yet AND the (file,class) pair is enabled, render a faint spinner / "Queued" placeholder rather than blank. Alternatively, insert analyze placeholders earlier (at phase 2 boundary) — but that's a bigger backend change; keep it frontend.
+
+---
+
+### 5. "Analyzing Content 0/4 classes" in phase 3
+**Where:** `run-analysis-pipeline/index.ts` line 1729-1735 sets `pipeline_progress_total = jobRows.length + immediateFailures.length` at the moment phase flips to `analyzing`. `jobRows` is the count of **(file × class) pairs that survived triage**, not classes.
+
+So the total `4` you saw was **4 file-class analyze jobs**, not 4 classes. Unit label `"classes"` (line 3592) is misleading — for a 1-file/4-class run it happens to coincide, but for 4-files/2-classes it would say "0/8 classes" which is wrong.
+
+**Fix:** Change the analyzing unit to `"items"` or `"checks"` (matches the per-cell semantics). Or compute the unit dynamically: if `jobRows.length === enabledClasses.length` and file count is 1, say "classes"; else "checks".
+
+---
+
+## Plan of changes (all frontend, no backend / DB changes)
+
+1. **`src/components/wizard/ProjectFilesUpload.tsx`** — set `pageCount` from the existing `onPageCountKnown` callback so the modal shows the true total immediately.
+
+2. **`src/components/analysis/AnalysisSection.tsx`**:
+   - Add a lightweight prefetch effect that warms `useDocumentSource` for the first few files (idle-time).
+   - Update `pipelineUnit` (lines 3582-3596): change `triaging → "page checks"` and `analyzing/summarizing → "checks"` (or `"items"`); keep `splitting/extracting → "pages"`.
+   - In the per-cell render (around line 4225), add a "queued" fallback spinner when `pipelinePhase ∈ {triaging, dispatching_analyze, analyzing}` and the cell has neither a live triage job nor an analyze result yet.
+
+3. **No backend changes** — counts and totals from the pipeline are correct; the labels in the UI just need to match what's actually being counted.
+
+## Open questions
+- Issue 3 wording: prefer **"page checks"**, **"items"**, or split into `pages × classes`? I'll default to **"page checks"** unless you say otherwise.
+- Issue 2 prefetch budget: warm **first 3 files** by default (covers the common case without burning bandwidth on 50-file runs). OK?

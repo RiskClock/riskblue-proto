@@ -56,6 +56,10 @@ export function usePdfPageRaster(
 ) {
   const opts = { ...DEFAULTS, ...options };
   const [pages, setPages] = useState<RasterPage[]>([]);
+  // Total page count from the PDF document — known as soon as pdf.js parses
+  // the document structure (before rasterization). Lets the UI show
+  // "Page 1 / 54" immediately instead of ticking up 1 → 54 as pages render.
+  const [totalPages, setTotalPages] = useState(0);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const pdfRef = useRef<pdfjsLib.PDFDocumentProxy | null>(null);
@@ -81,6 +85,7 @@ export function usePdfPageRaster(
             const cachedPdf = await pdfDocCache.get(blobKey);
             if (cachedPdf) pdfRef.current = cachedPdf;
             if (!cancelled) {
+              setTotalPages(cachedPages.length);
               setPages(cachedPages);
               setLoading(false);
             }
@@ -99,6 +104,8 @@ export function usePdfPageRaster(
         }
         const pdf = await pdfPromise;
         pdfRef.current = pdf;
+        // Publish total pages immediately so toolbars can render "1 / N".
+        if (!cancelled) setTotalPages(pdf.numPages);
 
         const out: RasterPage[] = [];
         for (let i = 1; i <= pdf.numPages; i++) {
@@ -140,6 +147,7 @@ export function usePdfPageRaster(
     };
 
     setPages([]);
+    setTotalPages(0);
     load();
     return () => {
       cancelled = true;
@@ -204,5 +212,5 @@ export function usePdfPageRaster(
     rerasterTimers.current.set(pageNum, timer);
   };
 
-  return { pages, loading, error, scheduleReraster };
+  return { pages, totalPages, loading, error, scheduleReraster };
 }

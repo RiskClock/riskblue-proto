@@ -89,7 +89,7 @@ export const DrawingViewer = forwardRef<DrawingViewerApi, DrawingViewerProps>(
       useDocumentSource(source);
 
     const isPdf = resolved?.kind === "pdf";
-    const { pages, loading: pdfLoading, error: pdfError, scheduleReraster } =
+    const { pages, totalPages: pdfTotalPages, loading: pdfLoading, error: pdfError, scheduleReraster } =
       usePdfPageRaster(isPdf ? resolved!.pdfBlob! : null);
 
     // Image source synthesizes a single "page" so the same render path works.
@@ -114,7 +114,9 @@ export const DrawingViewer = forwardRef<DrawingViewerApi, DrawingViewerProps>(
     }, [resolved]);
 
     const allPages: RasterPage[] = isPdf ? pages : imagePage ? [imagePage] : [];
-    const totalPages = allPages.length;
+    // Use the PDF's true page count as soon as it's known so toolbars show
+    // "Page 1 / 54" immediately instead of ticking up as pages render.
+    const totalPages = isPdf ? pdfTotalPages : (imagePage ? 1 : 0);
 
     useEffect(() => {
       onTotalPagesChange?.(totalPages);
