@@ -127,6 +127,7 @@ export type Database = {
       }
       analysis_pipeline_jobs: {
         Row: {
+          accepted_pages: number[] | null
           analysis_request_id: string
           analysis_run_id: string | null
           analyze_model: string
@@ -154,6 +155,7 @@ export type Database = {
           worker_id: string | null
         }
         Insert: {
+          accepted_pages?: number[] | null
           analysis_request_id: string
           analysis_run_id?: string | null
           analyze_model?: string
@@ -181,6 +183,7 @@ export type Database = {
           worker_id?: string | null
         }
         Update: {
+          accepted_pages?: number[] | null
           analysis_request_id?: string
           analysis_run_id?: string | null
           analyze_model?: string
@@ -2391,6 +2394,7 @@ export type Database = {
       claim_next_analysis_jobs: {
         Args: { p_batch_size?: number; p_worker_id: string }
         Returns: {
+          accepted_pages: number[] | null
           analysis_request_id: string
           analysis_run_id: string | null
           analyze_model: string
