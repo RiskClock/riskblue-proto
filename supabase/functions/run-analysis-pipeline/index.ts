@@ -1692,18 +1692,17 @@ async function runPipeline(params: PipelineParams) {
         });
       }
 
-      // Analyze rows are always keyed at the file level now (sheet_id IS NULL),
-      // so use the legacy partial-unique index in both modes.
-      const RESULTS_ONCONFLICT = "analysis_request_id,file_id,awp_class_name";
+      // analysis_results were just deleted for all eligibleClasses above, so
+      // we can plain-insert placeholders + immediate failures (no conflict).
+      // (The legacy partial-unique index can't be referenced via onConflict
+      // when sheet_id is non-null because PostgREST omits the WHERE predicate.)
 
       if (immediateFailures.length > 0) {
-        await admin.from("analysis_results").upsert(immediateFailures, {
-          onConflict: RESULTS_ONCONFLICT,
-        });
+        await admin.from("analysis_results").insert(immediateFailures);
       }
 
       console.log(
-        `[pipeline][DEBUG] About to insert: jobRows=${jobRows.length} immediateFailures=${immediateFailures.length} jobKeys=${JSON.stringify(jobRows.map((j) => `${j.file_id}::${j.awp_class_name}`))}`,
+        `[pipeline][DEBUG] About to insert: jobRows=${jobRows.length} immediateFailures=${immediateFailures.length} jobKeys=${JSON.stringify(jobRows.map((j) => `${j.file_id}::${j.sheet_id ?? "-"}::${j.awp_class_name}`))}`,
       );
 
       // Insert analyze jobs FIRST (before placeholders + phase change).
