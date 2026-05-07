@@ -1564,6 +1564,49 @@ async function runPipeline(params: PipelineParams) {
       console.log(
         `[pipeline] Phase 3: Analyze ${workQueue.length} eligible items (sheet-mode=${useSheets})`,
       );
+      // DEBUG: dump eligibility decisions to find dropped pairs.
+      try {
+        const triageCount = (triageResults || []).length;
+        const sheetSize = sheetById.size;
+        const eligibleKeys = workQueue.map((w) => `${w.fileId}::${w.awpClassName}`);
+        console.log(
+          `[pipeline][DEBUG] triageResults=${triageCount} sheetById.size=${sheetSize} workQueue=${workQueue.length} keys=${JSON.stringify(eligibleKeys)}`,
+        );
+        // Recompute eligibility from raw triage rows (independent of acceptedByKey)
+        // to detect anything dropped silently in the loop above.
+        if (useSheets) {
+          const rawElig = new Map<string, { score: number; role: string | null }>();
+          for (const t of (triageResults || []) as any[]) {
+            const sh = sheetById.get(t.sheet_id);
+            if (!sh) continue;
+            const ovKey = `${sh.parent_file_id}_${t.awp_class_name}`;
+            if (overrideMap.get(ovKey) === "exclude") continue;
+            const isEligible =
+              overrideMap.get(ovKey) === "include" ||
+              (t.status === "complete" && t.score !== null && t.score >= 50) ||
+              t.sheet_role === "analysis_sheet";
+            if (!isEligible) continue;
+            const k = `${sh.parent_file_id}::${t.awp_class_name}`;
+            const prev = rawElig.get(k);
+            if (!prev || (t.score ?? -1) > prev.score) {
+              rawElig.set(k, { score: t.score ?? -1, role: t.sheet_role });
+            }
+          }
+          const builtKeys = new Set(eligibleKeys);
+          const missing: string[] = [];
+          for (const k of rawElig.keys()) if (!builtKeys.has(k)) missing.push(k);
+          console.log(
+            `[pipeline][DEBUG] rawEligible=${rawElig.size} missingFromWorkQueue=${JSON.stringify(missing)}`,
+          );
+          if (missing.length > 0) {
+            for (const k of missing) {
+              console.log(`[pipeline][DEBUG] DROPPED ${k} -> ${JSON.stringify(rawElig.get(k))}`);
+            }
+          }
+        }
+      } catch (e) {
+        console.error(`[pipeline][DEBUG] eligibility dump failed: ${(e as Error).message}`);
+      }
 
       // Clear existing analysis results for eligible classes
       const eligibleClasses = [...new Set(workQueue.map((w) => w.awpClassName))];
@@ -1676,6 +1719,10 @@ async function runPipeline(params: PipelineParams) {
           onConflict: RESULTS_ONCONFLICT,
         });
       }
+
+      console.log(
+        `[pipeline][DEBUG] About to insert: jobRows=${jobRows.length} immediateFailures=${immediateFailures.length} jobKeys=${JSON.stringify(jobRows.map((j) => `${j.file_id}::${j.awp_class_name}`))}`,
+      );
 
       // Insert analyze jobs FIRST (before placeholders + phase change).
       const CHUNK = 500;
