@@ -102,6 +102,17 @@ async function uploadPdfToOpenAI(params: {
   }
 
   const pdfBlob = new Blob([await fileData.arrayBuffer()], { type: effectiveMime });
+  // Hard cap: OpenAI Files API rejects very large PDFs and tokenization cost
+  // explodes. We log a warning above 32MB and hard-fail above 100MB so the
+  // worker surfaces a clear error instead of a silent OpenAI 413.
+  const SIZE_WARN_BYTES = 32 * 1024 * 1024;
+  const SIZE_HARD_BYTES = 100 * 1024 * 1024;
+  if (pdfBlob.size > SIZE_HARD_BYTES) {
+    return { error: `Parent PDF too large for analyze (${(pdfBlob.size / 1024 / 1024).toFixed(1)} MB > ${SIZE_HARD_BYTES / 1024 / 1024} MB cap). Reduce-page packaging (Design B) required.`, httpStatus: 413 };
+  }
+  if (pdfBlob.size > SIZE_WARN_BYTES) {
+    console.warn(`[analyze-drawings] LARGE PDF: ${fileRecord.name} = ${(pdfBlob.size / 1024 / 1024).toFixed(1)} MB (sheetId=${sheetId ?? "-"}). Consider reduced-page packaging if cost/latency becomes a problem.`);
+  }
   console.log(`[analyze-drawings] Uploading to OpenAI: name=${fileRecord.name}, mime=${effectiveMime}, blobSize=${pdfBlob.size} bytes, sheetId=${sheetId ?? "-"}`);
 
   const uploadForm = new FormData();
