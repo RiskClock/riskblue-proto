@@ -123,6 +123,7 @@ export function presentAnalysisUiState(state: AnalysisUiState): UiStatePresentat
     starting: { label: "Starting Analysis", button: "Starting Analysis" },
     extracting: { label: "Extracting Context", button: "Extracting Context" },
     triaging: { label: "Triaging Drawings", button: "Triaging Drawings" },
+    preparing_analysis: { label: "Preparing Analysis", button: "Preparing Analysis" },
     analyzing: { label: "Analyzing Content", button: "Analyzing Content" },
     summarizing: { label: "Summarizing Findings", button: "Summarizing Findings" },
     stopping: { label: "Stopping Analysis", button: "Stopping Analysis" },
