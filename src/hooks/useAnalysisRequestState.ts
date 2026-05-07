@@ -283,12 +283,22 @@ export function useAnalysisRequestState(requestId: string | null | undefined): A
   const noEligible =
     !!(effectiveRow?.summary_data as any)?.no_eligible_drawings;
 
-  if (effectiveRow && effectiveRunId) {
+  // Recent-Start guard (survives reload): if started_at is more recent than
+  // the row's last completion write, mask any stale 'complete' as 'syncing'
+  // until the backend writes the new run's processing state.
+  const startedAtMs = effectiveRow?.started_at ? Date.parse(effectiveRow.started_at) : 0;
+  const updatedAtMs = effectiveRow?.updated_at ? Date.parse(effectiveRow.updated_at) : 0;
+  const recentStart =
+    !!startedAtMs && Date.now() - startedAtMs < 30_000 && startedAtMs >= updatedAtMs - 1_000;
+
+  if (effectiveRow) {
     const hasCounts = countsFetched && !!counts;
     const jobsActive = counts?.jobsActive ?? 0;
     const triageActive = counts?.triageActive ?? 0;
 
-    if (status === "complete" && !hasCounts && !noEligible) {
+    if (status === "complete" && recentStart && !noEligible) {
+      uiState = "syncing";
+    } else if (status === "complete" && effectiveRunId && !hasCounts && !noEligible) {
       uiState = "syncing";
     } else if (derivedUiState === "starting" || derivedUiState === "extracting") {
       // keep
