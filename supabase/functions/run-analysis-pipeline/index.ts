@@ -1720,9 +1720,17 @@ async function runPipeline(params: PipelineParams) {
         });
       }
 
+      console.log(
+        `[pipeline][DEBUG] About to insert: jobRows=${jobRows.length} immediateFailures=${immediateFailures.length} jobKeys=${JSON.stringify(jobRows.map((j) => `${j.file_id}::${j.awp_class_name}`))}`,
+      );
+
       // Insert analyze jobs FIRST (before placeholders + phase change).
       const CHUNK = 500;
       for (let i = 0; i < jobRows.length; i += CHUNK) {
+        const slice = jobRows.slice(i, i + CHUNK);
+        const { error: insErr } = await admin
+          .from("analysis_pipeline_jobs")
+          .insert(slice);
         const slice = jobRows.slice(i, i + CHUNK);
         const { error: insErr } = await admin
           .from("analysis_pipeline_jobs")
