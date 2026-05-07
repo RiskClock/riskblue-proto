@@ -1634,10 +1634,16 @@ async function runPipeline(params: PipelineParams) {
           });
           continue;
         }
-        // Inject capped context-sheet text when present.
+        // In sheet-mode the analyze unit is the FULL parent PDF. Append a
+        // page-evidence requirement so findings carry localized provenance.
+        // We deliberately do NOT pass acceptedPages as a focus hint — the
+        // model must inspect every page and return page-localized evidence.
+        const pageEvidenceInstruction = useSheets
+          ? `\n\n[Multi-page parent file]\nThis PDF may contain many pages/sheets. Inspect EVERY page. For each finding you report, include:\n  - "PDF Page" — the 1-based PDF page number where the evidence appears (REQUIRED).\n  - "Sheet Number" — the printed sheet number from the title block, if visible (optional).\n  - "Evidence/Location" — a brief note on where on the page the evidence is (e.g. plan view, schedule, title block).\nIf the same instance appears on multiple pages, list it once and cite the most informative page. Do not invent page numbers; if you cannot determine the page, omit the row.`
+          : "";
         const finalPrompt = item.contextText
-          ? `${promptContent}\n\n[Supporting context from related sheets in the same document; use only as reference, do NOT count instances from these excerpts]\n${item.contextText}`
-          : promptContent;
+          ? `${promptContent}${pageEvidenceInstruction}\n\n[Supporting context from related sheets in the same document; use only as reference, do NOT count instances from these excerpts]\n${item.contextText}`
+          : `${promptContent}${pageEvidenceInstruction}`;
         jobRows.push({
           analysis_request_id: analysisRequestId,
           analysis_run_id: activeRunId,
