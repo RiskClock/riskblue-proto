@@ -4302,6 +4302,28 @@ export function AnalysisSection({ requestId, files, projectId, sourceType, isWMS
                           );
                         }
 
+                        // Queued fallback: while the pipeline is mid-flight
+                        // (triage running, transitioning to analyze, or
+                        // analyzing) and this enabled cell has no triage
+                        // row and no analyze result yet, show a faint spinner
+                        // so the cell doesn't appear "done" prematurely.
+                        const inFlightPhase =
+                          pipelinePhase === "triaging" ||
+                          pipelinePhase === "dispatching_analyze" ||
+                          pipelinePhase === "analyzing";
+                        if (inFlightPhase && !isColDisabled && val === null) {
+                          return (
+                            <td key={prompt.id} className={`w-14 px-2 py-2 text-center${disabledCls}`}>
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <Loader2 className="w-3 h-3 animate-spin text-muted-foreground/60 mx-auto" />
+                                </TooltipTrigger>
+                                <TooltipContent>Queued</TooltipContent>
+                              </Tooltip>
+                            </td>
+                          );
+                        }
+
                         return <td key={prompt.id} className="w-14 px-2 py-2" />;
                       })}
                     </tr>
