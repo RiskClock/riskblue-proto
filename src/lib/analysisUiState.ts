@@ -58,8 +58,9 @@ export function deriveAnalysisUiState(row: AnalysisRowLike | null | undefined): 
     if (phase === "triaging") return "triaging";
     if (phase === "analyzing") return "analyzing";
     // Transient phase set by the triage finalizer between triage completion
-    // and analyze invocation. Treat as analyzing for UI continuity.
-    if (phase === "dispatching_analyze") return "analyzing";
+    // and analyze invocation. Show as "Preparing Analysis" so the badge
+    // does not flash "Analyzing Content" with stale triage counts.
+    if (phase === "dispatching_analyze") return "preparing_analysis";
     if (phase === "summarizing") return "summarizing";
     // status=processing with no/unknown phase → treat as starting
     return "starting";
