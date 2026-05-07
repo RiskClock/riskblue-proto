@@ -1274,10 +1274,13 @@ async function maybeFinalizeTriage(
   if ((cur2 as any)?.pipeline_phase !== "triaging") return;
   if (runId && (cur2 as any)?.analysis_run_id !== runId) return;
 
-  // Atomically transition to a transient phase so siblings don't double-fire
+  // Atomically transition to a transient phase so siblings don't double-fire.
+  // We intentionally use a dedicated 'dispatching_analyze' value (not
+  // 'extracting' or 'analyzing') so the row is distinguishable from both
+  // Phase 1 and Phase 3, enabling future recovery if the analyze invoke fails.
   let claimQ = admin
     .from("analysis_requests")
-    .update({ pipeline_phase: "extracting" } as any)  // will be reset by analyze entry
+    .update({ pipeline_phase: "dispatching_analyze" } as any)
     .eq("id", requestId)
     .eq("pipeline_phase", "triaging");
   if (runId) claimQ = claimQ.eq("analysis_run_id", runId);
