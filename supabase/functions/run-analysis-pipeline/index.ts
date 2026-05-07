@@ -1455,7 +1455,6 @@ async function runPipeline(params: PipelineParams) {
         const acceptedByKey = new Map<string, Acc>();
 
         for (const t of (triageResults || []) as any[]) {
-          if (t.sheet_role !== "analysis_sheet") continue;
           const sh = sheetById.get(t.sheet_id);
           if (!sh) continue;
 
@@ -1463,6 +1462,12 @@ async function runPipeline(params: PipelineParams) {
           const override = overrideMap.get(overrideKey);
           if (override === "exclude") continue;
 
+          // Eligibility mirrors the non-sheet branch: include override OR
+          // score >= 50 qualifies the page, regardless of how the triage model
+          // self-classified `sheet_role`. Previously we hard-filtered on
+          // sheet_role === "analysis_sheet", which silently dropped score=100
+          // pages the model labeled "context_sheet" — producing empty Phase 3
+          // work queues and "no eligible drawings" emails.
           let eligible = override === "include";
           if (
             !eligible &&
@@ -1472,6 +1477,8 @@ async function runPipeline(params: PipelineParams) {
           ) {
             eligible = true;
           }
+          // Also accept explicit analysis_sheet rows even if score is missing.
+          if (!eligible && t.sheet_role === "analysis_sheet") eligible = true;
           if (!eligible) continue;
 
           const key = `${sh.parent_file_id}::${t.awp_class_name}`;
