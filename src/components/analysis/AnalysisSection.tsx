@@ -3562,27 +3562,20 @@ export function AnalysisSection({ requestId, files, projectId, sourceType, isWMS
   const wmsvRunning = pipelineRunning || analyzeV2Stopping;
   const wmsvPhaseLabel = analyzeV2Stopping ? "Stopping…" : pipelinePhaseLabel;
 
-  // Freeze the visible counter at last non-zero values during phase transitions
-  // (e.g. extracting → triaging briefly reports 0/0 before the next phase
-  // initializes its totals). Counter resets when the run starts or stops.
-  // (lastCounterRef declared above the early return to keep hook order stable.)
+  // Track the phase that produced the last (done, total) so we never carry
+  // a triage count into the analyze phase. When the phase changes but the
+  // new phase hasn't written totals yet, render "…" instead of stale numbers.
   if (pipelineRunning) {
     if (rawPipelineTotal > 0) {
       lastCounterRef.current = { done: rawPipelineDone, total: rawPipelineTotal, phase: pipelinePhase };
-    } else if (lastCounterRef.current.phase !== pipelinePhase) {
-      // Phase just changed; freeze the previous (done, total) until the new
-      // phase reports a non-zero total.
-      lastCounterRef.current = {
-        done: lastCounterRef.current.total, // show prior phase as "complete"
-        total: lastCounterRef.current.total,
-        phase: lastCounterRef.current.phase,
-      };
     }
   } else {
     lastCounterRef.current = { done: 0, total: 0, phase: null };
   }
-  const pipelineDone = rawPipelineTotal > 0 ? rawPipelineDone : lastCounterRef.current.done;
-  const pipelineTotal = rawPipelineTotal > 0 ? rawPipelineTotal : lastCounterRef.current.total;
+  const countersMatchPhase =
+    rawPipelineTotal > 0 && lastCounterRef.current.phase === pipelinePhase;
+  const pipelineDone = countersMatchPhase ? rawPipelineDone : 0;
+  const pipelineTotal = countersMatchPhase ? rawPipelineTotal : 0;
 
   // Phase-aware unit label — "items" was ambiguous when the chip carried over
   // a triage count into the analyze phase.
@@ -3603,23 +3596,11 @@ export function AnalysisSection({ requestId, files, projectId, sourceType, isWMS
   })();
 
   // While transitioning from triage → analyze (phase=dispatching_analyze) the
-  // backend has not yet written the analyze-phase totals. Suppress the stale
-  // triage count so it doesn't read "Analyzing Content 54/54 items".
+  // backend has not yet written the analyze-phase totals. Suppress any stale
+  // count so it doesn't read "Analyzing Content 54/54 items".
   const showCounter =
     pipelinePhase !== "dispatching_analyze" && pipelineTotal > 0;
-
-  // Short-circuit breakdown — only relevant during the triage phase, where the
-  // raw "X/Y drawings" can leap due to bulk sibling completion.
-  const triageBreakdownVisible =
-    pipelinePhase === "triaging" &&
-    !!triageBreakdown &&
-    (triageBreakdown.shortCircuited ?? 0) > 0;
-  const triageBreakdownSuffix = triageBreakdownVisible
-    ? ` (${triageBreakdown!.triaged} triaged · ${triageBreakdown!.shortCircuited} skipped via short-circuit)`
-    : "";
-  const triageBreakdownTooltip = triageBreakdownVisible
-    ? `${triageBreakdown!.triaged} drawings triaged by AI; ${triageBreakdown!.shortCircuited} auto-completed because a sibling page in the same file already scored 100% for this class.`
-    : "";
+  void triageBreakdown;
 
 
   return (
@@ -3639,20 +3620,9 @@ export function AnalysisSection({ requestId, files, projectId, sourceType, isWMS
                     <Loader2 className="w-4 h-4 animate-spin text-primary" />
                     <span className="text-sm font-medium text-foreground">{wmsvPhaseLabel}</span>
                     {!analyzeV2Stopping && showCounter && (
-                      triageBreakdownVisible ? (
-                        <Tooltip>
-                          <TooltipTrigger asChild>
-                            <span className="text-xs text-muted-foreground tabular-nums cursor-help">
-                              {pipelineDone}/{pipelineTotal} {pipelineUnit}{triageBreakdownSuffix}
-                            </span>
-                          </TooltipTrigger>
-                          <TooltipContent>{triageBreakdownTooltip}</TooltipContent>
-                        </Tooltip>
-                      ) : (
-                        <span className="text-xs text-muted-foreground tabular-nums">
-                          {pipelineDone}/{pipelineTotal} {pipelineUnit}
-                        </span>
-                      )
+                      <span className="text-xs text-muted-foreground tabular-nums">
+                        {pipelineDone}/{pipelineTotal} {pipelineUnit}
+                      </span>
                     )}
                     {!analyzeV2Stopping && !showCounter && (
                       <span className="text-xs text-muted-foreground tabular-nums">…</span>
@@ -3744,20 +3714,9 @@ export function AnalysisSection({ requestId, files, projectId, sourceType, isWMS
                   <Loader2 className="w-4 h-4 animate-spin text-primary" />
                   <span className="text-sm font-medium text-foreground">{pipelinePhaseLabel}</span>
                   {showCounter ? (
-                    triageBreakdownVisible ? (
-                      <Tooltip>
-                        <TooltipTrigger asChild>
-                          <span className="text-xs text-muted-foreground tabular-nums cursor-help">
-                            {pipelineDone}/{pipelineTotal} {pipelineUnit}{triageBreakdownSuffix}
-                          </span>
-                        </TooltipTrigger>
-                        <TooltipContent>{triageBreakdownTooltip}</TooltipContent>
-                      </Tooltip>
-                    ) : (
-                      <span className="text-xs text-muted-foreground tabular-nums">
-                        {pipelineDone}/{pipelineTotal} {pipelineUnit}
-                      </span>
-                    )
+                    <span className="text-xs text-muted-foreground tabular-nums">
+                      {pipelineDone}/{pipelineTotal} {pipelineUnit}
+                    </span>
                   ) : (
                     <span className="text-xs text-muted-foreground tabular-nums">…</span>
                   )}
