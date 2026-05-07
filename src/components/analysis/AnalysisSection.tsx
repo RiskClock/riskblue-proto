@@ -72,7 +72,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { BuyCreditsModal } from "@/components/BuyCreditsModal";
 import { useCredits } from "@/hooks/useCredits";
 import * as pdfjsLib from "pdfjs-dist";
-import { DrawingViewer } from "@/components/viewer";
+import { DrawingViewer, prewarmDocumentSource } from "@/components/viewer";
 import type { DocumentSourceDescriptor, OverlayInput } from "@/components/viewer";
 
 // Configure PDF.js worker (idempotent — safe to call multiple times)
