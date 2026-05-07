@@ -92,7 +92,7 @@ Deno.serve(async (req) => {
 
   // 3. Try finalization for each touched (request, run) (single-trigger guarded)
   for (const { requestId, runId } of touchedKeys.values()) {
-    await maybeFinalizeTriage(admin, supabaseUrl, serviceKey, requestId, runId).catch((e) =>
+    await dispatchAnalyzeWhenTriageComplete(admin, supabaseUrl, serviceKey, requestId, runId).catch((e) =>
       console.error(`[worker] triage finalize for ${requestId} threw:`, e),
     );
     await maybeFinalize(admin, supabaseUrl, serviceKey, requestId, runId).catch((e) =>
@@ -653,7 +653,7 @@ async function checkFinalizeAll(
       }
     }
     if (phase === "triaging") {
-      await maybeFinalizeTriage(admin, supabaseUrl, serviceKey, row.id, runId).catch(() => {});
+      await dispatchAnalyzeWhenTriageComplete(admin, supabaseUrl, serviceKey, row.id, runId).catch(() => {});
     } else if (phase === "analyzing") {
       await maybeFinalize(admin, supabaseUrl, serviceKey, row.id, runId).catch(() => {});
     }
@@ -1205,7 +1205,7 @@ async function updateTriageProgress(
 // Triage finalizer — when all triage jobs are terminal, transition into Phase 3
 // by re-invoking run-analysis-pipeline with phaseOverride='analyze'.
 // ---------------------------------------------------------------------------
-async function maybeFinalizeTriage(
+async function dispatchAnalyzeWhenTriageComplete(
   admin: ReturnType<typeof createClient>,
   supabaseUrl: string,
   serviceKey: string,
@@ -1241,7 +1241,7 @@ async function maybeFinalizeTriage(
   // pipeline insert), do NOT finalize — wait for jobs to land.
   const { count: anyCount } = await buildQ([]);
   if ((anyCount ?? 0) === 0) {
-    console.warn(`[worker] maybeFinalizeTriage: no triage jobs visible yet for ${requestId}; skipping`);
+    console.warn(`[worker] dispatchAnalyzeWhenTriageComplete: no triage jobs visible yet for ${requestId}; skipping`);
     return;
   }
 
