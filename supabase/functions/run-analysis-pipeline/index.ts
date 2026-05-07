@@ -1731,10 +1731,6 @@ async function runPipeline(params: PipelineParams) {
         const { error: insErr } = await admin
           .from("analysis_pipeline_jobs")
           .insert(slice);
-        const slice = jobRows.slice(i, i + CHUNK);
-        const { error: insErr } = await admin
-          .from("analysis_pipeline_jobs")
-          .insert(slice);
         if (insErr) {
           console.error(`[pipeline] Failed to insert jobs chunk: ${insErr.message}`);
           await admin
