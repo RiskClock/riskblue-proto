@@ -1666,12 +1666,12 @@ async function runPipeline(params: PipelineParams) {
           });
           continue;
         }
-        // In sheet-mode the analyze unit is the FULL parent PDF. Append a
-        // page-evidence requirement so findings carry localized provenance.
-        // We deliberately do NOT pass acceptedPages as a focus hint — the
-        // model must inspect every page and return page-localized evidence.
+        // In sheet-mode the analyze unit is a single-page sheet PDF. Tell the
+        // model to cite the parent-PDF page number it represents so downstream
+        // bbox/page resolution still works.
+        const sheetPageNum = item.acceptedPages[0];
         const pageEvidenceInstruction = useSheets
-          ? `\n\n[Multi-page parent file]\nThis PDF may contain many pages/sheets. Inspect EVERY page. For each finding you report, include:\n  - "PDF Page" — the 1-based PDF page number where the evidence appears (REQUIRED).\n  - "Sheet Number" — the printed sheet number from the title block, if visible (optional).\n  - "Evidence/Location" — a brief note on where on the page the evidence is (e.g. plan view, schedule, title block).\nIf the same instance appears on multiple pages, list it once and cite the most informative page. Do not invent page numbers; if you cannot determine the page, omit the row.`
+          ? `\n\n[Single-sheet PDF]\nThis PDF contains a single drawing sheet from a larger parent document. For each finding you report, include:\n  - "PDF Page" — set to ${sheetPageNum ?? 1} (the page number in the parent PDF this sheet was extracted from).\n  - "Sheet Number" — the printed sheet number from the title block, if visible (optional).\n  - "Evidence/Location" — a brief note on where on the sheet the evidence is (e.g. plan view, schedule, title block).`
           : "";
         const finalPrompt = item.contextText
           ? `${promptContent}${pageEvidenceInstruction}\n\n[Supporting context from related sheets in the same document; use only as reference, do NOT count instances from these excerpts]\n${item.contextText}`
