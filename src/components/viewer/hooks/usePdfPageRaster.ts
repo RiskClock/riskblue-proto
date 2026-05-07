@@ -212,5 +212,5 @@ export function usePdfPageRaster(
     rerasterTimers.current.set(pageNum, timer);
   };
 
-  return { pages, loading, error, scheduleReraster };
+  return { pages, totalPages, loading, error, scheduleReraster };
 }
