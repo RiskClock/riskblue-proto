@@ -85,6 +85,7 @@ export function usePdfPageRaster(
             const cachedPdf = await pdfDocCache.get(blobKey);
             if (cachedPdf) pdfRef.current = cachedPdf;
             if (!cancelled) {
+              setTotalPages(cachedPages.length);
               setPages(cachedPages);
               setLoading(false);
             }
@@ -103,6 +104,8 @@ export function usePdfPageRaster(
         }
         const pdf = await pdfPromise;
         pdfRef.current = pdf;
+        // Publish total pages immediately so toolbars can render "1 / N".
+        if (!cancelled) setTotalPages(pdf.numPages);
 
         const out: RasterPage[] = [];
         for (let i = 1; i <= pdf.numPages; i++) {
