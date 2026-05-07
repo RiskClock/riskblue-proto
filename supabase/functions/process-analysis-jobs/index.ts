@@ -250,6 +250,10 @@ async function runJob(
     if (res.ok) {
       const tokens =
         (respJson?.usage?.total_tokens as number | undefined) ?? null;
+      // Per-(parent_file, class) token instrumentation for Design A vs B evaluation.
+      console.log(
+        `[worker][analyze][tokens] request=${job.analysis_request_id} parent_file=${job.file_id} class=${job.awp_class_name} sheet_id=${job.sheet_id ?? "null"} accepted_pages=${JSON.stringify(job.accepted_pages ?? null)} total_tokens=${tokens ?? "n/a"}`,
+      );
 
       const wrote = await updateJobGuarded(admin, job, {
         status: "complete",
