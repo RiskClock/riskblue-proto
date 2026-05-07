@@ -147,6 +147,7 @@ export function usePdfPageRaster(
     };
 
     setPages([]);
+    setTotalPages(0);
     load();
     return () => {
       cancelled = true;
