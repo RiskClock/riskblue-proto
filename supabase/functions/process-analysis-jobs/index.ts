@@ -314,6 +314,23 @@ async function runJob(
       return;
     }
 
+    // Permanent: parent PDF exceeds the analyze size cap — retrying will not help.
+    // Surface the original size-cap message verbatim so the UI summary is actionable.
+    if (httpStatus === 413 || /too large for analyze/i.test(msg)) {
+      const cleanMsg =
+        (typeof respJson === "object" && respJson?.error)
+          ? String(respJson.error)
+          : msg;
+      const wrote = await updateJobGuarded(admin, job, {
+        status: "failed",
+        completed_at: new Date().toISOString(),
+        error_message: cleanMsg.slice(0, 1000),
+      });
+      console.error(`[worker] job ${job.id} permanently failed (413/oversize): ${cleanMsg}`);
+      if (wrote > 0) await updateProgress(admin, job.analysis_request_id, job.analysis_run_id);
+      return;
+    }
+
     if (attempts < maxAttempts) {
       // Exponential backoff: 30s, 60s, 120s
       const delaySec = 30 * Math.pow(2, attempts - 1);
