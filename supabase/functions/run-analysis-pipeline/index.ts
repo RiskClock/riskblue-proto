@@ -1747,10 +1747,7 @@ async function runPipeline(params: PipelineParams) {
         }));
         const PCHUNK = 500;
         for (let i = 0; i < placeholderRows.length; i += PCHUNK) {
-          await admin.from("analysis_results").upsert(
-            placeholderRows.slice(i, i + PCHUNK),
-            { onConflict: RESULTS_ONCONFLICT },
-          );
+          await admin.from("analysis_results").insert(placeholderRows.slice(i, i + PCHUNK));
         }
       }
 
