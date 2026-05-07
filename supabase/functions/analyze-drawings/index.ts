@@ -424,21 +424,65 @@ serve(async (req) => {
     } : {}) };
 
     // Mark as processing — analysisRunId is guaranteed non-null at this point.
-    const upsertRow: Record<string, unknown> = {
-      analysis_request_id: analysisRequestId,
-      analysis_run_id: analysisRunId,
-      file_id: fileId,
-      sheet_id: sheetId ?? null,
-      awp_class_name: awpClassName,
-      status: "processing",
-    };
-    await adminSupabase
-      .from("analysis_results")
-      .upsert(upsertRow, {
-        onConflict: sheetId
-          ? "analysis_request_id,sheet_id,awp_class_name"
-          : "analysis_request_id,file_id,awp_class_name",
-      });
+    //
+    // NOTE: We deliberately do NOT use PostgREST `.upsert(..., { onConflict })` here
+    // because the unique indexes on analysis_results are PARTIAL:
+    //   uniq_analysis_results_sheet            WHERE sheet_id IS NOT NULL
+    //   analysis_results_request_file_class…   WHERE sheet_id IS NULL
+    // PostgREST emits `ON CONFLICT (cols) DO UPDATE` without the index predicate,
+    // which Postgres rejects with "no unique or exclusion constraint matching the
+    // ON CONFLICT specification". The error was being silently swallowed (no
+    // `.throwOnError()`), the row was never created, and the final UPDATE then
+    // matched 0 rows — leaving the analysis_results table empty even though the
+    // job was marked complete. We now do an explicit select → insert/update.
+    {
+      let existQ = adminSupabase
+        .from("analysis_results")
+        .select("id")
+        .eq("analysis_request_id", analysisRequestId)
+        .eq("awp_class_name", awpClassName);
+      if (sheetId) existQ = existQ.eq("sheet_id", sheetId);
+      else existQ = existQ.eq("file_id", fileId).is("sheet_id", null);
+      const { data: existing, error: existErr } = await existQ.maybeSingle();
+      if (existErr) {
+        console.error(`[analyze-drawings] FATAL: failed to query analysis_results: ${existErr.message}`);
+        return new Response(
+          JSON.stringify({ error: `Failed to read analysis_results: ${existErr.message}` }),
+          { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+        );
+      }
+      if (existing) {
+        const { error: updErr } = await adminSupabase
+          .from("analysis_results")
+          .update({ status: "processing", analysis_run_id: analysisRunId, error_message: null } as any)
+          .eq("id", (existing as any).id);
+        if (updErr) {
+          console.error(`[analyze-drawings] FATAL: failed to mark analysis_results processing: ${updErr.message}`);
+          return new Response(
+            JSON.stringify({ error: `Failed to mark processing: ${updErr.message}` }),
+            { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+          );
+        }
+      } else {
+        const { error: insErr } = await adminSupabase
+          .from("analysis_results")
+          .insert({
+            analysis_request_id: analysisRequestId,
+            analysis_run_id: analysisRunId,
+            file_id: fileId,
+            sheet_id: sheetId ?? null,
+            awp_class_name: awpClassName,
+            status: "processing",
+          } as any);
+        if (insErr) {
+          console.error(`[analyze-drawings] FATAL: failed to insert analysis_results placeholder: ${insErr.message}`);
+          return new Response(
+            JSON.stringify({ error: `Failed to insert placeholder: ${insErr.message}` }),
+            { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+          );
+        }
+      }
+    }
 
     // ------------------------------------------------------------------
     // Determine effective MIME type (Procore often stores octet-stream)
@@ -668,10 +712,38 @@ serve(async (req) => {
 
     // Store result — also stamp analysis_run_id to repair any prior orphaned
     // upsert that may have left the row with a NULL run id.
-    await scopeResultsUpdate(
+    // We require .select() back so we can verify a row was actually written;
+    // historically a silent 0-row UPDATE here let the worker mark the job
+    // complete with no analysis_results persisted.
+    const { data: writtenRows, error: writeErr } = await scopeResultsUpdate(
       adminSupabase.from("analysis_results")
         .update({ status: "complete", result_text: resultText, error_message: null, analysis_run_id: analysisRunId })
-    );
+    ).select("id");
+
+    if (writeErr) {
+      console.error(`[analyze-drawings] FATAL: failed to persist final result: ${writeErr.message}`);
+      return new Response(
+        JSON.stringify({ error: `Failed to persist analysis result: ${writeErr.message}` }),
+        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+      );
+    }
+
+    if (!writtenRows || writtenRows.length === 0) {
+      // Hard failure: model returned a result but no analysis_results row was
+      // affected. This means the placeholder insert above failed silently
+      // (partial-index ON CONFLICT bug, RLS, or a race that deleted the row).
+      // Return 500 so the worker retries instead of marking the job complete
+      // with no persisted output.
+      const msg =
+        `No analysis_results row updated for request=${analysisRequestId} ` +
+        `file=${fileId} sheet=${sheetId ?? "-"} class=${awpClassName}. ` +
+        `Result text was generated but not persisted.`;
+      console.error(`[analyze-drawings] FATAL: ${msg}`);
+      return new Response(
+        JSON.stringify({ error: msg }),
+        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+      );
+    }
 
     return new Response(JSON.stringify({
       status: "complete",
@@ -680,6 +752,7 @@ serve(async (req) => {
       fileName: fileRecord.name,
       openaiFileId,
       usage,
+      rowsWritten: writtenRows.length,
     }), {
       status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
