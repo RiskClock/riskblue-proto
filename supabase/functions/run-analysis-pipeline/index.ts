@@ -1389,12 +1389,13 @@ async function runPipeline(params: PipelineParams) {
 
       interface WorkItem {
         fileId: string;          // parent file id (always set)
-        sheetId: string | null;  // sheet id when useSheets
-        unitName: string;
+        sheetId: string | null;  // sheet id when useSheets — DEPRECATED for analyze in sheet-mode (always null after Phase 3 file-level redesign)
+        unitName: string;        // parent file name (or sheet name in legacy paths)
         awpClassName: string;
         promptContent: string | null;
         triagePromptContent: string | null;
-        contextText: string | null; // injected context_sheet excerpts
+        contextText: string | null; // injected context_sheet excerpts (legacy non-sheet mode only)
+        acceptedPages: number[]; // 1-based PDF page numbers triage flagged (sheet-mode); provenance/debug only
       }
 
       const promptByClass = new Map<string, any>();
