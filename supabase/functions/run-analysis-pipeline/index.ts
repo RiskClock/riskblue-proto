@@ -1462,12 +1462,11 @@ async function runPipeline(params: PipelineParams) {
           const override = overrideMap.get(overrideKey);
           if (override === "exclude") continue;
 
-          // Eligibility mirrors the non-sheet branch: include override OR
-          // score >= 50 qualifies the page, regardless of how the triage model
-          // self-classified `sheet_role`. Previously we hard-filtered on
-          // sheet_role === "analysis_sheet", which silently dropped score=100
-          // pages the model labeled "context_sheet" — producing empty Phase 3
-          // work queues and "no eligible drawings" emails.
+          // Strict eligibility: include override OR score >= 50.
+          // We intentionally do NOT fall back on `sheet_role === "analysis_sheet"`,
+          // because the triage model can label a low-score page as analysis_sheet
+          // and that would let low-confidence pairs through (e.g. score=20).
+          // The canonical rule is the 50% score threshold.
           let eligible = override === "include";
           if (
             !eligible &&
@@ -1477,8 +1476,6 @@ async function runPipeline(params: PipelineParams) {
           ) {
             eligible = true;
           }
-          // Also accept explicit analysis_sheet rows even if score is missing.
-          if (!eligible && t.sheet_role === "analysis_sheet") eligible = true;
           if (!eligible) continue;
 
           const key = `${sh.parent_file_id}::${t.awp_class_name}`;
@@ -1583,8 +1580,7 @@ async function runPipeline(params: PipelineParams) {
             if (overrideMap.get(ovKey) === "exclude") continue;
             const isEligible =
               overrideMap.get(ovKey) === "include" ||
-              (t.status === "complete" && t.score !== null && t.score >= 50) ||
-              t.sheet_role === "analysis_sheet";
+              (t.status === "complete" && t.score !== null && t.score >= 50);
             if (!isEligible) continue;
             const k = `${sh.parent_file_id}::${t.awp_class_name}`;
             const prev = rawElig.get(k);
