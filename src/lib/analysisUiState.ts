@@ -15,6 +15,7 @@ export type AnalysisUiState =
   | "starting"
   | "extracting"
   | "triaging"
+  | "preparing_analysis"
   | "analyzing"
   | "summarizing"
   | "stopping"
@@ -57,8 +58,9 @@ export function deriveAnalysisUiState(row: AnalysisRowLike | null | undefined): 
     if (phase === "triaging") return "triaging";
     if (phase === "analyzing") return "analyzing";
     // Transient phase set by the triage finalizer between triage completion
-    // and analyze invocation. Treat as analyzing for UI continuity.
-    if (phase === "dispatching_analyze") return "analyzing";
+    // and analyze invocation. Show as "Preparing Analysis" so the badge
+    // does not flash "Analyzing Content" with stale triage counts.
+    if (phase === "dispatching_analyze") return "preparing_analysis";
     if (phase === "summarizing") return "summarizing";
     // status=processing with no/unknown phase → treat as starting
     return "starting";
@@ -102,6 +104,7 @@ const RUNNING_STATES: ReadonlySet<AnalysisUiState> = new Set([
   "starting",
   "extracting",
   "triaging",
+  "preparing_analysis",
   "analyzing",
   "summarizing",
   "stopping",
@@ -121,6 +124,7 @@ export function presentAnalysisUiState(state: AnalysisUiState): UiStatePresentat
     starting: { label: "Starting Analysis", button: "Starting Analysis" },
     extracting: { label: "Extracting Context", button: "Extracting Context" },
     triaging: { label: "Triaging Drawings", button: "Triaging Drawings" },
+    preparing_analysis: { label: "Preparing Analysis", button: "Preparing Analysis" },
     analyzing: { label: "Analyzing Content", button: "Analyzing Content" },
     summarizing: { label: "Summarizing Findings", button: "Summarizing Findings" },
     stopping: { label: "Stopping Analysis", button: "Stopping Analysis" },
@@ -168,6 +172,7 @@ export function uiStateBadgeClass(state: AnalysisUiState): string {
     case "starting":
     case "extracting":
     case "triaging":
+    case "preparing_analysis":
     case "analyzing":
     case "summarizing":
       return "bg-purple-100 text-purple-800 border-purple-300";

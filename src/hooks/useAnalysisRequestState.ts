@@ -302,6 +302,9 @@ export function useAnalysisRequestState(requestId: string | null | undefined): A
       uiState = "syncing";
     } else if (derivedUiState === "starting" || derivedUiState === "extracting") {
       // keep
+    } else if (phase === "dispatching_analyze") {
+      // Keep "Preparing Analysis" — do not override with stale triage/analyze counts.
+      uiState = "preparing_analysis";
     } else if (triageActive > 0) {
       uiState = "triaging";
     } else if (jobsActive > 0) {

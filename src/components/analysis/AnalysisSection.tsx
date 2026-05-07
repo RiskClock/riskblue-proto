@@ -1180,6 +1180,37 @@ export function AnalysisSection({ requestId, files, projectId, sourceType, isWMS
     })() as number | false,
   });
 
+  // Triage progress breakdown: distinguish pages truly triaged by the AI from
+  // pages auto-completed via the bulk short-circuit ("sibling already scored
+  // 100%"). Used by the chip + tooltip so the count never misleadingly jumps.
+  const { data: triageBreakdown } = useQuery({
+    queryKey: ["triage-progress-breakdown", requestId, currentRunId],
+    queryFn: async () => {
+      let q = supabase
+        .from("analysis_pipeline_jobs")
+        .select("status, error_message")
+        .eq("analysis_request_id", requestId)
+        .eq("job_kind", "triage");
+      if (currentRunId) q = q.eq("analysis_run_id", currentRunId);
+      const { data, error } = await q;
+      if (error) throw error;
+      const rows = (data ?? []) as Array<{ status: string; error_message: string | null }>;
+      let triaged = 0;
+      let shortCircuited = 0;
+      for (const r of rows) {
+        if (r.status !== "complete") continue;
+        if ((r.error_message || "").startsWith("Short-circuited")) shortCircuited += 1;
+        else triaged += 1;
+      }
+      return { triaged, shortCircuited, total: rows.length };
+    },
+    refetchInterval: (() => {
+      const s = queryClient.getQueryData<any>(["analysis-request-meta", requestId])?.status;
+      return ACTIVE_STATUSES.includes(s) ? 5000 : false;
+    })() as number | false,
+    enabled: !!requestId,
+  });
+
   // Hydrate triage results into map. In sheet-normalized mode there is one
   // triage row per (file, class, sheet) — we collapse to the MAX score per
   // (file, class) so a single high-scoring page keeps the cell highlighted
@@ -3553,6 +3584,43 @@ export function AnalysisSection({ requestId, files, projectId, sourceType, isWMS
   const pipelineDone = rawPipelineTotal > 0 ? rawPipelineDone : lastCounterRef.current.done;
   const pipelineTotal = rawPipelineTotal > 0 ? rawPipelineTotal : lastCounterRef.current.total;
 
+  // Phase-aware unit label — "items" was ambiguous when the chip carried over
+  // a triage count into the analyze phase.
+  const pipelineUnit = (() => {
+    switch (pipelinePhase) {
+      case "splitting":
+      case "extracting":
+        return "pages";
+      case "triaging":
+        return "drawings";
+      case "dispatching_analyze":
+      case "analyzing":
+      case "summarizing":
+        return "classes";
+      default:
+        return "items";
+    }
+  })();
+
+  // While transitioning from triage → analyze (phase=dispatching_analyze) the
+  // backend has not yet written the analyze-phase totals. Suppress the stale
+  // triage count so it doesn't read "Analyzing Content 54/54 items".
+  const showCounter =
+    pipelinePhase !== "dispatching_analyze" && pipelineTotal > 0;
+
+  // Short-circuit breakdown — only relevant during the triage phase, where the
+  // raw "X/Y drawings" can leap due to bulk sibling completion.
+  const triageBreakdownVisible =
+    pipelinePhase === "triaging" &&
+    !!triageBreakdown &&
+    (triageBreakdown.shortCircuited ?? 0) > 0;
+  const triageBreakdownSuffix = triageBreakdownVisible
+    ? ` (${triageBreakdown!.triaged} triaged · ${triageBreakdown!.shortCircuited} skipped via short-circuit)`
+    : "";
+  const triageBreakdownTooltip = triageBreakdownVisible
+    ? `${triageBreakdown!.triaged} drawings triaged by AI; ${triageBreakdown!.shortCircuited} auto-completed because a sibling page in the same file already scored 100% for this class.`
+    : "";
+
 
   return (
     <TooltipProvider delayDuration={0}>
@@ -3570,10 +3638,24 @@ export function AnalysisSection({ requestId, files, projectId, sourceType, isWMS
                   <div className="flex items-center gap-3">
                     <Loader2 className="w-4 h-4 animate-spin text-primary" />
                     <span className="text-sm font-medium text-foreground">{wmsvPhaseLabel}</span>
-                    {!analyzeV2Stopping && (
-                      <span className="text-xs text-muted-foreground tabular-nums">
-                        {pipelineDone}/{pipelineTotal} {pipelinePhase === "extracting" ? "pages" : "items"}
-                      </span>
+                    {!analyzeV2Stopping && showCounter && (
+                      triageBreakdownVisible ? (
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <span className="text-xs text-muted-foreground tabular-nums cursor-help">
+                              {pipelineDone}/{pipelineTotal} {pipelineUnit}{triageBreakdownSuffix}
+                            </span>
+                          </TooltipTrigger>
+                          <TooltipContent>{triageBreakdownTooltip}</TooltipContent>
+                        </Tooltip>
+                      ) : (
+                        <span className="text-xs text-muted-foreground tabular-nums">
+                          {pipelineDone}/{pipelineTotal} {pipelineUnit}
+                        </span>
+                      )
+                    )}
+                    {!analyzeV2Stopping && !showCounter && (
+                      <span className="text-xs text-muted-foreground tabular-nums">…</span>
                     )}
                     <Button
                       size="sm"
@@ -3661,9 +3743,24 @@ export function AnalysisSection({ requestId, files, projectId, sourceType, isWMS
                 <div className="flex items-center gap-3">
                   <Loader2 className="w-4 h-4 animate-spin text-primary" />
                   <span className="text-sm font-medium text-foreground">{pipelinePhaseLabel}</span>
-                  <span className="text-xs text-muted-foreground tabular-nums">
-                    {pipelineDone}/{pipelineTotal} {pipelinePhase === "extracting" ? "pages" : "items"}
-                  </span>
+                  {showCounter ? (
+                    triageBreakdownVisible ? (
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <span className="text-xs text-muted-foreground tabular-nums cursor-help">
+                            {pipelineDone}/{pipelineTotal} {pipelineUnit}{triageBreakdownSuffix}
+                          </span>
+                        </TooltipTrigger>
+                        <TooltipContent>{triageBreakdownTooltip}</TooltipContent>
+                      </Tooltip>
+                    ) : (
+                      <span className="text-xs text-muted-foreground tabular-nums">
+                        {pipelineDone}/{pipelineTotal} {pipelineUnit}
+                      </span>
+                    )
+                  ) : (
+                    <span className="text-xs text-muted-foreground tabular-nums">…</span>
+                  )}
                   <Button
                     size="sm"
                     variant="destructive"

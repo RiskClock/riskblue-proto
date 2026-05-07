@@ -403,6 +403,8 @@ In addition to the relevance score, classify the sheet's role for this AWP class
 
 Drawing lists, legends, schedules and risers are NEVER analysis_sheet.
 
+IMPORTANT: If score >= 50, you MUST classify the sheet as "analysis_sheet" UNLESS the sheet is exclusively a legend / schedule / riser / key plan / cover sheet that lists or references equipment installed elsewhere. A floor plan showing the actual labeled rooms or equipment for this class is "analysis_sheet", not "context_sheet".
+
 Return ONLY valid JSON: {"score":0,"reason":"...","sheet_role":"analysis_sheet|context_sheet|irrelevant"}`;
 
     let triagePrompt: string;
