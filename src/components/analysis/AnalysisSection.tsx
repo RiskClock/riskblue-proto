@@ -3577,19 +3577,22 @@ export function AnalysisSection({ requestId, files, projectId, sourceType, isWMS
   const pipelineDone = countersMatchPhase ? rawPipelineDone : 0;
   const pipelineTotal = countersMatchPhase ? rawPipelineTotal : 0;
 
-  // Phase-aware unit label — "items" was ambiguous when the chip carried over
-  // a triage count into the analyze phase.
+  // Phase-aware unit label. Counts are per-job, not per-drawing — the triage
+  // phase enqueues one job per (page × class) and the analyze phase enqueues
+  // one job per (file × class) that survived triage. Using "drawings" or
+  // "classes" was misleading because the totals don't match either entity
+  // 1:1. "checks" reflects what's actually being counted.
   const pipelineUnit = (() => {
     switch (pipelinePhase) {
       case "splitting":
       case "extracting":
         return "pages";
       case "triaging":
-        return "drawings";
+        return "page checks";
       case "dispatching_analyze":
       case "analyzing":
       case "summarizing":
-        return "classes";
+        return "checks";
       default:
         return "items";
     }
