@@ -4028,25 +4028,28 @@ export function AnalysisSection({ requestId, files, projectId, sourceType, isWMS
                           </button>
                           {(() => {
                             const sp = sheetProgressByFile.get(file.id);
+                            // Once the pipeline has advanced past extract, every
+                            // file present in the run must have completed extraction —
+                            // stale per-sheet `pending` counts should not keep the
+                            // spinner alive.
+                            const pastExtract =
+                              pipelinePhase === "triaging" ||
+                              pipelinePhase === "dispatching_analyze" ||
+                              pipelinePhase === "analyzing" ||
+                              pipelinePhase === "summarizing" ||
+                              dbStatus === "complete";
                             // Sheet-mode: spinner if any sheet of this file is still pending
-                            const sheetExtracting = !!sp && sp.pending > 0;
+                            const sheetExtracting = !pastExtract && !!sp && sp.pending > 0;
                             // Sheet-mode: processed when ALL sheets are extracted
                             const sheetAllDone = !!sp && sp.total > 0 && sp.pending === 0;
                             // Legacy fallback (non-sheet-mode runs)
-                            const legacyExtracting = extractingFileIds.has(file.id);
+                            const legacyExtracting = !pastExtract && extractingFileIds.has(file.id);
                             const legacyExtracted = extractedFileIds.has(file.id);
                             // Pipeline-phase fallback: while phase is extract/split, show spinner
                             // for any file not yet marked processed.
                             const pipelineExtracting =
                               (pipelinePhase === "extracting" || pipelinePhase === "splitting") &&
                               !legacyExtracted && !sheetAllDone;
-                            // Once we've moved past extract phase, treat all files as processed
-                            // (any file that reached triage/analyze must have completed extract).
-                            const pastExtract =
-                              pipelinePhase === "triaging" ||
-                              pipelinePhase === "analyzing" ||
-                              pipelinePhase === "summarizing" ||
-                              dbStatus === "complete";
                             const showSpinner = sheetExtracting || legacyExtracting || pipelineExtracting;
                             const showProcessed =
                               !showSpinner && (sheetAllDone || legacyExtracted || pastExtract);
