@@ -104,6 +104,7 @@ const RUNNING_STATES: ReadonlySet<AnalysisUiState> = new Set([
   "starting",
   "extracting",
   "triaging",
+  "preparing_analysis",
   "analyzing",
   "summarizing",
   "stopping",
