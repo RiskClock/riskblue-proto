@@ -712,10 +712,38 @@ serve(async (req) => {
 
     // Store result — also stamp analysis_run_id to repair any prior orphaned
     // upsert that may have left the row with a NULL run id.
-    await scopeResultsUpdate(
+    // We require .select() back so we can verify a row was actually written;
+    // historically a silent 0-row UPDATE here let the worker mark the job
+    // complete with no analysis_results persisted.
+    const { data: writtenRows, error: writeErr } = await scopeResultsUpdate(
       adminSupabase.from("analysis_results")
         .update({ status: "complete", result_text: resultText, error_message: null, analysis_run_id: analysisRunId })
-    );
+    ).select("id");
+
+    if (writeErr) {
+      console.error(`[analyze-drawings] FATAL: failed to persist final result: ${writeErr.message}`);
+      return new Response(
+        JSON.stringify({ error: `Failed to persist analysis result: ${writeErr.message}` }),
+        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+      );
+    }
+
+    if (!writtenRows || writtenRows.length === 0) {
+      // Hard failure: model returned a result but no analysis_results row was
+      // affected. This means the placeholder insert above failed silently
+      // (partial-index ON CONFLICT bug, RLS, or a race that deleted the row).
+      // Return 500 so the worker retries instead of marking the job complete
+      // with no persisted output.
+      const msg =
+        `No analysis_results row updated for request=${analysisRequestId} ` +
+        `file=${fileId} sheet=${sheetId ?? "-"} class=${awpClassName}. ` +
+        `Result text was generated but not persisted.`;
+      console.error(`[analyze-drawings] FATAL: ${msg}`);
+      return new Response(
+        JSON.stringify({ error: msg }),
+        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+      );
+    }
 
     return new Response(JSON.stringify({
       status: "complete",
@@ -724,6 +752,7 @@ serve(async (req) => {
       fileName: fileRecord.name,
       openaiFileId,
       usage,
+      rowsWritten: writtenRows.length,
     }), {
       status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
