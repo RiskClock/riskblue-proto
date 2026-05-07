@@ -1180,6 +1180,37 @@ export function AnalysisSection({ requestId, files, projectId, sourceType, isWMS
     })() as number | false,
   });
 
+  // Triage progress breakdown: distinguish pages truly triaged by the AI from
+  // pages auto-completed via the bulk short-circuit ("sibling already scored
+  // 100%"). Used by the chip + tooltip so the count never misleadingly jumps.
+  const { data: triageBreakdown } = useQuery({
+    queryKey: ["triage-progress-breakdown", requestId, currentRunId],
+    queryFn: async () => {
+      let q = supabase
+        .from("analysis_pipeline_jobs")
+        .select("status, error_message")
+        .eq("analysis_request_id", requestId)
+        .eq("job_kind", "triage");
+      if (currentRunId) q = q.eq("analysis_run_id", currentRunId);
+      const { data, error } = await q;
+      if (error) throw error;
+      const rows = (data ?? []) as Array<{ status: string; error_message: string | null }>;
+      let triaged = 0;
+      let shortCircuited = 0;
+      for (const r of rows) {
+        if (r.status !== "complete") continue;
+        if ((r.error_message || "").startsWith("Short-circuited")) shortCircuited += 1;
+        else triaged += 1;
+      }
+      return { triaged, shortCircuited, total: rows.length };
+    },
+    refetchInterval: (() => {
+      const s = queryClient.getQueryData<any>(["analysis-request-meta", requestId])?.status;
+      return ACTIVE_STATUSES.includes(s) ? 5000 : false;
+    })() as number | false,
+    enabled: !!requestId,
+  });
+
   // Hydrate triage results into map. In sheet-normalized mode there is one
   // triage row per (file, class, sheet) — we collapse to the MAX score per
   // (file, class) so a single high-scoring page keeps the cell highlighted
