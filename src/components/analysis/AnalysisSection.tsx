@@ -1543,6 +1543,34 @@ export function AnalysisSection({ requestId, files, projectId, sourceType, isWMS
 
   const copiedFiles = files.filter((f) => f.copy_status === "copied" && f.storage_path);
 
+  // Prefetch first few drawings into the viewer's blob cache as soon as the
+  // file list is known. Subsequent preview-modal opens hit the cache and
+  // resolve instantly instead of waiting on a fresh signed-URL + download.
+  // Idle-time, capped to 3 files to avoid burning bandwidth on large runs.
+  useEffect(() => {
+    if (copiedFiles.length === 0) return;
+    const bucket =
+      sourceType === "manual_upload" ? "uploaded-drawings" : "drive-analysis-files";
+    const targets = copiedFiles
+      .slice(0, 3)
+      .filter((f) => f.storage_path)
+      .map((f) => ({
+        kind: "supabase-storage" as const,
+        bucket,
+        path: f.storage_path!,
+      }));
+    const ric =
+      (window as any).requestIdleCallback ??
+      ((cb: () => void) => setTimeout(cb, 1000));
+    const cic =
+      (window as any).cancelIdleCallback ??
+      ((id: any) => clearTimeout(id));
+    const handle = ric(() => {
+      for (const t of targets) prewarmDocumentSource(t);
+    });
+    return () => cic(handle);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [copiedFiles.map((f) => f.id).join(","), sourceType]);
   // Auto-resume: when we hydrate as "processing" but have no active scheduler,
   // rebuild the work queue from incomplete cells and restart.
   useEffect(() => {
