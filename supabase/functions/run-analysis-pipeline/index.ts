@@ -1289,7 +1289,7 @@ async function runPipeline(params: PipelineParams) {
 
       // IMPORTANT: insert jobs BEFORE setting phase=triaging. Otherwise the
       // cron worker may tick during this window, see 0 triage jobs in
-      // pending/processing, and prematurely run maybeFinalizeTriage which
+      // pending/processing, and prematurely run dispatchAnalyzeWhenTriageComplete which
       // flips the phase and causes a 0/0 progress flicker.
       const TCHUNK = 500;
       for (let i = 0; i < triageJobRows.length; i += TCHUNK) {

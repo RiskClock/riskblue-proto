@@ -144,7 +144,7 @@ export function useAnalysisRequestState(requestId: string | null | undefined): A
   const dbRunId = rawRow?.analysis_run_id ?? null;
   const dbStatus = rawRow?.status ?? "";
   const dbPhase = rawRow?.pipeline_phase ?? "";
-  const RUNNING_PHASES = new Set(["extracting", "triaging", "analyzing", "summarizing"]);
+  const RUNNING_PHASES = new Set(["extracting", "triaging", "analyzing", "summarizing", "dispatching_analyze"]);
   const dbLooksRunning =
     dbStatus === "processing" || RUNNING_PHASES.has(dbPhase);
 

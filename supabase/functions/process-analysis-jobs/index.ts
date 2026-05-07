@@ -92,7 +92,7 @@ Deno.serve(async (req) => {
 
   // 3. Try finalization for each touched (request, run) (single-trigger guarded)
   for (const { requestId, runId } of touchedKeys.values()) {
-    await maybeFinalizeTriage(admin, supabaseUrl, serviceKey, requestId, runId).catch((e) =>
+    await dispatchAnalyzeWhenTriageComplete(admin, supabaseUrl, serviceKey, requestId, runId).catch((e) =>
       console.error(`[worker] triage finalize for ${requestId} threw:`, e),
     );
     await maybeFinalize(admin, supabaseUrl, serviceKey, requestId, runId).catch((e) =>
@@ -653,7 +653,7 @@ async function checkFinalizeAll(
       }
     }
     if (phase === "triaging") {
-      await maybeFinalizeTriage(admin, supabaseUrl, serviceKey, row.id, runId).catch(() => {});
+      await dispatchAnalyzeWhenTriageComplete(admin, supabaseUrl, serviceKey, row.id, runId).catch(() => {});
     } else if (phase === "analyzing") {
       await maybeFinalize(admin, supabaseUrl, serviceKey, row.id, runId).catch(() => {});
     }
@@ -1080,10 +1080,13 @@ async function runTriageJob(
             .eq("analysis_request_id", job.analysis_request_id)
             .eq("file_id", job.file_id)
             .eq("awp_class_name", job.awp_class_name)
-            .eq("job_type", "triage")
+            .eq("job_kind", "triage")
             .eq("status", "pending");
           if (job.analysis_run_id) q = q.eq("analysis_run_id", job.analysis_run_id);
           const { data: updated, error: bulkErr } = await q.select("id");
+          if (bulkErr) {
+            console.warn(`[worker][triage] bulk short-circuit update failed: ${bulkErr.message}`);
+          }
           const n = updated?.length ?? 0;
           if (!bulkErr && n > 0) {
             console.log(`[worker][triage] short-circuited ${n} sibling jobs for file=${job.file_id} class=${job.awp_class_name}`);
@@ -1202,7 +1205,7 @@ async function updateTriageProgress(
 // Triage finalizer — when all triage jobs are terminal, transition into Phase 3
 // by re-invoking run-analysis-pipeline with phaseOverride='analyze'.
 // ---------------------------------------------------------------------------
-async function maybeFinalizeTriage(
+async function dispatchAnalyzeWhenTriageComplete(
   admin: ReturnType<typeof createClient>,
   supabaseUrl: string,
   serviceKey: string,
@@ -1238,7 +1241,7 @@ async function maybeFinalizeTriage(
   // pipeline insert), do NOT finalize — wait for jobs to land.
   const { count: anyCount } = await buildQ([]);
   if ((anyCount ?? 0) === 0) {
-    console.warn(`[worker] maybeFinalizeTriage: no triage jobs visible yet for ${requestId}; skipping`);
+    console.warn(`[worker] dispatchAnalyzeWhenTriageComplete: no triage jobs visible yet for ${requestId}; skipping`);
     return;
   }
 
@@ -1271,10 +1274,13 @@ async function maybeFinalizeTriage(
   if ((cur2 as any)?.pipeline_phase !== "triaging") return;
   if (runId && (cur2 as any)?.analysis_run_id !== runId) return;
 
-  // Atomically transition to a transient phase so siblings don't double-fire
+  // Atomically transition to a transient phase so siblings don't double-fire.
+  // We intentionally use a dedicated 'dispatching_analyze' value (not
+  // 'extracting' or 'analyzing') so the row is distinguishable from both
+  // Phase 1 and Phase 3, enabling future recovery if the analyze invoke fails.
   let claimQ = admin
     .from("analysis_requests")
-    .update({ pipeline_phase: "extracting" } as any)  // will be reset by analyze entry
+    .update({ pipeline_phase: "dispatching_analyze" } as any)
     .eq("id", requestId)
     .eq("pipeline_phase", "triaging");
   if (runId) claimQ = claimQ.eq("analysis_run_id", runId);
