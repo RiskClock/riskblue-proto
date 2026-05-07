@@ -541,14 +541,38 @@ async function maybeFinalize(
     return;
   }
 
-  // All failed (no completes) -> stop with error, no summarize
+  // All failed (no completes) -> stop with error, no summarize.
+  // If every failure is the same permanent oversize error, surface that
+  // verbatim — retrying won't help and the user needs the actionable copy.
   if ((completeJobs ?? 0) === 0 && (failedJobs ?? 0) > 0) {
+    let userMsg = `All ${failedJobs} analysis items failed. Please try again in a few minutes.`;
+    try {
+      let fq = admin
+        .from("analysis_pipeline_jobs")
+        .select("error_message")
+        .eq("analysis_request_id", requestId)
+        .eq("status", "failed")
+        .or("job_kind.is.null,job_kind.eq.analyze");
+      if (runId) fq = fq.eq("analysis_run_id", runId);
+      const { data: failedRows } = await fq;
+      const msgs = (failedRows ?? [])
+        .map((r: any) => (r?.error_message ? String(r.error_message) : ""))
+        .filter(Boolean);
+      const oversize = msgs.filter((m) => /too large for analyze/i.test(m));
+      if (msgs.length > 0 && oversize.length === msgs.length) {
+        // All failures share the same permanent cause — show the first one.
+        userMsg = oversize[0].slice(0, 1000);
+      }
+    } catch (e) {
+      console.warn("[worker] could not inspect failed-job messages:", e);
+    }
+
     let q = admin.from("analysis_requests").update({
       status: "started",
       pipeline_phase: null,
       pipeline_progress_done: 0,
       pipeline_progress_total: 0,
-      error_message: `All ${failedJobs} analysis items failed. Please try again in a few minutes.`,
+      error_message: userMsg,
     } as any).eq("id", requestId);
     if (runId) q = q.eq("analysis_run_id", runId);
     await q;
