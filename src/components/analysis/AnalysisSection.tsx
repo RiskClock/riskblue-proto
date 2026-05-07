@@ -3596,17 +3596,11 @@ export function AnalysisSection({ requestId, files, projectId, sourceType, isWMS
   })();
 
   // While transitioning from triage → analyze (phase=dispatching_analyze) the
-  // backend has not yet written the analyze-phase totals. Suppress the stale
-  // triage count so it doesn't read "Analyzing Content 54/54 items".
+  // backend has not yet written the analyze-phase totals. Suppress any stale
+  // count so it doesn't read "Analyzing Content 54/54 items".
   const showCounter =
     pipelinePhase !== "dispatching_analyze" && pipelineTotal > 0;
-
-  // Short-circuit breakdown — only relevant during the triage phase, where the
-  // raw "X/Y drawings" can leap due to bulk sibling completion.
-  const triageBreakdownVisible =
-    pipelinePhase === "triaging" &&
-    !!triageBreakdown &&
-    (triageBreakdown.shortCircuited ?? 0) > 0;
+  void triageBreakdown;
   const triageBreakdownSuffix = triageBreakdownVisible
     ? ` (${triageBreakdown!.triaged} triaged · ${triageBreakdown!.shortCircuited} skipped via short-circuit)`
     : "";
