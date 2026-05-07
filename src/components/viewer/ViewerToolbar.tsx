@@ -1,4 +1,6 @@
+import { useEffect, useState, type KeyboardEvent } from "react";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import {
   ChevronLeft,
   ChevronRight,
@@ -21,6 +23,7 @@ export interface ViewerToolbarProps {
     total: number;
     onPrev: () => void;
     onNext: () => void;
+    onJump?: (page: number) => void;
   };
 }
 
@@ -32,6 +35,38 @@ export const ViewerToolbar = ({
   onFitSelection,
   pageNav,
 }: ViewerToolbarProps) => {
+  const [jumpValue, setJumpValue] = useState<string>(
+    pageNav ? String(pageNav.current) : "",
+  );
+
+  // Keep input in sync when external page changes (prev/next/programmatic).
+  useEffect(() => {
+    if (pageNav) setJumpValue(String(pageNav.current));
+  }, [pageNav?.current]);
+
+  const commitJump = () => {
+    if (!pageNav?.onJump) return;
+    const n = parseInt(jumpValue, 10);
+    if (!Number.isFinite(n)) {
+      setJumpValue(String(pageNav.current));
+      return;
+    }
+    const clamped = Math.max(1, Math.min(pageNav.total, n));
+    if (clamped !== pageNav.current) pageNav.onJump(clamped);
+    setJumpValue(String(clamped));
+  };
+
+  const onJumpKeyDown = (e: KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      commitJump();
+      (e.target as HTMLInputElement).blur();
+    } else if (e.key === "Escape") {
+      setJumpValue(String(pageNav?.current ?? ""));
+      (e.target as HTMLInputElement).blur();
+    }
+  };
+
   return (
     <div className="flex items-center gap-2">
       {pageNav && pageNav.total > 1 && (
@@ -55,6 +90,22 @@ export const ViewerToolbar = ({
           >
             <ChevronRight className="w-4 h-4" />
           </Button>
+          {pageNav.onJump && (
+            <div className="flex items-center gap-1 ml-1">
+              <span className="text-xs text-muted-foreground">Go to</span>
+              <Input
+                type="number"
+                min={1}
+                max={pageNav.total}
+                value={jumpValue}
+                onChange={(e) => setJumpValue(e.target.value)}
+                onBlur={commitJump}
+                onKeyDown={onJumpKeyDown}
+                className="h-8 w-16 text-sm"
+                aria-label="Jump to page"
+              />
+            </div>
+          )}
           <div className="w-px h-6 bg-border mx-1" />
         </>
       )}
