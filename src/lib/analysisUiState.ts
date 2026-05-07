@@ -15,6 +15,7 @@ export type AnalysisUiState =
   | "starting"
   | "extracting"
   | "triaging"
+  | "preparing_analysis"
   | "analyzing"
   | "summarizing"
   | "stopping"
