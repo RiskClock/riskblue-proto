@@ -172,6 +172,7 @@ export function uiStateBadgeClass(state: AnalysisUiState): string {
     case "starting":
     case "extracting":
     case "triaging":
+    case "preparing_analysis":
     case "analyzing":
     case "summarizing":
       return "bg-purple-100 text-purple-800 border-purple-300";
