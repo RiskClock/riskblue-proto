@@ -1,61 +1,114 @@
-## Issues found in latest run (Test3, request `32102393…`)
+## Goal
 
-### Issue 1: Low-triage cell got analyzed
-**`RB-A05-LVL4-V9.pdf` × `Elevator Pit`** had a max triage score of **20**, yet was analyzed (returned 0 results = the empty cell in the screenshots).
+Make the three Analysis Queue buttons strictly bounded by phase: each button **clears its own phase and every later phase**, **auto-backfills missing prior phases**, runs **up to its own phase only**, and then leaves the request idle in `started` state. No phase past the clicked button ever runs.
 
-**Root cause** — `supabase/functions/run-analysis-pipeline/index.ts`, line 1481:
+## Per-button contract
+
+| Button | Clears (current run) | Runs (in order) | End state |
+|---|---|---|---|
+| **Extract Context** | extract artifacts + triage + analyze + overrides + summary + tokens | split (if needed) → extract | `status='started'`, `pipeline_phase=null` |
+| **Triage** | triage + analyze + overrides + summary + analyze tokens | extract (only sheets missing `extracted_text`/`extract_status='done'`) → triage | `status='started'`, `pipeline_phase=null` |
+| **Analyze** | analyze + summary + analyze tokens | extract (missing sheets only) → triage (missing `(sheet,class)` pairs only) → analyze | `status='started'`, `pipeline_phase=null` |
+
+Never runs Summarize from any button. Summarize remains reachable only via the existing internal `phaseOverride='summarize'` worker re-invocation (left untouched for now).
+
+## Backend changes — `supabase/functions/run-analysis-pipeline/index.ts`
+
+### 1. Phase ordering + bounded runPhase
+
+Replace the current `runPhase`:
 ```ts
-if (!eligible && t.sheet_role === "analysis_sheet") eligible = true;
-```
-This admits any file/class pair where the triage model labelled at least one sheet as `analysis_sheet`, **regardless of its score**. The Elevator-Pit triage on this file produced an analysis_sheet label with score 20, so the pair slipped through.
-
-`sheet_role` is the triage model's self-classification of a page as `analysis_sheet` (worth analyzing in Pass-2) vs `context_sheet` (only useful as side-context). It's separate from the numeric `score` (model's confidence the class is present, 0–100). The intended canonical rule per memory `mem://logic/drawing-analysis-triage-scoring` is the **50% score threshold**, not the role label.
-
-### Issue 2: `Combined Electrical.pdf` × `Electrical Room` failed
-Pipeline job failed after 3 attempts with `error_message = "The signal has been aborted"`. This is the analyze-drawings call timing out / being aborted (Combined Electrical is the largest file, ~25MB). The other 8 jobs on the same run completed fine on attempt 1.
-
----
-
-## Fix
-
-### 1. Strict score-only eligibility (Phase 3)
-File: `supabase/functions/run-analysis-pipeline/index.ts`
-
-In the sheet-mode branch (around line 1471–1482), remove the `sheet_role === "analysis_sheet"` fallback. New rule:
-
-```ts
-let eligible = override === "include";
-if (
-  !eligible &&
-  t.status === "complete" &&
-  t.score !== null &&
-  t.score >= 50
-) {
-  eligible = true;
-}
-// (no sheet_role fallback)
-if (!eligible) continue;
+const PHASE_ORDER = ["split", "extract", "triage", "analyze", "summarize"];
+const startIdx = phaseOverride ? Math.max(0, PHASE_ORDER.indexOf(phaseOverride)) : 0;
+// stopIdx defines the LAST phase that should run for this invocation
+const stopIdx = phaseOverride
+  ? PHASE_ORDER.indexOf(phaseOverride)            // extract|triage|analyze stop at themselves
+  : PHASE_ORDER.indexOf("summarize");             // full run (no override) goes to the end
+const runPhase = (phase: string) => {
+  const i = PHASE_ORDER.indexOf(phase);
+  // "split" is treated as a prerequisite for "extract" — include it whenever extract or later runs
+  if (phase === "split") return stopIdx >= PHASE_ORDER.indexOf("extract");
+  return i >= startIdx && i <= stopIdx;
+};
 ```
 
-Also update the parallel debug-eligibility recomputation (lines 1584–1588) to match — drop the `|| t.sheet_role === "analysis_sheet"` clause so the `DROPPED` log accurately reflects the new rule.
+The pre-existing `summarize`-only internal branch must still be preserved (early return after phase 4 setup). Audit and keep that path intact.
 
-The non-sheet branch (lines 1517–1539) already uses score-only and needs no change.
+### 2. Backfill: extract only missing units
 
-This restores the canonical "≥50% score" rule from `mem://logic/drawing-analysis-triage-scoring`. The historical concern that motivated the role fallback ("score=100 pages mislabeled context_sheet") is no longer a risk — those pages still pass the score check.
+In Phase 1, when `phaseOverride === "triage" | "analyze"`:
+- Query sheets/files and filter the unit list to those where `extract_status <> 'done'` OR `extracted_text IS NULL/empty`.
+- If the filtered list is empty, skip enqueueing extract jobs and fall straight through to Phase 2.
+- Already-extracted sheets keep their `extracted_text` and `openai_file_id`.
 
-### 2. Investigate Combined Electrical / ERM abort
-Pull `analyze-drawings` logs filtered to that file/class for the run (timestamp ~2026-05-07 15:42–15:46 UTC) to identify whether the abort comes from:
-- the analyze-drawings function exceeding the Edge Function wall time,
-- the OpenAI/Gemini call itself, or
-- the worker-side AbortController timeout in `process-analysis-jobs`.
+### 3. Backfill: triage only missing pairs
 
-Then either raise the relevant timeout for large PDFs or fall back to a raster/page-chunked retry. No code change yet — first read logs and report findings, since the right fix depends on which boundary aborted.
+In Phase 2 (and the Phase 3 dispatcher), when `phaseOverride === "analyze"`:
+- For each enabled `(sheet_id, awp_class_name)` pair in the active run, check `analysis_triage_results` for an existing row stamped with the current `analysis_run_id`.
+- Only enqueue triage jobs for missing pairs. Existing triage rows are reused for analyze dispatch.
 
-### 3. Redeploy
-After the edit in step 1, redeploy `run-analysis-pipeline` so the next run uses the strict rule.
+### 4. Active run id preservation
 
----
+Today: `phaseOverride === "summarize" | "analyze"` preserves the existing `analysis_run_id`; everything else mints a new one. Change to:
+- `analyze` → preserve (unchanged)
+- `triage` → **preserve** (new) — keeps extract artifacts valid under the same run id
+- `extract` → mint new (matches "full clear")
+- `summarize` → preserve (unchanged)
 
-## Out of scope (per your reply)
-- Other green cells showing 0 results (e.g. RB-A01/ELVP) — not addressed in this plan.
-- Removing the temporary `[pipeline][DEBUG]` block — leaving it in place; it's still useful and now reflects the strict rule.
+Cleanup blocks already match this scope (extract = full, triage = triage+analyze+overrides, analyze = analyze only) — no change needed there.
+
+### 5. Stop after clicked phase
+
+Today the pipeline cascades: extract finishes → triage runs → triage-finalize worker re-invokes with `phaseOverride='analyze'` → analyze-finalize re-invokes with `phaseOverride='summarize'`.
+
+Add a guard so re-invocations only happen when the original `phaseOverride` permits the next phase:
+- After triage finalize (worker code path), only re-invoke pipeline with `phaseOverride='analyze'` when the **active** run's `phaseOverride` was `analyze` or unset. If it was `triage`, do not re-invoke; instead write `status='started'`, `pipeline_phase=null`, `pipeline_progress_done=0`, `pipeline_progress_total=0`.
+- After analyze finalize, only re-invoke with `phaseOverride='summarize'` when the active run's `phaseOverride` was unset (full run). If it was `analyze`, write `status='started'` idle state.
+- After extract finishes, if `phaseOverride==='extract'`, do not proceed to Phase 2; write idle state and return.
+
+Implementation: persist the original `phaseOverride` on `analysis_requests` (e.g. add a column `pipeline_phase_override text`, or stash on `summary_data._phase_override`) at the start of the run, so worker re-invocations and finalize handlers can read it back. Migration to add the column is preferred for clarity. Existing rows default to NULL (= full run).
+
+### 6. Idle-state writer helper
+
+Centralize the "stop cleanly after my phase" path in one helper that writes:
+```ts
+{ status: 'started', pipeline_phase: null, pipeline_progress_done: 0, pipeline_progress_total: 0, pipeline_stop_requested: false, error_message: null }
+```
+Call it at the end of Extract-only, Triage-only, and Analyze-only runs. This matches today's `handleStopped()` shape so the UI label engine (`useAnalysisRequestState`) treats it as terminal-idle, not running.
+
+### 7. UI state derivation
+
+Confirm `src/lib/analysisUiState.ts` + `useAnalysisRequestState.ts` already render `status='started' && pipeline_phase=null` as an idle/ready state (not "syncing"). If `analysis_run_id` is non-null and no active jobs/triage rows exist, it should resolve to a non-running label. Adjust only if a regression appears during verification.
+
+## Frontend changes — `src/components/analysis/AnalysisSection.tsx`
+
+Optimistic clearing in `startPipeline` (lines 1958–1975) already matches the contract. Remove or soften the "Run Extract Context first" toasts at lines 2458, 3097, 3174 because the backend now backfills. Keep the button labels themselves unchanged.
+
+No change to credit consumption — `handleWmsvStartAnalysis` is the only credit-gated entry and still runs a full pipeline (no `phaseOverride`).
+
+## Database migration
+
+Add a nullable column to persist the per-run override:
+```sql
+ALTER TABLE public.analysis_requests
+  ADD COLUMN IF NOT EXISTS pipeline_phase_override text;
+```
+Set it at run claim time alongside `analysis_run_id`; clear it (`NULL`) when a full run starts and when an idle state is written.
+
+## Verification
+
+1. Deploy `run-analysis-pipeline` and any worker that re-invokes it (`process-analysis-jobs`, `triage-drawings`, `analyze-drawings` — wherever the finalize → re-invoke happens).
+2. Test matrix on a small request:
+   - Fresh request → **Extract** → only extract runs, no triage rows, no analyze rows; ends idle.
+   - Then **Triage** → no re-extract, triage runs, no analyze rows; ends idle.
+   - Then **Analyze** → no re-extract, no re-triage, only analyze runs; ends idle (no summary).
+   - Fresh request → **Triage** → extract auto-runs, then triage; no analyze; ends idle.
+   - Fresh request → **Analyze** → extract → triage → analyze; no summarize; ends idle.
+   - `handleWmsvStartAnalysis` (Start Analysis full run) → full pipeline including summarize → `status='complete'`.
+3. Confirm cancelled-job cleanup still scopes by `analysis_run_id` (no accidental cross-run deletes).
+
+## Out of scope
+
+- No UI label changes for the three buttons.
+- No change to credit gating.
+- Summarize phase remains unreachable from these three buttons; the only way to reach it is the existing full-run path.
