@@ -1366,6 +1366,21 @@ async function dispatchAnalyzeWhenTriageComplete(
     return;
   }
 
+  // Bounded run: if the request was started via Triage button only, stop here as idle.
+  const phaseOverride = (cur as any)?.pipeline_phase_override ?? null;
+  if (phaseOverride === "triage") {
+    let q = admin.from("analysis_requests").update({
+      status: "started",
+      pipeline_phase: null,
+      pipeline_progress_done: 0,
+      pipeline_progress_total: 0,
+    } as any).eq("id", requestId);
+    if (runId) q = q.eq("analysis_run_id", runId);
+    await q;
+    console.log(`[worker] triage finalize: phaseOverride='triage' -> idle (no analyze) for ${requestId}`);
+    return;
+  }
+
   console.log(`[worker] finalizing triage for ${requestId} (run=${runId}) -> dispatching analyze phase`);
   fireAndForgetAnalyze(supabaseUrl, serviceKey, requestId, cur).catch((e) =>
     console.error("[worker] analyze dispatch failed:", e),
