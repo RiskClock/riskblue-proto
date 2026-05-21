@@ -584,6 +584,23 @@ async function maybeFinalize(
       ? `${failedJobs} of ${totalJobs} items failed during analysis`
       : null;
 
+  const phaseOverride = (cur as any)?.pipeline_phase_override ?? null;
+
+  // Bounded run: 'analyze' (or 'triage', defensive) stops here as idle — no summarize.
+  if (phaseOverride === "analyze" || phaseOverride === "triage") {
+    let q = admin.from("analysis_requests").update({
+      status: "started",
+      pipeline_phase: null,
+      pipeline_progress_done: 0,
+      pipeline_progress_total: 0,
+      error_message: errorMsg,
+    } as any).eq("id", requestId);
+    if (runId) q = q.eq("analysis_run_id", runId);
+    await q;
+    console.log(`[worker] analyze finalize: phaseOverride='${phaseOverride}' -> idle (no summarize) for ${requestId}`);
+    return;
+  }
+
   {
     let q = admin.from("analysis_requests").update({
       status: "complete",
