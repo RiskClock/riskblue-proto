@@ -776,20 +776,56 @@ Deno.serve(async (req) => {
     // as the auth token for nested function calls (summarize-analysis etc.).
     const userToken = isInternalCall ? serviceKey : authHeader.replace("Bearer ", "");
 
-    // ---- Run claim FIRST: stamp the new analysis_run_id atomically before
-    // any destructive cleanup. If claim fails we abort and leave prior data
-    // intact. (Per Phase B note #1.)
+    // ---- Run claim FIRST: stamp the analysis_run_id atomically before any
+    // destructive cleanup. If claim fails we abort and leave prior data intact.
+    //
+    // Phase-button semantics:
+    //   extract  → mint NEW run id, full clear
+    //   triage   → PRESERVE current run id, clear triage + analyze + overrides
+    //   analyze  → PRESERVE current run id, clear analyze only
+    //   summarize→ PRESERVE current run id, no clear (internal worker)
+    //   (none)   → mint NEW run id, full clear (full pipeline run)
+    //
+    // We also persist `pipeline_phase_override` so worker finalize handlers
+    // know when to stop instead of continuing into the next phase.
     let activeRunId: string | null = null;
-    if (phaseOverride === "summarize" || phaseOverride === "analyze") {
-      // Re-invocation continuing an existing run (summarize after analyze, or
-      // analyze after triage finalize). Preserve current analysis_run_id so
-      // results stamped under the previous phase remain visible.
+    const preserveRun =
+      phaseOverride === "summarize" ||
+      phaseOverride === "analyze" ||
+      phaseOverride === "triage";
+
+    if (preserveRun) {
       const { data: cur } = await admin
         .from("analysis_requests")
         .select("analysis_run_id")
         .eq("id", analysisRequestId)
         .single();
       activeRunId = (cur as any)?.analysis_run_id ?? null;
+      if (!activeRunId) {
+        // Defensive: no prior run id exists (e.g. user clicked Triage on a
+        // brand-new request). Mint one so all downstream rows can be stamped.
+        activeRunId = crypto.randomUUID();
+      }
+      // Persist working state without resetting started_at-or-newer
+      // analysis_run_id (preserve). Always refresh started_at + override.
+      const { error: claimErr } = await admin
+        .from("analysis_requests")
+        .update({
+          pipeline_stop_requested: false,
+          pipeline_phase: "extracting",
+          pipeline_progress_done: 0,
+          pipeline_progress_total: 0,
+          status: "processing",
+          error_message: null,
+          analysis_run_id: activeRunId,
+          started_at: new Date().toISOString(),
+          pipeline_phase_override: phaseOverride ?? null,
+        } as any)
+        .eq("id", analysisRequestId);
+      if (claimErr) {
+        console.error("[pipeline] Run claim failed:", claimErr);
+        return json({ error: "Failed to claim analysis run" }, 500);
+      }
     } else {
       activeRunId = crypto.randomUUID();
       const { error: claimErr } = await admin
@@ -803,6 +839,7 @@ Deno.serve(async (req) => {
           error_message: null,
           analysis_run_id: activeRunId,
           started_at: new Date().toISOString(),
+          pipeline_phase_override: phaseOverride ?? null,
         } as any)
         .eq("id", analysisRequestId);
       if (claimErr) {
@@ -811,15 +848,15 @@ Deno.serve(async (req) => {
       }
     }
 
-    // ---- Phase-aware cleanup, scoped to PRIOR runs only (run_id IS NULL OR <> activeRunId)
-    // Cancel stale in-flight jobs first (don't hard-delete them) so workers can detect
-    // the mismatch and skip writes. Then delete prior-run result/triage rows.
+    // ---- Phase-aware cleanup
     if (phaseOverride === "summarize") {
       // Internal worker re-invocation to run summary phase ONLY.
       // CRITICAL: Do NOT clear any data here — analyze results must be preserved
       // so summarize-analysis can read them. Skip directly to phase 4.
     } else {
-      // Cancel any stale pending/processing jobs from prior runs
+      // Cancel any stale pending/processing jobs from PRIOR runs (different
+      // run id or NULL). For preserved-run phases, current-run jobs are
+      // deleted explicitly below per phase.
       if (activeRunId) {
         await admin
           .from("analysis_pipeline_jobs")
@@ -827,7 +864,6 @@ Deno.serve(async (req) => {
           .eq("analysis_request_id", analysisRequestId)
           .neq("analysis_run_id", activeRunId)
           .in("status", ["pending", "processing"]);
-        // Also cancel rows where run_id is NULL (legacy / never stamped)
         await admin
           .from("analysis_pipeline_jobs")
           .update({ status: "cancelled", completed_at: new Date().toISOString(), error_message: "Superseded by a newer analysis run" } as any)
@@ -836,51 +872,40 @@ Deno.serve(async (req) => {
           .in("status", ["pending", "processing"]);
       }
 
-      const deleteStaleResults = async () => {
-        if (!activeRunId) return;
-        // Delete prior-run analysis_results
-        await admin.from("analysis_results")
-          .delete()
-          .eq("analysis_request_id", analysisRequestId)
-          .neq("analysis_run_id", activeRunId);
-        await admin.from("analysis_results")
-          .delete()
-          .eq("analysis_request_id", analysisRequestId)
-          .is("analysis_run_id", null);
-      };
-      const deleteStaleTriage = async () => {
-        if (!activeRunId) return;
-        await admin.from("analysis_triage_results")
-          .delete()
-          .eq("analysis_request_id", analysisRequestId)
-          .neq("analysis_run_id", activeRunId);
-        await admin.from("analysis_triage_results")
-          .delete()
-          .eq("analysis_request_id", analysisRequestId)
-          .is("analysis_run_id", null);
-      };
-
       if (phaseOverride === "analyze") {
+        // Analyze button: wipe analyze results (regardless of run id — preserved-run
+        // means existing rows are this same run). Keep triage + extract intact.
         await Promise.all([
-          deleteStaleResults(),
+          admin.from("analysis_results")
+            .delete()
+            .eq("analysis_request_id", analysisRequestId),
           admin.from("analysis_requests")
             .update({ analyze_tokens_used: 0, summary_data: {} } as any)
             .eq("id", analysisRequestId),
         ]);
       } else if (phaseOverride === "triage") {
+        // Triage button: wipe triage + analyze + overrides. Keep extract artifacts.
         await Promise.all([
-          deleteStaleTriage(),
-          deleteStaleResults(),
+          admin.from("analysis_triage_results")
+            .delete()
+            .eq("analysis_request_id", analysisRequestId),
+          admin.from("analysis_results")
+            .delete()
+            .eq("analysis_request_id", analysisRequestId),
           admin.from("analysis_triage_overrides").delete().eq("analysis_request_id", analysisRequestId),
           admin.from("analysis_requests")
             .update({ triage_tokens_used: 0, analyze_tokens_used: 0, summary_data: {} } as any)
             .eq("id", analysisRequestId),
         ]);
       } else {
-        // Full clear: delete prior-run rows + extracted text + OpenAI file caches
+        // Extract button OR full run: full clear of EVERYTHING.
         await Promise.all([
-          deleteStaleTriage(),
-          deleteStaleResults(),
+          admin.from("analysis_triage_results")
+            .delete()
+            .eq("analysis_request_id", analysisRequestId),
+          admin.from("analysis_results")
+            .delete()
+            .eq("analysis_request_id", analysisRequestId),
           admin.from("analysis_triage_overrides").delete().eq("analysis_request_id", analysisRequestId),
           admin.from("analysis_request_files")
             .update({ extracted_text: null, openai_file_id: null, openai_file_status: null } as any)
