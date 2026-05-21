@@ -1964,12 +1964,19 @@ async function runPipeline(params: PipelineParams) {
         } catch (e) {
           console.warn("[pipeline] failed to set no_eligible_drawings flag:", e);
         }
-        // Fall through to summarize (which will be a no-op).
+        // Bounded run: Analyze button stops here without summarizing.
+        if (phaseOverride === "analyze") {
+          await writeIdleAfterPhase("analyze");
+          return;
+        }
+        // Fall through to summarize (which will be a no-op) for full runs.
       } else {
-        // Jobs are queued; worker will finalize + trigger summarize. Exit now.
+        // Jobs are queued; worker will finalize and (when allowed) trigger
+        // summarize. For phaseOverride='analyze' the worker writes idle instead.
         return;
       }
     }
+
 
     // ======================== PHASE 4: SUMMARIZE (background) ========================
     // Mark phase=summarizing but keep status=processing — the UI must not
