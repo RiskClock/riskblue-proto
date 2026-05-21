@@ -446,10 +446,26 @@ async function renderDrawingImage(
       aiViewportWidth = refVp.width;
       pageResolved = true;
     } else {
+      // Occurrence index: how many earlier rows on the same page share the
+      // same primary candidate text. Disambiguates duplicate-text rows.
+      let occurrenceIndex = 0;
+      if (matchingRow) {
+        const primary = matchingRow.candidates[0];
+        const key = primary ? normalizeText(primary) : "";
+        if (key) {
+          const matchIdx = rows.indexOf(matchingRow);
+          for (let i = 0; i < matchIdx; i++) {
+            const r = rows[i];
+            if (r.pageNum !== matchingRow.pageNum) continue;
+            if (r.candidates[0] && normalizeText(r.candidates[0]) === key) occurrenceIndex++;
+          }
+        }
+      }
+
       let textBBox = null as null | { x1: number; y1: number; x2: number; y2: number; pageNum: number };
       for (const candidate of searchCandidates) {
         checkAbort(signal);
-        textBBox = await findBBoxInTextLayer(pdf, candidate, hintPage);
+        textBBox = await findBBoxInTextLayer(pdf, candidate, hintPage, occurrenceIndex);
         if (textBBox) break;
       }
       if (textBBox) {

@@ -1,114 +1,61 @@
-## Goal
+## Confirmation of the bug
 
-Make the three Analysis Queue buttons strictly bounded by phase: each button **clears its own phase and every later phase**, **auto-backfills missing prior phases**, runs **up to its own phase only**, and then leaves the request idle in `started` state. No phase past the clicked button ever runs.
+Yes — highlights are positioned by text-layer matching, and the current matcher returns the **first** occurrence only.
 
-## Per-button contract
+- `src/lib/pdfTextLayerSearch.ts` → `findBBoxInTextLayer(pdf, tag, hintPage)` walks pages, breaks on the first item whose normalized text equals the tag (Pass 1), or first cross-item concat that matches (Pass 2), or longest substring (Pass 2.5). It returns a single `PDFBBox` and never looks for further occurrences.
+- Callers that hit this:
+  - `AnalysisSection.tsx` line 417 — single-instance overlay opener
+  - `AnalysisSection.tsx` line 654 — Raw Result modal loop over all rows
+  - `analysisDocxExporter.ts` line 452 — DOCX export
+  - `LocationDetailsModal.tsx` line 186 — wizard location pinning
 
-| Button | Clears (current run) | Runs (in order) | End state |
-|---|---|---|---|
-| **Extract Context** | extract artifacts + triage + analyze + overrides + summary + tokens | split (if needed) → extract | `status='started'`, `pipeline_phase=null` |
-| **Triage** | triage + analyze + overrides + summary + analyze tokens | extract (only sheets missing `extracted_text`/`extract_status='done'`) → triage | `status='started'`, `pipeline_phase=null` |
-| **Analyze** | analyze + summary + analyze tokens | extract (missing sheets only) → triage (missing `(sheet,class)` pairs only) → analyze | `status='started'`, `pipeline_phase=null` |
+When the AI returns multiple detection rows on the same page with identical candidate text (e.g. two rooms tagged `EL-01`, or two pipes labelled `CWS-50`), every row resolves to the same first bbox.
 
-Never runs Summarize from any button. Summarize remains reachable only via the existing internal `phaseOverride='summarize'` worker re-invocation (left untouched for now).
+## Fix
 
-## Backend changes — `supabase/functions/run-analysis-pipeline/index.ts`
+Teach the matcher to enumerate occurrences, and have each caller request the right one based on its ordinal among same-text siblings.
 
-### 1. Phase ordering + bounded runPhase
+### 1. `src/lib/pdfTextLayerSearch.ts`
 
-Replace the current `runPhase`:
-```ts
-const PHASE_ORDER = ["split", "extract", "triage", "analyze", "summarize"];
-const startIdx = phaseOverride ? Math.max(0, PHASE_ORDER.indexOf(phaseOverride)) : 0;
-// stopIdx defines the LAST phase that should run for this invocation
-const stopIdx = phaseOverride
-  ? PHASE_ORDER.indexOf(phaseOverride)            // extract|triage|analyze stop at themselves
-  : PHASE_ORDER.indexOf("summarize");             // full run (no override) goes to the end
-const runPhase = (phase: string) => {
-  const i = PHASE_ORDER.indexOf(phase);
-  // "split" is treated as a prerequisite for "extract" — include it whenever extract or later runs
-  if (phase === "split") return stopIdx >= PHASE_ORDER.indexOf("extract");
-  return i >= startIdx && i <= stopIdx;
-};
-```
+- Refactor the per-page scan into an internal helper that returns **all matches on a page** in document order (Pass 1 + Pass 2; Pass 2.5 substring stays as a last-resort fallback only when no exact matches exist).
+- Public API change: add an optional `occurrenceIndex?: number` (default 0) to `findBBoxInTextLayer`. The function:
+  - Visits pages in the same order (hint page first, then 1..N).
+  - Collects exact matches per page.
+  - Returns the `occurrenceIndex`-th exact match overall. If fewer exact matches than `occurrenceIndex`, fall back to the last exact match (preferred over substring) and log a warning.
+  - If no exact matches anywhere, fall through to the existing substring fallback.
+- Pass 3 (room-name expansion) runs on the chosen matched item, unchanged.
+- Keep current signature backwards-compatible (callers that don't pass `occurrenceIndex` still get the first match).
 
-The pre-existing `summarize`-only internal branch must still be preserved (early return after phase 4 setup). Audit and keep that path intact.
+### 2. `src/components/analysis/AnalysisSection.tsx`
 
-### 2. Backfill: extract only missing units
+**Single-instance opener (≈ line 383–460):**
+- After `parseOverlayCandidates(resultText)`, compute the instance's ordinal among rows that resolve to the same candidate text on the same page:
+  - For each row, derive a key from `(pageNum, normalizeText(primary candidate))`.
+  - The instance's `occurrenceIndex` = position of its row within rows sharing that key.
+- Pass `occurrenceIndex` to `findBBoxInTextLayer`.
 
-In Phase 1, when `phaseOverride === "triage" | "analyze"`:
-- Query sheets/files and filter the unit list to those where `extract_status <> 'done'` OR `extracted_text IS NULL/empty`.
-- If the filtered list is empty, skip enqueueing extract jobs and fall straight through to Phase 2.
-- Already-extracted sheets keep their `extracted_text` and `openai_file_id`.
+**Raw Result modal loop (≈ line 622–672):**
+- Track a `Map<pageKey, count>` keyed by `(pageNum, normalizeText(candidate))`.
+- Before each `findBBoxInTextLayer` call, look up the current count for the key, pass it as `occurrenceIndex`, then increment.
+- Only count successful exact matches so failed candidates don't poison the counter.
 
-### 3. Backfill: triage only missing pairs
+### 3. `src/lib/analysisDocxExporter.ts`
 
-In Phase 2 (and the Phase 3 dispatcher), when `phaseOverride === "analyze"`:
-- For each enabled `(sheet_id, awp_class_name)` pair in the active run, check `analysis_triage_results` for an existing row stamped with the current `analysis_run_id`.
-- Only enqueue triage jobs for missing pairs. Existing triage rows are reused for analyze dispatch.
+- Mirror the single-instance opener change: compute occurrence index by scanning `rows` for same-(page, normalized text) siblings before the current instance's row, pass into `findBBoxInTextLayer`.
 
-### 4. Active run id preservation
+### 4. `src/components/wizard/LocationDetailsModal.tsx`
 
-Today: `phaseOverride === "summarize" | "analyze"` preserves the existing `analysis_run_id`; everything else mints a new one. Change to:
-- `analyze` → preserve (unchanged)
-- `triage` → **preserve** (new) — keeps extract artifacts valid under the same run id
-- `extract` → mint new (matches "full clear")
-- `summarize` → preserve (unchanged)
-
-Cleanup blocks already match this scope (extract = full, triage = triage+analyze+overrides, analyze = analyze only) — no change needed there.
-
-### 5. Stop after clicked phase
-
-Today the pipeline cascades: extract finishes → triage runs → triage-finalize worker re-invokes with `phaseOverride='analyze'` → analyze-finalize re-invokes with `phaseOverride='summarize'`.
-
-Add a guard so re-invocations only happen when the original `phaseOverride` permits the next phase:
-- After triage finalize (worker code path), only re-invoke pipeline with `phaseOverride='analyze'` when the **active** run's `phaseOverride` was `analyze` or unset. If it was `triage`, do not re-invoke; instead write `status='started'`, `pipeline_phase=null`, `pipeline_progress_done=0`, `pipeline_progress_total=0`.
-- After analyze finalize, only re-invoke with `phaseOverride='summarize'` when the active run's `phaseOverride` was unset (full run). If it was `analyze`, write `status='started'` idle state.
-- After extract finishes, if `phaseOverride==='extract'`, do not proceed to Phase 2; write idle state and return.
-
-Implementation: persist the original `phaseOverride` on `analysis_requests` (e.g. add a column `pipeline_phase_override text`, or stash on `summary_data._phase_override`) at the start of the run, so worker re-invocations and finalize handlers can read it back. Migration to add the column is preferred for clarity. Existing rows default to NULL (= full run).
-
-### 6. Idle-state writer helper
-
-Centralize the "stop cleanly after my phase" path in one helper that writes:
-```ts
-{ status: 'started', pipeline_phase: null, pipeline_progress_done: 0, pipeline_progress_total: 0, pipeline_stop_requested: false, error_message: null }
-```
-Call it at the end of Extract-only, Triage-only, and Analyze-only runs. This matches today's `handleStopped()` shape so the UI label engine (`useAnalysisRequestState`) treats it as terminal-idle, not running.
-
-### 7. UI state derivation
-
-Confirm `src/lib/analysisUiState.ts` + `useAnalysisRequestState.ts` already render `status='started' && pipeline_phase=null` as an idle/ready state (not "syncing"). If `analysis_run_id` is non-null and no active jobs/triage rows exist, it should resolve to a non-running label. Adjust only if a regression appears during verification.
-
-## Frontend changes — `src/components/analysis/AnalysisSection.tsx`
-
-Optimistic clearing in `startPipeline` (lines 1958–1975) already matches the contract. Remove or soften the "Run Extract Context first" toasts at lines 2458, 3097, 3174 because the backend now backfills. Keep the button labels themselves unchanged.
-
-No change to credit consumption — `handleWmsvStartAnalysis` is the only credit-gated entry and still runs a full pipeline (no `phaseOverride`).
-
-## Database migration
-
-Add a nullable column to persist the per-run override:
-```sql
-ALTER TABLE public.analysis_requests
-  ADD COLUMN IF NOT EXISTS pipeline_phase_override text;
-```
-Set it at run claim time alongside `analysis_run_id`; clear it (`NULL`) when a full run starts and when an idle state is written.
-
-## Verification
-
-1. Deploy `run-analysis-pipeline` and any worker that re-invokes it (`process-analysis-jobs`, `triage-drawings`, `analyze-drawings` — wherever the finalize → re-invoke happens).
-2. Test matrix on a small request:
-   - Fresh request → **Extract** → only extract runs, no triage rows, no analyze rows; ends idle.
-   - Then **Triage** → no re-extract, triage runs, no analyze rows; ends idle.
-   - Then **Analyze** → no re-extract, no re-triage, only analyze runs; ends idle (no summary).
-   - Fresh request → **Triage** → extract auto-runs, then triage; no analyze; ends idle.
-   - Fresh request → **Analyze** → extract → triage → analyze; no summarize; ends idle.
-   - `handleWmsvStartAnalysis` (Start Analysis full run) → full pipeline including summarize → `status='complete'`.
-3. Confirm cancelled-job cleanup still scopes by `analysis_run_id` (no accidental cross-run deletes).
+- Lower priority: this modal resolves a single user-selected location at a time, so duplicate-text ambiguity is less likely. Leave the call as `occurrenceIndex=0` (default) unless we can derive an ordinal here too — to be confirmed when reading the file. No behaviour regression either way.
 
 ## Out of scope
 
-- No UI label changes for the three buttons.
-- No change to credit gating.
-- Summarize phase remains unreachable from these three buttons; the only way to reach it is the existing full-run path.
+- AI-supplied pixel bboxes (`aiBBox`) — those already carry exact coordinates and skip text matching entirely.
+- Changing the AI prompt to disambiguate identical labels.
+- Reworking Pass 3 room-name expansion.
+
+## Verification
+
+- A drawing with two rooms sharing the same tag on one page: each row's "View" button highlights a different location.
+- Raw Result modal on the same page shows two distinct boxes instead of one stacked box.
+- A drawing with a unique tag still resolves identically (no regression).
+- DOCX export embeds two distinct crops for duplicate-text instances.

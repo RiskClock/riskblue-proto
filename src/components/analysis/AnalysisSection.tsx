@@ -405,8 +405,25 @@ function InstanceDetailModal({
         const hintPage = matchingRow?.pageNum;
         const matchedAiBBox = matchingRow?.aiBBox;
 
+        // Compute occurrence index: how many earlier rows on the same page share
+        // the same primary candidate text. Disambiguates duplicate-text rows
+        // so each highlights a distinct location.
+        let occurrenceIndex = 0;
+        if (matchingRow && !matchedAiBBox) {
+          const primary = matchingRow.candidates[0];
+          const key = primary ? normalizeText(primary) : "";
+          if (key) {
+            const matchIdx = overlayRows.indexOf(matchingRow);
+            for (let i = 0; i < matchIdx; i++) {
+              const r = overlayRows[i];
+              if (r.pageNum !== matchingRow.pageNum) continue;
+              if (r.candidates[0] && normalizeText(r.candidates[0]) === key) occurrenceIndex++;
+            }
+          }
+        }
+
         console.log(`[BBox] opening: instance.id=${instance.id} instance.name=${instance.name}`);
-        console.log(`[BBox] searchCandidates=`, searchCandidates, `hintPage=${hintPage}`, `aiBBox=`, matchedAiBBox);
+        console.log(`[BBox] searchCandidates=`, searchCandidates, `hintPage=${hintPage}`, `aiBBox=`, matchedAiBBox, `occurrenceIndex=${occurrenceIndex}`);
 
         const pdf = await pdfjsLib.getDocument({ data: ab }).promise;
         if (cancelled) return;
@@ -414,7 +431,7 @@ function InstanceDetailModal({
         let textBBox: PDFBBox | null = null;
         if (!matchedAiBBox) {
           for (const candidate of searchCandidates) {
-            textBBox = await findBBoxInTextLayer(pdf, candidate, hintPage);
+            textBBox = await findBBoxInTextLayer(pdf, candidate, hintPage, occurrenceIndex);
             if (textBBox) break;
             if (cancelled) return;
           }
@@ -635,6 +652,9 @@ function RawResultModal({ fileName, awpClassName, resultText, instanceCount, sou
 
         const built: OverlayInput[] = [];
         let idx = 0;
+        // Per (page, normalized-candidate) occurrence counter so duplicate-text
+        // rows resolve to distinct bboxes on the page.
+        const occByKey = new Map<string, number>();
         for (const row of overlayRows) {
           const pageNum = Math.min(Math.max(1, row.pageNum), pdf.numPages);
           if (row.aiBBox) {
@@ -651,9 +671,12 @@ function RawResultModal({ fileName, awpClassName, resultText, instanceCount, sou
           } else {
             // Text-layer fallback: try candidates until one matches
             for (const candidate of row.candidates) {
-              const tb = await findBBoxInTextLayer(pdf, candidate, pageNum);
+              const key = `${pageNum}::${normalizeText(candidate)}`;
+              const occ = occByKey.get(key) ?? 0;
+              const tb = await findBBoxInTextLayer(pdf, candidate, pageNum, occ);
               if (cancelled) return;
               if (tb) {
+                occByKey.set(key, occ + 1);
                 const tbPage = Math.min(Math.max(1, tb.pageNum ?? pageNum), pdf.numPages);
                 const vp = await getViewport(tbPage);
                 if (cancelled) return;
