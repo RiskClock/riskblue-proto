@@ -494,7 +494,7 @@ async function maybeFinalize(
   // Re-check: another worker may have just transitioned phase / a new run started
   const { data: cur } = await admin
     .from("analysis_requests")
-    .select("status, pipeline_phase, pipeline_stop_requested, analysis_run_id")
+    .select("status, pipeline_phase, pipeline_stop_requested, analysis_run_id, pipeline_phase_override")
     .eq("id", requestId)
     .single();
 
