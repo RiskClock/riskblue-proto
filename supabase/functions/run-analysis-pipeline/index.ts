@@ -1475,13 +1475,20 @@ async function runPipeline(params: PipelineParams) {
       }
 
       if (triageJobRows.length === 0) {
-        // No items — fall through to analyze (likely no eligible items).
+        // Nothing new to triage. If this was the Triage button, write idle and stop.
+        if (phaseOverride === "triage") {
+          await writeIdleAfterPhase("triage");
+          return;
+        }
         console.log("[pipeline] Phase 2: no triage items — proceeding inline to analyze");
       } else {
-        // Worker will finalize triage and re-invoke pipeline with phaseOverride='analyze'.
+        // Worker finalizes triage and (when allowed by pipeline_phase_override)
+        // re-invokes pipeline with phaseOverride='analyze'. For override='triage'
+        // the worker writes idle instead.
         return;
       }
     }
+
 
     // ======================== PHASE 3: ANALYZE ========================
     if (runPhase("analyze")) {
