@@ -652,6 +652,9 @@ function RawResultModal({ fileName, awpClassName, resultText, instanceCount, sou
 
         const built: OverlayInput[] = [];
         let idx = 0;
+        // Per (page, normalized-candidate) occurrence counter so duplicate-text
+        // rows resolve to distinct bboxes on the page.
+        const occByKey = new Map<string, number>();
         for (const row of overlayRows) {
           const pageNum = Math.min(Math.max(1, row.pageNum), pdf.numPages);
           if (row.aiBBox) {
@@ -668,9 +671,12 @@ function RawResultModal({ fileName, awpClassName, resultText, instanceCount, sou
           } else {
             // Text-layer fallback: try candidates until one matches
             for (const candidate of row.candidates) {
-              const tb = await findBBoxInTextLayer(pdf, candidate, pageNum);
+              const key = `${pageNum}::${normalizeText(candidate)}`;
+              const occ = occByKey.get(key) ?? 0;
+              const tb = await findBBoxInTextLayer(pdf, candidate, pageNum, occ);
               if (cancelled) return;
               if (tb) {
+                occByKey.set(key, occ + 1);
                 const tbPage = Math.min(Math.max(1, tb.pageNum ?? pageNum), pdf.numPages);
                 const vp = await getViewport(tbPage);
                 if (cancelled) return;
