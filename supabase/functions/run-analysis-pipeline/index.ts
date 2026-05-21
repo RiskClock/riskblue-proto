@@ -1357,9 +1357,28 @@ async function runPipeline(params: PipelineParams) {
             .sort((a: any, b: any) => (a.name || "").localeCompare(b.name || ""))
             .map((f: any) => ({ fileId: f.id, sheetId: null, name: f.name }));
 
+      // Backfill mode (analyze override): only enqueue triage for (unit,class)
+      // pairs that DON'T already have a triage result for the active run.
+      let existingTriageKeys: Set<string> = new Set();
+      if (isBackfillTriage && activeRunId) {
+        const { data: existing } = await admin
+          .from("analysis_triage_results")
+          .select("file_id, sheet_id, awp_class_name")
+          .eq("analysis_request_id", analysisRequestId)
+          .eq("analysis_run_id", activeRunId);
+        for (const r of (existing as any[]) || []) {
+          existingTriageKeys.add(`${r.file_id}::${r.sheet_id ?? "-"}::${r.awp_class_name}`);
+        }
+      }
+
       const triageJobRows: any[] = [];
       triageUnits.forEach((u, unitIdx) => {
         for (const prompt of prompts) {
+          const className = (prompt as any).awp_class_name;
+          if (isBackfillTriage) {
+            const key = `${u.fileId}::${u.sheetId ?? "-"}::${className}`;
+            if (existingTriageKeys.has(key)) continue;
+          }
           const triagePromptContent =
             (prompt as any).triage_prompt_content ||
             (prompt as any).prompt_content ||
@@ -1370,20 +1389,20 @@ async function runPipeline(params: PipelineParams) {
             file_id: u.fileId,
             sheet_id: u.sheetId,
             parent_file_id: useSheets ? u.fileId : null,
-            awp_class_name: (prompt as any).awp_class_name,
+            awp_class_name: className,
             prompt_content: triagePromptContent,
             analyze_model: triageModel,
             job_kind: "triage",
             status: "pending",
-            // Unit-first sort: process all classes for one unit before moving on.
-            sort_order: unitIdx * 1000 + orderForTriage((prompt as any).awp_class_name),
+            sort_order: unitIdx * 1000 + orderForTriage(className),
           });
         }
       });
 
       console.log(
-        `[pipeline] Phase 2: enqueueing ${triageJobRows.length} triage jobs (${triageUnits.length} ${useSheets ? "sheets" : "files"} × ${prompts.length} classes)`,
+        `[pipeline] Phase 2: enqueueing ${triageJobRows.length} triage jobs (backfill=${isBackfillTriage}, ${triageUnits.length} units × ${prompts.length} classes)`,
       );
+
 
       // Clear stale triage jobs for this request before insert
       await admin
