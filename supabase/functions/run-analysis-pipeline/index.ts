@@ -1071,8 +1071,28 @@ async function runPipeline(params: PipelineParams) {
         .eq("id", analysisRequestId);
     }
 
-    const runPhase = (phase: string) =>
-      !phaseOverride || phaseOverride === phase;
+    // Bounded phase execution: each phase override stops AT its own phase.
+    //   extract  -> runs split + extract, stops
+    //   triage   -> runs (backfill extract if needed) + triage, stops
+    //   analyze  -> runs (backfill extract + triage if needed) + analyze, stops
+    //   (none)   -> runs everything including summarize
+    //   summarize-> internal worker re-invocation (handled separately)
+    const PHASE_ORDER = ["split", "extract", "triage", "analyze", "summarize"];
+    const stopIdx = phaseOverride
+      ? PHASE_ORDER.indexOf(phaseOverride)
+      : PHASE_ORDER.length - 1;
+    const runPhase = (phase: string) => {
+      const i = PHASE_ORDER.indexOf(phase);
+      // Split is a prerequisite for extract — run whenever extract or later runs.
+      if (phase === "split") return stopIdx >= PHASE_ORDER.indexOf("extract");
+      return i <= stopIdx;
+    };
+
+    // Backfill: when override is triage or analyze, the extract phase runs
+    // only for units that don't yet have extracted text. Likewise for triage
+    // under override=analyze.
+    const isBackfillExtract = phaseOverride === "triage" || phaseOverride === "analyze";
+    const isBackfillTriage = phaseOverride === "analyze";
 
     // Helper for stopped cleanup
     async function handleStopped() {
@@ -1084,6 +1104,22 @@ async function runPipeline(params: PipelineParams) {
           pipeline_phase: null,
           pipeline_progress_done: 0,
           pipeline_progress_total: 0,
+        } as any)
+        .eq("id", analysisRequestId);
+    }
+
+    // Helper: write idle/ready state after a bounded phase finishes cleanly.
+    async function writeIdleAfterPhase(phaseLabel: string) {
+      console.log(`[pipeline] bounded run finished after ${phaseLabel} — writing idle state`);
+      await admin
+        .from("analysis_requests")
+        .update({
+          status: "started",
+          pipeline_phase: null,
+          pipeline_progress_done: 0,
+          pipeline_progress_total: 0,
+          pipeline_stop_requested: false,
+          error_message: null,
         } as any)
         .eq("id", analysisRequestId);
     }
