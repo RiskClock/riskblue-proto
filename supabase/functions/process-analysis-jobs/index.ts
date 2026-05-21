@@ -494,7 +494,7 @@ async function maybeFinalize(
   // Re-check: another worker may have just transitioned phase / a new run started
   const { data: cur } = await admin
     .from("analysis_requests")
-    .select("status, pipeline_phase, pipeline_stop_requested, analysis_run_id")
+    .select("status, pipeline_phase, pipeline_stop_requested, analysis_run_id, pipeline_phase_override")
     .eq("id", requestId)
     .single();
 
@@ -583,6 +583,23 @@ async function maybeFinalize(
     (failedJobs ?? 0) > 0
       ? `${failedJobs} of ${totalJobs} items failed during analysis`
       : null;
+
+  const phaseOverride = (cur as any)?.pipeline_phase_override ?? null;
+
+  // Bounded run: 'analyze' (or 'triage', defensive) stops here as idle — no summarize.
+  if (phaseOverride === "analyze" || phaseOverride === "triage") {
+    let q = admin.from("analysis_requests").update({
+      status: "started",
+      pipeline_phase: null,
+      pipeline_progress_done: 0,
+      pipeline_progress_total: 0,
+      error_message: errorMsg,
+    } as any).eq("id", requestId);
+    if (runId) q = q.eq("analysis_run_id", runId);
+    await q;
+    console.log(`[worker] analyze finalize: phaseOverride='${phaseOverride}' -> idle (no summarize) for ${requestId}`);
+    return;
+  }
 
   {
     let q = admin.from("analysis_requests").update({
@@ -1260,7 +1277,7 @@ async function dispatchAnalyzeWhenTriageComplete(
   // Verify run is still current
   const { data: cur } = await admin
     .from("analysis_requests")
-    .select("status, pipeline_phase, pipeline_stop_requested, analysis_run_id, disabled_awp_classes, triage_model, analyze_model")
+    .select("status, pipeline_phase, pipeline_stop_requested, analysis_run_id, disabled_awp_classes, triage_model, analyze_model, pipeline_phase_override")
     .eq("id", requestId)
     .single();
 
@@ -1346,6 +1363,21 @@ async function dispatchAnalyzeWhenTriageComplete(
     } as any).eq("id", requestId);
     if (runId) q = q.eq("analysis_run_id", runId);
     await q;
+    return;
+  }
+
+  // Bounded run: if the request was started via Triage button only, stop here as idle.
+  const phaseOverride = (cur as any)?.pipeline_phase_override ?? null;
+  if (phaseOverride === "triage") {
+    let q = admin.from("analysis_requests").update({
+      status: "started",
+      pipeline_phase: null,
+      pipeline_progress_done: 0,
+      pipeline_progress_total: 0,
+    } as any).eq("id", requestId);
+    if (runId) q = q.eq("analysis_run_id", runId);
+    await q;
+    console.log(`[worker] triage finalize: phaseOverride='triage' -> idle (no analyze) for ${requestId}`);
     return;
   }
 
