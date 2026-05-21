@@ -1252,38 +1252,87 @@ async function runPipeline(params: PipelineParams) {
     );
 
     if (runPhase("extract")) {
-      const units: Array<{ id: string; name: string; kind: "sheet" | "file" }> = useSheets
-        ? sheets.map((s: any) => ({ id: s.id, name: s.name, kind: "sheet" as const }))
-        : files.map((f: any) => ({ id: f.id, name: f.name, kind: "file" as const }));
+      // Build the unit list (sheets in sheet-mode, files otherwise).
+      const allUnits: Array<{
+        id: string;
+        name: string;
+        kind: "sheet" | "file";
+        hasExtract: boolean;
+      }> = useSheets
+        ? sheets.map((s: any) => ({
+            id: s.id,
+            name: s.name,
+            kind: "sheet" as const,
+            hasExtract:
+              (s.extract_status === "done") &&
+              !!(s.extracted_text && String(s.extracted_text).trim().length > 0),
+          }))
+        : files.map((f: any) => ({
+            id: f.id,
+            name: f.name,
+            kind: "file" as const,
+            hasExtract: !!(f.extracted_text && String(f.extracted_text).trim().length > 0),
+          }));
+
+      // Backfill mode (triage/analyze override): only extract units that are
+      // missing extracted text. Full-extract mode (no override OR override='extract')
+      // processes every unit.
+      const units = isBackfillExtract
+        ? allUnits.filter((u) => !u.hasExtract)
+        : allUnits;
 
       console.log(
-        `[pipeline] Phase 1: Extract context for ${units.length} ${useSheets ? "sheets" : "files"}`,
+        `[pipeline] Phase 1: Extract context for ${units.length} ${useSheets ? "sheets" : "files"} (backfill=${isBackfillExtract}, totalCandidates=${allUnits.length})`,
       );
-      const progress = createProgressTracker(admin, analysisRequestId, "extracting", units.length);
-      await progress.init();
 
-      let stopped = false;
-      for (const u of units) {
-        if (await shouldStop(admin, analysisRequestId)) { stopped = true; break; }
-        try {
-          const body: Record<string, unknown> = { action: "extract" };
-          if (u.kind === "sheet") body.sheetId = u.id;
-          else body.fileId = u.id;
-          await callFunction(supabaseUrl, serviceKey, userToken, "triage-drawings", body);
-        } catch (e) {
-          console.error(`[pipeline] Extract failed for ${u.name}:`, e);
+      if (units.length > 0) {
+        const progress = createProgressTracker(admin, analysisRequestId, "extracting", units.length);
+        await progress.init();
+
+        let stopped = false;
+        for (const u of units) {
+          if (await shouldStop(admin, analysisRequestId)) { stopped = true; break; }
+          try {
+            const body: Record<string, unknown> = { action: "extract" };
+            if (u.kind === "sheet") body.sheetId = u.id;
+            else body.fileId = u.id;
+            await callFunction(supabaseUrl, serviceKey, userToken, "triage-drawings", body);
+          } catch (e) {
+            console.error(`[pipeline] Extract failed for ${u.name}:`, e);
+          }
+          progress.increment();
+          await progress.flush();
         }
-        progress.increment();
-        await progress.flush();
+
+        await progress.finalize();
+
+        if (stopped) {
+          await handleStopped();
+          return;
+        }
+      } else {
+        console.log(`[pipeline] Phase 1: nothing to extract — skipping`);
       }
 
-      await progress.finalize();
+      // Re-load sheets so subsequent phases see the freshly-extracted text.
+      if (sheetFlagOn) {
+        const { data: sheetRows2 } = await admin
+          .from("analysis_request_sheets")
+          .select("id, parent_file_id, page_index, name, storage_path, extract_status, extracted_text")
+          .eq("analysis_request_id", analysisRequestId)
+          .order("parent_file_id", { ascending: true })
+          .order("page_index", { ascending: true });
+        sheets = (sheetRows2 as any[]) || [];
+      }
 
-      if (stopped) {
-        await handleStopped();
+      // Bounded run: if this invocation was started by the Extract Context
+      // button, stop here and leave the row idle.
+      if (phaseOverride === "extract") {
+        await writeIdleAfterPhase("extract");
         return;
       }
     }
+
 
     // ======================== PHASE 2: TRIAGE (queued) ========================
     if (runPhase("triage")) {
