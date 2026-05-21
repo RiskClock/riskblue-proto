@@ -1277,7 +1277,7 @@ async function dispatchAnalyzeWhenTriageComplete(
   // Verify run is still current
   const { data: cur } = await admin
     .from("analysis_requests")
-    .select("status, pipeline_phase, pipeline_stop_requested, analysis_run_id, disabled_awp_classes, triage_model, analyze_model")
+    .select("status, pipeline_phase, pipeline_stop_requested, analysis_run_id, disabled_awp_classes, triage_model, analyze_model, pipeline_phase_override")
     .eq("id", requestId)
     .single();
 
