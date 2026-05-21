@@ -776,20 +776,56 @@ Deno.serve(async (req) => {
     // as the auth token for nested function calls (summarize-analysis etc.).
     const userToken = isInternalCall ? serviceKey : authHeader.replace("Bearer ", "");
 
-    // ---- Run claim FIRST: stamp the new analysis_run_id atomically before
-    // any destructive cleanup. If claim fails we abort and leave prior data
-    // intact. (Per Phase B note #1.)
+    // ---- Run claim FIRST: stamp the analysis_run_id atomically before any
+    // destructive cleanup. If claim fails we abort and leave prior data intact.
+    //
+    // Phase-button semantics:
+    //   extract  → mint NEW run id, full clear
+    //   triage   → PRESERVE current run id, clear triage + analyze + overrides
+    //   analyze  → PRESERVE current run id, clear analyze only
+    //   summarize→ PRESERVE current run id, no clear (internal worker)
+    //   (none)   → mint NEW run id, full clear (full pipeline run)
+    //
+    // We also persist `pipeline_phase_override` so worker finalize handlers
+    // know when to stop instead of continuing into the next phase.
     let activeRunId: string | null = null;
-    if (phaseOverride === "summarize" || phaseOverride === "analyze") {
-      // Re-invocation continuing an existing run (summarize after analyze, or
-      // analyze after triage finalize). Preserve current analysis_run_id so
-      // results stamped under the previous phase remain visible.
+    const preserveRun =
+      phaseOverride === "summarize" ||
+      phaseOverride === "analyze" ||
+      phaseOverride === "triage";
+
+    if (preserveRun) {
       const { data: cur } = await admin
         .from("analysis_requests")
         .select("analysis_run_id")
         .eq("id", analysisRequestId)
         .single();
       activeRunId = (cur as any)?.analysis_run_id ?? null;
+      if (!activeRunId) {
+        // Defensive: no prior run id exists (e.g. user clicked Triage on a
+        // brand-new request). Mint one so all downstream rows can be stamped.
+        activeRunId = crypto.randomUUID();
+      }
+      // Persist working state without resetting started_at-or-newer
+      // analysis_run_id (preserve). Always refresh started_at + override.
+      const { error: claimErr } = await admin
+        .from("analysis_requests")
+        .update({
+          pipeline_stop_requested: false,
+          pipeline_phase: "extracting",
+          pipeline_progress_done: 0,
+          pipeline_progress_total: 0,
+          status: "processing",
+          error_message: null,
+          analysis_run_id: activeRunId,
+          started_at: new Date().toISOString(),
+          pipeline_phase_override: phaseOverride ?? null,
+        } as any)
+        .eq("id", analysisRequestId);
+      if (claimErr) {
+        console.error("[pipeline] Run claim failed:", claimErr);
+        return json({ error: "Failed to claim analysis run" }, 500);
+      }
     } else {
       activeRunId = crypto.randomUUID();
       const { error: claimErr } = await admin
@@ -803,6 +839,7 @@ Deno.serve(async (req) => {
           error_message: null,
           analysis_run_id: activeRunId,
           started_at: new Date().toISOString(),
+          pipeline_phase_override: phaseOverride ?? null,
         } as any)
         .eq("id", analysisRequestId);
       if (claimErr) {
@@ -811,15 +848,15 @@ Deno.serve(async (req) => {
       }
     }
 
-    // ---- Phase-aware cleanup, scoped to PRIOR runs only (run_id IS NULL OR <> activeRunId)
-    // Cancel stale in-flight jobs first (don't hard-delete them) so workers can detect
-    // the mismatch and skip writes. Then delete prior-run result/triage rows.
+    // ---- Phase-aware cleanup
     if (phaseOverride === "summarize") {
       // Internal worker re-invocation to run summary phase ONLY.
       // CRITICAL: Do NOT clear any data here — analyze results must be preserved
       // so summarize-analysis can read them. Skip directly to phase 4.
     } else {
-      // Cancel any stale pending/processing jobs from prior runs
+      // Cancel any stale pending/processing jobs from PRIOR runs (different
+      // run id or NULL). For preserved-run phases, current-run jobs are
+      // deleted explicitly below per phase.
       if (activeRunId) {
         await admin
           .from("analysis_pipeline_jobs")
@@ -827,7 +864,6 @@ Deno.serve(async (req) => {
           .eq("analysis_request_id", analysisRequestId)
           .neq("analysis_run_id", activeRunId)
           .in("status", ["pending", "processing"]);
-        // Also cancel rows where run_id is NULL (legacy / never stamped)
         await admin
           .from("analysis_pipeline_jobs")
           .update({ status: "cancelled", completed_at: new Date().toISOString(), error_message: "Superseded by a newer analysis run" } as any)
@@ -836,51 +872,40 @@ Deno.serve(async (req) => {
           .in("status", ["pending", "processing"]);
       }
 
-      const deleteStaleResults = async () => {
-        if (!activeRunId) return;
-        // Delete prior-run analysis_results
-        await admin.from("analysis_results")
-          .delete()
-          .eq("analysis_request_id", analysisRequestId)
-          .neq("analysis_run_id", activeRunId);
-        await admin.from("analysis_results")
-          .delete()
-          .eq("analysis_request_id", analysisRequestId)
-          .is("analysis_run_id", null);
-      };
-      const deleteStaleTriage = async () => {
-        if (!activeRunId) return;
-        await admin.from("analysis_triage_results")
-          .delete()
-          .eq("analysis_request_id", analysisRequestId)
-          .neq("analysis_run_id", activeRunId);
-        await admin.from("analysis_triage_results")
-          .delete()
-          .eq("analysis_request_id", analysisRequestId)
-          .is("analysis_run_id", null);
-      };
-
       if (phaseOverride === "analyze") {
+        // Analyze button: wipe analyze results (regardless of run id — preserved-run
+        // means existing rows are this same run). Keep triage + extract intact.
         await Promise.all([
-          deleteStaleResults(),
+          admin.from("analysis_results")
+            .delete()
+            .eq("analysis_request_id", analysisRequestId),
           admin.from("analysis_requests")
             .update({ analyze_tokens_used: 0, summary_data: {} } as any)
             .eq("id", analysisRequestId),
         ]);
       } else if (phaseOverride === "triage") {
+        // Triage button: wipe triage + analyze + overrides. Keep extract artifacts.
         await Promise.all([
-          deleteStaleTriage(),
-          deleteStaleResults(),
+          admin.from("analysis_triage_results")
+            .delete()
+            .eq("analysis_request_id", analysisRequestId),
+          admin.from("analysis_results")
+            .delete()
+            .eq("analysis_request_id", analysisRequestId),
           admin.from("analysis_triage_overrides").delete().eq("analysis_request_id", analysisRequestId),
           admin.from("analysis_requests")
             .update({ triage_tokens_used: 0, analyze_tokens_used: 0, summary_data: {} } as any)
             .eq("id", analysisRequestId),
         ]);
       } else {
-        // Full clear: delete prior-run rows + extracted text + OpenAI file caches
+        // Extract button OR full run: full clear of EVERYTHING.
         await Promise.all([
-          deleteStaleTriage(),
-          deleteStaleResults(),
+          admin.from("analysis_triage_results")
+            .delete()
+            .eq("analysis_request_id", analysisRequestId),
+          admin.from("analysis_results")
+            .delete()
+            .eq("analysis_request_id", analysisRequestId),
           admin.from("analysis_triage_overrides").delete().eq("analysis_request_id", analysisRequestId),
           admin.from("analysis_request_files")
             .update({ extracted_text: null, openai_file_id: null, openai_file_status: null } as any)
@@ -1046,8 +1071,28 @@ async function runPipeline(params: PipelineParams) {
         .eq("id", analysisRequestId);
     }
 
-    const runPhase = (phase: string) =>
-      !phaseOverride || phaseOverride === phase;
+    // Bounded phase execution: each phase override stops AT its own phase.
+    //   extract  -> runs split + extract, stops
+    //   triage   -> runs (backfill extract if needed) + triage, stops
+    //   analyze  -> runs (backfill extract + triage if needed) + analyze, stops
+    //   (none)   -> runs everything including summarize
+    //   summarize-> internal worker re-invocation (handled separately)
+    const PHASE_ORDER = ["split", "extract", "triage", "analyze", "summarize"];
+    const stopIdx = phaseOverride
+      ? PHASE_ORDER.indexOf(phaseOverride)
+      : PHASE_ORDER.length - 1;
+    const runPhase = (phase: string) => {
+      const i = PHASE_ORDER.indexOf(phase);
+      // Split is a prerequisite for extract — run whenever extract or later runs.
+      if (phase === "split") return stopIdx >= PHASE_ORDER.indexOf("extract");
+      return i <= stopIdx;
+    };
+
+    // Backfill: when override is triage or analyze, the extract phase runs
+    // only for units that don't yet have extracted text. Likewise for triage
+    // under override=analyze.
+    const isBackfillExtract = phaseOverride === "triage" || phaseOverride === "analyze";
+    const isBackfillTriage = phaseOverride === "analyze";
 
     // Helper for stopped cleanup
     async function handleStopped() {
@@ -1059,6 +1104,22 @@ async function runPipeline(params: PipelineParams) {
           pipeline_phase: null,
           pipeline_progress_done: 0,
           pipeline_progress_total: 0,
+        } as any)
+        .eq("id", analysisRequestId);
+    }
+
+    // Helper: write idle/ready state after a bounded phase finishes cleanly.
+    async function writeIdleAfterPhase(phaseLabel: string) {
+      console.log(`[pipeline] bounded run finished after ${phaseLabel} — writing idle state`);
+      await admin
+        .from("analysis_requests")
+        .update({
+          status: "started",
+          pipeline_phase: null,
+          pipeline_progress_done: 0,
+          pipeline_progress_total: 0,
+          pipeline_stop_requested: false,
+          error_message: null,
         } as any)
         .eq("id", analysisRequestId);
     }
@@ -1087,7 +1148,7 @@ async function runPipeline(params: PipelineParams) {
     if (
       sheetFlagOn &&
       pdfFiles.length > 0 &&
-      (!phaseOverride || phaseOverride === "extract" || phaseOverride === "split")
+      runPhase("split")
     ) {
       try {
         await runSplitPhase({
@@ -1191,38 +1252,87 @@ async function runPipeline(params: PipelineParams) {
     );
 
     if (runPhase("extract")) {
-      const units: Array<{ id: string; name: string; kind: "sheet" | "file" }> = useSheets
-        ? sheets.map((s: any) => ({ id: s.id, name: s.name, kind: "sheet" as const }))
-        : files.map((f: any) => ({ id: f.id, name: f.name, kind: "file" as const }));
+      // Build the unit list (sheets in sheet-mode, files otherwise).
+      const allUnits: Array<{
+        id: string;
+        name: string;
+        kind: "sheet" | "file";
+        hasExtract: boolean;
+      }> = useSheets
+        ? sheets.map((s: any) => ({
+            id: s.id,
+            name: s.name,
+            kind: "sheet" as const,
+            hasExtract:
+              (s.extract_status === "done") &&
+              !!(s.extracted_text && String(s.extracted_text).trim().length > 0),
+          }))
+        : files.map((f: any) => ({
+            id: f.id,
+            name: f.name,
+            kind: "file" as const,
+            hasExtract: !!(f.extracted_text && String(f.extracted_text).trim().length > 0),
+          }));
+
+      // Backfill mode (triage/analyze override): only extract units that are
+      // missing extracted text. Full-extract mode (no override OR override='extract')
+      // processes every unit.
+      const units = isBackfillExtract
+        ? allUnits.filter((u) => !u.hasExtract)
+        : allUnits;
 
       console.log(
-        `[pipeline] Phase 1: Extract context for ${units.length} ${useSheets ? "sheets" : "files"}`,
+        `[pipeline] Phase 1: Extract context for ${units.length} ${useSheets ? "sheets" : "files"} (backfill=${isBackfillExtract}, totalCandidates=${allUnits.length})`,
       );
-      const progress = createProgressTracker(admin, analysisRequestId, "extracting", units.length);
-      await progress.init();
 
-      let stopped = false;
-      for (const u of units) {
-        if (await shouldStop(admin, analysisRequestId)) { stopped = true; break; }
-        try {
-          const body: Record<string, unknown> = { action: "extract" };
-          if (u.kind === "sheet") body.sheetId = u.id;
-          else body.fileId = u.id;
-          await callFunction(supabaseUrl, serviceKey, userToken, "triage-drawings", body);
-        } catch (e) {
-          console.error(`[pipeline] Extract failed for ${u.name}:`, e);
+      if (units.length > 0) {
+        const progress = createProgressTracker(admin, analysisRequestId, "extracting", units.length);
+        await progress.init();
+
+        let stopped = false;
+        for (const u of units) {
+          if (await shouldStop(admin, analysisRequestId)) { stopped = true; break; }
+          try {
+            const body: Record<string, unknown> = { action: "extract" };
+            if (u.kind === "sheet") body.sheetId = u.id;
+            else body.fileId = u.id;
+            await callFunction(supabaseUrl, serviceKey, userToken, "triage-drawings", body);
+          } catch (e) {
+            console.error(`[pipeline] Extract failed for ${u.name}:`, e);
+          }
+          progress.increment();
+          await progress.flush();
         }
-        progress.increment();
-        await progress.flush();
+
+        await progress.finalize();
+
+        if (stopped) {
+          await handleStopped();
+          return;
+        }
+      } else {
+        console.log(`[pipeline] Phase 1: nothing to extract — skipping`);
       }
 
-      await progress.finalize();
+      // Re-load sheets so subsequent phases see the freshly-extracted text.
+      if (sheetFlagOn) {
+        const { data: sheetRows2 } = await admin
+          .from("analysis_request_sheets")
+          .select("id, parent_file_id, page_index, name, storage_path, extract_status, extracted_text")
+          .eq("analysis_request_id", analysisRequestId)
+          .order("parent_file_id", { ascending: true })
+          .order("page_index", { ascending: true });
+        sheets = (sheetRows2 as any[]) || [];
+      }
 
-      if (stopped) {
-        await handleStopped();
+      // Bounded run: if this invocation was started by the Extract Context
+      // button, stop here and leave the row idle.
+      if (phaseOverride === "extract") {
+        await writeIdleAfterPhase("extract");
         return;
       }
     }
+
 
     // ======================== PHASE 2: TRIAGE (queued) ========================
     if (runPhase("triage")) {
@@ -1247,9 +1357,28 @@ async function runPipeline(params: PipelineParams) {
             .sort((a: any, b: any) => (a.name || "").localeCompare(b.name || ""))
             .map((f: any) => ({ fileId: f.id, sheetId: null, name: f.name }));
 
+      // Backfill mode (analyze override): only enqueue triage for (unit,class)
+      // pairs that DON'T already have a triage result for the active run.
+      let existingTriageKeys: Set<string> = new Set();
+      if (isBackfillTriage && activeRunId) {
+        const { data: existing } = await admin
+          .from("analysis_triage_results")
+          .select("file_id, sheet_id, awp_class_name")
+          .eq("analysis_request_id", analysisRequestId)
+          .eq("analysis_run_id", activeRunId);
+        for (const r of (existing as any[]) || []) {
+          existingTriageKeys.add(`${r.file_id}::${r.sheet_id ?? "-"}::${r.awp_class_name}`);
+        }
+      }
+
       const triageJobRows: any[] = [];
       triageUnits.forEach((u, unitIdx) => {
         for (const prompt of prompts) {
+          const className = (prompt as any).awp_class_name;
+          if (isBackfillTriage) {
+            const key = `${u.fileId}::${u.sheetId ?? "-"}::${className}`;
+            if (existingTriageKeys.has(key)) continue;
+          }
           const triagePromptContent =
             (prompt as any).triage_prompt_content ||
             (prompt as any).prompt_content ||
@@ -1260,20 +1389,20 @@ async function runPipeline(params: PipelineParams) {
             file_id: u.fileId,
             sheet_id: u.sheetId,
             parent_file_id: useSheets ? u.fileId : null,
-            awp_class_name: (prompt as any).awp_class_name,
+            awp_class_name: className,
             prompt_content: triagePromptContent,
             analyze_model: triageModel,
             job_kind: "triage",
             status: "pending",
-            // Unit-first sort: process all classes for one unit before moving on.
-            sort_order: unitIdx * 1000 + orderForTriage((prompt as any).awp_class_name),
+            sort_order: unitIdx * 1000 + orderForTriage(className),
           });
         }
       });
 
       console.log(
-        `[pipeline] Phase 2: enqueueing ${triageJobRows.length} triage jobs (${triageUnits.length} ${useSheets ? "sheets" : "files"} × ${prompts.length} classes)`,
+        `[pipeline] Phase 2: enqueueing ${triageJobRows.length} triage jobs (backfill=${isBackfillTriage}, ${triageUnits.length} units × ${prompts.length} classes)`,
       );
+
 
       // Clear stale triage jobs for this request before insert
       await admin
@@ -1346,13 +1475,20 @@ async function runPipeline(params: PipelineParams) {
       }
 
       if (triageJobRows.length === 0) {
-        // No items — fall through to analyze (likely no eligible items).
+        // Nothing new to triage. If this was the Triage button, write idle and stop.
+        if (phaseOverride === "triage") {
+          await writeIdleAfterPhase("triage");
+          return;
+        }
         console.log("[pipeline] Phase 2: no triage items — proceeding inline to analyze");
       } else {
-        // Worker will finalize triage and re-invoke pipeline with phaseOverride='analyze'.
+        // Worker finalizes triage and (when allowed by pipeline_phase_override)
+        // re-invokes pipeline with phaseOverride='analyze'. For override='triage'
+        // the worker writes idle instead.
         return;
       }
     }
+
 
     // ======================== PHASE 3: ANALYZE ========================
     if (runPhase("analyze")) {
@@ -1828,12 +1964,19 @@ async function runPipeline(params: PipelineParams) {
         } catch (e) {
           console.warn("[pipeline] failed to set no_eligible_drawings flag:", e);
         }
-        // Fall through to summarize (which will be a no-op).
+        // Bounded run: Analyze button stops here without summarizing.
+        if (phaseOverride === "analyze") {
+          await writeIdleAfterPhase("analyze");
+          return;
+        }
+        // Fall through to summarize (which will be a no-op) for full runs.
       } else {
-        // Jobs are queued; worker will finalize + trigger summarize. Exit now.
+        // Jobs are queued; worker will finalize and (when allowed) trigger
+        // summarize. For phaseOverride='analyze' the worker writes idle instead.
         return;
       }
     }
+
 
     // ======================== PHASE 4: SUMMARIZE (background) ========================
     // Mark phase=summarizing but keep status=processing — the UI must not
