@@ -1148,7 +1148,7 @@ async function runPipeline(params: PipelineParams) {
     if (
       sheetFlagOn &&
       pdfFiles.length > 0 &&
-      (!phaseOverride || phaseOverride === "extract" || phaseOverride === "split")
+      runPhase("split")
     ) {
       try {
         await runSplitPhase({
