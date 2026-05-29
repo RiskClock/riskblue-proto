@@ -19,6 +19,7 @@ import ResetPassword from "./pages/ResetPassword";
 import SetupAccount from "./pages/SetupAccount";
 import InternalAnalysisQueue from "./pages/InternalAnalysisQueue";
 import InternalWorkbench from "./pages/InternalWorkbench";
+import WorkbenchProjectDetail from "./pages/WorkbenchProjectDetail";
 
 import UserManagement from "./pages/UserManagement";
 import AnalysisRequestDetail from "./pages/AnalysisRequestDetail";
