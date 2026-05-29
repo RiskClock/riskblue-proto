@@ -2380,6 +2380,27 @@ export type Database = {
         }
         Relationships: []
       }
+      workbench_column_preferences: {
+        Row: {
+          awp_class_names: string[]
+          id: string
+          updated_at: string
+          updated_by: string | null
+        }
+        Insert: {
+          awp_class_names?: string[]
+          id?: string
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Update: {
+          awp_class_names?: string[]
+          id?: string
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
