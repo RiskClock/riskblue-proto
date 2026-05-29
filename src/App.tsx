@@ -18,6 +18,8 @@ import SharePointConnect from "./pages/SharePointConnect";
 import ResetPassword from "./pages/ResetPassword";
 import SetupAccount from "./pages/SetupAccount";
 import InternalAnalysisQueue from "./pages/InternalAnalysisQueue";
+import InternalWorkbench from "./pages/InternalWorkbench";
+
 import UserManagement from "./pages/UserManagement";
 import AnalysisRequestDetail from "./pages/AnalysisRequestDetail";
 import Controls from "./pages/Controls";
@@ -71,6 +73,8 @@ const App = () => (
             <Route path="/logs" element={<ProtectedRoute><Logs /></ProtectedRoute>} />
             <Route path="/controls" element={<ProtectedRoute><Controls /></ProtectedRoute>} />
             <Route path="/internal/analysis-queue" element={<ProtectedRoute><InternalAnalysisQueue /></ProtectedRoute>} />
+            <Route path="/internal/workbench" element={<ProtectedRoute><InternalWorkbench /></ProtectedRoute>} />
+
             <Route path="/internal/users" element={<ProtectedRoute><UserManagement /></ProtectedRoute>} />
             <Route path="/internal/analysis-queue/:requestId" element={<ProtectedRoute><AnalysisRequestDetail /></ProtectedRoute>} />
             <Route path="/internal/viewer-test" element={<ProtectedRoute><InternalViewerTest /></ProtectedRoute>} />
