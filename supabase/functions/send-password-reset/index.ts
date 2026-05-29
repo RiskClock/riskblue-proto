@@ -59,23 +59,31 @@ const handler = async (req: Request): Promise<Response> => {
       );
     }
 
-    // Check if user exists using targeted lookup (don't reveal to client)
-    const { data: { users }, error: userError } = await supabase.auth.admin.listUsers({
-      perPage: 1,
-      page: 1,
-    });
-    
-    // Use getUserById alternative - search by email directly
+    // Check if user exists by paginating through users and matching email.
+    // The admin API doesn't expose a direct "get by email" query, so we page
+    // through (large page size) until we find a match or exhaust the list.
+    const targetEmail = email.toLowerCase();
     let userExists = false;
-    if (!userError) {
-      // Use admin API to find user by email
-      const allUsers = users || [];
-      userExists = allUsers.some(u => u.email?.toLowerCase() === email.toLowerCase());
+    let page = 1;
+    const perPage = 1000;
+    const maxPages = 50; // safety cap (~50k users)
+    while (page <= maxPages) {
+      const { data, error: pageError } = await supabase.auth.admin.listUsers({ page, perPage });
+      if (pageError) {
+        console.error("Failed to list users:", pageError);
+        break;
+      }
+      const batch = data?.users ?? [];
+      if (batch.some((u) => u.email?.toLowerCase() === targetEmail)) {
+        userExists = true;
+        break;
+      }
+      if (batch.length < perPage) break;
+      page += 1;
     }
-    
-    // Fallback: try listing with smaller scope if needed
-    if (!userExists && !userError) {
-      // Try paginated search - but for security we just proceed silently
+
+    if (!userExists) {
+      // Don't reveal to client whether the user exists.
       console.log(`User not found for email: ${email}, returning success anyway for security`);
       return new Response(
         JSON.stringify({ success: true }),
