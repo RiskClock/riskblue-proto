@@ -276,7 +276,7 @@ export default function InternalWorkbench() {
                           {label}
                         </Badge>
                       </TableCell>
-                      <TableCell className="text-right">
+                      <TableCell className="text-right" onClick={(e) => e.stopPropagation()}>
                         <div className="flex items-center justify-end gap-1">
                           <Button
                             variant="ghost"
