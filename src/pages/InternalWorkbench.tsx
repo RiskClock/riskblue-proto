@@ -165,8 +165,15 @@ export default function InternalWorkbench() {
     if (confirmName.trim() !== deleteTarget.name) return;
     setDeleting(true);
     try {
-      const { error } = await supabase.from("projects").delete().eq("id", deleteTarget.id);
+      const { data, error } = await supabase
+        .from("projects")
+        .delete()
+        .eq("id", deleteTarget.id)
+        .select("id");
       if (error) throw error;
+      if (!data || data.length === 0) {
+        throw new Error("Delete affected 0 rows — you may not have permission to delete this project.");
+      }
       toast({ title: "Project deleted", description: `"${deleteTarget.name}" was removed.` });
       setDeleteTarget(null);
       setConfirmName("");
