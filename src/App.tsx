@@ -19,6 +19,7 @@ import ResetPassword from "./pages/ResetPassword";
 import SetupAccount from "./pages/SetupAccount";
 import InternalAnalysisQueue from "./pages/InternalAnalysisQueue";
 import InternalWorkbench from "./pages/InternalWorkbench";
+import WorkbenchProjectDetail from "./pages/WorkbenchProjectDetail";
 
 import UserManagement from "./pages/UserManagement";
 import AnalysisRequestDetail from "./pages/AnalysisRequestDetail";
@@ -74,6 +75,7 @@ const App = () => (
             <Route path="/controls" element={<ProtectedRoute><Controls /></ProtectedRoute>} />
             <Route path="/internal/analysis-queue" element={<ProtectedRoute><InternalAnalysisQueue /></ProtectedRoute>} />
             <Route path="/internal/workbench" element={<ProtectedRoute><InternalWorkbench /></ProtectedRoute>} />
+            <Route path="/internal/workbench/project/:projectId" element={<ProtectedRoute><WorkbenchProjectDetail /></ProtectedRoute>} />
 
             <Route path="/internal/users" element={<ProtectedRoute><UserManagement /></ProtectedRoute>} />
             <Route path="/internal/analysis-queue/:requestId" element={<ProtectedRoute><AnalysisRequestDetail /></ProtectedRoute>} />
