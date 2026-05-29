@@ -161,13 +161,19 @@ const Projects = () => {
 
   const fetchProjects = async () => {
     try {
-      // First fetch projects
-      const { data: projectsData, error: projectsError } = await supabase
+      const isInternalUser = user?.email?.toLowerCase().endsWith("@riskclock.com") ?? false;
+      // First fetch projects — internal users see only their own (Workbench shows all)
+      let query = supabase
         .from("projects")
         .select("*")
         .order("created_at", { ascending: false });
+      if (isInternalUser) {
+        query = query.eq("user_id", user!.id);
+      }
+      const { data: projectsData, error: projectsError } = await query;
 
       if (projectsError) throw projectsError;
+
 
       // Get unique user IDs and project IDs
       const userIds = [...new Set((projectsData || []).map(p => p.user_id))];
