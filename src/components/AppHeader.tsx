@@ -99,6 +99,11 @@ export const AppHeader = ({ leftContent }: AppHeaderProps) => {
                     <FileText className="h-4 w-4 mr-2" />
                     Analysis Queue
                   </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => navigate("/internal/workbench")} className="cursor-pointer">
+                    <LayoutGrid className="h-4 w-4 mr-2" />
+                    Workbench
+                  </DropdownMenuItem>
+
                   <DropdownMenuItem onClick={() => navigate("/logs")} className="cursor-pointer">
                     <BarChart3 className="h-4 w-4 mr-2" />
                     Logs
