@@ -250,7 +250,11 @@ export default function InternalWorkbench() {
                   const label = p.status ? statusLabels[p.status] || p.status : "New";
                   const colorClass = p.status ? statusColors[p.status] || "" : "";
                   return (
-                    <TableRow key={p.id}>
+                    <TableRow
+                      key={p.id}
+                      className="cursor-pointer hover:bg-muted/50"
+                      onClick={() => navigate(`/internal/workbench/project/${p.id}`)}
+                    >
                       <TableCell className="font-medium">{p.name}</TableCell>
                       <TableCell>
                         <div className="flex flex-col">
