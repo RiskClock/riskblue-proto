@@ -10,7 +10,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { LogOut, Settings, FileText, BarChart3, Shield, Coins, Users, KeyRound, UserCog } from "lucide-react";
+import { LogOut, Settings, FileText, BarChart3, Shield, Coins, Users, KeyRound, UserCog, LayoutGrid } from "lucide-react";
 import riskBlueLogo from "@/assets/logo-riskblue.png";
 import { useAccountType } from "@/hooks/useAccountType";
 import { useCredits } from "@/hooks/useCredits";
