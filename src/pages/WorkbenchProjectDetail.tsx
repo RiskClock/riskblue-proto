@@ -985,67 +985,49 @@ export default function WorkbenchProjectDetail() {
                         );
                       };
 
-                      // Per-sheet phase status helpers
-                      const sheetExtractState = (s: SheetRow) => {
+                      // Per-sheet extract state — drives the per-page Processing/Processed badge.
+                      const sheetExtractState = (s: SheetRow): "done" | "running" | "failed" | "pending" => {
                         const st = s.extract_status;
                         if (st === "extracted" || st === "skipped") return "done";
                         if (st === "extracting") return "running";
                         if (st === "failed") return "failed";
                         return "pending";
                       };
-                      const sheetTriageState = (s: SheetRow) => {
-                        if (!enabledCols.length) return "pending";
-                        let done = 0, running = 0, failed = 0;
-                        for (const name of enabledCols) {
-                          const r = sheetTriageLookup.get(`${s.id}::${name}`);
-                          if (!r) continue;
-                          if (r.status === "completed" || r.status === "complete") done++;
-                          else if (r.status === "failed") failed++;
-                          else running++;
-                        }
-                        if (done === enabledCols.length) return "done";
-                        if (running > 0 || done > 0) return done === 0 ? "running" : "partial";
-                        if (failed > 0) return "failed";
-                        return "pending";
-                      };
-                      const sheetAnalyzeState = (s: SheetRow) => {
-                        if (!enabledCols.length) return "pending";
-                        let done = 0, running = 0, failed = 0, total = 0;
-                        for (const name of enabledCols) {
-                          const st = sheetAnalyzeLookup.get(`${s.id}::${name}`);
-                          if (!st) continue;
-                          total++;
-                          if (st === "completed" || st === "complete") done++;
-                          else if (st === "failed") failed++;
-                          else running++;
-                        }
-                        if (total === 0) return "pending";
-                        if (running > 0) return "running";
-                        if (done > 0 && failed === 0) return "done";
-                        if (done > 0) return "partial";
-                        if (failed > 0) return "failed";
-                        return "pending";
-                      };
 
-                      const PhasePill = ({ label, state }: { label: string; state: string }) => {
-                        const cls =
-                          state === "done"
-                            ? "bg-emerald-500/15 text-emerald-700 border-emerald-500/30"
-                            : state === "running"
-                              ? "bg-purple-500/15 text-purple-700 border-purple-500/30"
-                              : state === "partial"
-                                ? "bg-amber-500/15 text-amber-700 border-amber-500/30"
-                                : state === "failed"
-                                  ? "bg-red-500/15 text-red-700 border-red-500/30"
-                                  : "bg-muted text-muted-foreground border-border";
-                        return (
-                          <span
-                            className={`inline-flex items-center gap-1 h-4 px-1.5 rounded border text-[10px] leading-none ${cls}`}
-                          >
-                            {state === "running" && <Loader2 className="h-2.5 w-2.5 animate-spin" />}
-                            {label}
-                          </span>
-                        );
+                      const SheetStatusBadge = ({ s }: { s: SheetRow }) => {
+                        const st = sheetExtractState(s);
+                        if (st === "done") {
+                          return (
+                            <Badge
+                              variant="outline"
+                              className="ml-auto shrink-0 h-4 px-1.5 text-[10px] leading-none bg-emerald-500/10 text-emerald-700 border-emerald-500/30"
+                            >
+                              Processed
+                            </Badge>
+                          );
+                        }
+                        if (st === "running" || (activePhase === "extract" && st !== "failed")) {
+                          return (
+                            <Badge
+                              variant="outline"
+                              className="ml-auto shrink-0 h-4 px-1.5 text-[10px] leading-none gap-1"
+                            >
+                              <Loader2 className="h-2.5 w-2.5 animate-spin" />
+                              Processing
+                            </Badge>
+                          );
+                        }
+                        if (st === "failed") {
+                          return (
+                            <Badge
+                              variant="outline"
+                              className="ml-auto shrink-0 h-4 px-1.5 text-[10px] leading-none bg-red-500/10 text-red-700 border-red-500/30"
+                            >
+                              Failed
+                            </Badge>
+                          );
+                        }
+                        return null;
                       };
 
                       const isExpanded = expandedFiles.has(group.file.id);
@@ -1057,7 +1039,7 @@ export default function WorkbenchProjectDetail() {
                             className="group h-8 cursor-pointer"
                             onClick={() => {
                               if (singlePage && onlySheet) setActiveSheet(onlySheet);
-                              else setActiveFileForFile(group.file);
+                              else setActiveFile(group.file);
                             }}
                           >
                             <TableCell
@@ -1083,7 +1065,7 @@ export default function WorkbenchProjectDetail() {
                                 ) : (
                                   <span className="inline-block w-3.5 shrink-0" />
                                 )}
-                                <span className="font-medium truncate">{group.file.name}</span>
+                                <span className="font-medium truncate min-w-0">{group.file.name}</span>
                                 {!singlePage && (
                                   <span className="text-xs text-muted-foreground shrink-0">
                                     {group.sheets.length} pages
@@ -1120,16 +1102,12 @@ export default function WorkbenchProjectDetail() {
                                   className={`${stickyCellFirstBase} bg-muted/10 group-hover:bg-muted/30 py-1 text-sm`}
                                 >
                                   <div className="flex items-center gap-2 min-w-0 pl-7">
-                                    <span className="text-muted-foreground shrink-0">
+                                    <span className="text-muted-foreground truncate min-w-0">
                                       Page {s.page_index}
                                       {s.sheet_number ? ` · ${s.sheet_number}` : ""}
                                       {s.sheet_title ? ` — ${s.sheet_title}` : ""}
                                     </span>
-                                    <div className="flex items-center gap-1 ml-auto shrink-0">
-                                      <PhasePill label="Extract" state={sheetExtractState(s)} />
-                                      <PhasePill label="Triage" state={sheetTriageState(s)} />
-                                      <PhasePill label="Analyze" state={sheetAnalyzeState(s)} />
-                                    </div>
+                                    <SheetStatusBadge s={s} />
                                   </div>
                                 </TableCell>
                                 {enabledCols.map((name) => {
@@ -1137,12 +1115,13 @@ export default function WorkbenchProjectDetail() {
                                   const score = tr?.score;
                                   const failed = tr?.status === "failed";
                                   const hasScore = typeof score === "number";
+                                  const inflight = triageInflight.has(`${s.id}::${name}`);
                                   // Match grid behavior: green bg opacity proportional to score
                                   const opacity = hasScore ? Math.max(0, Math.min(100, score!)) / 100 : 0;
                                   return (
                                     <TableCell
                                       key={name}
-                                      className="text-center py-1 text-xs relative"
+                                      className="text-center py-1 text-xs relative p-0"
                                       style={
                                         hasScore && !failed
                                           ? { backgroundColor: `rgba(16, 185, 129, ${opacity * 0.55})` }
@@ -1151,22 +1130,26 @@ export default function WorkbenchProjectDetail() {
                                     >
                                       <Tooltip>
                                         <TooltipTrigger asChild>
-                                          <span className="inline-flex items-center justify-center w-full h-full">
-                                            {failed ? (
+                                          <div className="flex items-center justify-center w-full h-7 cursor-default">
+                                            {inflight && !hasScore && !failed ? (
+                                              <Loader2 className="h-3 w-3 animate-spin text-muted-foreground" />
+                                            ) : failed ? (
                                               <span className="text-red-600">!</span>
                                             ) : hasScore ? (
                                               <span className="sr-only">{score}%</span>
                                             ) : (
                                               <span className="text-muted-foreground">—</span>
                                             )}
-                                          </span>
+                                          </div>
                                         </TooltipTrigger>
                                         <TooltipContent>
                                           {failed
                                             ? "Triage failed"
                                             : hasScore
                                               ? `Triage: ${score}%`
-                                              : "Not triaged"}
+                                              : inflight
+                                                ? "Triaging…"
+                                                : "Not triaged"}
                                         </TooltipContent>
                                       </Tooltip>
                                     </TableCell>
