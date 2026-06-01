@@ -1333,6 +1333,15 @@ async function runPipeline(params: PipelineParams) {
           .order("parent_file_id", { ascending: true })
           .order("page_index", { ascending: true });
         sheets = (sheetRows2 as any[]) || [];
+        const fileNameById2 = new Map<string, string>();
+        for (const f of files as any[]) fileNameById2.set(f.id, (f as any).name ?? "");
+        sheets.sort((a, b) => {
+          const an = fileNameById2.get(a.parent_file_id) ?? "";
+          const bn = fileNameById2.get(b.parent_file_id) ?? "";
+          const c = an.localeCompare(bn);
+          if (c !== 0) return c;
+          return (a.page_index ?? 0) - (b.page_index ?? 0);
+        });
       }
 
       // Bounded run: if this invocation was started by the Extract Context
