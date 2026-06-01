@@ -817,11 +817,24 @@ Deno.serve(async (req) => {
       }
       // Persist working state without resetting started_at-or-newer
       // analysis_run_id (preserve). Always refresh started_at + override.
+      // Pick initial pipeline_phase from override so the UI immediately
+      // reflects what the user clicked (Triage / Analyze) even when there is
+      // nothing to backfill in the extract phase.
+      const initialPhase =
+        phaseOverride === "triage"
+          ? "triaging"
+          : phaseOverride === "analyze"
+            ? "analyzing"
+            : phaseOverride === "summarize"
+              ? "summarizing"
+              : phaseOverride === "split"
+                ? "splitting"
+                : "extracting";
       const { error: claimErr } = await admin
         .from("analysis_requests")
         .update({
           pipeline_stop_requested: false,
-          pipeline_phase: "extracting",
+          pipeline_phase: initialPhase,
           pipeline_progress_done: 0,
           pipeline_progress_total: 0,
           status: "processing",
@@ -837,11 +850,21 @@ Deno.serve(async (req) => {
       }
     } else {
       activeRunId = crypto.randomUUID();
+      const initialPhase =
+        phaseOverride === "triage"
+          ? "triaging"
+          : phaseOverride === "analyze"
+            ? "analyzing"
+            : phaseOverride === "summarize"
+              ? "summarizing"
+              : phaseOverride === "split"
+                ? "splitting"
+                : "extracting";
       const { error: claimErr } = await admin
         .from("analysis_requests")
         .update({
           pipeline_stop_requested: false,
-          pipeline_phase: "extracting",
+          pipeline_phase: initialPhase,
           pipeline_progress_done: 0,
           pipeline_progress_total: 0,
           status: "processing",
