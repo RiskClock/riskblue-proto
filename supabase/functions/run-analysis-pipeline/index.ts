@@ -800,7 +800,8 @@ Deno.serve(async (req) => {
     const preserveRun =
       phaseOverride === "summarize" ||
       phaseOverride === "analyze" ||
-      phaseOverride === "triage";
+      phaseOverride === "triage" ||
+      phaseOverride === "split";
 
     if (preserveRun) {
       const { data: cur } = await admin
@@ -857,10 +858,9 @@ Deno.serve(async (req) => {
     }
 
     // ---- Phase-aware cleanup
-    if (phaseOverride === "summarize") {
-      // Internal worker re-invocation to run summary phase ONLY.
-      // CRITICAL: Do NOT clear any data here — analyze results must be preserved
-      // so summarize-analysis can read them. Skip directly to phase 4.
+    if (phaseOverride === "summarize" || phaseOverride === "split") {
+      // summarize: internal worker re-invocation — keep analyze results intact.
+      // split: lightweight prep run — must not wipe any data.
     } else {
       // Cancel any stale pending/processing jobs from PRIOR runs (different
       // run id or NULL). For preserved-run phases, current-run jobs are
@@ -1091,8 +1091,12 @@ async function runPipeline(params: PipelineParams) {
       : PHASE_ORDER.length - 1;
     const runPhase = (phase: string) => {
       const i = PHASE_ORDER.indexOf(phase);
-      // Split is a prerequisite for extract — run whenever extract or later runs.
-      if (phase === "split") return stopIdx >= PHASE_ORDER.indexOf("extract");
+      // Split is a prerequisite for extract — run whenever extract or later
+      // runs. Also runs when override is explicitly "split".
+      if (phase === "split") {
+        if (phaseOverride === "split") return true;
+        return stopIdx >= PHASE_ORDER.indexOf("extract");
+      }
       return i <= stopIdx;
     };
 

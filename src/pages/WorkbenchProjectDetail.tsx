@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useMemo, useState } from "react";
+import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
@@ -139,7 +139,7 @@ export default function WorkbenchProjectDetail() {
   });
 
   // Latest analysis_request for this project
-  const { data: analysisRequest } = useQuery({
+  const { data: analysisRequest, isLoading: isLoadingAnalysisRequest } = useQuery({
     queryKey: ["workbench-analysis-request", projectId],
     enabled: !!projectId && isInternal,
     queryFn: async () => {
@@ -226,6 +226,32 @@ export default function WorkbenchProjectDetail() {
       a.file.name.localeCompare(b.file.name),
     );
   }, [rows]);
+
+  // Auto-trigger split phase if files exist with zero sheets and the
+  // pipeline isn't currently running. Ensures all PDF pages appear as rows
+  // immediately on opening the project detail page.
+  const autoSplitInvokedRef = useRef<Set<string>>(new Set());
+  useEffect(() => {
+    if (!requestId || !rows) return;
+    if (rows.files.length === 0) return;
+    if (rows.sheets.length > 0) return;
+    if (analysisRequest?.pipeline_phase) return; // already running
+    if (autoSplitInvokedRef.current.has(requestId)) return;
+    autoSplitInvokedRef.current.add(requestId);
+    supabase.functions
+      .invoke("run-analysis-pipeline", {
+        body: { analysisRequestId: requestId, phaseOverride: "split" },
+      })
+      .then(() => {
+        queryClient.invalidateQueries({ queryKey: ["workbench-rows", requestId] });
+        queryClient.invalidateQueries({
+          queryKey: ["workbench-analysis-request", projectId],
+        });
+      })
+      .catch((e) => {
+        console.error("[workbench] auto-split failed", e);
+      });
+  }, [requestId, rows, analysisRequest?.pipeline_phase, queryClient, projectId]);
 
   // Prewarm PDFs into the shared cache so opening the viewer is instant.
   useEffect(() => {
@@ -704,7 +730,7 @@ export default function WorkbenchProjectDetail() {
               </Button>
             </div>
 
-            {isLoading ? (
+            {isLoadingAnalysisRequest || (analysisRequest && isLoading) ? (
               <div className="flex items-center justify-center py-12 text-muted-foreground">
                 <Loader2 className="h-5 w-5 animate-spin mr-2" /> Loading…
               </div>
@@ -966,6 +992,7 @@ export default function WorkbenchProjectDetail() {
                 queryKey: ["workbench-instances", requestId],
               });
             }}
+            persistKey={projectId}
           />
         )}
 
