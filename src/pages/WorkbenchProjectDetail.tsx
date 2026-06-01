@@ -18,8 +18,17 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import { FileViewerModal } from "@/components/wizard/FileViewerModal";
-import type { DocumentSourceDescriptor } from "@/components/viewer";
+import {
+  prewarmDocumentSource,
+  type DocumentSourceDescriptor,
+} from "@/components/viewer/hooks/useDocumentSource";
 import { useAWPOptions, groupAWPOptionsByCategory } from "@/hooks/useAWPOptions";
 import { getUserFriendlyError } from "@/lib/errorHandling";
 
@@ -47,6 +56,10 @@ interface TriageCount {
   file_id: string;
   awp_class_name: string;
   instances: number | null;
+}
+
+function bucketForSource(sourceType: string) {
+  return sourceType === "manual_upload" ? "uploaded-drawings" : "drive-analysis-files";
 }
 
 export default function WorkbenchProjectDetail() {
@@ -147,6 +160,44 @@ export default function WorkbenchProjectDetail() {
     },
   });
 
+  // Group sheets by file (preserves sorted order)
+  const fileGroups = useMemo(() => {
+    const groups = new Map<string, { fileName: string; sheets: SheetRow[] }>();
+    for (const s of rows?.sheets || []) {
+      const g = groups.get(s.parent_file_id);
+      if (g) g.sheets.push(s);
+      else groups.set(s.parent_file_id, { fileName: s.file_name, sheets: [s] });
+    }
+    return Array.from(groups.entries()).map(([id, v]) => ({ id, ...v }));
+  }, [rows]);
+
+  // Prefetch all sheet PDFs into the shared document-source cache so opening
+  // the viewer is instant. Best-effort, in parallel batches.
+  useEffect(() => {
+    if (!rows?.sheets?.length) return;
+    let cancelled = false;
+    const queue = rows.sheets
+      .filter((s) => s.storage_path)
+      .map<DocumentSourceDescriptor>((s) => ({
+        kind: "supabase-storage",
+        bucket: bucketForSource(s.file_source_type),
+        path: s.storage_path!,
+        mimeType: "application/pdf",
+      }));
+    const CONCURRENCY = 4;
+    let idx = 0;
+    const worker = async () => {
+      while (!cancelled && idx < queue.length) {
+        const d = queue[idx++];
+        await prewarmDocumentSource(d);
+      }
+    };
+    Promise.all(Array.from({ length: CONCURRENCY }, worker)).catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [rows]);
+
   // Triage counts per (sheet, awp_class)
   const { data: triage } = useQuery({
     queryKey: ["workbench-triage", analysisRequest?.id],
@@ -167,6 +218,11 @@ export default function WorkbenchProjectDetail() {
     () => (awpOptions || []).filter((o) => o.category === "Asset" || o.category === "Water System"),
     [awpOptions],
   );
+  const optionByName = useMemo(() => {
+    const m = new Map<string, { name: string; idPrefix: string | null }>();
+    for (const o of awpOptions || []) m.set(o.name, { name: o.name, idPrefix: o.idPrefix });
+    return m;
+  }, [awpOptions]);
 
   const { data: prefs } = useQuery({
     queryKey: ["workbench-column-prefs"],
@@ -218,7 +274,6 @@ export default function WorkbenchProjectDetail() {
         });
       if (error) throw error;
       queryClient.invalidateQueries({ queryKey: ["workbench-column-prefs"] });
-      toast({ title: "Columns updated" });
       setManageOpen(false);
     } catch (error: any) {
       toast({
@@ -233,11 +288,9 @@ export default function WorkbenchProjectDetail() {
 
   const sheetSource = useMemo<DocumentSourceDescriptor | null>(() => {
     if (!activeSheet || !activeSheet.storage_path) return null;
-    const bucket =
-      activeSheet.file_source_type === "manual_upload" ? "uploaded-drawings" : "drive-analysis-files";
     return {
       kind: "supabase-storage",
-      bucket,
+      bucket: bucketForSource(activeSheet.file_source_type),
       path: activeSheet.storage_path,
       mimeType: "application/pdf",
     };
@@ -258,152 +311,233 @@ export default function WorkbenchProjectDetail() {
 
   const grouped = awpOptions ? groupAWPOptionsByCategory(eligibleOptions) : {};
 
+  // Sticky column styling
+  const stickyHeadFirst =
+    "sticky left-0 z-30 bg-card min-w-[260px] border-r";
+  const stickyCellFirst =
+    "sticky left-0 z-10 bg-card border-r";
+
   return (
-    <div className="h-screen flex flex-col bg-background overflow-hidden">
-      <AppHeader />
-      <main className="container mx-auto px-6 py-8 flex-1 overflow-auto">
-        <div className="mb-6 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <Button variant="ghost" size="sm" onClick={() => navigate("/internal/workbench")}>
-              <ArrowLeft className="h-4 w-4 mr-1" /> Workbench
-            </Button>
-            <div>
-              <h1 className="text-2xl font-bold text-foreground">{project?.name || "Project"}</h1>
-              <p className="text-sm text-muted-foreground">Files and pages by detection</p>
+    <TooltipProvider delayDuration={150}>
+      <div className="h-screen flex flex-col bg-background overflow-hidden">
+        <AppHeader />
+
+        {/* Docked sub-header with project name */}
+        <div className="sticky top-0 z-10 border-b bg-background">
+          <div className="container mx-auto px-6 py-3 flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-8 w-8"
+                onClick={() => navigate("/internal/workbench")}
+                aria-label="Back to Workbench"
+              >
+                <ArrowLeft className="h-4 w-4" />
+              </Button>
+              <h1 className="text-xl font-bold text-foreground truncate">
+                {project?.name || "Project"}
+              </h1>
             </div>
+            {rows && (
+              <Badge variant="outline" className="text-xs">
+                {rows.sheets.length} page{rows.sheets.length === 1 ? "" : "s"} · {rows.files.length} file
+                {rows.files.length === 1 ? "" : "s"}
+              </Badge>
+            )}
           </div>
-          {rows && (
-            <Badge variant="outline" className="text-sm">
-              {rows.sheets.length} page{rows.sheets.length === 1 ? "" : "s"} · {rows.files.length} file
-              {rows.files.length === 1 ? "" : "s"}
-            </Badge>
-          )}
         </div>
 
-        {isLoading ? (
-          <div className="flex items-center justify-center py-12 text-muted-foreground">
-            <Loader2 className="h-5 w-5 animate-spin mr-2" /> Loading…
-          </div>
-        ) : !analysisRequest || !rows || rows.sheets.length === 0 ? (
-          <div className="text-center py-12 text-muted-foreground">
-            No drawings uploaded for this project yet.
-          </div>
-        ) : (
-          <div className="bg-card rounded-lg border overflow-hidden">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead className="min-w-[260px]">File / Page</TableHead>
-                  {enabledCols.map((name) => (
-                    <TableHead key={name} className="text-right whitespace-nowrap">
-                      {name}
-                    </TableHead>
-                  ))}
-                  <TableHead className="text-right w-[1%] whitespace-nowrap">
-                    <Button variant="outline" size="sm" onClick={openManage}>
-                      <Settings2 className="h-4 w-4 mr-1" /> Manage
-                    </Button>
-                  </TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {rows.sheets.map((s) => (
-                  <TableRow
-                    key={s.id}
-                    className="cursor-pointer"
-                    onClick={() => setActiveSheet(s)}
-                  >
-                    <TableCell>
-                      <div className="flex flex-col">
-                        <span className="font-medium text-sm">{s.file_name}</span>
-                        <span className="text-xs text-muted-foreground">
-                          Page {s.page_index}
-                          {s.sheet_number ? ` · ${s.sheet_number}` : ""}
-                          {s.sheet_title ? ` — ${s.sheet_title}` : ""}
-                        </span>
-                      </div>
-                    </TableCell>
-                    {enabledCols.map((name) => {
-                      const count = countLookup.get(`${s.id}::${name}`) || 0;
+        <main className="flex-1 overflow-auto">
+          <div className="container mx-auto px-6 py-6">
+            {isLoading ? (
+              <div className="flex items-center justify-center py-12 text-muted-foreground">
+                <Loader2 className="h-5 w-5 animate-spin mr-2" /> Loading…
+              </div>
+            ) : !analysisRequest || !rows || rows.sheets.length === 0 ? (
+              <div className="text-center py-12 text-muted-foreground">
+                No drawings uploaded for this project yet.
+              </div>
+            ) : (
+              <div className="bg-card rounded-lg border overflow-auto relative">
+                <Table>
+                  <TableHeader className="sticky top-0 z-20 bg-card">
+                    <TableRow>
+                      <TableHead className={`${stickyHeadFirst} h-9 py-1`}>
+                        File / Page
+                      </TableHead>
+                      {enabledCols.map((name) => {
+                        const opt = optionByName.get(name);
+                        const label = opt?.idPrefix || name;
+                        return (
+                          <TableHead
+                            key={name}
+                            className="text-right whitespace-nowrap h-9 py-1"
+                          >
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <span className="cursor-default">{label}</span>
+                              </TooltipTrigger>
+                              <TooltipContent>{name}</TooltipContent>
+                            </Tooltip>
+                          </TableHead>
+                        );
+                      })}
+                      <TableHead className="text-right w-[1%] whitespace-nowrap h-9 py-1">
+                        <Button variant="outline" size="sm" onClick={openManage}>
+                          <Settings2 className="h-4 w-4 mr-1" /> Manage
+                        </Button>
+                      </TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {fileGroups.map((group) => {
+                      const singlePage = group.sheets.length === 1;
                       return (
-                        <TableCell key={name} className="text-right tabular-nums">
-                          {count > 0 ? (
-                            <span className="font-medium">{count}</span>
-                          ) : (
-                            <span className="text-muted-foreground">—</span>
+                        <>
+                          {!singlePage && (
+                            <TableRow
+                              key={`hdr-${group.id}`}
+                              className="bg-muted/40 hover:bg-muted/40"
+                            >
+                              <TableCell
+                                className={`${stickyCellFirst} bg-muted/40 py-1 font-medium text-sm`}
+                              >
+                                {group.fileName}
+                              </TableCell>
+                              <TableCell
+                                colSpan={enabledCols.length + 1}
+                                className="bg-muted/40 py-1"
+                              />
+                            </TableRow>
                           )}
-                        </TableCell>
+                          {group.sheets.map((s) => (
+                            <TableRow
+                              key={s.id}
+                              className="cursor-pointer h-8"
+                              onClick={() => setActiveSheet(s)}
+                            >
+                              <TableCell
+                                className={`${stickyCellFirst} py-1 text-sm`}
+                              >
+                                {singlePage ? (
+                                  <span className="font-medium">{s.file_name}</span>
+                                ) : (
+                                  <span className="pl-4 text-muted-foreground">
+                                    Page {s.page_index}
+                                    {s.sheet_number ? ` · ${s.sheet_number}` : ""}
+                                    {s.sheet_title ? ` — ${s.sheet_title}` : ""}
+                                  </span>
+                                )}
+                              </TableCell>
+                              {enabledCols.map((name) => {
+                                const count =
+                                  countLookup.get(`${s.id}::${name}`) || 0;
+                                return (
+                                  <TableCell
+                                    key={name}
+                                    className="text-right tabular-nums py-1"
+                                  >
+                                    {count > 0 ? (
+                                      <span className="font-medium">{count}</span>
+                                    ) : (
+                                      <span className="text-muted-foreground">
+                                        —
+                                      </span>
+                                    )}
+                                  </TableCell>
+                                );
+                              })}
+                              <TableCell className="py-1" />
+                            </TableRow>
+                          ))}
+                        </>
                       );
                     })}
-                    <TableCell />
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </div>
-        )}
-      </main>
-
-      {/* Drawing modal */}
-      {activeSheet && sheetSource && (
-        <FileViewerModal
-          isOpen={!!activeSheet}
-          onClose={() => setActiveSheet(null)}
-          fileId={activeSheet.id}
-          fileName={`${activeSheet.file_name} — Page ${activeSheet.page_index}`}
-          mimeType="application/pdf"
-          accessToken=""
-          detections={[]}
-          sourceOverride={sheetSource}
-        />
-      )}
-
-      {/* Manage columns modal */}
-      <Dialog open={manageOpen} onOpenChange={setManageOpen}>
-        <DialogContent className="max-w-lg">
-          <DialogHeader>
-            <DialogTitle>Manage columns</DialogTitle>
-            <DialogDescription>
-              Pick which assets and water systems appear as columns. Shared across all internal
-              users.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="max-h-[60vh] overflow-auto space-y-5 py-2">
-            {Object.entries(grouped).map(([category, opts]) => (
-              <div key={category}>
-                <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-2">
-                  {category}
-                </div>
-                <div className="space-y-2">
-                  {opts.map((opt) => {
-                    const checked = draftCols.includes(opt.name);
-                    return (
-                      <label
-                        key={opt.id}
-                        className="flex items-center gap-2 text-sm cursor-pointer"
-                      >
-                        <Checkbox
-                          checked={checked}
-                          onCheckedChange={() => toggleDraft(opt.name)}
-                        />
-                        <span>{opt.name}</span>
-                      </label>
-                    );
-                  })}
-                </div>
+                  </TableBody>
+                </Table>
               </div>
-            ))}
+            )}
           </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setManageOpen(false)} disabled={savingPrefs}>
-              Cancel
-            </Button>
-            <Button onClick={saveColumns} disabled={savingPrefs}>
-              {savingPrefs ? <Loader2 className="h-4 w-4 animate-spin" /> : "Save"}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-    </div>
+        </main>
+
+        {/* Drawing modal */}
+        {activeSheet && sheetSource && (
+          <FileViewerModal
+            isOpen={!!activeSheet}
+            onClose={() => setActiveSheet(null)}
+            fileId={activeSheet.id}
+            fileName={
+              fileGroups.find((g) => g.id === activeSheet.parent_file_id)
+                ?.sheets.length === 1
+                ? activeSheet.file_name
+                : `${activeSheet.file_name} — Page ${activeSheet.page_index}`
+            }
+            mimeType="application/pdf"
+            accessToken=""
+            detections={[]}
+            sourceOverride={sheetSource}
+          />
+        )}
+
+        {/* Manage columns modal */}
+        <Dialog open={manageOpen} onOpenChange={setManageOpen}>
+          <DialogContent className="max-w-lg">
+            <DialogHeader>
+              <DialogTitle>Manage columns</DialogTitle>
+              <DialogDescription>
+                Pick which assets and water systems appear as columns. Shared across all
+                internal users.
+              </DialogDescription>
+            </DialogHeader>
+            <div className="max-h-[60vh] overflow-auto space-y-5 py-2">
+              {Object.entries(grouped).map(([category, opts]) => (
+                <div key={category}>
+                  <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-2">
+                    {category}
+                  </div>
+                  <div className="space-y-2">
+                    {opts.map((opt) => {
+                      const checked = draftCols.includes(opt.name);
+                      return (
+                        <label
+                          key={opt.id}
+                          className="flex items-center gap-2 text-sm cursor-pointer"
+                        >
+                          <Checkbox
+                            checked={checked}
+                            onCheckedChange={() => toggleDraft(opt.name)}
+                          />
+                          <span>
+                            {opt.idPrefix ? (
+                              <>
+                                <span className="font-mono text-xs text-muted-foreground mr-2">
+                                  {opt.idPrefix}
+                                </span>
+                                {opt.name}
+                              </>
+                            ) : (
+                              opt.name
+                            )}
+                          </span>
+                        </label>
+                      );
+                    })}
+                  </div>
+                </div>
+              ))}
+            </div>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setManageOpen(false)} disabled={savingPrefs}>
+                Cancel
+              </Button>
+              <Button onClick={saveColumns} disabled={savingPrefs}>
+                {savingPrefs ? <Loader2 className="h-4 w-4 animate-spin" /> : "Save"}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      </div>
+    </TooltipProvider>
   );
 }
