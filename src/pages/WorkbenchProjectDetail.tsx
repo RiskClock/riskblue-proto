@@ -1057,6 +1057,85 @@ export default function WorkbenchProjectDetail() {
 }
 
 // ---------------------------------------------------------------------------
+// AwpPromptModal — shows prompt content + opens source Google Doc
+// ---------------------------------------------------------------------------
+function AwpPromptModal({
+  className,
+  onClose,
+}: {
+  className: string | null;
+  onClose: () => void;
+}) {
+  const [loading, setLoading] = useState(false);
+  const [row, setRow] = useState<{
+    prompt_content: string | null;
+    drive_file_url: string | null;
+    drive_file_name: string | null;
+  } | null>(null);
+
+  useEffect(() => {
+    if (!className) {
+      setRow(null);
+      return;
+    }
+    let cancelled = false;
+    (async () => {
+      setLoading(true);
+      const { data } = await supabase
+        .from("awp_class_prompts")
+        .select("prompt_content, drive_file_url, drive_file_name")
+        .eq("awp_class_name", className)
+        .maybeSingle();
+      if (!cancelled) {
+        setRow((data as any) ?? { prompt_content: null, drive_file_url: null, drive_file_name: null });
+        setLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [className]);
+
+  return (
+    <Dialog open={!!className} onOpenChange={(o) => !o && onClose()}>
+      <DialogContent className="max-w-3xl">
+        <DialogHeader>
+          <DialogTitle>{className} — prompt</DialogTitle>
+          <DialogDescription>
+            {row?.drive_file_name || "Prompt used during triage and analysis."}
+          </DialogDescription>
+        </DialogHeader>
+        {loading ? (
+          <div className="flex items-center justify-center p-8">
+            <Loader2 className="w-5 h-5 animate-spin text-muted-foreground" />
+          </div>
+        ) : (
+          <div className="max-h-[55vh] overflow-auto border rounded-md p-4 bg-muted/30">
+            <pre className="text-xs whitespace-pre-wrap font-mono text-foreground">
+              {row?.prompt_content || "(no prompt content)"}
+            </pre>
+          </div>
+        )}
+        <DialogFooter>
+          <Button variant="outline" onClick={onClose}>
+            Close
+          </Button>
+          <Button
+            disabled={!row?.drive_file_url}
+            onClick={() => {
+              if (row?.drive_file_url) window.open(row.drive_file_url, "_blank");
+            }}
+          >
+            Open Source File
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+
+// ---------------------------------------------------------------------------
 // ExtractedTextBody — shows file extracted text without page line-break headers
 // ---------------------------------------------------------------------------
 function ExtractedTextBody({ fileId }: { fileId: string }) {
