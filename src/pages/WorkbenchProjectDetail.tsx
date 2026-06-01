@@ -921,8 +921,25 @@ export default function WorkbenchProjectDetail() {
             accessToken=""
             detections={[]}
             sourceOverride={sheetSource}
+            analysisRequestId={requestId}
+            parentFileId={activeSheet.parent_file_id}
+            sheetId={activeSheet.id}
+            pageIndex={activeSheet.page_index}
+            awpClasses={enabledCols.map((name) => ({
+              name,
+              prefix: optionByName.get(name)?.idPrefix ?? null,
+              analysisCount:
+                fileCountLookup.get(`${activeSheet.parent_file_id}::${name}`) || 0,
+            }))}
           />
         )}
+
+        {/* AWP class prompt modal */}
+        <AwpPromptModal
+          className={promptClass}
+          onClose={() => setPromptClass(null)}
+        />
+
 
         {/* File-level click for files without sheets: pick first sheet if any, else nothing */}
         {activeFileForFile && (() => {
