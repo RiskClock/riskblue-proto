@@ -183,7 +183,7 @@ export default function WorkbenchProjectDetail() {
       const [filesRes, sheetsRes] = await Promise.all([
         supabase
           .from("analysis_request_files")
-          .select("id, name, extracted_text")
+          .select("id, name, extracted_text, storage_path, mime_type")
           .eq("analysis_request_id", requestId!)
           .order("name"),
         supabase
@@ -201,6 +201,8 @@ export default function WorkbenchProjectDetail() {
         name: f.name,
         source_type: analysisRequest!.source_type,
         extracted_text: f.extracted_text ?? null,
+        storage_path: f.storage_path ?? null,
+        mime_type: f.mime_type ?? null,
       }));
       const fileMap = new Map(files.map((f) => [f.id, f]));
       const sheets: SheetRow[] = (sheetsRes.data || [])
