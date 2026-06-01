@@ -7,6 +7,8 @@ interface OverlayLayerProps {
   pageSize: { width: number; height: number };
   hoveredId?: string | null;
   defaultColor?: string;
+  /** When provided, clicking an overlay invokes this with its id. */
+  onOverlayClick?: (id: string) => void;
 }
 
 /**
