@@ -1207,28 +1207,45 @@ export default function WorkbenchProjectDetail() {
           />
         )}
 
+        {/* Parent file modal — full multi-page PDF with page navigation */}
+        {activeFile && fileSource && (
+          <FileViewerModal
+            isOpen={!!activeFile}
+            onClose={() => setActiveFile(null)}
+            fileId={activeFile.id}
+            fileName={activeFile.name}
+            mimeType={activeFile.mime_type || "application/pdf"}
+            accessToken=""
+            detections={[]}
+            sourceOverride={fileSource}
+            analysisRequestId={requestId}
+            parentFileId={activeFile.id}
+            sheetId={null}
+            pageIndex={1}
+            awpClasses={enabledCols.map((name) => ({
+              name,
+              prefix: optionByName.get(name)?.idPrefix ?? null,
+              analysisCount:
+                fileCountLookup.get(`${activeFile.id}::${name}`) || 0,
+            }))}
+            fileNameById={Object.fromEntries(
+              fileGroups.map((g) => [g.file.id, g.file.name]),
+            )}
+            onInstancesChanged={() => {
+              queryClient.invalidateQueries({
+                queryKey: ["workbench-instances", requestId],
+              });
+            }}
+            persistKey={projectId}
+          />
+        )}
+
         {/* AWP class prompt modal */}
         <AwpPromptModal
           className={promptClass}
           onClose={() => setPromptClass(null)}
         />
 
-
-        {/* File-level click for files without sheets: pick first sheet if any, else nothing */}
-        {activeFileForFile && (() => {
-          const grp = fileGroups.find((g) => g.file.id === activeFileForFile.id);
-          const first = grp?.sheets[0];
-          if (first) {
-            // Defer to next tick to swap into sheet modal
-            setTimeout(() => {
-              setActiveSheet(first);
-              setActiveFileForFile(null);
-            }, 0);
-          } else {
-            setTimeout(() => setActiveFileForFile(null), 0);
-          }
-          return null;
-        })()}
 
         {/* Extracted-text modal */}
         <Dialog open={!!textFileId} onOpenChange={(o) => !o && setTextFileId(null)}>
