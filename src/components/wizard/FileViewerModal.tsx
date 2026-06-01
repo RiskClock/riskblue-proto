@@ -239,6 +239,13 @@ export const FileViewerModal = ({
     [toast, onInstancesChanged],
   );
 
+  // When viewing a per-sheet PDF (sheetId provided), the rendered PDF only
+  // has a single page (currentPage === 1) but instances are persisted under
+  // their original `pageIndex` from the source document. When viewing the
+  // full multi-page parent PDF, instances live on whatever page the user is
+  // currently on.
+  const effectivePage = sheetId ? pageIndex : currentPage;
+
   // ---- User-initiated actions ---------------------------------------------
   const handleCanvasClick = async (nx: number, ny: number) => {
     if (!sidebarEnabled || !selectedClass) return;
@@ -246,7 +253,7 @@ export const FileViewerModal = ({
       awp_class_name: selectedClass,
       nx,
       ny,
-      page_index: pageIndex,
+      page_index: effectivePage,
     });
     if (!row) return;
     setInstances((prev) => [...prev, row]);
