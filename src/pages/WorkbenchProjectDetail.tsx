@@ -524,14 +524,15 @@ export default function WorkbenchProjectDetail() {
     setSavingPrefs(true);
     try {
       const { error } = await supabase.from("workbench_column_preferences").upsert({
-        id: PREF_ID,
+        id: prefId,
         awp_class_names: draftCols,
         updated_at: new Date().toISOString(),
         updated_by: user?.id ?? null,
       });
       if (error) throw error;
-      queryClient.invalidateQueries({ queryKey: ["workbench-column-prefs"] });
+      queryClient.invalidateQueries({ queryKey: ["workbench-column-prefs", prefId] });
       setManageOpen(false);
+
     } catch (error: any) {
       toast({
         variant: "destructive",
