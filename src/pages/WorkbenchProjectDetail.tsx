@@ -68,6 +68,8 @@ interface FileRow {
   name: string;
   source_type: string;
   extracted_text: string | null;
+  storage_path: string | null;
+  mime_type: string | null;
 }
 
 interface SheetRow {
