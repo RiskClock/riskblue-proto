@@ -63,6 +63,9 @@ interface FileViewerModalProps {
   fileNameById?: Record<string, string>;
   /** Notified after any user marker is added or removed. */
   onInstancesChanged?: () => void;
+  /** Optional key (e.g. project id) used to persist the selected AWP class
+   *  in localStorage across modal openings and browser sessions. */
+  persistKey?: string;
 }
 
 const BOUNDING_BOX_COLOR = "#39FF14"; // legacy detections (green)
