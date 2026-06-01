@@ -1842,7 +1842,9 @@ async function runPipeline(params: PipelineParams) {
           analyze_model: analyzeModel,
           job_kind: "analyze",
           status: "pending",
-          sort_order: orderFor(item.awpClassName),
+          // Top-to-bottom by unit (workQueue is already sorted alphabetically by unit),
+          // then class within unit. Index drives DB worker claim order.
+          sort_order: jobRows.length,
         });
       }
 
