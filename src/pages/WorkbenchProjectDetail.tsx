@@ -549,8 +549,18 @@ export default function WorkbenchProjectDetail() {
     };
   }, [activeSheet]);
 
+  const fileSource = useMemo<DocumentSourceDescriptor | null>(() => {
+    if (!activeFile || !activeFile.storage_path) return null;
+    return {
+      kind: "supabase-storage",
+      bucket: bucketForSource(activeFile.source_type),
+      path: activeFile.storage_path,
+      mimeType: activeFile.mime_type || "application/pdf",
+    };
+  }, [activeFile]);
+
   // --- Pipeline actions -----------------------------------------------------
-  const runPipeline = async (phase: "extract" | "triage") => {
+  const runPipeline = async (phase: "extract" | "triage" | "analyze") => {
     if (!requestId) return;
     setRunning(phase);
     try {
@@ -558,7 +568,7 @@ export default function WorkbenchProjectDetail() {
         analysisRequestId: requestId,
         phaseOverride: phase,
       };
-      if (phase === "triage") {
+      if (phase === "triage" || phase === "analyze") {
         // Send eligible classes (those visible as columns) so triage actually runs
         const enabledAwpClasses = enabledCols.length
           ? enabledCols
@@ -569,11 +579,12 @@ export default function WorkbenchProjectDetail() {
         body,
       });
       if (error) throw error;
-      if (phase === "triage") {
-        toast({ title: "Triage started" });
-      }
+      if (phase === "triage") toast({ title: "Triage started" });
+      else if (phase === "analyze") toast({ title: "Analyze started" });
       queryClient.invalidateQueries({ queryKey: ["workbench-rows", requestId] });
       queryClient.invalidateQueries({ queryKey: ["workbench-triage", requestId] });
+      queryClient.invalidateQueries({ queryKey: ["workbench-analyze", requestId] });
+      queryClient.invalidateQueries({ queryKey: ["workbench-jobs", requestId] });
       queryClient.invalidateQueries({
         queryKey: ["workbench-analysis-request", projectId],
       });
