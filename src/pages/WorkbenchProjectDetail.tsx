@@ -116,6 +116,8 @@ export default function WorkbenchProjectDetail() {
   const [clearOpen, setClearOpen] = useState(false);
   const [clearing, setClearing] = useState(false);
   const [running, setRunning] = useState<"extract" | "triage" | null>(null);
+  const [promptClass, setPromptClass] = useState<string | null>(null);
+
 
   useEffect(() => {
     if (user && !isInternal) navigate("/projects", { replace: true });
