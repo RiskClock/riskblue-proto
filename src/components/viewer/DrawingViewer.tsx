@@ -379,6 +379,7 @@ export const DrawingViewer = forwardRef<DrawingViewerApi, DrawingViewerProps>(
                         ? (nx, ny) => onCanvasClick(nx, ny, activePage.pageNum)
                         : undefined
                     }
+                    onOverlayClick={onOverlayClick}
                   />
                 ) : (
                   <div className="flex flex-col gap-4">
@@ -399,6 +400,7 @@ export const DrawingViewer = forwardRef<DrawingViewerApi, DrawingViewerProps>(
                               ? (nx, ny) => onCanvasClick(nx, ny, p.pageNum)
                               : undefined
                           }
+                          onOverlayClick={onOverlayClick}
                         />
                       );
                     })}
