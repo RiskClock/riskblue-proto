@@ -1100,7 +1100,7 @@ function AwpPromptModal({
     <Dialog open={!!className} onOpenChange={(o) => !o && onClose()}>
       <DialogContent className="max-w-3xl">
         <DialogHeader>
-          <DialogTitle>{className} — prompt</DialogTitle>
+          <DialogTitle>{className}</DialogTitle>
           <DialogDescription>
             {row?.drive_file_name || "Prompt used during triage and analysis."}
           </DialogDescription>
