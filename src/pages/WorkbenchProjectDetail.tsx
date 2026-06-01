@@ -139,7 +139,7 @@ export default function WorkbenchProjectDetail() {
   });
 
   // Latest analysis_request for this project
-  const { data: analysisRequest } = useQuery({
+  const { data: analysisRequest, isLoading: isLoadingAnalysisRequest } = useQuery({
     queryKey: ["workbench-analysis-request", projectId],
     enabled: !!projectId && isInternal,
     queryFn: async () => {
