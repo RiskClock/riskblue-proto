@@ -143,7 +143,7 @@ export default function WorkbenchProjectDetail() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("analysis_requests")
-        .select("id, source_type, pipeline_phase, status")
+        .select("id, source_type, pipeline_phase, status, pipeline_progress_done, pipeline_progress_total")
         .eq("project_id", projectId!)
         .order("created_at", { ascending: false })
         .limit(1)
@@ -151,7 +151,7 @@ export default function WorkbenchProjectDetail() {
       if (error) throw error;
       return data;
     },
-    refetchInterval: running ? 3000 : false,
+    refetchInterval: 3000,
   });
 
   const requestId = analysisRequest?.id;
