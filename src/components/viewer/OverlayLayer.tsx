@@ -62,12 +62,14 @@ export const OverlayLayer = ({
   pageSize,
   hoveredId,
   defaultColor = "hsl(var(--destructive))",
+  onOverlayClick,
 }: OverlayLayerProps) => {
   return (
     <div
       className="pointer-events-none absolute inset-0"
       style={{ width: pageSize.width, height: pageSize.height }}
     >
+
       {overlays.map((o) => {
         const color = o.color ?? defaultColor;
         const hovered = hoveredId === o.id;
