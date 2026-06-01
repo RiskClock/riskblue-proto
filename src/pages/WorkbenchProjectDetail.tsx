@@ -113,6 +113,7 @@ export default function WorkbenchProjectDetail() {
   const isInternal = user?.email?.toLowerCase().endsWith("@riskclock.com") ?? false;
 
   const [activeSheet, setActiveSheet] = useState<SheetRow | null>(null);
+  const [activeFile, setActiveFile] = useState<FileRow | null>(null);
   const [activeFileForFile, setActiveFileForFile] = useState<FileRow | null>(null);
   const [manageOpen, setManageOpen] = useState(false);
   const [draftCols, setDraftCols] = useState<string[]>([]);
@@ -120,7 +121,7 @@ export default function WorkbenchProjectDetail() {
   const [textFileId, setTextFileId] = useState<string | null>(null);
   const [clearOpen, setClearOpen] = useState(false);
   const [clearing, setClearing] = useState(false);
-  const [running, setRunning] = useState<"extract" | "triage" | null>(null);
+  const [running, setRunning] = useState<"extract" | "triage" | "analyze" | null>(null);
   const [promptClass, setPromptClass] = useState<string | null>(null);
   const [expandedFiles, setExpandedFiles] = useState<Set<string>>(new Set());
 
