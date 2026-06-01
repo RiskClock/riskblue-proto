@@ -412,14 +412,17 @@ export default function WorkbenchProjectDetail() {
     return m;
   }, [awpOptions]);
 
+  // Column preferences are scoped per project. Legacy rows used id='global';
+  // each project now persists its own row keyed by projectId.
+  const prefId = projectId || PREF_ID;
   const { data: prefs } = useQuery({
-    queryKey: ["workbench-column-prefs"],
-    enabled: isInternal,
+    queryKey: ["workbench-column-prefs", prefId],
+    enabled: isInternal && !!prefId,
     queryFn: async () => {
       const { data, error } = await supabase
         .from("workbench_column_preferences")
         .select("awp_class_names")
-        .eq("id", PREF_ID)
+        .eq("id", prefId)
         .maybeSingle();
       if (error) throw error;
       return (data?.awp_class_names as string[]) || [];
@@ -427,6 +430,7 @@ export default function WorkbenchProjectDetail() {
   });
 
   const enabledCols = prefs || [];
+
 
   // (sheet, class) -> { score, status } for triage cell rendering on sub-rows
 
