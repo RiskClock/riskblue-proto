@@ -120,6 +120,18 @@ export default function WorkbenchProjectDetail() {
   const [clearing, setClearing] = useState(false);
   const [running, setRunning] = useState<"extract" | "triage" | null>(null);
   const [promptClass, setPromptClass] = useState<string | null>(null);
+  const [expandedFiles, setExpandedFiles] = useState<Set<string>>(new Set());
+
+  const toggleExpand = (fileId: string) => {
+    setExpandedFiles((prev) => {
+      const next = new Set(prev);
+      if (next.has(fileId)) next.delete(fileId);
+      else next.add(fileId);
+      return next;
+    });
+  };
+
+
 
 
   useEffect(() => {
