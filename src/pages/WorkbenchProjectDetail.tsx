@@ -695,9 +695,6 @@ export default function WorkbenchProjectDetail() {
                       <TableHead className={`${stickyHeadFirst} h-9 py-1`}>
                         Files ({totalFiles} file{totalFiles === 1 ? "" : "s"})
                       </TableHead>
-                      <TableHead className="h-9 py-1 whitespace-nowrap text-xs text-muted-foreground">
-                        Status
-                      </TableHead>
                       {enabledCols.map((name) => {
                         const opt = optionByName.get(name);
                         const label = opt?.idPrefix || name;
@@ -727,30 +724,33 @@ export default function WorkbenchProjectDetail() {
                       const singlePage = group.sheets.length <= 1;
                       const onlySheet = group.sheets[0];
                       const extractStatus = fileExtractStatus.get(group.file.id);
+                      const isProcessing =
+                        activePhase === "extract" && extractStatus !== "processed";
 
-                      const StatusCell = () => {
+                      const StatusBadge = () => {
                         if (extractStatus === "processed") {
                           return (
-                            <button
-                              type="button"
+                            <Badge
+                              variant="outline"
                               onClick={(e) => {
                                 e.stopPropagation();
                                 setTextFileId(group.file.id);
                               }}
-                              className="text-xs text-emerald-600 hover:text-emerald-700 underline-offset-2 hover:underline"
+                              className="text-[10px] bg-emerald-500/10 text-emerald-700 border-emerald-500/30 cursor-pointer hover:bg-emerald-500/20"
                             >
                               Processed
-                            </button>
+                            </Badge>
                           );
                         }
-                        if (extractStatus === "partial") {
+                        if (isProcessing || extractStatus === "partial") {
                           return (
-                            <span className="text-xs text-muted-foreground inline-flex items-center gap-1">
-                              <Loader2 className="h-3 w-3 animate-spin" /> Processing
-                            </span>
+                            <Badge variant="outline" className="text-[10px] gap-1">
+                              <Loader2 className="h-2.5 w-2.5 animate-spin" />
+                              Processing
+                            </Badge>
                           );
                         }
-                        return <span className="text-xs text-muted-foreground">—</span>;
+                        return null;
                       };
 
                       const renderTriageCell = (
@@ -761,6 +761,7 @@ export default function WorkbenchProjectDetail() {
                       ) => {
                         const key = `${fileId}::${awpClassName}`;
                         const override = overrideMap.get(key);
+                        const clickable = hasTriageRun;
                         const inner =
                           count > 0 ? (
                             <span className="font-medium tabular-nums">{count}</span>
@@ -772,14 +773,19 @@ export default function WorkbenchProjectDetail() {
                         return (
                           <TableCell
                             key={awpClassName}
-                            className={`text-center py-1 cursor-pointer relative group ${
+                            className={`text-center py-1 relative group ${
+                              clickable ? "cursor-pointer" : ""
+                            } ${
                               override === "exclude"
                                 ? "bg-muted/60"
                                 : override === "include"
                                   ? "bg-emerald-500/20"
-                                  : "hover:bg-muted/40"
+                                  : clickable
+                                    ? "hover:bg-muted/40"
+                                    : ""
                             }`}
                             onClick={(e) => {
+                              if (!clickable) return;
                               e.stopPropagation();
                               toggleOverride(fileId, awpClassName, count);
                             }}
@@ -796,15 +802,17 @@ export default function WorkbenchProjectDetail() {
                                   )}
                                 </span>
                               </TooltipTrigger>
-                              <TooltipContent>
-                                {override === "include"
-                                  ? "Manually included — click to clear"
-                                  : override === "exclude"
-                                    ? "Manually excluded — click to clear"
-                                    : count > 0
-                                      ? "Click to exclude"
-                                      : "Click to include"}
-                              </TooltipContent>
+                              {clickable && (
+                                <TooltipContent>
+                                  {override === "include"
+                                    ? "Manually included — click to clear"
+                                    : override === "exclude"
+                                      ? "Manually excluded — click to clear"
+                                      : count > 0
+                                        ? "Click to exclude"
+                                        : "Click to include"}
+                                </TooltipContent>
+                              )}
                             </Tooltip>
                           </TableCell>
                         );
@@ -823,15 +831,15 @@ export default function WorkbenchProjectDetail() {
                             <TableCell
                               className={`${stickyCellFirstBase} bg-card group-hover:bg-muted/50 py-1 text-sm`}
                             >
-                              <span className="font-medium">{group.file.name}</span>
-                              {!singlePage && (
-                                <span className="ml-2 text-xs text-muted-foreground">
-                                  {group.sheets.length} pages
-                                </span>
-                              )}
-                            </TableCell>
-                            <TableCell className="py-1">
-                              <StatusCell />
+                              <div className="flex items-center gap-2 min-w-0">
+                                <span className="font-medium truncate">{group.file.name}</span>
+                                {!singlePage && (
+                                  <span className="text-xs text-muted-foreground shrink-0">
+                                    {group.sheets.length} pages
+                                  </span>
+                                )}
+                                <StatusBadge />
+                              </div>
                             </TableCell>
                             {enabledCols.map((name) => {
                               const count =
@@ -862,7 +870,6 @@ export default function WorkbenchProjectDetail() {
                                     {s.sheet_title ? ` — ${s.sheet_title}` : ""}
                                   </span>
                                 </TableCell>
-                                <TableCell className="py-1" />
                                 {enabledCols.map((name) => {
                                   const count =
                                     sheetCountLookup.get(`${s.id}::${name}`) || 0;
