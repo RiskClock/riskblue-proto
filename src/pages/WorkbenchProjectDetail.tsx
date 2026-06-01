@@ -452,6 +452,24 @@ export default function WorkbenchProjectDetail() {
     return m;
   }, [analyzeRows]);
 
+  // In-flight job sets used to show per-cell spinners.
+  const triageInflight = useMemo(() => {
+    const s = new Set<string>();
+    for (const j of pipelineJobs || []) {
+      if (j.job_kind !== "triage" || !j.sheet_id || !j.awp_class_name) continue;
+      s.add(`${j.sheet_id}::${j.awp_class_name}`);
+    }
+    return s;
+  }, [pipelineJobs]);
+  const analyzeInflight = useMemo(() => {
+    const s = new Set<string>();
+    for (const j of pipelineJobs || []) {
+      if (j.job_kind !== "analyze" || !j.sheet_id || !j.awp_class_name) continue;
+      s.add(`${j.sheet_id}::${j.awp_class_name}`);
+    }
+    return s;
+  }, [pipelineJobs]);
+
   const fileCountLookup = useMemo(() => {
     const m = new Map<string, number>();
     for (const t of triage || []) {
