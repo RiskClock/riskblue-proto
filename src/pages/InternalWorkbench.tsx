@@ -124,6 +124,13 @@ export default function InternalWorkbench() {
     }
   }, [user, isInternal, navigate]);
 
+  useEffect(() => {
+    localStorage.setItem(
+      STORAGE_KEY,
+      JSON.stringify({ creators: filterCreators, statuses: filterStatuses }),
+    );
+  }, [filterCreators, filterStatuses]);
+
   const { data: projects, isLoading, refetch } = useQuery({
     queryKey: ["workbench-projects"],
     enabled: !!user && isInternal,
