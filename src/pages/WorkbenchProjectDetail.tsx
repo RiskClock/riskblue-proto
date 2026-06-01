@@ -958,6 +958,14 @@ export default function WorkbenchProjectDetail() {
               analysisCount:
                 fileCountLookup.get(`${activeSheet.parent_file_id}::${name}`) || 0,
             }))}
+            fileNameById={Object.fromEntries(
+              fileGroups.map((g) => [g.file.id, g.file.name]),
+            )}
+            onInstancesChanged={() => {
+              queryClient.invalidateQueries({
+                queryKey: ["workbench-instances", requestId],
+              });
+            }}
           />
         )}
 
