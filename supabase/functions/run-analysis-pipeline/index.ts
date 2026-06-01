@@ -1091,8 +1091,12 @@ async function runPipeline(params: PipelineParams) {
       : PHASE_ORDER.length - 1;
     const runPhase = (phase: string) => {
       const i = PHASE_ORDER.indexOf(phase);
-      // Split is a prerequisite for extract — run whenever extract or later runs.
-      if (phase === "split") return stopIdx >= PHASE_ORDER.indexOf("extract");
+      // Split is a prerequisite for extract — run whenever extract or later
+      // runs. Also runs when override is explicitly "split".
+      if (phase === "split") {
+        if (phaseOverride === "split") return true;
+        return stopIdx >= PHASE_ORDER.indexOf("extract");
+      }
       return i <= stopIdx;
     };
 
