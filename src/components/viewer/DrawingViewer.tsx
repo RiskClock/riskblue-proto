@@ -81,6 +81,7 @@ export const DrawingViewer = forwardRef<DrawingViewerApi, DrawingViewerProps>(
       onApiReady,
       onTotalPagesChange,
       onCanvasClick,
+      onOverlayClick,
       className,
     },
     ref
