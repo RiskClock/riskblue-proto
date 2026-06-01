@@ -401,17 +401,8 @@ export default function WorkbenchProjectDetail() {
 
   const enabledCols = prefs || [];
 
-  const sheetCountLookup = useMemo(() => {
-    const m = new Map<string, number>();
-    for (const t of triage || []) {
-      if (!t.sheet_id) continue;
-      const key = `${t.sheet_id}::${t.awp_class_name}`;
-      m.set(key, (m.get(key) || 0) + (t.instances || 0));
-    }
-    return m;
-  }, [triage]);
-
   // (sheet, class) -> { score, status } for triage cell rendering on sub-rows
+
   const sheetTriageLookup = useMemo(() => {
     const m = new Map<string, { score: number | null; status: string | null }>();
     for (const t of triage || []) {
