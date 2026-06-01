@@ -47,10 +47,8 @@ export const AppHeader = ({ leftContent }: AppHeaderProps) => {
             className="h-8 cursor-pointer"
             onClick={() => navigate("/projects")}
           />
-          {!accountLoading && (
-            <span className="text-lg font-bold text-black">
-              {isWMSV ? "Workbench" : "Portal"}
-            </span>
+          {!accountLoading && isWMSV && (
+            <span className="text-lg font-bold text-black">Workbench</span>
           )}
           {leftContent}
         </div>
