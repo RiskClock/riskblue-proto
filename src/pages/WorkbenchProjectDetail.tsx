@@ -745,7 +745,7 @@ export default function WorkbenchProjectDetail() {
                                 e.stopPropagation();
                                 setTextFileId(group.file.id);
                               }}
-                              className="text-[10px] bg-emerald-500/10 text-emerald-700 border-emerald-500/30 cursor-pointer hover:bg-emerald-500/20"
+                              className="ml-auto shrink-0 h-4 px-1.5 text-[10px] leading-none bg-emerald-500/10 text-emerald-700 border-emerald-500/30 cursor-pointer hover:bg-emerald-500/20"
                             >
                               Processed
                             </Badge>
@@ -753,7 +753,7 @@ export default function WorkbenchProjectDetail() {
                         }
                         if (isProcessing || extractStatus === "partial") {
                           return (
-                            <Badge variant="outline" className="text-[10px] gap-1">
+                            <Badge variant="outline" className="ml-auto shrink-0 h-4 px-1.5 text-[10px] leading-none gap-1">
                               <Loader2 className="h-2.5 w-2.5 animate-spin" />
                               Processing
                             </Badge>
@@ -761,6 +761,7 @@ export default function WorkbenchProjectDetail() {
                         }
                         return null;
                       };
+
 
                       const renderTriageCell = (
                         fileId: string,
