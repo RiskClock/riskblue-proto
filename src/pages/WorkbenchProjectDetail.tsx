@@ -816,7 +816,12 @@ export default function WorkbenchProjectDetail() {
                   <Square className="h-3.5 w-3.5 mr-1.5" /> Stop Analyzing
                 </Button>
               ) : (
-                <Button size="sm" variant="outline" disabled>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => runPipeline("analyze")}
+                  disabled={!requestId || phaseRunning || totalFiles === 0}
+                >
                   Analyze
                 </Button>
               )}
