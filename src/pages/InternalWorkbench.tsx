@@ -7,10 +7,26 @@ import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Checkbox } from "@/components/ui/checkbox";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { AppHeader } from "@/components/AppHeader";
 import { useHeapIdentify } from "@/hooks/useHeapIdentify";
-import { Eye, Trash2, Loader2, ShieldAlert } from "lucide-react";
+import {
+  ArrowDown,
+  ArrowUp,
+  ArrowUpDown,
+  Eye,
+  Filter,
+  Loader2,
+  ShieldAlert,
+  Trash2,
+} from "lucide-react";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -67,6 +83,15 @@ const formatBytes = (bytes: number | null): string => {
   return `${(bytes / (1024 * 1024 * 1024)).toFixed(1)} GB`;
 };
 
+type SortKey =
+  | "name"
+  | "creator"
+  | "created_at"
+  | "file_count"
+  | "total_size_bytes"
+  | "status";
+type SortDir = "asc" | "desc";
+
 export default function InternalWorkbench() {
   const { user } = useAuth();
   const navigate = useNavigate();
@@ -75,6 +100,11 @@ export default function InternalWorkbench() {
   const [deleteTarget, setDeleteTarget] = useState<WorkbenchProject | null>(null);
   const [confirmName, setConfirmName] = useState("");
   const [deleting, setDeleting] = useState(false);
+
+  const [sortKey, setSortKey] = useState<SortKey>("created_at");
+  const [sortDir, setSortDir] = useState<SortDir>("desc");
+  const [filterCreators, setFilterCreators] = useState<string[]>([]);
+  const [filterStatuses, setFilterStatuses] = useState<string[]>([]);
 
   const isInternal = user?.email?.toLowerCase().endsWith("@riskclock.com") ?? false;
 
@@ -145,6 +175,106 @@ export default function InternalWorkbench() {
     },
   });
 
+  const creatorOptions = useMemo(() => {
+    const seen = new Map<string, string>();
+    for (const p of projects || []) {
+      const key = p.creator_email || p.creator_name;
+      if (!seen.has(key)) {
+        seen.set(
+          key,
+          p.creator_email
+            ? `${p.creator_name} (${p.creator_email})`
+            : p.creator_name,
+        );
+      }
+    }
+    return Array.from(seen.entries())
+      .map(([value, label]) => ({ value, label }))
+      .sort((a, b) => a.label.localeCompare(b.label));
+  }, [projects]);
+
+  const statusOptions = useMemo(() => {
+    const seen = new Set<string>();
+    for (const p of projects || []) {
+      if (p.status) seen.add(p.status);
+    }
+    return Array.from(seen)
+      .map((s) => ({ value: s, label: statusLabels[s] || s }))
+      .sort((a, b) => a.label.localeCompare(b.label));
+  }, [projects]);
+
+  const filteredSorted = useMemo(() => {
+    let rows = projects || [];
+    if (filterCreators.length > 0) {
+      rows = rows.filter((p) =>
+        filterCreators.includes(p.creator_email || p.creator_name),
+      );
+    }
+    if (filterStatuses.length > 0) {
+      rows = rows.filter((p) => p.status && filterStatuses.includes(p.status));
+    }
+    const out = rows.slice();
+    out.sort((a, b) => {
+      let va: string | number = "";
+      let vb: string | number = "";
+      switch (sortKey) {
+        case "name":
+          va = a.name.toLowerCase();
+          vb = b.name.toLowerCase();
+          break;
+        case "creator":
+          va = a.creator_name.toLowerCase();
+          vb = b.creator_name.toLowerCase();
+          break;
+        case "created_at":
+          va = new Date(a.created_at).getTime();
+          vb = new Date(b.created_at).getTime();
+          break;
+        case "file_count":
+          va = a.file_count || 0;
+          vb = b.file_count || 0;
+          break;
+        case "total_size_bytes":
+          va = a.total_size_bytes ?? -1;
+          vb = b.total_size_bytes ?? -1;
+          break;
+        case "status":
+          va = (a.status && statusLabels[a.status]) || a.status || "";
+          vb = (b.status && statusLabels[b.status]) || b.status || "";
+          break;
+      }
+      if (va < vb) return sortDir === "asc" ? -1 : 1;
+      if (va > vb) return sortDir === "asc" ? 1 : -1;
+      return 0;
+    });
+    return out;
+  }, [projects, filterCreators, filterStatuses, sortKey, sortDir]);
+
+  const toggleSort = (key: SortKey) => {
+    if (sortKey === key) {
+      setSortDir(sortDir === "asc" ? "desc" : "asc");
+    } else {
+      setSortKey(key);
+      setSortDir(
+        key === "created_at" || key === "file_count" || key === "total_size_bytes"
+          ? "desc"
+          : "asc",
+      );
+    }
+  };
+
+  const SortIcon = ({ k }: { k: SortKey }) =>
+    sortKey !== k ? (
+      <ArrowUpDown className="h-3 w-3 ml-1 inline opacity-50" />
+    ) : sortDir === "asc" ? (
+      <ArrowUp className="h-3 w-3 ml-1 inline" />
+    ) : (
+      <ArrowDown className="h-3 w-3 ml-1 inline" />
+    );
+
+  const filterCount =
+    (filterCreators.length > 0 ? 1 : 0) + (filterStatuses.length > 0 ? 1 : 0);
+
   const handleView = (p: WorkbenchProject) => {
     navigate(p.account_type === "wmsv" ? `/wmsv-project/${p.id}` : `/project/${p.id}`);
   };
@@ -211,18 +341,50 @@ export default function InternalWorkbench() {
     <div className="h-screen flex flex-col bg-background overflow-hidden">
       <AppHeader />
       <main className="container mx-auto px-6 py-8 flex-1 overflow-auto">
-        <div className="mb-6 flex items-center justify-between">
+        <div className="mb-6 flex items-center justify-between gap-3">
           <div>
             <h1 className="text-3xl font-bold text-foreground">Workbench</h1>
             <p className="text-sm text-muted-foreground mt-1">
               All projects across every user. Internal access only.
             </p>
           </div>
-          {projects && (
-            <Badge variant="outline" className="text-sm">
-              {projects.length} project{projects.length === 1 ? "" : "s"}
-            </Badge>
-          )}
+          <Popover>
+            <PopoverTrigger asChild>
+              <Button variant="outline">
+                <Filter className="h-4 w-4 mr-2" />
+                Filter
+                {filterCount > 0 && (
+                  <Badge variant="secondary" className="ml-2 px-1.5">
+                    {filterCount}
+                  </Badge>
+                )}
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent align="end" className="w-80 space-y-4">
+              <div>
+                <Label className="text-xs uppercase text-muted-foreground">
+                  Created By
+                </Label>
+                <ChecklistGroup
+                  options={creatorOptions}
+                  selected={filterCreators}
+                  onChange={setFilterCreators}
+                  emptyLabel="No creators"
+                />
+              </div>
+              <div>
+                <Label className="text-xs uppercase text-muted-foreground">
+                  Status
+                </Label>
+                <ChecklistGroup
+                  options={statusOptions}
+                  selected={filterStatuses}
+                  onChange={setFilterStatuses}
+                  emptyLabel="No statuses"
+                />
+              </div>
+            </PopoverContent>
+          </Popover>
         </div>
 
         {isLoading ? (
@@ -236,17 +398,47 @@ export default function InternalWorkbench() {
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Project Name</TableHead>
-                  <TableHead>Created By</TableHead>
-                  <TableHead>Created On</TableHead>
-                  <TableHead className="text-right">Files</TableHead>
-                  <TableHead className="text-right">Total Size</TableHead>
-                  <TableHead>Status</TableHead>
+                  <TableHead
+                    className="cursor-pointer select-none"
+                    onClick={() => toggleSort("name")}
+                  >
+                    Project Name <SortIcon k="name" />
+                  </TableHead>
+                  <TableHead
+                    className="cursor-pointer select-none"
+                    onClick={() => toggleSort("creator")}
+                  >
+                    Created By <SortIcon k="creator" />
+                  </TableHead>
+                  <TableHead
+                    className="cursor-pointer select-none"
+                    onClick={() => toggleSort("created_at")}
+                  >
+                    Created On <SortIcon k="created_at" />
+                  </TableHead>
+                  <TableHead
+                    className="text-right cursor-pointer select-none"
+                    onClick={() => toggleSort("file_count")}
+                  >
+                    Files <SortIcon k="file_count" />
+                  </TableHead>
+                  <TableHead
+                    className="text-right cursor-pointer select-none"
+                    onClick={() => toggleSort("total_size_bytes")}
+                  >
+                    Total Size <SortIcon k="total_size_bytes" />
+                  </TableHead>
+                  <TableHead
+                    className="cursor-pointer select-none"
+                    onClick={() => toggleSort("status")}
+                  >
+                    Status <SortIcon k="status" />
+                  </TableHead>
                   <TableHead className="text-right w-[140px]">Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {projects.map((p) => {
+                {filteredSorted.map((p) => {
                   const label = p.status ? statusLabels[p.status] || p.status : "New";
                   const colorClass = p.status ? statusColors[p.status] || "" : "";
                   return (
@@ -340,6 +532,75 @@ export default function InternalWorkbench() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// ChecklistGroup — compact multi-select used in the Filter popover.
+// ---------------------------------------------------------------------------
+function ChecklistGroup({
+  options,
+  selected,
+  onChange,
+  emptyLabel,
+}: {
+  options: { value: string; label: string }[];
+  selected: string[];
+  onChange: (v: string[]) => void;
+  emptyLabel: string;
+}) {
+  const allChecked = options.length > 0 && selected.length === options.length;
+  const toggle = (value: string) => {
+    if (selected.includes(value)) onChange(selected.filter((v) => v !== value));
+    else onChange([...selected, value]);
+  };
+  return (
+    <div className="mt-2 rounded-md border">
+      <div className="px-2 py-1.5 border-b flex items-center justify-between">
+        <button
+          type="button"
+          className="text-xs text-primary hover:underline disabled:opacity-50"
+          onClick={() =>
+            onChange(allChecked ? [] : options.map((o) => o.value))
+          }
+          disabled={options.length === 0}
+        >
+          {allChecked ? "Uncheck all" : "Check all"}
+        </button>
+        {selected.length > 0 && (
+          <button
+            type="button"
+            className="text-xs text-muted-foreground hover:underline"
+            onClick={() => onChange([])}
+          >
+            Clear
+          </button>
+        )}
+      </div>
+      <div className="max-h-56 overflow-y-auto py-1">
+        {options.length === 0 ? (
+          <div className="px-3 py-2 text-sm text-muted-foreground">
+            {emptyLabel}
+          </div>
+        ) : (
+          options.map((o) => {
+            const checked = selected.includes(o.value);
+            return (
+              <label
+                key={o.value}
+                className="flex items-center gap-2 px-3 py-1.5 text-sm cursor-pointer hover:bg-muted/50"
+              >
+                <Checkbox
+                  checked={checked}
+                  onCheckedChange={() => toggle(o.value)}
+                />
+                <span className="truncate">{o.label}</span>
+              </label>
+            );
+          })
+        )}
+      </div>
     </div>
   );
 }
