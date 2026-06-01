@@ -282,6 +282,29 @@ export default function WorkbenchProjectDetail() {
     },
   });
 
+  // User-placed drawing instances (per file × class). Refreshed when modal mutates.
+  const { data: instanceRows } = useQuery({
+    queryKey: ["workbench-instances", requestId],
+    enabled: !!requestId,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("drawing_instances" as any)
+        .select("file_id, awp_class_name")
+        .eq("analysis_request_id", requestId!);
+      if (error) throw error;
+      return ((data as unknown) as { file_id: string; awp_class_name: string }[]) || [];
+    },
+  });
+
+  const instanceCountLookup = useMemo(() => {
+    const m = new Map<string, number>();
+    for (const r of instanceRows || []) {
+      const k = `${r.file_id}::${r.awp_class_name}`;
+      m.set(k, (m.get(k) || 0) + 1);
+    }
+    return m;
+  }, [instanceRows]);
+
   const overrideMap = useMemo(() => {
     const m = new Map<string, "include" | "exclude">();
     for (const o of overrides || []) m.set(`${o.file_id}::${o.awp_class_name}`, o.override_type);
@@ -852,12 +875,16 @@ export default function WorkbenchProjectDetail() {
                               </div>
                             </TableCell>
                             {enabledCols.map((name) => {
-                              const count =
+                              const baseCount =
                                 fileCountLookup.get(`${group.file.id}::${name}`) || 0;
-                              const scoreKnown = (triage || []).some(
-                                (t) =>
-                                  t.file_id === group.file.id && t.awp_class_name === name,
-                              );
+                              const userCount =
+                                instanceCountLookup.get(`${group.file.id}::${name}`) || 0;
+                              const count = baseCount + userCount;
+                              const scoreKnown =
+                                (triage || []).some(
+                                  (t) =>
+                                    t.file_id === group.file.id && t.awp_class_name === name,
+                                ) || userCount > 0;
                               return renderTriageCell(group.file.id, name, count, scoreKnown);
                             })}
                             <TableCell className="py-1" />
@@ -931,6 +958,14 @@ export default function WorkbenchProjectDetail() {
               analysisCount:
                 fileCountLookup.get(`${activeSheet.parent_file_id}::${name}`) || 0,
             }))}
+            fileNameById={Object.fromEntries(
+              fileGroups.map((g) => [g.file.id, g.file.name]),
+            )}
+            onInstancesChanged={() => {
+              queryClient.invalidateQueries({
+                queryKey: ["workbench-instances", requestId],
+              });
+            }}
           />
         )}
 
@@ -1100,7 +1135,7 @@ function AwpPromptModal({
     <Dialog open={!!className} onOpenChange={(o) => !o && onClose()}>
       <DialogContent className="max-w-3xl">
         <DialogHeader>
-          <DialogTitle>{className} — prompt</DialogTitle>
+          <DialogTitle>{className}</DialogTitle>
           <DialogDescription>
             {row?.drive_file_name || "Prompt used during triage and analysis."}
           </DialogDescription>

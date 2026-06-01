@@ -7,6 +7,8 @@ interface OverlayLayerProps {
   pageSize: { width: number; height: number };
   hoveredId?: string | null;
   defaultColor?: string;
+  /** When provided, clicking an overlay invokes this with its id. */
+  onOverlayClick?: (id: string) => void;
 }
 
 /**
@@ -60,12 +62,14 @@ export const OverlayLayer = ({
   pageSize,
   hoveredId,
   defaultColor = "hsl(var(--destructive))",
+  onOverlayClick,
 }: OverlayLayerProps) => {
   return (
     <div
       className="pointer-events-none absolute inset-0"
       style={{ width: pageSize.width, height: pageSize.height }}
     >
+
       {overlays.map((o) => {
         const color = o.color ?? defaultColor;
         const hovered = hoveredId === o.id;
@@ -80,6 +84,7 @@ export const OverlayLayer = ({
         );
         const diameter = Math.max(MIN_CIRCLE_DIAMETER_CSS, bboxSidePx * 1.5);
 
+        const clickable = !!onOverlayClick;
         const style: CSSProperties = {
           position: "absolute",
           left: cx - diameter / 2,
@@ -92,13 +97,26 @@ export const OverlayLayer = ({
           borderStyle: "solid",
           backgroundColor: withAlpha(color, hovered ? 0.28 : 0.22),
           boxSizing: "border-box",
+          pointerEvents: clickable ? "auto" : "none",
+          cursor: clickable ? "pointer" : undefined,
         };
 
         return (
-          <div key={o.id} style={style}>
+          <div
+            key={o.id}
+            style={style}
+            onClick={
+              clickable
+                ? (e) => {
+                    e.stopPropagation();
+                    onOverlayClick!(o.id);
+                  }
+                : undefined
+            }
+          >
             {o.label && (
               <div
-                className="absolute -top-5 left-1/2 -translate-x-1/2 px-1 text-[10px] font-bold text-white whitespace-nowrap rounded-sm"
+                className="absolute -top-5 left-1/2 -translate-x-1/2 px-1 text-[10px] font-bold text-white whitespace-nowrap rounded-sm pointer-events-none"
                 style={{ backgroundColor: color }}
               >
                 {o.label}
@@ -110,3 +128,4 @@ export const OverlayLayer = ({
     </div>
   );
 };
+

@@ -54,6 +54,8 @@ export interface DrawingViewerProps {
   onTotalPagesChange?: (n: number) => void;
   /** Called when user clicks on the page; receives normalized 0..1 coords. */
   onCanvasClick?: (nx: number, ny: number, pageNum: number) => void;
+  /** Called when user clicks on an overlay element; receives its id. */
+  onOverlayClick?: (overlayId: string) => void;
   className?: string;
 }
 
@@ -79,6 +81,7 @@ export const DrawingViewer = forwardRef<DrawingViewerApi, DrawingViewerProps>(
       onApiReady,
       onTotalPagesChange,
       onCanvasClick,
+      onOverlayClick,
       className,
     },
     ref
@@ -376,6 +379,7 @@ export const DrawingViewer = forwardRef<DrawingViewerApi, DrawingViewerProps>(
                         ? (nx, ny) => onCanvasClick(nx, ny, activePage.pageNum)
                         : undefined
                     }
+                    onOverlayClick={onOverlayClick}
                   />
                 ) : (
                   <div className="flex flex-col gap-4">
@@ -396,6 +400,7 @@ export const DrawingViewer = forwardRef<DrawingViewerApi, DrawingViewerProps>(
                               ? (nx, ny) => onCanvasClick(nx, ny, p.pageNum)
                               : undefined
                           }
+                          onOverlayClick={onOverlayClick}
                         />
                       );
                     })}
