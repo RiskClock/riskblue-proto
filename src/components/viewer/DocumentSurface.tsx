@@ -1,4 +1,4 @@
-import { CSSProperties, MouseEvent } from "react";
+import { CSSProperties, PointerEvent as ReactPointerEvent, useRef } from "react";
 import { OverlayLayer } from "./OverlayLayer";
 import type { NormalizedOverlay } from "./viewerGeometry";
 
@@ -13,6 +13,10 @@ interface DocumentSurfaceProps {
   onOverlayClick?: (overlayId: string) => void;
 }
 
+/** Max pointer movement (CSS px) between down and up to still count as a click,
+ *  rather than a pan gesture. */
+const CLICK_MOVE_THRESHOLD = 4;
+
 /**
  * Renders a single rasterized page (or image) as a CSS-sized <img>, with an
  * absolutely-positioned overlay layer on top.
@@ -25,6 +29,7 @@ export const DocumentSurface = ({
   onCanvasClick,
   onOverlayClick,
 }: DocumentSurfaceProps) => {
+  const downRef = useRef<{ x: number; y: number } | null>(null);
   const style: CSSProperties = {
     width: pageSize.width,
     height: pageSize.height,
@@ -32,15 +37,23 @@ export const DocumentSurface = ({
     userSelect: "none",
     cursor: onCanvasClick ? "crosshair" : undefined,
   };
-  const handleClick = (e: MouseEvent<HTMLDivElement>) => {
-    if (!onCanvasClick) return;
+  const handlePointerDown = (e: ReactPointerEvent<HTMLDivElement>) => {
+    downRef.current = { x: e.clientX, y: e.clientY };
+  };
+  const handlePointerUp = (e: ReactPointerEvent<HTMLDivElement>) => {
+    const start = downRef.current;
+    downRef.current = null;
+    if (!onCanvasClick || !start) return;
+    const dx = e.clientX - start.x;
+    const dy = e.clientY - start.y;
+    if (Math.hypot(dx, dy) > CLICK_MOVE_THRESHOLD) return; // panned, ignore
     const rect = e.currentTarget.getBoundingClientRect();
     const nx = (e.clientX - rect.left) / rect.width;
     const ny = (e.clientY - rect.top) / rect.height;
     if (nx >= 0 && nx <= 1 && ny >= 0 && ny <= 1) onCanvasClick(nx, ny);
   };
   return (
-    <div style={style} onClick={handleClick}>
+    <div style={style} onPointerDown={handlePointerDown} onPointerUp={handlePointerUp}>
       <img
         src={imageUrl}
         draggable={false}
