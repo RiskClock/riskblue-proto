@@ -8,7 +8,7 @@ import {
   Loader2,
   Settings2,
   ShieldAlert,
-  Sparkles,
+  Square,
   Trash2,
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
@@ -143,7 +143,7 @@ export default function WorkbenchProjectDetail() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("analysis_requests")
-        .select("id, source_type, pipeline_phase, status")
+        .select("id, source_type, pipeline_phase, status, pipeline_progress_done, pipeline_progress_total")
         .eq("project_id", projectId!)
         .order("created_at", { ascending: false })
         .limit(1)
@@ -151,11 +151,10 @@ export default function WorkbenchProjectDetail() {
       if (error) throw error;
       return data;
     },
-    refetchInterval: running ? 3000 : false,
+    refetchInterval: 3000,
   });
 
   const requestId = analysisRequest?.id;
-  const pipelinePhase = analysisRequest?.pipeline_phase ?? null;
 
   // Files + sheets for the latest request
   const { data: rows, isLoading } = useQuery({
@@ -209,7 +208,7 @@ export default function WorkbenchProjectDetail() {
         );
       return { files, sheets };
     },
-    refetchInterval: running ? 3000 : false,
+    refetchInterval: 3000,
   });
 
   // Group: every file is a group, with optional sheets underneath
@@ -238,7 +237,7 @@ export default function WorkbenchProjectDetail() {
         path: s.storage_path!,
         mimeType: "application/pdf",
       }));
-    const CONCURRENCY = 4;
+    const CONCURRENCY = 8;
     let idx = 0;
     const worker = async () => {
       while (!cancelled && idx < queue.length) {
@@ -264,7 +263,7 @@ export default function WorkbenchProjectDetail() {
       if (error) throw error;
       return (data || []) as TriageCount[];
     },
-    refetchInterval: running ? 3000 : false,
+    refetchInterval: 3000,
   });
 
   // Workbench-only overrides
@@ -427,9 +426,9 @@ export default function WorkbenchProjectDetail() {
         body,
       });
       if (error) throw error;
-      toast({
-        title: phase === "extract" ? "Extract Context started" : "Triage started",
-      });
+      if (phase === "triage") {
+        toast({ title: "Triage started" });
+      }
       queryClient.invalidateQueries({ queryKey: ["workbench-rows", requestId] });
       queryClient.invalidateQueries({ queryKey: ["workbench-triage", requestId] });
       queryClient.invalidateQueries({
@@ -561,7 +560,40 @@ export default function WorkbenchProjectDetail() {
 
   const stickyHeadFirst = "sticky left-0 z-30 bg-card min-w-[260px] border-r";
   const stickyCellFirstBase = "sticky left-0 z-10 border-r transition-colors";
-  const phaseRunning = !!pipelinePhase || !!running;
+
+  // Derive the currently-active phase from DB (authoritative) with `running`
+  // as a short-lived optimistic fallback while the row hasn't updated yet.
+  const dbPhase = analysisRequest?.pipeline_phase ?? null;
+  const dbStatus = analysisRequest?.status ?? null;
+  const activePhase: "extract" | "triage" | "analyze" | null =
+    dbPhase === "extracting"
+      ? "extract"
+      : dbPhase === "triaging"
+        ? "triage"
+        : dbPhase === "analyzing" || dbPhase === "summarizing" || dbPhase === "dispatching_analyze"
+          ? "analyze"
+          : running;
+  const phaseRunning = !!activePhase;
+  const hasTriageRun = (triage?.length ?? 0) > 0;
+
+  const stopPipeline = async () => {
+    if (!requestId) return;
+    try {
+      await supabase.functions.invoke("run-analysis-pipeline", {
+        body: { analysisRequestId: requestId, action: "stop" },
+      });
+      setRunning(null);
+      queryClient.invalidateQueries({ queryKey: ["workbench-analysis-request", projectId] });
+      queryClient.invalidateQueries({ queryKey: ["workbench-rows", requestId] });
+      queryClient.invalidateQueries({ queryKey: ["workbench-triage", requestId] });
+    } catch (error: any) {
+      toast({
+        variant: "destructive",
+        title: "Failed to stop",
+        description: getUserFriendlyError(error),
+      });
+    }
+  };
 
   return (
     <TooltipProvider delayDuration={150}>
@@ -585,9 +617,9 @@ export default function WorkbenchProjectDetail() {
                 {project?.name || "Project"}
               </h1>
             </div>
-            {pipelinePhase && (
+            {activePhase && (
               <Badge variant="outline" className="text-xs capitalize">
-                {pipelinePhase}
+                {dbPhase || activePhase}
               </Badge>
             )}
           </div>
@@ -597,35 +629,43 @@ export default function WorkbenchProjectDetail() {
           <div className="container mx-auto px-6 py-6 space-y-4">
             {/* Action toolbar */}
             <div className="flex flex-wrap items-center gap-2">
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={() => runPipeline("extract")}
-                disabled={!requestId || phaseRunning || totalFiles === 0}
-              >
-                {running === "extract" ? (
-                  <Loader2 className="h-4 w-4 mr-1.5 animate-spin" />
-                ) : (
-                  <Sparkles className="h-4 w-4 mr-1.5" />
-                )}
-                Extract Context
-              </Button>
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={() => runPipeline("triage")}
-                disabled={!requestId || phaseRunning || totalFiles === 0}
-              >
-                {running === "triage" ? (
-                  <Loader2 className="h-4 w-4 mr-1.5 animate-spin" />
-                ) : (
-                  <Sparkles className="h-4 w-4 mr-1.5" />
-                )}
-                Triage
-              </Button>
-              <Button size="sm" variant="outline" disabled>
-                Analyze
-              </Button>
+              {activePhase === "extract" ? (
+                <Button size="sm" variant="destructive" onClick={stopPipeline}>
+                  <Square className="h-3.5 w-3.5 mr-1.5" /> Stop Extract
+                </Button>
+              ) : (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => runPipeline("extract")}
+                  disabled={!requestId || phaseRunning || totalFiles === 0}
+                >
+                  Extract Context
+                </Button>
+              )}
+              {activePhase === "triage" ? (
+                <Button size="sm" variant="destructive" onClick={stopPipeline}>
+                  <Square className="h-3.5 w-3.5 mr-1.5" /> Stop Triage
+                </Button>
+              ) : (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => runPipeline("triage")}
+                  disabled={!requestId || phaseRunning || totalFiles === 0}
+                >
+                  Triage
+                </Button>
+              )}
+              {activePhase === "analyze" ? (
+                <Button size="sm" variant="destructive" onClick={stopPipeline}>
+                  <Square className="h-3.5 w-3.5 mr-1.5" /> Stop Analyze
+                </Button>
+              ) : (
+                <Button size="sm" variant="outline" disabled>
+                  Analyze
+                </Button>
+              )}
               <div className="flex-1" />
               <Button
                 size="sm"
@@ -653,9 +693,6 @@ export default function WorkbenchProjectDetail() {
                     <TableRow>
                       <TableHead className={`${stickyHeadFirst} h-9 py-1`}>
                         Files ({totalFiles} file{totalFiles === 1 ? "" : "s"})
-                      </TableHead>
-                      <TableHead className="h-9 py-1 whitespace-nowrap text-xs text-muted-foreground">
-                        Status
                       </TableHead>
                       {enabledCols.map((name) => {
                         const opt = optionByName.get(name);
@@ -686,30 +723,33 @@ export default function WorkbenchProjectDetail() {
                       const singlePage = group.sheets.length <= 1;
                       const onlySheet = group.sheets[0];
                       const extractStatus = fileExtractStatus.get(group.file.id);
+                      const isProcessing =
+                        activePhase === "extract" && extractStatus !== "processed";
 
-                      const StatusCell = () => {
+                      const StatusBadge = () => {
                         if (extractStatus === "processed") {
                           return (
-                            <button
-                              type="button"
+                            <Badge
+                              variant="outline"
                               onClick={(e) => {
                                 e.stopPropagation();
                                 setTextFileId(group.file.id);
                               }}
-                              className="text-xs text-emerald-600 hover:text-emerald-700 underline-offset-2 hover:underline"
+                              className="text-[10px] bg-emerald-500/10 text-emerald-700 border-emerald-500/30 cursor-pointer hover:bg-emerald-500/20"
                             >
                               Processed
-                            </button>
+                            </Badge>
                           );
                         }
-                        if (extractStatus === "partial") {
+                        if (isProcessing || extractStatus === "partial") {
                           return (
-                            <span className="text-xs text-muted-foreground inline-flex items-center gap-1">
-                              <Loader2 className="h-3 w-3 animate-spin" /> Processing
-                            </span>
+                            <Badge variant="outline" className="text-[10px] gap-1">
+                              <Loader2 className="h-2.5 w-2.5 animate-spin" />
+                              Processing
+                            </Badge>
                           );
                         }
-                        return <span className="text-xs text-muted-foreground">—</span>;
+                        return null;
                       };
 
                       const renderTriageCell = (
@@ -720,6 +760,7 @@ export default function WorkbenchProjectDetail() {
                       ) => {
                         const key = `${fileId}::${awpClassName}`;
                         const override = overrideMap.get(key);
+                        const clickable = hasTriageRun;
                         const inner =
                           count > 0 ? (
                             <span className="font-medium tabular-nums">{count}</span>
@@ -731,14 +772,19 @@ export default function WorkbenchProjectDetail() {
                         return (
                           <TableCell
                             key={awpClassName}
-                            className={`text-center py-1 cursor-pointer relative group ${
+                            className={`text-center py-1 relative group ${
+                              clickable ? "cursor-pointer" : ""
+                            } ${
                               override === "exclude"
                                 ? "bg-muted/60"
                                 : override === "include"
                                   ? "bg-emerald-500/20"
-                                  : "hover:bg-muted/40"
+                                  : clickable
+                                    ? "hover:bg-muted/40"
+                                    : ""
                             }`}
                             onClick={(e) => {
+                              if (!clickable) return;
                               e.stopPropagation();
                               toggleOverride(fileId, awpClassName, count);
                             }}
@@ -755,15 +801,17 @@ export default function WorkbenchProjectDetail() {
                                   )}
                                 </span>
                               </TooltipTrigger>
-                              <TooltipContent>
-                                {override === "include"
-                                  ? "Manually included — click to clear"
-                                  : override === "exclude"
-                                    ? "Manually excluded — click to clear"
-                                    : count > 0
-                                      ? "Click to exclude"
-                                      : "Click to include"}
-                              </TooltipContent>
+                              {clickable && (
+                                <TooltipContent>
+                                  {override === "include"
+                                    ? "Manually included — click to clear"
+                                    : override === "exclude"
+                                      ? "Manually excluded — click to clear"
+                                      : count > 0
+                                        ? "Click to exclude"
+                                        : "Click to include"}
+                                </TooltipContent>
+                              )}
                             </Tooltip>
                           </TableCell>
                         );
@@ -782,15 +830,15 @@ export default function WorkbenchProjectDetail() {
                             <TableCell
                               className={`${stickyCellFirstBase} bg-card group-hover:bg-muted/50 py-1 text-sm`}
                             >
-                              <span className="font-medium">{group.file.name}</span>
-                              {!singlePage && (
-                                <span className="ml-2 text-xs text-muted-foreground">
-                                  {group.sheets.length} pages
-                                </span>
-                              )}
-                            </TableCell>
-                            <TableCell className="py-1">
-                              <StatusCell />
+                              <div className="flex items-center gap-2 min-w-0">
+                                <span className="font-medium truncate">{group.file.name}</span>
+                                {!singlePage && (
+                                  <span className="text-xs text-muted-foreground shrink-0">
+                                    {group.sheets.length} pages
+                                  </span>
+                                )}
+                                <StatusBadge />
+                              </div>
                             </TableCell>
                             {enabledCols.map((name) => {
                               const count =
@@ -821,7 +869,6 @@ export default function WorkbenchProjectDetail() {
                                     {s.sheet_title ? ` — ${s.sheet_title}` : ""}
                                   </span>
                                 </TableCell>
-                                <TableCell className="py-1" />
                                 {enabledCols.map((name) => {
                                   const count =
                                     sheetCountLookup.get(`${s.id}::${name}`) || 0;

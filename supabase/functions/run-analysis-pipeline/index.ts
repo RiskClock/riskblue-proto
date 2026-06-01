@@ -1229,6 +1229,16 @@ async function runPipeline(params: PipelineParams) {
         .order("parent_file_id", { ascending: true })
         .order("page_index", { ascending: true });
       sheets = (sheetRows as any[]) || [];
+      // Re-sort top-to-bottom by parent file name (alphabetical), then page.
+      const fileNameById = new Map<string, string>();
+      for (const f of files as any[]) fileNameById.set(f.id, (f as any).name ?? "");
+      sheets.sort((a, b) => {
+        const an = fileNameById.get(a.parent_file_id) ?? "";
+        const bn = fileNameById.get(b.parent_file_id) ?? "";
+        const c = an.localeCompare(bn);
+        if (c !== 0) return c;
+        return (a.page_index ?? 0) - (b.page_index ?? 0);
+      });
     }
 
     // Sheet-mode for the run: enabled when normalization is on AND we have
@@ -1323,6 +1333,15 @@ async function runPipeline(params: PipelineParams) {
           .order("parent_file_id", { ascending: true })
           .order("page_index", { ascending: true });
         sheets = (sheetRows2 as any[]) || [];
+        const fileNameById2 = new Map<string, string>();
+        for (const f of files as any[]) fileNameById2.set(f.id, (f as any).name ?? "");
+        sheets.sort((a, b) => {
+          const an = fileNameById2.get(a.parent_file_id) ?? "";
+          const bn = fileNameById2.get(b.parent_file_id) ?? "";
+          const c = an.localeCompare(bn);
+          if (c !== 0) return c;
+          return (a.page_index ?? 0) - (b.page_index ?? 0);
+        });
       }
 
       // Bounded run: if this invocation was started by the Extract Context
@@ -1674,13 +1693,12 @@ async function runPipeline(params: PipelineParams) {
         }
       }
 
-      // Sort so jobs are inserted (and claimed) in canonical class order,
-      // then by unit name for stable ordering within each class.
+      // Sort so jobs are claimed top-to-bottom by unit name (alphabetical),
+      // then by canonical class order within each unit.
       workQueue.sort((a, b) => {
-        const ao = orderFor(a.awpClassName);
-        const bo = orderFor(b.awpClassName);
-        if (ao !== bo) return ao - bo;
-        return a.unitName.localeCompare(b.unitName);
+        const c = a.unitName.localeCompare(b.unitName);
+        if (c !== 0) return c;
+        return orderFor(a.awpClassName) - orderFor(b.awpClassName);
       });
 
       console.log(
@@ -1824,7 +1842,9 @@ async function runPipeline(params: PipelineParams) {
           analyze_model: analyzeModel,
           job_kind: "analyze",
           status: "pending",
-          sort_order: orderFor(item.awpClassName),
+          // Top-to-bottom by unit (workQueue is already sorted alphabetically by unit),
+          // then class within unit. Index drives DB worker claim order.
+          sort_order: jobRows.length,
         });
       }
 
