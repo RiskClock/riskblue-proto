@@ -472,12 +472,18 @@ export default function InternalWorkbench() {
                     >
                       <TableCell className="font-medium">{p.name}</TableCell>
                       <TableCell>
-                        <div className="flex flex-col">
-                          <span className="text-sm">{p.creator_name}</span>
-                          {p.creator_email && (
-                            <span className="text-xs text-muted-foreground">{p.creator_email}</span>
-                          )}
-                        </div>
+                        <TooltipProvider delayDuration={200}>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <span className="text-sm cursor-default">{p.creator_name}</span>
+                            </TooltipTrigger>
+                            {p.creator_email && (
+                              <TooltipContent>
+                                <p>{p.creator_email}</p>
+                              </TooltipContent>
+                            )}
+                          </Tooltip>
+                        </TooltipProvider>
                       </TableCell>
                       <TableCell className="text-muted-foreground">
                         {format(new Date(p.created_at), "MMM d, yyyy")}
