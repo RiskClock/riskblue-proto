@@ -633,7 +633,7 @@ export default function WorkbenchProjectDetail() {
             <div className="flex flex-wrap items-center gap-2">
               {activePhase === "extract" ? (
                 <Button size="sm" variant="destructive" onClick={stopPipeline}>
-                  <Square className="h-3.5 w-3.5 mr-1.5" /> Stop Extract
+                  <Square className="h-3.5 w-3.5 mr-1.5" /> Stop Extracting Context
                 </Button>
               ) : (
                 <Button
@@ -647,7 +647,7 @@ export default function WorkbenchProjectDetail() {
               )}
               {activePhase === "triage" ? (
                 <Button size="sm" variant="destructive" onClick={stopPipeline}>
-                  <Square className="h-3.5 w-3.5 mr-1.5" /> Stop Triage
+                  <Square className="h-3.5 w-3.5 mr-1.5" /> Stop Triaging
                 </Button>
               ) : (
                 <Button
@@ -661,13 +661,14 @@ export default function WorkbenchProjectDetail() {
               )}
               {activePhase === "analyze" ? (
                 <Button size="sm" variant="destructive" onClick={stopPipeline}>
-                  <Square className="h-3.5 w-3.5 mr-1.5" /> Stop Analyze
+                  <Square className="h-3.5 w-3.5 mr-1.5" /> Stop Analyzing
                 </Button>
               ) : (
                 <Button size="sm" variant="outline" disabled>
                   Analyze
                 </Button>
               )}
+
               <div className="flex-1" />
               <Button
                 size="sm"
