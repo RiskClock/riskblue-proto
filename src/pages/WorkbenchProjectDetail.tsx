@@ -630,35 +630,43 @@ export default function WorkbenchProjectDetail() {
           <div className="container mx-auto px-6 py-6 space-y-4">
             {/* Action toolbar */}
             <div className="flex flex-wrap items-center gap-2">
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={() => runPipeline("extract")}
-                disabled={!requestId || phaseRunning || totalFiles === 0}
-              >
-                {running === "extract" ? (
-                  <Loader2 className="h-4 w-4 mr-1.5 animate-spin" />
-                ) : (
-                  <Sparkles className="h-4 w-4 mr-1.5" />
-                )}
-                Extract Context
-              </Button>
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={() => runPipeline("triage")}
-                disabled={!requestId || phaseRunning || totalFiles === 0}
-              >
-                {running === "triage" ? (
-                  <Loader2 className="h-4 w-4 mr-1.5 animate-spin" />
-                ) : (
-                  <Sparkles className="h-4 w-4 mr-1.5" />
-                )}
-                Triage
-              </Button>
-              <Button size="sm" variant="outline" disabled>
-                Analyze
-              </Button>
+              {activePhase === "extract" ? (
+                <Button size="sm" variant="destructive" onClick={stopPipeline}>
+                  <Square className="h-3.5 w-3.5 mr-1.5" /> Stop Extract
+                </Button>
+              ) : (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => runPipeline("extract")}
+                  disabled={!requestId || phaseRunning || totalFiles === 0}
+                >
+                  Extract Context
+                </Button>
+              )}
+              {activePhase === "triage" ? (
+                <Button size="sm" variant="destructive" onClick={stopPipeline}>
+                  <Square className="h-3.5 w-3.5 mr-1.5" /> Stop Triage
+                </Button>
+              ) : (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => runPipeline("triage")}
+                  disabled={!requestId || phaseRunning || totalFiles === 0}
+                >
+                  Triage
+                </Button>
+              )}
+              {activePhase === "analyze" ? (
+                <Button size="sm" variant="destructive" onClick={stopPipeline}>
+                  <Square className="h-3.5 w-3.5 mr-1.5" /> Stop Analyze
+                </Button>
+              ) : (
+                <Button size="sm" variant="outline" disabled>
+                  Analyze
+                </Button>
+              )}
               <div className="flex-1" />
               <Button
                 size="sm"
