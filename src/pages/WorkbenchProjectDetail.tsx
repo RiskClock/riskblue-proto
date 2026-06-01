@@ -68,6 +68,8 @@ interface FileRow {
   name: string;
   source_type: string;
   extracted_text: string | null;
+  storage_path: string | null;
+  mime_type: string | null;
 }
 
 interface SheetRow {
@@ -111,14 +113,15 @@ export default function WorkbenchProjectDetail() {
   const isInternal = user?.email?.toLowerCase().endsWith("@riskclock.com") ?? false;
 
   const [activeSheet, setActiveSheet] = useState<SheetRow | null>(null);
-  const [activeFileForFile, setActiveFileForFile] = useState<FileRow | null>(null);
+  const [activeFile, setActiveFile] = useState<FileRow | null>(null);
+  
   const [manageOpen, setManageOpen] = useState(false);
   const [draftCols, setDraftCols] = useState<string[]>([]);
   const [savingPrefs, setSavingPrefs] = useState(false);
   const [textFileId, setTextFileId] = useState<string | null>(null);
   const [clearOpen, setClearOpen] = useState(false);
   const [clearing, setClearing] = useState(false);
-  const [running, setRunning] = useState<"extract" | "triage" | null>(null);
+  const [running, setRunning] = useState<"extract" | "triage" | "analyze" | null>(null);
   const [promptClass, setPromptClass] = useState<string | null>(null);
   const [expandedFiles, setExpandedFiles] = useState<Set<string>>(new Set());
 
@@ -181,7 +184,7 @@ export default function WorkbenchProjectDetail() {
       const [filesRes, sheetsRes] = await Promise.all([
         supabase
           .from("analysis_request_files")
-          .select("id, name, extracted_text")
+          .select("id, name, extracted_text, storage_path, mime_type")
           .eq("analysis_request_id", requestId!)
           .order("name"),
         supabase
@@ -199,6 +202,8 @@ export default function WorkbenchProjectDetail() {
         name: f.name,
         source_type: analysisRequest!.source_type,
         extracted_text: f.extracted_text ?? null,
+        storage_path: f.storage_path ?? null,
+        mime_type: f.mime_type ?? null,
       }));
       const fileMap = new Map(files.map((f) => [f.id, f]));
       const sheets: SheetRow[] = (sheetsRes.data || [])
@@ -324,6 +329,28 @@ export default function WorkbenchProjectDetail() {
     refetchInterval: 3000,
   });
 
+  // In-flight pipeline jobs — used to show per-cell spinners during triage
+  // (and later analyze) without waiting for the final results row to land.
+  const { data: pipelineJobs } = useQuery({
+    queryKey: ["workbench-jobs", requestId],
+    enabled: !!requestId,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("analysis_pipeline_jobs")
+        .select("sheet_id, awp_class_name, status, job_kind")
+        .eq("analysis_request_id", requestId!)
+        .in("status", ["pending", "processing"]);
+      if (error) throw error;
+      return (data || []) as {
+        sheet_id: string | null;
+        awp_class_name: string | null;
+        status: string;
+        job_kind: string;
+      }[];
+    },
+    refetchInterval: 2000,
+  });
+
 
 
   // Workbench-only overrides
@@ -425,6 +452,24 @@ export default function WorkbenchProjectDetail() {
     return m;
   }, [analyzeRows]);
 
+  // In-flight job sets used to show per-cell spinners.
+  const triageInflight = useMemo(() => {
+    const s = new Set<string>();
+    for (const j of pipelineJobs || []) {
+      if (j.job_kind !== "triage" || !j.sheet_id || !j.awp_class_name) continue;
+      s.add(`${j.sheet_id}::${j.awp_class_name}`);
+    }
+    return s;
+  }, [pipelineJobs]);
+  const analyzeInflight = useMemo(() => {
+    const s = new Set<string>();
+    for (const j of pipelineJobs || []) {
+      if (j.job_kind !== "analyze" || !j.sheet_id || !j.awp_class_name) continue;
+      s.add(`${j.sheet_id}::${j.awp_class_name}`);
+    }
+    return s;
+  }, [pipelineJobs]);
+
   const fileCountLookup = useMemo(() => {
     const m = new Map<string, number>();
     for (const t of triage || []) {
@@ -504,8 +549,18 @@ export default function WorkbenchProjectDetail() {
     };
   }, [activeSheet]);
 
+  const fileSource = useMemo<DocumentSourceDescriptor | null>(() => {
+    if (!activeFile || !activeFile.storage_path) return null;
+    return {
+      kind: "supabase-storage",
+      bucket: bucketForSource(activeFile.source_type),
+      path: activeFile.storage_path,
+      mimeType: activeFile.mime_type || "application/pdf",
+    };
+  }, [activeFile]);
+
   // --- Pipeline actions -----------------------------------------------------
-  const runPipeline = async (phase: "extract" | "triage") => {
+  const runPipeline = async (phase: "extract" | "triage" | "analyze") => {
     if (!requestId) return;
     setRunning(phase);
     try {
@@ -513,7 +568,7 @@ export default function WorkbenchProjectDetail() {
         analysisRequestId: requestId,
         phaseOverride: phase,
       };
-      if (phase === "triage") {
+      if (phase === "triage" || phase === "analyze") {
         // Send eligible classes (those visible as columns) so triage actually runs
         const enabledAwpClasses = enabledCols.length
           ? enabledCols
@@ -524,11 +579,12 @@ export default function WorkbenchProjectDetail() {
         body,
       });
       if (error) throw error;
-      if (phase === "triage") {
-        toast({ title: "Triage started" });
-      }
+      if (phase === "triage") toast({ title: "Triage started" });
+      else if (phase === "analyze") toast({ title: "Analyze started" });
       queryClient.invalidateQueries({ queryKey: ["workbench-rows", requestId] });
       queryClient.invalidateQueries({ queryKey: ["workbench-triage", requestId] });
+      queryClient.invalidateQueries({ queryKey: ["workbench-analyze", requestId] });
+      queryClient.invalidateQueries({ queryKey: ["workbench-jobs", requestId] });
       queryClient.invalidateQueries({
         queryKey: ["workbench-analysis-request", projectId],
       });
@@ -656,8 +712,8 @@ export default function WorkbenchProjectDetail() {
 
   const grouped = awpOptions ? groupAWPOptionsByCategory(eligibleOptions) : {};
 
-  const stickyHeadFirst = "sticky left-0 z-30 bg-card min-w-[260px] border-r";
-  const stickyCellFirstBase = "sticky left-0 z-10 border-r transition-colors";
+  const stickyHeadFirst = "sticky left-0 z-30 bg-card min-w-[260px] max-w-[420px] w-[420px] border-r";
+  const stickyCellFirstBase = "sticky left-0 z-10 border-r transition-colors max-w-[420px] w-[420px]";
 
   // Derive the currently-active phase from DB (authoritative) with `running`
   // as a short-lived optimistic fallback while the row hasn't updated yet.
@@ -760,7 +816,12 @@ export default function WorkbenchProjectDetail() {
                   <Square className="h-3.5 w-3.5 mr-1.5" /> Stop Analyzing
                 </Button>
               ) : (
-                <Button size="sm" variant="outline" disabled>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => runPipeline("analyze")}
+                  disabled={!requestId || phaseRunning || totalFiles === 0}
+                >
                   Analyze
                 </Button>
               )}
@@ -924,67 +985,49 @@ export default function WorkbenchProjectDetail() {
                         );
                       };
 
-                      // Per-sheet phase status helpers
-                      const sheetExtractState = (s: SheetRow) => {
+                      // Per-sheet extract state — drives the per-page Processing/Processed badge.
+                      const sheetExtractState = (s: SheetRow): "done" | "running" | "failed" | "pending" => {
                         const st = s.extract_status;
                         if (st === "extracted" || st === "skipped") return "done";
                         if (st === "extracting") return "running";
                         if (st === "failed") return "failed";
                         return "pending";
                       };
-                      const sheetTriageState = (s: SheetRow) => {
-                        if (!enabledCols.length) return "pending";
-                        let done = 0, running = 0, failed = 0;
-                        for (const name of enabledCols) {
-                          const r = sheetTriageLookup.get(`${s.id}::${name}`);
-                          if (!r) continue;
-                          if (r.status === "completed" || r.status === "complete") done++;
-                          else if (r.status === "failed") failed++;
-                          else running++;
-                        }
-                        if (done === enabledCols.length) return "done";
-                        if (running > 0 || done > 0) return done === 0 ? "running" : "partial";
-                        if (failed > 0) return "failed";
-                        return "pending";
-                      };
-                      const sheetAnalyzeState = (s: SheetRow) => {
-                        if (!enabledCols.length) return "pending";
-                        let done = 0, running = 0, failed = 0, total = 0;
-                        for (const name of enabledCols) {
-                          const st = sheetAnalyzeLookup.get(`${s.id}::${name}`);
-                          if (!st) continue;
-                          total++;
-                          if (st === "completed" || st === "complete") done++;
-                          else if (st === "failed") failed++;
-                          else running++;
-                        }
-                        if (total === 0) return "pending";
-                        if (running > 0) return "running";
-                        if (done > 0 && failed === 0) return "done";
-                        if (done > 0) return "partial";
-                        if (failed > 0) return "failed";
-                        return "pending";
-                      };
 
-                      const PhasePill = ({ label, state }: { label: string; state: string }) => {
-                        const cls =
-                          state === "done"
-                            ? "bg-emerald-500/15 text-emerald-700 border-emerald-500/30"
-                            : state === "running"
-                              ? "bg-purple-500/15 text-purple-700 border-purple-500/30"
-                              : state === "partial"
-                                ? "bg-amber-500/15 text-amber-700 border-amber-500/30"
-                                : state === "failed"
-                                  ? "bg-red-500/15 text-red-700 border-red-500/30"
-                                  : "bg-muted text-muted-foreground border-border";
-                        return (
-                          <span
-                            className={`inline-flex items-center gap-1 h-4 px-1.5 rounded border text-[10px] leading-none ${cls}`}
-                          >
-                            {state === "running" && <Loader2 className="h-2.5 w-2.5 animate-spin" />}
-                            {label}
-                          </span>
-                        );
+                      const SheetStatusBadge = ({ s }: { s: SheetRow }) => {
+                        const st = sheetExtractState(s);
+                        if (st === "done") {
+                          return (
+                            <Badge
+                              variant="outline"
+                              className="ml-auto shrink-0 h-4 px-1.5 text-[10px] leading-none bg-emerald-500/10 text-emerald-700 border-emerald-500/30"
+                            >
+                              Processed
+                            </Badge>
+                          );
+                        }
+                        if (st === "running" || (activePhase === "extract" && st !== "failed")) {
+                          return (
+                            <Badge
+                              variant="outline"
+                              className="ml-auto shrink-0 h-4 px-1.5 text-[10px] leading-none gap-1"
+                            >
+                              <Loader2 className="h-2.5 w-2.5 animate-spin" />
+                              Processing
+                            </Badge>
+                          );
+                        }
+                        if (st === "failed") {
+                          return (
+                            <Badge
+                              variant="outline"
+                              className="ml-auto shrink-0 h-4 px-1.5 text-[10px] leading-none bg-red-500/10 text-red-700 border-red-500/30"
+                            >
+                              Failed
+                            </Badge>
+                          );
+                        }
+                        return null;
                       };
 
                       const isExpanded = expandedFiles.has(group.file.id);
@@ -996,7 +1039,7 @@ export default function WorkbenchProjectDetail() {
                             className="group h-8 cursor-pointer"
                             onClick={() => {
                               if (singlePage && onlySheet) setActiveSheet(onlySheet);
-                              else setActiveFileForFile(group.file);
+                              else setActiveFile(group.file);
                             }}
                           >
                             <TableCell
@@ -1022,7 +1065,7 @@ export default function WorkbenchProjectDetail() {
                                 ) : (
                                   <span className="inline-block w-3.5 shrink-0" />
                                 )}
-                                <span className="font-medium truncate">{group.file.name}</span>
+                                <span className="font-medium truncate min-w-0">{group.file.name}</span>
                                 {!singlePage && (
                                   <span className="text-xs text-muted-foreground shrink-0">
                                     {group.sheets.length} pages
@@ -1059,16 +1102,12 @@ export default function WorkbenchProjectDetail() {
                                   className={`${stickyCellFirstBase} bg-muted/10 group-hover:bg-muted/30 py-1 text-sm`}
                                 >
                                   <div className="flex items-center gap-2 min-w-0 pl-7">
-                                    <span className="text-muted-foreground shrink-0">
+                                    <span className="text-muted-foreground truncate min-w-0">
                                       Page {s.page_index}
                                       {s.sheet_number ? ` · ${s.sheet_number}` : ""}
                                       {s.sheet_title ? ` — ${s.sheet_title}` : ""}
                                     </span>
-                                    <div className="flex items-center gap-1 ml-auto shrink-0">
-                                      <PhasePill label="Extract" state={sheetExtractState(s)} />
-                                      <PhasePill label="Triage" state={sheetTriageState(s)} />
-                                      <PhasePill label="Analyze" state={sheetAnalyzeState(s)} />
-                                    </div>
+                                    <SheetStatusBadge s={s} />
                                   </div>
                                 </TableCell>
                                 {enabledCols.map((name) => {
@@ -1076,12 +1115,13 @@ export default function WorkbenchProjectDetail() {
                                   const score = tr?.score;
                                   const failed = tr?.status === "failed";
                                   const hasScore = typeof score === "number";
+                                  const inflight = triageInflight.has(`${s.id}::${name}`);
                                   // Match grid behavior: green bg opacity proportional to score
                                   const opacity = hasScore ? Math.max(0, Math.min(100, score!)) / 100 : 0;
                                   return (
                                     <TableCell
                                       key={name}
-                                      className="text-center py-1 text-xs relative"
+                                      className="text-center py-1 text-xs relative p-0"
                                       style={
                                         hasScore && !failed
                                           ? { backgroundColor: `rgba(16, 185, 129, ${opacity * 0.55})` }
@@ -1090,22 +1130,26 @@ export default function WorkbenchProjectDetail() {
                                     >
                                       <Tooltip>
                                         <TooltipTrigger asChild>
-                                          <span className="inline-flex items-center justify-center w-full h-full">
-                                            {failed ? (
+                                          <div className="flex items-center justify-center w-full h-7 cursor-default">
+                                            {inflight && !hasScore && !failed ? (
+                                              <Loader2 className="h-3 w-3 animate-spin text-muted-foreground" />
+                                            ) : failed ? (
                                               <span className="text-red-600">!</span>
                                             ) : hasScore ? (
                                               <span className="sr-only">{score}%</span>
                                             ) : (
                                               <span className="text-muted-foreground">—</span>
                                             )}
-                                          </span>
+                                          </div>
                                         </TooltipTrigger>
                                         <TooltipContent>
                                           {failed
                                             ? "Triage failed"
                                             : hasScore
                                               ? `Triage: ${score}%`
-                                              : "Not triaged"}
+                                              : inflight
+                                                ? "Triaging…"
+                                                : "Not triaged"}
                                         </TooltipContent>
                                       </Tooltip>
                                     </TableCell>
@@ -1163,28 +1207,45 @@ export default function WorkbenchProjectDetail() {
           />
         )}
 
+        {/* Parent file modal — full multi-page PDF with page navigation */}
+        {activeFile && fileSource && (
+          <FileViewerModal
+            isOpen={!!activeFile}
+            onClose={() => setActiveFile(null)}
+            fileId={activeFile.id}
+            fileName={activeFile.name}
+            mimeType={activeFile.mime_type || "application/pdf"}
+            accessToken=""
+            detections={[]}
+            sourceOverride={fileSource}
+            analysisRequestId={requestId}
+            parentFileId={activeFile.id}
+            sheetId={null}
+            pageIndex={1}
+            awpClasses={enabledCols.map((name) => ({
+              name,
+              prefix: optionByName.get(name)?.idPrefix ?? null,
+              analysisCount:
+                fileCountLookup.get(`${activeFile.id}::${name}`) || 0,
+            }))}
+            fileNameById={Object.fromEntries(
+              fileGroups.map((g) => [g.file.id, g.file.name]),
+            )}
+            onInstancesChanged={() => {
+              queryClient.invalidateQueries({
+                queryKey: ["workbench-instances", requestId],
+              });
+            }}
+            persistKey={projectId}
+          />
+        )}
+
         {/* AWP class prompt modal */}
         <AwpPromptModal
           className={promptClass}
           onClose={() => setPromptClass(null)}
         />
 
-
-        {/* File-level click for files without sheets: pick first sheet if any, else nothing */}
-        {activeFileForFile && (() => {
-          const grp = fileGroups.find((g) => g.file.id === activeFileForFile.id);
-          const first = grp?.sheets[0];
-          if (first) {
-            // Defer to next tick to swap into sheet modal
-            setTimeout(() => {
-              setActiveSheet(first);
-              setActiveFileForFile(null);
-            }, 0);
-          } else {
-            setTimeout(() => setActiveFileForFile(null), 0);
-          }
-          return null;
-        })()}
 
         {/* Extracted-text modal */}
         <Dialog open={!!textFileId} onOpenChange={(o) => !o && setTextFileId(null)}>
