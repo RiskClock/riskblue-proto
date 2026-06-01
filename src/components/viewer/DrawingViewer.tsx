@@ -371,6 +371,11 @@ export const DrawingViewer = forwardRef<DrawingViewerApi, DrawingViewerProps>(
                     pageSize={pageCssSize}
                     overlays={normalizedByPage.get(activePage.pageNum) ?? []}
                     hoveredOverlayId={hoveredOverlayId}
+                    onCanvasClick={
+                      onCanvasClick
+                        ? (nx, ny) => onCanvasClick(nx, ny, activePage.pageNum)
+                        : undefined
+                    }
                   />
                 ) : (
                   <div className="flex flex-col gap-4">
@@ -386,11 +391,17 @@ export const DrawingViewer = forwardRef<DrawingViewerApi, DrawingViewerProps>(
                           pageSize={{ width: w, height: h }}
                           overlays={normalizedByPage.get(p.pageNum) ?? []}
                           hoveredOverlayId={hoveredOverlayId}
+                          onCanvasClick={
+                            onCanvasClick
+                              ? (nx, ny) => onCanvasClick(nx, ny, p.pageNum)
+                              : undefined
+                          }
                         />
                       );
                     })}
                   </div>
                 )}
+
               </TransformComponent>
             </TransformWrapper>
           ) : null}
