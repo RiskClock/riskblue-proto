@@ -8,7 +8,7 @@ import {
   Loader2,
   Settings2,
   ShieldAlert,
-  Sparkles,
+  Square,
   Trash2,
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
