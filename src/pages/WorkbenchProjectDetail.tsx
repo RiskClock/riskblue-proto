@@ -992,6 +992,7 @@ export default function WorkbenchProjectDetail() {
                 queryKey: ["workbench-instances", requestId],
               });
             }}
+            persistKey={projectId}
           />
         )}
 
