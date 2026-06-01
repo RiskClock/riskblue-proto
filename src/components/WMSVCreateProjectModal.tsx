@@ -235,6 +235,17 @@ export function WMSVCreateProjectModal({ open, onOpenChange, onCreated }: WMSVCr
             })
             .eq("id", reqId);
 
+          // Kick off background PDF splitting immediately so per-page sheet
+          // rows exist by the time the user opens the project detail page.
+          // phaseOverride="split" is non-destructive (no result clearing).
+          if (copied > 0) {
+            supabase.functions
+              .invoke("run-analysis-pipeline", {
+                body: { analysisRequestId: reqId, phaseOverride: "split" },
+              })
+              .catch((e) => console.error("[upload] auto-split failed", e));
+          }
+
           if (failures.length === 0) {
             toast({
               title: "Upload Complete",
@@ -247,6 +258,7 @@ export function WMSVCreateProjectModal({ open, onOpenChange, onCreated }: WMSVCr
               variant: "destructive",
             });
           }
+
         })();
       }
     } catch (error) {

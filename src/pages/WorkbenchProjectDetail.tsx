@@ -4,6 +4,8 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   ArrowLeft,
   Check,
+  ChevronDown,
+  ChevronRight,
   Copy,
   Loader2,
   Settings2,
@@ -11,6 +13,7 @@ import {
   Square,
   Trash2,
 } from "lucide-react";
+
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { useToast } from "@/hooks/use-toast";
@@ -117,6 +120,18 @@ export default function WorkbenchProjectDetail() {
   const [clearing, setClearing] = useState(false);
   const [running, setRunning] = useState<"extract" | "triage" | null>(null);
   const [promptClass, setPromptClass] = useState<string | null>(null);
+  const [expandedFiles, setExpandedFiles] = useState<Set<string>>(new Set());
+
+  const toggleExpand = (fileId: string) => {
+    setExpandedFiles((prev) => {
+      const next = new Set(prev);
+      if (next.has(fileId)) next.delete(fileId);
+      else next.add(fileId);
+      return next;
+    });
+  };
+
+
 
 
   useEffect(() => {
@@ -294,6 +309,23 @@ export default function WorkbenchProjectDetail() {
     refetchInterval: 3000,
   });
 
+  // Per-sheet analyze status (one row per sheet × awp class)
+  const { data: analyzeRows } = useQuery({
+    queryKey: ["workbench-analyze", requestId],
+    enabled: !!requestId,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("analysis_results")
+        .select("sheet_id, awp_class_name, status")
+        .eq("analysis_request_id", requestId!);
+      if (error) throw error;
+      return (data || []) as { sheet_id: string | null; awp_class_name: string; status: string }[];
+    },
+    refetchInterval: 3000,
+  });
+
+
+
   // Workbench-only overrides
   const { data: overrides } = useQuery({
     queryKey: ["workbench-overrides", requestId],
@@ -369,15 +401,29 @@ export default function WorkbenchProjectDetail() {
 
   const enabledCols = prefs || [];
 
-  const sheetCountLookup = useMemo(() => {
-    const m = new Map<string, number>();
+  // (sheet, class) -> { score, status } for triage cell rendering on sub-rows
+
+  const sheetTriageLookup = useMemo(() => {
+    const m = new Map<string, { score: number | null; status: string | null }>();
     for (const t of triage || []) {
       if (!t.sheet_id) continue;
-      const key = `${t.sheet_id}::${t.awp_class_name}`;
-      m.set(key, (m.get(key) || 0) + (t.instances || 0));
+      m.set(`${t.sheet_id}::${t.awp_class_name}`, {
+        score: t.score,
+        status: t.status,
+      });
     }
     return m;
   }, [triage]);
+
+  // (sheet, class) -> analyze status for per-sheet analyze badge derivation
+  const sheetAnalyzeLookup = useMemo(() => {
+    const m = new Map<string, string>();
+    for (const a of analyzeRows || []) {
+      if (!a.sheet_id) continue;
+      m.set(`${a.sheet_id}::${a.awp_class_name}`, a.status);
+    }
+    return m;
+  }, [analyzeRows]);
 
   const fileCountLookup = useMemo(() => {
     const m = new Map<string, number>();
@@ -387,6 +433,7 @@ export default function WorkbenchProjectDetail() {
     }
     return m;
   }, [triage]);
+
 
   // Per-file extract status: processed if extracted_text on file OR all sheets extracted/skipped
   const fileExtractStatus = useMemo(() => {
@@ -877,6 +924,71 @@ export default function WorkbenchProjectDetail() {
                         );
                       };
 
+                      // Per-sheet phase status helpers
+                      const sheetExtractState = (s: SheetRow) => {
+                        const st = s.extract_status;
+                        if (st === "extracted" || st === "skipped") return "done";
+                        if (st === "extracting") return "running";
+                        if (st === "failed") return "failed";
+                        return "pending";
+                      };
+                      const sheetTriageState = (s: SheetRow) => {
+                        if (!enabledCols.length) return "pending";
+                        let done = 0, running = 0, failed = 0;
+                        for (const name of enabledCols) {
+                          const r = sheetTriageLookup.get(`${s.id}::${name}`);
+                          if (!r) continue;
+                          if (r.status === "completed" || r.status === "complete") done++;
+                          else if (r.status === "failed") failed++;
+                          else running++;
+                        }
+                        if (done === enabledCols.length) return "done";
+                        if (running > 0 || done > 0) return done === 0 ? "running" : "partial";
+                        if (failed > 0) return "failed";
+                        return "pending";
+                      };
+                      const sheetAnalyzeState = (s: SheetRow) => {
+                        if (!enabledCols.length) return "pending";
+                        let done = 0, running = 0, failed = 0, total = 0;
+                        for (const name of enabledCols) {
+                          const st = sheetAnalyzeLookup.get(`${s.id}::${name}`);
+                          if (!st) continue;
+                          total++;
+                          if (st === "completed" || st === "complete") done++;
+                          else if (st === "failed") failed++;
+                          else running++;
+                        }
+                        if (total === 0) return "pending";
+                        if (running > 0) return "running";
+                        if (done > 0 && failed === 0) return "done";
+                        if (done > 0) return "partial";
+                        if (failed > 0) return "failed";
+                        return "pending";
+                      };
+
+                      const PhasePill = ({ label, state }: { label: string; state: string }) => {
+                        const cls =
+                          state === "done"
+                            ? "bg-emerald-500/15 text-emerald-700 border-emerald-500/30"
+                            : state === "running"
+                              ? "bg-purple-500/15 text-purple-700 border-purple-500/30"
+                              : state === "partial"
+                                ? "bg-amber-500/15 text-amber-700 border-amber-500/30"
+                                : state === "failed"
+                                  ? "bg-red-500/15 text-red-700 border-red-500/30"
+                                  : "bg-muted text-muted-foreground border-border";
+                        return (
+                          <span
+                            className={`inline-flex items-center gap-1 h-4 px-1.5 rounded border text-[10px] leading-none ${cls}`}
+                          >
+                            {state === "running" && <Loader2 className="h-2.5 w-2.5 animate-spin" />}
+                            {label}
+                          </span>
+                        );
+                      };
+
+                      const isExpanded = expandedFiles.has(group.file.id);
+
                       return (
                         <Fragment key={group.file.id}>
                           {/* File-level row */}
@@ -891,6 +1003,25 @@ export default function WorkbenchProjectDetail() {
                               className={`${stickyCellFirstBase} bg-card group-hover:bg-muted/50 py-1 text-sm`}
                             >
                               <div className="flex items-center gap-2 min-w-0">
+                                {!singlePage ? (
+                                  <button
+                                    type="button"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      toggleExpand(group.file.id);
+                                    }}
+                                    className="shrink-0 text-muted-foreground hover:text-foreground"
+                                    aria-label={isExpanded ? "Collapse pages" : "Expand pages"}
+                                  >
+                                    {isExpanded ? (
+                                      <ChevronDown className="h-3.5 w-3.5" />
+                                    ) : (
+                                      <ChevronRight className="h-3.5 w-3.5" />
+                                    )}
+                                  </button>
+                                ) : (
+                                  <span className="inline-block w-3.5 shrink-0" />
+                                )}
                                 <span className="font-medium truncate">{group.file.name}</span>
                                 {!singlePage && (
                                   <span className="text-xs text-muted-foreground shrink-0">
@@ -916,32 +1047,67 @@ export default function WorkbenchProjectDetail() {
                             <TableCell className="py-1" />
                           </TableRow>
 
-                          {/* Per-page sub-rows (only when multi-page) */}
-                          {!singlePage &&
+                          {/* Per-page sub-rows (only when multi-page AND expanded) */}
+                          {!singlePage && isExpanded &&
                             group.sheets.map((s) => (
                               <TableRow
                                 key={s.id}
-                                className="group h-8 cursor-pointer"
+                                className="group h-8 cursor-pointer bg-muted/10"
                                 onClick={() => setActiveSheet(s)}
                               >
                                 <TableCell
-                                  className={`${stickyCellFirstBase} bg-card group-hover:bg-muted/50 py-1 text-sm`}
+                                  className={`${stickyCellFirstBase} bg-muted/10 group-hover:bg-muted/30 py-1 text-sm`}
                                 >
-                                  <span className="pl-6 text-muted-foreground">
-                                    Page {s.page_index}
-                                    {s.sheet_number ? ` · ${s.sheet_number}` : ""}
-                                    {s.sheet_title ? ` — ${s.sheet_title}` : ""}
-                                  </span>
+                                  <div className="flex items-center gap-2 min-w-0 pl-7">
+                                    <span className="text-muted-foreground shrink-0">
+                                      Page {s.page_index}
+                                      {s.sheet_number ? ` · ${s.sheet_number}` : ""}
+                                      {s.sheet_title ? ` — ${s.sheet_title}` : ""}
+                                    </span>
+                                    <div className="flex items-center gap-1 ml-auto shrink-0">
+                                      <PhasePill label="Extract" state={sheetExtractState(s)} />
+                                      <PhasePill label="Triage" state={sheetTriageState(s)} />
+                                      <PhasePill label="Analyze" state={sheetAnalyzeState(s)} />
+                                    </div>
+                                  </div>
                                 </TableCell>
                                 {enabledCols.map((name) => {
-                                  const count =
-                                    sheetCountLookup.get(`${s.id}::${name}`) || 0;
+                                  const tr = sheetTriageLookup.get(`${s.id}::${name}`);
+                                  const score = tr?.score;
+                                  const failed = tr?.status === "failed";
+                                  const hasScore = typeof score === "number";
+                                  // Match grid behavior: green bg opacity proportional to score
+                                  const opacity = hasScore ? Math.max(0, Math.min(100, score!)) / 100 : 0;
                                   return (
                                     <TableCell
                                       key={name}
-                                      className="text-center tabular-nums py-1 text-xs text-muted-foreground"
+                                      className="text-center py-1 text-xs relative"
+                                      style={
+                                        hasScore && !failed
+                                          ? { backgroundColor: `rgba(16, 185, 129, ${opacity * 0.55})` }
+                                          : undefined
+                                      }
                                     >
-                                      {count > 0 ? count : "—"}
+                                      <Tooltip>
+                                        <TooltipTrigger asChild>
+                                          <span className="inline-flex items-center justify-center w-full h-full">
+                                            {failed ? (
+                                              <span className="text-red-600">!</span>
+                                            ) : hasScore ? (
+                                              <span className="sr-only">{score}%</span>
+                                            ) : (
+                                              <span className="text-muted-foreground">—</span>
+                                            )}
+                                          </span>
+                                        </TooltipTrigger>
+                                        <TooltipContent>
+                                          {failed
+                                            ? "Triage failed"
+                                            : hasScore
+                                              ? `Triage: ${score}%`
+                                              : "Not triaged"}
+                                        </TooltipContent>
+                                      </Tooltip>
                                     </TableCell>
                                   );
                                 })}
@@ -950,6 +1116,7 @@ export default function WorkbenchProjectDetail() {
                             ))}
                         </Fragment>
                       );
+
                     })}
                   </TableBody>
                 </Table>
