@@ -583,7 +583,7 @@ export const FileViewerModal = ({
                                   />
                                   <span className="flex-1 font-mono">
                                     {instanceLabel(i)}
-                                    {i.page_index !== currentPage
+                                    {i.page_index !== effectivePage
                                       ? ` (p.${i.page_index})`
                                       : ""}
                                   </span>
