@@ -1229,6 +1229,16 @@ async function runPipeline(params: PipelineParams) {
         .order("parent_file_id", { ascending: true })
         .order("page_index", { ascending: true });
       sheets = (sheetRows as any[]) || [];
+      // Re-sort top-to-bottom by parent file name (alphabetical), then page.
+      const fileNameById = new Map<string, string>();
+      for (const f of files as any[]) fileNameById.set(f.id, (f as any).name ?? "");
+      sheets.sort((a, b) => {
+        const an = fileNameById.get(a.parent_file_id) ?? "";
+        const bn = fileNameById.get(b.parent_file_id) ?? "";
+        const c = an.localeCompare(bn);
+        if (c !== 0) return c;
+        return (a.page_index ?? 0) - (b.page_index ?? 0);
+      });
     }
 
     // Sheet-mode for the run: enabled when normalization is on AND we have
