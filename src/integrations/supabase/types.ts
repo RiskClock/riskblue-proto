@@ -2401,6 +2401,36 @@ export type Database = {
         }
         Relationships: []
       }
+      workbench_triage_overrides: {
+        Row: {
+          analysis_request_id: string
+          awp_class_name: string
+          created_at: string
+          created_by: string | null
+          file_id: string
+          id: string
+          override_type: string
+        }
+        Insert: {
+          analysis_request_id: string
+          awp_class_name: string
+          created_at?: string
+          created_by?: string | null
+          file_id: string
+          id?: string
+          override_type: string
+        }
+        Update: {
+          analysis_request_id?: string
+          awp_class_name?: string
+          created_at?: string
+          created_by?: string | null
+          file_id?: string
+          id?: string
+          override_type?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never

@@ -1,7 +1,16 @@
 import { Fragment, useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { ArrowLeft, Loader2, Settings2, ShieldAlert } from "lucide-react";
+import {
+  ArrowLeft,
+  Check,
+  Copy,
+  Loader2,
+  Settings2,
+  ShieldAlert,
+  Sparkles,
+  Trash2,
+} from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { useToast } from "@/hooks/use-toast";
@@ -10,6 +19,16 @@ import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Badge } from "@/components/ui/badge";
 import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import {
   Dialog,
   DialogContent,
   DialogDescription,
@@ -17,7 +36,14 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 import {
   Tooltip,
   TooltipContent,
@@ -38,6 +64,7 @@ interface FileRow {
   id: string;
   name: string;
   source_type: string;
+  extracted_text: string | null;
 }
 
 interface SheetRow {
@@ -47,6 +74,8 @@ interface SheetRow {
   sheet_number: string | null;
   sheet_title: string | null;
   storage_path: string | null;
+  extract_status: string | null;
+  extracted_text: string | null;
   file_name: string;
   file_source_type: string;
 }
@@ -56,6 +85,14 @@ interface TriageCount {
   file_id: string;
   awp_class_name: string;
   instances: number | null;
+  score: number | null;
+  status: string | null;
+}
+
+interface OverrideRow {
+  file_id: string;
+  awp_class_name: string;
+  override_type: "include" | "exclude";
 }
 
 function bucketForSource(sourceType: string) {
@@ -71,9 +108,14 @@ export default function WorkbenchProjectDetail() {
   const isInternal = user?.email?.toLowerCase().endsWith("@riskclock.com") ?? false;
 
   const [activeSheet, setActiveSheet] = useState<SheetRow | null>(null);
+  const [activeFileForFile, setActiveFileForFile] = useState<FileRow | null>(null);
   const [manageOpen, setManageOpen] = useState(false);
   const [draftCols, setDraftCols] = useState<string[]>([]);
   const [savingPrefs, setSavingPrefs] = useState(false);
+  const [textFileId, setTextFileId] = useState<string | null>(null);
+  const [clearOpen, setClearOpen] = useState(false);
+  const [clearing, setClearing] = useState(false);
+  const [running, setRunning] = useState<"extract" | "triage" | null>(null);
 
   useEffect(() => {
     if (user && !isInternal) navigate("/projects", { replace: true });
@@ -101,7 +143,7 @@ export default function WorkbenchProjectDetail() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("analysis_requests")
-        .select("id, source_type")
+        .select("id, source_type, pipeline_phase, status")
         .eq("project_id", projectId!)
         .order("created_at", { ascending: false })
         .limit(1)
@@ -109,23 +151,29 @@ export default function WorkbenchProjectDetail() {
       if (error) throw error;
       return data;
     },
+    refetchInterval: running ? 3000 : false,
   });
+
+  const requestId = analysisRequest?.id;
+  const pipelinePhase = analysisRequest?.pipeline_phase ?? null;
 
   // Files + sheets for the latest request
   const { data: rows, isLoading } = useQuery({
-    queryKey: ["workbench-rows", analysisRequest?.id],
-    enabled: !!analysisRequest?.id,
+    queryKey: ["workbench-rows", requestId],
+    enabled: !!requestId,
     queryFn: async () => {
-      const requestId = analysisRequest!.id;
       const [filesRes, sheetsRes] = await Promise.all([
         supabase
           .from("analysis_request_files")
-          .select("id, name")
-          .eq("analysis_request_id", requestId),
+          .select("id, name, extracted_text")
+          .eq("analysis_request_id", requestId!)
+          .order("name"),
         supabase
           .from("analysis_request_sheets")
-          .select("id, parent_file_id, page_index, sheet_number, sheet_title, storage_path")
-          .eq("analysis_request_id", requestId)
+          .select(
+            "id, parent_file_id, page_index, sheet_number, sheet_title, storage_path, extract_status, extracted_text",
+          )
+          .eq("analysis_request_id", requestId!)
           .order("page_index", { ascending: true }),
       ]);
       if (filesRes.error) throw filesRes.error;
@@ -134,6 +182,7 @@ export default function WorkbenchProjectDetail() {
         id: f.id,
         name: f.name,
         source_type: analysisRequest!.source_type,
+        extracted_text: f.extracted_text ?? null,
       }));
       const fileMap = new Map(files.map((f) => [f.id, f]));
       const sheets: SheetRow[] = (sheetsRes.data || [])
@@ -147,6 +196,8 @@ export default function WorkbenchProjectDetail() {
             sheet_number: s.sheet_number,
             sheet_title: s.sheet_title,
             storage_path: s.storage_path,
+            extract_status: s.extract_status ?? null,
+            extracted_text: s.extracted_text ?? null,
             file_name: f.name,
             file_source_type: f.source_type,
           };
@@ -158,21 +209,24 @@ export default function WorkbenchProjectDetail() {
         );
       return { files, sheets };
     },
+    refetchInterval: running ? 3000 : false,
   });
 
-  // Group sheets by file (preserves sorted order)
+  // Group: every file is a group, with optional sheets underneath
   const fileGroups = useMemo(() => {
-    const groups = new Map<string, { fileName: string; sheets: SheetRow[] }>();
-    for (const s of rows?.sheets || []) {
-      const g = groups.get(s.parent_file_id);
+    if (!rows) return [];
+    const byFile = new Map<string, { file: FileRow; sheets: SheetRow[] }>();
+    for (const f of rows.files) byFile.set(f.id, { file: f, sheets: [] });
+    for (const s of rows.sheets) {
+      const g = byFile.get(s.parent_file_id);
       if (g) g.sheets.push(s);
-      else groups.set(s.parent_file_id, { fileName: s.file_name, sheets: [s] });
     }
-    return Array.from(groups.entries()).map(([id, v]) => ({ id, ...v }));
+    return Array.from(byFile.values()).sort((a, b) =>
+      a.file.name.localeCompare(b.file.name),
+    );
   }, [rows]);
 
-  // Prefetch all sheet PDFs into the shared document-source cache so opening
-  // the viewer is instant. Best-effort, in parallel batches.
+  // Prewarm PDFs into the shared cache so opening the viewer is instant.
   useEffect(() => {
     if (!rows?.sheets?.length) return;
     let cancelled = false;
@@ -198,29 +252,54 @@ export default function WorkbenchProjectDetail() {
     };
   }, [rows]);
 
-  // Triage counts per (sheet, awp_class)
+  // Triage counts per (sheet, awp_class) and per (file, awp_class)
   const { data: triage } = useQuery({
-    queryKey: ["workbench-triage", analysisRequest?.id],
-    enabled: !!analysisRequest?.id,
+    queryKey: ["workbench-triage", requestId],
+    enabled: !!requestId,
     queryFn: async (): Promise<TriageCount[]> => {
       const { data, error } = await supabase
         .from("analysis_triage_results")
-        .select("sheet_id, file_id, awp_class_name, instances")
-        .eq("analysis_request_id", analysisRequest!.id);
+        .select("sheet_id, file_id, awp_class_name, instances, score, status")
+        .eq("analysis_request_id", requestId!);
       if (error) throw error;
       return (data || []) as TriageCount[];
     },
+    refetchInterval: running ? 3000 : false,
   });
+
+  // Workbench-only overrides
+  const { data: overrides } = useQuery({
+    queryKey: ["workbench-overrides", requestId],
+    enabled: !!requestId,
+    queryFn: async (): Promise<OverrideRow[]> => {
+      const { data, error } = await supabase
+        .from("workbench_triage_overrides" as any)
+        .select("file_id, awp_class_name, override_type")
+        .eq("analysis_request_id", requestId!);
+      if (error) throw error;
+      return ((data as unknown) as OverrideRow[]) || [];
+    },
+  });
+
+  const overrideMap = useMemo(() => {
+    const m = new Map<string, "include" | "exclude">();
+    for (const o of overrides || []) m.set(`${o.file_id}::${o.awp_class_name}`, o.override_type);
+    return m;
+  }, [overrides]);
 
   // AWP options + global column preferences
   const { data: awpOptions } = useAWPOptions();
   const eligibleOptions = useMemo(
-    () => (awpOptions || []).filter((o) => o.category === "Asset" || o.category === "Water System"),
+    () =>
+      (awpOptions || []).filter(
+        (o) => o.category === "Asset" || o.category === "Water System",
+      ),
     [awpOptions],
   );
   const optionByName = useMemo(() => {
     const m = new Map<string, { name: string; idPrefix: string | null }>();
-    for (const o of awpOptions || []) m.set(o.name, { name: o.name, idPrefix: o.idPrefix });
+    for (const o of awpOptions || [])
+      m.set(o.name, { name: o.name, idPrefix: o.idPrefix });
     return m;
   }, [awpOptions]);
 
@@ -240,7 +319,7 @@ export default function WorkbenchProjectDetail() {
 
   const enabledCols = prefs || [];
 
-  const countLookup = useMemo(() => {
+  const sheetCountLookup = useMemo(() => {
     const m = new Map<string, number>();
     for (const t of triage || []) {
       if (!t.sheet_id) continue;
@@ -249,6 +328,40 @@ export default function WorkbenchProjectDetail() {
     }
     return m;
   }, [triage]);
+
+  const fileCountLookup = useMemo(() => {
+    const m = new Map<string, number>();
+    for (const t of triage || []) {
+      const key = `${t.file_id}::${t.awp_class_name}`;
+      m.set(key, (m.get(key) || 0) + (t.instances || 0));
+    }
+    return m;
+  }, [triage]);
+
+  // Per-file extract status: processed if extracted_text on file OR all sheets extracted/skipped
+  const fileExtractStatus = useMemo(() => {
+    const m = new Map<string, "processed" | "partial" | "none">();
+    for (const g of fileGroups) {
+      if (g.file.extracted_text && g.file.extracted_text.length > 0) {
+        m.set(g.file.id, "processed");
+        continue;
+      }
+      if (g.sheets.length === 0) {
+        m.set(g.file.id, "none");
+        continue;
+      }
+      const total = g.sheets.length;
+      const done = g.sheets.filter(
+        (s) => s.extract_status === "extracted" || s.extract_status === "skipped",
+      ).length;
+      if (done === total) m.set(g.file.id, "processed");
+      else if (done > 0) m.set(g.file.id, "partial");
+      else m.set(g.file.id, "none");
+    }
+    return m;
+  }, [fileGroups]);
+
+  const totalFiles = fileGroups.length;
 
   const openManage = () => {
     setDraftCols(enabledCols);
@@ -264,14 +377,12 @@ export default function WorkbenchProjectDetail() {
   const saveColumns = async () => {
     setSavingPrefs(true);
     try {
-      const { error } = await supabase
-        .from("workbench_column_preferences")
-        .upsert({
-          id: PREF_ID,
-          awp_class_names: draftCols,
-          updated_at: new Date().toISOString(),
-          updated_by: user?.id ?? null,
-        });
+      const { error } = await supabase.from("workbench_column_preferences").upsert({
+        id: PREF_ID,
+        awp_class_names: draftCols,
+        updated_at: new Date().toISOString(),
+        updated_by: user?.id ?? null,
+      });
       if (error) throw error;
       queryClient.invalidateQueries({ queryKey: ["workbench-column-prefs"] });
       setManageOpen(false);
@@ -296,6 +407,143 @@ export default function WorkbenchProjectDetail() {
     };
   }, [activeSheet]);
 
+  // --- Pipeline actions -----------------------------------------------------
+  const runPipeline = async (phase: "extract" | "triage") => {
+    if (!requestId) return;
+    setRunning(phase);
+    try {
+      const body: Record<string, unknown> = {
+        analysisRequestId: requestId,
+        phaseOverride: phase,
+      };
+      if (phase === "triage") {
+        // Send eligible classes (those visible as columns) so triage actually runs
+        const enabledAwpClasses = enabledCols.length
+          ? enabledCols
+          : eligibleOptions.map((o) => o.name);
+        body.enabledAwpClasses = enabledAwpClasses;
+      }
+      const { error } = await supabase.functions.invoke("run-analysis-pipeline", {
+        body,
+      });
+      if (error) throw error;
+      toast({
+        title: phase === "extract" ? "Extract Context started" : "Triage started",
+      });
+      queryClient.invalidateQueries({ queryKey: ["workbench-rows", requestId] });
+      queryClient.invalidateQueries({ queryKey: ["workbench-triage", requestId] });
+      queryClient.invalidateQueries({
+        queryKey: ["workbench-analysis-request", projectId],
+      });
+    } catch (error: any) {
+      toast({
+        variant: "destructive",
+        title: "Failed to start",
+        description: getUserFriendlyError(error),
+      });
+    } finally {
+      // Keep polling for a bit; auto-clear once pipeline phase resolves.
+      setTimeout(() => setRunning(null), 30_000);
+    }
+  };
+
+  const clearAll = async () => {
+    if (!requestId) return;
+    setClearing(true);
+    try {
+      await Promise.all([
+        supabase
+          .from("analysis_triage_results")
+          .delete()
+          .eq("analysis_request_id", requestId),
+        supabase
+          .from("analysis_results")
+          .delete()
+          .eq("analysis_request_id", requestId),
+        supabase
+          .from("workbench_triage_overrides" as any)
+          .delete()
+          .eq("analysis_request_id", requestId),
+      ]);
+      // Clear extracted text on files + sheets
+      await Promise.all([
+        supabase
+          .from("analysis_request_files")
+          .update({ extracted_text: null })
+          .eq("analysis_request_id", requestId),
+        supabase
+          .from("analysis_request_sheets")
+          .update({ extracted_text: null, extract_status: "pending" })
+          .eq("analysis_request_id", requestId),
+      ]);
+      await supabase
+        .from("analysis_requests")
+        .update({
+          summary_data: {},
+          pipeline_phase: null,
+          pipeline_phase_override: null,
+        })
+        .eq("id", requestId);
+
+      queryClient.invalidateQueries({ queryKey: ["workbench-rows", requestId] });
+      queryClient.invalidateQueries({ queryKey: ["workbench-triage", requestId] });
+      queryClient.invalidateQueries({ queryKey: ["workbench-overrides", requestId] });
+      queryClient.invalidateQueries({
+        queryKey: ["workbench-analysis-request", projectId],
+      });
+      toast({ title: "All results cleared" });
+      setClearOpen(false);
+    } catch (error: any) {
+      toast({
+        variant: "destructive",
+        title: "Could not clear",
+        description: getUserFriendlyError(error),
+      });
+    } finally {
+      setClearing(false);
+    }
+  };
+
+  // --- Triage cell click ----------------------------------------------------
+  const toggleOverride = async (
+    fileId: string,
+    awpClassName: string,
+    aggregateCount: number,
+  ) => {
+    if (!requestId) return;
+    const key = `${fileId}::${awpClassName}`;
+    const current = overrideMap.get(key);
+    try {
+      if (current) {
+        await supabase
+          .from("workbench_triage_overrides" as any)
+          .delete()
+          .eq("analysis_request_id", requestId)
+          .eq("file_id", fileId)
+          .eq("awp_class_name", awpClassName);
+      } else {
+        const newType = aggregateCount > 0 ? "exclude" : "include";
+        await supabase.from("workbench_triage_overrides" as any).upsert(
+          {
+            analysis_request_id: requestId,
+            file_id: fileId,
+            awp_class_name: awpClassName,
+            override_type: newType,
+            created_by: user?.id ?? null,
+          } as any,
+          { onConflict: "analysis_request_id,file_id,awp_class_name" },
+        );
+      }
+      queryClient.invalidateQueries({ queryKey: ["workbench-overrides", requestId] });
+    } catch (error: any) {
+      toast({
+        variant: "destructive",
+        title: "Could not update",
+        description: getUserFriendlyError(error),
+      });
+    }
+  };
+
   if (!user || !isInternal) {
     return (
       <div className="h-screen flex flex-col bg-background overflow-hidden">
@@ -311,19 +559,17 @@ export default function WorkbenchProjectDetail() {
 
   const grouped = awpOptions ? groupAWPOptionsByCategory(eligibleOptions) : {};
 
-  // Sticky column styling
-  const stickyHeadFirst =
-    "sticky left-0 z-30 bg-card min-w-[260px] border-r";
-  const stickyCellFirst =
-    "sticky left-0 z-10 bg-card border-r";
+  const stickyHeadFirst = "sticky left-0 z-30 bg-card min-w-[260px] border-r";
+  const stickyCellFirstBase = "sticky left-0 z-10 border-r transition-colors";
+  const phaseRunning = !!pipelinePhase || !!running;
 
   return (
     <TooltipProvider delayDuration={150}>
       <div className="h-screen flex flex-col bg-background overflow-hidden">
         <AppHeader />
 
-        {/* Docked sub-header with project name */}
-        <div className="sticky top-0 z-10 border-b bg-background">
+        {/* Sub-header (no longer sticky) */}
+        <div className="border-b bg-background">
           <div className="container mx-auto px-6 py-3 flex items-center justify-between">
             <div className="flex items-center gap-2">
               <Button
@@ -339,22 +585,64 @@ export default function WorkbenchProjectDetail() {
                 {project?.name || "Project"}
               </h1>
             </div>
-            {rows && (
-              <Badge variant="outline" className="text-xs">
-                {rows.sheets.length} page{rows.sheets.length === 1 ? "" : "s"} · {rows.files.length} file
-                {rows.files.length === 1 ? "" : "s"}
+            {pipelinePhase && (
+              <Badge variant="outline" className="text-xs capitalize">
+                {pipelinePhase}
               </Badge>
             )}
           </div>
         </div>
 
         <main className="flex-1 overflow-auto">
-          <div className="container mx-auto px-6 py-6">
+          <div className="container mx-auto px-6 py-6 space-y-4">
+            {/* Action toolbar */}
+            <div className="flex flex-wrap items-center gap-2">
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => runPipeline("extract")}
+                disabled={!requestId || phaseRunning || totalFiles === 0}
+              >
+                {running === "extract" ? (
+                  <Loader2 className="h-4 w-4 mr-1.5 animate-spin" />
+                ) : (
+                  <Sparkles className="h-4 w-4 mr-1.5" />
+                )}
+                Extract Context
+              </Button>
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => runPipeline("triage")}
+                disabled={!requestId || phaseRunning || totalFiles === 0}
+              >
+                {running === "triage" ? (
+                  <Loader2 className="h-4 w-4 mr-1.5 animate-spin" />
+                ) : (
+                  <Sparkles className="h-4 w-4 mr-1.5" />
+                )}
+                Triage
+              </Button>
+              <Button size="sm" variant="outline" disabled>
+                Analyze
+              </Button>
+              <div className="flex-1" />
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => setClearOpen(true)}
+                disabled={!requestId || phaseRunning}
+              >
+                <Trash2 className="h-4 w-4 mr-1.5" />
+                Clear All
+              </Button>
+            </div>
+
             {isLoading ? (
               <div className="flex items-center justify-center py-12 text-muted-foreground">
                 <Loader2 className="h-5 w-5 animate-spin mr-2" /> Loading…
               </div>
-            ) : !analysisRequest || !rows || rows.sheets.length === 0 ? (
+            ) : !analysisRequest || totalFiles === 0 ? (
               <div className="text-center py-12 text-muted-foreground">
                 No drawings uploaded for this project yet.
               </div>
@@ -364,7 +652,10 @@ export default function WorkbenchProjectDetail() {
                   <TableHeader className="sticky top-0 z-20 bg-card">
                     <TableRow>
                       <TableHead className={`${stickyHeadFirst} h-9 py-1`}>
-                        File / Page
+                        Files ({totalFiles} file{totalFiles === 1 ? "" : "s"})
+                      </TableHead>
+                      <TableHead className="h-9 py-1 whitespace-nowrap text-xs text-muted-foreground">
+                        Status
                       </TableHead>
                       {enabledCols.map((name) => {
                         const opt = optionByName.get(name);
@@ -372,7 +663,7 @@ export default function WorkbenchProjectDetail() {
                         return (
                           <TableHead
                             key={name}
-                            className="text-right whitespace-nowrap h-9 py-1"
+                            className="text-center whitespace-nowrap h-9 py-1"
                           >
                             <Tooltip>
                               <TooltipTrigger asChild>
@@ -392,65 +683,160 @@ export default function WorkbenchProjectDetail() {
                   </TableHeader>
                   <TableBody>
                     {fileGroups.map((group) => {
-                      const singlePage = group.sheets.length === 1;
+                      const singlePage = group.sheets.length <= 1;
+                      const onlySheet = group.sheets[0];
+                      const extractStatus = fileExtractStatus.get(group.file.id);
+
+                      const StatusCell = () => {
+                        if (extractStatus === "processed") {
+                          return (
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setTextFileId(group.file.id);
+                              }}
+                              className="text-xs text-emerald-600 hover:text-emerald-700 underline-offset-2 hover:underline"
+                            >
+                              Processed
+                            </button>
+                          );
+                        }
+                        if (extractStatus === "partial") {
+                          return (
+                            <span className="text-xs text-muted-foreground inline-flex items-center gap-1">
+                              <Loader2 className="h-3 w-3 animate-spin" /> Processing
+                            </span>
+                          );
+                        }
+                        return <span className="text-xs text-muted-foreground">—</span>;
+                      };
+
+                      const renderTriageCell = (
+                        fileId: string,
+                        awpClassName: string,
+                        count: number,
+                        scoreKnown: boolean,
+                      ) => {
+                        const key = `${fileId}::${awpClassName}`;
+                        const override = overrideMap.get(key);
+                        const inner =
+                          count > 0 ? (
+                            <span className="font-medium tabular-nums">{count}</span>
+                          ) : scoreKnown ? (
+                            <span className="text-muted-foreground">0</span>
+                          ) : (
+                            <span className="text-muted-foreground">—</span>
+                          );
+                        return (
+                          <TableCell
+                            key={awpClassName}
+                            className={`text-center py-1 cursor-pointer relative group ${
+                              override === "exclude"
+                                ? "bg-muted/60"
+                                : override === "include"
+                                  ? "bg-emerald-500/20"
+                                  : "hover:bg-muted/40"
+                            }`}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              toggleOverride(fileId, awpClassName, count);
+                            }}
+                          >
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <span className="inline-flex items-center justify-center w-full">
+                                  {override === "exclude" ? (
+                                    <span className="line-through text-muted-foreground">
+                                      {count > 0 ? count : "—"}
+                                    </span>
+                                  ) : (
+                                    inner
+                                  )}
+                                </span>
+                              </TooltipTrigger>
+                              <TooltipContent>
+                                {override === "include"
+                                  ? "Manually included — click to clear"
+                                  : override === "exclude"
+                                    ? "Manually excluded — click to clear"
+                                    : count > 0
+                                      ? "Click to exclude"
+                                      : "Click to include"}
+                              </TooltipContent>
+                            </Tooltip>
+                          </TableCell>
+                        );
+                      };
+
                       return (
-                        <Fragment key={group.id}>
-                          {!singlePage && (
-                            <TableRow
-                              key={`hdr-${group.id}`}
-                              className="bg-muted/40 hover:bg-muted/40"
+                        <Fragment key={group.file.id}>
+                          {/* File-level row */}
+                          <TableRow
+                            className="group h-8 cursor-pointer"
+                            onClick={() => {
+                              if (singlePage && onlySheet) setActiveSheet(onlySheet);
+                              else setActiveFileForFile(group.file);
+                            }}
+                          >
+                            <TableCell
+                              className={`${stickyCellFirstBase} bg-card group-hover:bg-muted/50 py-1 text-sm`}
                             >
-                              <TableCell
-                                className={`${stickyCellFirst} bg-muted/40 py-1 font-medium text-sm`}
+                              <span className="font-medium">{group.file.name}</span>
+                              {!singlePage && (
+                                <span className="ml-2 text-xs text-muted-foreground">
+                                  {group.sheets.length} pages
+                                </span>
+                              )}
+                            </TableCell>
+                            <TableCell className="py-1">
+                              <StatusCell />
+                            </TableCell>
+                            {enabledCols.map((name) => {
+                              const count =
+                                fileCountLookup.get(`${group.file.id}::${name}`) || 0;
+                              const scoreKnown = (triage || []).some(
+                                (t) =>
+                                  t.file_id === group.file.id && t.awp_class_name === name,
+                              );
+                              return renderTriageCell(group.file.id, name, count, scoreKnown);
+                            })}
+                            <TableCell className="py-1" />
+                          </TableRow>
+
+                          {/* Per-page sub-rows (only when multi-page) */}
+                          {!singlePage &&
+                            group.sheets.map((s) => (
+                              <TableRow
+                                key={s.id}
+                                className="group h-8 cursor-pointer"
+                                onClick={() => setActiveSheet(s)}
                               >
-                                {group.fileName}
-                              </TableCell>
-                              <TableCell
-                                colSpan={enabledCols.length + 1}
-                                className="bg-muted/40 py-1"
-                              />
-                            </TableRow>
-                          )}
-                          {group.sheets.map((s) => (
-                            <TableRow
-                              key={s.id}
-                              className="cursor-pointer h-8"
-                              onClick={() => setActiveSheet(s)}
-                            >
-                              <TableCell
-                                className={`${stickyCellFirst} py-1 text-sm`}
-                              >
-                                {singlePage ? (
-                                  <span className="font-medium">{s.file_name}</span>
-                                ) : (
-                                  <span className="pl-4 text-muted-foreground">
+                                <TableCell
+                                  className={`${stickyCellFirstBase} bg-card group-hover:bg-muted/50 py-1 text-sm`}
+                                >
+                                  <span className="pl-6 text-muted-foreground">
                                     Page {s.page_index}
                                     {s.sheet_number ? ` · ${s.sheet_number}` : ""}
                                     {s.sheet_title ? ` — ${s.sheet_title}` : ""}
                                   </span>
-                                )}
-                              </TableCell>
-                              {enabledCols.map((name) => {
-                                const count =
-                                  countLookup.get(`${s.id}::${name}`) || 0;
-                                return (
-                                  <TableCell
-                                    key={name}
-                                    className="text-right tabular-nums py-1"
-                                  >
-                                    {count > 0 ? (
-                                      <span className="font-medium">{count}</span>
-                                    ) : (
-                                      <span className="text-muted-foreground">
-                                        —
-                                      </span>
-                                    )}
-                                  </TableCell>
-                                );
-                              })}
-                              <TableCell className="py-1" />
-                            </TableRow>
-                          ))}
+                                </TableCell>
+                                <TableCell className="py-1" />
+                                {enabledCols.map((name) => {
+                                  const count =
+                                    sheetCountLookup.get(`${s.id}::${name}`) || 0;
+                                  return (
+                                    <TableCell
+                                      key={name}
+                                      className="text-center tabular-nums py-1 text-xs text-muted-foreground"
+                                    >
+                                      {count > 0 ? count : "—"}
+                                    </TableCell>
+                                  );
+                                })}
+                                <TableCell className="py-1" />
+                              </TableRow>
+                            ))}
                         </Fragment>
                       );
                     })}
@@ -461,15 +847,15 @@ export default function WorkbenchProjectDetail() {
           </div>
         </main>
 
-        {/* Drawing modal */}
+        {/* Drawing modal — single sheet */}
         {activeSheet && sheetSource && (
           <FileViewerModal
             isOpen={!!activeSheet}
             onClose={() => setActiveSheet(null)}
             fileId={activeSheet.id}
             fileName={
-              fileGroups.find((g) => g.id === activeSheet.parent_file_id)
-                ?.sheets.length === 1
+              fileGroups.find((g) => g.file.id === activeSheet.parent_file_id)?.sheets
+                .length === 1
                 ? activeSheet.file_name
                 : `${activeSheet.file_name} — Page ${activeSheet.page_index}`
             }
@@ -480,14 +866,43 @@ export default function WorkbenchProjectDetail() {
           />
         )}
 
+        {/* File-level click for files without sheets: pick first sheet if any, else nothing */}
+        {activeFileForFile && (() => {
+          const grp = fileGroups.find((g) => g.file.id === activeFileForFile.id);
+          const first = grp?.sheets[0];
+          if (first) {
+            // Defer to next tick to swap into sheet modal
+            setTimeout(() => {
+              setActiveSheet(first);
+              setActiveFileForFile(null);
+            }, 0);
+          } else {
+            setTimeout(() => setActiveFileForFile(null), 0);
+          }
+          return null;
+        })()}
+
+        {/* Extracted-text modal */}
+        <Dialog open={!!textFileId} onOpenChange={(o) => !o && setTextFileId(null)}>
+          <DialogContent className="max-w-3xl">
+            <DialogHeader>
+              <DialogTitle>Extracted text</DialogTitle>
+              <DialogDescription>
+                {fileGroups.find((g) => g.file.id === textFileId)?.file.name}
+              </DialogDescription>
+            </DialogHeader>
+            {textFileId && <ExtractedTextBody fileId={textFileId} />}
+          </DialogContent>
+        </Dialog>
+
         {/* Manage columns modal */}
         <Dialog open={manageOpen} onOpenChange={setManageOpen}>
           <DialogContent className="max-w-lg">
             <DialogHeader>
               <DialogTitle>Manage columns</DialogTitle>
               <DialogDescription>
-                Pick which assets and water systems appear as columns. Shared across all
-                internal users.
+                Pick which assets and water systems appear as columns. Shared across
+                all internal users.
               </DialogDescription>
             </DialogHeader>
             <div className="max-h-[60vh] overflow-auto space-y-5 py-2">
@@ -528,7 +943,11 @@ export default function WorkbenchProjectDetail() {
               ))}
             </div>
             <DialogFooter>
-              <Button variant="outline" onClick={() => setManageOpen(false)} disabled={savingPrefs}>
+              <Button
+                variant="outline"
+                onClick={() => setManageOpen(false)}
+                disabled={savingPrefs}
+              >
                 Cancel
               </Button>
               <Button onClick={saveColumns} disabled={savingPrefs}>
@@ -537,7 +956,107 @@ export default function WorkbenchProjectDetail() {
             </DialogFooter>
           </DialogContent>
         </Dialog>
+
+        {/* Clear All confirmation */}
+        <AlertDialog open={clearOpen} onOpenChange={setClearOpen}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Clear all results?</AlertDialogTitle>
+              <AlertDialogDescription>
+                This deletes extracted text, triage results, analysis results, and
+                Workbench overrides for this project's latest analysis request. The
+                files themselves are not removed.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel disabled={clearing}>Cancel</AlertDialogCancel>
+              <AlertDialogAction onClick={clearAll} disabled={clearing}>
+                {clearing ? <Loader2 className="h-4 w-4 animate-spin" /> : "Clear All"}
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
       </div>
     </TooltipProvider>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// ExtractedTextBody — shows file extracted text without page line-break headers
+// ---------------------------------------------------------------------------
+function ExtractedTextBody({ fileId }: { fileId: string }) {
+  const [text, setText] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [copied, setCopied] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      setLoading(true);
+      const { data: fileRow } = await supabase
+        .from("analysis_request_files")
+        .select("extracted_text")
+        .eq("id", fileId)
+        .maybeSingle();
+      let combined = (fileRow?.extracted_text as string) || "";
+      if (!combined) {
+        const { data: sheets } = await supabase
+          .from("analysis_request_sheets")
+          .select("page_index, extracted_text")
+          .eq("parent_file_id", fileId)
+          .order("page_index");
+        if (sheets && sheets.length > 0) {
+          combined = sheets
+            .filter((s: any) => s.extracted_text)
+            .map((s: any) => s.extracted_text as string)
+            .join(" ");
+        }
+      }
+      // Strip line breaks per spec ("without line breaks")
+      const flat = (combined || "").replace(/\s+/g, " ").trim();
+      if (!cancelled) {
+        setText(flat || null);
+        setLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [fileId]);
+
+  const handleCopy = () => {
+    if (!text) return;
+    navigator.clipboard.writeText(text).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    });
+  };
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center p-8">
+        <Loader2 className="w-5 h-5 animate-spin text-muted-foreground" />
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex flex-col gap-2 min-h-0">
+      <div className="flex justify-end">
+        <button
+          onClick={handleCopy}
+          disabled={!text}
+          className="inline-flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors disabled:opacity-40"
+        >
+          {copied ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
+          {copied ? "Copied" : "Copy all"}
+        </button>
+      </div>
+      <div className="max-h-[60vh] overflow-auto border rounded-md p-4 bg-muted/30">
+        <p className="text-xs break-words font-mono text-foreground whitespace-normal">
+          {text || "(no text extracted)"}
+        </p>
+      </div>
+    </div>
   );
 }
