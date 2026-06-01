@@ -90,6 +90,7 @@ export const FileViewerModal = ({
   pageIndex = 1,
   fileNameById,
   onInstancesChanged,
+  persistKey,
 }: FileViewerModalProps) => {
   const { toast } = useToast();
   const [hoveredCode, setHoveredCode] = useState<string | null>(null);
@@ -98,22 +99,62 @@ export const FileViewerModal = ({
   const sidebarEnabled =
     !!awpClasses && !!analysisRequestId && !!parentFileId;
 
-  const [selectedClass, setSelectedClass] = useState<string | null>(
-    awpClasses?.[0]?.name ?? null,
+  const storageKey = persistKey ? `workbench-awp-class:${persistKey}` : null;
+
+  const readStoredClass = useCallback((): string | null => {
+    if (!storageKey || typeof window === "undefined") return null;
+    try {
+      return window.localStorage.getItem(storageKey);
+    } catch {
+      return null;
+    }
+  }, [storageKey]);
+
+  const [selectedClass, setSelectedClass] = useState<string | null>(() => {
+    const stored = (() => {
+      if (!persistKey || typeof window === "undefined") return null;
+      try {
+        return window.localStorage.getItem(`workbench-awp-class:${persistKey}`);
+      } catch {
+        return null;
+      }
+    })();
+    if (stored && awpClasses?.some((c) => c.name === stored)) return stored;
+    return awpClasses?.[0]?.name ?? null;
+  });
+  const [expanded, setExpanded] = useState<Set<string>>(
+    () => new Set(selectedClass ? [selectedClass] : []),
   );
-  const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [instances, setInstances] = useState<DrawingInstanceRow[]>([]);
   const [loadingInstances, setLoadingInstances] = useState(false);
   const [past, setPast] = useState<HistoryAction[]>([]);
   const [future, setFuture] = useState<HistoryAction[]>([]);
 
-  // Reset history each time the modal opens
+  // Reset history each time the modal opens; also resync selected class from
+  // localStorage and expand only the selected class.
   useEffect(() => {
     if (isOpen) {
       setPast([]);
       setFuture([]);
+      const stored = readStoredClass();
+      const next =
+        stored && awpClasses?.some((c) => c.name === stored)
+          ? stored
+          : awpClasses?.[0]?.name ?? null;
+      setSelectedClass(next);
+      setExpanded(new Set(next ? [next] : []));
     }
-  }, [isOpen]);
+  }, [isOpen, awpClasses, readStoredClass]);
+
+  // Persist selected class to localStorage whenever it changes.
+  useEffect(() => {
+    if (!storageKey || !selectedClass || typeof window === "undefined") return;
+    try {
+      window.localStorage.setItem(storageKey, selectedClass);
+    } catch {
+      // ignore
+    }
+  }, [storageKey, selectedClass]);
 
   useEffect(() => {
     if (isOpen && awpClasses && awpClasses.length > 0 && !selectedClass) {
