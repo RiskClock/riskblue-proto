@@ -394,7 +394,7 @@ export default function WorkbenchProjectDetail() {
                     {fileGroups.map((group) => {
                       const singlePage = group.sheets.length === 1;
                       return (
-                        <>
+                        <Fragment key={group.id}>
                           {!singlePage && (
                             <TableRow
                               key={`hdr-${group.id}`}
@@ -451,7 +451,7 @@ export default function WorkbenchProjectDetail() {
                               <TableCell className="py-1" />
                             </TableRow>
                           ))}
-                        </>
+                        </Fragment>
                       );
                     })}
                   </TableBody>
