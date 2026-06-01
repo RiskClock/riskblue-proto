@@ -426,9 +426,9 @@ export default function WorkbenchProjectDetail() {
         body,
       });
       if (error) throw error;
-      toast({
-        title: phase === "extract" ? "Extract Context started" : "Triage started",
-      });
+      if (phase === "triage") {
+        toast({ title: "Triage started" });
+      }
       queryClient.invalidateQueries({ queryKey: ["workbench-rows", requestId] });
       queryClient.invalidateQueries({ queryKey: ["workbench-triage", requestId] });
       queryClient.invalidateQueries({
