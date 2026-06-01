@@ -734,43 +734,51 @@ Deno.serve(async (req) => {
     }
 
     if (action === "stop") {
-      const stopPatch = {
-        status: "cancelled",
-        completed_at: new Date().toISOString(),
-        error_message: "Cancelled by user stop request",
-      } as any;
+      // Set the stop flag and DO NOT reset it here — running invocation(s) poll
+      // this on each item dispatch and exit on their own. The next pipeline
+      // start resets the flag.
       await admin
         .from("analysis_requests")
         .update({ pipeline_stop_requested: true } as any)
         .eq("id", analysisRequestId);
+
       await admin
         .from("analysis_pipeline_jobs")
-        .update(stopPatch)
+        .update({
+          status: "cancelled",
+          completed_at: new Date().toISOString(),
+          error_message: "Cancelled by user stop request",
+        } as any)
         .eq("analysis_request_id", analysisRequestId)
         .in("status", ["pending", "processing"]);
+
+      // Empty/not-started state for in-flight rows: delete them so re-running
+      // starts clean (matches "Stop ASAP, current file empty" UX).
       await admin
         .from("analysis_triage_results")
-        .update({ status: "failed", reason: "Cancelled by user stop request", error_message: "Cancelled by user stop request" } as any)
+        .delete()
         .eq("analysis_request_id", analysisRequestId)
         .in("status", ["queued", "pending", "processing"]);
       await admin
         .from("analysis_results")
-        .update({ status: "failed", error_message: "Cancelled by user stop request" } as any)
+        .delete()
         .eq("analysis_request_id", analysisRequestId)
-        .eq("status", "processing");
+        .in("status", ["pending", "processing"]);
+
       await admin
         .from("analysis_requests")
         .update({
           status: "started",
           pipeline_phase: null,
-          pipeline_stop_requested: false,
           pipeline_progress_done: 0,
           pipeline_progress_total: 0,
           error_message: "Stopped by user",
         } as any)
         .eq("id", analysisRequestId);
+
       return json({ status: "stopped", analysisRequestId });
     }
+
 
     // For internal worker re-invocations (summarize phase), use the service key
     // as the auth token for nested function calls (summarize-analysis etc.).

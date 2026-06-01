@@ -52,8 +52,11 @@ export interface DrawingViewerProps {
   /** When toolbarSlot === 'external', callbacks are exposed via onApiReady. */
   onApiReady?: (api: DrawingViewerApi) => void;
   onTotalPagesChange?: (n: number) => void;
+  /** Called when user clicks on the page; receives normalized 0..1 coords. */
+  onCanvasClick?: (nx: number, ny: number, pageNum: number) => void;
   className?: string;
 }
+
 
 const DEFAULT_MIN = 0.8;
 const DEFAULT_MAX = 8;
@@ -75,10 +78,12 @@ export const DrawingViewer = forwardRef<DrawingViewerApi, DrawingViewerProps>(
       toolbarSlot = "top",
       onApiReady,
       onTotalPagesChange,
+      onCanvasClick,
       className,
     },
     ref
   ) {
+
     const wrapperRef = useRef<ReactZoomPanPinchRef>(null);
     const containerRef = useRef<HTMLDivElement>(null);
     const [scale, setScale] = useState(1);
@@ -366,6 +371,11 @@ export const DrawingViewer = forwardRef<DrawingViewerApi, DrawingViewerProps>(
                     pageSize={pageCssSize}
                     overlays={normalizedByPage.get(activePage.pageNum) ?? []}
                     hoveredOverlayId={hoveredOverlayId}
+                    onCanvasClick={
+                      onCanvasClick
+                        ? (nx, ny) => onCanvasClick(nx, ny, activePage.pageNum)
+                        : undefined
+                    }
                   />
                 ) : (
                   <div className="flex flex-col gap-4">
@@ -381,11 +391,17 @@ export const DrawingViewer = forwardRef<DrawingViewerApi, DrawingViewerProps>(
                           pageSize={{ width: w, height: h }}
                           overlays={normalizedByPage.get(p.pageNum) ?? []}
                           hoveredOverlayId={hoveredOverlayId}
+                          onCanvasClick={
+                            onCanvasClick
+                              ? (nx, ny) => onCanvasClick(nx, ny, p.pageNum)
+                              : undefined
+                          }
                         />
                       );
                     })}
                   </div>
                 )}
+
               </TransformComponent>
             </TransformWrapper>
           ) : null}

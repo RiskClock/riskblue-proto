@@ -116,6 +116,8 @@ export default function WorkbenchProjectDetail() {
   const [clearOpen, setClearOpen] = useState(false);
   const [clearing, setClearing] = useState(false);
   const [running, setRunning] = useState<"extract" | "triage" | null>(null);
+  const [promptClass, setPromptClass] = useState<string | null>(null);
+
 
   useEffect(() => {
     if (user && !isInternal) navigate("/projects", { replace: true });
@@ -631,7 +633,7 @@ export default function WorkbenchProjectDetail() {
             <div className="flex flex-wrap items-center gap-2">
               {activePhase === "extract" ? (
                 <Button size="sm" variant="destructive" onClick={stopPipeline}>
-                  <Square className="h-3.5 w-3.5 mr-1.5" /> Stop Extract
+                  <Square className="h-3.5 w-3.5 mr-1.5" /> Stop Extracting Context
                 </Button>
               ) : (
                 <Button
@@ -645,7 +647,7 @@ export default function WorkbenchProjectDetail() {
               )}
               {activePhase === "triage" ? (
                 <Button size="sm" variant="destructive" onClick={stopPipeline}>
-                  <Square className="h-3.5 w-3.5 mr-1.5" /> Stop Triage
+                  <Square className="h-3.5 w-3.5 mr-1.5" /> Stop Triaging
                 </Button>
               ) : (
                 <Button
@@ -659,13 +661,14 @@ export default function WorkbenchProjectDetail() {
               )}
               {activePhase === "analyze" ? (
                 <Button size="sm" variant="destructive" onClick={stopPipeline}>
-                  <Square className="h-3.5 w-3.5 mr-1.5" /> Stop Analyze
+                  <Square className="h-3.5 w-3.5 mr-1.5" /> Stop Analyzing
                 </Button>
               ) : (
                 <Button size="sm" variant="outline" disabled>
                   Analyze
                 </Button>
               )}
+
               <div className="flex-1" />
               <Button
                 size="sm"
@@ -704,13 +707,20 @@ export default function WorkbenchProjectDetail() {
                           >
                             <Tooltip>
                               <TooltipTrigger asChild>
-                                <span className="cursor-default">{label}</span>
+                                <button
+                                  type="button"
+                                  className="font-semibold hover:underline underline-offset-2"
+                                  onClick={() => setPromptClass(name)}
+                                >
+                                  {label}
+                                </button>
                               </TooltipTrigger>
-                              <TooltipContent>{name}</TooltipContent>
+                              <TooltipContent>{name} — click to view prompt</TooltipContent>
                             </Tooltip>
                           </TableHead>
                         );
                       })}
+
                       <TableHead className="text-right w-[1%] whitespace-nowrap h-9 py-1">
                         <Button variant="outline" size="sm" onClick={openManage}>
                           <Settings2 className="h-4 w-4 mr-1" /> Manage
@@ -735,7 +745,7 @@ export default function WorkbenchProjectDetail() {
                                 e.stopPropagation();
                                 setTextFileId(group.file.id);
                               }}
-                              className="text-[10px] bg-emerald-500/10 text-emerald-700 border-emerald-500/30 cursor-pointer hover:bg-emerald-500/20"
+                              className="ml-auto shrink-0 h-4 px-1.5 text-[10px] leading-none bg-emerald-500/10 text-emerald-700 border-emerald-500/30 cursor-pointer hover:bg-emerald-500/20"
                             >
                               Processed
                             </Badge>
@@ -743,7 +753,7 @@ export default function WorkbenchProjectDetail() {
                         }
                         if (isProcessing || extractStatus === "partial") {
                           return (
-                            <Badge variant="outline" className="text-[10px] gap-1">
+                            <Badge variant="outline" className="ml-auto shrink-0 h-4 px-1.5 text-[10px] leading-none gap-1">
                               <Loader2 className="h-2.5 w-2.5 animate-spin" />
                               Processing
                             </Badge>
@@ -751,6 +761,7 @@ export default function WorkbenchProjectDetail() {
                         }
                         return null;
                       };
+
 
                       const renderTriageCell = (
                         fileId: string,
@@ -910,8 +921,25 @@ export default function WorkbenchProjectDetail() {
             accessToken=""
             detections={[]}
             sourceOverride={sheetSource}
+            analysisRequestId={requestId}
+            parentFileId={activeSheet.parent_file_id}
+            sheetId={activeSheet.id}
+            pageIndex={activeSheet.page_index}
+            awpClasses={enabledCols.map((name) => ({
+              name,
+              prefix: optionByName.get(name)?.idPrefix ?? null,
+              analysisCount:
+                fileCountLookup.get(`${activeSheet.parent_file_id}::${name}`) || 0,
+            }))}
           />
         )}
+
+        {/* AWP class prompt modal */}
+        <AwpPromptModal
+          className={promptClass}
+          onClose={() => setPromptClass(null)}
+        />
+
 
         {/* File-level click for files without sheets: pick first sheet if any, else nothing */}
         {activeFileForFile && (() => {
@@ -1027,6 +1055,85 @@ export default function WorkbenchProjectDetail() {
     </TooltipProvider>
   );
 }
+
+// ---------------------------------------------------------------------------
+// AwpPromptModal — shows prompt content + opens source Google Doc
+// ---------------------------------------------------------------------------
+function AwpPromptModal({
+  className,
+  onClose,
+}: {
+  className: string | null;
+  onClose: () => void;
+}) {
+  const [loading, setLoading] = useState(false);
+  const [row, setRow] = useState<{
+    prompt_content: string | null;
+    drive_file_url: string | null;
+    drive_file_name: string | null;
+  } | null>(null);
+
+  useEffect(() => {
+    if (!className) {
+      setRow(null);
+      return;
+    }
+    let cancelled = false;
+    (async () => {
+      setLoading(true);
+      const { data } = await supabase
+        .from("awp_class_prompts")
+        .select("prompt_content, drive_file_url, drive_file_name")
+        .eq("awp_class_name", className)
+        .maybeSingle();
+      if (!cancelled) {
+        setRow((data as any) ?? { prompt_content: null, drive_file_url: null, drive_file_name: null });
+        setLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [className]);
+
+  return (
+    <Dialog open={!!className} onOpenChange={(o) => !o && onClose()}>
+      <DialogContent className="max-w-3xl">
+        <DialogHeader>
+          <DialogTitle>{className} — prompt</DialogTitle>
+          <DialogDescription>
+            {row?.drive_file_name || "Prompt used during triage and analysis."}
+          </DialogDescription>
+        </DialogHeader>
+        {loading ? (
+          <div className="flex items-center justify-center p-8">
+            <Loader2 className="w-5 h-5 animate-spin text-muted-foreground" />
+          </div>
+        ) : (
+          <div className="max-h-[55vh] overflow-auto border rounded-md p-4 bg-muted/30">
+            <pre className="text-xs whitespace-pre-wrap font-mono text-foreground">
+              {row?.prompt_content || "(no prompt content)"}
+            </pre>
+          </div>
+        )}
+        <DialogFooter>
+          <Button variant="outline" onClick={onClose}>
+            Close
+          </Button>
+          <Button
+            disabled={!row?.drive_file_url}
+            onClick={() => {
+              if (row?.drive_file_url) window.open(row.drive_file_url, "_blank");
+            }}
+          >
+            Open Source File
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 
 // ---------------------------------------------------------------------------
 // ExtractedTextBody — shows file extracted text without page line-break headers

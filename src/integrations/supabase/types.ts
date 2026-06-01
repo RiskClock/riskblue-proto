@@ -1274,6 +1274,45 @@ export type Database = {
           },
         ]
       }
+      drawing_instances: {
+        Row: {
+          analysis_request_id: string
+          awp_class_name: string
+          created_at: string
+          created_by: string | null
+          file_id: string
+          id: string
+          nx: number
+          ny: number
+          page_index: number
+          sheet_id: string | null
+        }
+        Insert: {
+          analysis_request_id: string
+          awp_class_name: string
+          created_at?: string
+          created_by?: string | null
+          file_id: string
+          id?: string
+          nx: number
+          ny: number
+          page_index?: number
+          sheet_id?: string | null
+        }
+        Update: {
+          analysis_request_id?: string
+          awp_class_name?: string
+          created_at?: string
+          created_by?: string | null
+          file_id?: string
+          id?: string
+          nx?: number
+          ny?: number
+          page_index?: number
+          sheet_id?: string | null
+        }
+        Relationships: []
+      }
       drive_watch_channels: {
         Row: {
           channel_id: string
