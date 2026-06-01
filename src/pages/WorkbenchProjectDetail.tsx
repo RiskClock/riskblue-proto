@@ -712,8 +712,8 @@ export default function WorkbenchProjectDetail() {
 
   const grouped = awpOptions ? groupAWPOptionsByCategory(eligibleOptions) : {};
 
-  const stickyHeadFirst = "sticky left-0 z-30 bg-card min-w-[260px] border-r";
-  const stickyCellFirstBase = "sticky left-0 z-10 border-r transition-colors";
+  const stickyHeadFirst = "sticky left-0 z-30 bg-card min-w-[260px] max-w-[420px] w-[420px] border-r";
+  const stickyCellFirstBase = "sticky left-0 z-10 border-r transition-colors max-w-[420px] w-[420px]";
 
   // Derive the currently-active phase from DB (authoritative) with `running`
   // as a short-lived optimistic fallback while the row hasn't updated yet.
