@@ -263,7 +263,7 @@ export default function WorkbenchProjectDetail() {
       if (error) throw error;
       return (data || []) as TriageCount[];
     },
-    refetchInterval: running ? 3000 : false,
+    refetchInterval: 3000,
   });
 
   // Workbench-only overrides
