@@ -52,8 +52,11 @@ export interface DrawingViewerProps {
   /** When toolbarSlot === 'external', callbacks are exposed via onApiReady. */
   onApiReady?: (api: DrawingViewerApi) => void;
   onTotalPagesChange?: (n: number) => void;
+  /** Called when user clicks on the page; receives normalized 0..1 coords. */
+  onCanvasClick?: (nx: number, ny: number, pageNum: number) => void;
   className?: string;
 }
+
 
 const DEFAULT_MIN = 0.8;
 const DEFAULT_MAX = 8;
