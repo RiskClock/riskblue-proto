@@ -858,10 +858,9 @@ Deno.serve(async (req) => {
     }
 
     // ---- Phase-aware cleanup
-    if (phaseOverride === "summarize") {
-      // Internal worker re-invocation to run summary phase ONLY.
-      // CRITICAL: Do NOT clear any data here — analyze results must be preserved
-      // so summarize-analysis can read them. Skip directly to phase 4.
+    if (phaseOverride === "summarize" || phaseOverride === "split") {
+      // summarize: internal worker re-invocation — keep analyze results intact.
+      // split: lightweight prep run — must not wipe any data.
     } else {
       // Cancel any stale pending/processing jobs from PRIOR runs (different
       // run id or NULL). For preserved-run phases, current-run jobs are
