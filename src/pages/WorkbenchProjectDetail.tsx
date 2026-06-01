@@ -208,7 +208,7 @@ export default function WorkbenchProjectDetail() {
         );
       return { files, sheets };
     },
-    refetchInterval: running ? 3000 : false,
+    refetchInterval: 3000,
   });
 
   // Group: every file is a group, with optional sheets underneath
