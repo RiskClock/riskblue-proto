@@ -277,7 +277,7 @@ export default function WorkbenchProjectDetail() {
         .select("file_id, awp_class_name, override_type")
         .eq("analysis_request_id", requestId!);
       if (error) throw error;
-      return (data || []) as OverrideRow[];
+      return ((data as unknown) as OverrideRow[]) || [];
     },
   });
 
