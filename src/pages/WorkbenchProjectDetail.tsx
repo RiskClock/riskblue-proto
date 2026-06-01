@@ -875,12 +875,16 @@ export default function WorkbenchProjectDetail() {
                               </div>
                             </TableCell>
                             {enabledCols.map((name) => {
-                              const count =
+                              const baseCount =
                                 fileCountLookup.get(`${group.file.id}::${name}`) || 0;
-                              const scoreKnown = (triage || []).some(
-                                (t) =>
-                                  t.file_id === group.file.id && t.awp_class_name === name,
-                              );
+                              const userCount =
+                                instanceCountLookup.get(`${group.file.id}::${name}`) || 0;
+                              const count = baseCount + userCount;
+                              const scoreKnown =
+                                (triage || []).some(
+                                  (t) =>
+                                    t.file_id === group.file.id && t.awp_class_name === name,
+                                ) || userCount > 0;
                               return renderTriageCell(group.file.id, name, count, scoreKnown);
                             })}
                             <TableCell className="py-1" />
