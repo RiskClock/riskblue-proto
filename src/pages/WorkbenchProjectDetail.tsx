@@ -411,6 +411,29 @@ export default function WorkbenchProjectDetail() {
     return m;
   }, [triage]);
 
+  // (sheet, class) -> { score, status } for triage cell rendering on sub-rows
+  const sheetTriageLookup = useMemo(() => {
+    const m = new Map<string, { score: number | null; status: string | null }>();
+    for (const t of triage || []) {
+      if (!t.sheet_id) continue;
+      m.set(`${t.sheet_id}::${t.awp_class_name}`, {
+        score: t.score,
+        status: t.status,
+      });
+    }
+    return m;
+  }, [triage]);
+
+  // (sheet, class) -> analyze status for per-sheet analyze badge derivation
+  const sheetAnalyzeLookup = useMemo(() => {
+    const m = new Map<string, string>();
+    for (const a of analyzeRows || []) {
+      if (!a.sheet_id) continue;
+      m.set(`${a.sheet_id}::${a.awp_class_name}`, a.status);
+    }
+    return m;
+  }, [analyzeRows]);
+
   const fileCountLookup = useMemo(() => {
     const m = new Map<string, number>();
     for (const t of triage || []) {
@@ -419,6 +442,7 @@ export default function WorkbenchProjectDetail() {
     }
     return m;
   }, [triage]);
+
 
   // Per-file extract status: processed if extracted_text on file OR all sheets extracted/skipped
   const fileExtractStatus = useMemo(() => {
