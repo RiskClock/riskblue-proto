@@ -78,10 +78,12 @@ export const DrawingViewer = forwardRef<DrawingViewerApi, DrawingViewerProps>(
       toolbarSlot = "top",
       onApiReady,
       onTotalPagesChange,
+      onCanvasClick,
       className,
     },
     ref
   ) {
+
     const wrapperRef = useRef<ReactZoomPanPinchRef>(null);
     const containerRef = useRef<HTMLDivElement>(null);
     const [scale, setScale] = useState(1);
