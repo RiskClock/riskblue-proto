@@ -1693,13 +1693,12 @@ async function runPipeline(params: PipelineParams) {
         }
       }
 
-      // Sort so jobs are inserted (and claimed) in canonical class order,
-      // then by unit name for stable ordering within each class.
+      // Sort so jobs are claimed top-to-bottom by unit name (alphabetical),
+      // then by canonical class order within each unit.
       workQueue.sort((a, b) => {
-        const ao = orderFor(a.awpClassName);
-        const bo = orderFor(b.awpClassName);
-        if (ao !== bo) return ao - bo;
-        return a.unitName.localeCompare(b.unitName);
+        const c = a.unitName.localeCompare(b.unitName);
+        if (c !== 0) return c;
+        return orderFor(a.awpClassName) - orderFor(b.awpClassName);
       });
 
       console.log(
