@@ -329,6 +329,28 @@ export default function WorkbenchProjectDetail() {
     refetchInterval: 3000,
   });
 
+  // In-flight pipeline jobs — used to show per-cell spinners during triage
+  // (and later analyze) without waiting for the final results row to land.
+  const { data: pipelineJobs } = useQuery({
+    queryKey: ["workbench-jobs", requestId],
+    enabled: !!requestId,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("analysis_pipeline_jobs")
+        .select("sheet_id, awp_class_name, status, job_kind")
+        .eq("analysis_request_id", requestId!)
+        .in("status", ["pending", "processing"]);
+      if (error) throw error;
+      return (data || []) as {
+        sheet_id: string | null;
+        awp_class_name: string | null;
+        status: string;
+        job_kind: string;
+      }[];
+    },
+    refetchInterval: 2000,
+  });
+
 
 
   // Workbench-only overrides
