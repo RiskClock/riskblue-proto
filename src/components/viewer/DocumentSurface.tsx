@@ -9,6 +9,8 @@ interface DocumentSurfaceProps {
   hoveredOverlayId?: string | null;
   /** Click handler that receives normalized (0..1) coordinates within the page. */
   onCanvasClick?: (nx: number, ny: number) => void;
+  /** Optional click handler invoked when user clicks on an overlay. */
+  onOverlayClick?: (overlayId: string) => void;
 }
 
 /**
