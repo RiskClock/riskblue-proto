@@ -114,7 +114,7 @@ export default function WorkbenchProjectDetail() {
 
   const [activeSheet, setActiveSheet] = useState<SheetRow | null>(null);
   const [activeFile, setActiveFile] = useState<FileRow | null>(null);
-  const [activeFileForFile, setActiveFileForFile] = useState<FileRow | null>(null);
+  
   const [manageOpen, setManageOpen] = useState(false);
   const [draftCols, setDraftCols] = useState<string[]>([]);
   const [savingPrefs, setSavingPrefs] = useState(false);
