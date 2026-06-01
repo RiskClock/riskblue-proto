@@ -54,6 +54,8 @@ export interface DrawingViewerProps {
   onTotalPagesChange?: (n: number) => void;
   /** Called when user clicks on the page; receives normalized 0..1 coords. */
   onCanvasClick?: (nx: number, ny: number, pageNum: number) => void;
+  /** Called when user clicks on an overlay element; receives its id. */
+  onOverlayClick?: (overlayId: string) => void;
   className?: string;
 }
 
