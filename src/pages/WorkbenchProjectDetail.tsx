@@ -707,13 +707,20 @@ export default function WorkbenchProjectDetail() {
                           >
                             <Tooltip>
                               <TooltipTrigger asChild>
-                                <span className="cursor-default">{label}</span>
+                                <button
+                                  type="button"
+                                  className="font-semibold hover:underline underline-offset-2"
+                                  onClick={() => setPromptClass(name)}
+                                >
+                                  {label}
+                                </button>
                               </TooltipTrigger>
-                              <TooltipContent>{name}</TooltipContent>
+                              <TooltipContent>{name} — click to view prompt</TooltipContent>
                             </Tooltip>
                           </TableHead>
                         );
                       })}
+
                       <TableHead className="text-right w-[1%] whitespace-nowrap h-9 py-1">
                         <Button variant="outline" size="sm" onClick={openManage}>
                           <Settings2 className="h-4 w-4 mr-1" /> Manage
