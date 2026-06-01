@@ -561,7 +561,40 @@ export default function WorkbenchProjectDetail() {
 
   const stickyHeadFirst = "sticky left-0 z-30 bg-card min-w-[260px] border-r";
   const stickyCellFirstBase = "sticky left-0 z-10 border-r transition-colors";
-  const phaseRunning = !!pipelinePhase || !!running;
+
+  // Derive the currently-active phase from DB (authoritative) with `running`
+  // as a short-lived optimistic fallback while the row hasn't updated yet.
+  const dbPhase = analysisRequest?.pipeline_phase ?? null;
+  const dbStatus = analysisRequest?.status ?? null;
+  const activePhase: "extract" | "triage" | "analyze" | null =
+    dbPhase === "extracting"
+      ? "extract"
+      : dbPhase === "triaging"
+        ? "triage"
+        : dbPhase === "analyzing" || dbPhase === "summarizing" || dbPhase === "dispatching_analyze"
+          ? "analyze"
+          : running;
+  const phaseRunning = !!activePhase;
+  const hasTriageRun = (triage?.length ?? 0) > 0;
+
+  const stopPipeline = async () => {
+    if (!requestId) return;
+    try {
+      await supabase.functions.invoke("run-analysis-pipeline", {
+        body: { analysisRequestId: requestId, action: "stop" },
+      });
+      setRunning(null);
+      queryClient.invalidateQueries({ queryKey: ["workbench-analysis-request", projectId] });
+      queryClient.invalidateQueries({ queryKey: ["workbench-rows", requestId] });
+      queryClient.invalidateQueries({ queryKey: ["workbench-triage", requestId] });
+    } catch (error: any) {
+      toast({
+        variant: "destructive",
+        title: "Failed to stop",
+        description: getUserFriendlyError(error),
+      });
+    }
+  };
 
   return (
     <TooltipProvider delayDuration={150}>
@@ -585,9 +618,9 @@ export default function WorkbenchProjectDetail() {
                 {project?.name || "Project"}
               </h1>
             </div>
-            {pipelinePhase && (
+            {activePhase && (
               <Badge variant="outline" className="text-xs capitalize">
-                {pipelinePhase}
+                {dbPhase || activePhase}
               </Badge>
             )}
           </div>
