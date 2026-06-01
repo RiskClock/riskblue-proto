@@ -1,12 +1,13 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   Dialog,
   DialogContent,
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { ChevronDown, ChevronRight, Loader2 } from "lucide-react";
+import { ChevronDown, ChevronRight, Loader2, Redo2, Undo2 } from "lucide-react";
 import { DrawingViewer } from "@/components/viewer";
 import type {
   DocumentSourceDescriptor,
@@ -15,6 +16,7 @@ import type {
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { getUserFriendlyError } from "@/lib/errorHandling";
+import { awpClassColor } from "@/lib/awpColor";
 
 interface SystemDetection {
   lineMonitored: string;
@@ -37,6 +39,8 @@ interface DrawingInstanceRow {
   nx: number;
   ny: number;
   page_index: number;
+  file_id: string;
+  created_at: string;
 }
 
 interface FileViewerModalProps {
@@ -49,20 +53,23 @@ interface FileViewerModalProps {
   detections: SystemDetection[];
   sourceOverride?: DocumentSourceDescriptor;
   // --- Workbench enhancements ---
-  /** When provided, enables the AWP-class sidebar + click-to-mark feature. */
   awpClasses?: AwpClassOption[];
-  /** Analysis-request id used to persist instances. */
   analysisRequestId?: string;
-  /** Parent analysis_request_files id (used as instance scope). */
   parentFileId?: string;
-  /** Optional sheet (page) id; null for single-page files. */
   sheetId?: string | null;
-  /** Page index of the active sheet (defaults to 1). */
   pageIndex?: number;
+  /** Map of file_id → file name. Required when awpClasses is provided so
+   *  global instance numbering can order by drawing file name. */
+  fileNameById?: Record<string, string>;
+  /** Notified after any user marker is added or removed. */
+  onInstancesChanged?: () => void;
 }
 
 const BOUNDING_BOX_COLOR = "#39FF14"; // legacy detections (green)
-const INSTANCE_COLOR = "#ef4444"; // user-placed red circles
+
+type HistoryAction =
+  | { type: "add"; instance: DrawingInstanceRow }
+  | { type: "delete"; instance: DrawingInstanceRow };
 
 export const FileViewerModal = ({
   isOpen,
@@ -78,6 +85,8 @@ export const FileViewerModal = ({
   parentFileId,
   sheetId,
   pageIndex = 1,
+  fileNameById,
+  onInstancesChanged,
 }: FileViewerModalProps) => {
   const { toast } = useToast();
   const [hoveredCode, setHoveredCode] = useState<string | null>(null);
@@ -92,6 +101,16 @@ export const FileViewerModal = ({
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [instances, setInstances] = useState<DrawingInstanceRow[]>([]);
   const [loadingInstances, setLoadingInstances] = useState(false);
+  const [past, setPast] = useState<HistoryAction[]>([]);
+  const [future, setFuture] = useState<HistoryAction[]>([]);
+
+  // Reset history each time the modal opens
+  useEffect(() => {
+    if (isOpen) {
+      setPast([]);
+      setFuture([]);
+    }
+  }, [isOpen]);
 
   useEffect(() => {
     if (isOpen && awpClasses && awpClasses.length > 0 && !selectedClass) {
@@ -99,7 +118,7 @@ export const FileViewerModal = ({
     }
   }, [isOpen, awpClasses, selectedClass]);
 
-  // Load instances for this file
+  // Load instances for the entire analysis request (needed for global numbering)
   useEffect(() => {
     if (!isOpen || !sidebarEnabled) return;
     let cancelled = false;
@@ -107,9 +126,9 @@ export const FileViewerModal = ({
       setLoadingInstances(true);
       const { data, error } = await supabase
         .from("drawing_instances" as any)
-        .select("id, awp_class_name, nx, ny, page_index")
+        .select("id, awp_class_name, nx, ny, page_index, file_id, created_at")
         .eq("analysis_request_id", analysisRequestId!)
-        .eq("file_id", parentFileId!);
+        .order("created_at", { ascending: true });
       if (!cancelled) {
         if (error) {
           toast({
@@ -125,66 +144,145 @@ export const FileViewerModal = ({
     return () => {
       cancelled = true;
     };
-  }, [isOpen, sidebarEnabled, analysisRequestId, parentFileId, toast]);
+  }, [isOpen, sidebarEnabled, analysisRequestId, toast]);
 
+  // ---- DB helpers (do not touch history) -----------------------------------
+  const dbInsert = useCallback(
+    async (
+      args: { awp_class_name: string; nx: number; ny: number; page_index: number },
+    ): Promise<DrawingInstanceRow | null> => {
+      const { data, error } = await supabase
+        .from("drawing_instances" as any)
+        .insert({
+          analysis_request_id: analysisRequestId!,
+          file_id: parentFileId!,
+          sheet_id: sheetId ?? null,
+          ...args,
+        } as any)
+        .select("id, awp_class_name, nx, ny, page_index, file_id, created_at")
+        .single();
+      if (error) {
+        toast({
+          variant: "destructive",
+          title: "Could not save marker",
+          description: getUserFriendlyError(error),
+        });
+        return null;
+      }
+      onInstancesChanged?.();
+      return (data as unknown) as DrawingInstanceRow;
+    },
+    [analysisRequestId, parentFileId, sheetId, toast, onInstancesChanged],
+  );
+
+  const dbDelete = useCallback(
+    async (id: string): Promise<boolean> => {
+      const { error } = await supabase
+        .from("drawing_instances" as any)
+        .delete()
+        .eq("id", id);
+      if (error) {
+        toast({
+          variant: "destructive",
+          title: "Could not delete marker",
+          description: getUserFriendlyError(error),
+        });
+        return false;
+      }
+      onInstancesChanged?.();
+      return true;
+    },
+    [toast, onInstancesChanged],
+  );
+
+  // ---- User-initiated actions ---------------------------------------------
   const handleCanvasClick = async (nx: number, ny: number) => {
     if (!sidebarEnabled || !selectedClass) return;
-    // Optimistic insert
-    const tempId = `tmp-${Date.now()}`;
-    const optimistic: DrawingInstanceRow = {
-      id: tempId,
+    const row = await dbInsert({
       awp_class_name: selectedClass,
       nx,
       ny,
       page_index: pageIndex,
-    };
-    setInstances((prev) => [...prev, optimistic]);
-    const { data, error } = await supabase
-      .from("drawing_instances" as any)
-      .insert({
-        analysis_request_id: analysisRequestId!,
-        file_id: parentFileId!,
-        sheet_id: sheetId ?? null,
-        awp_class_name: selectedClass,
-        nx,
-        ny,
-        page_index: pageIndex,
-      } as any)
-      .select("id, awp_class_name, nx, ny, page_index")
-      .single();
-    if (error) {
-      setInstances((prev) => prev.filter((i) => i.id !== tempId));
-      toast({
-        variant: "destructive",
-        title: "Could not save marker",
-        description: getUserFriendlyError(error),
-      });
-      return;
-    }
-    setInstances((prev) =>
-      prev.map((i) =>
-        i.id === tempId ? ((data as unknown) as DrawingInstanceRow) : i,
-      ),
-    );
+    });
+    if (!row) return;
+    setInstances((prev) => [...prev, row]);
+    setPast((p) => [...p, { type: "add", instance: row }]);
+    setFuture([]);
   };
 
-  const deleteInstance = async (id: string) => {
-    const prev = instances;
-    setInstances((p) => p.filter((i) => i.id !== id));
-    const { error } = await supabase
-      .from("drawing_instances" as any)
-      .delete()
-      .eq("id", id);
-    if (error) {
-      setInstances(prev);
-      toast({
-        variant: "destructive",
-        title: "Could not delete marker",
-        description: getUserFriendlyError(error),
+  const handleOverlayClick = async (overlayId: string) => {
+    if (!sidebarEnabled) return;
+    const instId = overlayId.startsWith("inst-") ? overlayId.slice(5) : overlayId;
+    const inst = instances.find((i) => i.id === instId);
+    if (!inst) return;
+    const ok = await dbDelete(inst.id);
+    if (!ok) return;
+    setInstances((prev) => prev.filter((i) => i.id !== inst.id));
+    setPast((p) => [...p, { type: "delete", instance: inst }]);
+    setFuture([]);
+  };
+
+  const handleDeleteFromList = async (id: string) => {
+    const inst = instances.find((i) => i.id === id);
+    if (!inst) return;
+    const ok = await dbDelete(id);
+    if (!ok) return;
+    setInstances((prev) => prev.filter((i) => i.id !== id));
+    setPast((p) => [...p, { type: "delete", instance: inst }]);
+    setFuture([]);
+  };
+
+  // ---- Undo / redo --------------------------------------------------------
+  const undo = async () => {
+    if (past.length === 0) return;
+    const action = past[past.length - 1];
+    if (action.type === "add") {
+      const ok = await dbDelete(action.instance.id);
+      if (!ok) return;
+      setInstances((prev) => prev.filter((i) => i.id !== action.instance.id));
+      setPast((p) => p.slice(0, -1));
+      setFuture((f) => [...f, action]);
+    } else {
+      // Re-insert deleted marker → DB will assign a new id
+      const row = await dbInsert({
+        awp_class_name: action.instance.awp_class_name,
+        nx: action.instance.nx,
+        ny: action.instance.ny,
+        page_index: action.instance.page_index,
       });
+      if (!row) return;
+      setInstances((prev) => [...prev, row]);
+      setPast((p) => p.slice(0, -1));
+      // Store the new row so a subsequent redo deletes the correct id
+      setFuture((f) => [...f, { type: "delete", instance: row }]);
     }
   };
 
+  const redo = async () => {
+    if (future.length === 0) return;
+    const action = future[future.length - 1];
+    if (action.type === "add") {
+      // Re-insert the previously undone add
+      const row = await dbInsert({
+        awp_class_name: action.instance.awp_class_name,
+        nx: action.instance.nx,
+        ny: action.instance.ny,
+        page_index: action.instance.page_index,
+      });
+      if (!row) return;
+      setInstances((prev) => [...prev, row]);
+      setFuture((f) => f.slice(0, -1));
+      setPast((p) => [...p, { type: "add", instance: row }]);
+    } else {
+      const ok = await dbDelete(action.instance.id);
+      if (!ok) return;
+      setInstances((prev) => prev.filter((i) => i.id !== action.instance.id));
+      setFuture((f) => f.slice(0, -1));
+      setPast((p) => [...p, action]);
+    }
+  };
+
+  // ---- Source ------------------------------------------------------------
   const source: DocumentSourceDescriptor | null = useMemo(() => {
     if (!isOpen) return null;
     if (sourceOverride) return sourceOverride;
@@ -198,7 +296,42 @@ export const FileViewerModal = ({
     };
   }, [isOpen, sourceOverride, fileId, accessToken, mimeType, fileName]);
 
-  // Legacy detection overlays
+  // ---- Numbering: global per AWP class -----------------------------------
+  // Ordering: by file name (alphabetical) then created_at; numbers stay
+  // contiguous because they're computed from the live list.
+  const prefixByClass = useMemo(() => {
+    const m = new Map<string, string>();
+    for (const c of awpClasses || []) m.set(c.name, c.prefix || c.name.slice(0, 3).toUpperCase());
+    return m;
+  }, [awpClasses]);
+
+  const numberByInstanceId = useMemo(() => {
+    const m = new Map<string, number>();
+    const byClass = new Map<string, DrawingInstanceRow[]>();
+    for (const inst of instances) {
+      const arr = byClass.get(inst.awp_class_name) || [];
+      arr.push(inst);
+      byClass.set(inst.awp_class_name, arr);
+    }
+    const nameOf = (fid: string) => fileNameById?.[fid] ?? "";
+    for (const [, arr] of byClass) {
+      arr.sort((a, b) => {
+        const an = nameOf(a.file_id);
+        const bn = nameOf(b.file_id);
+        return an.localeCompare(bn) || a.created_at.localeCompare(b.created_at);
+      });
+      arr.forEach((inst, idx) => m.set(inst.id, idx + 1));
+    }
+    return m;
+  }, [instances, fileNameById]);
+
+  const instanceLabel = (inst: DrawingInstanceRow) => {
+    const n = numberByInstanceId.get(inst.id) ?? 0;
+    const prefix = prefixByClass.get(inst.awp_class_name) || "AWP";
+    return `${prefix}-${String(n).padStart(3, "0")}`;
+  };
+
+  // ---- Overlays ----------------------------------------------------------
   const detectionOverlays: OverlayInput[] = useMemo(() => {
     return detections.map((d, i) => {
       const coords = d.coordinates;
@@ -215,30 +348,36 @@ export const FileViewerModal = ({
     });
   }, [detections]);
 
-  // Instance overlays (user-placed red circles for selected page)
+  // User-placed circles, but only for THIS file and current page.
   const instanceOverlays: OverlayInput[] = useMemo(() => {
     return instances
-      .filter((i) => i.page_index === currentPage)
+      .filter(
+        (i) => i.file_id === parentFileId && i.page_index === currentPage,
+      )
       .map((i) => ({
         id: `inst-${i.id}`,
-        bbox: [i.nx, i.ny, 0.01, 0.01] as [number, number, number, number],
+        // bbox width/height = 0 so the centroid is exactly the click point
+        bbox: [i.nx, i.ny, 0, 0] as [number, number, number, number],
         coordSpace: "normalized" as const,
         page: i.page_index,
-        color: INSTANCE_COLOR,
+        color: awpClassColor(i.awp_class_name),
+        label: instanceLabel(i),
       }));
-  }, [instances, currentPage]);
+  }, [instances, currentPage, parentFileId, numberByInstanceId, prefixByClass]);
 
   const overlays = [...detectionOverlays, ...instanceOverlays];
 
-  const instancesByClass = useMemo(() => {
+  // For the sidebar: instances for THIS file, grouped by class.
+  const instancesByClassThisFile = useMemo(() => {
     const m = new Map<string, DrawingInstanceRow[]>();
     for (const i of instances) {
+      if (i.file_id !== parentFileId) continue;
       const arr = m.get(i.awp_class_name) || [];
       arr.push(i);
       m.set(i.awp_class_name, arr);
     }
     return m;
-  }, [instances]);
+  }, [instances, parentFileId]);
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
@@ -266,16 +405,43 @@ export const FileViewerModal = ({
               minScale={0.8}
               maxScale={8}
               onCanvasClick={sidebarEnabled ? handleCanvasClick : undefined}
+              onOverlayClick={sidebarEnabled ? handleOverlayClick : undefined}
             />
           </div>
 
           {sidebarEnabled && awpClasses ? (
             <div className="w-72 flex-shrink-0 border rounded-lg flex flex-col">
-              <div className="px-3 py-2 border-b">
-                <h4 className="text-sm font-medium">AWP classes</h4>
-                <p className="text-[11px] text-muted-foreground">
-                  Click the canvas to mark an instance of the selected class.
-                </p>
+              <div className="px-3 py-2 border-b flex items-start justify-between gap-2">
+                <div>
+                  <h4 className="text-sm font-medium">AWP classes</h4>
+                  <p className="text-[11px] text-muted-foreground">
+                    Click the canvas to mark; click a marker to remove.
+                  </p>
+                </div>
+                <div className="flex items-center gap-1">
+                  <Button
+                    size="icon"
+                    variant="ghost"
+                    className="h-7 w-7"
+                    onClick={undo}
+                    disabled={past.length === 0}
+                    aria-label="Undo"
+                    title="Undo"
+                  >
+                    <Undo2 className="h-3.5 w-3.5" />
+                  </Button>
+                  <Button
+                    size="icon"
+                    variant="ghost"
+                    className="h-7 w-7"
+                    onClick={redo}
+                    disabled={future.length === 0}
+                    aria-label="Redo"
+                    title="Redo"
+                  >
+                    <Redo2 className="h-3.5 w-3.5" />
+                  </Button>
+                </div>
               </div>
               <ScrollArea className="flex-1">
                 <div className="py-1">
@@ -286,25 +452,40 @@ export const FileViewerModal = ({
                     </div>
                   )}
                   {awpClasses.map((c) => {
-                    const userCount =
-                      instancesByClass.get(c.name)?.length ?? 0;
+                    const subList = instancesByClassThisFile.get(c.name) || [];
+                    const userCount = subList.length;
                     const total = c.analysisCount + userCount;
                     const isSelected = selectedClass === c.name;
                     const isExpanded = expanded.has(c.name);
-                    const subList = instancesByClass.get(c.name) || [];
+                    const color = awpClassColor(c.name);
                     return (
                       <div key={c.name} className="border-b last:border-b-0">
                         <div
                           className={`flex items-center gap-2 px-3 py-1.5 text-sm cursor-pointer hover:bg-muted/50 ${
                             isSelected ? "bg-muted/40" : ""
                           }`}
-                          onClick={() => setSelectedClass(c.name)}
+                          onClick={() => {
+                            setExpanded((prev) => {
+                              const next = new Set(prev);
+                              if (next.has(c.name)) next.delete(c.name);
+                              else next.add(c.name);
+                              return next;
+                            });
+                          }}
                         >
                           <input
                             type="radio"
                             checked={isSelected}
                             onChange={() => setSelectedClass(c.name)}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setSelectedClass(c.name);
+                            }}
                             className="h-3.5 w-3.5"
+                          />
+                          <span
+                            className="h-2 w-2 rounded-full shrink-0"
+                            style={{ backgroundColor: color }}
                           />
                           <span className="font-mono text-xs text-muted-foreground">
                             {c.prefix ?? "—"}
@@ -313,25 +494,11 @@ export const FileViewerModal = ({
                           <span className="text-xs tabular-nums text-muted-foreground">
                             {total}
                           </span>
-                          <button
-                            type="button"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setExpanded((prev) => {
-                                const next = new Set(prev);
-                                if (next.has(c.name)) next.delete(c.name);
-                                else next.add(c.name);
-                                return next;
-                              });
-                            }}
-                            className="text-muted-foreground hover:text-foreground"
-                          >
-                            {isExpanded ? (
-                              <ChevronDown className="h-4 w-4" />
-                            ) : (
-                              <ChevronRight className="h-4 w-4" />
-                            )}
-                          </button>
+                          {isExpanded ? (
+                            <ChevronDown className="h-4 w-4 text-muted-foreground" />
+                          ) : (
+                            <ChevronRight className="h-4 w-4 text-muted-foreground" />
+                          )}
                         </div>
                         {isExpanded && (
                           <div className="px-8 py-1 space-y-1 bg-muted/20">
@@ -345,27 +512,37 @@ export const FileViewerModal = ({
                                 No instances yet.
                               </div>
                             )}
-                            {subList.map((i, idx) => (
-                              <div
-                                key={i.id}
-                                className="flex items-center gap-2 text-[11px]"
-                              >
-                                <span className="h-2 w-2 rounded-full bg-destructive" />
-                                <span className="flex-1">
-                                  Marker {idx + 1}
-                                  {i.page_index !== currentPage
-                                    ? ` (p.${i.page_index})`
-                                    : ""}
-                                </span>
-                                <button
-                                  onClick={() => deleteInstance(i.id)}
-                                  className="text-muted-foreground hover:text-destructive"
-                                  aria-label="Remove marker"
+                            {subList
+                              .slice()
+                              .sort(
+                                (a, b) =>
+                                  (numberByInstanceId.get(a.id) ?? 0) -
+                                  (numberByInstanceId.get(b.id) ?? 0),
+                              )
+                              .map((i) => (
+                                <div
+                                  key={i.id}
+                                  className="flex items-center gap-2 text-[11px]"
                                 >
-                                  ×
-                                </button>
-                              </div>
-                            ))}
+                                  <span
+                                    className="h-2 w-2 rounded-full"
+                                    style={{ backgroundColor: color }}
+                                  />
+                                  <span className="flex-1 font-mono">
+                                    {instanceLabel(i)}
+                                    {i.page_index !== currentPage
+                                      ? ` (p.${i.page_index})`
+                                      : ""}
+                                  </span>
+                                  <button
+                                    onClick={() => handleDeleteFromList(i.id)}
+                                    className="text-muted-foreground hover:text-destructive"
+                                    aria-label="Remove marker"
+                                  >
+                                    ×
+                                  </button>
+                                </div>
+                              ))}
                           </div>
                         )}
                       </div>
