@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Dialog,
   DialogContent,
@@ -131,9 +131,13 @@ export const FileViewerModal = ({
   const [future, setFuture] = useState<HistoryAction[]>([]);
 
   // Reset history each time the modal opens; also resync selected class from
-  // localStorage and expand only the selected class.
+  // localStorage and expand only the selected class. This must run only on the
+  // open transition — re-running when `awpClasses` changes would collapse rows
+  // the user expanded (e.g. after removing an instance the parent re-fetches
+  // and produces a new awpClasses array reference).
+  const wasOpenRef = useRef(false);
   useEffect(() => {
-    if (isOpen) {
+    if (isOpen && !wasOpenRef.current) {
       setPast([]);
       setFuture([]);
       const stored = readStoredClass();
@@ -144,7 +148,9 @@ export const FileViewerModal = ({
       setSelectedClass(next);
       setExpanded(new Set(next ? [next] : []));
     }
+    wasOpenRef.current = isOpen;
   }, [isOpen, awpClasses, readStoredClass]);
+
 
   // Persist selected class to localStorage whenever it changes.
   useEffect(() => {
