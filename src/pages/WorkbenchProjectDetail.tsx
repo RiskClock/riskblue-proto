@@ -155,7 +155,6 @@ export default function WorkbenchProjectDetail() {
   });
 
   const requestId = analysisRequest?.id;
-  const pipelinePhase = analysisRequest?.pipeline_phase ?? null;
 
   // Files + sheets for the latest request
   const { data: rows, isLoading } = useQuery({
