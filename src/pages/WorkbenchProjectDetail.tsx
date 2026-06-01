@@ -309,6 +309,23 @@ export default function WorkbenchProjectDetail() {
     refetchInterval: 3000,
   });
 
+  // Per-sheet analyze status (one row per sheet × awp class)
+  const { data: analyzeRows } = useQuery({
+    queryKey: ["workbench-analyze", requestId],
+    enabled: !!requestId,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("analysis_results")
+        .select("sheet_id, awp_class_name, status")
+        .eq("analysis_request_id", requestId!);
+      if (error) throw error;
+      return (data || []) as { sheet_id: string | null; awp_class_name: string; status: string }[];
+    },
+    refetchInterval: 3000,
+  });
+
+
+
   // Workbench-only overrides
   const { data: overrides } = useQuery({
     queryKey: ["workbench-overrides", requestId],
