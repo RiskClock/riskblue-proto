@@ -238,7 +238,7 @@ export default function WorkbenchProjectDetail() {
         path: s.storage_path!,
         mimeType: "application/pdf",
       }));
-    const CONCURRENCY = 4;
+    const CONCURRENCY = 8;
     let idx = 0;
     const worker = async () => {
       while (!cancelled && idx < queue.length) {
