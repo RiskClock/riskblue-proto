@@ -23,6 +23,7 @@ export const DocumentSurface = ({
   overlays,
   hoveredOverlayId,
   onCanvasClick,
+  onOverlayClick,
 }: DocumentSurfaceProps) => {
   const style: CSSProperties = {
     width: pageSize.width,
