@@ -101,10 +101,20 @@ export default function InternalWorkbench() {
   const [confirmName, setConfirmName] = useState("");
   const [deleting, setDeleting] = useState(false);
 
+  const STORAGE_KEY = "workbench-filter";
+
+  const saved = (() => {
+    try {
+      const raw = localStorage.getItem(STORAGE_KEY);
+      if (raw) return JSON.parse(raw) as { creators?: string[]; statuses?: string[] };
+    } catch {}
+    return null;
+  })();
+
   const [sortKey, setSortKey] = useState<SortKey>("created_at");
   const [sortDir, setSortDir] = useState<SortDir>("desc");
-  const [filterCreators, setFilterCreators] = useState<string[]>([]);
-  const [filterStatuses, setFilterStatuses] = useState<string[]>([]);
+  const [filterCreators, setFilterCreators] = useState<string[]>(saved?.creators ?? []);
+  const [filterStatuses, setFilterStatuses] = useState<string[]>(saved?.statuses ?? []);
 
   const isInternal = user?.email?.toLowerCase().endsWith("@riskclock.com") ?? false;
 
@@ -113,6 +123,13 @@ export default function InternalWorkbench() {
       navigate("/projects", { replace: true });
     }
   }, [user, isInternal, navigate]);
+
+  useEffect(() => {
+    localStorage.setItem(
+      STORAGE_KEY,
+      JSON.stringify({ creators: filterCreators, statuses: filterStatuses }),
+    );
+  }, [filterCreators, filterStatuses]);
 
   const { data: projects, isLoading, refetch } = useQuery({
     queryKey: ["workbench-projects"],
