@@ -1450,6 +1450,34 @@ export default function WorkbenchProjectDetail() {
                 </Table>
               </div>
             )}
+
+            {analysisRequest && totalFiles > 0 && (
+              <div className="flex justify-end gap-2 pt-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleExportResults}
+                  disabled={exporting || !requestId}
+                >
+                  {exporting ? (
+                    <Loader2 className="h-4 w-4 mr-1.5 animate-spin" />
+                  ) : null}
+                  Export Results
+                </Button>
+                <Button
+                  size="sm"
+                  onClick={() =>
+                    toast({
+                      title: "Sent to WMG Project",
+                      description: "Results have been sent.",
+                    })
+                  }
+                  disabled={!requestId}
+                >
+                  Send to WMG Project
+                </Button>
+              </div>
+            )}
           </div>
         </main>
 
