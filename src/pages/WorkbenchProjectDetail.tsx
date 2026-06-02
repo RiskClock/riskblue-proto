@@ -867,7 +867,7 @@ export default function WorkbenchProjectDetail() {
                 No drawings uploaded for this project yet.
               </div>
             ) : (
-              <div className="bg-card rounded-lg border overflow-auto relative">
+              <div className="bg-card rounded-lg border overflow-hidden relative max-h-[calc(100vh-220px)] [&>div]:max-h-[calc(100vh-220px)]">
                 <Table>
                   <TableHeader className="sticky top-0 z-20 bg-card">
                     <TableRow>
@@ -877,29 +877,64 @@ export default function WorkbenchProjectDetail() {
                       {enabledCols.map((name) => {
                         const opt = optionByName.get(name);
                         const label = opt?.idPrefix || name;
+                        const classHasTriage = (triage || []).some(
+                          (t) => t.awp_class_name === name,
+                        );
                         return (
                           <TableHead
                             key={name}
                             className="text-center whitespace-nowrap h-9 py-1"
                           >
-                            <Tooltip>
-                              <TooltipTrigger asChild>
-                                <button
-                                  type="button"
-                                  className="font-semibold hover:underline underline-offset-2"
-                                  onClick={() => setPromptClass(name)}
-                                >
-                                  {label}
-                                </button>
-                              </TooltipTrigger>
-                              <TooltipContent>{name} — click to view prompt</TooltipContent>
-                            </Tooltip>
+                            <div className="inline-flex items-center gap-1">
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <button
+                                    type="button"
+                                    className="font-semibold hover:underline underline-offset-2"
+                                    onClick={() => setPromptClass(name)}
+                                  >
+                                    {label}
+                                  </button>
+                                </TooltipTrigger>
+                                <TooltipContent>{name} — click to view prompt</TooltipContent>
+                              </Tooltip>
+                              <DropdownMenu>
+                                <DropdownMenuTrigger asChild>
+                                  <button
+                                    type="button"
+                                    className="text-muted-foreground hover:text-foreground p-0.5 rounded hover:bg-muted/50"
+                                    aria-label={`Actions for ${name}`}
+                                  >
+                                    <MoreVertical className="h-3.5 w-3.5" />
+                                  </button>
+                                </DropdownMenuTrigger>
+                                <DropdownMenuContent align="end">
+                                  <DropdownMenuItem
+                                    disabled={!anyFileProcessed || phaseRunning}
+                                    onClick={() => runPipeline("triage", [name])}
+                                  >
+                                    {classHasTriage ? "Re-Triage" : "Triage"}
+                                  </DropdownMenuItem>
+                                  <DropdownMenuItem
+                                    disabled={!anyFileProcessed || !classHasTriage || phaseRunning}
+                                    onClick={() => runPipeline("analyze", [name])}
+                                  >
+                                    Analyze
+                                  </DropdownMenuItem>
+                                </DropdownMenuContent>
+                              </DropdownMenu>
+                            </div>
                           </TableHead>
                         );
                       })}
 
                       <TableHead className="text-right w-[1%] whitespace-nowrap h-9 py-1">
-                        <Button variant="outline" size="sm" onClick={openManage}>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={openManage}
+                          disabled={phaseRunning}
+                        >
                           <Settings2 className="h-4 w-4 mr-1" /> Manage
                         </Button>
                       </TableHead>
