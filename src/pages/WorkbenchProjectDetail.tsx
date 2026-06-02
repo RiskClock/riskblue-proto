@@ -1551,6 +1551,8 @@ export default function WorkbenchProjectDetail() {
               });
             }}
             persistKey={projectId}
+            expandedClasses={sidebarExpandedClasses}
+            onExpandedClassesChange={setSidebarExpandedClasses}
           />
         )}
 
