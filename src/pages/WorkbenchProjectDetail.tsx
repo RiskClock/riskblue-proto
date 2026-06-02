@@ -126,6 +126,7 @@ export default function WorkbenchProjectDetail() {
   const [draftCols, setDraftCols] = useState<string[]>([]);
   const [savingPrefs, setSavingPrefs] = useState(false);
   const [textFileId, setTextFileId] = useState<string | null>(null);
+  const [textSheet, setTextSheet] = useState<{ id: string; label: string } | null>(null);
   const [clearOpen, setClearOpen] = useState(false);
   const [clearing, setClearing] = useState(false);
   const [running, setRunning] = useState<"extract" | "triage" | "analyze" | null>(null);
@@ -1302,10 +1303,15 @@ export default function WorkbenchProjectDetail() {
                       const SheetStatusBadge = ({ s }: { s: SheetRow }) => {
                         const st = sheetExtractState(s);
                         if (st === "done") {
+                          const label = `Page ${s.page_index}${s.sheet_number ? ` · ${s.sheet_number}` : ""}`;
                           return (
                             <Badge
                               variant="outline"
-                              className="ml-auto shrink-0 h-4 px-1.5 text-[10px] leading-none bg-emerald-500/10 text-emerald-700 border-emerald-500/30"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setTextSheet({ id: s.id, label: `${group.file.name} — ${label}` });
+                              }}
+                              className="ml-auto shrink-0 h-4 px-1.5 text-[10px] leading-none bg-emerald-500/10 text-emerald-700 border-emerald-500/30 cursor-pointer hover:bg-emerald-500/20"
                             >
                               Processed
                             </Badge>
@@ -1583,15 +1589,30 @@ export default function WorkbenchProjectDetail() {
 
 
         {/* Extracted-text modal */}
-        <Dialog open={!!textFileId} onOpenChange={(o) => !o && setTextFileId(null)}>
+        <Dialog
+          open={!!textFileId || !!textSheet}
+          onOpenChange={(o) => {
+            if (!o) {
+              setTextFileId(null);
+              setTextSheet(null);
+            }
+          }}
+        >
           <DialogContent className="max-w-3xl">
             <DialogHeader>
               <DialogTitle>Extracted text</DialogTitle>
               <DialogDescription>
-                {fileGroups.find((g) => g.file.id === textFileId)?.file.name}
+                {textSheet
+                  ? textSheet.label
+                  : fileGroups.find((g) => g.file.id === textFileId)?.file.name}
               </DialogDescription>
             </DialogHeader>
-            {textFileId && <ExtractedTextBody fileId={textFileId} />}
+            {(textFileId || textSheet) && (
+              <ExtractedTextBody
+                fileId={textFileId ?? undefined}
+                sheetId={textSheet?.id}
+              />
+            )}
           </DialogContent>
         </Dialog>
 
@@ -1803,7 +1824,7 @@ function AwpPromptModal({
 // ---------------------------------------------------------------------------
 // ExtractedTextBody — shows file extracted text without page line-break headers
 // ---------------------------------------------------------------------------
-function ExtractedTextBody({ fileId }: { fileId: string }) {
+function ExtractedTextBody({ fileId, sheetId }: { fileId?: string; sheetId?: string }) {
   const [text, setText] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [copied, setCopied] = useState(false);
@@ -1812,23 +1833,33 @@ function ExtractedTextBody({ fileId }: { fileId: string }) {
     let cancelled = false;
     (async () => {
       setLoading(true);
-      const { data: fileRow } = await supabase
-        .from("analysis_request_files")
-        .select("extracted_text")
-        .eq("id", fileId)
-        .maybeSingle();
-      let combined = (fileRow?.extracted_text as string) || "";
-      if (!combined) {
-        const { data: sheets } = await supabase
+      let combined = "";
+      if (sheetId) {
+        const { data: sheetRow } = await supabase
           .from("analysis_request_sheets")
-          .select("page_index, extracted_text")
-          .eq("parent_file_id", fileId)
-          .order("page_index");
-        if (sheets && sheets.length > 0) {
-          combined = sheets
-            .filter((s: any) => s.extracted_text)
-            .map((s: any) => s.extracted_text as string)
-            .join(" ");
+          .select("extracted_text")
+          .eq("id", sheetId)
+          .maybeSingle();
+        combined = (sheetRow?.extracted_text as string) || "";
+      } else if (fileId) {
+        const { data: fileRow } = await supabase
+          .from("analysis_request_files")
+          .select("extracted_text")
+          .eq("id", fileId)
+          .maybeSingle();
+        combined = (fileRow?.extracted_text as string) || "";
+        if (!combined) {
+          const { data: sheets } = await supabase
+            .from("analysis_request_sheets")
+            .select("page_index, extracted_text")
+            .eq("parent_file_id", fileId)
+            .order("page_index");
+          if (sheets && sheets.length > 0) {
+            combined = sheets
+              .filter((s: any) => s.extracted_text)
+              .map((s: any) => s.extracted_text as string)
+              .join(" ");
+          }
         }
       }
       // Strip line breaks per spec ("without line breaks")
@@ -1841,7 +1872,7 @@ function ExtractedTextBody({ fileId }: { fileId: string }) {
     return () => {
       cancelled = true;
     };
-  }, [fileId]);
+  }, [fileId, sheetId]);
 
   const handleCopy = () => {
     if (!text) return;
