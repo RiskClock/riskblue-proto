@@ -525,6 +525,10 @@ export default function WorkbenchProjectDetail() {
   }, [fileGroups]);
 
   const totalFiles = fileGroups.length;
+  const anyFileProcessed = useMemo(
+    () => [...fileExtractStatus.values()].some((s) => s === "processed"),
+    [fileExtractStatus],
+  );
 
   const openManage = () => {
     setDraftCols(enabledCols);
