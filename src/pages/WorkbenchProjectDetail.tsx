@@ -1321,7 +1321,13 @@ export default function WorkbenchProjectDetail() {
                                 ) : (
                                   <span className="inline-block w-3.5 shrink-0" />
                                 )}
-                                <span className="font-medium truncate min-w-0">{group.file.name}</span>
+                                <span className="font-medium truncate min-w-0">
+                                  {group.file.name}
+                                  {(() => {
+                                    const n = fileTotalLookup.get(group.file.id) || 0;
+                                    return n > 0 ? ` (${n} inst.)` : "";
+                                  })()}
+                                </span>
                                 {!singlePage && (
                                   <span className="text-xs text-muted-foreground shrink-0">
                                     {group.sheets.length} pages
