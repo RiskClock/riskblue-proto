@@ -1350,8 +1350,8 @@ export default function WorkbenchProjectDetail() {
                                 fileCountLookup.get(`${group.file.id}::${name}`) || 0;
                               const userCount =
                                 instanceCountLookup.get(`${group.file.id}::${name}`) || 0;
-                              // Triage produces no instances — show only user/analysis count.
-                              const count = userCount;
+                              // Annotation count is independent of triage score — show both.
+                              const count = baseCount + userCount;
                               const fileScore = fileScoreLookup.get(`${group.file.id}::${name}`);
                               const scoreKnown =
                                 fileScore != null ||
