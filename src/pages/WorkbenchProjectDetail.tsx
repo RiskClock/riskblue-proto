@@ -1368,6 +1368,14 @@ export default function WorkbenchProjectDetail() {
                                       Page {s.page_index}
                                       {s.sheet_number ? ` · ${s.sheet_number}` : ""}
                                       {s.sheet_title ? ` — ${s.sheet_title}` : ""}
+                                      {(() => {
+                                        const triageOnPage =
+                                          (pageTotalLookup.get(`sheet:${s.id}`) || 0);
+                                        const userOnPage =
+                                          (pageTotalLookup.get(`${s.parent_file_id}::${s.page_index}`) || 0);
+                                        const n = triageOnPage + userOnPage;
+                                        return n > 0 ? ` (${n} inst.)` : "";
+                                      })()}
                                     </span>
                                     <SheetStatusBadge s={s} />
                                   </div>
