@@ -8,6 +8,7 @@ import {
   ChevronRight,
   Copy,
   Loader2,
+  MoreVertical,
   Settings2,
   ShieldAlert,
   Square,
