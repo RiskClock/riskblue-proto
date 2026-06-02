@@ -1371,6 +1371,7 @@ async function runPipeline(params: PipelineParams) {
         sheets = (sheetRows2 as any[]) || [];
         const fileNameById2 = new Map<string, string>();
         for (const f of files as any[]) fileNameById2.set(f.id, (f as any).name ?? "");
+        for (const f of pdfFiles as any[]) fileNameById2.set(f.id, (f as any).name ?? "");
         sheets.sort((a, b) => {
           const an = fileNameById2.get(a.parent_file_id) ?? "";
           const bn = fileNameById2.get(b.parent_file_id) ?? "";
