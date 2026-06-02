@@ -374,10 +374,10 @@ export default function WorkbenchProjectDetail() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("drawing_instances" as any)
-        .select("file_id, awp_class_name")
+        .select("file_id, awp_class_name, page_index")
         .eq("analysis_request_id", requestId!);
       if (error) throw error;
-      return ((data as unknown) as { file_id: string; awp_class_name: string }[]) || [];
+      return ((data as unknown) as { file_id: string; awp_class_name: string; page_index: number }[]) || [];
     },
   });
 
@@ -385,6 +385,16 @@ export default function WorkbenchProjectDetail() {
     const m = new Map<string, number>();
     for (const r of instanceRows || []) {
       const k = `${r.file_id}::${r.awp_class_name}`;
+      m.set(k, (m.get(k) || 0) + 1);
+    }
+    return m;
+  }, [instanceRows]);
+
+  // Per-page instance count: key = `${fileId}::${pageIndex}::${className}`
+  const pageInstanceCountLookup = useMemo(() => {
+    const m = new Map<string, number>();
+    for (const r of instanceRows || []) {
+      const k = `${r.file_id}::${r.page_index}::${r.awp_class_name}`;
       m.set(k, (m.get(k) || 0) + 1);
     }
     return m;
