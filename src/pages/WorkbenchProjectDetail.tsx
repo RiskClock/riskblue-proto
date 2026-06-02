@@ -1872,7 +1872,7 @@ function ExtractedTextBody({ fileId }: { fileId: string }) {
         </button>
       </div>
       <div className="max-h-[60vh] overflow-auto border rounded-md p-4 bg-muted/30">
-        <p className="text-xs break-words font-mono text-foreground whitespace-normal">
+        <p className="text-xs font-mono text-foreground whitespace-pre-wrap [overflow-wrap:anywhere] break-words">
           {text || "(no text extracted)"}
         </p>
       </div>
