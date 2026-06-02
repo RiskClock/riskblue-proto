@@ -572,11 +572,26 @@ export const FileViewerModal = ({
                           <span className="text-xs tabular-nums text-muted-foreground shrink-0">
                             {total}
                           </span>
-                          {isExpanded ? (
-                            <ChevronDown className="h-4 w-4 text-muted-foreground shrink-0" />
-                          ) : (
-                            <ChevronRight className="h-4 w-4 text-muted-foreground shrink-0" />
-                          )}
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setExpanded((prev) => {
+                                const next = new Set(prev);
+                                if (next.has(c.name)) next.delete(c.name);
+                                else next.add(c.name);
+                                return next;
+                              });
+                            }}
+                            className="shrink-0 text-muted-foreground hover:text-foreground p-0.5 rounded hover:bg-muted/50"
+                            aria-label={isExpanded ? "Collapse" : "Expand"}
+                          >
+                            {isExpanded ? (
+                              <ChevronDown className="h-4 w-4" />
+                            ) : (
+                              <ChevronRight className="h-4 w-4" />
+                            )}
+                          </button>
                         </div>
                         {isExpanded && (
                           <div className="px-8 py-1 space-y-1 bg-muted/20">
