@@ -95,6 +95,8 @@ export const FileViewerModal = ({
   fileNameById,
   onInstancesChanged,
   persistKey,
+  expandedClasses,
+  onExpandedClassesChange,
 }: FileViewerModalProps) => {
   const { toast } = useToast();
   const [hoveredCode, setHoveredCode] = useState<string | null>(null);
@@ -126,19 +128,24 @@ export const FileViewerModal = ({
     if (stored && awpClasses?.some((c) => c.name === stored)) return stored;
     return awpClasses?.[0]?.name ?? null;
   });
-  const [expanded, setExpanded] = useState<Set<string>>(
-    () => new Set(selectedClass ? [selectedClass] : []),
+  // Internal expanded set, used only when parent doesn't provide one.
+  const [localExpanded, setLocalExpanded] = useState<Set<string>>(
+    () => new Set((awpClasses || []).map((c) => c.name)),
   );
+  const expanded = expandedClasses ?? localExpanded;
+  const setExpanded = (updater: (prev: Set<string>) => Set<string>) => {
+    const next = updater(expanded);
+    if (onExpandedClassesChange) onExpandedClassesChange(next);
+    else setLocalExpanded(next);
+  };
   const [instances, setInstances] = useState<DrawingInstanceRow[]>([]);
   const [loadingInstances, setLoadingInstances] = useState(false);
   const [past, setPast] = useState<HistoryAction[]>([]);
   const [future, setFuture] = useState<HistoryAction[]>([]);
 
-  // Reset history each time the modal opens; also resync selected class from
-  // localStorage and expand only the selected class. This must run only on the
-  // open transition — re-running when `awpClasses` changes would collapse rows
-  // the user expanded (e.g. after removing an instance the parent re-fetches
-  // and produces a new awpClasses array reference).
+  // Reset history on open. Selected class is re-synced from localStorage.
+  // Expansion state is NOT reset — it should persist across modal opens
+  // (and, when a parent provides expandedClasses, across page sessions too).
   const wasOpenRef = useRef(false);
   useEffect(() => {
     if (isOpen && !wasOpenRef.current) {
@@ -150,10 +157,24 @@ export const FileViewerModal = ({
           ? stored
           : awpClasses?.[0]?.name ?? null;
       setSelectedClass(next);
-      setExpanded(new Set(next ? [next] : []));
     }
     wasOpenRef.current = isOpen;
   }, [isOpen, awpClasses, readStoredClass]);
+
+  // Auto-expand newly-arriving classes so they default to expanded.
+  useEffect(() => {
+    if (!awpClasses || awpClasses.length === 0) return;
+    const missing = awpClasses
+      .map((c) => c.name)
+      .filter((n) => !expanded.has(n));
+    if (missing.length === 0) return;
+    setExpanded((prev) => {
+      const next = new Set(prev);
+      for (const n of missing) next.add(n);
+      return next;
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [awpClasses]);
 
 
   // Persist selected class to localStorage whenever it changes.
