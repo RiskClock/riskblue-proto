@@ -1267,6 +1267,7 @@ async function runPipeline(params: PipelineParams) {
       // Re-sort top-to-bottom by parent file name (alphabetical), then page.
       const fileNameById = new Map<string, string>();
       for (const f of files as any[]) fileNameById.set(f.id, (f as any).name ?? "");
+      for (const f of pdfFiles as any[]) fileNameById.set(f.id, (f as any).name ?? "");
       sheets.sort((a, b) => {
         const an = fileNameById.get(a.parent_file_id) ?? "";
         const bn = fileNameById.get(b.parent_file_id) ?? "";
