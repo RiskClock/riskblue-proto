@@ -642,7 +642,7 @@ export const FileViewerModal = ({
                     );
                   })}
                 </div>
-              </ScrollArea>
+              </div>
             </div>
           ) : detections.length > 0 ? (
             <div className="w-64 flex-shrink-0 border rounded-lg p-3 flex flex-col">
