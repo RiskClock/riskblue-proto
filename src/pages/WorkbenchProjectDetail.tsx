@@ -1047,7 +1047,8 @@ export default function WorkbenchProjectDetail() {
                 </Button>
               )}
 
-              <div className="flex-1" />
+              <span className="text-muted-foreground select-none">|</span>
+
               <Button
                 size="sm"
                 variant="outline"
@@ -1057,6 +1058,38 @@ export default function WorkbenchProjectDetail() {
                 <Trash2 className="h-4 w-4 mr-1.5" />
                 Clear All
               </Button>
+
+              <div className="flex-1" />
+
+              {analysisRequest && totalFiles > 0 && (
+                <>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() =>
+                      toast({
+                        title: "Export queued",
+                        description: "You'll receive an email with the results.",
+                      })
+                    }
+                    disabled={!requestId}
+                  >
+                    Export Results
+                  </Button>
+                  <Button
+                    size="sm"
+                    onClick={() =>
+                      toast({
+                        title: "Sent to WMG Project",
+                        description: "Results have been sent.",
+                      })
+                    }
+                    disabled={!requestId}
+                  >
+                    Send to WMG Project
+                  </Button>
+                </>
+              )}
             </div>
 
             {isLoadingAnalysisRequest || (analysisRequest && isLoading) ? (
@@ -1464,35 +1497,6 @@ export default function WorkbenchProjectDetail() {
               </div>
             )}
 
-            {analysisRequest && totalFiles > 0 && (
-              <div className="flex justify-end gap-2 pt-2">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() =>
-                    toast({
-                      title: "Export queued",
-                      description: "You'll receive an email with the results.",
-                    })
-                  }
-                  disabled={!requestId}
-                >
-                  Export Results
-                </Button>
-                <Button
-                  size="sm"
-                  onClick={() =>
-                    toast({
-                      title: "Sent to WMG Project",
-                      description: "Results have been sent.",
-                    })
-                  }
-                  disabled={!requestId}
-                >
-                  Send to WMG Project
-                </Button>
-              </div>
-            )}
           </div>
         </main>
 
