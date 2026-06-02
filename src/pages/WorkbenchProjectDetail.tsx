@@ -1824,7 +1824,7 @@ function AwpPromptModal({
 // ---------------------------------------------------------------------------
 // ExtractedTextBody — shows file extracted text without page line-break headers
 // ---------------------------------------------------------------------------
-function ExtractedTextBody({ fileId }: { fileId: string }) {
+function ExtractedTextBody({ fileId, sheetId }: { fileId?: string; sheetId?: string }) {
   const [text, setText] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [copied, setCopied] = useState(false);
@@ -1833,23 +1833,33 @@ function ExtractedTextBody({ fileId }: { fileId: string }) {
     let cancelled = false;
     (async () => {
       setLoading(true);
-      const { data: fileRow } = await supabase
-        .from("analysis_request_files")
-        .select("extracted_text")
-        .eq("id", fileId)
-        .maybeSingle();
-      let combined = (fileRow?.extracted_text as string) || "";
-      if (!combined) {
-        const { data: sheets } = await supabase
+      let combined = "";
+      if (sheetId) {
+        const { data: sheetRow } = await supabase
           .from("analysis_request_sheets")
-          .select("page_index, extracted_text")
-          .eq("parent_file_id", fileId)
-          .order("page_index");
-        if (sheets && sheets.length > 0) {
-          combined = sheets
-            .filter((s: any) => s.extracted_text)
-            .map((s: any) => s.extracted_text as string)
-            .join(" ");
+          .select("extracted_text")
+          .eq("id", sheetId)
+          .maybeSingle();
+        combined = (sheetRow?.extracted_text as string) || "";
+      } else if (fileId) {
+        const { data: fileRow } = await supabase
+          .from("analysis_request_files")
+          .select("extracted_text")
+          .eq("id", fileId)
+          .maybeSingle();
+        combined = (fileRow?.extracted_text as string) || "";
+        if (!combined) {
+          const { data: sheets } = await supabase
+            .from("analysis_request_sheets")
+            .select("page_index, extracted_text")
+            .eq("parent_file_id", fileId)
+            .order("page_index");
+          if (sheets && sheets.length > 0) {
+            combined = sheets
+              .filter((s: any) => s.extracted_text)
+              .map((s: any) => s.extracted_text as string)
+              .join(" ");
+          }
         }
       }
       // Strip line breaks per spec ("without line breaks")
@@ -1862,7 +1872,7 @@ function ExtractedTextBody({ fileId }: { fileId: string }) {
     return () => {
       cancelled = true;
     };
-  }, [fileId]);
+  }, [fileId, sheetId]);
 
   const handleCopy = () => {
     if (!text) return;
