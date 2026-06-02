@@ -504,36 +504,38 @@ export default function WorkbenchProjectDetail() {
     return m;
   }, [triage]);
 
-  // Total annotations per file across all classes (triage + user instances).
-  const fileTotalLookup = useMemo(() => {
+  // (file, class) -> max triage score across sheets, for file-level bg coloring.
+  const fileScoreLookup = useMemo(() => {
     const m = new Map<string, number>();
     for (const t of triage || []) {
-      m.set(t.file_id, (m.get(t.file_id) || 0) + (t.instances || 0));
+      if (typeof t.score !== "number") continue;
+      const key = `${t.file_id}::${t.awp_class_name}`;
+      const prev = m.get(key);
+      if (prev == null || t.score > prev) m.set(key, t.score);
     }
+    return m;
+  }, [triage]);
+
+  // Total annotations per file — user/analysis instances only.
+  const fileTotalLookup = useMemo(() => {
+    const m = new Map<string, number>();
     for (const r of instanceRows || []) {
       m.set(r.file_id, (m.get(r.file_id) || 0) + 1);
     }
     return m;
-  }, [triage, instanceRows]);
+  }, [instanceRows]);
 
-  // Total annotations per page (sheet) across all classes.
+  // Total annotations per page (sheet) — user/analysis instances only.
+  // Triage does not produce instances; only its score is used for bg coloring.
   // Key = `${parentFileId}::${pageIndex}`
   const pageTotalLookup = useMemo(() => {
     const m = new Map<string, number>();
-    // sheet-scoped triage instances
-    for (const t of triage || []) {
-      if (!t.sheet_id) continue;
-      // We need page_index; look it up below via sheet id resolved at render time.
-      // Track per sheet_id here, page key computed during render.
-      const key = `sheet:${t.sheet_id}`;
-      m.set(key, (m.get(key) || 0) + (t.instances || 0));
-    }
     for (const r of instanceRows || []) {
       const key = `${r.file_id}::${r.page_index}`;
       m.set(key, (m.get(key) || 0) + 1);
     }
     return m;
-  }, [triage, instanceRows]);
+  }, [instanceRows]);
 
 
   // Per-file extract status: processed if extracted_text on file OR all sheets extracted/skipped
@@ -1181,21 +1183,38 @@ export default function WorkbenchProjectDetail() {
                         awpClassName: string,
                         count: number,
                         scoreKnown: boolean,
+                        score?: number,
                       ) => {
                         const key = `${fileId}::${awpClassName}`;
                         const override = overrideMap.get(key);
                         const clickable = hasTriageRun;
+                        const hasScore = typeof score === "number";
+                        const opacity = hasScore ? Math.max(0, Math.min(100, score!)) / 100 : 0;
+                        // Show count ONLY when user/analysis instances exist.
+                        // Triage results contribute bg color only, no number.
                         const inner =
                           count > 0 ? (
                             <span className="font-medium tabular-nums">{count}</span>
-                          ) : scoreKnown ? (
-                            <span className="text-muted-foreground">0</span>
                           ) : (
-                            <span className="text-muted-foreground">—</span>
+                            <span className="text-muted-foreground">
+                              {scoreKnown ? "" : "—"}
+                            </span>
                           );
+                        const title = !clickable
+                          ? undefined
+                          : override === "include"
+                            ? "Manually included — click to clear"
+                            : override === "exclude"
+                              ? "Manually excluded — click to clear"
+                              : hasScore
+                                ? `Triage: ${score}%${count > 0 ? ` · ${count}` : ""} — click to ${count > 0 ? "exclude" : "include"}`
+                                : count > 0
+                                  ? "Click to exclude"
+                                  : "Click to include";
                         return (
                           <TableCell
                             key={awpClassName}
+                            title={title}
                             className={`text-center py-1 relative group ${
                               clickable ? "cursor-pointer" : ""
                             } ${
@@ -1207,36 +1226,26 @@ export default function WorkbenchProjectDetail() {
                                     ? "hover:bg-muted/40"
                                     : ""
                             }`}
+                            style={
+                              hasScore && override !== "exclude" && override !== "include"
+                                ? { backgroundColor: `rgba(16, 185, 129, ${opacity * 0.55})` }
+                                : undefined
+                            }
                             onClick={(e) => {
                               if (!clickable) return;
                               e.stopPropagation();
                               toggleOverride(fileId, awpClassName, count);
                             }}
                           >
-                            <Tooltip>
-                              <TooltipTrigger asChild>
-                                <span className="inline-flex items-center justify-center w-full">
-                                  {override === "exclude" ? (
-                                    <span className="line-through text-muted-foreground">
-                                      {count > 0 ? count : "—"}
-                                    </span>
-                                  ) : (
-                                    inner
-                                  )}
+                            <span className="inline-flex items-center justify-center w-full">
+                              {override === "exclude" ? (
+                                <span className="line-through text-muted-foreground">
+                                  {count > 0 ? count : "—"}
                                 </span>
-                              </TooltipTrigger>
-                              {clickable && (
-                                <TooltipContent>
-                                  {override === "include"
-                                    ? "Manually included — click to clear"
-                                    : override === "exclude"
-                                      ? "Manually excluded — click to clear"
-                                      : count > 0
-                                        ? "Click to exclude"
-                                        : "Click to include"}
-                                </TooltipContent>
+                              ) : (
+                                inner
                               )}
-                            </Tooltip>
+                            </span>
                           </TableCell>
                         );
                       };
@@ -1341,13 +1350,18 @@ export default function WorkbenchProjectDetail() {
                                 fileCountLookup.get(`${group.file.id}::${name}`) || 0;
                               const userCount =
                                 instanceCountLookup.get(`${group.file.id}::${name}`) || 0;
-                              const count = baseCount + userCount;
+                              // Triage produces no instances — show only user/analysis count.
+                              const count = userCount;
+                              const fileScore = fileScoreLookup.get(`${group.file.id}::${name}`);
                               const scoreKnown =
+                                fileScore != null ||
                                 (triage || []).some(
                                   (t) =>
                                     t.file_id === group.file.id && t.awp_class_name === name,
-                                ) || userCount > 0;
-                              return renderTriageCell(group.file.id, name, count, scoreKnown);
+                                ) ||
+                                userCount > 0 ||
+                                baseCount > 0;
+                              return renderTriageCell(group.file.id, name, count, scoreKnown, fileScore);
                             })}
                             <TableCell className="py-1" />
                           </TableRow>
@@ -1369,11 +1383,8 @@ export default function WorkbenchProjectDetail() {
                                       {s.sheet_number ? ` · ${s.sheet_number}` : ""}
                                       {s.sheet_title ? ` — ${s.sheet_title}` : ""}
                                       {(() => {
-                                        const triageOnPage =
-                                          (pageTotalLookup.get(`sheet:${s.id}`) || 0);
-                                        const userOnPage =
-                                          (pageTotalLookup.get(`${s.parent_file_id}::${s.page_index}`) || 0);
-                                        const n = triageOnPage + userOnPage;
+                                        const n =
+                                          pageTotalLookup.get(`${s.parent_file_id}::${s.page_index}`) || 0;
                                         return n > 0 ? ` (${n} ${n === 1 ? "instance" : "instances"})` : "";
                                       })()}
                                     </span>
@@ -1386,21 +1397,26 @@ export default function WorkbenchProjectDetail() {
                                   const failed = tr?.status === "failed";
                                   const hasScore = typeof score === "number";
                                   const inflight = triageInflight.has(`${s.id}::${name}`);
-                                  const triageInstances = tr?.score != null
-                                    ? ((triage || []).find(
-                                        (t) => t.sheet_id === s.id && t.awp_class_name === name,
-                                      )?.instances ?? 0)
-                                    : 0;
                                   const userCount =
                                     pageInstanceCountLookup.get(
                                       `${s.parent_file_id}::${s.page_index}::${name}`,
                                     ) || 0;
-                                  const totalCount = triageInstances + userCount;
-                                  // Match grid behavior: green bg opacity proportional to score
+                                  // Triage produces no instances — count is user/analysis only.
+                                  const totalCount = userCount;
                                   const opacity = hasScore ? Math.max(0, Math.min(100, score!)) / 100 : 0;
+                                  const title = failed
+                                    ? "Triage failed"
+                                    : hasScore
+                                      ? `Triage: ${score}%${totalCount > 0 ? ` · ${totalCount} annotation${totalCount === 1 ? "" : "s"}` : ""}`
+                                      : inflight
+                                        ? "Triaging…"
+                                        : totalCount > 0
+                                          ? `${totalCount} annotation${totalCount === 1 ? "" : "s"}`
+                                          : "Not triaged";
                                   return (
                                     <TableCell
                                       key={name}
+                                      title={title}
                                       className="text-center py-1 text-xs relative p-0"
                                       style={
                                         hasScore && !failed
@@ -1408,34 +1424,19 @@ export default function WorkbenchProjectDetail() {
                                           : undefined
                                       }
                                     >
-                                      <Tooltip>
-                                        <TooltipTrigger asChild>
-                                          <div className="flex items-center justify-center w-full h-7 cursor-default">
-                                            {inflight && !hasScore && !failed ? (
-                                              <Loader2 className="h-3 w-3 animate-spin text-muted-foreground" />
-                                            ) : failed ? (
-                                              <span className="text-red-600">!</span>
-                                            ) : totalCount > 0 ? (
-                                              <span className="font-medium tabular-nums">{totalCount}</span>
-                                            ) : hasScore ? (
-                                              <span className="text-muted-foreground">0</span>
-                                            ) : (
-                                              <span className="text-muted-foreground">—</span>
-                                            )}
-                                          </div>
-                                        </TooltipTrigger>
-                                        <TooltipContent>
-                                          {failed
-                                            ? "Triage failed"
-                                            : hasScore
-                                              ? `Triage: ${score}% · ${totalCount} annotation${totalCount === 1 ? "" : "s"}`
-                                              : inflight
-                                                ? "Triaging…"
-                                                : totalCount > 0
-                                                  ? `${totalCount} annotation${totalCount === 1 ? "" : "s"}`
-                                                  : "Not triaged"}
-                                        </TooltipContent>
-                                      </Tooltip>
+                                      <div className="flex items-center justify-center w-full h-7 cursor-default">
+                                        {inflight && !hasScore && !failed ? (
+                                          <Loader2 className="h-3 w-3 animate-spin text-muted-foreground" />
+                                        ) : failed ? (
+                                          <span className="text-red-600">!</span>
+                                        ) : totalCount > 0 ? (
+                                          <span className="font-medium tabular-nums">{totalCount}</span>
+                                        ) : (
+                                          <span className="text-muted-foreground">
+                                            {hasScore ? "" : "—"}
+                                          </span>
+                                        )}
+                                      </div>
                                     </TableCell>
                                   );
                                 })}
