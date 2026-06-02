@@ -516,36 +516,26 @@ export default function WorkbenchProjectDetail() {
     return m;
   }, [triage]);
 
-  // Total annotations per file across all classes (triage + user instances).
+  // Total annotations per file — user/analysis instances only.
   const fileTotalLookup = useMemo(() => {
     const m = new Map<string, number>();
-    for (const t of triage || []) {
-      m.set(t.file_id, (m.get(t.file_id) || 0) + (t.instances || 0));
-    }
     for (const r of instanceRows || []) {
       m.set(r.file_id, (m.get(r.file_id) || 0) + 1);
     }
     return m;
-  }, [triage, instanceRows]);
+  }, [instanceRows]);
 
-  // Total annotations per page (sheet) across all classes.
+  // Total annotations per page (sheet) — user/analysis instances only.
+  // Triage does not produce instances; only its score is used for bg coloring.
   // Key = `${parentFileId}::${pageIndex}`
   const pageTotalLookup = useMemo(() => {
     const m = new Map<string, number>();
-    // sheet-scoped triage instances
-    for (const t of triage || []) {
-      if (!t.sheet_id) continue;
-      // We need page_index; look it up below via sheet id resolved at render time.
-      // Track per sheet_id here, page key computed during render.
-      const key = `sheet:${t.sheet_id}`;
-      m.set(key, (m.get(key) || 0) + (t.instances || 0));
-    }
     for (const r of instanceRows || []) {
       const key = `${r.file_id}::${r.page_index}`;
       m.set(key, (m.get(key) || 0) + 1);
     }
     return m;
-  }, [triage, instanceRows]);
+  }, [instanceRows]);
 
 
   // Per-file extract status: processed if extracted_text on file OR all sheets extracted/skipped
