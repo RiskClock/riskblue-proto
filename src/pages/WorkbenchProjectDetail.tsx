@@ -1401,8 +1401,12 @@ export default function WorkbenchProjectDetail() {
                                     pageInstanceCountLookup.get(
                                       `${s.parent_file_id}::${s.page_index}::${name}`,
                                     ) || 0;
-                                  // Triage produces no instances — count is user/analysis only.
-                                  const totalCount = userCount;
+                                  const triageInstances =
+                                    (triage || []).find(
+                                      (t) => t.sheet_id === s.id && t.awp_class_name === name,
+                                    )?.instances ?? 0;
+                                  // Annotation count is independent of triage score — show both.
+                                  const totalCount = triageInstances + userCount;
                                   const opacity = hasScore ? Math.max(0, Math.min(100, score!)) / 100 : 0;
                                   const title = failed
                                     ? "Triage failed"
