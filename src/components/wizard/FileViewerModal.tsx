@@ -528,8 +528,8 @@ export const FileViewerModal = ({
                   </Button>
                 </div>
               </div>
-              <ScrollArea className="flex-1">
-                <div className="py-1">
+              <div className="flex-1 overflow-y-auto overflow-x-hidden min-w-0">
+                <div className="py-1 w-full min-w-0">
                   {loadingInstances && (
                     <div className="flex items-center gap-2 px-3 py-2 text-xs text-muted-foreground">
                       <Loader2 className="h-3 w-3 animate-spin" /> Loading
@@ -544,19 +544,12 @@ export const FileViewerModal = ({
                     const isExpanded = expanded.has(c.name);
                     const color = awpClassColor(c.name);
                     return (
-                      <div key={c.name} className="border-b last:border-b-0">
+                      <div key={c.name} className="border-b last:border-b-0 min-w-0">
                         <div
-                          className={`flex items-center gap-2 px-3 py-1.5 text-sm cursor-pointer hover:bg-muted/50 ${
+                          className={`flex items-center gap-2 px-3 py-1.5 text-sm cursor-pointer hover:bg-muted/50 min-w-0 ${
                             isSelected ? "bg-muted/40" : ""
                           }`}
-                          onClick={() => {
-                            setExpanded((prev) => {
-                              const next = new Set(prev);
-                              if (next.has(c.name)) next.delete(c.name);
-                              else next.add(c.name);
-                              return next;
-                            });
-                          }}
+                          onClick={() => setSelectedClass(c.name)}
                         >
                           <input
                             type="radio"
@@ -566,7 +559,7 @@ export const FileViewerModal = ({
                               e.stopPropagation();
                               setSelectedClass(c.name);
                             }}
-                            className="h-3.5 w-3.5"
+                            className="h-3.5 w-3.5 shrink-0"
                           />
                           <span
                             className="h-2 w-2 rounded-full shrink-0"
