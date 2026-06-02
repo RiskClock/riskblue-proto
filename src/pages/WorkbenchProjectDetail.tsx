@@ -516,26 +516,33 @@ export default function WorkbenchProjectDetail() {
     return m;
   }, [triage]);
 
-  // Total annotations per file — user/analysis instances only.
+  // Total annotations per file across classes (triage + user/analysis instances).
   const fileTotalLookup = useMemo(() => {
     const m = new Map<string, number>();
+    for (const t of triage || []) {
+      m.set(t.file_id, (m.get(t.file_id) || 0) + (t.instances || 0));
+    }
     for (const r of instanceRows || []) {
       m.set(r.file_id, (m.get(r.file_id) || 0) + 1);
     }
     return m;
-  }, [instanceRows]);
+  }, [triage, instanceRows]);
 
-  // Total annotations per page (sheet) — user/analysis instances only.
-  // Triage does not produce instances; only its score is used for bg coloring.
-  // Key = `${parentFileId}::${pageIndex}`
+  // Total annotations per page (sheet) — triage + user/analysis instances.
+  // Key = `${parentFileId}::${pageIndex}` and `sheet:${sheetId}` for triage.
   const pageTotalLookup = useMemo(() => {
     const m = new Map<string, number>();
+    for (const t of triage || []) {
+      if (!t.sheet_id) continue;
+      const key = `sheet:${t.sheet_id}`;
+      m.set(key, (m.get(key) || 0) + (t.instances || 0));
+    }
     for (const r of instanceRows || []) {
       const key = `${r.file_id}::${r.page_index}`;
       m.set(key, (m.get(key) || 0) + 1);
     }
     return m;
-  }, [instanceRows]);
+  }, [triage, instanceRows]);
 
 
   // Per-file extract status: processed if extracted_text on file OR all sheets extracted/skipped
@@ -1350,8 +1357,8 @@ export default function WorkbenchProjectDetail() {
                                 fileCountLookup.get(`${group.file.id}::${name}`) || 0;
                               const userCount =
                                 instanceCountLookup.get(`${group.file.id}::${name}`) || 0;
-                              // Triage produces no instances — show only user/analysis count.
-                              const count = userCount;
+                              // Annotation count is independent of triage score — show both.
+                              const count = baseCount + userCount;
                               const fileScore = fileScoreLookup.get(`${group.file.id}::${name}`);
                               const scoreKnown =
                                 fileScore != null ||
@@ -1384,7 +1391,8 @@ export default function WorkbenchProjectDetail() {
                                       {s.sheet_title ? ` — ${s.sheet_title}` : ""}
                                       {(() => {
                                         const n =
-                                          pageTotalLookup.get(`${s.parent_file_id}::${s.page_index}`) || 0;
+                                          (pageTotalLookup.get(`sheet:${s.id}`) || 0) +
+                                          (pageTotalLookup.get(`${s.parent_file_id}::${s.page_index}`) || 0);
                                         return n > 0 ? ` (${n} ${n === 1 ? "instance" : "instances"})` : "";
                                       })()}
                                     </span>
@@ -1401,8 +1409,12 @@ export default function WorkbenchProjectDetail() {
                                     pageInstanceCountLookup.get(
                                       `${s.parent_file_id}::${s.page_index}::${name}`,
                                     ) || 0;
-                                  // Triage produces no instances — count is user/analysis only.
-                                  const totalCount = userCount;
+                                  const triageInstances =
+                                    (triage || []).find(
+                                      (t) => t.sheet_id === s.id && t.awp_class_name === name,
+                                    )?.instances ?? 0;
+                                  // Annotation count is independent of triage score — show both.
+                                  const totalCount = triageInstances + userCount;
                                   const opacity = hasScore ? Math.max(0, Math.min(100, score!)) / 100 : 0;
                                   const title = failed
                                     ? "Triage failed"
