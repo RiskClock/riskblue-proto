@@ -903,31 +903,51 @@ Deno.serve(async (req) => {
           .in("status", ["pending", "processing"]);
       }
 
+      // When the caller targets specific classes (e.g. kebab "triage this class"),
+      // scope destructive cleanup to those classes so other classes' results
+      // remain intact.
+      const scopedClasses =
+        Array.isArray(enabledAwpClasses) && enabledAwpClasses.length > 0
+          ? enabledAwpClasses
+          : null;
+
       if (phaseOverride === "analyze") {
         // Analyze button: wipe analyze results (regardless of run id — preserved-run
         // means existing rows are this same run). Keep triage + extract intact.
+        let analyzeDel = admin.from("analysis_results")
+          .delete()
+          .eq("analysis_request_id", analysisRequestId);
+        if (scopedClasses) analyzeDel = analyzeDel.in("awp_class_name", scopedClasses);
         await Promise.all([
-          admin.from("analysis_results")
-            .delete()
-            .eq("analysis_request_id", analysisRequestId),
+          analyzeDel,
           admin.from("analysis_requests")
             .update({ analyze_tokens_used: 0, summary_data: {} } as any)
             .eq("id", analysisRequestId),
         ]);
       } else if (phaseOverride === "triage") {
         // Triage button: wipe triage + analyze + overrides. Keep extract artifacts.
-        await Promise.all([
-          admin.from("analysis_triage_results")
-            .delete()
-            .eq("analysis_request_id", analysisRequestId),
-          admin.from("analysis_results")
-            .delete()
-            .eq("analysis_request_id", analysisRequestId),
-          admin.from("analysis_triage_overrides").delete().eq("analysis_request_id", analysisRequestId),
-          admin.from("analysis_requests")
-            .update({ triage_tokens_used: 0, analyze_tokens_used: 0, summary_data: {} } as any)
-            .eq("id", analysisRequestId),
-        ]);
+        let triageDel = admin.from("analysis_triage_results")
+          .delete()
+          .eq("analysis_request_id", analysisRequestId);
+        let analyzeDel = admin.from("analysis_results")
+          .delete()
+          .eq("analysis_request_id", analysisRequestId);
+        let overridesDel = admin.from("analysis_triage_overrides")
+          .delete()
+          .eq("analysis_request_id", analysisRequestId);
+        if (scopedClasses) {
+          triageDel = triageDel.in("awp_class_name", scopedClasses);
+          analyzeDel = analyzeDel.in("awp_class_name", scopedClasses);
+          overridesDel = overridesDel.in("awp_class_name", scopedClasses);
+        }
+        const requestUpdate = scopedClasses
+          ? admin.from("analysis_requests")
+              .update({ summary_data: {} } as any)
+              .eq("id", analysisRequestId)
+          : admin.from("analysis_requests")
+              .update({ triage_tokens_used: 0, analyze_tokens_used: 0, summary_data: {} } as any)
+              .eq("id", analysisRequestId);
+        await Promise.all([triageDel, analyzeDel, overridesDel, requestUpdate]);
       } else {
         // Extract button OR full run: full clear of EVERYTHING.
         await Promise.all([
