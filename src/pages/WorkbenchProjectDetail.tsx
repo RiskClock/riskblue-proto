@@ -131,6 +131,10 @@ export default function WorkbenchProjectDetail() {
   const [running, setRunning] = useState<"extract" | "triage" | "analyze" | null>(null);
   const [promptClass, setPromptClass] = useState<string | null>(null);
   const [expandedFiles, setExpandedFiles] = useState<Set<string>>(new Set());
+  // Persist sidebar expand/collapse state across modal open/close cycles
+  // (but not across browser refresh).
+  const [sidebarExpandedClasses, setSidebarExpandedClasses] = useState<Set<string>>(new Set());
+  const [exporting, setExporting] = useState(false);
 
   const toggleExpand = (fileId: string) => {
     setExpandedFiles((prev) => {
