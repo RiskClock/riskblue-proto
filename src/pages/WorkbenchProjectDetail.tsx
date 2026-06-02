@@ -1182,6 +1182,16 @@ export default function WorkbenchProjectDetail() {
                                   const failed = tr?.status === "failed";
                                   const hasScore = typeof score === "number";
                                   const inflight = triageInflight.has(`${s.id}::${name}`);
+                                  const triageInstances = tr?.score != null
+                                    ? ((triage || []).find(
+                                        (t) => t.sheet_id === s.id && t.awp_class_name === name,
+                                      )?.instances ?? 0)
+                                    : 0;
+                                  const userCount =
+                                    pageInstanceCountLookup.get(
+                                      `${s.parent_file_id}::${s.page_index}::${name}`,
+                                    ) || 0;
+                                  const totalCount = triageInstances + userCount;
                                   // Match grid behavior: green bg opacity proportional to score
                                   const opacity = hasScore ? Math.max(0, Math.min(100, score!)) / 100 : 0;
                                   return (
@@ -1201,8 +1211,10 @@ export default function WorkbenchProjectDetail() {
                                               <Loader2 className="h-3 w-3 animate-spin text-muted-foreground" />
                                             ) : failed ? (
                                               <span className="text-red-600">!</span>
+                                            ) : totalCount > 0 ? (
+                                              <span className="font-medium tabular-nums">{totalCount}</span>
                                             ) : hasScore ? (
-                                              <span className="sr-only">{score}%</span>
+                                              <span className="text-muted-foreground">0</span>
                                             ) : (
                                               <span className="text-muted-foreground">—</span>
                                             )}
@@ -1212,10 +1224,12 @@ export default function WorkbenchProjectDetail() {
                                           {failed
                                             ? "Triage failed"
                                             : hasScore
-                                              ? `Triage: ${score}%`
+                                              ? `Triage: ${score}% · ${totalCount} annotation${totalCount === 1 ? "" : "s"}`
                                               : inflight
                                                 ? "Triaging…"
-                                                : "Not triaged"}
+                                                : totalCount > 0
+                                                  ? `${totalCount} annotation${totalCount === 1 ? "" : "s"}`
+                                                  : "Not triaged"}
                                         </TooltipContent>
                                       </Tooltip>
                                     </TableCell>
