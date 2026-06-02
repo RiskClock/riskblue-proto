@@ -162,15 +162,19 @@ export const FileViewerModal = ({
   }, [isOpen, awpClasses, readStoredClass]);
 
   // Auto-expand newly-arriving classes so they default to expanded.
+  // Track which class names we've already auto-expanded so user-collapsed
+  // classes don't get re-expanded on every render when the awpClasses prop
+  // reference changes.
+  const autoExpandedRef = useRef<Set<string>>(new Set());
   useEffect(() => {
     if (!awpClasses || awpClasses.length === 0) return;
-    const missing = awpClasses
-      .map((c) => c.name)
-      .filter((n) => !expanded.has(n));
-    if (missing.length === 0) return;
+    const seen = autoExpandedRef.current;
+    const fresh = awpClasses.map((c) => c.name).filter((n) => !seen.has(n));
+    if (fresh.length === 0) return;
+    for (const n of fresh) seen.add(n);
     setExpanded((prev) => {
       const next = new Set(prev);
-      for (const n of missing) next.add(n);
+      for (const n of fresh) next.add(n);
       return next;
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps

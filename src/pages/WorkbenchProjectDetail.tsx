@@ -1325,7 +1325,7 @@ export default function WorkbenchProjectDetail() {
                                   {group.file.name}
                                   {(() => {
                                     const n = fileTotalLookup.get(group.file.id) || 0;
-                                    return n > 0 ? ` (${n} inst.)` : "";
+                                    return n > 0 ? ` (${n} ${n === 1 ? "instance" : "instances"})` : "";
                                   })()}
                                 </span>
                                 {!singlePage && (
@@ -1374,7 +1374,7 @@ export default function WorkbenchProjectDetail() {
                                         const userOnPage =
                                           (pageTotalLookup.get(`${s.parent_file_id}::${s.page_index}`) || 0);
                                         const n = triageOnPage + userOnPage;
-                                        return n > 0 ? ` (${n} inst.)` : "";
+                                        return n > 0 ? ` (${n} ${n === 1 ? "instance" : "instances"})` : "";
                                       })()}
                                     </span>
                                     <SheetStatusBadge s={s} />
@@ -1456,12 +1456,14 @@ export default function WorkbenchProjectDetail() {
                 <Button
                   variant="outline"
                   size="sm"
-                  onClick={handleExportResults}
-                  disabled={exporting || !requestId}
+                  onClick={() =>
+                    toast({
+                      title: "Export queued",
+                      description: "You'll receive an email with the results.",
+                    })
+                  }
+                  disabled={!requestId}
                 >
-                  {exporting ? (
-                    <Loader2 className="h-4 w-4 mr-1.5 animate-spin" />
-                  ) : null}
                   Export Results
                 </Button>
                 <Button
