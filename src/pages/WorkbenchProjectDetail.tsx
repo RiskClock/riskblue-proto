@@ -1410,21 +1410,26 @@ export default function WorkbenchProjectDetail() {
                                   const failed = tr?.status === "failed";
                                   const hasScore = typeof score === "number";
                                   const inflight = triageInflight.has(`${s.id}::${name}`);
-                                  const triageInstances = tr?.score != null
-                                    ? ((triage || []).find(
-                                        (t) => t.sheet_id === s.id && t.awp_class_name === name,
-                                      )?.instances ?? 0)
-                                    : 0;
                                   const userCount =
                                     pageInstanceCountLookup.get(
                                       `${s.parent_file_id}::${s.page_index}::${name}`,
                                     ) || 0;
-                                  const totalCount = triageInstances + userCount;
-                                  // Match grid behavior: green bg opacity proportional to score
+                                  // Triage produces no instances — count is user/analysis only.
+                                  const totalCount = userCount;
                                   const opacity = hasScore ? Math.max(0, Math.min(100, score!)) / 100 : 0;
+                                  const title = failed
+                                    ? "Triage failed"
+                                    : hasScore
+                                      ? `Triage: ${score}%${totalCount > 0 ? ` · ${totalCount} annotation${totalCount === 1 ? "" : "s"}` : ""}`
+                                      : inflight
+                                        ? "Triaging…"
+                                        : totalCount > 0
+                                          ? `${totalCount} annotation${totalCount === 1 ? "" : "s"}`
+                                          : "Not triaged";
                                   return (
                                     <TableCell
                                       key={name}
+                                      title={title}
                                       className="text-center py-1 text-xs relative p-0"
                                       style={
                                         hasScore && !failed
@@ -1432,34 +1437,19 @@ export default function WorkbenchProjectDetail() {
                                           : undefined
                                       }
                                     >
-                                      <Tooltip>
-                                        <TooltipTrigger asChild>
-                                          <div className="flex items-center justify-center w-full h-7 cursor-default">
-                                            {inflight && !hasScore && !failed ? (
-                                              <Loader2 className="h-3 w-3 animate-spin text-muted-foreground" />
-                                            ) : failed ? (
-                                              <span className="text-red-600">!</span>
-                                            ) : totalCount > 0 ? (
-                                              <span className="font-medium tabular-nums">{totalCount}</span>
-                                            ) : hasScore ? (
-                                              <span className="text-muted-foreground">0</span>
-                                            ) : (
-                                              <span className="text-muted-foreground">—</span>
-                                            )}
-                                          </div>
-                                        </TooltipTrigger>
-                                        <TooltipContent>
-                                          {failed
-                                            ? "Triage failed"
-                                            : hasScore
-                                              ? `Triage: ${score}% · ${totalCount} annotation${totalCount === 1 ? "" : "s"}`
-                                              : inflight
-                                                ? "Triaging…"
-                                                : totalCount > 0
-                                                  ? `${totalCount} annotation${totalCount === 1 ? "" : "s"}`
-                                                  : "Not triaged"}
-                                        </TooltipContent>
-                                      </Tooltip>
+                                      <div className="flex items-center justify-center w-full h-7 cursor-default">
+                                        {inflight && !hasScore && !failed ? (
+                                          <Loader2 className="h-3 w-3 animate-spin text-muted-foreground" />
+                                        ) : failed ? (
+                                          <span className="text-red-600">!</span>
+                                        ) : totalCount > 0 ? (
+                                          <span className="font-medium tabular-nums">{totalCount}</span>
+                                        ) : (
+                                          <span className="text-muted-foreground">
+                                            {hasScore ? "" : "—"}
+                                          </span>
+                                        )}
+                                      </div>
                                     </TableCell>
                                   );
                                 })}
