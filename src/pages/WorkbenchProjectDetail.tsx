@@ -1360,13 +1360,18 @@ export default function WorkbenchProjectDetail() {
                                 fileCountLookup.get(`${group.file.id}::${name}`) || 0;
                               const userCount =
                                 instanceCountLookup.get(`${group.file.id}::${name}`) || 0;
-                              const count = baseCount + userCount;
+                              // Triage produces no instances — show only user/analysis count.
+                              const count = userCount;
+                              const fileScore = fileScoreLookup.get(`${group.file.id}::${name}`);
                               const scoreKnown =
+                                fileScore != null ||
                                 (triage || []).some(
                                   (t) =>
                                     t.file_id === group.file.id && t.awp_class_name === name,
-                                ) || userCount > 0;
-                              return renderTriageCell(group.file.id, name, count, scoreKnown);
+                                ) ||
+                                userCount > 0 ||
+                                baseCount > 0;
+                              return renderTriageCell(group.file.id, name, count, scoreKnown, fileScore);
                             })}
                             <TableCell className="py-1" />
                           </TableRow>
