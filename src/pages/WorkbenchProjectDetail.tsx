@@ -126,6 +126,7 @@ export default function WorkbenchProjectDetail() {
   const [draftCols, setDraftCols] = useState<string[]>([]);
   const [savingPrefs, setSavingPrefs] = useState(false);
   const [textFileId, setTextFileId] = useState<string | null>(null);
+  const [textSheet, setTextSheet] = useState<{ id: string; label: string } | null>(null);
   const [clearOpen, setClearOpen] = useState(false);
   const [clearing, setClearing] = useState(false);
   const [running, setRunning] = useState<"extract" | "triage" | "analyze" | null>(null);
