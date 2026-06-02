@@ -1391,7 +1391,8 @@ export default function WorkbenchProjectDetail() {
                                       {s.sheet_title ? ` — ${s.sheet_title}` : ""}
                                       {(() => {
                                         const n =
-                                          pageTotalLookup.get(`${s.parent_file_id}::${s.page_index}`) || 0;
+                                          (pageTotalLookup.get(`sheet:${s.id}`) || 0) +
+                                          (pageTotalLookup.get(`${s.parent_file_id}::${s.page_index}`) || 0);
                                         return n > 0 ? ` (${n} ${n === 1 ? "instance" : "instances"})` : "";
                                       })()}
                                     </span>
