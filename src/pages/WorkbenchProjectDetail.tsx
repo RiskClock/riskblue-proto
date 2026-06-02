@@ -1113,6 +1113,12 @@ export default function WorkbenchProjectDetail() {
                                   >
                                     Analyze
                                   </DropdownMenuItem>
+                                  <DropdownMenuItem
+                                    disabled={phaseRunning}
+                                    onClick={() => clearClassResults(name)}
+                                  >
+                                    Clear
+                                  </DropdownMenuItem>
                                 </DropdownMenuContent>
                               </DropdownMenu>
                             </div>
@@ -1123,11 +1129,14 @@ export default function WorkbenchProjectDetail() {
                       <TableHead className="text-right w-[1%] whitespace-nowrap h-9 py-1">
                         <Button
                           variant="outline"
-                          size="sm"
+                          size="icon"
                           onClick={openManage}
                           disabled={phaseRunning}
+                          aria-label="Manage columns"
+                          title="Manage columns"
+                          className="h-8 w-8"
                         >
-                          <Settings2 className="h-4 w-4 mr-1" /> Manage
+                          <Settings2 className="h-4 w-4" />
                         </Button>
                       </TableHead>
                     </TableRow>
