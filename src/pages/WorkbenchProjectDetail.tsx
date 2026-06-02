@@ -1344,7 +1344,7 @@ export default function WorkbenchProjectDetail() {
                             className="group h-8 cursor-pointer"
                             onClick={() => {
                               if (singlePage && onlySheet) setActiveSheet(onlySheet);
-                              else setActiveFile(group.file);
+                              else toggleExpand(group.file.id);
                             }}
                           >
                             <TableCell
