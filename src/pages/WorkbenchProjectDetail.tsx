@@ -1589,15 +1589,30 @@ export default function WorkbenchProjectDetail() {
 
 
         {/* Extracted-text modal */}
-        <Dialog open={!!textFileId} onOpenChange={(o) => !o && setTextFileId(null)}>
+        <Dialog
+          open={!!textFileId || !!textSheet}
+          onOpenChange={(o) => {
+            if (!o) {
+              setTextFileId(null);
+              setTextSheet(null);
+            }
+          }}
+        >
           <DialogContent className="max-w-3xl">
             <DialogHeader>
               <DialogTitle>Extracted text</DialogTitle>
               <DialogDescription>
-                {fileGroups.find((g) => g.file.id === textFileId)?.file.name}
+                {textSheet
+                  ? textSheet.label
+                  : fileGroups.find((g) => g.file.id === textFileId)?.file.name}
               </DialogDescription>
             </DialogHeader>
-            {textFileId && <ExtractedTextBody fileId={textFileId} />}
+            {(textFileId || textSheet) && (
+              <ExtractedTextBody
+                fileId={textFileId ?? undefined}
+                sheetId={textSheet?.id}
+              />
+            )}
           </DialogContent>
         </Dialog>
 
