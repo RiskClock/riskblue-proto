@@ -426,17 +426,18 @@ export const FileViewerModal = ({
 
   const overlays = [...detectionOverlays, ...instanceOverlays];
 
-  // For the sidebar: instances for THIS file, grouped by class.
+  // For the sidebar: instances for THIS file, on the current page, grouped by class.
   const instancesByClassThisFile = useMemo(() => {
     const m = new Map<string, DrawingInstanceRow[]>();
     for (const i of instances) {
       if (i.file_id !== parentFileId) continue;
+      if (i.page_index !== effectivePage) continue;
       const arr = m.get(i.awp_class_name) || [];
       arr.push(i);
       m.set(i.awp_class_name, arr);
     }
     return m;
-  }, [instances, parentFileId]);
+  }, [instances, parentFileId, effectivePage]);
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
