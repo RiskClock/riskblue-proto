@@ -101,10 +101,13 @@ export const OverlayLayer = ({
           cursor: clickable ? "pointer" : undefined,
         };
 
+        const stop = (e: { stopPropagation: () => void }) => e.stopPropagation();
         return (
           <div
             key={o.id}
             style={style}
+            onPointerDown={clickable ? stop : undefined}
+            onPointerUp={clickable ? stop : undefined}
             onClick={
               clickable
                 ? (e) => {
@@ -117,7 +120,7 @@ export const OverlayLayer = ({
             {o.label && (
               <div
                 className="absolute -top-5 left-1/2 -translate-x-1/2 px-1 text-[10px] font-bold text-white whitespace-nowrap rounded-sm pointer-events-none"
-                style={{ backgroundColor: color }}
+                style={{ backgroundColor: withAlpha(color, 0.8) }}
               >
                 {o.label}
               </div>

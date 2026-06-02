@@ -426,17 +426,18 @@ export const FileViewerModal = ({
 
   const overlays = [...detectionOverlays, ...instanceOverlays];
 
-  // For the sidebar: instances for THIS file, grouped by class.
+  // For the sidebar: instances for THIS file, on the current page, grouped by class.
   const instancesByClassThisFile = useMemo(() => {
     const m = new Map<string, DrawingInstanceRow[]>();
     for (const i of instances) {
       if (i.file_id !== parentFileId) continue;
+      if (i.page_index !== effectivePage) continue;
       const arr = m.get(i.awp_class_name) || [];
       arr.push(i);
       m.set(i.awp_class_name, arr);
     }
     return m;
-  }, [instances, parentFileId]);
+  }, [instances, parentFileId, effectivePage]);
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
@@ -546,17 +547,17 @@ export const FileViewerModal = ({
                             className="h-2 w-2 rounded-full shrink-0"
                             style={{ backgroundColor: color }}
                           />
-                          <span className="font-mono text-xs text-muted-foreground">
+                          <span className="font-mono text-xs text-muted-foreground shrink-0">
                             {c.prefix ?? "—"}
                           </span>
-                          <span className="flex-1 truncate">{c.name}</span>
-                          <span className="text-xs tabular-nums text-muted-foreground">
+                          <span className="flex-1 min-w-0 truncate" title={c.name}>{c.name}</span>
+                          <span className="text-xs tabular-nums text-muted-foreground shrink-0">
                             {total}
                           </span>
                           {isExpanded ? (
-                            <ChevronDown className="h-4 w-4 text-muted-foreground" />
+                            <ChevronDown className="h-4 w-4 text-muted-foreground shrink-0" />
                           ) : (
-                            <ChevronRight className="h-4 w-4 text-muted-foreground" />
+                            <ChevronRight className="h-4 w-4 text-muted-foreground shrink-0" />
                           )}
                         </div>
                         {isExpanded && (
@@ -584,10 +585,10 @@ export const FileViewerModal = ({
                                   className="flex items-center gap-2 text-[11px]"
                                 >
                                   <span
-                                    className="h-2 w-2 rounded-full"
+                                    className="h-2 w-2 rounded-full shrink-0"
                                     style={{ backgroundColor: color }}
                                   />
-                                  <span className="flex-1 font-mono">
+                                  <span className="flex-1 min-w-0 font-mono truncate">
                                     {instanceLabel(i)}
                                     {i.page_index !== effectivePage
                                       ? ` (p.${i.page_index})`
@@ -595,7 +596,7 @@ export const FileViewerModal = ({
                                   </span>
                                   <button
                                     onClick={() => handleDeleteFromList(i.id)}
-                                    className="text-muted-foreground hover:text-destructive"
+                                    className="shrink-0 text-muted-foreground hover:text-destructive px-1"
                                     aria-label="Remove marker"
                                   >
                                     ×

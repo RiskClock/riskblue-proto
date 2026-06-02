@@ -8,6 +8,7 @@ import {
   ChevronRight,
   Copy,
   Loader2,
+  MoreVertical,
   Settings2,
   ShieldAlert,
   Square,
@@ -53,6 +54,12 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { FileViewerModal } from "@/components/wizard/FileViewerModal";
 import {
   prewarmDocumentSource,
@@ -374,10 +381,10 @@ export default function WorkbenchProjectDetail() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("drawing_instances" as any)
-        .select("file_id, awp_class_name")
+        .select("file_id, awp_class_name, page_index")
         .eq("analysis_request_id", requestId!);
       if (error) throw error;
-      return ((data as unknown) as { file_id: string; awp_class_name: string }[]) || [];
+      return ((data as unknown) as { file_id: string; awp_class_name: string; page_index: number }[]) || [];
     },
   });
 
@@ -385,6 +392,16 @@ export default function WorkbenchProjectDetail() {
     const m = new Map<string, number>();
     for (const r of instanceRows || []) {
       const k = `${r.file_id}::${r.awp_class_name}`;
+      m.set(k, (m.get(k) || 0) + 1);
+    }
+    return m;
+  }, [instanceRows]);
+
+  // Per-page instance count: key = `${fileId}::${pageIndex}::${className}`
+  const pageInstanceCountLookup = useMemo(() => {
+    const m = new Map<string, number>();
+    for (const r of instanceRows || []) {
+      const k = `${r.file_id}::${r.page_index}::${r.awp_class_name}`;
       m.set(k, (m.get(k) || 0) + 1);
     }
     return m;
@@ -508,6 +525,10 @@ export default function WorkbenchProjectDetail() {
   }, [fileGroups]);
 
   const totalFiles = fileGroups.length;
+  const anyFileProcessed = useMemo(
+    () => [...fileExtractStatus.values()].some((s) => s === "processed"),
+    [fileExtractStatus],
+  );
 
   const openManage = () => {
     setDraftCols(enabledCols);
@@ -565,7 +586,10 @@ export default function WorkbenchProjectDetail() {
   }, [activeFile]);
 
   // --- Pipeline actions -----------------------------------------------------
-  const runPipeline = async (phase: "extract" | "triage" | "analyze") => {
+  const runPipeline = async (
+    phase: "extract" | "triage" | "analyze",
+    classesOverride?: string[],
+  ) => {
     if (!requestId) return;
     setRunning(phase);
     try {
@@ -575,9 +599,11 @@ export default function WorkbenchProjectDetail() {
       };
       if (phase === "triage" || phase === "analyze") {
         // Send eligible classes (those visible as columns) so triage actually runs
-        const enabledAwpClasses = enabledCols.length
-          ? enabledCols
-          : eligibleOptions.map((o) => o.name);
+        const enabledAwpClasses = classesOverride
+          ? classesOverride
+          : enabledCols.length
+            ? enabledCols
+            : eligibleOptions.map((o) => o.name);
         body.enabledAwpClasses = enabledAwpClasses;
       }
       const { error } = await supabase.functions.invoke("run-analysis-pipeline", {
@@ -852,7 +878,7 @@ export default function WorkbenchProjectDetail() {
                 No drawings uploaded for this project yet.
               </div>
             ) : (
-              <div className="bg-card rounded-lg border overflow-auto relative">
+              <div className="bg-card rounded-lg border overflow-hidden relative max-h-[calc(100vh-220px)] [&>div]:max-h-[calc(100vh-220px)]">
                 <Table>
                   <TableHeader className="sticky top-0 z-20 bg-card">
                     <TableRow>
@@ -862,29 +888,64 @@ export default function WorkbenchProjectDetail() {
                       {enabledCols.map((name) => {
                         const opt = optionByName.get(name);
                         const label = opt?.idPrefix || name;
+                        const classHasTriage = (triage || []).some(
+                          (t) => t.awp_class_name === name,
+                        );
                         return (
                           <TableHead
                             key={name}
                             className="text-center whitespace-nowrap h-9 py-1"
                           >
-                            <Tooltip>
-                              <TooltipTrigger asChild>
-                                <button
-                                  type="button"
-                                  className="font-semibold hover:underline underline-offset-2"
-                                  onClick={() => setPromptClass(name)}
-                                >
-                                  {label}
-                                </button>
-                              </TooltipTrigger>
-                              <TooltipContent>{name} — click to view prompt</TooltipContent>
-                            </Tooltip>
+                            <div className="inline-flex items-center gap-1">
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <button
+                                    type="button"
+                                    className="font-semibold hover:underline underline-offset-2"
+                                    onClick={() => setPromptClass(name)}
+                                  >
+                                    {label}
+                                  </button>
+                                </TooltipTrigger>
+                                <TooltipContent>{name} — click to view prompt</TooltipContent>
+                              </Tooltip>
+                              <DropdownMenu>
+                                <DropdownMenuTrigger asChild>
+                                  <button
+                                    type="button"
+                                    className="text-muted-foreground hover:text-foreground p-0.5 rounded hover:bg-muted/50"
+                                    aria-label={`Actions for ${name}`}
+                                  >
+                                    <MoreVertical className="h-3.5 w-3.5" />
+                                  </button>
+                                </DropdownMenuTrigger>
+                                <DropdownMenuContent align="end">
+                                  <DropdownMenuItem
+                                    disabled={!anyFileProcessed || phaseRunning}
+                                    onClick={() => runPipeline("triage", [name])}
+                                  >
+                                    {classHasTriage ? "Re-Triage" : "Triage"}
+                                  </DropdownMenuItem>
+                                  <DropdownMenuItem
+                                    disabled={!anyFileProcessed || !classHasTriage || phaseRunning}
+                                    onClick={() => runPipeline("analyze", [name])}
+                                  >
+                                    Analyze
+                                  </DropdownMenuItem>
+                                </DropdownMenuContent>
+                              </DropdownMenu>
+                            </div>
                           </TableHead>
                         );
                       })}
 
                       <TableHead className="text-right w-[1%] whitespace-nowrap h-9 py-1">
-                        <Button variant="outline" size="sm" onClick={openManage}>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={openManage}
+                          disabled={phaseRunning}
+                        >
                           <Settings2 className="h-4 w-4 mr-1" /> Manage
                         </Button>
                       </TableHead>
@@ -1121,6 +1182,16 @@ export default function WorkbenchProjectDetail() {
                                   const failed = tr?.status === "failed";
                                   const hasScore = typeof score === "number";
                                   const inflight = triageInflight.has(`${s.id}::${name}`);
+                                  const triageInstances = tr?.score != null
+                                    ? ((triage || []).find(
+                                        (t) => t.sheet_id === s.id && t.awp_class_name === name,
+                                      )?.instances ?? 0)
+                                    : 0;
+                                  const userCount =
+                                    pageInstanceCountLookup.get(
+                                      `${s.parent_file_id}::${s.page_index}::${name}`,
+                                    ) || 0;
+                                  const totalCount = triageInstances + userCount;
                                   // Match grid behavior: green bg opacity proportional to score
                                   const opacity = hasScore ? Math.max(0, Math.min(100, score!)) / 100 : 0;
                                   return (
@@ -1140,8 +1211,10 @@ export default function WorkbenchProjectDetail() {
                                               <Loader2 className="h-3 w-3 animate-spin text-muted-foreground" />
                                             ) : failed ? (
                                               <span className="text-red-600">!</span>
+                                            ) : totalCount > 0 ? (
+                                              <span className="font-medium tabular-nums">{totalCount}</span>
                                             ) : hasScore ? (
-                                              <span className="sr-only">{score}%</span>
+                                              <span className="text-muted-foreground">0</span>
                                             ) : (
                                               <span className="text-muted-foreground">—</span>
                                             )}
@@ -1151,10 +1224,12 @@ export default function WorkbenchProjectDetail() {
                                           {failed
                                             ? "Triage failed"
                                             : hasScore
-                                              ? `Triage: ${score}%`
+                                              ? `Triage: ${score}% · ${totalCount} annotation${totalCount === 1 ? "" : "s"}`
                                               : inflight
                                                 ? "Triaging…"
-                                                : "Not triaged"}
+                                                : totalCount > 0
+                                                  ? `${totalCount} annotation${totalCount === 1 ? "" : "s"}`
+                                                  : "Not triaged"}
                                         </TooltipContent>
                                       </Tooltip>
                                     </TableCell>
