@@ -723,6 +723,152 @@ export default function WorkbenchProjectDetail() {
     }
   };
 
+  // Clear triage + analyze results (and related overrides) for a single class
+  // across the current request. Leaves user-placed drawing instances intact.
+  const clearClassResults = async (awpClassName: string) => {
+    if (!requestId) return;
+    try {
+      await Promise.all([
+        supabase
+          .from("analysis_triage_results")
+          .delete()
+          .eq("analysis_request_id", requestId)
+          .eq("awp_class_name", awpClassName),
+        supabase
+          .from("analysis_results")
+          .delete()
+          .eq("analysis_request_id", requestId)
+          .eq("awp_class_name", awpClassName),
+        supabase
+          .from("workbench_triage_overrides" as any)
+          .delete()
+          .eq("analysis_request_id", requestId)
+          .eq("awp_class_name", awpClassName),
+      ]);
+      queryClient.invalidateQueries({ queryKey: ["workbench-triage", requestId] });
+      queryClient.invalidateQueries({ queryKey: ["workbench-analyze", requestId] });
+      queryClient.invalidateQueries({ queryKey: ["workbench-overrides", requestId] });
+      toast({ title: `Cleared results for ${awpClassName}` });
+    } catch (error: any) {
+      toast({
+        variant: "destructive",
+        title: "Could not clear class",
+        description: getUserFriendlyError(error),
+      });
+    }
+  };
+
+  // --- Export -----------------------------------------------------------------
+  const handleExportResults = async () => {
+    if (!requestId || exporting) return;
+    setExporting(true);
+    try {
+      const { Document, Packer, Paragraph, TextRun, HeadingLevel, AlignmentType } =
+        await import("docx");
+
+      // Load all annotated instances for this request, scoped to enabled classes.
+      const { data: instances, error } = await supabase
+        .from("drawing_instances" as any)
+        .select("awp_class_name, file_id, page_index, nx, ny, created_at")
+        .eq("analysis_request_id", requestId)
+        .order("awp_class_name")
+        .order("created_at", { ascending: true });
+      if (error) throw error;
+
+      const fileNameById = new Map(fileGroups.map((g) => [g.file.id, g.file.name]));
+      const prefixOf = (name: string) =>
+        optionByName.get(name)?.idPrefix || name.slice(0, 3).toUpperCase();
+
+      // Group by class, then sort by file name + created_at to match viewer numbering.
+      const byClass = new Map<string, any[]>();
+      for (const i of (instances as any[]) || []) {
+        const arr = byClass.get(i.awp_class_name) || [];
+        arr.push(i);
+        byClass.set(i.awp_class_name, arr);
+      }
+      const today = new Date();
+      const ymd = `${today.getFullYear()}${String(today.getMonth() + 1).padStart(2, "0")}${String(today.getDate()).padStart(2, "0")}`;
+      const projectName = project?.name || "Project";
+
+      const children: any[] = [
+        new Paragraph({
+          heading: HeadingLevel.HEADING_1,
+          children: [new TextRun({ text: `RiskBlue Workbench Export — ${projectName}`, bold: true })],
+        }),
+        new Paragraph({
+          children: [
+            new TextRun({ text: `Generated: ${today.toLocaleString()}`, italics: true, size: 20 }),
+          ],
+        }),
+        new Paragraph({ children: [new TextRun("")] }),
+      ];
+
+      const sortedClassNames = Array.from(byClass.keys()).sort();
+      if (sortedClassNames.length === 0) {
+        children.push(
+          new Paragraph({
+            children: [new TextRun({ text: "No annotated instances found.", italics: true })],
+          }),
+        );
+      }
+      for (const className of sortedClassNames) {
+        const arr = (byClass.get(className) || []).slice().sort((a, b) => {
+          const an = fileNameById.get(a.file_id) || "";
+          const bn = fileNameById.get(b.file_id) || "";
+          return an.localeCompare(bn) || a.created_at.localeCompare(b.created_at);
+        });
+        const prefix = prefixOf(className);
+        children.push(
+          new Paragraph({
+            heading: HeadingLevel.HEADING_2,
+            children: [
+              new TextRun({ text: `${className} (${arr.length})`, bold: true }),
+            ],
+          }),
+        );
+        arr.forEach((inst, idx) => {
+          const id = `${prefix}-${String(idx + 1).padStart(3, "0")}`;
+          const fname = fileNameById.get(inst.file_id) || "Unknown file";
+          children.push(
+            new Paragraph({
+              children: [
+                new TextRun({ text: id, bold: true }),
+                new TextRun({ text: `  ·  ${fname}  ·  Page ${inst.page_index}` }),
+              ],
+            }),
+          );
+        });
+        children.push(new Paragraph({ children: [new TextRun("")] }));
+      }
+
+      const doc = new Document({
+        creator: "RiskBlue",
+        title: `RiskBlue Workbench Export - ${projectName}`,
+        sections: [{ children }],
+      });
+
+      const blob = await Packer.toBlob(doc);
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `RiskBlue Workbench Export ${ymd} - ${projectName}.docx`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      toast({ title: "Export ready", description: "Your .docx has been downloaded." });
+    } catch (error: any) {
+      toast({
+        variant: "destructive",
+        title: "Export failed",
+        description: getUserFriendlyError(error),
+      });
+    } finally {
+      setExporting(false);
+    }
+  };
+
+
   // --- Triage cell click ----------------------------------------------------
   const toggleOverride = async (
     fileId: string,
