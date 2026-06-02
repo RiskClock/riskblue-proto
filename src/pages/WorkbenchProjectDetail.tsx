@@ -575,7 +575,10 @@ export default function WorkbenchProjectDetail() {
   }, [activeFile]);
 
   // --- Pipeline actions -----------------------------------------------------
-  const runPipeline = async (phase: "extract" | "triage" | "analyze") => {
+  const runPipeline = async (
+    phase: "extract" | "triage" | "analyze",
+    classesOverride?: string[],
+  ) => {
     if (!requestId) return;
     setRunning(phase);
     try {
@@ -585,9 +588,11 @@ export default function WorkbenchProjectDetail() {
       };
       if (phase === "triage" || phase === "analyze") {
         // Send eligible classes (those visible as columns) so triage actually runs
-        const enabledAwpClasses = enabledCols.length
-          ? enabledCols
-          : eligibleOptions.map((o) => o.name);
+        const enabledAwpClasses = classesOverride
+          ? classesOverride
+          : enabledCols.length
+            ? enabledCols
+            : eligibleOptions.map((o) => o.name);
         body.enabledAwpClasses = enabledAwpClasses;
       }
       const { error } = await supabase.functions.invoke("run-analysis-pipeline", {
