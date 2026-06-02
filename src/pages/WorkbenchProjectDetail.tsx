@@ -1303,10 +1303,15 @@ export default function WorkbenchProjectDetail() {
                       const SheetStatusBadge = ({ s }: { s: SheetRow }) => {
                         const st = sheetExtractState(s);
                         if (st === "done") {
+                          const label = `Page ${s.page_index}${s.sheet_number ? ` · ${s.sheet_number}` : ""}`;
                           return (
                             <Badge
                               variant="outline"
-                              className="ml-auto shrink-0 h-4 px-1.5 text-[10px] leading-none bg-emerald-500/10 text-emerald-700 border-emerald-500/30"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setTextSheet({ id: s.id, label: `${group.file.name} — ${label}` });
+                              }}
+                              className="ml-auto shrink-0 h-4 px-1.5 text-[10px] leading-none bg-emerald-500/10 text-emerald-700 border-emerald-500/30 cursor-pointer hover:bg-emerald-500/20"
                             >
                               Processed
                             </Badge>
