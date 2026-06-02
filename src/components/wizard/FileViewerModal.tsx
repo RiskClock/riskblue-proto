@@ -66,6 +66,10 @@ interface FileViewerModalProps {
   /** Optional key (e.g. project id) used to persist the selected AWP class
    *  in localStorage across modal openings and browser sessions. */
   persistKey?: string;
+  /** Controlled expanded-class set. When provided, expand/collapse state is
+   *  owned by the parent so it survives modal open/close cycles. */
+  expandedClasses?: Set<string>;
+  onExpandedClassesChange?: (next: Set<string>) => void;
 }
 
 const BOUNDING_BOX_COLOR = "#39FF14"; // legacy detections (green)
