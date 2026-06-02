@@ -585,10 +585,10 @@ export const FileViewerModal = ({
                                   className="flex items-center gap-2 text-[11px]"
                                 >
                                   <span
-                                    className="h-2 w-2 rounded-full"
+                                    className="h-2 w-2 rounded-full shrink-0"
                                     style={{ backgroundColor: color }}
                                   />
-                                  <span className="flex-1 font-mono">
+                                  <span className="flex-1 min-w-0 font-mono truncate">
                                     {instanceLabel(i)}
                                     {i.page_index !== effectivePage
                                       ? ` (p.${i.page_index})`
@@ -596,7 +596,7 @@ export const FileViewerModal = ({
                                   </span>
                                   <button
                                     onClick={() => handleDeleteFromList(i.id)}
-                                    className="text-muted-foreground hover:text-destructive"
+                                    className="shrink-0 text-muted-foreground hover:text-destructive px-1"
                                     aria-label="Remove marker"
                                   >
                                     ×
