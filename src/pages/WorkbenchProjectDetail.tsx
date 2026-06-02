@@ -1673,10 +1673,14 @@ function AwpPromptModal({
   onClose: () => void;
 }) {
   const [loading, setLoading] = useState(false);
+  const [tab, setTab] = useState<"triage" | "analyze">("triage");
   const [row, setRow] = useState<{
     prompt_content: string | null;
     drive_file_url: string | null;
     drive_file_name: string | null;
+    triage_prompt_content: string | null;
+    triage_drive_file_url: string | null;
+    triage_drive_file_name: string | null;
   } | null>(null);
 
   useEffect(() => {
@@ -1689,11 +1693,22 @@ function AwpPromptModal({
       setLoading(true);
       const { data } = await supabase
         .from("awp_class_prompts")
-        .select("prompt_content, drive_file_url, drive_file_name")
+        .select(
+          "prompt_content, drive_file_url, drive_file_name, triage_prompt_content, triage_drive_file_url, triage_drive_file_name",
+        )
         .eq("awp_class_name", className)
         .maybeSingle();
       if (!cancelled) {
-        setRow((data as any) ?? { prompt_content: null, drive_file_url: null, drive_file_name: null });
+        setRow(
+          (data as any) ?? {
+            prompt_content: null,
+            drive_file_url: null,
+            drive_file_name: null,
+            triage_prompt_content: null,
+            triage_drive_file_url: null,
+            triage_drive_file_name: null,
+          },
+        );
         setLoading(false);
       }
     })();
@@ -1702,15 +1717,40 @@ function AwpPromptModal({
     };
   }, [className]);
 
+  const isTriage = tab === "triage";
+  const content = isTriage ? row?.triage_prompt_content : row?.prompt_content;
+  const driveUrl = isTriage ? row?.triage_drive_file_url : row?.drive_file_url;
+  const driveName = isTriage ? row?.triage_drive_file_name : row?.drive_file_name;
+
   return (
     <Dialog open={!!className} onOpenChange={(o) => !o && onClose()}>
       <DialogContent className="max-w-3xl">
         <DialogHeader>
           <DialogTitle>{className}</DialogTitle>
           <DialogDescription>
-            {row?.drive_file_name || "Prompt used during triage and analysis."}
+            {driveName || `Prompt used during ${isTriage ? "triage" : "analysis"}.`}
           </DialogDescription>
         </DialogHeader>
+        <div className="inline-flex rounded-md border bg-muted p-0.5 self-start text-xs">
+          <button
+            type="button"
+            onClick={() => setTab("triage")}
+            className={`px-3 py-1 rounded ${
+              isTriage ? "bg-background shadow-sm" : "text-muted-foreground"
+            }`}
+          >
+            Triage prompt
+          </button>
+          <button
+            type="button"
+            onClick={() => setTab("analyze")}
+            className={`px-3 py-1 rounded ${
+              !isTriage ? "bg-background shadow-sm" : "text-muted-foreground"
+            }`}
+          >
+            Analyze prompt
+          </button>
+        </div>
         {loading ? (
           <div className="flex items-center justify-center p-8">
             <Loader2 className="w-5 h-5 animate-spin text-muted-foreground" />
@@ -1718,7 +1758,7 @@ function AwpPromptModal({
         ) : (
           <div className="max-h-[55vh] overflow-auto border rounded-md p-4 bg-muted/30">
             <pre className="text-xs whitespace-pre-wrap font-mono text-foreground">
-              {row?.prompt_content || "(no prompt content)"}
+              {content || "(no prompt content)"}
             </pre>
           </div>
         )}
@@ -1727,9 +1767,9 @@ function AwpPromptModal({
             Close
           </Button>
           <Button
-            disabled={!row?.drive_file_url}
+            disabled={!driveUrl}
             onClick={() => {
-              if (row?.drive_file_url) window.open(row.drive_file_url, "_blank");
+              if (driveUrl) window.open(driveUrl, "_blank");
             }}
           >
             Open Source File
