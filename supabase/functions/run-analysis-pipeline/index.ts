@@ -1309,7 +1309,7 @@ async function runPipeline(params: PipelineParams) {
             name: s.name,
             kind: "sheet" as const,
             hasExtract:
-              (s.extract_status === "done") &&
+              (s.extract_status === "extracted" || s.extract_status === "skipped") ||
               !!(s.extracted_text && String(s.extracted_text).trim().length > 0),
           }))
         : files.map((f: any) => ({
