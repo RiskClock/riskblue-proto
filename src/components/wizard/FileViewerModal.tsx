@@ -547,17 +547,17 @@ export const FileViewerModal = ({
                             className="h-2 w-2 rounded-full shrink-0"
                             style={{ backgroundColor: color }}
                           />
-                          <span className="font-mono text-xs text-muted-foreground">
+                          <span className="font-mono text-xs text-muted-foreground shrink-0">
                             {c.prefix ?? "—"}
                           </span>
-                          <span className="flex-1 truncate">{c.name}</span>
-                          <span className="text-xs tabular-nums text-muted-foreground">
+                          <span className="flex-1 min-w-0 truncate" title={c.name}>{c.name}</span>
+                          <span className="text-xs tabular-nums text-muted-foreground shrink-0">
                             {total}
                           </span>
                           {isExpanded ? (
-                            <ChevronDown className="h-4 w-4 text-muted-foreground" />
+                            <ChevronDown className="h-4 w-4 text-muted-foreground shrink-0" />
                           ) : (
-                            <ChevronRight className="h-4 w-4 text-muted-foreground" />
+                            <ChevronRight className="h-4 w-4 text-muted-foreground shrink-0" />
                           )}
                         </div>
                         {isExpanded && (
