@@ -504,6 +504,18 @@ export default function WorkbenchProjectDetail() {
     return m;
   }, [triage]);
 
+  // (file, class) -> max triage score across sheets, for file-level bg coloring.
+  const fileScoreLookup = useMemo(() => {
+    const m = new Map<string, number>();
+    for (const t of triage || []) {
+      if (typeof t.score !== "number") continue;
+      const key = `${t.file_id}::${t.awp_class_name}`;
+      const prev = m.get(key);
+      if (prev == null || t.score > prev) m.set(key, t.score);
+    }
+    return m;
+  }, [triage]);
+
   // Total annotations per file across all classes (triage + user instances).
   const fileTotalLookup = useMemo(() => {
     const m = new Map<string, number>();
@@ -1181,21 +1193,38 @@ export default function WorkbenchProjectDetail() {
                         awpClassName: string,
                         count: number,
                         scoreKnown: boolean,
+                        score?: number,
                       ) => {
                         const key = `${fileId}::${awpClassName}`;
                         const override = overrideMap.get(key);
                         const clickable = hasTriageRun;
+                        const hasScore = typeof score === "number";
+                        const opacity = hasScore ? Math.max(0, Math.min(100, score!)) / 100 : 0;
+                        // Show count ONLY when user/analysis instances exist.
+                        // Triage results contribute bg color only, no number.
                         const inner =
                           count > 0 ? (
                             <span className="font-medium tabular-nums">{count}</span>
-                          ) : scoreKnown ? (
-                            <span className="text-muted-foreground">0</span>
                           ) : (
-                            <span className="text-muted-foreground">—</span>
+                            <span className="text-muted-foreground">
+                              {scoreKnown ? "" : "—"}
+                            </span>
                           );
+                        const title = !clickable
+                          ? undefined
+                          : override === "include"
+                            ? "Manually included — click to clear"
+                            : override === "exclude"
+                              ? "Manually excluded — click to clear"
+                              : hasScore
+                                ? `Triage: ${score}%${count > 0 ? ` · ${count}` : ""} — click to ${count > 0 ? "exclude" : "include"}`
+                                : count > 0
+                                  ? "Click to exclude"
+                                  : "Click to include";
                         return (
                           <TableCell
                             key={awpClassName}
+                            title={title}
                             className={`text-center py-1 relative group ${
                               clickable ? "cursor-pointer" : ""
                             } ${
@@ -1207,36 +1236,26 @@ export default function WorkbenchProjectDetail() {
                                     ? "hover:bg-muted/40"
                                     : ""
                             }`}
+                            style={
+                              hasScore && override !== "exclude" && override !== "include"
+                                ? { backgroundColor: `rgba(16, 185, 129, ${opacity * 0.55})` }
+                                : undefined
+                            }
                             onClick={(e) => {
                               if (!clickable) return;
                               e.stopPropagation();
                               toggleOverride(fileId, awpClassName, count);
                             }}
                           >
-                            <Tooltip>
-                              <TooltipTrigger asChild>
-                                <span className="inline-flex items-center justify-center w-full">
-                                  {override === "exclude" ? (
-                                    <span className="line-through text-muted-foreground">
-                                      {count > 0 ? count : "—"}
-                                    </span>
-                                  ) : (
-                                    inner
-                                  )}
+                            <span className="inline-flex items-center justify-center w-full">
+                              {override === "exclude" ? (
+                                <span className="line-through text-muted-foreground">
+                                  {count > 0 ? count : "—"}
                                 </span>
-                              </TooltipTrigger>
-                              {clickable && (
-                                <TooltipContent>
-                                  {override === "include"
-                                    ? "Manually included — click to clear"
-                                    : override === "exclude"
-                                      ? "Manually excluded — click to clear"
-                                      : count > 0
-                                        ? "Click to exclude"
-                                        : "Click to include"}
-                                </TooltipContent>
+                              ) : (
+                                inner
                               )}
-                            </Tooltip>
+                            </span>
                           </TableCell>
                         );
                       };
