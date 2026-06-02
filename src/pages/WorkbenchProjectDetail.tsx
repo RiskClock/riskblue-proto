@@ -1383,11 +1383,8 @@ export default function WorkbenchProjectDetail() {
                                       {s.sheet_number ? ` · ${s.sheet_number}` : ""}
                                       {s.sheet_title ? ` — ${s.sheet_title}` : ""}
                                       {(() => {
-                                        const triageOnPage =
-                                          (pageTotalLookup.get(`sheet:${s.id}`) || 0);
-                                        const userOnPage =
-                                          (pageTotalLookup.get(`${s.parent_file_id}::${s.page_index}`) || 0);
-                                        const n = triageOnPage + userOnPage;
+                                        const n =
+                                          pageTotalLookup.get(`${s.parent_file_id}::${s.page_index}`) || 0;
                                         return n > 0 ? ` (${n} ${n === 1 ? "instance" : "instances"})` : "";
                                       })()}
                                     </span>
