@@ -66,6 +66,10 @@ interface FileViewerModalProps {
   /** Optional key (e.g. project id) used to persist the selected AWP class
    *  in localStorage across modal openings and browser sessions. */
   persistKey?: string;
+  /** Controlled expanded-class set. When provided, expand/collapse state is
+   *  owned by the parent so it survives modal open/close cycles. */
+  expandedClasses?: Set<string>;
+  onExpandedClassesChange?: (next: Set<string>) => void;
 }
 
 const BOUNDING_BOX_COLOR = "#39FF14"; // legacy detections (green)
@@ -91,6 +95,8 @@ export const FileViewerModal = ({
   fileNameById,
   onInstancesChanged,
   persistKey,
+  expandedClasses,
+  onExpandedClassesChange,
 }: FileViewerModalProps) => {
   const { toast } = useToast();
   const [hoveredCode, setHoveredCode] = useState<string | null>(null);
@@ -122,19 +128,24 @@ export const FileViewerModal = ({
     if (stored && awpClasses?.some((c) => c.name === stored)) return stored;
     return awpClasses?.[0]?.name ?? null;
   });
-  const [expanded, setExpanded] = useState<Set<string>>(
-    () => new Set(selectedClass ? [selectedClass] : []),
+  // Internal expanded set, used only when parent doesn't provide one.
+  const [localExpanded, setLocalExpanded] = useState<Set<string>>(
+    () => new Set((awpClasses || []).map((c) => c.name)),
   );
+  const expanded = expandedClasses ?? localExpanded;
+  const setExpanded = (updater: (prev: Set<string>) => Set<string>) => {
+    const next = updater(expanded);
+    if (onExpandedClassesChange) onExpandedClassesChange(next);
+    else setLocalExpanded(next);
+  };
   const [instances, setInstances] = useState<DrawingInstanceRow[]>([]);
   const [loadingInstances, setLoadingInstances] = useState(false);
   const [past, setPast] = useState<HistoryAction[]>([]);
   const [future, setFuture] = useState<HistoryAction[]>([]);
 
-  // Reset history each time the modal opens; also resync selected class from
-  // localStorage and expand only the selected class. This must run only on the
-  // open transition — re-running when `awpClasses` changes would collapse rows
-  // the user expanded (e.g. after removing an instance the parent re-fetches
-  // and produces a new awpClasses array reference).
+  // Reset history on open. Selected class is re-synced from localStorage.
+  // Expansion state is NOT reset — it should persist across modal opens
+  // (and, when a parent provides expandedClasses, across page sessions too).
   const wasOpenRef = useRef(false);
   useEffect(() => {
     if (isOpen && !wasOpenRef.current) {
@@ -146,10 +157,24 @@ export const FileViewerModal = ({
           ? stored
           : awpClasses?.[0]?.name ?? null;
       setSelectedClass(next);
-      setExpanded(new Set(next ? [next] : []));
     }
     wasOpenRef.current = isOpen;
   }, [isOpen, awpClasses, readStoredClass]);
+
+  // Auto-expand newly-arriving classes so they default to expanded.
+  useEffect(() => {
+    if (!awpClasses || awpClasses.length === 0) return;
+    const missing = awpClasses
+      .map((c) => c.name)
+      .filter((n) => !expanded.has(n));
+    if (missing.length === 0) return;
+    setExpanded((prev) => {
+      const next = new Set(prev);
+      for (const n of missing) next.add(n);
+      return next;
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [awpClasses]);
 
 
   // Persist selected class to localStorage whenever it changes.
@@ -503,8 +528,8 @@ export const FileViewerModal = ({
                   </Button>
                 </div>
               </div>
-              <ScrollArea className="flex-1">
-                <div className="py-1">
+              <div className="flex-1 overflow-y-auto overflow-x-hidden min-w-0">
+                <div className="py-1 w-full min-w-0">
                   {loadingInstances && (
                     <div className="flex items-center gap-2 px-3 py-2 text-xs text-muted-foreground">
                       <Loader2 className="h-3 w-3 animate-spin" /> Loading
@@ -519,19 +544,12 @@ export const FileViewerModal = ({
                     const isExpanded = expanded.has(c.name);
                     const color = awpClassColor(c.name);
                     return (
-                      <div key={c.name} className="border-b last:border-b-0">
+                      <div key={c.name} className="border-b last:border-b-0 min-w-0">
                         <div
-                          className={`flex items-center gap-2 px-3 py-1.5 text-sm cursor-pointer hover:bg-muted/50 ${
+                          className={`flex items-center gap-2 px-3 py-1.5 text-sm cursor-pointer hover:bg-muted/50 min-w-0 ${
                             isSelected ? "bg-muted/40" : ""
                           }`}
-                          onClick={() => {
-                            setExpanded((prev) => {
-                              const next = new Set(prev);
-                              if (next.has(c.name)) next.delete(c.name);
-                              else next.add(c.name);
-                              return next;
-                            });
-                          }}
+                          onClick={() => setSelectedClass(c.name)}
                         >
                           <input
                             type="radio"
@@ -541,7 +559,7 @@ export const FileViewerModal = ({
                               e.stopPropagation();
                               setSelectedClass(c.name);
                             }}
-                            className="h-3.5 w-3.5"
+                            className="h-3.5 w-3.5 shrink-0"
                           />
                           <span
                             className="h-2 w-2 rounded-full shrink-0"
@@ -554,11 +572,26 @@ export const FileViewerModal = ({
                           <span className="text-xs tabular-nums text-muted-foreground shrink-0">
                             {total}
                           </span>
-                          {isExpanded ? (
-                            <ChevronDown className="h-4 w-4 text-muted-foreground shrink-0" />
-                          ) : (
-                            <ChevronRight className="h-4 w-4 text-muted-foreground shrink-0" />
-                          )}
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setExpanded((prev) => {
+                                const next = new Set(prev);
+                                if (next.has(c.name)) next.delete(c.name);
+                                else next.add(c.name);
+                                return next;
+                              });
+                            }}
+                            className="shrink-0 text-muted-foreground hover:text-foreground p-0.5 rounded hover:bg-muted/50"
+                            aria-label={isExpanded ? "Collapse" : "Expand"}
+                          >
+                            {isExpanded ? (
+                              <ChevronDown className="h-4 w-4" />
+                            ) : (
+                              <ChevronRight className="h-4 w-4" />
+                            )}
+                          </button>
                         </div>
                         {isExpanded && (
                           <div className="px-8 py-1 space-y-1 bg-muted/20">
@@ -609,7 +642,7 @@ export const FileViewerModal = ({
                     );
                   })}
                 </div>
-              </ScrollArea>
+              </div>
             </div>
           ) : detections.length > 0 ? (
             <div className="w-64 flex-shrink-0 border rounded-lg p-3 flex flex-col">

@@ -120,7 +120,7 @@ export const OverlayLayer = ({
             {o.label && (
               <div
                 className="absolute -top-5 left-1/2 -translate-x-1/2 px-1 text-[10px] font-bold text-white whitespace-nowrap rounded-sm pointer-events-none"
-                style={{ backgroundColor: withAlpha(color, 0.8) }}
+                style={{ backgroundColor: withAlpha(color, 0.7) }}
               >
                 {o.label}
               </div>

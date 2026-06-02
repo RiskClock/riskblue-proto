@@ -131,6 +131,10 @@ export default function WorkbenchProjectDetail() {
   const [running, setRunning] = useState<"extract" | "triage" | "analyze" | null>(null);
   const [promptClass, setPromptClass] = useState<string | null>(null);
   const [expandedFiles, setExpandedFiles] = useState<Set<string>>(new Set());
+  // Persist sidebar expand/collapse state across modal open/close cycles
+  // (but not across browser refresh).
+  const [sidebarExpandedClasses, setSidebarExpandedClasses] = useState<Set<string>>(new Set());
+  const [exporting, setExporting] = useState(false);
 
   const toggleExpand = (fileId: string) => {
     setExpandedFiles((prev) => {
@@ -500,6 +504,37 @@ export default function WorkbenchProjectDetail() {
     return m;
   }, [triage]);
 
+  // Total annotations per file across all classes (triage + user instances).
+  const fileTotalLookup = useMemo(() => {
+    const m = new Map<string, number>();
+    for (const t of triage || []) {
+      m.set(t.file_id, (m.get(t.file_id) || 0) + (t.instances || 0));
+    }
+    for (const r of instanceRows || []) {
+      m.set(r.file_id, (m.get(r.file_id) || 0) + 1);
+    }
+    return m;
+  }, [triage, instanceRows]);
+
+  // Total annotations per page (sheet) across all classes.
+  // Key = `${parentFileId}::${pageIndex}`
+  const pageTotalLookup = useMemo(() => {
+    const m = new Map<string, number>();
+    // sheet-scoped triage instances
+    for (const t of triage || []) {
+      if (!t.sheet_id) continue;
+      // We need page_index; look it up below via sheet id resolved at render time.
+      // Track per sheet_id here, page key computed during render.
+      const key = `sheet:${t.sheet_id}`;
+      m.set(key, (m.get(key) || 0) + (t.instances || 0));
+    }
+    for (const r of instanceRows || []) {
+      const key = `${r.file_id}::${r.page_index}`;
+      m.set(key, (m.get(key) || 0) + 1);
+    }
+    return m;
+  }, [triage, instanceRows]);
+
 
   // Per-file extract status: processed if extracted_text on file OR all sheets extracted/skipped
   const fileExtractStatus = useMemo(() => {
@@ -687,6 +722,152 @@ export default function WorkbenchProjectDetail() {
       setClearing(false);
     }
   };
+
+  // Clear triage + analyze results (and related overrides) for a single class
+  // across the current request. Leaves user-placed drawing instances intact.
+  const clearClassResults = async (awpClassName: string) => {
+    if (!requestId) return;
+    try {
+      await Promise.all([
+        supabase
+          .from("analysis_triage_results")
+          .delete()
+          .eq("analysis_request_id", requestId)
+          .eq("awp_class_name", awpClassName),
+        supabase
+          .from("analysis_results")
+          .delete()
+          .eq("analysis_request_id", requestId)
+          .eq("awp_class_name", awpClassName),
+        supabase
+          .from("workbench_triage_overrides" as any)
+          .delete()
+          .eq("analysis_request_id", requestId)
+          .eq("awp_class_name", awpClassName),
+      ]);
+      queryClient.invalidateQueries({ queryKey: ["workbench-triage", requestId] });
+      queryClient.invalidateQueries({ queryKey: ["workbench-analyze", requestId] });
+      queryClient.invalidateQueries({ queryKey: ["workbench-overrides", requestId] });
+      toast({ title: `Cleared results for ${awpClassName}` });
+    } catch (error: any) {
+      toast({
+        variant: "destructive",
+        title: "Could not clear class",
+        description: getUserFriendlyError(error),
+      });
+    }
+  };
+
+  // --- Export -----------------------------------------------------------------
+  const handleExportResults = async () => {
+    if (!requestId || exporting) return;
+    setExporting(true);
+    try {
+      const { Document, Packer, Paragraph, TextRun, HeadingLevel, AlignmentType } =
+        await import("docx");
+
+      // Load all annotated instances for this request, scoped to enabled classes.
+      const { data: instances, error } = await supabase
+        .from("drawing_instances" as any)
+        .select("awp_class_name, file_id, page_index, nx, ny, created_at")
+        .eq("analysis_request_id", requestId)
+        .order("awp_class_name")
+        .order("created_at", { ascending: true });
+      if (error) throw error;
+
+      const fileNameById = new Map(fileGroups.map((g) => [g.file.id, g.file.name]));
+      const prefixOf = (name: string) =>
+        optionByName.get(name)?.idPrefix || name.slice(0, 3).toUpperCase();
+
+      // Group by class, then sort by file name + created_at to match viewer numbering.
+      const byClass = new Map<string, any[]>();
+      for (const i of (instances as any[]) || []) {
+        const arr = byClass.get(i.awp_class_name) || [];
+        arr.push(i);
+        byClass.set(i.awp_class_name, arr);
+      }
+      const today = new Date();
+      const ymd = `${today.getFullYear()}${String(today.getMonth() + 1).padStart(2, "0")}${String(today.getDate()).padStart(2, "0")}`;
+      const projectName = project?.name || "Project";
+
+      const children: any[] = [
+        new Paragraph({
+          heading: HeadingLevel.HEADING_1,
+          children: [new TextRun({ text: `RiskBlue Workbench Export — ${projectName}`, bold: true })],
+        }),
+        new Paragraph({
+          children: [
+            new TextRun({ text: `Generated: ${today.toLocaleString()}`, italics: true, size: 20 }),
+          ],
+        }),
+        new Paragraph({ children: [new TextRun("")] }),
+      ];
+
+      const sortedClassNames = Array.from(byClass.keys()).sort();
+      if (sortedClassNames.length === 0) {
+        children.push(
+          new Paragraph({
+            children: [new TextRun({ text: "No annotated instances found.", italics: true })],
+          }),
+        );
+      }
+      for (const className of sortedClassNames) {
+        const arr = (byClass.get(className) || []).slice().sort((a, b) => {
+          const an = fileNameById.get(a.file_id) || "";
+          const bn = fileNameById.get(b.file_id) || "";
+          return an.localeCompare(bn) || a.created_at.localeCompare(b.created_at);
+        });
+        const prefix = prefixOf(className);
+        children.push(
+          new Paragraph({
+            heading: HeadingLevel.HEADING_2,
+            children: [
+              new TextRun({ text: `${className} (${arr.length})`, bold: true }),
+            ],
+          }),
+        );
+        arr.forEach((inst, idx) => {
+          const id = `${prefix}-${String(idx + 1).padStart(3, "0")}`;
+          const fname = fileNameById.get(inst.file_id) || "Unknown file";
+          children.push(
+            new Paragraph({
+              children: [
+                new TextRun({ text: id, bold: true }),
+                new TextRun({ text: `  ·  ${fname}  ·  Page ${inst.page_index}` }),
+              ],
+            }),
+          );
+        });
+        children.push(new Paragraph({ children: [new TextRun("")] }));
+      }
+
+      const doc = new Document({
+        creator: "RiskBlue",
+        title: `RiskBlue Workbench Export - ${projectName}`,
+        sections: [{ children }],
+      });
+
+      const blob = await Packer.toBlob(doc);
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `RiskBlue Workbench Export ${ymd} - ${projectName}.docx`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      toast({ title: "Export ready", description: "Your .docx has been downloaded." });
+    } catch (error: any) {
+      toast({
+        variant: "destructive",
+        title: "Export failed",
+        description: getUserFriendlyError(error),
+      });
+    } finally {
+      setExporting(false);
+    }
+  };
+
 
   // --- Triage cell click ----------------------------------------------------
   const toggleOverride = async (
@@ -932,6 +1113,12 @@ export default function WorkbenchProjectDetail() {
                                   >
                                     Analyze
                                   </DropdownMenuItem>
+                                  <DropdownMenuItem
+                                    disabled={phaseRunning}
+                                    onClick={() => clearClassResults(name)}
+                                  >
+                                    Clear
+                                  </DropdownMenuItem>
                                 </DropdownMenuContent>
                               </DropdownMenu>
                             </div>
@@ -942,11 +1129,14 @@ export default function WorkbenchProjectDetail() {
                       <TableHead className="text-right w-[1%] whitespace-nowrap h-9 py-1">
                         <Button
                           variant="outline"
-                          size="sm"
+                          size="icon"
                           onClick={openManage}
                           disabled={phaseRunning}
+                          aria-label="Manage columns"
+                          title="Manage columns"
+                          className="h-8 w-8"
                         >
-                          <Settings2 className="h-4 w-4 mr-1" /> Manage
+                          <Settings2 className="h-4 w-4" />
                         </Button>
                       </TableHead>
                     </TableRow>
@@ -1131,7 +1321,13 @@ export default function WorkbenchProjectDetail() {
                                 ) : (
                                   <span className="inline-block w-3.5 shrink-0" />
                                 )}
-                                <span className="font-medium truncate min-w-0">{group.file.name}</span>
+                                <span className="font-medium truncate min-w-0">
+                                  {group.file.name}
+                                  {(() => {
+                                    const n = fileTotalLookup.get(group.file.id) || 0;
+                                    return n > 0 ? ` (${n} inst.)` : "";
+                                  })()}
+                                </span>
                                 {!singlePage && (
                                   <span className="text-xs text-muted-foreground shrink-0">
                                     {group.sheets.length} pages
@@ -1172,6 +1368,14 @@ export default function WorkbenchProjectDetail() {
                                       Page {s.page_index}
                                       {s.sheet_number ? ` · ${s.sheet_number}` : ""}
                                       {s.sheet_title ? ` — ${s.sheet_title}` : ""}
+                                      {(() => {
+                                        const triageOnPage =
+                                          (pageTotalLookup.get(`sheet:${s.id}`) || 0);
+                                        const userOnPage =
+                                          (pageTotalLookup.get(`${s.parent_file_id}::${s.page_index}`) || 0);
+                                        const n = triageOnPage + userOnPage;
+                                        return n > 0 ? ` (${n} inst.)` : "";
+                                      })()}
                                     </span>
                                     <SheetStatusBadge s={s} />
                                   </div>
@@ -1246,6 +1450,34 @@ export default function WorkbenchProjectDetail() {
                 </Table>
               </div>
             )}
+
+            {analysisRequest && totalFiles > 0 && (
+              <div className="flex justify-end gap-2 pt-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleExportResults}
+                  disabled={exporting || !requestId}
+                >
+                  {exporting ? (
+                    <Loader2 className="h-4 w-4 mr-1.5 animate-spin" />
+                  ) : null}
+                  Export Results
+                </Button>
+                <Button
+                  size="sm"
+                  onClick={() =>
+                    toast({
+                      title: "Sent to WMG Project",
+                      description: "Results have been sent.",
+                    })
+                  }
+                  disabled={!requestId}
+                >
+                  Send to WMG Project
+                </Button>
+              </div>
+            )}
           </div>
         </main>
 
@@ -1284,6 +1516,8 @@ export default function WorkbenchProjectDetail() {
               });
             }}
             persistKey={projectId}
+            expandedClasses={sidebarExpandedClasses}
+            onExpandedClassesChange={setSidebarExpandedClasses}
           />
         )}
 
@@ -1317,6 +1551,8 @@ export default function WorkbenchProjectDetail() {
               });
             }}
             persistKey={projectId}
+            expandedClasses={sidebarExpandedClasses}
+            onExpandedClassesChange={setSidebarExpandedClasses}
           />
         )}
 
@@ -1437,10 +1673,14 @@ function AwpPromptModal({
   onClose: () => void;
 }) {
   const [loading, setLoading] = useState(false);
+  const [tab, setTab] = useState<"triage" | "analyze">("triage");
   const [row, setRow] = useState<{
     prompt_content: string | null;
     drive_file_url: string | null;
     drive_file_name: string | null;
+    triage_prompt_content: string | null;
+    triage_drive_file_url: string | null;
+    triage_drive_file_name: string | null;
   } | null>(null);
 
   useEffect(() => {
@@ -1453,11 +1693,22 @@ function AwpPromptModal({
       setLoading(true);
       const { data } = await supabase
         .from("awp_class_prompts")
-        .select("prompt_content, drive_file_url, drive_file_name")
+        .select(
+          "prompt_content, drive_file_url, drive_file_name, triage_prompt_content, triage_drive_file_url, triage_drive_file_name",
+        )
         .eq("awp_class_name", className)
         .maybeSingle();
       if (!cancelled) {
-        setRow((data as any) ?? { prompt_content: null, drive_file_url: null, drive_file_name: null });
+        setRow(
+          (data as any) ?? {
+            prompt_content: null,
+            drive_file_url: null,
+            drive_file_name: null,
+            triage_prompt_content: null,
+            triage_drive_file_url: null,
+            triage_drive_file_name: null,
+          },
+        );
         setLoading(false);
       }
     })();
@@ -1466,15 +1717,40 @@ function AwpPromptModal({
     };
   }, [className]);
 
+  const isTriage = tab === "triage";
+  const content = isTriage ? row?.triage_prompt_content : row?.prompt_content;
+  const driveUrl = isTriage ? row?.triage_drive_file_url : row?.drive_file_url;
+  const driveName = isTriage ? row?.triage_drive_file_name : row?.drive_file_name;
+
   return (
     <Dialog open={!!className} onOpenChange={(o) => !o && onClose()}>
       <DialogContent className="max-w-3xl">
         <DialogHeader>
           <DialogTitle>{className}</DialogTitle>
           <DialogDescription>
-            {row?.drive_file_name || "Prompt used during triage and analysis."}
+            {driveName || `Prompt used during ${isTriage ? "triage" : "analysis"}.`}
           </DialogDescription>
         </DialogHeader>
+        <div className="inline-flex rounded-md border bg-muted p-0.5 self-start text-xs">
+          <button
+            type="button"
+            onClick={() => setTab("triage")}
+            className={`px-3 py-1 rounded ${
+              isTriage ? "bg-background shadow-sm" : "text-muted-foreground"
+            }`}
+          >
+            Triage prompt
+          </button>
+          <button
+            type="button"
+            onClick={() => setTab("analyze")}
+            className={`px-3 py-1 rounded ${
+              !isTriage ? "bg-background shadow-sm" : "text-muted-foreground"
+            }`}
+          >
+            Analyze prompt
+          </button>
+        </div>
         {loading ? (
           <div className="flex items-center justify-center p-8">
             <Loader2 className="w-5 h-5 animate-spin text-muted-foreground" />
@@ -1482,7 +1758,7 @@ function AwpPromptModal({
         ) : (
           <div className="max-h-[55vh] overflow-auto border rounded-md p-4 bg-muted/30">
             <pre className="text-xs whitespace-pre-wrap font-mono text-foreground">
-              {row?.prompt_content || "(no prompt content)"}
+              {content || "(no prompt content)"}
             </pre>
           </div>
         )}
@@ -1491,9 +1767,9 @@ function AwpPromptModal({
             Close
           </Button>
           <Button
-            disabled={!row?.drive_file_url}
+            disabled={!driveUrl}
             onClick={() => {
-              if (row?.drive_file_url) window.open(row.drive_file_url, "_blank");
+              if (driveUrl) window.open(driveUrl, "_blank");
             }}
           >
             Open Source File
