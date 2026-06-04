@@ -2458,13 +2458,17 @@ function InstancesReportModal({
   fileGroups,
   optionByName,
   pageSpaceMap,
+  spaceHierarchyPayload,
+  projectName,
 }: {
   open: boolean;
   onOpenChange: (v: boolean) => void;
   requestId: string | undefined;
-  fileGroups: Array<{ file: { id: string; name: string }; sheets: SheetRow[] }>;
+  fileGroups: Array<{ file: FileRow; sheets: SheetRow[] }>;
   optionByName: Map<string, { idPrefix: string | null; category: string }>;
   pageSpaceMap: Map<string, string[]>;
+  spaceHierarchyPayload: any | null | undefined;
+  projectName: string;
 }) {
   const [loading, setLoading] = useState(false);
   const [instances, setInstances] = useState<any[]>([]);
@@ -2477,7 +2481,7 @@ function InstancesReportModal({
       setLoading(true);
       const { data } = await supabase
         .from("drawing_instances" as any)
-        .select("id, awp_class_name, file_id, page_index, instance_number, created_at")
+        .select("id, awp_class_name, file_id, page_index, instance_number, nx, ny, created_at")
         .eq("analysis_request_id", requestId)
         .order("awp_class_name")
         .order("created_at", { ascending: true });
@@ -2497,6 +2501,29 @@ function InstancesReportModal({
     [fileGroups],
   );
 
+  // sheet lookup: "fileName::pageIndex" -> { sheet, file }
+  const sheetByFilePage = useMemo(() => {
+    const m = new Map<string, { sheet: SheetRow; file: FileRow }>();
+    for (const g of fileGroups) {
+      for (const s of g.sheets) {
+        m.set(`${g.file.name}::${s.page_index}`, { sheet: s, file: g.file });
+      }
+    }
+    return m;
+  }, [fileGroups]);
+
+  // space_index map for proper sorting (P2 Sub-Slab < P2 < P1 < Ground < L1 ...)
+  const spaceIndexMap = useMemo(() => {
+    const m = new Map<string, number>();
+    const spaces: any[] = spaceHierarchyPayload?.parsed?.physical_spaces || [];
+    for (const sp of spaces) {
+      if (sp?.standardized_space_name && typeof sp?.space_index === "number") {
+        m.set(sp.standardized_space_name, sp.space_index);
+      }
+    }
+    return m;
+  }, [spaceHierarchyPayload]);
+
   const expanded = useMemo(() => {
     type Row = {
       annotationBaseId: string;
@@ -2506,6 +2533,8 @@ function InstancesReportModal({
       category: string;
       fileId: string;
       pageIndex: number;
+      nx: number;
+      ny: number;
     };
     const rows: Row[] = [];
     for (const inst of instances) {
@@ -2516,27 +2545,20 @@ function InstancesReportModal({
       const base = `${prefix}${String(num).padStart(3, "0")}`;
       const fileName = fileNameById.get(inst.file_id) || "";
       const sps = pageSpaceMap.get(`${fileName}::${inst.page_index}`) || [];
+      const common = {
+        annotationBaseId: base,
+        awpClassName: inst.awp_class_name,
+        category,
+        fileId: inst.file_id,
+        pageIndex: inst.page_index,
+        nx: Number(inst.nx) || 0,
+        ny: Number(inst.ny) || 0,
+      };
       if (sps.length === 0) {
-        rows.push({
-          annotationBaseId: base,
-          instanceId: base,
-          spaceName: null,
-          awpClassName: inst.awp_class_name,
-          category,
-          fileId: inst.file_id,
-          pageIndex: inst.page_index,
-        });
+        rows.push({ ...common, instanceId: base, spaceName: null });
       } else {
         for (const sp of sps) {
-          rows.push({
-            annotationBaseId: base,
-            instanceId: `${base}@${sp}`,
-            spaceName: sp,
-            awpClassName: inst.awp_class_name,
-            category,
-            fileId: inst.file_id,
-            pageIndex: inst.page_index,
-          });
+          rows.push({ ...common, instanceId: `${base}@${sp}`, spaceName: sp });
         }
       }
     }
@@ -2550,12 +2572,17 @@ function InstancesReportModal({
       if (r.spaceName) set.add(r.spaceName);
       else hasUnassigned = true;
     }
-    const arr = Array.from(set).sort((a, b) =>
-      a.localeCompare(b, undefined, { numeric: true, sensitivity: "base" }),
-    );
+    const arr = Array.from(set).sort((a, b) => {
+      const ia = spaceIndexMap.get(a);
+      const ib = spaceIndexMap.get(b);
+      if (ia !== undefined && ib !== undefined) return ia - ib;
+      if (ia !== undefined) return -1;
+      if (ib !== undefined) return 1;
+      return a.localeCompare(b, undefined, { numeric: true, sensitivity: "base" });
+    });
     if (hasUnassigned) arr.push("__unassigned__");
     return arr;
-  }, [expanded]);
+  }, [expanded, spaceIndexMap]);
 
   const classCols = useMemo(() => {
     const map = new Map<string, string>();
@@ -2598,6 +2625,222 @@ function InstancesReportModal({
       .filter((r) => (space === "__unassigned__" ? r.spaceName === null : r.spaceName === space))
       .sort((a, b) => a.instanceId.localeCompare(b.instanceId));
 
+  // Compact table density classes (reduce row heights)
+  const compactRow = "h-7";
+  const compactCell = "py-1 text-xs";
+  const compactHead = "h-7 py-1 text-xs";
+
+  const renderOverview = () => {
+    const sourceDrawings = fileGroups.map((g) => g.file.name).join("; ") || "—";
+    const today = new Date();
+    const reportDate = today.toLocaleDateString("en-US", {
+      month: "long",
+      day: "numeric",
+      year: "numeric",
+    });
+    return (
+      <div className="space-y-6">
+        <div>
+          <h2 className="text-xl font-bold mb-2">Report Overview</h2>
+          <p className="text-sm text-muted-foreground mb-4">
+            RiskBlue reviewed the referenced drawing sheets to identify assets and water systems at
+            risk across spaces for the {projectName} project. The report summarizes detected items
+            and provides space-by-space occurrence tables paired with the corresponding drawing
+            views.
+          </p>
+          <Table>
+            <TableBody>
+              {[
+                ["Project", projectName],
+                ["Report Type", "Workbench Drawing Analysis"],
+                ["Prepared By", "RiskBlue"],
+                ["Report Date", reportDate],
+                ["Document Version", "V1"],
+                ["Source Drawings", sourceDrawings],
+              ].map(([label, value]) => (
+                <TableRow key={label} className={compactRow}>
+                  <TableCell
+                    className={`${compactCell} font-semibold bg-muted/40 w-[180px] align-top`}
+                  >
+                    {label}
+                  </TableCell>
+                  <TableCell className={`${compactCell} align-top`}>{value}</TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </div>
+        <div>
+          <h3 className="text-base font-bold mb-2">Detection Totals</h3>
+          {classCols.length === 0 ? (
+            <div className="text-sm text-muted-foreground">No detections yet.</div>
+          ) : (
+            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-2">
+              {classCols.map((c) => {
+                const prefix = optionByName.get(c.name)?.idPrefix || c.name.slice(0, 3).toUpperCase();
+                return (
+                  <div
+                    key={c.name}
+                    className="border rounded overflow-hidden text-center"
+                  >
+                    <div className="bg-sky-900 text-white text-xs font-semibold py-1">
+                      {prefix}
+                    </div>
+                    <div className="py-2 text-2xl font-bold text-sky-700 tabular-nums">
+                      {overviewTotals.get(c.name) || 0}
+                    </div>
+                    <div className="text-[11px] text-muted-foreground pb-2 px-1">{c.name}</div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+          <p className="text-[11px] text-muted-foreground mt-2">
+            Note: Detection totals are derived from the occurrence tables that follow. The
+            per-space pages retain the original table + drawing evidence format.
+          </p>
+        </div>
+      </div>
+    );
+  };
+
+  const renderSummary = () => (
+    <div>
+      <h3 className="text-sm font-semibold mb-2">Summary (Counts per Space by Class)</h3>
+      <div className="overflow-auto">
+        <Table>
+          <TableHeader>
+            <TableRow className={compactRow}>
+              <TableHead className={`${compactHead} sticky left-0 bg-background`}>Space</TableHead>
+              {classCols.map((c) => (
+                <Tooltip key={c.name}>
+                  <TooltipTrigger asChild>
+                    <TableHead
+                      className={`${compactHead} text-center whitespace-nowrap cursor-help`}
+                    >
+                      {optionByName.get(c.name)?.idPrefix || c.name}
+                    </TableHead>
+                  </TooltipTrigger>
+                  <TooltipContent>{c.name}</TooltipContent>
+                </Tooltip>
+              ))}
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {spaceList.map((space) => {
+              const inner = summaryMatrix.get(space);
+              const label = space === "__unassigned__" ? "Unassigned" : space;
+              return (
+                <TableRow key={space} className={compactRow}>
+                  <TableCell
+                    className={`${compactCell} sticky left-0 bg-background font-medium`}
+                  >
+                    {label}
+                  </TableCell>
+                  {classCols.map((c) => (
+                    <TableCell key={c.name} className={`${compactCell} text-center tabular-nums`}>
+                      {inner?.get(c.name) || 0}
+                    </TableCell>
+                  ))}
+                </TableRow>
+              );
+            })}
+          </TableBody>
+        </Table>
+      </div>
+    </div>
+  );
+
+  const renderSpaceDetail = (space: string) => {
+    const rows = instancesForSpace(space);
+    const label = space === "__unassigned__" ? "Unassigned" : space;
+    // Group rows by file+page so we can render each matched drawing with overlays.
+    const pageKeys = Array.from(
+      new Set(rows.map((r) => `${r.fileId}::${r.pageIndex}`)),
+    );
+    return (
+      <div className="space-y-4">
+        <h3 className="text-sm font-semibold">{label}</h3>
+        <Table>
+          <TableHeader>
+            <TableRow className={compactRow}>
+              <TableHead className={compactHead}>Instance ID</TableHead>
+              <TableHead className={compactHead}>Class</TableHead>
+              <TableHead className={compactHead}>Annotation</TableHead>
+              <TableHead className={compactHead}>Source</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {rows.map((r, i) => (
+              <TableRow key={`${r.instanceId}-${i}`} className={compactRow}>
+                <TableCell className={`${compactCell} font-mono`}>{r.instanceId}</TableCell>
+                <TableCell className={compactCell}>{r.awpClassName}</TableCell>
+                <TableCell className={`${compactCell} font-mono text-muted-foreground`}>
+                  {r.annotationBaseId}
+                </TableCell>
+                <TableCell className={`${compactCell} text-muted-foreground`}>
+                  {fileNameById.get(r.fileId)} · Page {r.pageIndex}
+                </TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+        <div className="space-y-4">
+          {pageKeys.map((key) => {
+            const [fileId, pageIdxStr] = key.split("::");
+            const pageIdx = parseInt(pageIdxStr, 10);
+            const fileName = fileNameById.get(fileId) || "";
+            const lookup = sheetByFilePage.get(`${fileName}::${pageIdx}`);
+            if (!lookup || !lookup.sheet.storage_path) {
+              return (
+                <div key={key} className="text-xs text-muted-foreground">
+                  {fileName} · Page {pageIdx} (drawing not available)
+                </div>
+              );
+            }
+            const source: DocumentSourceDescriptor = {
+              kind: "supabase-storage",
+              bucket: bucketForSource(lookup.sheet.file_source_type),
+              path: lookup.sheet.storage_path,
+              mimeType: "application/pdf",
+            };
+            const overlays = rows
+              .filter((r) => r.fileId === fileId && r.pageIndex === pageIdx)
+              .map((r, i) => ({
+                id: `${r.instanceId}-${i}`,
+                bbox: [
+                  Math.max(0, r.nx - 0.006),
+                  Math.max(0, r.ny - 0.006),
+                  0.012,
+                  0.012,
+                ] as [number, number, number, number],
+                coordSpace: "normalized" as const,
+                page: pageIdx,
+                color: "#dc2626",
+                label: r.instanceId,
+                shape: "circle" as const,
+              }));
+            return (
+              <div key={key} className="border rounded-md overflow-hidden">
+                <div className="px-2 py-1 text-[11px] font-medium bg-muted/40 border-b">
+                  {fileName} · Page {pageIdx}
+                </div>
+                <div className="h-[360px]">
+                  <DrawingViewer
+                    source={source}
+                    page={pageIdx}
+                    overlays={overlays}
+                    showToolbar={false}
+                  />
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    );
+  };
+
   const renderRight = () => {
     if (loading) {
       return (
@@ -2606,6 +2849,7 @@ function InstancesReportModal({
         </div>
       );
     }
+    if (selected === "__overview__") return renderOverview();
     if (expanded.length === 0) {
       return (
         <div className="text-sm text-muted-foreground p-4">
@@ -2613,119 +2857,21 @@ function InstancesReportModal({
         </div>
       );
     }
-    if (selected === "__overview__") {
-      return (
-        <div>
-          <h3 className="text-sm font-semibold mb-2">Overview — Total Instances per Class</h3>
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Class</TableHead>
-                <TableHead>Category</TableHead>
-                <TableHead className="text-right">Total</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {classCols.map((c) => (
-                <TableRow key={c.name}>
-                  <TableCell>{c.name}</TableCell>
-                  <TableCell className="text-muted-foreground text-xs">{c.category}</TableCell>
-                  <TableCell className="text-right tabular-nums">
-                    {overviewTotals.get(c.name) || 0}
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </div>
-      );
-    }
-    if (selected === "__summary__") {
-      return (
-        <div>
-          <h3 className="text-sm font-semibold mb-2">Summary — Counts per Space × Class</h3>
-          <div className="overflow-auto">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead className="sticky left-0 bg-background">Space</TableHead>
-                  {classCols.map((c) => (
-                    <TableHead key={c.name} className="text-center whitespace-nowrap">
-                      {optionByName.get(c.name)?.idPrefix || c.name}
-                    </TableHead>
-                  ))}
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {spaceList.map((space) => {
-                  const inner = summaryMatrix.get(space);
-                  const label = space === "__unassigned__" ? "Unassigned" : space;
-                  return (
-                    <TableRow key={space}>
-                      <TableCell className="sticky left-0 bg-background font-medium">
-                        {label}
-                      </TableCell>
-                      {classCols.map((c) => (
-                        <TableCell key={c.name} className="text-center tabular-nums">
-                          {inner?.get(c.name) || 0}
-                        </TableCell>
-                      ))}
-                    </TableRow>
-                  );
-                })}
-              </TableBody>
-            </Table>
-          </div>
-        </div>
-      );
-    }
-    const rows = instancesForSpace(selected);
-    const label = selected === "__unassigned__" ? "Unassigned" : selected;
-    return (
-      <div>
-        <h3 className="text-sm font-semibold mb-2">{label}</h3>
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>Instance ID</TableHead>
-              <TableHead>Class</TableHead>
-              <TableHead>Annotation</TableHead>
-              <TableHead>Source</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {rows.map((r, i) => (
-              <TableRow key={`${r.instanceId}-${i}`}>
-                <TableCell className="font-mono text-xs">{r.instanceId}</TableCell>
-                <TableCell className="text-xs">{r.awpClassName}</TableCell>
-                <TableCell className="font-mono text-xs text-muted-foreground">
-                  {r.annotationBaseId}
-                </TableCell>
-                <TableCell className="text-xs text-muted-foreground">
-                  {fileNameById.get(r.fileId)} · Page {r.pageIndex}
-                </TableCell>
-              </TableRow>
-            ))}
-          </TableBody>
-        </Table>
-      </div>
-    );
+    if (selected === "__summary__") return renderSummary();
+    return renderSpaceDetail(selected);
   };
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-5xl">
+      <DialogContent className="max-w-6xl">
         <DialogHeader>
           <DialogTitle>Instances Report</DialogTitle>
           <DialogDescription>
             Annotations expanded into per-space instance IDs based on the Space Hierarchy.
           </DialogDescription>
         </DialogHeader>
-        <div className="grid grid-cols-[220px_1fr] gap-4 max-h-[65vh]">
+        <div className="grid grid-cols-[220px_1fr] gap-4 max-h-[70vh]">
           <div className="border rounded-md overflow-auto">
-            <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground px-3 py-2 border-b">
-              Spaces
-            </div>
             <button
               type="button"
               onClick={() => setSelected("__overview__")}
@@ -2744,6 +2890,9 @@ function InstancesReportModal({
             >
               Summary
             </button>
+            <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground px-3 py-2 border-b bg-muted/20">
+              Spaces
+            </div>
             {spaceList.map((space) => {
               const label = space === "__unassigned__" ? "Unassigned" : space;
               return (
@@ -2760,12 +2909,14 @@ function InstancesReportModal({
               );
             })}
           </div>
-          <div className="overflow-auto">{renderRight()}</div>
+          <div className="overflow-auto pr-1">{renderRight()}</div>
         </div>
         <DialogFooter>
           <Button onClick={() => onOpenChange(false)}>Close</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
+  );
+}
   );
 }
