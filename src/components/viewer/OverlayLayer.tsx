@@ -14,7 +14,7 @@ interface OverlayLayerProps {
   onOverlayClick?: (id: string) => void;
 }
 
-const MIN_CIRCLE_DIAMETER_CSS = 34;
+const MIN_CIRCLE_DIAMETER_CSS = 40;
 
 // On-screen target sizes; divided by viewScale so the label stays constant
 // on-screen as the user zooms.
@@ -216,7 +216,10 @@ export const OverlayLayer = ({
         o.rect.nw * pageSize.width,
         o.rect.nh * pageSize.height,
       );
-      const diameter = Math.max(MIN_CIRCLE_DIAMETER_CSS, bboxSidePx * 1.5);
+      // Min diameter is screen-constant (divide by viewScale) so markers stay
+      // readable at any zoom; the bbox-derived size scales naturally with content.
+      const diameter = Math.max(MIN_CIRCLE_DIAMETER_CSS / s, bboxSidePx * 1.5);
+
       return {
         id: o.id,
         cx,
@@ -227,7 +230,7 @@ export const OverlayLayer = ({
         hovered: hoveredId === o.id,
       };
     });
-  }, [overlays, pageSize.width, pageSize.height, defaultColor, hoveredId]);
+  }, [overlays, pageSize.width, pageSize.height, defaultColor, hoveredId, s]);
 
   // Size metrics in unscaled page CSS px. Dividing by viewScale keeps them
   // constant on-screen at any zoom.
@@ -296,13 +299,15 @@ export const OverlayLayer = ({
           height: c.r * 2,
           borderRadius: "9999px",
           borderColor: c.color,
-          borderWidth: (c.hovered ? 2 : 1.5) / s,
+          borderWidth: (c.hovered ? 3.5 : 2.5) / s,
           borderStyle: "solid",
-          backgroundColor: withAlpha(c.color, c.hovered ? 0.28 : 0.22),
+          backgroundColor: withAlpha(c.color, c.hovered ? 0.45 : 0.35),
+          boxShadow: `0 0 0 ${1 / s}px rgba(255,255,255,0.85)`,
           boxSizing: "border-box",
           pointerEvents: clickable ? "auto" : "none",
           cursor: clickable ? "pointer" : undefined,
         };
+
         const stop = (e: { stopPropagation: () => void }) => e.stopPropagation();
         return (
           <div
@@ -336,13 +341,15 @@ export const OverlayLayer = ({
             paddingLeft: padX,
             paddingRight: padX,
             borderRadius: 3 / s,
-            backgroundColor: withAlpha(p.color, 0.9),
+            backgroundColor: withAlpha(p.color, 0.95),
             color: readableTextOn(p.color),
+            boxShadow: `0 0 0 ${1 / s}px rgba(255,255,255,0.9)`,
           }}
         >
           {p.text}
         </div>
       ))}
+
     </div>
   );
 };
