@@ -1508,12 +1508,22 @@ async function runPipeline(params: PipelineParams) {
       );
 
 
-      // Clear stale triage jobs for this request before insert
-      await admin
-        .from("analysis_pipeline_jobs")
-        .delete()
-        .eq("analysis_request_id", analysisRequestId)
-        .eq("job_kind", "triage");
+      // Clear stale triage jobs for this request before insert (scoped to
+      // current sheet selection when this is a per-cell run).
+      {
+        const scopedClassesInner =
+          Array.isArray(enabledAwpClasses) && enabledAwpClasses.length > 0
+            ? enabledAwpClasses
+            : null;
+        let staleDel = admin
+          .from("analysis_pipeline_jobs")
+          .delete()
+          .eq("analysis_request_id", analysisRequestId)
+          .eq("job_kind", "triage");
+        if (sheetScopeSet) staleDel = staleDel.in("sheet_id", scopedSheetIds!);
+        if (scopedClassesInner) staleDel = staleDel.in("awp_class_name", scopedClassesInner);
+        await staleDel;
+      }
 
       // NOTE: We intentionally do NOT pre-insert placeholder triage rows.
       // The triage worker is the SOLE writer of analysis_triage_results — it
