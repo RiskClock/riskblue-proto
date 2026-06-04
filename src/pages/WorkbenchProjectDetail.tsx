@@ -2080,7 +2080,7 @@ export default function WorkbenchProjectDetail() {
         <SpaceHierarchyModal
           open={spaceModalOpen}
           onOpenChange={setSpaceModalOpen}
-          payload={analysisRequest?.space_hierarchy_json ?? null}
+          payload={spaceHierarchyHasResult ? spaceHierarchyPayload ?? null : null}
         />
       </div>
     </TooltipProvider>
