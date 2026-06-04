@@ -1240,7 +1240,35 @@ export default function WorkbenchProjectDetail() {
                 </Button>
               )}
 
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={buildSpaceHierarchy}
+                disabled={!requestId || !allFilesProcessed || buildingSpace || phaseRunning}
+                title={
+                  !allFilesProcessed
+                    ? "All files must finish Extract Context before building the space hierarchy."
+                    : "Send extracted text to OpenAI to compile physical floor levels."
+                }
+              >
+                {buildingSpace ? (
+                  <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />
+                ) : null}
+                Build Space Hierarchy
+              </Button>
+              {analysisRequest?.space_hierarchy_json && (
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  onClick={() => setSpaceModalOpen(true)}
+                  title="View last space hierarchy result"
+                >
+                  View Hierarchy
+                </Button>
+              )}
+
               <span className="text-muted-foreground select-none">|</span>
+
 
               <Button
                 size="sm"
