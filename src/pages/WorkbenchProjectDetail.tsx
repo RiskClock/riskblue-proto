@@ -141,6 +141,8 @@ export default function WorkbenchProjectDetail() {
   // (but not across browser refresh).
   const [sidebarExpandedClasses, setSidebarExpandedClasses] = useState<Set<string>>(new Set());
   const [exporting, setExporting] = useState(false);
+  const [spaceModalOpen, setSpaceModalOpen] = useState(false);
+  const [buildingSpace, setBuildingSpace] = useState(false);
 
   const toggleExpand = (fileId: string) => {
     setExpandedFiles((prev) => {
