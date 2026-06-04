@@ -239,6 +239,7 @@ Deno.serve(async (req) => {
       },
       body: JSON.stringify({
         model: model || "gpt-5",
+        background: true,
         input: [
           {
             type: "message",
@@ -264,53 +265,26 @@ Deno.serve(async (req) => {
     }
 
     const raw = await openaiRes.json();
-    let responseText = "";
-    if (raw.output) {
-      for (const item of raw.output) {
-        if (item.type === "message" && item.content) {
-          for (const c of item.content) {
-            if (c.type === "output_text") responseText += c.text;
-          }
-        }
-      }
-    }
-    if (!responseText && typeof raw.output_text === "string") responseText = raw.output_text;
-
-    // Try to parse JSON out of the response (it may be wrapped in ```json fences)
-    let parsed: unknown = null;
-    let parseError: string | null = null;
-    const cleaned = responseText
-      .trim()
-      .replace(/^```(?:json)?\s*/i, "")
-      .replace(/\s*```$/, "");
-    try {
-      parsed = JSON.parse(cleaned);
-    } catch (e) {
-      parseError = e instanceof Error ? e.message : String(e);
-    }
-
-    const result = {
-      generated_at: new Date().toISOString(),
+    const meta = {
+      openai_response_id: raw.id,
+      started_at: new Date().toISOString(),
       model: model || "gpt-5",
       input_chars: extractedText.length,
       input_truncated: truncated,
-      parsed,
-      parse_error: parseError,
-      raw_text: responseText,
-      usage: raw.usage ?? null,
+      openai_status: raw.status ?? "queued",
     };
 
     await admin
       .from("analysis_requests")
       .update({
-        space_hierarchy_json: result,
-        space_hierarchy_status: "complete",
+        space_hierarchy_json: meta,
+        space_hierarchy_status: raw.status === "completed" ? "complete" : "running",
         space_hierarchy_error: null,
         space_hierarchy_updated_at: new Date().toISOString(),
       } as any)
       .eq("id", analysisRequestId);
 
-    return json({ status: "ok", result });
+    return json({ status: raw.status ?? "running", response_id: raw.id, result: meta });
   } catch (e) {
     console.error("[build-space-hierarchy] Handler error:", e);
     return json({ error: e instanceof Error ? e.message : "Unknown error" }, 500);
