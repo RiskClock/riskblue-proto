@@ -41,6 +41,7 @@ interface DrawingInstanceRow {
   page_index: number;
   file_id: string;
   created_at: string;
+  instance_number: number | null;
 }
 
 interface FileViewerModalProps {
