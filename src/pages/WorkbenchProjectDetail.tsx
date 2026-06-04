@@ -873,6 +873,93 @@ export default function WorkbenchProjectDetail() {
     }
   };
 
+  // ---- Per-cell (single sheet × class) actions --------------------------
+  const runCell = async (
+    sheetId: string,
+    awpClassName: string,
+    phase: "triage" | "analyze",
+  ) => {
+    if (!requestId) return;
+    try {
+      const { error } = await supabase.functions.invoke("run-analysis-pipeline", {
+        body: {
+          analysisRequestId: requestId,
+          phaseOverride: phase,
+          enabledAwpClasses: [awpClassName],
+          scopedSheetIds: [sheetId],
+        },
+      });
+      if (error) throw error;
+      toast({ title: phase === "triage" ? "Triage started for cell" : "Analyze started for cell" });
+      queryClient.invalidateQueries({ queryKey: ["workbench-triage", requestId] });
+      queryClient.invalidateQueries({ queryKey: ["workbench-analyze", requestId] });
+      queryClient.invalidateQueries({ queryKey: ["workbench-jobs", requestId] });
+      queryClient.invalidateQueries({
+        queryKey: ["workbench-analysis-request", projectId],
+      });
+    } catch (error: any) {
+      toast({
+        variant: "destructive",
+        title: `Could not start ${phase}`,
+        description: getUserFriendlyError(error),
+      });
+    }
+  };
+
+  const clearCell = async (sheetId: string, awpClassName: string) => {
+    if (!requestId) return;
+    try {
+      await Promise.all([
+        supabase
+          .from("analysis_triage_results")
+          .delete()
+          .eq("analysis_request_id", requestId)
+          .eq("sheet_id", sheetId)
+          .eq("awp_class_name", awpClassName),
+        supabase
+          .from("analysis_results")
+          .delete()
+          .eq("analysis_request_id", requestId)
+          .eq("sheet_id", sheetId)
+          .eq("awp_class_name", awpClassName),
+      ]);
+      queryClient.invalidateQueries({ queryKey: ["workbench-triage", requestId] });
+      queryClient.invalidateQueries({ queryKey: ["workbench-analyze", requestId] });
+      toast({ title: "Cell cleared" });
+    } catch (error: any) {
+      toast({
+        variant: "destructive",
+        title: "Could not clear cell",
+        description: getUserFriendlyError(error),
+      });
+    }
+  };
+
+  // ---- Build Space Hierarchy ---------------------------------------------
+  const buildSpaceHierarchy = async () => {
+    if (!requestId) return;
+    setBuildingSpace(true);
+    try {
+      const { error } = await supabase.functions.invoke("build-space-hierarchy", {
+        body: { analysisRequestId: requestId },
+      });
+      if (error) throw error;
+      toast({ title: "Space hierarchy built" });
+      queryClient.invalidateQueries({
+        queryKey: ["workbench-analysis-request", projectId],
+      });
+      setSpaceModalOpen(true);
+    } catch (error: any) {
+      toast({
+        variant: "destructive",
+        title: "Could not build space hierarchy",
+        description: getUserFriendlyError(error),
+      });
+    } finally {
+      setBuildingSpace(false);
+    }
+  };
+
   // --- Export -----------------------------------------------------------------
   const handleExportResults = async () => {
     if (!requestId || exporting) return;
