@@ -113,7 +113,7 @@ function bucketForSource(sourceType: string) {
 
 export default function WorkbenchProjectDetail() {
   const { projectId } = useParams<{ projectId: string }>();
-  const { user } = useAuth();
+  const { user, session } = useAuth();
   const navigate = useNavigate();
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -940,8 +940,11 @@ export default function WorkbenchProjectDetail() {
     if (!requestId) return;
     setBuildingSpace(true);
     try {
+      const token = session?.access_token;
+      if (!token) throw new Error("Your session expired. Please sign in again.");
       const { error } = await supabase.functions.invoke("build-space-hierarchy", {
         body: { analysisRequestId: requestId },
+        headers: { Authorization: `Bearer ${token}` },
       });
       if (error) throw error;
       toast({ title: "Space hierarchy built" });
