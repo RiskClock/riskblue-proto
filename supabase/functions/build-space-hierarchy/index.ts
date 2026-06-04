@@ -6,34 +6,46 @@ const corsHeaders = {
   "Access-Control-Allow-Methods": "POST, OPTIONS",
 };
 
-const BASE_PROMPT = `You are an expert construction document analyzer. Your task is to process extracted text from architectural/mechanical PDF drawing packages and compile a master list of all distinct physical floor levels present in the project. 
+const BASE_PROMPT = `You are an expert construction data-engine and structural normalizer. Your task is to process extracted drawing text and output a **strictly flat, contiguous, unique list of distinct physical spaces or components** (such as high-rise tower levels, townhouse sections, or specific podium areas) present in the project.
 
-For each physical floor level identified, you must map it to the corresponding drawing numbers and sheet names found within the text.
+You must resolve naming inconsistencies, explode overlapping spatial ranges, and map target files and page numbers directly to the correct unique space entries.
 
-### CRITICAL RULES FOR EXTRACTION:
-1. **Maintain Floor-Level Hierarchy Only:** Do not count individual suites, units, townhouses, or localized room blow-ups as separate physical spaces. If a sheet zooms into a specific unit (e.g., "Suite Details", "Unit Plan Type A"), it must be grouped under the main floor it belongs to, or classified under a single catch-all "Suite/Typical Details" structural category.
-2. **Standardize Space Names:** Extract every distinct physical floor level or distinct multi-floor plan group (e.g., P2, P1, Ground Floor, Mezzanine, 2nd Floor, 4th-5th Floor, 13th-57th Floor, MPH, Roof).
-3. **Ignore Risers/Schematics for Floor Isolation:** Do not mistake schematic risers or schedules (which list all floors for engineering purposes) as individual floor plan entries unless a sheet specifically serves as the primary floor plan documentation for that level.
-4. **Clean Roll-ups:** If a drawing name contains a range (e.g., "13th to 57th Floor"), keep it as a unified entry for that range rather than guessing individual floors, unless separate individual floor plans are explicitly listed elsewhere in the text.
+### CRITICAL LOGICAL RULES FOR DATA NORMALIZATION:
+1. **Explode and Unify Ranges:** If a page text indicates it covers a range of spaces (e.g., "13th to 57th Floor" or "Townhouses 1 to 5"), expand this logically into individual, separate space entries in your data array (e.g., individual records for Level 13, Level 14... or Townhouse 1, Townhouse 2...).
+2. **Handle Overlaps with Multi-Source Mapping:** If a specific physical space (e.g., Level 31) is covered by a typical or generic layout page, but also has a dedicated layout or modifier plan on another page (even within the same file), map BOTH pages to that singular space record's "matched_sources" array.
+3. **Explode Multi-Space Groupings:** If a title groups distinct zones together (e.g., "Level 31 and 58" or "Townhouse 1 & 2"), do not keep them combined. Map that page to each separate individual entry.
+4. **Strict "Component-First" Nomenclature Standardization:** Force a completely unified naming convention across the entire project dataset using the word "Level" for primary tower components, or explicit labels for specialized low-rise/townhouse units:
+   - Standard tower floors MUST be formatted as: \`Level [X]\` (e.g., "Level 1", "Level 2", "Level 31"). Do NOT use "th Floor" or "nd Floor".
+   - Below-grade/special floors MUST be standardized to structural terms: "Level P2 Sub-Slab", "Level P2", "Level P1", "Ground Level", "Mezzanine Level", "Level 60 (MPH)", "Level MPH-2", and "Roof Level".
+   - Non-standard residential components or horizontal sectors must use descriptive prefixes: \`[Component] [Identifier] - [Sub-Level]\` (e.g., "Townhouse 1 - Floor 1", "Townhouse 1 - Floor 2", "Podium Zone A - Ground Level").
+5. **Enforce Sequence Indices:** Every space object must include a clear, sequential float or integer \`space_index\` solely for database sorting purposes. Lower/underground spaces must have lower indices than grade or upper tower storeys (e.g., Level P2 = -2, Ground Level = 0, Level 1 = 1, Level 31 = 31, Townhouse 1 Floor 1 = 1.1, Townhouse 1 Floor 2 = 1.2, etc.).
 
 ### Expected JSON Format:
 {
-  "project_name": "Name of the project if found",
+  "project_name": "55-75 BROWNLOW PHASE ONE",
   "physical_spaces": [
     {
-      "space_name": "Standardized Name of the Floor Level (e.g., 'Ground Floor', '6th Floor', '13th to 57th Floor')",
-      "matched_drawings": [
+      "standardized_space_name": "Level 31",
+      "space_index": 31,
+      "matched_sources": [
         {
-          "drawing_number": "e.g., M401",
-          "sheet_name": "e.g., GROUND FLOOR - HVAC"
+          "file_name": "mechanical_package.pdf",
+          "page_number": 14,
+          "context_extracted": "13TH TO 57TH FLOOR - MECHANICAL PLAN (Drawing M413)"
+        },
+        {
+          "file_name": "mechanical_package.pdf",
+          "page_number": 18,
+          "context_extracted": "LEVEL 31 AND 58 - MECHANICAL PLAN (Drawing M417)"
         }
       ]
     }
   ],
   "non_floor_details_and_schedules": [
     {
-      "drawing_number": "e.g., M005",
-      "sheet_name": "e.g., MECHANICAL - SUITE DETAILS"
+      "file_name": "mechanical_package.pdf",
+      "page_number": 2,
+      "context_extracted": "LEGENDS - MECHANICAL (Drawing M001)"
     }
   ]
 }
