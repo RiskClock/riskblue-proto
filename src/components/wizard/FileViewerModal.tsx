@@ -104,6 +104,7 @@ export const FileViewerModal = ({
   persistKey,
   expandedClasses,
   onExpandedClassesChange,
+  preselectClass,
 }: FileViewerModalProps) => {
   const { toast } = useToast();
   const [hoveredCode, setHoveredCode] = useState<string | null>(null);
