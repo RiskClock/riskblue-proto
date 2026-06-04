@@ -1482,14 +1482,16 @@ export default function WorkbenchProjectDetail() {
                                     <TableCell
                                       key={name}
                                       title={title}
-                                      className="text-center py-1 text-xs relative p-0"
-                                      style={
-                                        hasScore && !failed
-                                          ? { backgroundColor: `rgba(16, 185, 129, ${opacity * 0.55})` }
-                                          : undefined
-                                      }
+                                      className="text-center py-1 text-xs relative p-0 cursor-pointer hover:bg-muted/30"
+                                      onClick={() => {
+                                        // Bubbles up to row click which opens
+                                        // the viewer; we just record which
+                                        // class column was clicked so the
+                                        // modal preselects the right radio.
+                                        setPreselectClass(name);
+                                      }}
                                     >
-                                      <div className="flex items-center justify-center w-full h-7 cursor-default">
+                                      <div className="flex items-center justify-center w-full h-7">
                                         {inflight && !hasScore && !failed ? (
                                           <Loader2 className="h-3 w-3 animate-spin text-muted-foreground" />
                                         ) : failed ? (
