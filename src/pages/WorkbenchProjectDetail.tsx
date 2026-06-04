@@ -2691,9 +2691,14 @@ function InstancesReportModal({
                     key={c.name}
                     className="border rounded overflow-hidden text-center"
                   >
-                    <div className="bg-sky-900 text-white text-xs font-semibold py-1">
-                      {prefix}
-                    </div>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <div className="bg-sky-900 text-white text-xs font-semibold py-1 cursor-help">
+                          {prefix}
+                        </div>
+                      </TooltipTrigger>
+                      <TooltipContent>{c.name}</TooltipContent>
+                    </Tooltip>
                     <div className="py-2 text-2xl font-bold text-sky-700 tabular-nums">
                       {overviewTotals.get(c.name) || 0}
                     </div>
