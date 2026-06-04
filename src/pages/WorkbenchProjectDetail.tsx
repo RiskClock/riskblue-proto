@@ -2841,7 +2841,7 @@ function InstancesReportModal({
                 <div className="px-2 py-1 text-[11px] font-medium bg-muted/40 border-b">
                   {fileName} · Page {pageIdx}
                 </div>
-                <div className="h-[360px]">
+                <div className="w-full aspect-[3/2] bg-muted/10">
                   <DrawingViewer
                     source={source}
                     page={pageIdx}
