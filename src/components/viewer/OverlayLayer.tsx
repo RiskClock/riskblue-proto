@@ -1,4 +1,4 @@
-import { CSSProperties, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { CSSProperties, useMemo } from "react";
 import type { NormalizedOverlay } from "./viewerGeometry";
 
 interface OverlayLayerProps {
