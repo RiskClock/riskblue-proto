@@ -2164,6 +2164,8 @@ export default function WorkbenchProjectDetail() {
           fileGroups={fileGroups}
           optionByName={optionByName}
           pageSpaceMap={pageSpaceMap}
+          spaceHierarchyPayload={spaceHierarchyPayload}
+          projectName={project?.name || "Project"}
         />
       </div>
     </TooltipProvider>
