@@ -273,18 +273,19 @@ Deno.serve(async (req) => {
       input_truncated: truncated,
       openai_status: raw.status ?? "queued",
     };
+    const startResult = raw.status === "completed" ? buildResult(raw, meta) : meta;
 
     await admin
       .from("analysis_requests")
       .update({
-        space_hierarchy_json: meta,
+        space_hierarchy_json: startResult,
         space_hierarchy_status: raw.status === "completed" ? "complete" : "running",
         space_hierarchy_error: null,
         space_hierarchy_updated_at: new Date().toISOString(),
       } as any)
       .eq("id", analysisRequestId);
 
-    return json({ status: raw.status ?? "running", response_id: raw.id, result: meta });
+    return json({ status: raw.status ?? "running", response_id: raw.id, result: startResult });
   } catch (e) {
     console.error("[build-space-hierarchy] Handler error:", e);
     return json({ error: e instanceof Error ? e.message : "Unknown error" }, 500);
