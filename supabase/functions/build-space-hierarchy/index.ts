@@ -6,39 +6,40 @@ const corsHeaders = {
   "Access-Control-Allow-Methods": "POST, OPTIONS",
 };
 
-const BASE_PROMPT = `You are an expert construction data-engine and structural normalizer. Your task is to process extracted drawing text and output a **strictly flat, contiguous, unique list of distinct physical spaces or components** (such as high-rise tower levels, townhouse sections, or specific podium areas) present in the project.
+const BASE_PROMPT = `You are an expert construction data-engine and structural normalizer. Your task is to process extracted drawing text and output a **strictly flat, contiguous, unique list of distinct physical spaces or components** (such as high-rise tower levels or townhouse sections) present in the project.
 
-You must resolve naming inconsistencies, explode overlapping spatial ranges, and map target files and page numbers directly to the correct unique space entries.
+You must resolve naming inconsistencies, explode overlapping ranges, deduce unlisted intermediate floors, and map target files and page numbers directly to the correct unique space entries.
 
 ### CRITICAL LOGICAL RULES FOR DATA NORMALIZATION:
-1. **Explode and Unify Ranges:** If a page text indicates it covers a range of spaces (e.g., "13th to 57th Floor" or "Townhouses 1 to 5"), expand this logically into individual, separate space entries in your data array (e.g., individual records for Level 13, Level 14... or Townhouse 1, Townhouse 2...).
-2. **Handle Overlaps with Multi-Source Mapping:** If a specific physical space (e.g., Level 31) is covered by a typical or generic layout page, but also has a dedicated layout or modifier plan on another page (even within the same file), map BOTH pages to that singular space record's "matched_sources" array.
-3. **Explode Multi-Space Groupings:** If a title groups distinct zones together (e.g., "Level 31 and 58" or "Townhouse 1 & 2"), do not keep them combined. Map that page to each separate individual entry.
-4. **Strict "Component-First" Nomenclature Standardization:** Force a completely unified naming convention across the entire project dataset using the word "Level" for primary tower components, or explicit labels for specialized low-rise/townhouse units:
-   - Standard tower floors MUST be formatted as: \`Level [X]\` (e.g., "Level 1", "Level 2", "Level 31"). Do NOT use "th Floor" or "nd Floor".
+1. **Explode and Unify Ranges:** If a page text indicates it covers a range of spaces (e.g., "13TH TO 57TH FLOOR"), expand this logically into individual, separate space entries in your data array (e.g., separate entries for Level 13, Level 14... through Level 57).
+2. **Deduce and Interpolate Missing Levels (Contiguity Rule):** The final list of sequential spaces must be contiguous and unbroken. If the text jumps from "Level 3" directly to "6th Floor", or if a range like "13th to 57th Floor" logically implies the existence of intermediate storeys, you MUST explicitly generate objects for those missing levels (e.g., Level 4, Level 5, etc.). If a deduced floor has no specific drawing matching it in the text, still create the space object, but return its "matched_sources" field as an empty array \`[]\`.
+3. **Handle Overlaps with Multi-Source Mapping:** If a specific physical space (e.g., Level 31) is covered by a typical range on one page, but also has a dedicated modifier plan on another page (even within the same file), map BOTH pages to that singular space record's "matched_sources" array.
+4. **Explode Multi-Space Groupings:** If a title groups distinct zones together (e.g., "Level 31 and 58"), do not keep them combined. Map that page to each separate individual entry.
+5. **Strict Nomenclature Standardization:** Force a completely unified naming convention across the entire project dataset using the word "Level":
+   - Standard tower floors MUST be formatted as: \`Level [X]\` (e.g., "Level 1", "Level 2", "Level 14"). Do NOT use "th Floor" or "nd Floor".
    - Below-grade/special floors MUST be standardized to structural terms: "Level P2 Sub-Slab", "Level P2", "Level P1", "Ground Level", "Mezzanine Level", "Level 60 (MPH)", "Level MPH-2", and "Roof Level".
-   - Non-standard residential components or horizontal sectors must use descriptive prefixes: \`[Component] [Identifier] - [Sub-Level]\` (e.g., "Townhouse 1 - Floor 1", "Townhouse 1 - Floor 2", "Podium Zone A - Ground Level").
-5. **Enforce Sequence Indices:** Every space object must include a clear, sequential float or integer \`space_index\` solely for database sorting purposes. Lower/underground spaces must have lower indices than grade or upper tower storeys (e.g., Level P2 = -2, Ground Level = 0, Level 1 = 1, Level 31 = 31, Townhouse 1 Floor 1 = 1.1, Townhouse 1 Floor 2 = 1.2, etc.).
+   - Low-rise residential components must use explicit descriptive prefixes: \`[Component] [Identifier] - [Sub-Level]\` (e.g., "Townhouse 1 - Floor 1").
+6. **Enforce Sequence Indices:** Every space object must include a clear, sequential float or integer \`space_index\` solely for database sorting purposes (e.g., Level P2 = -2, Ground Level = 0, Level 1 = 1, Level 14 = 14, etc.).
 
 ### Expected JSON Format:
 {
   "project_name": "55-75 BROWNLOW PHASE ONE",
   "physical_spaces": [
     {
-      "standardized_space_name": "Level 31",
-      "space_index": 31,
+      "standardized_space_name": "Level 13",
+      "space_index": 13,
       "matched_sources": [
         {
           "file_name": "mechanical_package.pdf",
           "page_number": 14,
           "context_extracted": "13TH TO 57TH FLOOR - MECHANICAL PLAN (Drawing M413)"
-        },
-        {
-          "file_name": "mechanical_package.pdf",
-          "page_number": 18,
-          "context_extracted": "LEVEL 31 AND 58 - MECHANICAL PLAN (Drawing M417)"
         }
       ]
+    },
+    {
+      "standardized_space_name": "Level 14",
+      "space_index": 14,
+      "matched_sources": []
     }
   ],
   "non_floor_details_and_schedules": [
