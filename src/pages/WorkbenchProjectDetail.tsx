@@ -2459,6 +2459,7 @@ function InstancesReportModal({
     () => new Set(enabledClassNames || []),
     [enabledClassNames],
   );
+  const { toast } = useToast();
   const [loading, setLoading] = useState(false);
   const [instances, setInstances] = useState<any[]>([]);
   const [selected, setSelected] = useState<string>("__overview__");
