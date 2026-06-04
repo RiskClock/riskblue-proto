@@ -1767,7 +1767,7 @@ export default function WorkbenchProjectDetail() {
                                           className="shrink-0 h-4 px-1.5 text-[10px] leading-none bg-sky-500/10 text-sky-700 border-sky-500/30"
                                           title={sps.join(", ")}
                                         >
-                                          {sps.length === 1 ? sps[0] : `${sps[0]} +${sps.length - 1}`}
+                                          {formatSpaceBadge(sps)}
                                         </Badge>
                                       );
                                     })()}
