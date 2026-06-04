@@ -2904,31 +2904,110 @@ function InstancesReportModal({
           </div>
           <div className="overflow-auto pr-1">{renderRight()}</div>
         </div>
-        <DialogFooter className="gap-2">
+        <DialogFooter className="flex flex-row sm:justify-between gap-2">
+          <div className="flex gap-2">
+            <Button
+              variant="outline"
+              onClick={() =>
+                toast({
+                  title: "Export queued",
+                  description: "You'll receive an email with the results.",
+                })
+              }
+            >
+              Export Report
+            </Button>
+            <Button
+              onClick={() =>
+                toast({
+                  title: "Sent to WMG Project",
+                  description: "Results have been sent.",
+                })
+              }
+            >
+              Send to WMG Project
+            </Button>
+          </div>
           <Button variant="outline" onClick={() => onOpenChange(false)}>Close</Button>
-          <Button
-            variant="outline"
-            onClick={() =>
-              toast({
-                title: "Export queued",
-                description: "You'll receive an email with the results.",
-              })
-            }
-          >
-            Export
-          </Button>
-          <Button
-            onClick={() =>
-              toast({
-                title: "Sent to WMG Project",
-                description: "Results have been sent.",
-              })
-            }
-          >
-            Send to WMG Project
-          </Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// DrawingPageBlock — renders a single drawing page in the Instances Report
+// with a docked header (file name + Download button) and a non-interactive
+// DrawingViewer. The Download button rasterizes the page (including markers)
+// to PNG via html2canvas.
+// ---------------------------------------------------------------------------
+function DrawingPageBlock({
+  fileName,
+  pageIdx,
+  source,
+  overlays,
+}: {
+  fileName: string;
+  pageIdx: number;
+  source: DocumentSourceDescriptor;
+  overlays: any[];
+}) {
+  const surfaceRef = useRef<HTMLDivElement>(null);
+  const { toast } = useToast();
+  const [downloading, setDownloading] = useState(false);
+
+  const handleDownload = async () => {
+    const el = surfaceRef.current;
+    if (!el) return;
+    setDownloading(true);
+    try {
+      const html2canvas = (await import("html2canvas")).default;
+      const canvas = await html2canvas(el, {
+        backgroundColor: "#ffffff",
+        scale: 2,
+        useCORS: true,
+        logging: false,
+      });
+      const link = document.createElement("a");
+      const safeName = `${fileName.replace(/\.[^.]+$/, "")}_page${pageIdx}.png`;
+      link.download = safeName;
+      link.href = canvas.toDataURL("image/png");
+      link.click();
+    } catch (err) {
+      toast({
+        title: "Download failed",
+        description: (err as any)?.message ?? "Could not capture drawing.",
+        variant: "destructive",
+      });
+    } finally {
+      setDownloading(false);
+    }
+  };
+
+  return (
+    <div className="border rounded-md overflow-hidden">
+      <div className="flex items-center justify-between px-3 py-2 bg-muted/40 border-b">
+        <div className="text-sm font-semibold truncate">
+          {fileName} · Page {pageIdx}
+        </div>
+        <Button size="sm" variant="outline" onClick={handleDownload} disabled={downloading}>
+          {downloading ? (
+            <Loader2 className="h-3.5 w-3.5 animate-spin mr-1.5" />
+          ) : (
+            <Download className="h-3.5 w-3.5 mr-1.5" />
+          )}
+          Download
+        </Button>
+      </div>
+      <div ref={surfaceRef} className="w-full aspect-[3/2] bg-white">
+        <DrawingViewer
+          source={source}
+          page={1}
+          overlays={overlays}
+          showToolbar={false}
+          interactive={false}
+        />
+      </div>
+    </div>
   );
 }
