@@ -1338,22 +1338,16 @@ export default function WorkbenchProjectDetail() {
                 ) : null}
                 {spaceHierarchyRunning ? "Building Space Hierarchy" : "Build Space Hierarchy"}
               </Button>
-              {spaceHierarchyHasResult && (
-                <Button
-                  size="sm"
-                  variant="ghost"
-                  onClick={() => setSpaceModalOpen(true)}
-                  title="View last space hierarchy result"
-                >
-                  View Hierarchy
-                </Button>
-              )}
               <Button
                 size="sm"
                 variant="outline"
                 onClick={() => setInstancesReportOpen(true)}
-                disabled={!requestId}
-                title="Generate per-space instances report"
+                disabled={!requestId || !spaceHierarchyHasResult}
+                title={
+                  !spaceHierarchyHasResult
+                    ? "Build the space hierarchy first to generate the instances report."
+                    : "Generate per-space instances report"
+                }
               >
                 Generate Instances Report
               </Button>
