@@ -1452,11 +1452,14 @@ async function runPipeline(params: PipelineParams) {
       // Build triage units: one per (sheet|file, class).
       // In sheet-mode, file_id is the parent_file_id (kept for legacy joins) and sheet_id identifies the unit.
       type TriageUnit = { fileId: string; sheetId: string | null; name: string };
-      const triageUnits: TriageUnit[] = useSheets
+      let triageUnits: TriageUnit[] = useSheets
         ? sheets.map((s: any) => ({ fileId: s.parent_file_id, sheetId: s.id, name: s.name }))
         : [...files]
             .sort((a: any, b: any) => (a.name || "").localeCompare(b.name || ""))
             .map((f: any) => ({ fileId: f.id, sheetId: null, name: f.name }));
+      if (sheetScopeSet) {
+        triageUnits = triageUnits.filter((u) => u.sheetId && sheetScopeSet.has(u.sheetId));
+      }
 
       // Backfill mode (analyze override): only enqueue triage for (unit,class)
       // pairs that DON'T already have a triage result for the active run.
