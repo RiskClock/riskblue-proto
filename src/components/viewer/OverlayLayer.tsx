@@ -14,14 +14,14 @@ interface OverlayLayerProps {
   onOverlayClick?: (id: string) => void;
 }
 
-const MIN_CIRCLE_DIAMETER_CSS = 40;
+const MIN_CIRCLE_DIAMETER_CSS = 24;
 
-// On-screen target sizes; divided by viewScale so the label stays constant
-// on-screen as the user zooms.
-const LABEL_SCREEN_FONT_PX = 11;
-const LABEL_SCREEN_PAD_X = 6;
-const LABEL_SCREEN_H = 18;
-const LABEL_SCREEN_GAP = 8;
+// Label sizing in unscaled page CSS px. These scale naturally with the page
+// transform, so markers/labels grow when zooming in and shrink when zooming out.
+const LABEL_FONT_PX = 11;
+const LABEL_PAD_X = 6;
+const LABEL_H = 18;
+const LABEL_GAP = 8;
 
 function withAlpha(color: string, alpha: number): string {
   const trimmed = color.trim();
