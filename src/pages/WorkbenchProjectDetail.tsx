@@ -2571,7 +2571,7 @@ function InstancesReportModal({
       }
     }
     return rows;
-  }, [instances, optionByName, fileNameById, pageSpaceMap]);
+  }, [instances, optionByName, fileNameById, pageSpaceMap, enabledClassSet]);
 
   const spaceList = useMemo(() => {
     const set = new Set<string>();
