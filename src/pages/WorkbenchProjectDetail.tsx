@@ -2461,6 +2461,7 @@ function InstancesReportModal({
   pageSpaceMap,
   spaceHierarchyPayload,
   projectName,
+  enabledClassNames,
 }: {
   open: boolean;
   onOpenChange: (v: boolean) => void;
@@ -2470,7 +2471,12 @@ function InstancesReportModal({
   pageSpaceMap: Map<string, string[]>;
   spaceHierarchyPayload: any | null | undefined;
   projectName: string;
+  enabledClassNames: string[];
 }) {
+  const enabledClassSet = useMemo(
+    () => new Set(enabledClassNames || []),
+    [enabledClassNames],
+  );
   const [loading, setLoading] = useState(false);
   const [instances, setInstances] = useState<any[]>([]);
   const [selected, setSelected] = useState<string>("__overview__");
