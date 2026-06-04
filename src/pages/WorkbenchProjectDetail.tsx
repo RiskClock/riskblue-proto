@@ -1524,6 +1524,21 @@ export default function WorkbenchProjectDetail() {
               </div>
             )}
 
+            {enabledCols.length > 0 && (
+              <div className="flex justify-end mt-3">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    setCleanupChecked(new Set());
+                    setCleanupOpen(true);
+                  }}
+                >
+                  Clean Up ID Assignment
+                </Button>
+              </div>
+            )}
+
           </div>
         </main>
 
