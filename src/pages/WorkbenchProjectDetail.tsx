@@ -696,31 +696,68 @@ export default function WorkbenchProjectDetail() {
     if (classes.length === 0) return;
     setCleanupRunning(true);
     try {
+      // Build ordering: file name (A→Z) → page_index → created_at.
+      const { data: filesData, error: filesErr } = await supabase
+        .from("analysis_request_files")
+        .select("id, name")
+        .eq("analysis_request_id", requestId);
+      if (filesErr) throw filesErr;
+      const fileOrder = new Map<string, number>();
+      (filesData || [])
+        .slice()
+        .sort((a: any, b: any) =>
+          String(a.name || "").localeCompare(String(b.name || ""), undefined, {
+            sensitivity: "base",
+          }),
+        )
+        .forEach((f: any, i: number) => fileOrder.set(f.id as string, i));
+
       let totalReassigned = 0;
       for (const cls of classes) {
         const { data, error } = await supabase
           .from("drawing_instances" as any)
-          .select("id, instance_number, created_at")
+          .select("id, instance_number, file_id, page_index, created_at")
           .eq("analysis_request_id", requestId)
-          .eq("awp_class_name", cls)
-          .order("instance_number", { ascending: true, nullsFirst: false })
-          .order("created_at", { ascending: true });
+          .eq("awp_class_name", cls);
         if (error) throw error;
-        const rows = ((data as unknown) as Array<{ id: string; instance_number: number | null; created_at: string }>) || [];
-        // Reassign starting at 1. Skip updates that are already correct.
+        const rows = (((data as unknown) as Array<{
+          id: string;
+          instance_number: number | null;
+          file_id: string;
+          page_index: number | null;
+          created_at: string;
+        }>) || []).slice();
+        rows.sort((a, b) => {
+          const fa = fileOrder.get(a.file_id) ?? Number.MAX_SAFE_INTEGER;
+          const fb = fileOrder.get(b.file_id) ?? Number.MAX_SAFE_INTEGER;
+          if (fa !== fb) return fa - fb;
+          const pa = a.page_index ?? 0;
+          const pb = b.page_index ?? 0;
+          if (pa !== pb) return pa - pb;
+          return a.created_at.localeCompare(b.created_at);
+        });
+        // Two-phase update to avoid uniqueness collisions if a future
+        // (request, class, number) constraint is added: bump to negative
+        // temporaries first, then write final numbers.
+        for (let i = 0; i < rows.length; i++) {
+          const { error: upErr } = await supabase
+            .from("drawing_instances" as any)
+            .update({ instance_number: -(i + 1) })
+            .eq("id", rows[i].id);
+          if (upErr) throw upErr;
+        }
         for (let i = 0; i < rows.length; i++) {
           const desired = i + 1;
-          if (rows[i].instance_number === desired) continue;
           const { error: upErr } = await supabase
             .from("drawing_instances" as any)
             .update({ instance_number: desired })
             .eq("id", rows[i].id);
           if (upErr) throw upErr;
-          totalReassigned += 1;
+          if (rows[i].instance_number !== desired) totalReassigned += 1;
         }
       }
       toast({
-        title: "IDs cleaned up",
+        title: "IDs renumbered",
         description: `Reassigned ${totalReassigned} annotation${totalReassigned === 1 ? "" : "s"} across ${classes.length} class${classes.length === 1 ? "" : "es"}.`,
       });
       queryClient.invalidateQueries({ queryKey: ["workbench-instances", requestId] });
@@ -728,7 +765,7 @@ export default function WorkbenchProjectDetail() {
     } catch (e: any) {
       toast({
         variant: "destructive",
-        title: "Cleanup failed",
+        title: "Renumber failed",
         description: (e as any)?.message || "Could not reassign IDs.",
       });
     } finally {
