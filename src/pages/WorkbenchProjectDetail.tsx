@@ -1863,12 +1863,16 @@ export default function WorkbenchProjectDetail() {
             isOpen={!!activeSheet}
             onClose={() => { setActiveSheet(null); setPreselectClass(null); }}
             fileId={activeSheet.id}
-            fileName={
-              fileGroups.find((g) => g.file.id === activeSheet.parent_file_id)?.sheets
-                .length === 1
+            fileName={(() => {
+              const single =
+                fileGroups.find((g) => g.file.id === activeSheet.parent_file_id)?.sheets
+                  .length === 1;
+              const base = single
                 ? activeSheet.file_name
-                : `${activeSheet.file_name} — Page ${activeSheet.page_index}`
-            }
+                : `${activeSheet.file_name} — Page ${activeSheet.page_index}`;
+              const sps = spacesForSheet(activeSheet.file_name, activeSheet.page_index);
+              return sps.length > 0 ? `${base} · ${sps.join(", ")}` : base;
+            })()}
             mimeType="application/pdf"
             accessToken=""
             detections={[]}
