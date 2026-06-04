@@ -180,7 +180,7 @@ export default function WorkbenchProjectDetail() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("analysis_requests")
-        .select("id, source_type, pipeline_phase, status, pipeline_progress_done, pipeline_progress_total")
+        .select("id, source_type, pipeline_phase, status, pipeline_progress_done, pipeline_progress_total, space_hierarchy_json, space_hierarchy_status, space_hierarchy_error, space_hierarchy_updated_at")
         .eq("project_id", projectId!)
         .order("created_at", { ascending: false })
         .limit(1)
