@@ -2908,8 +2908,29 @@ function InstancesReportModal({
           </div>
           <div className="overflow-auto pr-1">{renderRight()}</div>
         </div>
-        <DialogFooter>
-          <Button onClick={() => onOpenChange(false)}>Close</Button>
+        <DialogFooter className="gap-2">
+          <Button variant="outline" onClick={() => onOpenChange(false)}>Close</Button>
+          <Button
+            variant="outline"
+            onClick={() =>
+              toast({
+                title: "Export queued",
+                description: "You'll receive an email with the results.",
+              })
+            }
+          >
+            Export
+          </Button>
+          <Button
+            onClick={() =>
+              toast({
+                title: "Sent to WMG Project",
+                description: "Results have been sent.",
+              })
+            }
+          >
+            Send to WMG Project
+          </Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
