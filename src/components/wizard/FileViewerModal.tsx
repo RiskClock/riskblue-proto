@@ -243,15 +243,23 @@ export const FileViewerModal = ({
     async (
       args: { awp_class_name: string; nx: number; ny: number; page_index: number },
     ): Promise<DrawingInstanceRow | null> => {
+      // Persistent numbering: next number = max existing for this
+      // (analysis_request, class) + 1. Deletes do NOT renumber, so the next
+      // added marker continues past the highest existing ID.
+      const maxNum = instances
+        .filter((i) => i.awp_class_name === args.awp_class_name)
+        .reduce((m, i) => Math.max(m, i.instance_number ?? 0), 0);
+      const nextNum = maxNum + 1;
       const { data, error } = await supabase
         .from("drawing_instances" as any)
         .insert({
           analysis_request_id: analysisRequestId!,
           file_id: parentFileId!,
           sheet_id: sheetId ?? null,
+          instance_number: nextNum,
           ...args,
         } as any)
-        .select("id, awp_class_name, nx, ny, page_index, file_id, created_at")
+        .select("id, awp_class_name, nx, ny, page_index, file_id, created_at, instance_number")
         .single();
       if (error) {
         toast({
@@ -264,7 +272,7 @@ export const FileViewerModal = ({
       onInstancesChanged?.();
       return (data as unknown) as DrawingInstanceRow;
     },
-    [analysisRequestId, parentFileId, sheetId, toast, onInstancesChanged],
+    [analysisRequestId, parentFileId, sheetId, toast, onInstancesChanged, instances],
   );
 
   const dbDelete = useCallback(
