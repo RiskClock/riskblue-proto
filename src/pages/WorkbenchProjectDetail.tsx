@@ -1580,7 +1580,7 @@ export default function WorkbenchProjectDetail() {
                     setCleanupOpen(true);
                   }}
                 >
-                  Clean Up ID Assignment
+                  Renumber IDs
                 </Button>
               </div>
             )}
