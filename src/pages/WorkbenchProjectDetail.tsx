@@ -1902,7 +1902,7 @@ export default function WorkbenchProjectDetail() {
                 ? activeSheet.file_name
                 : `${activeSheet.file_name} — Page ${activeSheet.page_index}`;
               const sps = spacesForSheet(activeSheet.file_name, activeSheet.page_index);
-              return sps.length > 0 ? `${base} · ${sps.join(", ")}` : base;
+              return sps.length > 0 ? `${base} · ${formatSpaceBadge(sps)}` : base;
             })()}
             mimeType="application/pdf"
             accessToken=""
