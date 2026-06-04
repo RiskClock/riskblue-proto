@@ -2825,11 +2825,12 @@ function InstancesReportModal({
               .map((r, i) => ({
                 id: `${r.instanceId}-${i}`,
                 bbox: [
-                  Math.max(0, r.nx - 0.015),
-                  Math.max(0, r.ny - 0.015),
-                  0.03,
-                  0.03,
+                  Math.max(0, r.nx - 0.025),
+                  Math.max(0, r.ny - 0.025),
+                  0.05,
+                  0.05,
                 ] as [number, number, number, number],
+
                 coordSpace: "normalized" as const,
                 page: pageIdx,
                 color: "#dc2626",
