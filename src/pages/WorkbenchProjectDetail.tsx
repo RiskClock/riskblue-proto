@@ -2549,7 +2549,8 @@ function InstancesReportModal({
         rows.push({ ...common, instanceId: base, spaceName: null });
       } else {
         for (const sp of sps) {
-          rows.push({ ...common, instanceId: `${base}@${sp}`, spaceName: sp });
+          const spId = sp.replace(/\s+/g, "_");
+          rows.push({ ...common, instanceId: `${base}@${spId}`, spaceName: sp });
         }
       }
     }
