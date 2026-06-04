@@ -230,7 +230,7 @@ export const OverlayLayer = ({
         hovered: hoveredId === o.id,
       };
     });
-  }, [overlays, pageSize.width, pageSize.height, defaultColor, hoveredId]);
+  }, [overlays, pageSize.width, pageSize.height, defaultColor, hoveredId, s]);
 
   // Size metrics in unscaled page CSS px. Dividing by viewScale keeps them
   // constant on-screen at any zoom.
