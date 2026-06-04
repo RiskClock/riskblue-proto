@@ -57,6 +57,8 @@ export interface DrawingViewerProps {
   /** Called when user clicks on an overlay element; receives its id. */
   onOverlayClick?: (overlayId: string) => void;
   className?: string;
+  /** When false, disables wheel zoom, pinch, pan, and double-click zoom. */
+  interactive?: boolean;
 }
 
 
@@ -83,6 +85,7 @@ export const DrawingViewer = forwardRef<DrawingViewerApi, DrawingViewerProps>(
       onCanvasClick,
       onOverlayClick,
       className,
+      interactive = true,
     },
     ref
   ) {
@@ -348,10 +351,10 @@ export const DrawingViewer = forwardRef<DrawingViewerApi, DrawingViewerProps>(
               minScale={minScale}
               maxScale={maxScale}
               limitToBounds={false}
-              wheel={{ step: 0.06 }}
-              doubleClick={{ disabled: false, step: 0.3 }}
-              pinch={{ step: 2 }}
-              panning={{ velocityDisabled: true }}
+              wheel={{ step: 0.06, disabled: !interactive }}
+              doubleClick={{ disabled: !interactive, step: 0.3 }}
+              pinch={{ step: 2, disabled: !interactive }}
+              panning={{ velocityDisabled: true, disabled: !interactive }}
               onTransform={handleTransform}
               onZoomStop={handleSettle}
               onPanningStop={handleSettle}
