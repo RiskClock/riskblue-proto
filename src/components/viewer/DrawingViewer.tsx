@@ -57,6 +57,8 @@ export interface DrawingViewerProps {
   /** Called when user clicks on an overlay element; receives its id. */
   onOverlayClick?: (overlayId: string) => void;
   className?: string;
+  /** When false, disables wheel zoom, pinch, pan, and double-click zoom. */
+  interactive?: boolean;
 }
 
 
