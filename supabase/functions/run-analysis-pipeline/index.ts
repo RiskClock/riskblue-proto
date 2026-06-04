@@ -1709,6 +1709,7 @@ async function runPipeline(params: PipelineParams) {
         for (const t of (triageResults || []) as any[]) {
           const sh = sheetById.get(t.sheet_id);
           if (!sh) continue;
+          if (sheetScopeSet && !sheetScopeSet.has(sh.id)) continue;
 
           const overrideKey = `${sh.parent_file_id}_${t.awp_class_name}`;
           const override = overrideMap.get(overrideKey);
