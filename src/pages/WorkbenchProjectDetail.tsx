@@ -2827,16 +2827,11 @@ function InstancesReportModal({
               .filter((r) => r.fileId === fileId && r.pageIndex === pageIdx)
               .map((r, i) => ({
                 id: `${r.instanceId}-${i}`,
-                bbox: [
-                  Math.max(0, r.nx - 0.025),
-                  Math.max(0, r.ny - 0.025),
-                  0.05,
-                  0.05,
-                ] as [number, number, number, number],
+                bbox: [r.nx, r.ny, 0, 0] as [number, number, number, number],
                 coordSpace: "normalized" as const,
                 page: 1,
                 color: "#dc2626",
-                label: r.annotationBaseId,
+                label: r.instanceId,
                 shape: "circle" as const,
               }));
 
