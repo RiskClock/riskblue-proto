@@ -141,8 +141,8 @@ function generateCandidates(
   return out;
 }
 
-const OVERLAP_PENALTY = 10_000;
-const CIRCLE_PENALTY = 10_000;
+const OVERLAP_PENALTY = 100_000;
+const CIRCLE_PENALTY = 100_000;
 
 function candidateCost(
   cand: LabelCandidate,
