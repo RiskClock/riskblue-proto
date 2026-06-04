@@ -690,6 +690,52 @@ export default function WorkbenchProjectDetail() {
     }
   };
 
+  const runCleanupIdAssignment = async () => {
+    if (!requestId) return;
+    const classes = Array.from(cleanupChecked);
+    if (classes.length === 0) return;
+    setCleanupRunning(true);
+    try {
+      let totalReassigned = 0;
+      for (const cls of classes) {
+        const { data, error } = await supabase
+          .from("drawing_instances" as any)
+          .select("id, instance_number, created_at")
+          .eq("analysis_request_id", requestId)
+          .eq("awp_class_name", cls)
+          .order("instance_number", { ascending: true, nullsFirst: false })
+          .order("created_at", { ascending: true });
+        if (error) throw error;
+        const rows = (data || []) as Array<{ id: string; instance_number: number | null; created_at: string }>;
+        // Reassign starting at 1. Skip updates that are already correct.
+        for (let i = 0; i < rows.length; i++) {
+          const desired = i + 1;
+          if (rows[i].instance_number === desired) continue;
+          const { error: upErr } = await supabase
+            .from("drawing_instances" as any)
+            .update({ instance_number: desired })
+            .eq("id", rows[i].id);
+          if (upErr) throw upErr;
+          totalReassigned += 1;
+        }
+      }
+      toast({
+        title: "IDs cleaned up",
+        description: `Reassigned ${totalReassigned} annotation${totalReassigned === 1 ? "" : "s"} across ${classes.length} class${classes.length === 1 ? "" : "es"}.`,
+      });
+      queryClient.invalidateQueries({ queryKey: ["workbench-instances", requestId] });
+      setCleanupOpen(false);
+    } catch (e: any) {
+      toast({
+        variant: "destructive",
+        title: "Cleanup failed",
+        description: (e as any)?.message || "Could not reassign IDs.",
+      });
+    } finally {
+      setCleanupRunning(false);
+    }
+  };
+
   const clearAll = async () => {
     if (!requestId) return;
     setClearing(true);
