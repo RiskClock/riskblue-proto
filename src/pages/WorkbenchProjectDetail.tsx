@@ -1821,7 +1821,7 @@ export default function WorkbenchProjectDetail() {
                 onClick={runCleanupIdAssignment}
                 disabled={cleanupRunning || cleanupChecked.size === 0}
               >
-                {cleanupRunning ? <Loader2 className="h-4 w-4 animate-spin" /> : "Clean Up"}
+                {cleanupRunning ? <Loader2 className="h-4 w-4 animate-spin" /> : "Renumber"}
               </Button>
             </DialogFooter>
           </DialogContent>
