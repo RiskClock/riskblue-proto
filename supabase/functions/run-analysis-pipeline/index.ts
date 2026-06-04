@@ -1891,11 +1891,22 @@ async function runPipeline(params: PipelineParams) {
       }
 
       // Clear any old analyze jobs for this request before inserting fresh ones.
-      await admin
-        .from("analysis_pipeline_jobs")
-        .delete()
-        .eq("analysis_request_id", analysisRequestId)
-        .or("job_kind.is.null,job_kind.eq.analyze");
+      // Scope by sheet_id + class when this is a per-cell run so other in-flight
+      // analyze jobs are not wiped.
+      {
+        const scopedClassesInner =
+          Array.isArray(enabledAwpClasses) && enabledAwpClasses.length > 0
+            ? enabledAwpClasses
+            : null;
+        let stale = admin
+          .from("analysis_pipeline_jobs")
+          .delete()
+          .eq("analysis_request_id", analysisRequestId)
+          .or("job_kind.is.null,job_kind.eq.analyze");
+        if (sheetScopeSet) stale = stale.in("sheet_id", scopedSheetIds!);
+        if (scopedClassesInner) stale = stale.in("awp_class_name", scopedClassesInner);
+        await stale;
+      }
 
       // Build job rows. Items with no prompt content fail immediately as
       // analysis_results rows (preserves prior behavior, no retries).
