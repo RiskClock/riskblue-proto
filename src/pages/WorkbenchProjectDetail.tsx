@@ -2166,6 +2166,7 @@ export default function WorkbenchProjectDetail() {
           pageSpaceMap={pageSpaceMap}
           spaceHierarchyPayload={spaceHierarchyPayload}
           projectName={project?.name || "Project"}
+          enabledClassNames={enabledCols}
         />
       </div>
     </TooltipProvider>
@@ -2460,6 +2461,7 @@ function InstancesReportModal({
   pageSpaceMap,
   spaceHierarchyPayload,
   projectName,
+  enabledClassNames,
 }: {
   open: boolean;
   onOpenChange: (v: boolean) => void;
@@ -2469,7 +2471,12 @@ function InstancesReportModal({
   pageSpaceMap: Map<string, string[]>;
   spaceHierarchyPayload: any | null | undefined;
   projectName: string;
+  enabledClassNames: string[];
 }) {
+  const enabledClassSet = useMemo(
+    () => new Set(enabledClassNames || []),
+    [enabledClassNames],
+  );
   const [loading, setLoading] = useState(false);
   const [instances, setInstances] = useState<any[]>([]);
   const [selected, setSelected] = useState<string>("__overview__");
@@ -2538,6 +2545,7 @@ function InstancesReportModal({
     };
     const rows: Row[] = [];
     for (const inst of instances) {
+      if (enabledClassSet.size > 0 && !enabledClassSet.has(inst.awp_class_name)) continue;
       const opt = optionByName.get(inst.awp_class_name);
       const prefix = opt?.idPrefix || inst.awp_class_name.slice(0, 3).toUpperCase();
       const category = opt?.category || "Other";
@@ -2563,7 +2571,7 @@ function InstancesReportModal({
       }
     }
     return rows;
-  }, [instances, optionByName, fileNameById, pageSpaceMap]);
+  }, [instances, optionByName, fileNameById, pageSpaceMap, enabledClassSet]);
 
   const spaceList = useMemo(() => {
     const set = new Set<string>();
@@ -2683,9 +2691,14 @@ function InstancesReportModal({
                     key={c.name}
                     className="border rounded overflow-hidden text-center"
                   >
-                    <div className="bg-sky-900 text-white text-xs font-semibold py-1">
-                      {prefix}
-                    </div>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <div className="bg-sky-900 text-white text-xs font-semibold py-1 cursor-help">
+                          {prefix}
+                        </div>
+                      </TooltipTrigger>
+                      <TooltipContent>{c.name}</TooltipContent>
+                    </Tooltip>
                     <div className="py-2 text-2xl font-bold text-sky-700 tabular-nums">
                       {overviewTotals.get(c.name) || 0}
                     </div>
@@ -2713,16 +2726,19 @@ function InstancesReportModal({
             <TableRow className={compactRow}>
               <TableHead className={`${compactHead} sticky left-0 bg-background`}>Space</TableHead>
               {classCols.map((c) => (
-                <Tooltip key={c.name}>
-                  <TooltipTrigger asChild>
-                    <TableHead
-                      className={`${compactHead} text-center whitespace-nowrap cursor-help`}
-                    >
-                      {optionByName.get(c.name)?.idPrefix || c.name}
-                    </TableHead>
-                  </TooltipTrigger>
-                  <TooltipContent>{c.name}</TooltipContent>
-                </Tooltip>
+                <TableHead
+                  key={c.name}
+                  className={`${compactHead} text-center whitespace-nowrap`}
+                >
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <span className="cursor-help inline-block">
+                        {optionByName.get(c.name)?.idPrefix || c.name}
+                      </span>
+                    </TooltipTrigger>
+                    <TooltipContent>{c.name}</TooltipContent>
+                  </Tooltip>
+                </TableHead>
               ))}
             </TableRow>
           </TableHeader>
@@ -2825,7 +2841,7 @@ function InstancesReportModal({
                 <div className="px-2 py-1 text-[11px] font-medium bg-muted/40 border-b">
                   {fileName} · Page {pageIdx}
                 </div>
-                <div className="h-[360px]">
+                <div className="w-full aspect-[3/2] bg-muted/10">
                   <DrawingViewer
                     source={source}
                     page={pageIdx}
