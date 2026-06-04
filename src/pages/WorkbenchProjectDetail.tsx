@@ -1531,7 +1531,7 @@ export default function WorkbenchProjectDetail() {
         {activeSheet && sheetSource && (
           <FileViewerModal
             isOpen={!!activeSheet}
-            onClose={() => setActiveSheet(null)}
+            onClose={() => { setActiveSheet(null); setPreselectClass(null); }}
             fileId={activeSheet.id}
             fileName={
               fileGroups.find((g) => g.file.id === activeSheet.parent_file_id)?.sheets
