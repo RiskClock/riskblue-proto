@@ -1326,6 +1326,15 @@ export default function WorkbenchProjectDetail() {
                   View Hierarchy
                 </Button>
               )}
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => setInstancesReportOpen(true)}
+                disabled={!requestId}
+                title="Generate per-space instances report"
+              >
+                Generate Instances Report
+              </Button>
 
               <span className="text-muted-foreground select-none">|</span>
 
