@@ -24,5 +24,7 @@ function hslToHex(h: number, s: number, l: number): string {
 
 export function awpClassColor(name: string): string {
   const hue = hashStr(name.toLowerCase()) % 360;
-  return hslToHex(hue, 70, 45);
+  // Lightness capped at ~22% (half the previous 45%) so every hue stays dark
+  // enough for white ID labels to remain readable.
+  return hslToHex(hue, 70, 22);
 }

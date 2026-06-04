@@ -1282,6 +1282,7 @@ export type Database = {
           created_by: string | null
           file_id: string
           id: string
+          instance_number: number | null
           nx: number
           ny: number
           page_index: number
@@ -1294,6 +1295,7 @@ export type Database = {
           created_by?: string | null
           file_id: string
           id?: string
+          instance_number?: number | null
           nx: number
           ny: number
           page_index?: number
@@ -1306,6 +1308,7 @@ export type Database = {
           created_by?: string | null
           file_id?: string
           id?: string
+          instance_number?: number | null
           nx?: number
           ny?: number
           page_index?: number

@@ -121,6 +121,11 @@ export default function WorkbenchProjectDetail() {
 
   const [activeSheet, setActiveSheet] = useState<SheetRow | null>(null);
   const [activeFile, setActiveFile] = useState<FileRow | null>(null);
+  const [preselectClass, setPreselectClass] = useState<string | null>(null);
+  const [cleanupOpen, setCleanupOpen] = useState(false);
+  const [cleanupChecked, setCleanupChecked] = useState<Set<string>>(new Set());
+  const [cleanupRunning, setCleanupRunning] = useState(false);
+
   
   const [manageOpen, setManageOpen] = useState(false);
   const [draftCols, setDraftCols] = useState<string[]>([]);
@@ -682,6 +687,52 @@ export default function WorkbenchProjectDetail() {
     } finally {
       // Keep polling for a bit; auto-clear once pipeline phase resolves.
       setTimeout(() => setRunning(null), 30_000);
+    }
+  };
+
+  const runCleanupIdAssignment = async () => {
+    if (!requestId) return;
+    const classes = Array.from(cleanupChecked);
+    if (classes.length === 0) return;
+    setCleanupRunning(true);
+    try {
+      let totalReassigned = 0;
+      for (const cls of classes) {
+        const { data, error } = await supabase
+          .from("drawing_instances" as any)
+          .select("id, instance_number, created_at")
+          .eq("analysis_request_id", requestId)
+          .eq("awp_class_name", cls)
+          .order("instance_number", { ascending: true, nullsFirst: false })
+          .order("created_at", { ascending: true });
+        if (error) throw error;
+        const rows = ((data as unknown) as Array<{ id: string; instance_number: number | null; created_at: string }>) || [];
+        // Reassign starting at 1. Skip updates that are already correct.
+        for (let i = 0; i < rows.length; i++) {
+          const desired = i + 1;
+          if (rows[i].instance_number === desired) continue;
+          const { error: upErr } = await supabase
+            .from("drawing_instances" as any)
+            .update({ instance_number: desired })
+            .eq("id", rows[i].id);
+          if (upErr) throw upErr;
+          totalReassigned += 1;
+        }
+      }
+      toast({
+        title: "IDs cleaned up",
+        description: `Reassigned ${totalReassigned} annotation${totalReassigned === 1 ? "" : "s"} across ${classes.length} class${classes.length === 1 ? "" : "es"}.`,
+      });
+      queryClient.invalidateQueries({ queryKey: ["workbench-instances", requestId] });
+      setCleanupOpen(false);
+    } catch (e: any) {
+      toast({
+        variant: "destructive",
+        title: "Cleanup failed",
+        description: (e as any)?.message || "Could not reassign IDs.",
+      });
+    } finally {
+      setCleanupRunning(false);
     }
   };
 
@@ -1477,14 +1528,21 @@ export default function WorkbenchProjectDetail() {
                                     <TableCell
                                       key={name}
                                       title={title}
-                                      className="text-center py-1 text-xs relative p-0"
+                                      className="text-center py-1 text-xs relative p-0 cursor-pointer hover:bg-muted/30"
                                       style={
                                         hasScore && !failed
                                           ? { backgroundColor: `rgba(16, 185, 129, ${opacity * 0.55})` }
                                           : undefined
                                       }
+                                      onClick={() => {
+                                        // Bubbles up to row click which opens
+                                        // the viewer; we just record which
+                                        // class column was clicked so the
+                                        // modal preselects the right radio.
+                                        setPreselectClass(name);
+                                      }}
                                     >
-                                      <div className="flex items-center justify-center w-full h-7 cursor-default">
+                                      <div className="flex items-center justify-center w-full h-7">
                                         {inflight && !hasScore && !failed ? (
                                           <Loader2 className="h-3 w-3 animate-spin text-muted-foreground" />
                                         ) : failed ? (
@@ -1512,6 +1570,21 @@ export default function WorkbenchProjectDetail() {
               </div>
             )}
 
+            {enabledCols.length > 0 && (
+              <div className="flex justify-end mt-3">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    setCleanupChecked(new Set());
+                    setCleanupOpen(true);
+                  }}
+                >
+                  Clean Up ID Assignment
+                </Button>
+              </div>
+            )}
+
           </div>
         </main>
 
@@ -1519,7 +1592,7 @@ export default function WorkbenchProjectDetail() {
         {activeSheet && sheetSource && (
           <FileViewerModal
             isOpen={!!activeSheet}
-            onClose={() => setActiveSheet(null)}
+            onClose={() => { setActiveSheet(null); setPreselectClass(null); }}
             fileId={activeSheet.id}
             fileName={
               fileGroups.find((g) => g.file.id === activeSheet.parent_file_id)?.sheets
@@ -1552,6 +1625,7 @@ export default function WorkbenchProjectDetail() {
             persistKey={projectId}
             expandedClasses={sidebarExpandedClasses}
             onExpandedClassesChange={setSidebarExpandedClasses}
+            preselectClass={preselectClass}
           />
         )}
 
@@ -1559,7 +1633,7 @@ export default function WorkbenchProjectDetail() {
         {activeFile && fileSource && (
           <FileViewerModal
             isOpen={!!activeFile}
-            onClose={() => setActiveFile(null)}
+            onClose={() => { setActiveFile(null); setPreselectClass(null); }}
             fileId={activeFile.id}
             fileName={activeFile.name}
             mimeType={activeFile.mime_type || "application/pdf"}
@@ -1587,6 +1661,7 @@ export default function WorkbenchProjectDetail() {
             persistKey={projectId}
             expandedClasses={sidebarExpandedClasses}
             onExpandedClassesChange={setSidebarExpandedClasses}
+            preselectClass={preselectClass}
           />
         )}
 
@@ -1682,6 +1757,71 @@ export default function WorkbenchProjectDetail() {
               </Button>
               <Button onClick={saveColumns} disabled={savingPrefs}>
                 {savingPrefs ? <Loader2 className="h-4 w-4 animate-spin" /> : "Save"}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        {/* Clean Up ID Assignment modal */}
+        <Dialog open={cleanupOpen} onOpenChange={(o) => !cleanupRunning && setCleanupOpen(o)}>
+          <DialogContent className="max-w-md">
+            <DialogHeader>
+              <DialogTitle>Clean Up ID Assignment</DialogTitle>
+              <DialogDescription>
+                Select classes to renumber. Annotation IDs for each selected
+                class will be reassigned starting from 1, across all pages and
+                files in this analysis.
+              </DialogDescription>
+            </DialogHeader>
+            <div className="max-h-[50vh] overflow-auto space-y-2 py-2">
+              {enabledCols.length === 0 ? (
+                <div className="text-sm text-muted-foreground">No classes selected.</div>
+              ) : (
+                enabledCols.map((name) => {
+                  const opt = optionByName.get(name);
+                  const checked = cleanupChecked.has(name);
+                  return (
+                    <label
+                      key={name}
+                      className="flex items-center gap-2 text-sm cursor-pointer"
+                    >
+                      <Checkbox
+                        checked={checked}
+                        onCheckedChange={() => {
+                          setCleanupChecked((prev) => {
+                            const next = new Set(prev);
+                            if (next.has(name)) next.delete(name);
+                            else next.add(name);
+                            return next;
+                          });
+                        }}
+                      />
+                      <span>
+                        {opt?.idPrefix && (
+                          <span className="font-mono text-xs text-muted-foreground mr-2">
+                            {opt.idPrefix}
+                          </span>
+                        )}
+                        {name}
+                      </span>
+                    </label>
+                  );
+                })
+              )}
+            </div>
+            <DialogFooter>
+              <Button
+                variant="outline"
+                onClick={() => setCleanupOpen(false)}
+                disabled={cleanupRunning}
+              >
+                Cancel
+              </Button>
+              <Button
+                onClick={runCleanupIdAssignment}
+                disabled={cleanupRunning || cleanupChecked.size === 0}
+              >
+                {cleanupRunning ? <Loader2 className="h-4 w-4 animate-spin" /> : "Clean Up"}
               </Button>
             </DialogFooter>
           </DialogContent>
