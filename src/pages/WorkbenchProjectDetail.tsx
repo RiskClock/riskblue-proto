@@ -2135,6 +2135,15 @@ export default function WorkbenchProjectDetail() {
           onOpenChange={setSpaceModalOpen}
           payload={spaceHierarchyHasResult ? spaceHierarchyPayload ?? null : null}
         />
+
+        <InstancesReportModal
+          open={instancesReportOpen}
+          onOpenChange={setInstancesReportOpen}
+          requestId={requestId}
+          fileGroups={fileGroups}
+          optionByName={optionByName}
+          pageSpaceMap={pageSpaceMap}
+        />
       </div>
     </TooltipProvider>
   );
