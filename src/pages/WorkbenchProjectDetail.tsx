@@ -1161,6 +1161,18 @@ export default function WorkbenchProjectDetail() {
 
               {analysisRequest && totalFiles > 0 && (
                 <>
+                  {enabledCols.length > 0 && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => {
+                        setCleanupChecked(new Set());
+                        setCleanupOpen(true);
+                      }}
+                    >
+                      Renumber IDs
+                    </Button>
+                  )}
                   <Button
                     variant="outline"
                     size="sm"
@@ -1607,20 +1619,6 @@ export default function WorkbenchProjectDetail() {
               </div>
             )}
 
-            {enabledCols.length > 0 && (
-              <div className="flex justify-end mt-3">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => {
-                    setCleanupChecked(new Set());
-                    setCleanupOpen(true);
-                  }}
-                >
-                  Renumber IDs
-                </Button>
-              </div>
-            )}
 
           </div>
         </main>
