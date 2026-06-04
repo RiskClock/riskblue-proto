@@ -596,6 +596,12 @@ export default function WorkbenchProjectDetail() {
       [...fileExtractStatus.values()].every((s) => s === "processed"),
     [fileExtractStatus, fileGroups.length],
   );
+  const spaceHierarchyPayload = analysisRequest?.space_hierarchy_json as any | null | undefined;
+  const spaceHierarchyResponseId = spaceHierarchyPayload?.openai_response_id as string | undefined;
+  const spaceHierarchyHasResult = !!(spaceHierarchyPayload?.parsed || spaceHierarchyPayload?.raw_text);
+  const spaceHierarchyRunning =
+    buildingSpace ||
+    (analysisRequest?.space_hierarchy_status === "running" && !!spaceHierarchyResponseId);
 
   const openManage = () => {
     setDraftCols(enabledCols);
