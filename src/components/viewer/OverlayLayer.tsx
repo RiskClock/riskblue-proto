@@ -14,7 +14,7 @@ interface OverlayLayerProps {
   onOverlayClick?: (id: string) => void;
 }
 
-const MIN_CIRCLE_DIAMETER_CSS = 34;
+const MIN_CIRCLE_DIAMETER_CSS = 40;
 
 // On-screen target sizes; divided by viewScale so the label stays constant
 // on-screen as the user zooms.
