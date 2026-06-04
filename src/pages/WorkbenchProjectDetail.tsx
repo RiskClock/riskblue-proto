@@ -2834,7 +2834,8 @@ function InstancesReportModal({
                 coordSpace: "normalized" as const,
                 page: pageIdx,
                 color: "#dc2626",
-                label: r.instanceId,
+                label: r.annotationBaseId,
+
                 shape: "circle" as const,
               }));
 
