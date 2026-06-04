@@ -1055,6 +1055,7 @@ interface PipelineParams {
   analyzeModel: string;
   phaseOverride?: string;
   activeRunId: string | null;
+  scopedSheetIds?: string[] | null;
 }
 
 async function runPipeline(params: PipelineParams) {
@@ -1070,7 +1071,12 @@ async function runPipeline(params: PipelineParams) {
     analyzeModel,
     phaseOverride,
     activeRunId,
+    scopedSheetIds,
   } = params;
+  const sheetScopeSet =
+    Array.isArray(scopedSheetIds) && scopedSheetIds.length > 0
+      ? new Set(scopedSheetIds)
+      : null;
 
   const MAX_CONCURRENCY = 5;
 
