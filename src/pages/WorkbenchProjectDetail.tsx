@@ -2726,16 +2726,19 @@ function InstancesReportModal({
             <TableRow className={compactRow}>
               <TableHead className={`${compactHead} sticky left-0 bg-background`}>Space</TableHead>
               {classCols.map((c) => (
-                <Tooltip key={c.name}>
-                  <TooltipTrigger asChild>
-                    <TableHead
-                      className={`${compactHead} text-center whitespace-nowrap cursor-help`}
-                    >
-                      {optionByName.get(c.name)?.idPrefix || c.name}
-                    </TableHead>
-                  </TooltipTrigger>
-                  <TooltipContent>{c.name}</TooltipContent>
-                </Tooltip>
+                <TableHead
+                  key={c.name}
+                  className={`${compactHead} text-center whitespace-nowrap`}
+                >
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <span className="cursor-help inline-block">
+                        {optionByName.get(c.name)?.idPrefix || c.name}
+                      </span>
+                    </TooltipTrigger>
+                    <TooltipContent>{c.name}</TooltipContent>
+                  </Tooltip>
+                </TableHead>
               ))}
             </TableRow>
           </TableHeader>
