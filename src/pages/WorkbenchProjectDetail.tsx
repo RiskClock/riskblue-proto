@@ -2785,7 +2785,7 @@ function InstancesReportModal({
             ))}
           </TableBody>
         </Table>
-        <div className="space-y-4">
+        <div className="space-y-6">
           {pageKeys.map((key) => {
             const [fileId, pageIdxStr] = key.split("::");
             const pageIdx = parseInt(pageIdxStr, 10);
@@ -2820,19 +2820,13 @@ function InstancesReportModal({
               }));
 
             return (
-              <div key={key} className="border rounded-md overflow-hidden">
-                <div className="px-2 py-1 text-[11px] font-medium bg-muted/40 border-b">
-                  {fileName} · Page {pageIdx}
-                </div>
-                <div className="w-full aspect-[3/2] bg-muted/10">
-                  <DrawingViewer
-                    source={source}
-                    page={1}
-                    overlays={overlays}
-                    showToolbar={false}
-                  />
-                </div>
-              </div>
+              <DrawingPageBlock
+                key={key}
+                fileName={fileName}
+                pageIdx={pageIdx}
+                source={source}
+                overlays={overlays}
+              />
             );
           })}
         </div>
