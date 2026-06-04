@@ -14,14 +14,14 @@ interface OverlayLayerProps {
   onOverlayClick?: (id: string) => void;
 }
 
-const MIN_CIRCLE_DIAMETER_CSS = 40;
+const MIN_CIRCLE_DIAMETER_CSS = 24;
 
-// On-screen target sizes; divided by viewScale so the label stays constant
-// on-screen as the user zooms.
-const LABEL_SCREEN_FONT_PX = 11;
-const LABEL_SCREEN_PAD_X = 6;
-const LABEL_SCREEN_H = 18;
-const LABEL_SCREEN_GAP = 8;
+// Label sizing in unscaled page CSS px. These scale naturally with the page
+// transform, so markers/labels grow when zooming in and shrink when zooming out.
+const LABEL_FONT_PX = 11;
+const LABEL_PAD_X = 6;
+const LABEL_H = 18;
+const LABEL_GAP = 8;
 
 function withAlpha(color: string, alpha: number): string {
   const trimmed = color.trim();
@@ -204,8 +204,9 @@ export const OverlayLayer = ({
   defaultColor = "hsl(var(--destructive))",
   onOverlayClick,
 }: OverlayLayerProps) => {
-  // Sanitize scale: TransformWrapper can briefly emit 0 during mount.
-  const s = viewScale > 0.01 ? viewScale : 1;
+  // viewScale is no longer used to size markers/labels — they scale with the
+  // page transform naturally. Kept in the signature for backward compatibility.
+  void viewScale;
 
   const circles: CircleInfo[] = useMemo(() => {
     return overlays.map((o) => {
@@ -216,9 +217,9 @@ export const OverlayLayer = ({
         o.rect.nw * pageSize.width,
         o.rect.nh * pageSize.height,
       );
-      // Min diameter is screen-constant (divide by viewScale) so markers stay
-      // readable at any zoom; the bbox-derived size scales naturally with content.
-      const diameter = Math.max(MIN_CIRCLE_DIAMETER_CSS / s, bboxSidePx * 1.5);
+      // Static minimum diameter floor (in page CSS px) so very tiny bboxes
+      // remain visible at fit-to-page scale. Scales with zoom naturally.
+      const diameter = Math.max(MIN_CIRCLE_DIAMETER_CSS, bboxSidePx * 1.5);
 
       return {
         id: o.id,
@@ -230,14 +231,13 @@ export const OverlayLayer = ({
         hovered: hoveredId === o.id,
       };
     });
-  }, [overlays, pageSize.width, pageSize.height, defaultColor, hoveredId, s]);
+  }, [overlays, pageSize.width, pageSize.height, defaultColor, hoveredId]);
 
-  // Size metrics in unscaled page CSS px. Dividing by viewScale keeps them
-  // constant on-screen at any zoom.
-  const fontPx = LABEL_SCREEN_FONT_PX / s;
-  const padX = LABEL_SCREEN_PAD_X / s;
-  const labelH = LABEL_SCREEN_H / s;
-  const gap = LABEL_SCREEN_GAP / s;
+  // Label sizing in unscaled page CSS px (constant in document space).
+  const fontPx = LABEL_FONT_PX;
+  const padX = LABEL_PAD_X;
+  const labelH = LABEL_H;
+  const gap = LABEL_GAP;
   const charPx = fontPx * 0.62; // bold sans-serif avg
 
   const placedLabels: PlacedLabel[] = useMemo(() => {
@@ -282,7 +282,7 @@ export const OverlayLayer = ({
               x2={lx}
               y2={ly}
               stroke={p.color}
-              strokeWidth={1 / s}
+              strokeWidth={1}
               opacity={0.85}
             />
           );
@@ -299,10 +299,10 @@ export const OverlayLayer = ({
           height: c.r * 2,
           borderRadius: "9999px",
           borderColor: c.color,
-          borderWidth: (c.hovered ? 3.5 : 2.5) / s,
+          borderWidth: c.hovered ? 3.5 : 2.5,
           borderStyle: "solid",
           backgroundColor: withAlpha(c.color, c.hovered ? 0.45 : 0.35),
-          boxShadow: `0 0 0 ${1 / s}px rgba(255,255,255,0.85)`,
+          boxShadow: `0 0 0 1px rgba(255,255,255,0.85)`,
           boxSizing: "border-box",
           pointerEvents: clickable ? "auto" : "none",
           cursor: clickable ? "pointer" : undefined,
@@ -340,10 +340,10 @@ export const OverlayLayer = ({
             fontSize: fontPx,
             paddingLeft: padX,
             paddingRight: padX,
-            borderRadius: 3 / s,
+            borderRadius: 3,
             backgroundColor: withAlpha(p.color, 0.95),
             color: readableTextOn(p.color),
-            boxShadow: `0 0 0 ${1 / s}px rgba(255,255,255,0.9)`,
+            boxShadow: `0 0 0 1px rgba(255,255,255,0.9)`,
           }}
         >
           {p.text}
