@@ -264,7 +264,7 @@ export const OverlayLayer = ({
       {placedLabels.map((p) => (
         <div
           key={`label-${p.id}`}
-          className="absolute font-bold text-white whitespace-nowrap rounded-sm pointer-events-none text-center"
+          className="absolute font-bold whitespace-nowrap rounded-sm pointer-events-none text-center"
           style={{
             left: p.x,
             top: p.y,
@@ -274,7 +274,8 @@ export const OverlayLayer = ({
             fontSize: LABEL_FONT_PX,
             paddingLeft: LABEL_PAD_X,
             paddingRight: LABEL_PAD_X,
-            backgroundColor: withAlpha(p.color, 0.85),
+            backgroundColor: withAlpha(p.color, 0.9),
+            color: readableTextOn(p.color),
           }}
         >
           {p.text}
