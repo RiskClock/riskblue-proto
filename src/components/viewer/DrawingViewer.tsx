@@ -396,6 +396,7 @@ export const DrawingViewer = forwardRef<DrawingViewerApi, DrawingViewerProps>(
                           pageSize={{ width: w, height: h }}
                           overlays={normalizedByPage.get(p.pageNum) ?? []}
                           hoveredOverlayId={hoveredOverlayId}
+                          viewScale={scale}
                           onCanvasClick={
                             onCanvasClick
                               ? (nx, ny) => onCanvasClick(nx, ny, p.pageNum)
