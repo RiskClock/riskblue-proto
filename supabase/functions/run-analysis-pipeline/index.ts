@@ -924,11 +924,14 @@ Deno.serve(async (req) => {
           .delete()
           .eq("analysis_request_id", analysisRequestId);
         if (scopedClasses) analyzeDel = analyzeDel.in("awp_class_name", scopedClasses);
+        if (sheetScope) analyzeDel = analyzeDel.in("sheet_id", sheetScope);
         await Promise.all([
           analyzeDel,
-          admin.from("analysis_requests")
-            .update({ analyze_tokens_used: 0, summary_data: {} } as any)
-            .eq("id", analysisRequestId),
+          sheetScope
+            ? Promise.resolve({ data: null, error: null })
+            : admin.from("analysis_requests")
+                .update({ analyze_tokens_used: 0, summary_data: {} } as any)
+                .eq("id", analysisRequestId),
         ]);
       } else if (phaseOverride === "triage") {
         // Triage button: wipe triage + analyze + overrides. Keep extract artifacts.
@@ -946,7 +949,13 @@ Deno.serve(async (req) => {
           analyzeDel = analyzeDel.in("awp_class_name", scopedClasses);
           overridesDel = overridesDel.in("awp_class_name", scopedClasses);
         }
-        const requestUpdate = scopedClasses
+        if (sheetScope) {
+          triageDel = triageDel.in("sheet_id", sheetScope);
+          analyzeDel = analyzeDel.in("sheet_id", sheetScope);
+          // Overrides are file-scoped; do not delete when narrowing by sheet.
+          overridesDel = overridesDel.eq("analysis_request_id", "__noop__");
+        }
+        const requestUpdate = scopedClasses || sheetScope
           ? admin.from("analysis_requests")
               .update({ summary_data: {} } as any)
               .eq("id", analysisRequestId)
