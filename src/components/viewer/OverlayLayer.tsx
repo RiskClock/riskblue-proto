@@ -67,12 +67,12 @@ interface PlacedLabel {
 
 // Estimate label width without rendering; refined after mount.
 const LABEL_FONT_PX = 10;
-const LABEL_PAD_X = 4;
-const LABEL_H = 14;
+const LABEL_PAD_X = 6;
+const LABEL_H = 16;
 
 function estimateLabelWidth(text: string): number {
-  // Approximate average char width for 10px bold monospace-ish text
-  return Math.ceil(text.length * 6.2) + LABEL_PAD_X * 2;
+  // Bold 10px sans-serif averages ~7.2px/char; add padding + small safety margin.
+  return Math.ceil(text.length * 7.2) + LABEL_PAD_X * 2 + 2;
 }
 
 function rectsOverlap(
