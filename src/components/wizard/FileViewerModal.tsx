@@ -218,7 +218,7 @@ export const FileViewerModal = ({
       setLoadingInstances(true);
       const { data, error } = await supabase
         .from("drawing_instances" as any)
-        .select("id, awp_class_name, nx, ny, page_index, file_id, created_at")
+        .select("id, awp_class_name, nx, ny, page_index, file_id, created_at, instance_number")
         .eq("analysis_request_id", analysisRequestId!)
         .order("created_at", { ascending: true });
       if (!cancelled) {
