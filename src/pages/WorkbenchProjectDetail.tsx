@@ -1394,18 +1394,6 @@ export default function WorkbenchProjectDetail() {
                   >
                     Export Results
                   </Button>
-                  <Button
-                    size="sm"
-                    onClick={() =>
-                      toast({
-                        title: "Sent to WMG Project",
-                        description: "Results have been sent.",
-                      })
-                    }
-                    disabled={!requestId}
-                  >
-                    Send to WMG Project
-                  </Button>
                 </>
               )}
             </div>
