@@ -1199,9 +1199,9 @@ export default function WorkbenchProjectDetail() {
                 No drawings uploaded for this project yet.
               </div>
             ) : (
-              <div className="bg-card rounded-lg border overflow-hidden relative max-h-[calc(100vh-220px)] [&>div]:max-h-[calc(100vh-220px)]">
+              <div className="bg-card rounded-lg border overflow-hidden relative [&>div]:overflow-visible">
                 <Table>
-                  <TableHeader className="sticky top-0 z-20 bg-card">
+                  <TableHeader className="sticky top-[57px] z-20 bg-card">
                     <TableRow>
                       <TableHead className={`${stickyHeadFirst} h-9 py-1`}>
                         Files ({totalFiles} file{totalFiles === 1 ? "" : "s"})
