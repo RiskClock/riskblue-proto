@@ -2166,6 +2166,7 @@ export default function WorkbenchProjectDetail() {
           pageSpaceMap={pageSpaceMap}
           spaceHierarchyPayload={spaceHierarchyPayload}
           projectName={project?.name || "Project"}
+          enabledClassNames={enabledCols}
         />
       </div>
     </TooltipProvider>
