@@ -143,6 +143,7 @@ export default function WorkbenchProjectDetail() {
   const [exporting, setExporting] = useState(false);
   const [spaceModalOpen, setSpaceModalOpen] = useState(false);
   const [buildingSpace, setBuildingSpace] = useState(false);
+  const [instancesReportOpen, setInstancesReportOpen] = useState(false);
 
   const toggleExpand = (fileId: string) => {
     setExpandedFiles((prev) => {
