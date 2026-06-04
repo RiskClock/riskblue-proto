@@ -2545,6 +2545,7 @@ function InstancesReportModal({
     };
     const rows: Row[] = [];
     for (const inst of instances) {
+      if (enabledClassSet.size > 0 && !enabledClassSet.has(inst.awp_class_name)) continue;
       const opt = optionByName.get(inst.awp_class_name);
       const prefix = opt?.idPrefix || inst.awp_class_name.slice(0, 3).toUpperCase();
       const category = opt?.category || "Other";
