@@ -85,6 +85,7 @@ export const DrawingViewer = forwardRef<DrawingViewerApi, DrawingViewerProps>(
       onCanvasClick,
       onOverlayClick,
       className,
+      interactive = true,
     },
     ref
   ) {
