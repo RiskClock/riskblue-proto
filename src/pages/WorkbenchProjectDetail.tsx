@@ -1572,7 +1572,7 @@ export default function WorkbenchProjectDetail() {
         {activeFile && fileSource && (
           <FileViewerModal
             isOpen={!!activeFile}
-            onClose={() => setActiveFile(null)}
+            onClose={() => { setActiveFile(null); setPreselectClass(null); }}
             fileId={activeFile.id}
             fileName={activeFile.name}
             mimeType={activeFile.mime_type || "application/pdf"}
