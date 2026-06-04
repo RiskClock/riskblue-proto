@@ -7,6 +7,7 @@ import {
   ChevronDown,
   ChevronRight,
   Copy,
+  Download,
   Loader2,
   MoreVertical,
   Settings2,
