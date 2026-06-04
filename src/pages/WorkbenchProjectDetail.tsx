@@ -1278,19 +1278,19 @@ export default function WorkbenchProjectDetail() {
                 size="sm"
                 variant="outline"
                 onClick={buildSpaceHierarchy}
-                disabled={!requestId || !allFilesProcessed || buildingSpace || phaseRunning}
+                disabled={!requestId || !allFilesProcessed || spaceHierarchyRunning || phaseRunning}
                 title={
                   !allFilesProcessed
                     ? "All files must finish Extract Context before building the space hierarchy."
                     : "Send extracted text to OpenAI to compile physical floor levels."
                 }
               >
-                {buildingSpace ? (
+                {spaceHierarchyRunning ? (
                   <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />
                 ) : null}
-                Build Space Hierarchy
+                {spaceHierarchyRunning ? "Building Space Hierarchy" : "Build Space Hierarchy"}
               </Button>
-              {analysisRequest?.space_hierarchy_json && (
+              {spaceHierarchyHasResult && (
                 <Button
                   size="sm"
                   variant="ghost"
