@@ -1696,11 +1696,12 @@ export default function WorkbenchProjectDetail() {
                                         : totalCount > 0
                                           ? `${totalCount} annotation${totalCount === 1 ? "" : "s"}`
                                           : "Not triaged";
+                                  const cellHasTriage = hasScore || failed;
                                   return (
                                     <TableCell
                                       key={name}
                                       title={title}
-                                      className="text-center py-1 text-xs relative p-0 cursor-pointer hover:bg-muted/30"
+                                      className="text-center py-1 text-xs relative p-0 cursor-pointer hover:bg-muted/30 group/cell"
                                       style={
                                         hasScore && !failed
                                           ? { backgroundColor: `rgba(16, 185, 129, ${opacity * 0.55})` }
@@ -1714,7 +1715,7 @@ export default function WorkbenchProjectDetail() {
                                         setPreselectClass(name);
                                       }}
                                     >
-                                      <div className="flex items-center justify-center w-full h-7">
+                                      <div className="relative flex items-center justify-center w-full h-7">
                                         {inflight && !hasScore && !failed ? (
                                           <Loader2 className="h-3 w-3 animate-spin text-muted-foreground" />
                                         ) : failed ? (
@@ -1726,6 +1727,43 @@ export default function WorkbenchProjectDetail() {
                                             {hasScore ? "" : "—"}
                                           </span>
                                         )}
+                                        <div
+                                          className="absolute right-0.5 top-1/2 -translate-y-1/2 opacity-0 group-hover/cell:opacity-100 transition-opacity"
+                                          onClick={(e) => e.stopPropagation()}
+                                        >
+                                          <DropdownMenu>
+                                            <DropdownMenuTrigger asChild>
+                                              <button
+                                                type="button"
+                                                className="p-0.5 rounded hover:bg-muted text-muted-foreground hover:text-foreground"
+                                                aria-label={`Actions for ${name}`}
+                                                onClick={(e) => e.stopPropagation()}
+                                              >
+                                                <MoreVertical className="h-3 w-3" />
+                                              </button>
+                                            </DropdownMenuTrigger>
+                                            <DropdownMenuContent align="end" onClick={(e) => e.stopPropagation()}>
+                                              <DropdownMenuItem
+                                                disabled={phaseRunning}
+                                                onClick={() => runCell(s.id, name, "triage")}
+                                              >
+                                                {cellHasTriage ? "Re-Triage" : "Triage"}
+                                              </DropdownMenuItem>
+                                              <DropdownMenuItem
+                                                disabled={phaseRunning || !cellHasTriage}
+                                                onClick={() => runCell(s.id, name, "analyze")}
+                                              >
+                                                Analyze
+                                              </DropdownMenuItem>
+                                              <DropdownMenuItem
+                                                disabled={phaseRunning}
+                                                onClick={() => clearCell(s.id, name)}
+                                              >
+                                                Clear
+                                              </DropdownMenuItem>
+                                            </DropdownMenuContent>
+                                          </DropdownMenu>
+                                        </div>
                                       </div>
                                     </TableCell>
                                   );
