@@ -2778,11 +2778,11 @@ function InstancesReportModal({
       <div className="space-y-4">
         <h3 className="text-sm font-semibold">{label}</h3>
         <Table>
-          <TableHeader>
+          <TableHeader className="sticky top-0 z-10 bg-background shadow-[0_1px_0_0_hsl(var(--border))]">
             <TableRow className={compactRow}>
               <TableHead className={compactHead}>Instance ID</TableHead>
               <TableHead className={compactHead}>Class</TableHead>
-              <TableHead className={compactHead}>Annotation</TableHead>
+              <TableHead className={compactHead}>Annotation ID</TableHead>
               <TableHead className={compactHead}>Source</TableHead>
             </TableRow>
           </TableHeader>
@@ -2820,6 +2820,9 @@ function InstancesReportModal({
               path: lookup.sheet.storage_path,
               mimeType: "application/pdf",
             };
+            // Sheet storage_path is a per-page rendered PDF (single page),
+            // so overlays and the viewer must address page 1, not the
+            // original page_index from the source document.
             const overlays = rows
               .filter((r) => r.fileId === fileId && r.pageIndex === pageIdx)
               .map((r, i) => ({
@@ -2830,12 +2833,10 @@ function InstancesReportModal({
                   0.05,
                   0.05,
                 ] as [number, number, number, number],
-
                 coordSpace: "normalized" as const,
-                page: pageIdx,
+                page: 1,
                 color: "#dc2626",
                 label: r.annotationBaseId,
-
                 shape: "circle" as const,
               }));
 
@@ -2847,7 +2848,7 @@ function InstancesReportModal({
                 <div className="w-full aspect-[3/2] bg-muted/10">
                   <DrawingViewer
                     source={source}
-                    page={pageIdx}
+                    page={1}
                     overlays={overlays}
                     showToolbar={false}
                   />
