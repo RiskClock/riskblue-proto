@@ -299,13 +299,15 @@ export const OverlayLayer = ({
           height: c.r * 2,
           borderRadius: "9999px",
           borderColor: c.color,
-          borderWidth: (c.hovered ? 2 : 1.5) / s,
+          borderWidth: (c.hovered ? 3.5 : 2.5) / s,
           borderStyle: "solid",
-          backgroundColor: withAlpha(c.color, c.hovered ? 0.28 : 0.22),
+          backgroundColor: withAlpha(c.color, c.hovered ? 0.45 : 0.35),
+          boxShadow: `0 0 0 ${1 / s}px rgba(255,255,255,0.85)`,
           boxSizing: "border-box",
           pointerEvents: clickable ? "auto" : "none",
           cursor: clickable ? "pointer" : undefined,
         };
+
         const stop = (e: { stopPropagation: () => void }) => e.stopPropagation();
         return (
           <div
