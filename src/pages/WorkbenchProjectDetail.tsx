@@ -1766,7 +1766,7 @@ export default function WorkbenchProjectDetail() {
         <Dialog open={cleanupOpen} onOpenChange={(o) => !cleanupRunning && setCleanupOpen(o)}>
           <DialogContent className="max-w-md">
             <DialogHeader>
-              <DialogTitle>Clean Up ID Assignment</DialogTitle>
+              <DialogTitle>Renumber IDs</DialogTitle>
               <DialogDescription>
                 Select classes to renumber. Annotation IDs for each selected
                 class will be reassigned starting from 1, across all pages and
