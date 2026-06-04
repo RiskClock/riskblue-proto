@@ -2918,5 +2918,3 @@ function InstancesReportModal({
     </Dialog>
   );
 }
-  );
-}
