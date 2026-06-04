@@ -113,7 +113,7 @@ function bucketForSource(sourceType: string) {
 
 export default function WorkbenchProjectDetail() {
   const { projectId } = useParams<{ projectId: string }>();
-  const { user } = useAuth();
+  const { user, session } = useAuth();
   const navigate = useNavigate();
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -596,6 +596,12 @@ export default function WorkbenchProjectDetail() {
       [...fileExtractStatus.values()].every((s) => s === "processed"),
     [fileExtractStatus, fileGroups.length],
   );
+  const spaceHierarchyPayload = analysisRequest?.space_hierarchy_json as any | null | undefined;
+  const spaceHierarchyResponseId = spaceHierarchyPayload?.openai_response_id as string | undefined;
+  const spaceHierarchyHasResult = !!(spaceHierarchyPayload?.parsed || spaceHierarchyPayload?.raw_text);
+  const spaceHierarchyRunning =
+    buildingSpace ||
+    (analysisRequest?.space_hierarchy_status === "running" && !!spaceHierarchyResponseId);
 
   const openManage = () => {
     setDraftCols(enabledCols);
@@ -940,15 +946,17 @@ export default function WorkbenchProjectDetail() {
     if (!requestId) return;
     setBuildingSpace(true);
     try {
+      const token = session?.access_token;
+      if (!token) throw new Error("Your session expired. Please sign in again.");
       const { error } = await supabase.functions.invoke("build-space-hierarchy", {
-        body: { analysisRequestId: requestId },
+        body: { analysisRequestId: requestId, action: "start" },
+        headers: { Authorization: `Bearer ${token}` },
       });
       if (error) throw error;
-      toast({ title: "Space hierarchy built" });
+      toast({ title: "Space hierarchy build started" });
       queryClient.invalidateQueries({
         queryKey: ["workbench-analysis-request", projectId],
       });
-      setSpaceModalOpen(true);
     } catch (error: any) {
       toast({
         variant: "destructive",
@@ -959,6 +967,32 @@ export default function WorkbenchProjectDetail() {
       setBuildingSpace(false);
     }
   };
+
+  useEffect(() => {
+    if (!requestId || !spaceHierarchyRunning || !spaceHierarchyResponseId || !session?.access_token) return;
+    let cancelled = false;
+    const poll = async () => {
+      const { error } = await supabase.functions.invoke("build-space-hierarchy", {
+        body: { analysisRequestId: requestId, action: "poll" },
+        headers: { Authorization: `Bearer ${session.access_token}` },
+      });
+      if (cancelled) return;
+      if (error) {
+        toast({
+          variant: "destructive",
+          title: "Could not check space hierarchy",
+          description: getUserFriendlyError(error),
+        });
+      }
+      await queryClient.invalidateQueries({ queryKey: ["workbench-analysis-request", projectId] });
+    };
+    const id = window.setInterval(poll, 5000);
+    poll();
+    return () => {
+      cancelled = true;
+      window.clearInterval(id);
+    };
+  }, [requestId, spaceHierarchyRunning, spaceHierarchyResponseId, session?.access_token, queryClient, projectId, toast]);
 
   // --- Export -----------------------------------------------------------------
   const handleExportResults = async () => {
@@ -1244,19 +1278,19 @@ export default function WorkbenchProjectDetail() {
                 size="sm"
                 variant="outline"
                 onClick={buildSpaceHierarchy}
-                disabled={!requestId || !allFilesProcessed || buildingSpace || phaseRunning}
+                disabled={!requestId || !allFilesProcessed || spaceHierarchyRunning || phaseRunning}
                 title={
                   !allFilesProcessed
                     ? "All files must finish Extract Context before building the space hierarchy."
                     : "Send extracted text to OpenAI to compile physical floor levels."
                 }
               >
-                {buildingSpace ? (
+                {spaceHierarchyRunning ? (
                   <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />
                 ) : null}
-                Build Space Hierarchy
+                {spaceHierarchyRunning ? "Building Space Hierarchy" : "Build Space Hierarchy"}
               </Button>
-              {analysisRequest?.space_hierarchy_json && (
+              {spaceHierarchyHasResult && (
                 <Button
                   size="sm"
                   variant="ghost"
@@ -2046,7 +2080,7 @@ export default function WorkbenchProjectDetail() {
         <SpaceHierarchyModal
           open={spaceModalOpen}
           onOpenChange={setSpaceModalOpen}
-          payload={analysisRequest?.space_hierarchy_json ?? null}
+          payload={spaceHierarchyHasResult ? spaceHierarchyPayload ?? null : null}
         />
       </div>
     </TooltipProvider>

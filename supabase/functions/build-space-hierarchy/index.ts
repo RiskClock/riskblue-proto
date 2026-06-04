@@ -41,6 +41,45 @@ For each physical floor level identified, you must map it to the corresponding d
 ### Extracted Text to Process:
 `;
 
+function extractResponseText(raw: any) {
+  let responseText = "";
+  if (raw.output) {
+    for (const item of raw.output) {
+      if (item.type === "message" && item.content) {
+        for (const c of item.content) {
+          if (c.type === "output_text") responseText += c.text;
+        }
+      }
+    }
+  }
+  if (!responseText && typeof raw.output_text === "string") responseText = raw.output_text;
+  return responseText;
+}
+
+function buildResult(raw: any, meta: Record<string, unknown>) {
+  const responseText = extractResponseText(raw);
+  let parsed: unknown = null;
+  let parseError: string | null = null;
+  const cleaned = responseText
+    .trim()
+    .replace(/^```(?:json)?\s*/i, "")
+    .replace(/\s*```$/, "");
+  try {
+    parsed = JSON.parse(cleaned);
+  } catch (e) {
+    parseError = e instanceof Error ? e.message : String(e);
+  }
+  return {
+    ...meta,
+    generated_at: new Date().toISOString(),
+    parsed,
+    parse_error: parseError,
+    raw_text: responseText,
+    usage: raw.usage ?? null,
+    openai_status: raw.status ?? "completed",
+  };
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
@@ -55,18 +94,63 @@ Deno.serve(async (req) => {
     const admin = createClient(supabaseUrl, serviceKey);
 
     const authHeader = req.headers.get("Authorization");
-    if (!authHeader) return json({ error: "Unauthorized" }, 401);
-    const userClient = createClient(supabaseUrl, Deno.env.get("SUPABASE_ANON_KEY")!, {
-      global: { headers: { Authorization: authHeader } },
-    });
-    const { data: { user } } = await userClient.auth.getUser();
-    if (!user) return json({ error: "Unauthorized" }, 401);
+    if (!authHeader?.startsWith("Bearer ")) return json({ error: "Unauthorized" }, 401);
+    const token = authHeader.replace("Bearer ", "");
+    const { data: { user }, error: userError } = await admin.auth.getUser(token);
+    if (userError || !user) {
+      console.warn("[build-space-hierarchy] Auth failed:", userError?.message ?? "No user");
+      return json({ error: "Unauthorized" }, 401);
+    }
 
-    const { analysisRequestId, model } = await req.json() as {
+    const { analysisRequestId, model, action } = await req.json() as {
       analysisRequestId: string;
       model?: string;
+      action?: "start" | "poll";
     };
     if (!analysisRequestId) return json({ error: "Missing analysisRequestId" }, 400);
+
+    if (action === "poll") {
+      const { data: requestRow, error: requestError } = await admin
+        .from("analysis_requests")
+        .select("space_hierarchy_json")
+        .eq("id", analysisRequestId)
+        .maybeSingle();
+      if (requestError) throw requestError;
+      const responseId = (requestRow as any)?.space_hierarchy_json?.openai_response_id;
+      if (!responseId) return json({ error: "No OpenAI response id found" }, 400);
+
+      const statusRes = await fetch(`https://api.openai.com/v1/responses/${responseId}`, {
+        headers: { Authorization: `Bearer ${openaiApiKey}` },
+      });
+      if (!statusRes.ok) {
+        const errText = await statusRes.text();
+        await admin.from("analysis_requests").update({
+          space_hierarchy_status: "failed",
+          space_hierarchy_error: `OpenAI ${statusRes.status}: ${errText.slice(0, 500)}`,
+          space_hierarchy_updated_at: new Date().toISOString(),
+        } as any).eq("id", analysisRequestId);
+        return json({ error: "OpenAI polling failed", details: errText }, 500);
+      }
+
+      const raw = await statusRes.json();
+      if (raw.status !== "completed") {
+        await admin.from("analysis_requests").update({
+          space_hierarchy_status: raw.status === "failed" || raw.status === "cancelled" ? "failed" : "running",
+          space_hierarchy_error: raw.error?.message ?? null,
+          space_hierarchy_updated_at: new Date().toISOString(),
+        } as any).eq("id", analysisRequestId);
+        return json({ status: raw.status ?? "running" });
+      }
+
+      const result = buildResult(raw, (requestRow as any)?.space_hierarchy_json ?? {});
+      await admin.from("analysis_requests").update({
+        space_hierarchy_json: result,
+        space_hierarchy_status: "complete",
+        space_hierarchy_error: null,
+        space_hierarchy_updated_at: new Date().toISOString(),
+      } as any).eq("id", analysisRequestId);
+      return json({ status: "complete", result });
+    }
 
     // Mark as running
     await admin
@@ -155,6 +239,7 @@ Deno.serve(async (req) => {
       },
       body: JSON.stringify({
         model: model || "gpt-5",
+        background: true,
         input: [
           {
             type: "message",
@@ -180,53 +265,27 @@ Deno.serve(async (req) => {
     }
 
     const raw = await openaiRes.json();
-    let responseText = "";
-    if (raw.output) {
-      for (const item of raw.output) {
-        if (item.type === "message" && item.content) {
-          for (const c of item.content) {
-            if (c.type === "output_text") responseText += c.text;
-          }
-        }
-      }
-    }
-    if (!responseText && typeof raw.output_text === "string") responseText = raw.output_text;
-
-    // Try to parse JSON out of the response (it may be wrapped in ```json fences)
-    let parsed: unknown = null;
-    let parseError: string | null = null;
-    const cleaned = responseText
-      .trim()
-      .replace(/^```(?:json)?\s*/i, "")
-      .replace(/\s*```$/, "");
-    try {
-      parsed = JSON.parse(cleaned);
-    } catch (e) {
-      parseError = e instanceof Error ? e.message : String(e);
-    }
-
-    const result = {
-      generated_at: new Date().toISOString(),
+    const meta = {
+      openai_response_id: raw.id,
+      started_at: new Date().toISOString(),
       model: model || "gpt-5",
       input_chars: extractedText.length,
       input_truncated: truncated,
-      parsed,
-      parse_error: parseError,
-      raw_text: responseText,
-      usage: raw.usage ?? null,
+      openai_status: raw.status ?? "queued",
     };
+    const startResult = raw.status === "completed" ? buildResult(raw, meta) : meta;
 
     await admin
       .from("analysis_requests")
       .update({
-        space_hierarchy_json: result,
-        space_hierarchy_status: "complete",
+        space_hierarchy_json: startResult,
+        space_hierarchy_status: raw.status === "completed" ? "complete" : "running",
         space_hierarchy_error: null,
         space_hierarchy_updated_at: new Date().toISOString(),
       } as any)
       .eq("id", analysisRequestId);
 
-    return json({ status: "ok", result });
+    return json({ status: raw.status ?? "running", response_id: raw.id, result: startResult });
   } catch (e) {
     console.error("[build-space-hierarchy] Handler error:", e);
     return json({ error: e instanceof Error ? e.message : "Unknown error" }, 500);
