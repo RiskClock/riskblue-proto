@@ -363,9 +363,10 @@ export const OverlayLayer = ({
             paddingLeft: padX,
             paddingRight: padX,
             borderRadius: 3,
-            backgroundColor: withAlpha(p.color, 0.95),
+            backgroundColor: p.color,
             color: readableTextOn(p.color),
             boxShadow: `0 0 0 1px rgba(255,255,255,0.9)`,
+            opacity: LABEL_OPACITY,
           }}
         >
           {p.text}
