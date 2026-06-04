@@ -121,6 +121,11 @@ export default function WorkbenchProjectDetail() {
 
   const [activeSheet, setActiveSheet] = useState<SheetRow | null>(null);
   const [activeFile, setActiveFile] = useState<FileRow | null>(null);
+  const [preselectClass, setPreselectClass] = useState<string | null>(null);
+  const [cleanupOpen, setCleanupOpen] = useState(false);
+  const [cleanupChecked, setCleanupChecked] = useState<Set<string>>(new Set());
+  const [cleanupRunning, setCleanupRunning] = useState(false);
+
   
   const [manageOpen, setManageOpen] = useState(false);
   const [draftCols, setDraftCols] = useState<string[]>([]);
