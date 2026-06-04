@@ -159,15 +159,20 @@ export const FileViewerModal = ({
     if (isOpen && !wasOpenRef.current) {
       setPast([]);
       setFuture([]);
-      const stored = readStoredClass();
-      const next =
-        stored && awpClasses?.some((c) => c.name === stored)
-          ? stored
-          : awpClasses?.[0]?.name ?? null;
-      setSelectedClass(next);
+      // Preselect takes priority over stored class so cell-click force-selects.
+      if (preselectClass && awpClasses?.some((c) => c.name === preselectClass)) {
+        setSelectedClass(preselectClass);
+      } else {
+        const stored = readStoredClass();
+        const next =
+          stored && awpClasses?.some((c) => c.name === stored)
+            ? stored
+            : awpClasses?.[0]?.name ?? null;
+        setSelectedClass(next);
+      }
     }
     wasOpenRef.current = isOpen;
-  }, [isOpen, awpClasses, readStoredClass]);
+  }, [isOpen, awpClasses, readStoredClass, preselectClass]);
 
   // Auto-expand newly-arriving classes so they default to expanded.
   // Track which class names we've already auto-expanded so user-collapsed
