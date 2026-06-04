@@ -41,6 +41,45 @@ For each physical floor level identified, you must map it to the corresponding d
 ### Extracted Text to Process:
 `;
 
+function extractResponseText(raw: any) {
+  let responseText = "";
+  if (raw.output) {
+    for (const item of raw.output) {
+      if (item.type === "message" && item.content) {
+        for (const c of item.content) {
+          if (c.type === "output_text") responseText += c.text;
+        }
+      }
+    }
+  }
+  if (!responseText && typeof raw.output_text === "string") responseText = raw.output_text;
+  return responseText;
+}
+
+function buildResult(raw: any, meta: Record<string, unknown>) {
+  const responseText = extractResponseText(raw);
+  let parsed: unknown = null;
+  let parseError: string | null = null;
+  const cleaned = responseText
+    .trim()
+    .replace(/^```(?:json)?\s*/i, "")
+    .replace(/\s*```$/, "");
+  try {
+    parsed = JSON.parse(cleaned);
+  } catch (e) {
+    parseError = e instanceof Error ? e.message : String(e);
+  }
+  return {
+    ...meta,
+    generated_at: new Date().toISOString(),
+    parsed,
+    parse_error: parseError,
+    raw_text: responseText,
+    usage: raw.usage ?? null,
+    openai_status: raw.status ?? "completed",
+  };
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
