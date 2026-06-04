@@ -411,6 +411,10 @@ export type Database = {
           project_id: string
           sheet_normalization_enabled: boolean
           source_type: string
+          space_hierarchy_error: string | null
+          space_hierarchy_json: Json | null
+          space_hierarchy_status: string | null
+          space_hierarchy_updated_at: string | null
           started_at: string | null
           status: string
           storage_path: string | null
@@ -439,6 +443,10 @@ export type Database = {
           project_id: string
           sheet_normalization_enabled?: boolean
           source_type?: string
+          space_hierarchy_error?: string | null
+          space_hierarchy_json?: Json | null
+          space_hierarchy_status?: string | null
+          space_hierarchy_updated_at?: string | null
           started_at?: string | null
           status?: string
           storage_path?: string | null
@@ -467,6 +475,10 @@ export type Database = {
           project_id?: string
           sheet_normalization_enabled?: boolean
           source_type?: string
+          space_hierarchy_error?: string | null
+          space_hierarchy_json?: Json | null
+          space_hierarchy_status?: string | null
+          space_hierarchy_updated_at?: string | null
           started_at?: string | null
           status?: string
           storage_path?: string | null
