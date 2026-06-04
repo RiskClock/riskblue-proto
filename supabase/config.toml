@@ -107,3 +107,6 @@ verify_jwt = false
 
 [functions.process-analysis-jobs]
 verify_jwt = false
+
+[functions.build-space-hierarchy]
+verify_jwt = false
