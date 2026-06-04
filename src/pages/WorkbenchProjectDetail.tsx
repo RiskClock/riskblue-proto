@@ -112,6 +112,26 @@ function bucketForSource(sourceType: string) {
   return sourceType === "manual_upload" ? "uploaded-drawings" : "drive-analysis-files";
 }
 
+/** Format a set of space names for a multi-level badge.
+ * Contiguous numeric "Level N" runs collapse to "Level X-Y".
+ * Non-contiguous "Level N" sets render as "Level X & Y".
+ * Mixed/non-numeric falls back to joining with " & ". */
+function formatSpaceBadge(spaces: string[]): string {
+  if (spaces.length === 0) return "";
+  if (spaces.length === 1) return spaces[0];
+  const parsed = spaces.map((s) => {
+    const m = /^Level\s+(-?\d+)$/.exec(s);
+    return m ? parseInt(m[1], 10) : null;
+  });
+  if (parsed.every((n) => n !== null)) {
+    const nums = (parsed as number[]).slice().sort((a, b) => a - b);
+    const contiguous = nums.every((n, i) => i === 0 || n === nums[i - 1] + 1);
+    if (contiguous) return `Level ${nums[0]}-${nums[nums.length - 1]}`;
+    return `Level ${nums.join(" & ")}`;
+  }
+  return spaces.join(" & ");
+}
+
 export default function WorkbenchProjectDetail() {
   const { projectId } = useParams<{ projectId: string }>();
   const { user, session } = useAuth();
