@@ -697,6 +697,7 @@ Deno.serve(async (req) => {
       triageModel,
       analyzeModel,
       phaseOverride,
+      scopedSheetIds,
     } = body as {
       analysisRequestId: string;
       action?: string;
@@ -704,7 +705,12 @@ Deno.serve(async (req) => {
       triageModel?: string;
       analyzeModel?: string;
       phaseOverride?: string;
+      scopedSheetIds?: string[];
     };
+    const sheetScope =
+      Array.isArray(scopedSheetIds) && scopedSheetIds.length > 0
+        ? scopedSheetIds
+        : null;
 
     if (!analysisRequestId) return json({ error: "Missing analysisRequestId" }, 400);
 
@@ -918,11 +924,14 @@ Deno.serve(async (req) => {
           .delete()
           .eq("analysis_request_id", analysisRequestId);
         if (scopedClasses) analyzeDel = analyzeDel.in("awp_class_name", scopedClasses);
+        if (sheetScope) analyzeDel = analyzeDel.in("sheet_id", sheetScope);
         await Promise.all([
           analyzeDel,
-          admin.from("analysis_requests")
-            .update({ analyze_tokens_used: 0, summary_data: {} } as any)
-            .eq("id", analysisRequestId),
+          sheetScope
+            ? Promise.resolve({ data: null, error: null })
+            : admin.from("analysis_requests")
+                .update({ analyze_tokens_used: 0, summary_data: {} } as any)
+                .eq("id", analysisRequestId),
         ]);
       } else if (phaseOverride === "triage") {
         // Triage button: wipe triage + analyze + overrides. Keep extract artifacts.
@@ -940,7 +949,13 @@ Deno.serve(async (req) => {
           analyzeDel = analyzeDel.in("awp_class_name", scopedClasses);
           overridesDel = overridesDel.in("awp_class_name", scopedClasses);
         }
-        const requestUpdate = scopedClasses
+        if (sheetScope) {
+          triageDel = triageDel.in("sheet_id", sheetScope);
+          analyzeDel = analyzeDel.in("sheet_id", sheetScope);
+          // Overrides are file-scoped; do not delete when narrowing by sheet.
+          overridesDel = overridesDel.eq("analysis_request_id", "__noop__");
+        }
+        const requestUpdate = scopedClasses || sheetScope
           ? admin.from("analysis_requests")
               .update({ summary_data: {} } as any)
               .eq("id", analysisRequestId)
@@ -1004,6 +1019,7 @@ Deno.serve(async (req) => {
       analyzeModel: analyzeModel || "gpt-5-mini",
       phaseOverride,
       activeRunId,
+      scopedSheetIds: sheetScope,
     });
 
     if (typeof (globalThis as any).EdgeRuntime?.waitUntil === "function") {
@@ -1039,6 +1055,7 @@ interface PipelineParams {
   analyzeModel: string;
   phaseOverride?: string;
   activeRunId: string | null;
+  scopedSheetIds?: string[] | null;
 }
 
 async function runPipeline(params: PipelineParams) {
@@ -1054,7 +1071,12 @@ async function runPipeline(params: PipelineParams) {
     analyzeModel,
     phaseOverride,
     activeRunId,
+    scopedSheetIds,
   } = params;
+  const sheetScopeSet =
+    Array.isArray(scopedSheetIds) && scopedSheetIds.length > 0
+      ? new Set(scopedSheetIds)
+      : null;
 
   const MAX_CONCURRENCY = 5;
 
@@ -1343,9 +1365,12 @@ async function runPipeline(params: PipelineParams) {
       // Backfill mode (triage/analyze override): only extract units that are
       // missing extracted text. Full-extract mode (no override OR override='extract')
       // processes every unit.
-      const units = isBackfillExtract
+      let units = isBackfillExtract
         ? allUnits.filter((u) => !u.hasExtract)
         : allUnits;
+      if (sheetScopeSet) {
+        units = units.filter((u) => u.kind === "sheet" && sheetScopeSet.has(u.id));
+      }
 
       console.log(
         `[pipeline] Phase 1: Extract context for ${units.length} ${useSheets ? "sheets" : "files"} (backfill=${isBackfillExtract}, totalCandidates=${allUnits.length})`,
@@ -1427,11 +1452,14 @@ async function runPipeline(params: PipelineParams) {
       // Build triage units: one per (sheet|file, class).
       // In sheet-mode, file_id is the parent_file_id (kept for legacy joins) and sheet_id identifies the unit.
       type TriageUnit = { fileId: string; sheetId: string | null; name: string };
-      const triageUnits: TriageUnit[] = useSheets
+      let triageUnits: TriageUnit[] = useSheets
         ? sheets.map((s: any) => ({ fileId: s.parent_file_id, sheetId: s.id, name: s.name }))
         : [...files]
             .sort((a: any, b: any) => (a.name || "").localeCompare(b.name || ""))
             .map((f: any) => ({ fileId: f.id, sheetId: null, name: f.name }));
+      if (sheetScopeSet) {
+        triageUnits = triageUnits.filter((u) => u.sheetId && sheetScopeSet.has(u.sheetId));
+      }
 
       // Backfill mode (analyze override): only enqueue triage for (unit,class)
       // pairs that DON'T already have a triage result for the active run.
@@ -1480,12 +1508,22 @@ async function runPipeline(params: PipelineParams) {
       );
 
 
-      // Clear stale triage jobs for this request before insert
-      await admin
-        .from("analysis_pipeline_jobs")
-        .delete()
-        .eq("analysis_request_id", analysisRequestId)
-        .eq("job_kind", "triage");
+      // Clear stale triage jobs for this request before insert (scoped to
+      // current sheet selection when this is a per-cell run).
+      {
+        const scopedClassesInner =
+          Array.isArray(enabledAwpClasses) && enabledAwpClasses.length > 0
+            ? enabledAwpClasses
+            : null;
+        let staleDel = admin
+          .from("analysis_pipeline_jobs")
+          .delete()
+          .eq("analysis_request_id", analysisRequestId)
+          .eq("job_kind", "triage");
+        if (sheetScopeSet) staleDel = staleDel.in("sheet_id", scopedSheetIds!);
+        if (scopedClassesInner) staleDel = staleDel.in("awp_class_name", scopedClassesInner);
+        await staleDel;
+      }
 
       // NOTE: We intentionally do NOT pre-insert placeholder triage rows.
       // The triage worker is the SOLE writer of analysis_triage_results — it
@@ -1571,14 +1609,18 @@ async function runPipeline(params: PipelineParams) {
       // Defensive reconciliation: any triage rows still "processing" or "queued"
       // at this point are orphans (the triage call crashed before updating).
       // Mark them failed so the UI stops showing spinners on those cells.
-      await admin
-        .from("analysis_triage_results")
-        .update({
-          status: "failed",
-          error_message: "Triage did not complete (orphaned processing row)",
-        } as any)
-        .eq("analysis_request_id", analysisRequestId)
-        .in("status", ["processing", "queued"]);
+      {
+        let reconcile = admin
+          .from("analysis_triage_results")
+          .update({
+            status: "failed",
+            error_message: "Triage did not complete (orphaned processing row)",
+          } as any)
+          .eq("analysis_request_id", analysisRequestId)
+          .in("status", ["processing", "queued"]);
+        if (sheetScopeSet) reconcile = reconcile.in("sheet_id", scopedSheetIds!);
+        await reconcile;
+      }
 
       const { data: triageResults } = await admin
         .from("analysis_triage_results")
@@ -1671,6 +1713,7 @@ async function runPipeline(params: PipelineParams) {
         for (const t of (triageResults || []) as any[]) {
           const sh = sheetById.get(t.sheet_id);
           if (!sh) continue;
+          if (sheetScopeSet && !sheetScopeSet.has(sh.id)) continue;
 
           const overrideKey = `${sh.parent_file_id}_${t.awp_class_name}`;
           const override = overrideMap.get(overrideKey);
@@ -1852,11 +1895,22 @@ async function runPipeline(params: PipelineParams) {
       }
 
       // Clear any old analyze jobs for this request before inserting fresh ones.
-      await admin
-        .from("analysis_pipeline_jobs")
-        .delete()
-        .eq("analysis_request_id", analysisRequestId)
-        .or("job_kind.is.null,job_kind.eq.analyze");
+      // Scope by sheet_id + class when this is a per-cell run so other in-flight
+      // analyze jobs are not wiped.
+      {
+        const scopedClassesInner =
+          Array.isArray(enabledAwpClasses) && enabledAwpClasses.length > 0
+            ? enabledAwpClasses
+            : null;
+        let stale = admin
+          .from("analysis_pipeline_jobs")
+          .delete()
+          .eq("analysis_request_id", analysisRequestId)
+          .or("job_kind.is.null,job_kind.eq.analyze");
+        if (sheetScopeSet) stale = stale.in("sheet_id", scopedSheetIds!);
+        if (scopedClassesInner) stale = stale.in("awp_class_name", scopedClassesInner);
+        await stale;
+      }
 
       // Build job rows. Items with no prompt content fail immediately as
       // analysis_results rows (preserves prior behavior, no retries).

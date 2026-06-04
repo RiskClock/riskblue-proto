@@ -141,6 +141,8 @@ export default function WorkbenchProjectDetail() {
   // (but not across browser refresh).
   const [sidebarExpandedClasses, setSidebarExpandedClasses] = useState<Set<string>>(new Set());
   const [exporting, setExporting] = useState(false);
+  const [spaceModalOpen, setSpaceModalOpen] = useState(false);
+  const [buildingSpace, setBuildingSpace] = useState(false);
 
   const toggleExpand = (fileId: string) => {
     setExpandedFiles((prev) => {
@@ -180,7 +182,7 @@ export default function WorkbenchProjectDetail() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("analysis_requests")
-        .select("id, source_type, pipeline_phase, status, pipeline_progress_done, pipeline_progress_total")
+        .select("id, source_type, pipeline_phase, status, pipeline_progress_done, pipeline_progress_total, space_hierarchy_json, space_hierarchy_status, space_hierarchy_error, space_hierarchy_updated_at")
         .eq("project_id", projectId!)
         .order("created_at", { ascending: false })
         .limit(1)
@@ -588,6 +590,12 @@ export default function WorkbenchProjectDetail() {
     () => [...fileExtractStatus.values()].some((s) => s === "processed"),
     [fileExtractStatus],
   );
+  const allFilesProcessed = useMemo(
+    () =>
+      fileGroups.length > 0 &&
+      [...fileExtractStatus.values()].every((s) => s === "processed"),
+    [fileExtractStatus, fileGroups.length],
+  );
 
   const openManage = () => {
     setDraftCols(enabledCols);
@@ -862,6 +870,93 @@ export default function WorkbenchProjectDetail() {
         title: "Could not clear class",
         description: getUserFriendlyError(error),
       });
+    }
+  };
+
+  // ---- Per-cell (single sheet × class) actions --------------------------
+  const runCell = async (
+    sheetId: string,
+    awpClassName: string,
+    phase: "triage" | "analyze",
+  ) => {
+    if (!requestId) return;
+    try {
+      const { error } = await supabase.functions.invoke("run-analysis-pipeline", {
+        body: {
+          analysisRequestId: requestId,
+          phaseOverride: phase,
+          enabledAwpClasses: [awpClassName],
+          scopedSheetIds: [sheetId],
+        },
+      });
+      if (error) throw error;
+      toast({ title: phase === "triage" ? "Triage started for cell" : "Analyze started for cell" });
+      queryClient.invalidateQueries({ queryKey: ["workbench-triage", requestId] });
+      queryClient.invalidateQueries({ queryKey: ["workbench-analyze", requestId] });
+      queryClient.invalidateQueries({ queryKey: ["workbench-jobs", requestId] });
+      queryClient.invalidateQueries({
+        queryKey: ["workbench-analysis-request", projectId],
+      });
+    } catch (error: any) {
+      toast({
+        variant: "destructive",
+        title: `Could not start ${phase}`,
+        description: getUserFriendlyError(error),
+      });
+    }
+  };
+
+  const clearCell = async (sheetId: string, awpClassName: string) => {
+    if (!requestId) return;
+    try {
+      await Promise.all([
+        supabase
+          .from("analysis_triage_results")
+          .delete()
+          .eq("analysis_request_id", requestId)
+          .eq("sheet_id", sheetId)
+          .eq("awp_class_name", awpClassName),
+        supabase
+          .from("analysis_results")
+          .delete()
+          .eq("analysis_request_id", requestId)
+          .eq("sheet_id", sheetId)
+          .eq("awp_class_name", awpClassName),
+      ]);
+      queryClient.invalidateQueries({ queryKey: ["workbench-triage", requestId] });
+      queryClient.invalidateQueries({ queryKey: ["workbench-analyze", requestId] });
+      toast({ title: "Cell cleared" });
+    } catch (error: any) {
+      toast({
+        variant: "destructive",
+        title: "Could not clear cell",
+        description: getUserFriendlyError(error),
+      });
+    }
+  };
+
+  // ---- Build Space Hierarchy ---------------------------------------------
+  const buildSpaceHierarchy = async () => {
+    if (!requestId) return;
+    setBuildingSpace(true);
+    try {
+      const { error } = await supabase.functions.invoke("build-space-hierarchy", {
+        body: { analysisRequestId: requestId },
+      });
+      if (error) throw error;
+      toast({ title: "Space hierarchy built" });
+      queryClient.invalidateQueries({
+        queryKey: ["workbench-analysis-request", projectId],
+      });
+      setSpaceModalOpen(true);
+    } catch (error: any) {
+      toast({
+        variant: "destructive",
+        title: "Could not build space hierarchy",
+        description: getUserFriendlyError(error),
+      });
+    } finally {
+      setBuildingSpace(false);
     }
   };
 
@@ -1145,7 +1240,35 @@ export default function WorkbenchProjectDetail() {
                 </Button>
               )}
 
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={buildSpaceHierarchy}
+                disabled={!requestId || !allFilesProcessed || buildingSpace || phaseRunning}
+                title={
+                  !allFilesProcessed
+                    ? "All files must finish Extract Context before building the space hierarchy."
+                    : "Send extracted text to OpenAI to compile physical floor levels."
+                }
+              >
+                {buildingSpace ? (
+                  <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />
+                ) : null}
+                Build Space Hierarchy
+              </Button>
+              {analysisRequest?.space_hierarchy_json && (
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  onClick={() => setSpaceModalOpen(true)}
+                  title="View last space hierarchy result"
+                >
+                  View Hierarchy
+                </Button>
+              )}
+
               <span className="text-muted-foreground select-none">|</span>
+
 
               <Button
                 size="sm"
@@ -1573,11 +1696,12 @@ export default function WorkbenchProjectDetail() {
                                         : totalCount > 0
                                           ? `${totalCount} annotation${totalCount === 1 ? "" : "s"}`
                                           : "Not triaged";
+                                  const cellHasTriage = hasScore || failed;
                                   return (
                                     <TableCell
                                       key={name}
                                       title={title}
-                                      className="text-center py-1 text-xs relative p-0 cursor-pointer hover:bg-muted/30"
+                                      className="text-center py-1 text-xs relative p-0 cursor-pointer hover:bg-muted/30 group/cell"
                                       style={
                                         hasScore && !failed
                                           ? { backgroundColor: `rgba(16, 185, 129, ${opacity * 0.55})` }
@@ -1591,7 +1715,7 @@ export default function WorkbenchProjectDetail() {
                                         setPreselectClass(name);
                                       }}
                                     >
-                                      <div className="flex items-center justify-center w-full h-7">
+                                      <div className="relative flex items-center justify-center w-full h-7">
                                         {inflight && !hasScore && !failed ? (
                                           <Loader2 className="h-3 w-3 animate-spin text-muted-foreground" />
                                         ) : failed ? (
@@ -1603,6 +1727,43 @@ export default function WorkbenchProjectDetail() {
                                             {hasScore ? "" : "—"}
                                           </span>
                                         )}
+                                        <div
+                                          className="absolute right-0.5 top-1/2 -translate-y-1/2 opacity-0 group-hover/cell:opacity-100 transition-opacity"
+                                          onClick={(e) => e.stopPropagation()}
+                                        >
+                                          <DropdownMenu>
+                                            <DropdownMenuTrigger asChild>
+                                              <button
+                                                type="button"
+                                                className="p-0.5 rounded hover:bg-muted text-muted-foreground hover:text-foreground"
+                                                aria-label={`Actions for ${name}`}
+                                                onClick={(e) => e.stopPropagation()}
+                                              >
+                                                <MoreVertical className="h-3 w-3" />
+                                              </button>
+                                            </DropdownMenuTrigger>
+                                            <DropdownMenuContent align="end" onClick={(e) => e.stopPropagation()}>
+                                              <DropdownMenuItem
+                                                disabled={phaseRunning}
+                                                onClick={() => runCell(s.id, name, "triage")}
+                                              >
+                                                {cellHasTriage ? "Re-Triage" : "Triage"}
+                                              </DropdownMenuItem>
+                                              <DropdownMenuItem
+                                                disabled={phaseRunning || !cellHasTriage}
+                                                onClick={() => runCell(s.id, name, "analyze")}
+                                              >
+                                                Analyze
+                                              </DropdownMenuItem>
+                                              <DropdownMenuItem
+                                                disabled={phaseRunning}
+                                                onClick={() => clearCell(s.id, name)}
+                                              >
+                                                Clear
+                                              </DropdownMenuItem>
+                                            </DropdownMenuContent>
+                                          </DropdownMenu>
+                                        </div>
                                       </div>
                                     </TableCell>
                                   );
@@ -1881,6 +2042,12 @@ export default function WorkbenchProjectDetail() {
             </AlertDialogFooter>
           </AlertDialogContent>
         </AlertDialog>
+
+        <SpaceHierarchyModal
+          open={spaceModalOpen}
+          onOpenChange={setSpaceModalOpen}
+          payload={analysisRequest?.space_hierarchy_json ?? null}
+        />
       </div>
     </TooltipProvider>
   );
@@ -1998,6 +2165,73 @@ function AwpPromptModal({
           >
             Open Source File
           </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// SpaceHierarchyModal — pretty-printed JSON viewer with copy
+// ---------------------------------------------------------------------------
+function SpaceHierarchyModal({
+  open,
+  onOpenChange,
+  payload,
+}: {
+  open: boolean;
+  onOpenChange: (v: boolean) => void;
+  payload: any | null;
+}) {
+  const [copied, setCopied] = useState(false);
+  const pretty = useMemo(() => {
+    if (!payload) return "";
+    const parsed = (payload as any)?.parsed;
+    const target = parsed ?? (payload as any)?.raw_text ?? payload;
+    try {
+      return typeof target === "string" ? target : JSON.stringify(target, null, 2);
+    } catch {
+      return String(target);
+    }
+  }, [payload]);
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-4xl">
+        <DialogHeader>
+          <DialogTitle>Space Hierarchy</DialogTitle>
+          <DialogDescription>
+            {payload?.generated_at
+              ? `Generated ${new Date(payload.generated_at).toLocaleString()} · model ${payload.model ?? "?"} · ${payload.input_chars ?? 0} chars${
+                  payload.input_truncated ? " (truncated)" : ""
+                }${payload.parse_error ? " · ⚠ JSON parse failed" : ""}`
+              : "No result yet."}
+          </DialogDescription>
+        </DialogHeader>
+        <pre className="text-xs bg-muted/40 p-3 rounded-md max-h-[60vh] overflow-auto whitespace-pre-wrap break-words">
+{pretty || "(empty)"}
+        </pre>
+        {payload?.parse_error && payload?.raw_text && (
+          <details className="text-xs">
+            <summary className="cursor-pointer text-muted-foreground">Raw response</summary>
+            <pre className="mt-2 bg-muted/40 p-3 rounded-md max-h-[40vh] overflow-auto whitespace-pre-wrap break-words">
+{payload.raw_text}
+            </pre>
+          </details>
+        )}
+        <DialogFooter>
+          <Button
+            variant="outline"
+            onClick={() => {
+              navigator.clipboard.writeText(pretty);
+              setCopied(true);
+              setTimeout(() => setCopied(false), 1500);
+            }}
+          >
+            {copied ? <Check className="h-4 w-4 mr-1.5" /> : <Copy className="h-4 w-4 mr-1.5" />}
+            {copied ? "Copied" : "Copy JSON"}
+          </Button>
+          <Button onClick={() => onOpenChange(false)}>Close</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
