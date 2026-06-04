@@ -1762,6 +1762,71 @@ export default function WorkbenchProjectDetail() {
           </DialogContent>
         </Dialog>
 
+        {/* Clean Up ID Assignment modal */}
+        <Dialog open={cleanupOpen} onOpenChange={(o) => !cleanupRunning && setCleanupOpen(o)}>
+          <DialogContent className="max-w-md">
+            <DialogHeader>
+              <DialogTitle>Clean Up ID Assignment</DialogTitle>
+              <DialogDescription>
+                Select classes to renumber. Annotation IDs for each selected
+                class will be reassigned starting from 1, across all pages and
+                files in this analysis.
+              </DialogDescription>
+            </DialogHeader>
+            <div className="max-h-[50vh] overflow-auto space-y-2 py-2">
+              {enabledCols.length === 0 ? (
+                <div className="text-sm text-muted-foreground">No classes selected.</div>
+              ) : (
+                enabledCols.map((name) => {
+                  const opt = optionByName.get(name);
+                  const checked = cleanupChecked.has(name);
+                  return (
+                    <label
+                      key={name}
+                      className="flex items-center gap-2 text-sm cursor-pointer"
+                    >
+                      <Checkbox
+                        checked={checked}
+                        onCheckedChange={() => {
+                          setCleanupChecked((prev) => {
+                            const next = new Set(prev);
+                            if (next.has(name)) next.delete(name);
+                            else next.add(name);
+                            return next;
+                          });
+                        }}
+                      />
+                      <span>
+                        {opt?.idPrefix && (
+                          <span className="font-mono text-xs text-muted-foreground mr-2">
+                            {opt.idPrefix}
+                          </span>
+                        )}
+                        {name}
+                      </span>
+                    </label>
+                  );
+                })
+              )}
+            </div>
+            <DialogFooter>
+              <Button
+                variant="outline"
+                onClick={() => setCleanupOpen(false)}
+                disabled={cleanupRunning}
+              >
+                Cancel
+              </Button>
+              <Button
+                onClick={runCleanupIdAssignment}
+                disabled={cleanupRunning || cleanupChecked.size === 0}
+              >
+                {cleanupRunning ? <Loader2 className="h-4 w-4 animate-spin" /> : "Clean Up"}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
         {/* Clear All confirmation */}
         <AlertDialog open={clearOpen} onOpenChange={setClearOpen}>
           <AlertDialogContent>
