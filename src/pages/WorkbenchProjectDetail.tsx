@@ -590,6 +590,12 @@ export default function WorkbenchProjectDetail() {
     () => [...fileExtractStatus.values()].some((s) => s === "processed"),
     [fileExtractStatus],
   );
+  const allFilesProcessed = useMemo(
+    () =>
+      fileGroups.length > 0 &&
+      [...fileExtractStatus.values()].every((s) => s === "processed"),
+    [fileExtractStatus, fileGroups.length],
+  );
 
   const openManage = () => {
     setDraftCols(enabledCols);
