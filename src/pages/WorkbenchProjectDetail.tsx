@@ -706,7 +706,7 @@ export default function WorkbenchProjectDetail() {
           .order("instance_number", { ascending: true, nullsFirst: false })
           .order("created_at", { ascending: true });
         if (error) throw error;
-        const rows = (data || []) as Array<{ id: string; instance_number: number | null; created_at: string }>;
+        const rows = ((data as unknown) as Array<{ id: string; instance_number: number | null; created_at: string }>) || [];
         // Reassign starting at 1. Skip updates that are already correct.
         for (let i = 0; i < rows.length; i++) {
           const desired = i + 1;
