@@ -2165,6 +2165,73 @@ function AwpPromptModal({
   );
 }
 
+// ---------------------------------------------------------------------------
+// SpaceHierarchyModal — pretty-printed JSON viewer with copy
+// ---------------------------------------------------------------------------
+function SpaceHierarchyModal({
+  open,
+  onOpenChange,
+  payload,
+}: {
+  open: boolean;
+  onOpenChange: (v: boolean) => void;
+  payload: any | null;
+}) {
+  const [copied, setCopied] = useState(false);
+  const pretty = useMemo(() => {
+    if (!payload) return "";
+    const parsed = (payload as any)?.parsed;
+    const target = parsed ?? (payload as any)?.raw_text ?? payload;
+    try {
+      return typeof target === "string" ? target : JSON.stringify(target, null, 2);
+    } catch {
+      return String(target);
+    }
+  }, [payload]);
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-4xl">
+        <DialogHeader>
+          <DialogTitle>Space Hierarchy</DialogTitle>
+          <DialogDescription>
+            {payload?.generated_at
+              ? `Generated ${new Date(payload.generated_at).toLocaleString()} · model ${payload.model ?? "?"} · ${payload.input_chars ?? 0} chars${
+                  payload.input_truncated ? " (truncated)" : ""
+                }${payload.parse_error ? " · ⚠ JSON parse failed" : ""}`
+              : "No result yet."}
+          </DialogDescription>
+        </DialogHeader>
+        <pre className="text-xs bg-muted/40 p-3 rounded-md max-h-[60vh] overflow-auto whitespace-pre-wrap break-words">
+{pretty || "(empty)"}
+        </pre>
+        {payload?.parse_error && payload?.raw_text && (
+          <details className="text-xs">
+            <summary className="cursor-pointer text-muted-foreground">Raw response</summary>
+            <pre className="mt-2 bg-muted/40 p-3 rounded-md max-h-[40vh] overflow-auto whitespace-pre-wrap break-words">
+{payload.raw_text}
+            </pre>
+          </details>
+        )}
+        <DialogFooter>
+          <Button
+            variant="outline"
+            onClick={() => {
+              navigator.clipboard.writeText(pretty);
+              setCopied(true);
+              setTimeout(() => setCopied(false), 1500);
+            }}
+          >
+            {copied ? <Check className="h-4 w-4 mr-1.5" /> : <Copy className="h-4 w-4 mr-1.5" />}
+            {copied ? "Copied" : "Copy JSON"}
+          </Button>
+          <Button onClick={() => onOpenChange(false)}>Close</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 
 // ---------------------------------------------------------------------------
 // ExtractedTextBody — shows file extracted text without page line-break headers
