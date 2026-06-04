@@ -123,10 +123,8 @@ function placeLabel(
 
       // Avoid overlap with other labels
       const overlapsLabel = placed.some((p) => rectsOverlap(rect, p));
-      // Avoid overlap with OTHER circles (allow own circle to be near)
+      // Avoid overlap with ANY circle (including own) so the label sits clear.
       const overlapsCircle = circles.some((c) => {
-        if (c.id === circle.id) return false;
-        // Distance from rect to circle center
         const closestX = Math.max(rect.x, Math.min(c.cx, rect.x + rect.w));
         const closestY = Math.max(rect.y, Math.min(c.cy, rect.y + rect.h));
         const dx = c.cx - closestX;
