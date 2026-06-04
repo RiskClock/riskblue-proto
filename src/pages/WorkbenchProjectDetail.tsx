@@ -2825,10 +2825,10 @@ function InstancesReportModal({
               .map((r, i) => ({
                 id: `${r.instanceId}-${i}`,
                 bbox: [
-                  Math.max(0, r.nx - 0.006),
-                  Math.max(0, r.ny - 0.006),
-                  0.012,
-                  0.012,
+                  Math.max(0, r.nx - 0.015),
+                  Math.max(0, r.ny - 0.015),
+                  0.03,
+                  0.03,
                 ] as [number, number, number, number],
                 coordSpace: "normalized" as const,
                 page: pageIdx,
@@ -2836,6 +2836,7 @@ function InstancesReportModal({
                 label: r.instanceId,
                 shape: "circle" as const,
               }));
+
             return (
               <div key={key} className="border rounded-md overflow-hidden">
                 <div className="px-2 py-1 text-[11px] font-medium bg-muted/40 border-b">
