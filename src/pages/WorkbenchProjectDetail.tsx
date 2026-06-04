@@ -436,9 +436,9 @@ export default function WorkbenchProjectDetail() {
     [awpOptions],
   );
   const optionByName = useMemo(() => {
-    const m = new Map<string, { name: string; idPrefix: string | null }>();
+    const m = new Map<string, { name: string; idPrefix: string | null; category: string }>();
     for (const o of awpOptions || [])
-      m.set(o.name, { name: o.name, idPrefix: o.idPrefix });
+      m.set(o.name, { name: o.name, idPrefix: o.idPrefix, category: o.category });
     return m;
   }, [awpOptions]);
 
