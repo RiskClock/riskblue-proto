@@ -112,11 +112,11 @@ function generateCandidates(
   gap: number,
   bounds: { width: number; height: number },
 ): LabelCandidate[] {
-  const directions = 16;
-  const rings = 3;
+  const directions = 24;
+  const rings = 4;
   const out: LabelCandidate[] = [];
   for (let ring = 0; ring < rings; ring++) {
-    const dist = c.r + gap + ring * Math.max(8, labelH * 0.6);
+    const dist = c.r + gap + ring * Math.max(6, labelH * 0.5);
     for (let i = 0; i < directions; i++) {
       const angle = -Math.PI / 2 + (i * 2 * Math.PI) / directions;
       const cos = Math.cos(angle);
