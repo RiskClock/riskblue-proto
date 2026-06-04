@@ -1199,7 +1199,7 @@ export default function WorkbenchProjectDetail() {
                 No drawings uploaded for this project yet.
               </div>
             ) : (
-              <div className="bg-card rounded-lg border overflow-hidden relative [&>div]:overflow-visible">
+              <div className="bg-card rounded-lg border relative [&>div]:overflow-visible">
                 <Table>
                   <TableHeader className="sticky top-[57px] z-20 bg-card">
                     <TableRow>
