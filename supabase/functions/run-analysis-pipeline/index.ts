@@ -1019,6 +1019,7 @@ Deno.serve(async (req) => {
       analyzeModel: analyzeModel || "gpt-5-mini",
       phaseOverride,
       activeRunId,
+      scopedSheetIds: sheetScope,
     });
 
     if (typeof (globalThis as any).EdgeRuntime?.waitUntil === "function") {
