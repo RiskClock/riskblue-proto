@@ -282,7 +282,7 @@ export const OverlayLayer = ({
               x2={lx}
               y2={ly}
               stroke={p.color}
-              strokeWidth={1 / s}
+              strokeWidth={1}
               opacity={0.85}
             />
           );
