@@ -949,15 +949,14 @@ export default function WorkbenchProjectDetail() {
       const token = session?.access_token;
       if (!token) throw new Error("Your session expired. Please sign in again.");
       const { error } = await supabase.functions.invoke("build-space-hierarchy", {
-        body: { analysisRequestId: requestId },
+        body: { analysisRequestId: requestId, action: "start" },
         headers: { Authorization: `Bearer ${token}` },
       });
       if (error) throw error;
-      toast({ title: "Space hierarchy built" });
+      toast({ title: "Space hierarchy build started" });
       queryClient.invalidateQueries({
         queryKey: ["workbench-analysis-request", projectId],
       });
-      setSpaceModalOpen(true);
     } catch (error: any) {
       toast({
         variant: "destructive",
@@ -968,6 +967,32 @@ export default function WorkbenchProjectDetail() {
       setBuildingSpace(false);
     }
   };
+
+  useEffect(() => {
+    if (!requestId || !spaceHierarchyRunning || !spaceHierarchyResponseId || !session?.access_token) return;
+    let cancelled = false;
+    const poll = async () => {
+      const { error } = await supabase.functions.invoke("build-space-hierarchy", {
+        body: { analysisRequestId: requestId, action: "poll" },
+        headers: { Authorization: `Bearer ${session.access_token}` },
+      });
+      if (cancelled) return;
+      if (error) {
+        toast({
+          variant: "destructive",
+          title: "Could not check space hierarchy",
+          description: getUserFriendlyError(error),
+        });
+      }
+      await queryClient.invalidateQueries({ queryKey: ["workbench-analysis-request", projectId] });
+    };
+    const id = window.setInterval(poll, 5000);
+    poll();
+    return () => {
+      cancelled = true;
+      window.clearInterval(id);
+    };
+  }, [requestId, spaceHierarchyRunning, spaceHierarchyResponseId, session?.access_token, queryClient, projectId, toast]);
 
   // --- Export -----------------------------------------------------------------
   const handleExportResults = async () => {
