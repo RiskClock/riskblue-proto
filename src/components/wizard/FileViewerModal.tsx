@@ -71,7 +71,11 @@ interface FileViewerModalProps {
    *  owned by the parent so it survives modal open/close cycles. */
   expandedClasses?: Set<string>;
   onExpandedClassesChange?: (next: Set<string>) => void;
-}
+  /** When provided, the radio for this class is selected each time the
+   *  modal opens. Useful when the modal is launched by clicking a class
+   *  cell in a grid. The value changing also re-selects (so re-opens with a
+   *  different class force-select correctly). */
+  preselectClass?: string | null;
 
 const BOUNDING_BOX_COLOR = "#39FF14"; // legacy detections (green)
 
