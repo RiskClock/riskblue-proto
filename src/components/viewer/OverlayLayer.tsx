@@ -276,19 +276,36 @@ export const OverlayLayer = ({
         height={pageSize.height}
         style={{ overflow: "visible" }}
       >
-        {placedLabels.map((p) => {
-          const lx = Math.max(p.x, Math.min(p.ax, p.x + p.w));
-          const ly = Math.max(p.y, Math.min(p.ay, p.y + p.h));
+        {placedLabels.map((p, idx) => {
+          // Endpoint at nearest point on label rect to anchor, then push 1px
+          // inside the rect to guarantee no visible gap.
+          const labelCx = p.x + p.w / 2;
+          const labelCy = p.y + p.h / 2;
+          const dx = labelCx - p.ax;
+          const dy = labelCy - p.ay;
+          const len = Math.hypot(dx, dy) || 1;
+          const ux = dx / len;
+          const uy = dy / len;
+          // Start: just inside the circle border so the stroke overlaps it.
+          const c = circles.find((c) => c.id === p.id);
+          const startInset = c ? 1 : 0;
+          const x1 = p.ax - ux * startInset;
+          const y1 = p.ay - uy * startInset;
+          // End: nearest point on label rect, pushed 1px inside.
+          const ex = Math.max(p.x, Math.min(labelCx, p.x + p.w));
+          const ey = Math.max(p.y, Math.min(labelCy, p.y + p.h));
+          const x2 = ex + ux * 1;
+          const y2 = ey + uy * 1;
           return (
             <line
-              key={`leader-${p.id}`}
-              x1={p.ax}
-              y1={p.ay}
-              x2={lx}
-              y2={ly}
+              key={`leader-${p.id}-${idx}`}
+              x1={x1}
+              y1={y1}
+              x2={x2}
+              y2={y2}
               stroke={p.color}
-              strokeWidth={1}
-              opacity={0.85}
+              strokeWidth={1.5}
+              opacity={LABEL_OPACITY}
             />
           );
         })}
