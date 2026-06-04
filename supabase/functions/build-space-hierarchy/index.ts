@@ -102,11 +102,55 @@ Deno.serve(async (req) => {
       return json({ error: "Unauthorized" }, 401);
     }
 
-    const { analysisRequestId, model } = await req.json() as {
+    const { analysisRequestId, model, action } = await req.json() as {
       analysisRequestId: string;
       model?: string;
+      action?: "start" | "poll";
     };
     if (!analysisRequestId) return json({ error: "Missing analysisRequestId" }, 400);
+
+    if (action === "poll") {
+      const { data: requestRow, error: requestError } = await admin
+        .from("analysis_requests")
+        .select("space_hierarchy_json")
+        .eq("id", analysisRequestId)
+        .maybeSingle();
+      if (requestError) throw requestError;
+      const responseId = (requestRow as any)?.space_hierarchy_json?.openai_response_id;
+      if (!responseId) return json({ error: "No OpenAI response id found" }, 400);
+
+      const statusRes = await fetch(`https://api.openai.com/v1/responses/${responseId}`, {
+        headers: { Authorization: `Bearer ${openaiApiKey}` },
+      });
+      if (!statusRes.ok) {
+        const errText = await statusRes.text();
+        await admin.from("analysis_requests").update({
+          space_hierarchy_status: "failed",
+          space_hierarchy_error: `OpenAI ${statusRes.status}: ${errText.slice(0, 500)}`,
+          space_hierarchy_updated_at: new Date().toISOString(),
+        } as any).eq("id", analysisRequestId);
+        return json({ error: "OpenAI polling failed", details: errText }, 500);
+      }
+
+      const raw = await statusRes.json();
+      if (raw.status !== "completed") {
+        await admin.from("analysis_requests").update({
+          space_hierarchy_status: raw.status === "failed" || raw.status === "cancelled" ? "failed" : "running",
+          space_hierarchy_error: raw.error?.message ?? null,
+          space_hierarchy_updated_at: new Date().toISOString(),
+        } as any).eq("id", analysisRequestId);
+        return json({ status: raw.status ?? "running" });
+      }
+
+      const result = buildResult(raw, (requestRow as any)?.space_hierarchy_json ?? {});
+      await admin.from("analysis_requests").update({
+        space_hierarchy_json: result,
+        space_hierarchy_status: "complete",
+        space_hierarchy_error: null,
+        space_hierarchy_updated_at: new Date().toISOString(),
+      } as any).eq("id", analysisRequestId);
+      return json({ status: "complete", result });
+    }
 
     // Mark as running
     await admin
