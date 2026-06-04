@@ -1483,6 +1483,11 @@ export default function WorkbenchProjectDetail() {
                                       key={name}
                                       title={title}
                                       className="text-center py-1 text-xs relative p-0 cursor-pointer hover:bg-muted/30"
+                                      style={
+                                        hasScore && !failed
+                                          ? { backgroundColor: `rgba(16, 185, 129, ${opacity * 0.55})` }
+                                          : undefined
+                                      }
                                       onClick={() => {
                                         // Bubbles up to row click which opens
                                         // the viewer; we just record which
