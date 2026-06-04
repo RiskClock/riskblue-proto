@@ -1,5 +1,6 @@
 import { CSSProperties, useMemo } from "react";
 import type { NormalizedOverlay } from "./viewerGeometry";
+import { readableTextOn } from "@/lib/awpColor";
 
 interface OverlayLayerProps {
   overlays: NormalizedOverlay[];
