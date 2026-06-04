@@ -603,6 +603,28 @@ export default function WorkbenchProjectDetail() {
     buildingSpace ||
     (analysisRequest?.space_hierarchy_status === "running" && !!spaceHierarchyResponseId);
 
+  // Map "fileName::pageNumber" -> [space names], built from parsed hierarchy.
+  const pageSpaceMap = useMemo(() => {
+    const map = new Map<string, string[]>();
+    const parsed = spaceHierarchyPayload?.parsed as any;
+    const spaces: any[] = parsed?.physical_spaces || [];
+    for (const sp of spaces) {
+      const name = sp?.standardized_space_name;
+      if (!name) continue;
+      for (const src of sp?.matched_sources || []) {
+        const key = `${src?.file_name}::${src?.page_number}`;
+        const arr = map.get(key) || [];
+        if (!arr.includes(name)) arr.push(name);
+        map.set(key, arr);
+      }
+    }
+    return map;
+  }, [spaceHierarchyPayload]);
+
+  const spacesForSheet = (fileName: string, pageIndex: number): string[] => {
+    return pageSpaceMap.get(`${fileName}::${pageIndex}`) || [];
+  };
+
   const openManage = () => {
     setDraftCols(enabledCols);
     setManageOpen(true);
