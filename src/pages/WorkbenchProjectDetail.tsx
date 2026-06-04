@@ -2042,6 +2042,12 @@ export default function WorkbenchProjectDetail() {
             </AlertDialogFooter>
           </AlertDialogContent>
         </AlertDialog>
+
+        <SpaceHierarchyModal
+          open={spaceModalOpen}
+          onOpenChange={setSpaceModalOpen}
+          payload={analysisRequest?.space_hierarchy_json ?? null}
+        />
       </div>
     </TooltipProvider>
   );
