@@ -7,12 +7,21 @@ interface OverlayLayerProps {
   /** Page CSS size at scale = 1 (the size the surface img is rendered at). */
   pageSize: { width: number; height: number };
   hoveredId?: string | null;
+  /** Current viewport zoom scale. Labels divide by this to stay constant on-screen. */
+  viewScale?: number;
   defaultColor?: string;
   /** When provided, clicking an overlay invokes this with its id. */
   onOverlayClick?: (id: string) => void;
 }
 
 const MIN_CIRCLE_DIAMETER_CSS = 34;
+
+// On-screen target sizes; divided by viewScale so the label stays constant
+// on-screen as the user zooms.
+const LABEL_SCREEN_FONT_PX = 11;
+const LABEL_SCREEN_PAD_X = 6;
+const LABEL_SCREEN_H = 18;
+const LABEL_SCREEN_GAP = 8;
 
 function withAlpha(color: string, alpha: number): string {
   const trimmed = color.trim();
@@ -51,34 +60,26 @@ interface CircleInfo {
   hovered: boolean;
 }
 
-interface PlacedLabel {
-  id: string;
-  // Label rect (in page CSS px, scale=1)
+interface LabelCandidate {
   x: number;
   y: number;
   w: number;
   h: number;
-  // Anchor (circle edge) for leader line
-  ax: number;
-  ay: number;
-  color: string;
-  text: string;
+  ax: number; // anchor x on circle edge
+  ay: number; // anchor y on circle edge
+  leader: number; // base leader length
 }
 
-// Estimate label width without rendering; refined after mount.
-const LABEL_FONT_PX = 10;
-const LABEL_PAD_X = 6;
-const LABEL_H = 16;
-
-function estimateLabelWidth(text: string): number {
-  // Bold 10px sans-serif averages ~7.2px/char; add padding + small safety margin.
-  return Math.ceil(text.length * 7.2) + LABEL_PAD_X * 2 + 2;
+interface PlacedLabel extends LabelCandidate {
+  id: string;
+  color: string;
+  text: string;
 }
 
 function rectsOverlap(
   a: { x: number; y: number; w: number; h: number },
   b: { x: number; y: number; w: number; h: number },
-  pad = 2,
+  pad = 1,
 ): boolean {
   return !(
     a.x + a.w + pad <= b.x ||
@@ -88,76 +89,124 @@ function rectsOverlap(
   );
 }
 
+function rectIntersectsCircle(
+  rect: { x: number; y: number; w: number; h: number },
+  c: { cx: number; cy: number; r: number },
+): boolean {
+  const closestX = Math.max(rect.x, Math.min(c.cx, rect.x + rect.w));
+  const closestY = Math.max(rect.y, Math.min(c.cy, rect.y + rect.h));
+  const dx = c.cx - closestX;
+  const dy = c.cy - closestY;
+  return dx * dx + dy * dy < c.r * c.r;
+}
+
 /**
- * Pick a non-overlapping label position around a circle. Tries 16 directions
- * at increasing distances; if all fail, returns the closest candidate.
+ * Generate candidate label positions around a circle: 16 directions × 3 rings,
+ * with the label rect aligned so the nearest edge faces the circle (not centered).
  */
-function placeLabel(
-  circle: CircleInfo,
+function generateCandidates(
+  c: CircleInfo,
   labelW: number,
   labelH: number,
-  placed: PlacedLabel[],
+  gap: number,
   bounds: { width: number; height: number },
-  circles: CircleInfo[],
-): PlacedLabel {
-  const text = circle.label!;
+): LabelCandidate[] {
   const directions = 16;
-  const maxRings = 6;
-  const gap = 8;
-
-  let fallback: PlacedLabel | null = null;
-
-  for (let ring = 0; ring < maxRings; ring++) {
-    const dist = circle.r + gap + ring * 12;
+  const rings = 3;
+  const out: LabelCandidate[] = [];
+  for (let ring = 0; ring < rings; ring++) {
+    const dist = c.r + gap + ring * Math.max(8, labelH * 0.6);
     for (let i = 0; i < directions; i++) {
-      // Start above (angle = -PI/2) and sweep clockwise
       const angle = -Math.PI / 2 + (i * 2 * Math.PI) / directions;
-      const lx = circle.cx + Math.cos(angle) * dist - labelW / 2;
-      const ly = circle.cy + Math.sin(angle) * dist - labelH / 2;
-
-      // Keep inside the page
-      const x = Math.max(2, Math.min(bounds.width - labelW - 2, lx));
-      const y = Math.max(2, Math.min(bounds.height - labelH - 2, ly));
-
-      const rect = { x, y, w: labelW, h: labelH };
-
-      // Avoid overlap with other labels
-      const overlapsLabel = placed.some((p) => rectsOverlap(rect, p));
-      // Avoid overlap with ANY circle (including own) so the label sits clear.
-      const overlapsCircle = circles.some((c) => {
-        const closestX = Math.max(rect.x, Math.min(c.cx, rect.x + rect.w));
-        const closestY = Math.max(rect.y, Math.min(c.cy, rect.y + rect.h));
-        const dx = c.cx - closestX;
-        const dy = c.cy - closestY;
-        return dx * dx + dy * dy < c.r * c.r;
-      });
-
-      const candidate: PlacedLabel = {
-        id: circle.id,
-        x,
-        y,
-        w: labelW,
-        h: labelH,
-        ax: circle.cx + Math.cos(angle) * circle.r,
-        ay: circle.cy + Math.sin(angle) * circle.r,
-        color: circle.color,
-        text,
-      };
-
-      if (!overlapsLabel && !overlapsCircle) return candidate;
-      if (!fallback) fallback = candidate;
+      const cos = Math.cos(angle);
+      const sin = Math.sin(angle);
+      // Place label center at distance, then offset so nearest edge points at circle
+      const labelCx = c.cx + cos * dist;
+      const labelCy = c.cy + sin * dist;
+      let lx = labelCx - labelW / 2;
+      let ly = labelCy - labelH / 2;
+      // Clamp inside page
+      lx = Math.max(2, Math.min(bounds.width - labelW - 2, lx));
+      ly = Math.max(2, Math.min(bounds.height - labelH - 2, ly));
+      const ax = c.cx + cos * c.r;
+      const ay = c.cy + sin * c.r;
+      // Anchor leader end: nearest point on rect to circle center
+      const ex = Math.max(lx, Math.min(c.cx, lx + labelW));
+      const ey = Math.max(ly, Math.min(c.cy, ly + labelH));
+      const leader = Math.hypot(ex - ax, ey - ay);
+      out.push({ x: lx, y: ly, w: labelW, h: labelH, ax, ay, leader });
     }
   }
-  return fallback!;
+  return out;
+}
+
+const OVERLAP_PENALTY = 10_000;
+const CIRCLE_PENALTY = 10_000;
+
+function candidateCost(
+  cand: LabelCandidate,
+  selfIdx: number,
+  positions: LabelCandidate[],
+  circles: CircleInfo[],
+): number {
+  let cost = cand.leader;
+  for (let j = 0; j < positions.length; j++) {
+    if (j === selfIdx) continue;
+    if (rectsOverlap(cand, positions[j])) cost += OVERLAP_PENALTY;
+  }
+  for (const c of circles) {
+    if (rectIntersectsCircle(cand, c)) cost += CIRCLE_PENALTY;
+  }
+  return cost;
+}
+
+/**
+ * Iterative global optimization: each label picks the candidate minimizing
+ * total cost (leader length + overlap penalties) given the others' current
+ * positions. Repeats until no improvement.
+ */
+function optimizePlacements(
+  candidatesPerLabel: LabelCandidate[][],
+  circles: CircleInfo[],
+): LabelCandidate[] {
+  // Initialize with shortest-leader candidate
+  const positions: LabelCandidate[] = candidatesPerLabel.map(
+    (cands) => cands.reduce((best, c) => (c.leader < best.leader ? c : best), cands[0]),
+  );
+  const maxIters = 8;
+  for (let iter = 0; iter < maxIters; iter++) {
+    let improved = false;
+    for (let i = 0; i < positions.length; i++) {
+      let bestCand = positions[i];
+      let bestCost = candidateCost(bestCand, i, positions, circles);
+      for (const cand of candidatesPerLabel[i]) {
+        const cost = candidateCost(cand, i, positions, circles);
+        if (cost < bestCost - 0.01) {
+          bestCost = cost;
+          bestCand = cand;
+        }
+      }
+      if (bestCand !== positions[i]) {
+        positions[i] = bestCand;
+        improved = true;
+      }
+    }
+    if (!improved) break;
+  }
+  return positions;
 }
 
 export const OverlayLayer = ({
   overlays,
   pageSize,
   hoveredId,
+  viewScale = 1,
   defaultColor = "hsl(var(--destructive))",
   onOverlayClick,
 }: OverlayLayerProps) => {
+  // Sanitize scale: TransformWrapper can briefly emit 0 during mount.
+  const s = viewScale > 0.01 ? viewScale : 1;
+
   const circles: CircleInfo[] = useMemo(() => {
     return overlays.map((o) => {
       const color = o.color ?? defaultColor;
@@ -180,25 +229,39 @@ export const OverlayLayer = ({
     });
   }, [overlays, pageSize.width, pageSize.height, defaultColor, hoveredId]);
 
+  // Size metrics in unscaled page CSS px. Dividing by viewScale keeps them
+  // constant on-screen at any zoom.
+  const fontPx = LABEL_SCREEN_FONT_PX / s;
+  const padX = LABEL_SCREEN_PAD_X / s;
+  const labelH = LABEL_SCREEN_H / s;
+  const gap = LABEL_SCREEN_GAP / s;
+  const charPx = fontPx * 0.62; // bold sans-serif avg
+
   const placedLabels: PlacedLabel[] = useMemo(() => {
-    const result: PlacedLabel[] = [];
-    // Place labels in a stable order (by y then x) so layout is deterministic.
-    const order = [...circles]
-      .filter((c) => !!c.label)
-      .sort((a, b) => a.cy - b.cy || a.cx - b.cx);
-    for (const c of order) {
-      const w = estimateLabelWidth(c.label!);
-      result.push(placeLabel(c, w, LABEL_H, result, pageSize, circles));
-    }
-    return result;
-  }, [circles, pageSize.width, pageSize.height]);
+    const labeled = circles.filter((c) => !!c.label);
+    if (labeled.length === 0) return [];
+    const widths = labeled.map((c) =>
+      Math.ceil(c.label!.length * charPx) + padX * 2,
+    );
+    const candidatesPerLabel = labeled.map((c, i) =>
+      generateCandidates(c, widths[i], labelH, gap, pageSize),
+    );
+    const positions = optimizePlacements(candidatesPerLabel, circles);
+    return positions.map((p, i) => ({
+      ...p,
+      id: labeled[i].id,
+      color: labeled[i].color,
+      text: labeled[i].label!,
+    }));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [circles, pageSize.width, pageSize.height, fontPx, padX, labelH, gap, charPx]);
 
   return (
     <div
       className="pointer-events-none absolute inset-0"
       style={{ width: pageSize.width, height: pageSize.height }}
     >
-      {/* Leader lines layer (SVG, behind circles) */}
+      {/* Leader lines (SVG, behind circles) */}
       <svg
         className="absolute inset-0 pointer-events-none"
         width={pageSize.width}
@@ -206,7 +269,6 @@ export const OverlayLayer = ({
         style={{ overflow: "visible" }}
       >
         {placedLabels.map((p) => {
-          // Endpoint: nearest point on label rect to anchor
           const lx = Math.max(p.x, Math.min(p.ax, p.x + p.w));
           const ly = Math.max(p.y, Math.min(p.ay, p.y + p.h));
           return (
@@ -217,7 +279,7 @@ export const OverlayLayer = ({
               x2={lx}
               y2={ly}
               stroke={p.color}
-              strokeWidth={1}
+              strokeWidth={1 / s}
               opacity={0.85}
             />
           );
@@ -234,7 +296,7 @@ export const OverlayLayer = ({
           height: c.r * 2,
           borderRadius: "9999px",
           borderColor: c.color,
-          borderWidth: c.hovered ? 2 : 1.5,
+          borderWidth: (c.hovered ? 2 : 1.5) / s,
           borderStyle: "solid",
           backgroundColor: withAlpha(c.color, c.hovered ? 0.28 : 0.22),
           boxSizing: "border-box",
@@ -260,20 +322,20 @@ export const OverlayLayer = ({
         );
       })}
 
-      {/* Labels layer (above circles) */}
+      {/* Labels (above circles). Intrinsic width hugs the text. */}
       {placedLabels.map((p) => (
         <div
           key={`label-${p.id}`}
-          className="absolute font-bold whitespace-nowrap rounded-sm pointer-events-none text-center"
+          className="absolute font-bold whitespace-nowrap pointer-events-none"
           style={{
             left: p.x,
             top: p.y,
-            width: p.w,
             height: p.h,
             lineHeight: `${p.h}px`,
-            fontSize: LABEL_FONT_PX,
-            paddingLeft: LABEL_PAD_X,
-            paddingRight: LABEL_PAD_X,
+            fontSize: fontPx,
+            paddingLeft: padX,
+            paddingRight: padX,
+            borderRadius: 3 / s,
             backgroundColor: withAlpha(p.color, 0.9),
             color: readableTextOn(p.color),
           }}
