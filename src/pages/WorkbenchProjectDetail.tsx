@@ -1727,6 +1727,19 @@ export default function WorkbenchProjectDetail() {
                                         return n > 0 ? ` (${n} ${n === 1 ? "instance" : "instances"})` : "";
                                       })()}
                                     </span>
+                                    {(() => {
+                                      const sps = spacesForSheet(group.file.name, s.page_index);
+                                      if (sps.length === 0) return null;
+                                      return (
+                                        <Badge
+                                          variant="outline"
+                                          className="shrink-0 h-4 px-1.5 text-[10px] leading-none bg-sky-500/10 text-sky-700 border-sky-500/30"
+                                          title={sps.join(", ")}
+                                        >
+                                          {sps.length === 1 ? sps[0] : `${sps[0]} +${sps.length - 1}`}
+                                        </Badge>
+                                      );
+                                    })()}
                                     <SheetStatusBadge s={s} />
                                   </div>
                                 </TableCell>
