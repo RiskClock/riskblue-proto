@@ -76,6 +76,8 @@ interface FileViewerModalProps {
    *  cell in a grid. The value changing also re-selects (so re-opens with a
    *  different class force-select correctly). */
   preselectClass?: string | null;
+}
+
 
 const BOUNDING_BOX_COLOR = "#39FF14"; // legacy detections (green)
 
