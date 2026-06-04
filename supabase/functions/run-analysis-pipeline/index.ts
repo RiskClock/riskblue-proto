@@ -697,6 +697,7 @@ Deno.serve(async (req) => {
       triageModel,
       analyzeModel,
       phaseOverride,
+      scopedSheetIds,
     } = body as {
       analysisRequestId: string;
       action?: string;
@@ -704,7 +705,12 @@ Deno.serve(async (req) => {
       triageModel?: string;
       analyzeModel?: string;
       phaseOverride?: string;
+      scopedSheetIds?: string[];
     };
+    const sheetScope =
+      Array.isArray(scopedSheetIds) && scopedSheetIds.length > 0
+        ? scopedSheetIds
+        : null;
 
     if (!analysisRequestId) return json({ error: "Missing analysisRequestId" }, 400);
 
