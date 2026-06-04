@@ -28,6 +28,7 @@ export const DocumentSurface = ({
   pageSize,
   overlays,
   hoveredOverlayId,
+  viewScale,
   onCanvasClick,
   onOverlayClick,
 }: DocumentSurfaceProps) => {
