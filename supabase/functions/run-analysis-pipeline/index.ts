@@ -1365,9 +1365,12 @@ async function runPipeline(params: PipelineParams) {
       // Backfill mode (triage/analyze override): only extract units that are
       // missing extracted text. Full-extract mode (no override OR override='extract')
       // processes every unit.
-      const units = isBackfillExtract
+      let units = isBackfillExtract
         ? allUnits.filter((u) => !u.hasExtract)
         : allUnits;
+      if (sheetScopeSet) {
+        units = units.filter((u) => u.kind === "sheet" && sheetScopeSet.has(u.id));
+      }
 
       console.log(
         `[pipeline] Phase 1: Extract context for ${units.length} ${useSheets ? "sheets" : "files"} (backfill=${isBackfillExtract}, totalCandidates=${allUnits.length})`,
