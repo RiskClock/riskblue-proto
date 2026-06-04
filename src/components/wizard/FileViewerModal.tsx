@@ -403,9 +403,11 @@ export const FileViewerModal = ({
     };
   }, [isOpen, sourceOverride, fileId, accessToken, mimeType, fileName]);
 
-  // ---- Numbering: global per AWP class -----------------------------------
-  // Ordering: by file name (alphabetical) then created_at; numbers stay
-  // contiguous because they're computed from the live list.
+  // ---- Numbering: persistent per AWP class --------------------------------
+  // IDs are stored on each row (instance_number). Deleting does NOT renumber
+  // — gaps remain and the next added marker continues past the highest ID.
+  // Fallback for rows that haven't been backfilled yet: append in created_at
+  // order after the highest stored number.
   const prefixByClass = useMemo(() => {
     const m = new Map<string, string>();
     for (const c of awpClasses || []) m.set(c.name, c.prefix || c.name.slice(0, 3).toUpperCase());
@@ -420,17 +422,25 @@ export const FileViewerModal = ({
       arr.push(inst);
       byClass.set(inst.awp_class_name, arr);
     }
-    const nameOf = (fid: string) => fileNameById?.[fid] ?? "";
     for (const [, arr] of byClass) {
-      arr.sort((a, b) => {
-        const an = nameOf(a.file_id);
-        const bn = nameOf(b.file_id);
-        return an.localeCompare(bn) || a.created_at.localeCompare(b.created_at);
-      });
-      arr.forEach((inst, idx) => m.set(inst.id, idx + 1));
+      let maxNum = 0;
+      for (const inst of arr) {
+        if (typeof inst.instance_number === "number") {
+          m.set(inst.id, inst.instance_number);
+          if (inst.instance_number > maxNum) maxNum = inst.instance_number;
+        }
+      }
+      // Assign sequential numbers to any rows missing instance_number
+      const missing = arr
+        .filter((i) => typeof i.instance_number !== "number")
+        .sort((a, b) => a.created_at.localeCompare(b.created_at));
+      for (const inst of missing) {
+        maxNum += 1;
+        m.set(inst.id, maxNum);
+      }
     }
     return m;
-  }, [instances, fileNameById]);
+  }, [instances]);
 
   const instanceLabel = (inst: DrawingInstanceRow) => {
     const n = numberByInstanceId.get(inst.id) ?? 0;
