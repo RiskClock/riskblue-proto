@@ -1,5 +1,6 @@
 import { CSSProperties, useMemo } from "react";
 import type { NormalizedOverlay } from "./viewerGeometry";
+import { readableTextOn } from "@/lib/awpColor";
 
 interface OverlayLayerProps {
   overlays: NormalizedOverlay[];
@@ -66,12 +67,12 @@ interface PlacedLabel {
 
 // Estimate label width without rendering; refined after mount.
 const LABEL_FONT_PX = 10;
-const LABEL_PAD_X = 4;
-const LABEL_H = 14;
+const LABEL_PAD_X = 6;
+const LABEL_H = 16;
 
 function estimateLabelWidth(text: string): number {
-  // Approximate average char width for 10px bold monospace-ish text
-  return Math.ceil(text.length * 6.2) + LABEL_PAD_X * 2;
+  // Bold 10px sans-serif averages ~7.2px/char; add padding + small safety margin.
+  return Math.ceil(text.length * 7.2) + LABEL_PAD_X * 2 + 2;
 }
 
 function rectsOverlap(
@@ -122,10 +123,8 @@ function placeLabel(
 
       // Avoid overlap with other labels
       const overlapsLabel = placed.some((p) => rectsOverlap(rect, p));
-      // Avoid overlap with OTHER circles (allow own circle to be near)
+      // Avoid overlap with ANY circle (including own) so the label sits clear.
       const overlapsCircle = circles.some((c) => {
-        if (c.id === circle.id) return false;
-        // Distance from rect to circle center
         const closestX = Math.max(rect.x, Math.min(c.cx, rect.x + rect.w));
         const closestY = Math.max(rect.y, Math.min(c.cy, rect.y + rect.h));
         const dx = c.cx - closestX;
@@ -265,7 +264,7 @@ export const OverlayLayer = ({
       {placedLabels.map((p) => (
         <div
           key={`label-${p.id}`}
-          className="absolute font-bold text-white whitespace-nowrap rounded-sm pointer-events-none text-center"
+          className="absolute font-bold whitespace-nowrap rounded-sm pointer-events-none text-center"
           style={{
             left: p.x,
             top: p.y,
@@ -275,7 +274,8 @@ export const OverlayLayer = ({
             fontSize: LABEL_FONT_PX,
             paddingLeft: LABEL_PAD_X,
             paddingRight: LABEL_PAD_X,
-            backgroundColor: withAlpha(p.color, 0.85),
+            backgroundColor: withAlpha(p.color, 0.9),
+            color: readableTextOn(p.color),
           }}
         >
           {p.text}

@@ -24,7 +24,27 @@ function hslToHex(h: number, s: number, l: number): string {
 
 export function awpClassColor(name: string): string {
   const hue = hashStr(name.toLowerCase()) % 360;
-  // Lightness capped at ~22% (half the previous 45%) so every hue stays dark
-  // enough for white ID labels to remain readable.
-  return hslToHex(hue, 70, 22);
+  // Lightness at 45% gives vivid, distinguishable colors across hues.
+  return hslToHex(hue, 70, 45);
+}
+
+/**
+ * Pick a readable text color (white or dark charcoal) for a given hex
+ * background using WCAG relative-luminance contrast.
+ */
+export function readableTextOn(hex: string): string {
+  const m = hex.trim().match(/^#?([0-9a-f]{6})$/i);
+  if (!m) return "#ffffff";
+  const v = parseInt(m[1], 16);
+  const toLin = (c8: number) => {
+    const c = c8 / 255;
+    return c <= 0.03928 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4);
+  };
+  const r = toLin((v >> 16) & 255);
+  const g = toLin((v >> 8) & 255);
+  const b = toLin(v & 255);
+  const L = 0.2126 * r + 0.7152 * g + 0.0722 * b;
+  // Contrast against white = 1.05 / (L+0.05); against #222 ≈ 0.0185.
+  const contrastWhite = 1.05 / (L + 0.05);
+  return contrastWhite >= 4.5 ? "#ffffff" : "#1f2937"; // tailwind gray-800
 }
