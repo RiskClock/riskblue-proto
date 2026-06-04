@@ -1338,22 +1338,16 @@ export default function WorkbenchProjectDetail() {
                 ) : null}
                 {spaceHierarchyRunning ? "Building Space Hierarchy" : "Build Space Hierarchy"}
               </Button>
-              {spaceHierarchyHasResult && (
-                <Button
-                  size="sm"
-                  variant="ghost"
-                  onClick={() => setSpaceModalOpen(true)}
-                  title="View last space hierarchy result"
-                >
-                  View Hierarchy
-                </Button>
-              )}
               <Button
                 size="sm"
                 variant="outline"
                 onClick={() => setInstancesReportOpen(true)}
-                disabled={!requestId}
-                title="Generate per-space instances report"
+                disabled={!requestId || !spaceHierarchyHasResult}
+                title={
+                  !spaceHierarchyHasResult
+                    ? "Build the space hierarchy first to generate the instances report."
+                    : "Generate per-space instances report"
+                }
               >
                 Generate Instances Report
               </Button>
@@ -1399,18 +1393,6 @@ export default function WorkbenchProjectDetail() {
                     disabled={!requestId}
                   >
                     Export Results
-                  </Button>
-                  <Button
-                    size="sm"
-                    onClick={() =>
-                      toast({
-                        title: "Sent to WMG Project",
-                        description: "Results have been sent.",
-                      })
-                    }
-                    disabled={!requestId}
-                  >
-                    Send to WMG Project
                   </Button>
                 </>
               )}
@@ -2477,6 +2459,7 @@ function InstancesReportModal({
     () => new Set(enabledClassNames || []),
     [enabledClassNames],
   );
+  const { toast } = useToast();
   const [loading, setLoading] = useState(false);
   const [instances, setInstances] = useState<any[]>([]);
   const [selected, setSelected] = useState<string>("__overview__");
@@ -2827,16 +2810,11 @@ function InstancesReportModal({
               .filter((r) => r.fileId === fileId && r.pageIndex === pageIdx)
               .map((r, i) => ({
                 id: `${r.instanceId}-${i}`,
-                bbox: [
-                  Math.max(0, r.nx - 0.025),
-                  Math.max(0, r.ny - 0.025),
-                  0.05,
-                  0.05,
-                ] as [number, number, number, number],
+                bbox: [r.nx, r.ny, 0, 0] as [number, number, number, number],
                 coordSpace: "normalized" as const,
                 page: 1,
                 color: "#dc2626",
-                label: r.annotationBaseId,
+                label: r.instanceId,
                 shape: "circle" as const,
               }));
 
@@ -2931,8 +2909,29 @@ function InstancesReportModal({
           </div>
           <div className="overflow-auto pr-1">{renderRight()}</div>
         </div>
-        <DialogFooter>
-          <Button onClick={() => onOpenChange(false)}>Close</Button>
+        <DialogFooter className="gap-2">
+          <Button variant="outline" onClick={() => onOpenChange(false)}>Close</Button>
+          <Button
+            variant="outline"
+            onClick={() =>
+              toast({
+                title: "Export queued",
+                description: "You'll receive an email with the results.",
+              })
+            }
+          >
+            Export
+          </Button>
+          <Button
+            onClick={() =>
+              toast({
+                title: "Sent to WMG Project",
+                description: "Results have been sent.",
+              })
+            }
+          >
+            Send to WMG Project
+          </Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>

@@ -149,7 +149,11 @@ function candidateCost(
   positions: LabelCandidate[],
   circles: CircleInfo[],
 ): number {
-  let cost = cand.leader;
+  // Prefer labels horizontally centered with the annotation circle.
+  const self = circles[selfIdx];
+  const labelCx = cand.x + cand.w / 2;
+  const horizontalOffset = self ? Math.abs(labelCx - self.cx) : 0;
+  let cost = cand.leader + horizontalOffset * 2;
   for (let j = 0; j < positions.length; j++) {
     if (j === selfIdx) continue;
     if (rectsOverlap(cand, positions[j])) cost += OVERLAP_PENALTY;
