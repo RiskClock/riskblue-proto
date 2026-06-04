@@ -2424,3 +2424,325 @@ function ExtractedTextBody({ fileId, sheetId }: { fileId?: string; sheetId?: str
     </div>
   );
 }
+
+// ---------------------------------------------------------------------------
+// InstancesReportModal — translates annotations to per-space instance IDs
+// ---------------------------------------------------------------------------
+function InstancesReportModal({
+  open,
+  onOpenChange,
+  requestId,
+  fileGroups,
+  optionByName,
+  pageSpaceMap,
+}: {
+  open: boolean;
+  onOpenChange: (v: boolean) => void;
+  requestId: string | undefined;
+  fileGroups: Array<{ file: { id: string; name: string }; sheets: SheetRow[] }>;
+  optionByName: Map<string, { idPrefix: string | null; category: string }>;
+  pageSpaceMap: Map<string, string[]>;
+}) {
+  const [loading, setLoading] = useState(false);
+  const [instances, setInstances] = useState<any[]>([]);
+  const [selected, setSelected] = useState<string>("__overview__");
+
+  useEffect(() => {
+    if (!open || !requestId) return;
+    let cancelled = false;
+    (async () => {
+      setLoading(true);
+      const { data } = await supabase
+        .from("drawing_instances" as any)
+        .select("id, awp_class_name, file_id, page_index, instance_number, created_at")
+        .eq("analysis_request_id", requestId)
+        .order("awp_class_name")
+        .order("created_at", { ascending: true });
+      if (!cancelled) {
+        setInstances((data as any[]) || []);
+        setLoading(false);
+        setSelected("__overview__");
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [open, requestId]);
+
+  const fileNameById = useMemo(
+    () => new Map(fileGroups.map((g) => [g.file.id, g.file.name])),
+    [fileGroups],
+  );
+
+  const expanded = useMemo(() => {
+    type Row = {
+      annotationBaseId: string;
+      instanceId: string;
+      spaceName: string | null;
+      awpClassName: string;
+      category: string;
+      fileId: string;
+      pageIndex: number;
+    };
+    const rows: Row[] = [];
+    for (const inst of instances) {
+      const opt = optionByName.get(inst.awp_class_name);
+      const prefix = opt?.idPrefix || inst.awp_class_name.slice(0, 3).toUpperCase();
+      const category = opt?.category || "Other";
+      const num = inst.instance_number ?? 0;
+      const base = `${prefix}${String(num).padStart(3, "0")}`;
+      const fileName = fileNameById.get(inst.file_id) || "";
+      const sps = pageSpaceMap.get(`${fileName}::${inst.page_index}`) || [];
+      if (sps.length === 0) {
+        rows.push({
+          annotationBaseId: base,
+          instanceId: base,
+          spaceName: null,
+          awpClassName: inst.awp_class_name,
+          category,
+          fileId: inst.file_id,
+          pageIndex: inst.page_index,
+        });
+      } else {
+        for (const sp of sps) {
+          rows.push({
+            annotationBaseId: base,
+            instanceId: `${base}@${sp}`,
+            spaceName: sp,
+            awpClassName: inst.awp_class_name,
+            category,
+            fileId: inst.file_id,
+            pageIndex: inst.page_index,
+          });
+        }
+      }
+    }
+    return rows;
+  }, [instances, optionByName, fileNameById, pageSpaceMap]);
+
+  const spaceList = useMemo(() => {
+    const set = new Set<string>();
+    let hasUnassigned = false;
+    for (const r of expanded) {
+      if (r.spaceName) set.add(r.spaceName);
+      else hasUnassigned = true;
+    }
+    const arr = Array.from(set).sort((a, b) =>
+      a.localeCompare(b, undefined, { numeric: true, sensitivity: "base" }),
+    );
+    if (hasUnassigned) arr.push("__unassigned__");
+    return arr;
+  }, [expanded]);
+
+  const classCols = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const r of expanded) {
+      if (r.category === "Asset" || r.category === "Water System") {
+        map.set(r.awpClassName, r.category);
+      }
+    }
+    return Array.from(map.entries())
+      .sort((a, b) => {
+        if (a[1] !== b[1]) return a[1] === "Asset" ? -1 : 1;
+        return a[0].localeCompare(b[0]);
+      })
+      .map(([name, category]) => ({ name, category }));
+  }, [expanded]);
+
+  const overviewTotals = useMemo(() => {
+    const m = new Map<string, number>();
+    for (const r of expanded) {
+      if (r.category !== "Asset" && r.category !== "Water System") continue;
+      m.set(r.awpClassName, (m.get(r.awpClassName) || 0) + 1);
+    }
+    return m;
+  }, [expanded]);
+
+  const summaryMatrix = useMemo(() => {
+    const m = new Map<string, Map<string, number>>();
+    for (const r of expanded) {
+      if (r.category !== "Asset" && r.category !== "Water System") continue;
+      const space = r.spaceName ?? "__unassigned__";
+      const inner = m.get(space) || new Map<string, number>();
+      inner.set(r.awpClassName, (inner.get(r.awpClassName) || 0) + 1);
+      m.set(space, inner);
+    }
+    return m;
+  }, [expanded]);
+
+  const instancesForSpace = (space: string) =>
+    expanded
+      .filter((r) => (space === "__unassigned__" ? r.spaceName === null : r.spaceName === space))
+      .sort((a, b) => a.instanceId.localeCompare(b.instanceId));
+
+  const renderRight = () => {
+    if (loading) {
+      return (
+        <div className="flex items-center justify-center p-8">
+          <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+        </div>
+      );
+    }
+    if (expanded.length === 0) {
+      return (
+        <div className="text-sm text-muted-foreground p-4">
+          No annotations found. Place annotations on drawings first.
+        </div>
+      );
+    }
+    if (selected === "__overview__") {
+      return (
+        <div>
+          <h3 className="text-sm font-semibold mb-2">Overview — Total Instances per Class</h3>
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Class</TableHead>
+                <TableHead>Category</TableHead>
+                <TableHead className="text-right">Total</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {classCols.map((c) => (
+                <TableRow key={c.name}>
+                  <TableCell>{c.name}</TableCell>
+                  <TableCell className="text-muted-foreground text-xs">{c.category}</TableCell>
+                  <TableCell className="text-right tabular-nums">
+                    {overviewTotals.get(c.name) || 0}
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </div>
+      );
+    }
+    if (selected === "__summary__") {
+      return (
+        <div>
+          <h3 className="text-sm font-semibold mb-2">Summary — Counts per Space × Class</h3>
+          <div className="overflow-auto">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead className="sticky left-0 bg-background">Space</TableHead>
+                  {classCols.map((c) => (
+                    <TableHead key={c.name} className="text-center whitespace-nowrap">
+                      {optionByName.get(c.name)?.idPrefix || c.name}
+                    </TableHead>
+                  ))}
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {spaceList.map((space) => {
+                  const inner = summaryMatrix.get(space);
+                  const label = space === "__unassigned__" ? "Unassigned" : space;
+                  return (
+                    <TableRow key={space}>
+                      <TableCell className="sticky left-0 bg-background font-medium">
+                        {label}
+                      </TableCell>
+                      {classCols.map((c) => (
+                        <TableCell key={c.name} className="text-center tabular-nums">
+                          {inner?.get(c.name) || 0}
+                        </TableCell>
+                      ))}
+                    </TableRow>
+                  );
+                })}
+              </TableBody>
+            </Table>
+          </div>
+        </div>
+      );
+    }
+    const rows = instancesForSpace(selected);
+    const label = selected === "__unassigned__" ? "Unassigned" : selected;
+    return (
+      <div>
+        <h3 className="text-sm font-semibold mb-2">{label}</h3>
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Instance ID</TableHead>
+              <TableHead>Class</TableHead>
+              <TableHead>Annotation</TableHead>
+              <TableHead>Source</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {rows.map((r, i) => (
+              <TableRow key={`${r.instanceId}-${i}`}>
+                <TableCell className="font-mono text-xs">{r.instanceId}</TableCell>
+                <TableCell className="text-xs">{r.awpClassName}</TableCell>
+                <TableCell className="font-mono text-xs text-muted-foreground">
+                  {r.annotationBaseId}
+                </TableCell>
+                <TableCell className="text-xs text-muted-foreground">
+                  {fileNameById.get(r.fileId)} · Page {r.pageIndex}
+                </TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+      </div>
+    );
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-5xl">
+        <DialogHeader>
+          <DialogTitle>Instances Report</DialogTitle>
+          <DialogDescription>
+            Annotations expanded into per-space instance IDs based on the Space Hierarchy.
+          </DialogDescription>
+        </DialogHeader>
+        <div className="grid grid-cols-[220px_1fr] gap-4 max-h-[65vh]">
+          <div className="border rounded-md overflow-auto">
+            <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground px-3 py-2 border-b">
+              Spaces
+            </div>
+            <button
+              type="button"
+              onClick={() => setSelected("__overview__")}
+              className={`w-full text-left px-3 py-2 text-sm border-b hover:bg-muted/40 ${
+                selected === "__overview__" ? "bg-muted font-medium" : ""
+              }`}
+            >
+              Overview
+            </button>
+            <button
+              type="button"
+              onClick={() => setSelected("__summary__")}
+              className={`w-full text-left px-3 py-2 text-sm border-b hover:bg-muted/40 ${
+                selected === "__summary__" ? "bg-muted font-medium" : ""
+              }`}
+            >
+              Summary
+            </button>
+            {spaceList.map((space) => {
+              const label = space === "__unassigned__" ? "Unassigned" : space;
+              return (
+                <button
+                  key={space}
+                  type="button"
+                  onClick={() => setSelected(space)}
+                  className={`w-full text-left px-3 py-2 text-sm border-b hover:bg-muted/40 ${
+                    selected === space ? "bg-muted font-medium" : ""
+                  }`}
+                >
+                  {label}
+                </button>
+              );
+            })}
+          </div>
+          <div className="overflow-auto">{renderRight()}</div>
+        </div>
+        <DialogFooter>
+          <Button onClick={() => onOpenChange(false)}>Close</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
