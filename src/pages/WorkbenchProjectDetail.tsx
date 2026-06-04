@@ -61,6 +61,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { FileViewerModal } from "@/components/wizard/FileViewerModal";
+import { DrawingViewer } from "@/components/viewer";
 import {
   prewarmDocumentSource,
   type DocumentSourceDescriptor,
