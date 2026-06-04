@@ -204,8 +204,9 @@ export const OverlayLayer = ({
   defaultColor = "hsl(var(--destructive))",
   onOverlayClick,
 }: OverlayLayerProps) => {
-  // Sanitize scale: TransformWrapper can briefly emit 0 during mount.
-  const s = viewScale > 0.01 ? viewScale : 1;
+  // viewScale is no longer used to size markers/labels — they scale with the
+  // page transform naturally. Kept in the signature for backward compatibility.
+  void viewScale;
 
   const circles: CircleInfo[] = useMemo(() => {
     return overlays.map((o) => {
@@ -216,9 +217,9 @@ export const OverlayLayer = ({
         o.rect.nw * pageSize.width,
         o.rect.nh * pageSize.height,
       );
-      // Min diameter is screen-constant (divide by viewScale) so markers stay
-      // readable at any zoom; the bbox-derived size scales naturally with content.
-      const diameter = Math.max(MIN_CIRCLE_DIAMETER_CSS / s, bboxSidePx * 1.5);
+      // Static minimum diameter floor (in page CSS px) so very tiny bboxes
+      // remain visible at fit-to-page scale. Scales with zoom naturally.
+      const diameter = Math.max(MIN_CIRCLE_DIAMETER_CSS, bboxSidePx * 1.5);
 
       return {
         id: o.id,
@@ -230,14 +231,13 @@ export const OverlayLayer = ({
         hovered: hoveredId === o.id,
       };
     });
-  }, [overlays, pageSize.width, pageSize.height, defaultColor, hoveredId, s]);
+  }, [overlays, pageSize.width, pageSize.height, defaultColor, hoveredId]);
 
-  // Size metrics in unscaled page CSS px. Dividing by viewScale keeps them
-  // constant on-screen at any zoom.
-  const fontPx = LABEL_SCREEN_FONT_PX / s;
-  const padX = LABEL_SCREEN_PAD_X / s;
-  const labelH = LABEL_SCREEN_H / s;
-  const gap = LABEL_SCREEN_GAP / s;
+  // Label sizing in unscaled page CSS px (constant in document space).
+  const fontPx = LABEL_FONT_PX;
+  const padX = LABEL_PAD_X;
+  const labelH = LABEL_H;
+  const gap = LABEL_GAP;
   const charPx = fontPx * 0.62; // bold sans-serif avg
 
   const placedLabels: PlacedLabel[] = useMemo(() => {
