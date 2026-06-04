@@ -216,7 +216,10 @@ export const OverlayLayer = ({
         o.rect.nw * pageSize.width,
         o.rect.nh * pageSize.height,
       );
-      const diameter = Math.max(MIN_CIRCLE_DIAMETER_CSS, bboxSidePx * 1.5);
+      // Min diameter is screen-constant (divide by viewScale) so markers stay
+      // readable at any zoom; the bbox-derived size scales naturally with content.
+      const diameter = Math.max(MIN_CIRCLE_DIAMETER_CSS / s, bboxSidePx * 1.5);
+
       return {
         id: o.id,
         cx,
