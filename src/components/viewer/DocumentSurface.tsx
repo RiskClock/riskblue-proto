@@ -72,6 +72,7 @@ export const DocumentSurface = ({
           overlays={overlays}
           pageSize={pageSize}
           hoveredId={hoveredOverlayId}
+          viewScale={viewScale}
           onOverlayClick={onOverlayClick}
         />
       )}
