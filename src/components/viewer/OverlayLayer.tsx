@@ -22,7 +22,7 @@ const LABEL_FONT_PX = 11;
 const LABEL_PAD_X = 6;
 const LABEL_H = 18;
 const LABEL_GAP = 0;
-const LABEL_OPACITY = 0.6;
+const LABEL_OPACITY = 0.7;
 
 function withAlpha(color: string, alpha: number): string {
   const trimmed = color.trim();
