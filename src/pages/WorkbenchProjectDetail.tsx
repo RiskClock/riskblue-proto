@@ -2988,13 +2988,145 @@ function DrawingPageBlock({
     if (!el) return;
     setDownloading(true);
     try {
-      const html2canvas = (await import("html2canvas")).default;
-      const canvas = await html2canvas(el, {
-        backgroundColor: "#ffffff",
-        scale: 2,
-        useCORS: true,
-        logging: false,
+      // Locate page image and the overlay layer.
+      const pageImg = el.querySelector("img") as HTMLImageElement | null;
+      if (!pageImg) throw new Error("Drawing not yet loaded.");
+      const imgRect = pageImg.getBoundingClientRect();
+      const cssW = pageImg.clientWidth;
+      const cssH = pageImg.clientHeight;
+      if (!cssW || !cssH) throw new Error("Drawing not yet loaded.");
+
+      // Output canvas at 2x for crispness.
+      const outScale = 2;
+      const canvas = document.createElement("canvas");
+      canvas.width = Math.round(cssW * outScale);
+      canvas.height = Math.round(cssH * outScale);
+      const ctx = canvas.getContext("2d")!;
+      ctx.fillStyle = "#ffffff";
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      ctx.imageSmoothingEnabled = true;
+      ctx.imageSmoothingQuality = "high";
+
+      // Reload image to bypass any tainted decode state.
+      const sourceImg: HTMLImageElement = await new Promise((resolve, reject) => {
+        const im = new Image();
+        im.crossOrigin = "anonymous";
+        im.onload = () => resolve(im);
+        im.onerror = () => reject(new Error("Could not load page image."));
+        im.src = pageImg.src;
       });
+      ctx.drawImage(sourceImg, 0, 0, canvas.width, canvas.height);
+
+      const px = (v: number) => v * outScale;
+      const toLocal = (clientX: number, clientY: number) => ({
+        x: (clientX - imgRect.left) * outScale,
+        y: (clientY - imgRect.top) * outScale,
+      });
+
+      // Leader lines (SVG). Convert SVG-local coords via getBoundingClientRect.
+      const leaderLines = el.querySelectorAll<SVGLineElement>('line[data-export-kind="leader"]');
+      leaderLines.forEach((line) => {
+        const color = line.getAttribute("data-color") || "#dc2626";
+        const opacity = Number(line.getAttribute("data-opacity") || "0.7");
+        // Use CTM to map SVG coords to client coords.
+        const svg = line.ownerSVGElement;
+        if (!svg) return;
+        const ctm = svg.getScreenCTM();
+        if (!ctm) return;
+        const pt1 = svg.createSVGPoint();
+        pt1.x = Number(line.getAttribute("x1") || 0);
+        pt1.y = Number(line.getAttribute("y1") || 0);
+        const pt2 = svg.createSVGPoint();
+        pt2.x = Number(line.getAttribute("x2") || 0);
+        pt2.y = Number(line.getAttribute("y2") || 0);
+        const p1 = pt1.matrixTransform(ctm);
+        const p2 = pt2.matrixTransform(ctm);
+        const a = toLocal(p1.x, p1.y);
+        const b = toLocal(p2.x, p2.y);
+        ctx.save();
+        ctx.globalAlpha = opacity;
+        ctx.strokeStyle = color;
+        ctx.lineWidth = 1.5 * outScale;
+        ctx.beginPath();
+        ctx.moveTo(a.x, a.y);
+        ctx.lineTo(b.x, b.y);
+        ctx.stroke();
+        ctx.restore();
+      });
+
+      // Circles.
+      const circles = el.querySelectorAll<HTMLDivElement>('[data-export-kind="circle"]');
+      circles.forEach((div) => {
+        const r = div.getBoundingClientRect();
+        const center = toLocal(r.left + r.width / 2, r.top + r.height / 2);
+        const radius = (r.width / 2) * outScale;
+        const color = div.getAttribute("data-color") || "#dc2626";
+        ctx.save();
+        // Fill (translucent), then white halo, then colored border.
+        ctx.beginPath();
+        ctx.arc(center.x, center.y, radius - 1.25 * outScale, 0, Math.PI * 2);
+        ctx.fillStyle = color;
+        ctx.globalAlpha = 0.35;
+        ctx.fill();
+        ctx.globalAlpha = 1;
+        // White halo.
+        ctx.beginPath();
+        ctx.arc(center.x, center.y, radius, 0, Math.PI * 2);
+        ctx.lineWidth = 1 * outScale;
+        ctx.strokeStyle = "rgba(255,255,255,0.85)";
+        ctx.stroke();
+        // Colored border.
+        ctx.beginPath();
+        ctx.arc(center.x, center.y, radius - 1.25 * outScale, 0, Math.PI * 2);
+        ctx.lineWidth = 2.5 * outScale;
+        ctx.strokeStyle = color;
+        ctx.stroke();
+        ctx.restore();
+      });
+
+      // Labels: rect + text.
+      const labels = el.querySelectorAll<HTMLDivElement>('[data-export-kind="label"]');
+      labels.forEach((div) => {
+        const r = div.getBoundingClientRect();
+        const tl = toLocal(r.left, r.top);
+        const w = r.width * outScale;
+        const h = r.height * outScale;
+        const bg = div.getAttribute("data-color") || "#dc2626";
+        const textColor = div.getAttribute("data-text-color") || "#ffffff";
+        const fontPx = Number(div.getAttribute("data-font-px") || "11") * outScale;
+        const opacity = Number(div.getAttribute("data-opacity") || "0.7");
+        const text = (div.textContent || "").trim();
+        ctx.save();
+        ctx.globalAlpha = opacity;
+        // Rounded rect background.
+        const radius = 3 * outScale;
+        const x = tl.x, y = tl.y;
+        ctx.beginPath();
+        ctx.moveTo(x + radius, y);
+        ctx.lineTo(x + w - radius, y);
+        ctx.quadraticCurveTo(x + w, y, x + w, y + radius);
+        ctx.lineTo(x + w, y + h - radius);
+        ctx.quadraticCurveTo(x + w, y + h, x + w - radius, y + h);
+        ctx.lineTo(x + radius, y + h);
+        ctx.quadraticCurveTo(x, y + h, x, y + h - radius);
+        ctx.lineTo(x, y + radius);
+        ctx.quadraticCurveTo(x, y, x + radius, y);
+        ctx.closePath();
+        ctx.fillStyle = bg;
+        ctx.fill();
+        // White halo stroke (1px).
+        ctx.lineWidth = 1 * outScale;
+        ctx.strokeStyle = "rgba(255,255,255,0.9)";
+        ctx.stroke();
+        // Text — match the on-screen font stack.
+        ctx.fillStyle = textColor;
+        ctx.font = `bold ${fontPx}px ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif`;
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+        ctx.fillText(text, x + w / 2, y + h / 2);
+        ctx.restore();
+      });
+
       const link = document.createElement("a");
       const safeName = `${fileName.replace(/\.[^.]+$/, "")}_page${pageIdx}.png`;
       link.download = safeName;
