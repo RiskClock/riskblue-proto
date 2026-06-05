@@ -1687,9 +1687,27 @@ export default function WorkbenchProjectDetail() {
                                   {group.file.name}
                                   {(() => {
                                     const n = fileTotalLookup.get(group.file.id) || 0;
-                                    return n > 0 ? ` (${n} ${n === 1 ? "instance" : "instances"})` : "";
+                                    return n > 0 ? ` (${n} ${n === 1 ? "detection" : "detections"})` : "";
                                   })()}
                                 </span>
+                                {(() => {
+                                  // Aggregate spaces across all sheets in this file.
+                                  const spSet = new Set<string>();
+                                  for (const sh of group.sheets) {
+                                    for (const s of spacesForSheet(group.file.name, sh.page_index)) spSet.add(s);
+                                  }
+                                  const sps = Array.from(spSet);
+                                  if (sps.length === 0) return null;
+                                  return (
+                                    <Badge
+                                      variant="outline"
+                                      className="shrink-0 h-4 px-1.5 text-[10px] leading-none bg-sky-500/10 text-sky-700 border-sky-500/30"
+                                      title={sps.join(", ")}
+                                    >
+                                      {formatSpaceBadge(sps)}
+                                    </Badge>
+                                  );
+                                })()}
                                 {!singlePage && (
                                   <span className="text-xs text-muted-foreground shrink-0">
                                     {group.sheets.length} pages
