@@ -361,6 +361,15 @@ export const OverlayLayer = ({
       {placedLabels.map((p) => (
         <div
           key={`label-${p.id}`}
+          data-export-kind="label"
+          data-color={p.color}
+          data-text-color={readableTextOn(p.color)}
+          data-x={p.x}
+          data-y={p.y}
+          data-w={p.w}
+          data-h={p.h}
+          data-font-px={fontPx}
+          data-opacity={LABEL_OPACITY}
           className="absolute font-bold whitespace-nowrap pointer-events-none text-center"
           style={{
             left: p.x,
