@@ -1,0 +1,1 @@
+INSERT INTO public.awp_classes (name, category, id_prefix, display_order, is_active) VALUES ('Heat Pump', 'Asset', 'HP', 8, true);
