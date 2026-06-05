@@ -1691,12 +1691,10 @@ export default function WorkbenchProjectDetail() {
                                   })()}
                                 </span>
                                 {(() => {
-                                  // Aggregate spaces across all sheets in this file.
-                                  const spSet = new Set<string>();
-                                  for (const sh of group.sheets) {
-                                    for (const s of spacesForSheet(group.file.name, sh.page_index)) spSet.add(s);
-                                  }
-                                  const sps = Array.from(spSet);
+                                  // Only show a file-level space badge when the file has a
+                                  // single page AND that page maps to at least one space.
+                                  if (group.sheets.length !== 1) return null;
+                                  const sps = spacesForSheet(group.file.name, group.sheets[0].page_index);
                                   if (sps.length === 0) return null;
                                   return (
                                     <Badge
