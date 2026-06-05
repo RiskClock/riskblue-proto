@@ -299,6 +299,9 @@ export const OverlayLayer = ({
           return (
             <line
               key={`leader-${p.id}-${idx}`}
+              data-export-kind="leader"
+              data-color={p.color}
+              data-opacity={LABEL_OPACITY}
               x1={x1}
               y1={y1}
               x2={x2}
