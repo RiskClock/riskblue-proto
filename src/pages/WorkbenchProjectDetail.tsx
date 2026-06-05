@@ -1277,9 +1277,10 @@ export default function WorkbenchProjectDetail() {
         </div>
 
         <main className="flex-1 overflow-auto">
-          <div className="container mx-auto px-6 py-6 space-y-4">
+          <div className="container mx-auto px-6 pt-0 pb-6 space-y-4">
             {/* Action toolbar (sticky to top of scrolling main) */}
             <div className="sticky top-0 z-40 -mx-6 px-6 py-3 bg-background border-b flex flex-wrap items-center gap-2">
+              <span className="text-sm font-medium text-muted-foreground mr-1">Agents:</span>
               {activePhase === "extract" ? (
                 <Button size="sm" variant="destructive" onClick={stopPipeline}>
                   <Square className="h-3.5 w-3.5 mr-1.5" /> Stop Extracting Context
