@@ -2563,6 +2563,11 @@ function InstancesReportModal({
 
   const spaceList = useMemo(() => {
     const set = new Set<string>();
+    // Start from the full hierarchy so spaces with 0 detections still appear.
+    const hierarchySpaces: any[] = spaceHierarchyPayload?.parsed?.physical_spaces || [];
+    for (const sp of hierarchySpaces) {
+      if (sp?.standardized_space_name) set.add(sp.standardized_space_name);
+    }
     let hasUnassigned = false;
     for (const r of expanded) {
       if (r.spaceName) set.add(r.spaceName);
@@ -2578,7 +2583,7 @@ function InstancesReportModal({
     });
     if (hasUnassigned) arr.push("__unassigned__");
     return arr;
-  }, [expanded, spaceIndexMap]);
+  }, [expanded, spaceIndexMap, spaceHierarchyPayload]);
 
   const classCols = useMemo(() => {
     const map = new Map<string, string>();
