@@ -337,6 +337,11 @@ export const OverlayLayer = ({
         return (
           <div
             key={c.id}
+            data-export-kind="circle"
+            data-color={c.color}
+            data-cx={c.cx}
+            data-cy={c.cy}
+            data-radius={c.r}
             style={style}
             onPointerDown={clickable ? stop : undefined}
             onPointerUp={clickable ? stop : undefined}
