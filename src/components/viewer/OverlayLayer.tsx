@@ -22,7 +22,7 @@ const LABEL_FONT_PX = 11;
 const LABEL_PAD_X = 6;
 const LABEL_H = 18;
 const LABEL_GAP = 0;
-const LABEL_OPACITY = 0.6;
+const LABEL_OPACITY = 0.7;
 
 function withAlpha(color: string, alpha: number): string {
   const trimmed = color.trim();
@@ -353,15 +353,17 @@ export const OverlayLayer = ({
       {placedLabels.map((p) => (
         <div
           key={`label-${p.id}`}
-          className="absolute font-bold whitespace-nowrap pointer-events-none"
+          className="absolute font-bold whitespace-nowrap pointer-events-none text-center"
           style={{
             left: p.x,
             top: p.y,
+            width: p.w,
             height: p.h,
             lineHeight: `${p.h}px`,
             fontSize: fontPx,
             paddingLeft: padX,
             paddingRight: padX,
+            boxSizing: "border-box",
             borderRadius: 3,
             backgroundColor: p.color,
             color: readableTextOn(p.color),

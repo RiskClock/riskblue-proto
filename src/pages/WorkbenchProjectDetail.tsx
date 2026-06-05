@@ -1277,9 +1277,10 @@ export default function WorkbenchProjectDetail() {
         </div>
 
         <main className="flex-1 overflow-auto">
-          <div className="container mx-auto px-6 py-6 space-y-4">
+          <div className="container mx-auto px-6 pt-0 pb-6 space-y-4">
             {/* Action toolbar (sticky to top of scrolling main) */}
             <div className="sticky top-0 z-40 -mx-6 px-6 py-3 bg-background border-b flex flex-wrap items-center gap-2">
+              <span className="text-sm font-medium text-muted-foreground mr-1">Agents:</span>
               {activePhase === "extract" ? (
                 <Button size="sm" variant="destructive" onClick={stopPipeline}>
                   <Square className="h-3.5 w-3.5 mr-1.5" /> Stop Extracting Context
@@ -1730,16 +1731,8 @@ export default function WorkbenchProjectDetail() {
                                   className={`${stickyCellFirstBase} bg-muted/10 group-hover:bg-muted/30 py-1 text-sm`}
                                 >
                                   <div className="flex items-center gap-2 min-w-0 pl-7">
-                                    <span className="text-muted-foreground truncate min-w-0">
+                                    <span className="text-muted-foreground shrink-0">
                                       Page {s.page_index}
-                                      {s.sheet_number ? ` · ${s.sheet_number}` : ""}
-                                      {s.sheet_title ? ` — ${s.sheet_title}` : ""}
-                                      {(() => {
-                                        const n =
-                                          (pageTotalLookup.get(`sheet:${s.id}`) || 0) +
-                                          (pageTotalLookup.get(`${s.parent_file_id}::${s.page_index}`) || 0);
-                                        return n > 0 ? ` (${n} ${n === 1 ? "instance" : "instances"})` : "";
-                                      })()}
                                     </span>
                                     {(() => {
                                       const sps = spacesForSheet(group.file.name, s.page_index);
@@ -1754,6 +1747,16 @@ export default function WorkbenchProjectDetail() {
                                         </Badge>
                                       );
                                     })()}
+                                    <span className="text-muted-foreground truncate min-w-0">
+                                      {s.sheet_number ? `· ${s.sheet_number}` : ""}
+                                      {s.sheet_title ? ` — ${s.sheet_title}` : ""}
+                                      {(() => {
+                                        const n =
+                                          (pageTotalLookup.get(`sheet:${s.id}`) || 0) +
+                                          (pageTotalLookup.get(`${s.parent_file_id}::${s.page_index}`) || 0);
+                                        return n > 0 ? ` (${n} ${n === 1 ? "detection" : "detections"})` : "";
+                                      })()}
+                                    </span>
                                     <SheetStatusBadge s={s} />
                                   </div>
                                 </TableCell>
@@ -2857,7 +2860,7 @@ function InstancesReportModal({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-6xl">
+      <DialogContent className="max-w-[95vw] w-[95vw] sm:max-w-[95vw]">
         <DialogHeader>
           <DialogTitle>Instances Report</DialogTitle>
           <DialogDescription>
