@@ -1691,12 +1691,10 @@ export default function WorkbenchProjectDetail() {
                                   })()}
                                 </span>
                                 {(() => {
-                                  // Aggregate spaces across all sheets in this file.
-                                  const spSet = new Set<string>();
-                                  for (const sh of group.sheets) {
-                                    for (const s of spacesForSheet(group.file.name, sh.page_index)) spSet.add(s);
-                                  }
-                                  const sps = Array.from(spSet);
+                                  // Only show a file-level space badge when the file has a
+                                  // single page AND that page maps to at least one space.
+                                  if (group.sheets.length !== 1) return null;
+                                  const sps = spacesForSheet(group.file.name, group.sheets[0].page_index);
                                   if (sps.length === 0) return null;
                                   return (
                                     <Badge
@@ -3084,7 +3082,9 @@ function DrawingPageBlock({
         ctx.restore();
       });
 
-      // Labels: rect + text.
+      // Labels: rect + text. Render each label fully opaque on an offscreen
+      // canvas, then composite at the configured opacity so text doesn't get
+      // double-faded by the background alpha (matches CSS group-opacity).
       const labels = el.querySelectorAll<HTMLDivElement>('[data-export-kind="label"]');
       labels.forEach((div) => {
         const r = div.getBoundingClientRect();
@@ -3096,36 +3096,41 @@ function DrawingPageBlock({
         const fontPx = Number(div.getAttribute("data-font-px") || "11") * outScale;
         const opacity = Number(div.getAttribute("data-opacity") || "0.7");
         const text = (div.textContent || "").trim();
+
+        // Offscreen canvas at the label size.
+        const off = document.createElement("canvas");
+        off.width = Math.ceil(w);
+        off.height = Math.ceil(h);
+        const octx = off.getContext("2d")!;
+        const radius = 3 * outScale;
+        octx.beginPath();
+        octx.moveTo(radius, 0);
+        octx.lineTo(w - radius, 0);
+        octx.quadraticCurveTo(w, 0, w, radius);
+        octx.lineTo(w, h - radius);
+        octx.quadraticCurveTo(w, h, w - radius, h);
+        octx.lineTo(radius, h);
+        octx.quadraticCurveTo(0, h, 0, h - radius);
+        octx.lineTo(0, radius);
+        octx.quadraticCurveTo(0, 0, radius, 0);
+        octx.closePath();
+        octx.fillStyle = bg;
+        octx.fill();
+        octx.lineWidth = 1 * outScale;
+        octx.strokeStyle = "rgba(255,255,255,0.9)";
+        octx.stroke();
+        octx.fillStyle = textColor;
+        octx.font = `bold ${fontPx}px ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif`;
+        octx.textAlign = "center";
+        octx.textBaseline = "middle";
+        octx.fillText(text, w / 2, h / 2);
+
         ctx.save();
         ctx.globalAlpha = opacity;
-        // Rounded rect background.
-        const radius = 3 * outScale;
-        const x = tl.x, y = tl.y;
-        ctx.beginPath();
-        ctx.moveTo(x + radius, y);
-        ctx.lineTo(x + w - radius, y);
-        ctx.quadraticCurveTo(x + w, y, x + w, y + radius);
-        ctx.lineTo(x + w, y + h - radius);
-        ctx.quadraticCurveTo(x + w, y + h, x + w - radius, y + h);
-        ctx.lineTo(x + radius, y + h);
-        ctx.quadraticCurveTo(x, y + h, x, y + h - radius);
-        ctx.lineTo(x, y + radius);
-        ctx.quadraticCurveTo(x, y, x + radius, y);
-        ctx.closePath();
-        ctx.fillStyle = bg;
-        ctx.fill();
-        // White halo stroke (1px).
-        ctx.lineWidth = 1 * outScale;
-        ctx.strokeStyle = "rgba(255,255,255,0.9)";
-        ctx.stroke();
-        // Text — match the on-screen font stack.
-        ctx.fillStyle = textColor;
-        ctx.font = `bold ${fontPx}px ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif`;
-        ctx.textAlign = "center";
-        ctx.textBaseline = "middle";
-        ctx.fillText(text, x + w / 2, y + h / 2);
+        ctx.drawImage(off, tl.x, tl.y);
         ctx.restore();
       });
+
 
       const link = document.createElement("a");
       const safeName = `${fileName.replace(/\.[^.]+$/, "")}_page${pageIdx}.png`;
