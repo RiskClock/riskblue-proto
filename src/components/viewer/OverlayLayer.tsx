@@ -299,6 +299,9 @@ export const OverlayLayer = ({
           return (
             <line
               key={`leader-${p.id}-${idx}`}
+              data-export-kind="leader"
+              data-color={p.color}
+              data-opacity={LABEL_OPACITY}
               x1={x1}
               y1={y1}
               x2={x2}
@@ -334,6 +337,11 @@ export const OverlayLayer = ({
         return (
           <div
             key={c.id}
+            data-export-kind="circle"
+            data-color={c.color}
+            data-cx={c.cx}
+            data-cy={c.cy}
+            data-radius={c.r}
             style={style}
             onPointerDown={clickable ? stop : undefined}
             onPointerUp={clickable ? stop : undefined}
@@ -353,6 +361,15 @@ export const OverlayLayer = ({
       {placedLabels.map((p) => (
         <div
           key={`label-${p.id}`}
+          data-export-kind="label"
+          data-color={p.color}
+          data-text-color={readableTextOn(p.color)}
+          data-x={p.x}
+          data-y={p.y}
+          data-w={p.w}
+          data-h={p.h}
+          data-font-px={fontPx}
+          data-opacity={LABEL_OPACITY}
           className="absolute font-bold whitespace-nowrap pointer-events-none text-center"
           style={{
             left: p.x,
