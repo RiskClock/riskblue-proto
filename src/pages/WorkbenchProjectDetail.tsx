@@ -1731,16 +1731,8 @@ export default function WorkbenchProjectDetail() {
                                   className={`${stickyCellFirstBase} bg-muted/10 group-hover:bg-muted/30 py-1 text-sm`}
                                 >
                                   <div className="flex items-center gap-2 min-w-0 pl-7">
-                                    <span className="text-muted-foreground truncate min-w-0">
+                                    <span className="text-muted-foreground shrink-0">
                                       Page {s.page_index}
-                                      {s.sheet_number ? ` · ${s.sheet_number}` : ""}
-                                      {s.sheet_title ? ` — ${s.sheet_title}` : ""}
-                                      {(() => {
-                                        const n =
-                                          (pageTotalLookup.get(`sheet:${s.id}`) || 0) +
-                                          (pageTotalLookup.get(`${s.parent_file_id}::${s.page_index}`) || 0);
-                                        return n > 0 ? ` (${n} ${n === 1 ? "instance" : "instances"})` : "";
-                                      })()}
                                     </span>
                                     {(() => {
                                       const sps = spacesForSheet(group.file.name, s.page_index);
@@ -1755,6 +1747,16 @@ export default function WorkbenchProjectDetail() {
                                         </Badge>
                                       );
                                     })()}
+                                    <span className="text-muted-foreground truncate min-w-0">
+                                      {s.sheet_number ? `· ${s.sheet_number}` : ""}
+                                      {s.sheet_title ? ` — ${s.sheet_title}` : ""}
+                                      {(() => {
+                                        const n =
+                                          (pageTotalLookup.get(`sheet:${s.id}`) || 0) +
+                                          (pageTotalLookup.get(`${s.parent_file_id}::${s.page_index}`) || 0);
+                                        return n > 0 ? ` (${n} ${n === 1 ? "detection" : "detections"})` : "";
+                                      })()}
+                                    </span>
                                     <SheetStatusBadge s={s} />
                                   </div>
                                 </TableCell>
