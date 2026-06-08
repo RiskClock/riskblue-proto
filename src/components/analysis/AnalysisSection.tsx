@@ -1033,7 +1033,7 @@ function ExtractedTextBody({ fileId, localText }: { fileId: string; localText?: 
           className="inline-flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors disabled:opacity-40"
         >
           {copied ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
-          {copied ? "Copied" : "Copy all"}
+          {copied ? "Copied" : "Copy"}
         </button>
       </div>
       <div className="flex-1 overflow-auto border rounded-md p-4 bg-muted/30">
