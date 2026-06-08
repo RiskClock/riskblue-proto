@@ -23,6 +23,7 @@ import { AppHeader } from "@/components/AppHeader";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Badge } from "@/components/ui/badge";
+import { SpaceEditModal } from "@/components/workbench/SpaceEditModal";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -166,6 +167,9 @@ export default function WorkbenchProjectDetail() {
   const [spaceModalOpen, setSpaceModalOpen] = useState(false);
   const [buildingSpace, setBuildingSpace] = useState(false);
   const [instancesReportOpen, setInstancesReportOpen] = useState(false);
+  const [spaceEditTarget, setSpaceEditTarget] = useState<
+    { fileName: string; pageNumber: number; current: string[] } | null
+  >(null);
 
   const toggleExpand = (fileId: string) => {
     setExpandedFiles((prev) => {
@@ -647,6 +651,103 @@ export default function WorkbenchProjectDetail() {
   const spacesForSheet = (fileName: string, pageIndex: number): string[] => {
     return pageSpaceMap.get(`${fileName}::${pageIndex}`) || [];
   };
+
+  const hierarchyBuilt = !!(spaceHierarchyPayload?.parsed?.physical_spaces?.length);
+
+  const allSpaceNames = useMemo<string[]>(() => {
+    const spaces: any[] = spaceHierarchyPayload?.parsed?.physical_spaces || [];
+    return spaces
+      .map((s) => s?.standardized_space_name)
+      .filter((n): n is string => typeof n === "string" && n.length > 0);
+  }, [spaceHierarchyPayload]);
+
+  const openSpaceEdit = (fileName: string, pageNumber: number) => {
+    setSpaceEditTarget({
+      fileName,
+      pageNumber,
+      current: spacesForSheet(fileName, pageNumber),
+    });
+  };
+
+  const handleSaveSpaces = async (newSpaces: string[]) => {
+    if (!spaceEditTarget || !analysisRequest?.id) return;
+    const { fileName, pageNumber } = spaceEditTarget;
+    const payload = spaceHierarchyPayload
+      ? JSON.parse(JSON.stringify(spaceHierarchyPayload))
+      : { parsed: { physical_spaces: [] } };
+    if (!payload.parsed) payload.parsed = { physical_spaces: [] };
+    if (!Array.isArray(payload.parsed.physical_spaces)) payload.parsed.physical_spaces = [];
+
+    const spaces: any[] = payload.parsed.physical_spaces;
+
+    // Remove this page from all existing matched_sources.
+    for (const sp of spaces) {
+      if (!Array.isArray(sp.matched_sources)) sp.matched_sources = [];
+      sp.matched_sources = sp.matched_sources.filter(
+        (src: any) => !(src?.file_name === fileName && Number(src?.page_number) === Number(pageNumber)),
+      );
+    }
+
+    // Add page to each selected space (create new space entries if needed).
+    for (const name of newSpaces) {
+      let entry = spaces.find((s) => s?.standardized_space_name === name);
+      if (!entry) {
+        entry = { standardized_space_name: name, space_index: null, matched_sources: [] };
+        spaces.push(entry);
+      }
+      if (!Array.isArray(entry.matched_sources)) entry.matched_sources = [];
+      entry.matched_sources.push({
+        file_name: fileName,
+        page_number: pageNumber,
+        context_extracted: "User-assigned",
+      });
+    }
+
+    try {
+      const { error } = await supabase
+        .from("analysis_requests")
+        .update({ space_hierarchy_json: payload } as any)
+        .eq("id", analysisRequest.id);
+      if (error) throw error;
+      toast({ title: "Spaces updated", description: `${fileName} · Page ${pageNumber}` });
+      queryClient.invalidateQueries({ queryKey: ["workbench-analysis-request", projectId] });
+    } catch (e: any) {
+      toast({ title: "Save failed", description: e?.message ?? "Unknown error", variant: "destructive" });
+    }
+  };
+
+  /** Render a clickable space badge. Returns null if no badge should display. */
+  const renderSpaceBadge = (fileName: string, pageNumber: number) => {
+    const sps = spacesForSheet(fileName, pageNumber);
+    const hasSpaces = sps.length > 0;
+    if (!hasSpaces && !hierarchyBuilt) return null;
+    const label = hasSpaces ? formatSpaceBadge(sps) : "No Space";
+    const cls = hasSpaces
+      ? "bg-sky-500/10 text-sky-700 border-sky-500/30"
+      : "bg-slate-400/15 text-slate-600 border-slate-400/40";
+    const badge = (
+      <Badge
+        variant="outline"
+        className={`min-w-0 max-w-full h-4 px-1.5 text-[10px] leading-none cursor-pointer hover:opacity-80 ${cls}`}
+        onClick={(e) => {
+          e.stopPropagation();
+          openSpaceEdit(fileName, pageNumber);
+        }}
+      >
+        <span className="truncate block">{label}</span>
+      </Badge>
+    );
+    if (!hasSpaces) return badge;
+    return (
+      <Tooltip>
+        <TooltipTrigger asChild>{badge}</TooltipTrigger>
+        <TooltipContent side="bottom" className="max-w-xs">
+          <div className="text-xs">{sps.join(", ")}</div>
+        </TooltipContent>
+      </Tooltip>
+    );
+  };
+
 
   const openManage = () => {
     setDraftCols(enabledCols);
@@ -1438,7 +1539,7 @@ export default function WorkbenchProjectDetail() {
                                     {label}
                                   </button>
                                 </TooltipTrigger>
-                                <TooltipContent>{name} — click to view prompt</TooltipContent>
+                                <TooltipContent side="bottom">{name} — click to view prompt</TooltipContent>
                               </Tooltip>
                               <DropdownMenu>
                                 <DropdownMenuTrigger asChild>
@@ -1690,22 +1791,11 @@ export default function WorkbenchProjectDetail() {
                                     return n > 0 ? ` (${n} ${n === 1 ? "detection" : "detections"})` : "";
                                   })()}
                                 </span>
-                                {(() => {
-                                  // Only show a file-level space badge when the file has a
-                                  // single page AND that page maps to at least one space.
-                                  if (group.sheets.length !== 1) return null;
-                                  const sps = spacesForSheet(group.file.name, group.sheets[0].page_index);
-                                  if (sps.length === 0) return null;
-                                  return (
-                                    <Badge
-                                      variant="outline"
-                                      className="shrink-0 h-4 px-1.5 text-[10px] leading-none bg-sky-500/10 text-sky-700 border-sky-500/30"
-                                      title={sps.join(", ")}
-                                    >
-                                      {formatSpaceBadge(sps)}
-                                    </Badge>
-                                  );
-                                })()}
+                                {group.sheets.length === 1 && (
+                                  <div className="min-w-0 overflow-hidden max-w-[55%] flex">
+                                    {renderSpaceBadge(group.file.name, group.sheets[0].page_index)}
+                                  </div>
+                                )}
                                 {!singlePage && (
                                   <span className="text-xs text-muted-foreground shrink-0">
                                     {group.sheets.length} pages
@@ -1750,19 +1840,9 @@ export default function WorkbenchProjectDetail() {
                                     <span className="text-muted-foreground shrink-0">
                                       Page {s.page_index}
                                     </span>
-                                    {(() => {
-                                      const sps = spacesForSheet(group.file.name, s.page_index);
-                                      if (sps.length === 0) return null;
-                                      return (
-                                        <Badge
-                                          variant="outline"
-                                          className="shrink-0 h-4 px-1.5 text-[10px] leading-none bg-sky-500/10 text-sky-700 border-sky-500/30"
-                                          title={sps.join(", ")}
-                                        >
-                                          {formatSpaceBadge(sps)}
-                                        </Badge>
-                                      );
-                                    })()}
+                                    <div className="min-w-0 overflow-hidden max-w-[55%] flex">
+                                      {renderSpaceBadge(group.file.name, s.page_index)}
+                                    </div>
                                     <span className="text-muted-foreground truncate min-w-0">
                                       {s.sheet_number ? `· ${s.sheet_number}` : ""}
                                       {s.sheet_title ? ` — ${s.sheet_title}` : ""}
@@ -1900,12 +1980,15 @@ export default function WorkbenchProjectDetail() {
               const single =
                 fileGroups.find((g) => g.file.id === activeSheet.parent_file_id)?.sheets
                   .length === 1;
-              const base = single
+              return single
                 ? activeSheet.file_name
                 : `${activeSheet.file_name} — Page ${activeSheet.page_index}`;
-              const sps = spacesForSheet(activeSheet.file_name, activeSheet.page_index);
-              return sps.length > 0 ? `${base} · ${formatSpaceBadge(sps)}` : base;
             })()}
+            titleAccessory={
+              <span className="inline-flex items-center max-w-[40%]">
+                {renderSpaceBadge(activeSheet.file_name, activeSheet.page_index)}
+              </span>
+            }
             mimeType="application/pdf"
             accessToken=""
             detections={[]}
@@ -1976,6 +2059,19 @@ export default function WorkbenchProjectDetail() {
           className={promptClass}
           onClose={() => setPromptClass(null)}
         />
+
+        {/* Space edit modal */}
+        {spaceEditTarget && (
+          <SpaceEditModal
+            isOpen={!!spaceEditTarget}
+            onClose={() => setSpaceEditTarget(null)}
+            fileName={spaceEditTarget.fileName}
+            pageNumber={spaceEditTarget.pageNumber}
+            currentSpaces={spaceEditTarget.current}
+            allSpaces={allSpaceNames}
+            onSave={handleSaveSpaces}
+          />
+        )}
 
 
         {/* Extracted-text modal */}

@@ -8,7 +8,8 @@ import { Badge } from "@/components/ui/badge";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog";
+import { Textarea } from "@/components/ui/textarea";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Input } from "@/components/ui/input";
@@ -466,8 +467,8 @@ export default function Configuration() {
       <main className="container mx-auto px-6 py-8">
         <div className="flex items-center justify-between mb-6">
           <div>
-            <h1 className="text-3xl font-bold text-foreground">AWP Configuration</h1>
-            <p className="text-muted-foreground">Manage default mitigation controls for each AWP class</p>
+            <h1 className="text-3xl font-bold text-foreground">App Configuration</h1>
+            <p className="text-muted-foreground">Manage default mitigation controls, prompts, and agent settings</p>
           </div>
           <div className="flex gap-3">
             <Button variant="outline" onClick={() => setShowRevertDialog(true)} disabled={!hasUnsavedChanges}>
@@ -515,6 +516,8 @@ export default function Configuration() {
             </Table>
           </div>
         )}
+
+        <SpaceHierarchyPromptSection />
       </main>
 
       {/* Control Edit Modal */}
@@ -666,5 +669,98 @@ function AddControlPopover({ awp, controls, currentIds, onAdd }: AddControlPopov
         </Command>
       </PopoverContent>
     </Popover>
+  );
+}
+
+// ---------------- Space Hierarchy Prompt ----------------
+function SpaceHierarchyPromptSection() {
+  const { toast } = useToast();
+  const [open, setOpen] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [content, setContent] = useState("");
+  const [updatedAt, setUpdatedAt] = useState<string | null>(null);
+
+  const loadPrompt = async () => {
+    setLoading(true);
+    try {
+      const { data, error } = await supabase
+        .from("app_settings" as any)
+        .select("value, updated_at")
+        .eq("key", "space_hierarchy_prompt")
+        .maybeSingle();
+      if (error) throw error;
+      setContent((data as any)?.value ?? "");
+      setUpdatedAt((data as any)?.updated_at ?? null);
+    } catch (e: any) {
+      toast({ title: "Failed to load prompt", description: e.message, variant: "destructive" });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const openModal = async () => {
+    setOpen(true);
+    await loadPrompt();
+  };
+
+  const save = async () => {
+    setSaving(true);
+    try {
+      const { error } = await supabase
+        .from("app_settings" as any)
+        .upsert({ key: "space_hierarchy_prompt", value: content, updated_at: new Date().toISOString() } as any, { onConflict: "key" });
+      if (error) throw error;
+      toast({ title: "Prompt saved", description: "Build Space Hierarchy will use the updated prompt next run." });
+      setOpen(false);
+    } catch (e: any) {
+      toast({ title: "Save failed", description: e.message, variant: "destructive" });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="mt-8 bg-card rounded-lg border p-4">
+      <div className="flex items-center justify-between">
+        <div>
+          <h2 className="text-lg font-semibold">Space Hierarchy Prompt</h2>
+          <p className="text-sm text-muted-foreground">
+            Prompt sent to the Build Space Hierarchy agent. Extracted drawing text is appended after the prompt.
+          </p>
+        </div>
+        <Button variant="outline" onClick={openModal}>Edit Prompt</Button>
+      </div>
+
+      <Dialog open={open} onOpenChange={setOpen}>
+        <DialogContent className="max-w-4xl max-h-[85vh] flex flex-col">
+          <DialogHeader>
+            <DialogTitle>Space Hierarchy Prompt</DialogTitle>
+            <DialogDescription>
+              {updatedAt
+                ? `Last updated ${format(new Date(updatedAt), "MMM d, yyyy 'at' h:mm a")}`
+                : "Edit and save the prompt used by Build Space Hierarchy."}
+            </DialogDescription>
+          </DialogHeader>
+          {loading ? (
+            <div className="flex items-center justify-center py-12 text-muted-foreground">
+              <Loader2 className="h-4 w-4 animate-spin mr-2" /> Loading…
+            </div>
+          ) : (
+            <Textarea
+              value={content}
+              onChange={(e) => setContent(e.target.value)}
+              className="font-mono text-xs flex-1 min-h-[400px]"
+            />
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setOpen(false)} disabled={saving}>Cancel</Button>
+            <Button onClick={save} disabled={saving || loading}>
+              {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : "Save"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </div>
   );
 }
