@@ -23,6 +23,7 @@ import { AppHeader } from "@/components/AppHeader";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Badge } from "@/components/ui/badge";
+import { SpaceEditModal } from "@/components/workbench/SpaceEditModal";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -166,6 +167,9 @@ export default function WorkbenchProjectDetail() {
   const [spaceModalOpen, setSpaceModalOpen] = useState(false);
   const [buildingSpace, setBuildingSpace] = useState(false);
   const [instancesReportOpen, setInstancesReportOpen] = useState(false);
+  const [spaceEditTarget, setSpaceEditTarget] = useState<
+    { fileName: string; pageNumber: number; current: string[] } | null
+  >(null);
 
   const toggleExpand = (fileId: string) => {
     setExpandedFiles((prev) => {
