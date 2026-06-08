@@ -717,18 +717,26 @@ export default function WorkbenchProjectDetail() {
   };
 
   /** Render a clickable space badge. Returns null if no badge should display. */
-  const renderSpaceBadge = (fileName: string, pageNumber: number) => {
+  const renderSpaceBadge = (
+    fileName: string,
+    pageNumber: number,
+    opts?: { size?: "sm" | "md" },
+  ) => {
     const sps = spacesForSheet(fileName, pageNumber);
     const hasSpaces = sps.length > 0;
     if (!hasSpaces && !hierarchyBuilt) return null;
     const label = hasSpaces ? formatSpaceBadge(sps) : "No Space";
     const cls = hasSpaces
       ? "bg-sky-500/10 text-sky-700 border-sky-500/30"
-      : "bg-slate-400/15 text-slate-600 border-slate-400/40";
+      : "bg-slate-400/15 text-slate-600 border-slate-400/40 opacity-80";
+    const sizeCls =
+      opts?.size === "md"
+        ? "h-5 px-2 text-[11px]"
+        : "h-4 px-1.5 text-[10px]";
     const badge = (
       <Badge
         variant="outline"
-        className={`min-w-0 max-w-full h-4 px-1.5 text-[10px] leading-none cursor-pointer hover:opacity-80 ${cls}`}
+        className={`min-w-0 max-w-full leading-none cursor-pointer hover:opacity-80 ${sizeCls} ${cls}`}
         onClick={(e) => {
           e.stopPropagation();
           openSpaceEdit(fileName, pageNumber);
@@ -739,12 +747,20 @@ export default function WorkbenchProjectDetail() {
     );
     if (!hasSpaces) return badge;
     return (
-      <Tooltip>
-        <TooltipTrigger asChild>{badge}</TooltipTrigger>
-        <TooltipContent side="bottom" className="max-w-xs">
-          <div className="text-xs">{sps.join(", ")}</div>
-        </TooltipContent>
-      </Tooltip>
+      <TooltipProvider delayDuration={150}>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <span className="inline-flex min-w-0 max-w-full">{badge}</span>
+          </TooltipTrigger>
+          <TooltipContent side="bottom" align="start" sideOffset={6} className="max-w-xs">
+            <div className="text-xs flex flex-col gap-0.5">
+              {sps.map((s) => (
+                <div key={s}>{s}</div>
+              ))}
+            </div>
+          </TooltipContent>
+        </Tooltip>
+      </TooltipProvider>
     );
   };
 
@@ -812,6 +828,24 @@ export default function WorkbenchProjectDetail() {
     if (!requestId) return;
     setRunning(phase);
     try {
+      // For Extract Context, proactively clear the per-sheet/file extracted
+      // text so the "Processed" badges disappear immediately while the new
+      // extraction is in flight.
+      if (phase === "extract") {
+        await Promise.all([
+          supabase
+            .from("analysis_request_sheets")
+            .update({ extracted_text: null, extract_status: "pending" })
+            .eq("analysis_request_id", requestId),
+          supabase
+            .from("analysis_request_files")
+            .update({ extracted_text: null })
+            .eq("analysis_request_id", requestId),
+        ]);
+        queryClient.invalidateQueries({ queryKey: ["workbench-rows", requestId] });
+        queryClient.invalidateQueries({ queryKey: ["workbench-sheets", requestId] });
+        queryClient.invalidateQueries({ queryKey: ["workbench-files", requestId] });
+      }
       const body: Record<string, unknown> = {
         analysisRequestId: requestId,
         phaseOverride: phase,
@@ -1098,6 +1132,20 @@ export default function WorkbenchProjectDetail() {
     try {
       const token = session?.access_token;
       if (!token) throw new Error("Your session expired. Please sign in again.");
+      // Clear existing space hierarchy immediately so the space badges
+      // disappear while the build is running.
+      await supabase
+        .from("analysis_requests")
+        .update({
+          space_hierarchy_json: null,
+          space_hierarchy_status: null,
+          space_hierarchy_error: null,
+          space_hierarchy_updated_at: null,
+        } as any)
+        .eq("id", requestId);
+      queryClient.invalidateQueries({
+        queryKey: ["workbench-analysis-request", projectId],
+      });
       const { error } = await supabase.functions.invoke("build-space-hierarchy", {
         body: { analysisRequestId: requestId, action: "start" },
         headers: { Authorization: `Bearer ${token}` },
@@ -1985,8 +2033,8 @@ export default function WorkbenchProjectDetail() {
                 : `${activeSheet.file_name} — Page ${activeSheet.page_index}`;
             })()}
             titleAccessory={
-              <span className="inline-flex items-center max-w-[40%]">
-                {renderSpaceBadge(activeSheet.file_name, activeSheet.page_index)}
+              <span className="inline-flex items-center max-w-[40%] shrink-0">
+                {renderSpaceBadge(activeSheet.file_name, activeSheet.page_index, { size: "md" })}
               </span>
             }
             mimeType="application/pdf"
@@ -2535,7 +2583,7 @@ function ExtractedTextBody({ fileId, sheetId }: { fileId?: string; sheetId?: str
           className="inline-flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors disabled:opacity-40"
         >
           {copied ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
-          {copied ? "Copied" : "Copy all"}
+          {copied ? "Copied" : "Copy"}
         </button>
       </div>
       <div className="max-h-[60vh] overflow-auto border rounded-md p-4 bg-muted/30">
