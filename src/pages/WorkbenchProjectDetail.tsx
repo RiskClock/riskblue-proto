@@ -652,6 +652,103 @@ export default function WorkbenchProjectDetail() {
     return pageSpaceMap.get(`${fileName}::${pageIndex}`) || [];
   };
 
+  const hierarchyBuilt = !!(spaceHierarchyPayload?.parsed?.physical_spaces?.length);
+
+  const allSpaceNames = useMemo<string[]>(() => {
+    const spaces: any[] = spaceHierarchyPayload?.parsed?.physical_spaces || [];
+    return spaces
+      .map((s) => s?.standardized_space_name)
+      .filter((n): n is string => typeof n === "string" && n.length > 0);
+  }, [spaceHierarchyPayload]);
+
+  const openSpaceEdit = (fileName: string, pageNumber: number) => {
+    setSpaceEditTarget({
+      fileName,
+      pageNumber,
+      current: spacesForSheet(fileName, pageNumber),
+    });
+  };
+
+  const handleSaveSpaces = async (newSpaces: string[]) => {
+    if (!spaceEditTarget || !analysisRequest?.id) return;
+    const { fileName, pageNumber } = spaceEditTarget;
+    const payload = spaceHierarchyPayload
+      ? JSON.parse(JSON.stringify(spaceHierarchyPayload))
+      : { parsed: { physical_spaces: [] } };
+    if (!payload.parsed) payload.parsed = { physical_spaces: [] };
+    if (!Array.isArray(payload.parsed.physical_spaces)) payload.parsed.physical_spaces = [];
+
+    const spaces: any[] = payload.parsed.physical_spaces;
+
+    // Remove this page from all existing matched_sources.
+    for (const sp of spaces) {
+      if (!Array.isArray(sp.matched_sources)) sp.matched_sources = [];
+      sp.matched_sources = sp.matched_sources.filter(
+        (src: any) => !(src?.file_name === fileName && Number(src?.page_number) === Number(pageNumber)),
+      );
+    }
+
+    // Add page to each selected space (create new space entries if needed).
+    for (const name of newSpaces) {
+      let entry = spaces.find((s) => s?.standardized_space_name === name);
+      if (!entry) {
+        entry = { standardized_space_name: name, space_index: null, matched_sources: [] };
+        spaces.push(entry);
+      }
+      if (!Array.isArray(entry.matched_sources)) entry.matched_sources = [];
+      entry.matched_sources.push({
+        file_name: fileName,
+        page_number: pageNumber,
+        context_extracted: "User-assigned",
+      });
+    }
+
+    try {
+      const { error } = await supabase
+        .from("analysis_requests")
+        .update({ space_hierarchy_json: payload } as any)
+        .eq("id", analysisRequest.id);
+      if (error) throw error;
+      toast({ title: "Spaces updated", description: `${fileName} · Page ${pageNumber}` });
+      queryClient.invalidateQueries({ queryKey: ["workbench-analysis-request", projectId] });
+    } catch (e: any) {
+      toast({ title: "Save failed", description: e?.message ?? "Unknown error", variant: "destructive" });
+    }
+  };
+
+  /** Render a clickable space badge. Returns null if no badge should display. */
+  const renderSpaceBadge = (fileName: string, pageNumber: number) => {
+    const sps = spacesForSheet(fileName, pageNumber);
+    const hasSpaces = sps.length > 0;
+    if (!hasSpaces && !hierarchyBuilt) return null;
+    const label = hasSpaces ? formatSpaceBadge(sps) : "No Space";
+    const cls = hasSpaces
+      ? "bg-sky-500/10 text-sky-700 border-sky-500/30"
+      : "bg-slate-400/15 text-slate-600 border-slate-400/40";
+    const badge = (
+      <Badge
+        variant="outline"
+        className={`min-w-0 max-w-full h-4 px-1.5 text-[10px] leading-none cursor-pointer hover:opacity-80 ${cls}`}
+        onClick={(e) => {
+          e.stopPropagation();
+          openSpaceEdit(fileName, pageNumber);
+        }}
+      >
+        <span className="truncate block">{label}</span>
+      </Badge>
+    );
+    if (!hasSpaces) return badge;
+    return (
+      <Tooltip>
+        <TooltipTrigger asChild>{badge}</TooltipTrigger>
+        <TooltipContent side="bottom" className="max-w-xs">
+          <div className="text-xs">{sps.join(", ")}</div>
+        </TooltipContent>
+      </Tooltip>
+    );
+  };
+
+
   const openManage = () => {
     setDraftCols(enabledCols);
     setManageOpen(true);
