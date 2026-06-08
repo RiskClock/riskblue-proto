@@ -1791,22 +1791,11 @@ export default function WorkbenchProjectDetail() {
                                     return n > 0 ? ` (${n} ${n === 1 ? "detection" : "detections"})` : "";
                                   })()}
                                 </span>
-                                {(() => {
-                                  // Only show a file-level space badge when the file has a
-                                  // single page AND that page maps to at least one space.
-                                  if (group.sheets.length !== 1) return null;
-                                  const sps = spacesForSheet(group.file.name, group.sheets[0].page_index);
-                                  if (sps.length === 0) return null;
-                                  return (
-                                    <Badge
-                                      variant="outline"
-                                      className="shrink-0 h-4 px-1.5 text-[10px] leading-none bg-sky-500/10 text-sky-700 border-sky-500/30"
-                                      title={sps.join(", ")}
-                                    >
-                                      {formatSpaceBadge(sps)}
-                                    </Badge>
-                                  );
-                                })()}
+                                {group.sheets.length === 1 && (
+                                  <div className="min-w-0 overflow-hidden max-w-[55%] flex">
+                                    {renderSpaceBadge(group.file.name, group.sheets[0].page_index)}
+                                  </div>
+                                )}
                                 {!singlePage && (
                                   <span className="text-xs text-muted-foreground shrink-0">
                                     {group.sheets.length} pages
@@ -1851,19 +1840,9 @@ export default function WorkbenchProjectDetail() {
                                     <span className="text-muted-foreground shrink-0">
                                       Page {s.page_index}
                                     </span>
-                                    {(() => {
-                                      const sps = spacesForSheet(group.file.name, s.page_index);
-                                      if (sps.length === 0) return null;
-                                      return (
-                                        <Badge
-                                          variant="outline"
-                                          className="shrink-0 h-4 px-1.5 text-[10px] leading-none bg-sky-500/10 text-sky-700 border-sky-500/30"
-                                          title={sps.join(", ")}
-                                        >
-                                          {formatSpaceBadge(sps)}
-                                        </Badge>
-                                      );
-                                    })()}
+                                    <div className="min-w-0 overflow-hidden max-w-[55%] flex">
+                                      {renderSpaceBadge(group.file.name, s.page_index)}
+                                    </div>
                                     <span className="text-muted-foreground truncate min-w-0">
                                       {s.sheet_number ? `· ${s.sheet_number}` : ""}
                                       {s.sheet_title ? ` — ${s.sheet_title}` : ""}
