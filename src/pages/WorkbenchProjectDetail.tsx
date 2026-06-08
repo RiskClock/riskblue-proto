@@ -1539,7 +1539,7 @@ export default function WorkbenchProjectDetail() {
                                     {label}
                                   </button>
                                 </TooltipTrigger>
-                                <TooltipContent>{name} — click to view prompt</TooltipContent>
+                                <TooltipContent side="bottom">{name} — click to view prompt</TooltipContent>
                               </Tooltip>
                               <DropdownMenu>
                                 <DropdownMenuTrigger asChild>
@@ -1980,12 +1980,15 @@ export default function WorkbenchProjectDetail() {
               const single =
                 fileGroups.find((g) => g.file.id === activeSheet.parent_file_id)?.sheets
                   .length === 1;
-              const base = single
+              return single
                 ? activeSheet.file_name
                 : `${activeSheet.file_name} — Page ${activeSheet.page_index}`;
-              const sps = spacesForSheet(activeSheet.file_name, activeSheet.page_index);
-              return sps.length > 0 ? `${base} · ${formatSpaceBadge(sps)}` : base;
             })()}
+            titleAccessory={
+              <span className="inline-flex items-center max-w-[40%]">
+                {renderSpaceBadge(activeSheet.file_name, activeSheet.page_index)}
+              </span>
+            }
             mimeType="application/pdf"
             accessToken=""
             detections={[]}
@@ -2056,6 +2059,19 @@ export default function WorkbenchProjectDetail() {
           className={promptClass}
           onClose={() => setPromptClass(null)}
         />
+
+        {/* Space edit modal */}
+        {spaceEditTarget && (
+          <SpaceEditModal
+            isOpen={!!spaceEditTarget}
+            onClose={() => setSpaceEditTarget(null)}
+            fileName={spaceEditTarget.fileName}
+            pageNumber={spaceEditTarget.pageNumber}
+            currentSpaces={spaceEditTarget.current}
+            allSpaces={allSpaceNames}
+            onSave={handleSaveSpaces}
+          />
+        )}
 
 
         {/* Extracted-text modal */}
