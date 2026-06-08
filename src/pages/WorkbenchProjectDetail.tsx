@@ -1132,6 +1132,20 @@ export default function WorkbenchProjectDetail() {
     try {
       const token = session?.access_token;
       if (!token) throw new Error("Your session expired. Please sign in again.");
+      // Clear existing space hierarchy immediately so the space badges
+      // disappear while the build is running.
+      await supabase
+        .from("analysis_requests")
+        .update({
+          space_hierarchy_json: null,
+          space_hierarchy_status: null,
+          space_hierarchy_error: null,
+          space_hierarchy_updated_at: null,
+        } as any)
+        .eq("id", requestId);
+      queryClient.invalidateQueries({
+        queryKey: ["workbench-analysis-request", projectId],
+      });
       const { error } = await supabase.functions.invoke("build-space-hierarchy", {
         body: { analysisRequestId: requestId, action: "start" },
         headers: { Authorization: `Bearer ${token}` },
