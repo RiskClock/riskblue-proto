@@ -828,6 +828,24 @@ export default function WorkbenchProjectDetail() {
     if (!requestId) return;
     setRunning(phase);
     try {
+      // For Extract Context, proactively clear the per-sheet/file extracted
+      // text so the "Processed" badges disappear immediately while the new
+      // extraction is in flight.
+      if (phase === "extract") {
+        await Promise.all([
+          supabase
+            .from("analysis_request_sheets")
+            .update({ extracted_text: null, extract_status: "pending" })
+            .eq("analysis_request_id", requestId),
+          supabase
+            .from("analysis_request_files")
+            .update({ extracted_text: null })
+            .eq("analysis_request_id", requestId),
+        ]);
+        queryClient.invalidateQueries({ queryKey: ["workbench-rows", requestId] });
+        queryClient.invalidateQueries({ queryKey: ["workbench-sheets", requestId] });
+        queryClient.invalidateQueries({ queryKey: ["workbench-files", requestId] });
+      }
       const body: Record<string, unknown> = {
         analysisRequestId: requestId,
         phaseOverride: phase,
