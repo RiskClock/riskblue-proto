@@ -258,6 +258,8 @@ Deno.serve(async (req) => {
       input_chars: extractedText.length,
       input_truncated: truncated,
       openai_status: raw.status ?? "queued",
+      base_prompt: basePrompt,
+      prompt_text: promptText,
     };
     const startResult = raw.status === "completed" ? buildResult(raw, meta) : meta;
 
