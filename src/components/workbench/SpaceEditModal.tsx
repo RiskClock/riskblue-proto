@@ -3,7 +3,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogD
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
-import { Check, Plus, X, Loader2 } from "lucide-react";
+import { Check, Plus, X, Loader2, Eye } from "lucide-react";
 import { ScrollArea } from "@/components/ui/scroll-area";
 
 interface SpaceEditModalProps {
@@ -14,6 +14,8 @@ interface SpaceEditModalProps {
   currentSpaces: string[];
   allSpaces: string[];
   onSave: (spaces: string[]) => Promise<void>;
+  promptText?: string | null;
+  basePrompt?: string | null;
 }
 
 export function SpaceEditModal({
