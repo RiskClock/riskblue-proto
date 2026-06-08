@@ -2677,7 +2677,8 @@ function InstancesReportModal({
   // space_index map for proper sorting (P2 Sub-Slab < P2 < P1 < Ground < L1 ...)
   const spaceIndexMap = useMemo(() => {
     const m = new Map<string, number>();
-    const spaces: any[] = spaceHierarchyPayload?.parsed?.physical_spaces || [];
+    const parsed: any = spaceHierarchyPayload?.parsed;
+    const spaces: any[] = parsed?.physical_spaces || parsed?.spatial_records || [];
     for (const sp of spaces) {
       if (sp?.standardized_space_name && typeof sp?.space_index === "number") {
         m.set(sp.standardized_space_name, sp.space_index);
