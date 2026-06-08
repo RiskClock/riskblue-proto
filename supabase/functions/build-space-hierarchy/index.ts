@@ -8,6 +8,14 @@ const corsHeaders = {
 
 const DEFAULT_PROMPT = `You are an expert construction data-engine and structural normalizer. Your task is to process extracted drawing text and output a **strictly flat, contiguous, unique list of distinct physical spaces or components** (such as high-rise tower levels or townhouse sections) present in the project.
 
+Return JSON in this exact shape:
+{
+  "project_name": "...",
+  "spatial_records": [
+    { "standardized_space_name": "...", "space_category": "...", "space_index": 0, "matched_sources": [ { "file_name": "...", "page_number": 1, "context_extracted": "..." } ] }
+  ]
+}
+
 ### Extracted Text to Process:
 `;
 
