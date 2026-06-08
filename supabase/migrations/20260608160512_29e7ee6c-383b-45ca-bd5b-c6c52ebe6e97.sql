@@ -1,0 +1,1 @@
+DELETE FROM public.awp_classes WHERE id = '2c79922b-fd39-41a3-ba8f-8d9763afb06b';
