@@ -682,9 +682,12 @@ export default function WorkbenchProjectDetail() {
       ? JSON.parse(JSON.stringify(spaceHierarchyPayload))
       : { parsed: { physical_spaces: [] } };
     if (!payload.parsed) payload.parsed = { physical_spaces: [] };
-    if (!Array.isArray(payload.parsed.physical_spaces)) payload.parsed.physical_spaces = [];
-
-    const spaces: any[] = payload.parsed.physical_spaces;
+    const spacesKey: "physical_spaces" | "spatial_records" =
+      Array.isArray(payload.parsed.spatial_records) && !Array.isArray(payload.parsed.physical_spaces)
+        ? "spatial_records"
+        : "physical_spaces";
+    if (!Array.isArray(payload.parsed[spacesKey])) payload.parsed[spacesKey] = [];
+    const spaces: any[] = payload.parsed[spacesKey];
 
     // Remove this page from all existing matched_sources.
     for (const sp of spaces) {
