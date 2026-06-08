@@ -79,10 +79,21 @@ export function SpaceEditModal({
   };
 
   return (
+    <>
     <Dialog open={isOpen} onOpenChange={(o) => !o && onClose()}>
       <DialogContent className="max-w-lg">
         <DialogHeader>
-          <DialogTitle>Edit Spaces</DialogTitle>
+          <DialogTitle>
+            <button
+              type="button"
+              className="inline-flex items-center gap-1.5 hover:text-primary transition-colors"
+              onClick={() => setShowPrompt(true)}
+              title="View the prompt sent to OpenAI"
+            >
+              Edit Spaces
+              <Eye className="h-3.5 w-3.5 opacity-60" />
+            </button>
+          </DialogTitle>
           <DialogDescription className="truncate">
             {fileName} · Page {pageNumber}
           </DialogDescription>
