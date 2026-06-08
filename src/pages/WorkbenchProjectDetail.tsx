@@ -630,11 +630,18 @@ export default function WorkbenchProjectDetail() {
     buildingSpace ||
     (analysisRequest?.space_hierarchy_status === "running" && !!spaceHierarchyResponseId);
 
+  // Accept either "physical_spaces" (legacy) or "spatial_records" (current prompt schema).
+  const extractSpaces = (parsed: any): any[] => {
+    if (!parsed) return [];
+    if (Array.isArray(parsed.physical_spaces)) return parsed.physical_spaces;
+    if (Array.isArray(parsed.spatial_records)) return parsed.spatial_records;
+    return [];
+  };
+
   // Map "fileName::pageNumber" -> [space names], built from parsed hierarchy.
   const pageSpaceMap = useMemo(() => {
     const map = new Map<string, string[]>();
-    const parsed = spaceHierarchyPayload?.parsed as any;
-    const spaces: any[] = parsed?.physical_spaces || [];
+    const spaces = extractSpaces(spaceHierarchyPayload?.parsed);
     for (const sp of spaces) {
       const name = sp?.standardized_space_name;
       if (!name) continue;
@@ -652,12 +659,11 @@ export default function WorkbenchProjectDetail() {
     return pageSpaceMap.get(`${fileName}::${pageIndex}`) || [];
   };
 
-  const hierarchyBuilt = !!(spaceHierarchyPayload?.parsed?.physical_spaces?.length);
+  const hierarchyBuilt = extractSpaces(spaceHierarchyPayload?.parsed).length > 0;
 
   const allSpaceNames = useMemo<string[]>(() => {
-    const spaces: any[] = spaceHierarchyPayload?.parsed?.physical_spaces || [];
-    return spaces
-      .map((s) => s?.standardized_space_name)
+    return extractSpaces(spaceHierarchyPayload?.parsed)
+      .map((s: any) => s?.standardized_space_name)
       .filter((n): n is string => typeof n === "string" && n.length > 0);
   }, [spaceHierarchyPayload]);
 
