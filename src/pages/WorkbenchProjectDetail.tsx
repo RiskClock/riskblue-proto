@@ -2001,8 +2001,8 @@ export default function WorkbenchProjectDetail() {
                 : `${activeSheet.file_name} — Page ${activeSheet.page_index}`;
             })()}
             titleAccessory={
-              <span className="inline-flex items-center max-w-[40%]">
-                {renderSpaceBadge(activeSheet.file_name, activeSheet.page_index)}
+              <span className="inline-flex items-center max-w-[40%] shrink-0">
+                {renderSpaceBadge(activeSheet.file_name, activeSheet.page_index, { size: "md" })}
               </span>
             }
             mimeType="application/pdf"
