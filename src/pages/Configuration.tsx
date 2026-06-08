@@ -8,7 +8,8 @@ import { Badge } from "@/components/ui/badge";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog";
+import { Textarea } from "@/components/ui/textarea";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Input } from "@/components/ui/input";
@@ -466,8 +467,8 @@ export default function Configuration() {
       <main className="container mx-auto px-6 py-8">
         <div className="flex items-center justify-between mb-6">
           <div>
-            <h1 className="text-3xl font-bold text-foreground">AWP Configuration</h1>
-            <p className="text-muted-foreground">Manage default mitigation controls for each AWP class</p>
+            <h1 className="text-3xl font-bold text-foreground">App Configuration</h1>
+            <p className="text-muted-foreground">Manage default mitigation controls, prompts, and agent settings</p>
           </div>
           <div className="flex gap-3">
             <Button variant="outline" onClick={() => setShowRevertDialog(true)} disabled={!hasUnsavedChanges}>
@@ -515,6 +516,8 @@ export default function Configuration() {
             </Table>
           </div>
         )}
+
+        <SpaceHierarchyPromptSection />
       </main>
 
       {/* Control Edit Modal */}
