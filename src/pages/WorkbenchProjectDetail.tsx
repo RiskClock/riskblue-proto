@@ -717,18 +717,26 @@ export default function WorkbenchProjectDetail() {
   };
 
   /** Render a clickable space badge. Returns null if no badge should display. */
-  const renderSpaceBadge = (fileName: string, pageNumber: number) => {
+  const renderSpaceBadge = (
+    fileName: string,
+    pageNumber: number,
+    opts?: { size?: "sm" | "md" },
+  ) => {
     const sps = spacesForSheet(fileName, pageNumber);
     const hasSpaces = sps.length > 0;
     if (!hasSpaces && !hierarchyBuilt) return null;
     const label = hasSpaces ? formatSpaceBadge(sps) : "No Space";
     const cls = hasSpaces
       ? "bg-sky-500/10 text-sky-700 border-sky-500/30"
-      : "bg-slate-400/15 text-slate-600 border-slate-400/40";
+      : "bg-slate-400/15 text-slate-600 border-slate-400/40 opacity-80";
+    const sizeCls =
+      opts?.size === "md"
+        ? "h-5 px-2 text-[11px]"
+        : "h-4 px-1.5 text-[10px]";
     const badge = (
       <Badge
         variant="outline"
-        className={`min-w-0 max-w-full h-4 px-1.5 text-[10px] leading-none cursor-pointer hover:opacity-80 ${cls}`}
+        className={`min-w-0 max-w-full leading-none cursor-pointer hover:opacity-80 ${sizeCls} ${cls}`}
         onClick={(e) => {
           e.stopPropagation();
           openSpaceEdit(fileName, pageNumber);
@@ -739,12 +747,20 @@ export default function WorkbenchProjectDetail() {
     );
     if (!hasSpaces) return badge;
     return (
-      <Tooltip>
-        <TooltipTrigger asChild>{badge}</TooltipTrigger>
-        <TooltipContent side="bottom" className="max-w-xs">
-          <div className="text-xs">{sps.join(", ")}</div>
-        </TooltipContent>
-      </Tooltip>
+      <TooltipProvider delayDuration={150}>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <span className="inline-flex min-w-0 max-w-full">{badge}</span>
+          </TooltipTrigger>
+          <TooltipContent side="bottom" align="start" sideOffset={6} className="max-w-xs">
+            <div className="text-xs flex flex-col gap-0.5">
+              {sps.map((s) => (
+                <div key={s}>{s}</div>
+              ))}
+            </div>
+          </TooltipContent>
+        </Tooltip>
+      </TooltipProvider>
     );
   };
 
