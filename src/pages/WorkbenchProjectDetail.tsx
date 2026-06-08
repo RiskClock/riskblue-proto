@@ -630,11 +630,18 @@ export default function WorkbenchProjectDetail() {
     buildingSpace ||
     (analysisRequest?.space_hierarchy_status === "running" && !!spaceHierarchyResponseId);
 
+  // Accept either "physical_spaces" (legacy) or "spatial_records" (current prompt schema).
+  const extractSpaces = (parsed: any): any[] => {
+    if (!parsed) return [];
+    if (Array.isArray(parsed.physical_spaces)) return parsed.physical_spaces;
+    if (Array.isArray(parsed.spatial_records)) return parsed.spatial_records;
+    return [];
+  };
+
   // Map "fileName::pageNumber" -> [space names], built from parsed hierarchy.
   const pageSpaceMap = useMemo(() => {
     const map = new Map<string, string[]>();
-    const parsed = spaceHierarchyPayload?.parsed as any;
-    const spaces: any[] = parsed?.physical_spaces || [];
+    const spaces = extractSpaces(spaceHierarchyPayload?.parsed);
     for (const sp of spaces) {
       const name = sp?.standardized_space_name;
       if (!name) continue;
@@ -652,12 +659,11 @@ export default function WorkbenchProjectDetail() {
     return pageSpaceMap.get(`${fileName}::${pageIndex}`) || [];
   };
 
-  const hierarchyBuilt = !!(spaceHierarchyPayload?.parsed?.physical_spaces?.length);
+  const hierarchyBuilt = extractSpaces(spaceHierarchyPayload?.parsed).length > 0;
 
   const allSpaceNames = useMemo<string[]>(() => {
-    const spaces: any[] = spaceHierarchyPayload?.parsed?.physical_spaces || [];
-    return spaces
-      .map((s) => s?.standardized_space_name)
+    return extractSpaces(spaceHierarchyPayload?.parsed)
+      .map((s: any) => s?.standardized_space_name)
       .filter((n): n is string => typeof n === "string" && n.length > 0);
   }, [spaceHierarchyPayload]);
 
@@ -676,9 +682,12 @@ export default function WorkbenchProjectDetail() {
       ? JSON.parse(JSON.stringify(spaceHierarchyPayload))
       : { parsed: { physical_spaces: [] } };
     if (!payload.parsed) payload.parsed = { physical_spaces: [] };
-    if (!Array.isArray(payload.parsed.physical_spaces)) payload.parsed.physical_spaces = [];
-
-    const spaces: any[] = payload.parsed.physical_spaces;
+    const spacesKey: "physical_spaces" | "spatial_records" =
+      Array.isArray(payload.parsed.spatial_records) && !Array.isArray(payload.parsed.physical_spaces)
+        ? "spatial_records"
+        : "physical_spaces";
+    if (!Array.isArray(payload.parsed[spacesKey])) payload.parsed[spacesKey] = [];
+    const spaces: any[] = payload.parsed[spacesKey];
 
     // Remove this page from all existing matched_sources.
     for (const sp of spaces) {
@@ -2671,7 +2680,8 @@ function InstancesReportModal({
   // space_index map for proper sorting (P2 Sub-Slab < P2 < P1 < Ground < L1 ...)
   const spaceIndexMap = useMemo(() => {
     const m = new Map<string, number>();
-    const spaces: any[] = spaceHierarchyPayload?.parsed?.physical_spaces || [];
+    const parsed: any = spaceHierarchyPayload?.parsed;
+    const spaces: any[] = parsed?.physical_spaces || parsed?.spatial_records || [];
     for (const sp of spaces) {
       if (sp?.standardized_space_name && typeof sp?.space_index === "number") {
         m.set(sp.standardized_space_name, sp.space_index);
@@ -2726,7 +2736,8 @@ function InstancesReportModal({
   const spaceList = useMemo(() => {
     const set = new Set<string>();
     // Start from the full hierarchy so spaces with 0 detections still appear.
-    const hierarchySpaces: any[] = spaceHierarchyPayload?.parsed?.physical_spaces || [];
+    const _p: any = spaceHierarchyPayload?.parsed;
+    const hierarchySpaces: any[] = _p?.physical_spaces || _p?.spatial_records || [];
     for (const sp of hierarchySpaces) {
       if (sp?.standardized_space_name) set.add(sp.standardized_space_name);
     }
