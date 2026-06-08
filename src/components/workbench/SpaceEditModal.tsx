@@ -26,11 +26,14 @@ export function SpaceEditModal({
   currentSpaces,
   allSpaces,
   onSave,
+  promptText,
+  basePrompt,
 }: SpaceEditModalProps) {
   const [selected, setSelected] = useState<string[]>([]);
   const [newName, setNewName] = useState("");
   const [search, setSearch] = useState("");
   const [saving, setSaving] = useState(false);
+  const [showPrompt, setShowPrompt] = useState(false);
 
   useEffect(() => {
     if (isOpen) {
