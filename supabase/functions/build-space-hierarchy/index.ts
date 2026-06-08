@@ -208,7 +208,8 @@ Deno.serve(async (req) => {
     // Safety cap (OpenAI input limit). gpt-5 supports large input; keep generous.
     const MAX_CHARS = 600_000;
     const truncated = extractedText.length > MAX_CHARS;
-    const promptText = BASE_PROMPT + (truncated
+    const basePrompt = await getPrompt(admin);
+    const promptText = basePrompt + (truncated
       ? extractedText.slice(0, MAX_CHARS) + "\n\n[...TRUNCATED FOR LENGTH...]"
       : extractedText);
 
