@@ -3,7 +3,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogD
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
-import { Check, Plus, X, Loader2 } from "lucide-react";
+import { Check, Plus, X, Loader2, Eye } from "lucide-react";
 import { ScrollArea } from "@/components/ui/scroll-area";
 
 interface SpaceEditModalProps {
@@ -14,6 +14,8 @@ interface SpaceEditModalProps {
   currentSpaces: string[];
   allSpaces: string[];
   onSave: (spaces: string[]) => Promise<void>;
+  promptText?: string | null;
+  basePrompt?: string | null;
 }
 
 export function SpaceEditModal({
@@ -24,11 +26,14 @@ export function SpaceEditModal({
   currentSpaces,
   allSpaces,
   onSave,
+  promptText,
+  basePrompt,
 }: SpaceEditModalProps) {
   const [selected, setSelected] = useState<string[]>([]);
   const [newName, setNewName] = useState("");
   const [search, setSearch] = useState("");
   const [saving, setSaving] = useState(false);
+  const [showPrompt, setShowPrompt] = useState(false);
 
   useEffect(() => {
     if (isOpen) {
@@ -74,10 +79,21 @@ export function SpaceEditModal({
   };
 
   return (
+    <>
     <Dialog open={isOpen} onOpenChange={(o) => !o && onClose()}>
       <DialogContent className="max-w-lg">
         <DialogHeader>
-          <DialogTitle>Edit Spaces</DialogTitle>
+          <DialogTitle>
+            <button
+              type="button"
+              className="inline-flex items-center gap-1.5 hover:text-primary transition-colors"
+              onClick={() => setShowPrompt(true)}
+              title="View the prompt sent to OpenAI"
+            >
+              Edit Spaces
+              <Eye className="h-3.5 w-3.5 opacity-60" />
+            </button>
+          </DialogTitle>
           <DialogDescription className="truncate">
             {fileName} · Page {pageNumber}
           </DialogDescription>
@@ -175,5 +191,41 @@ export function SpaceEditModal({
         </DialogFooter>
       </DialogContent>
     </Dialog>
+
+    <Dialog open={showPrompt} onOpenChange={setShowPrompt}>
+      <DialogContent className="max-w-4xl max-h-[85vh] flex flex-col">
+        <DialogHeader>
+          <DialogTitle>Prompt sent to OpenAI</DialogTitle>
+          <DialogDescription>
+            Full input for the Build Space Hierarchy agent (system prompt + extracted text).
+          </DialogDescription>
+        </DialogHeader>
+        {promptText ? (
+          <>
+            <div className="flex items-center justify-between text-xs text-muted-foreground">
+              <span>{promptText.length.toLocaleString()} characters</span>
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => navigator.clipboard.writeText(promptText)}
+              >
+                Copy
+              </Button>
+            </div>
+            <ScrollArea className="flex-1 border rounded-md min-h-0">
+              <pre className="p-3 text-xs whitespace-pre-wrap font-mono">{promptText}</pre>
+            </ScrollArea>
+          </>
+        ) : (
+          <div className="text-sm text-muted-foreground py-6 text-center">
+            No prompt recorded for this run. Re-run Build Space Hierarchy to capture it.
+          </div>
+        )}
+        <DialogFooter>
+          <Button variant="outline" onClick={() => setShowPrompt(false)}>Close</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+    </>
   );
 }

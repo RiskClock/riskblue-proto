@@ -2118,6 +2118,8 @@ export default function WorkbenchProjectDetail() {
             currentSpaces={spaceEditTarget.current}
             allSpaces={allSpaceNames}
             onSave={handleSaveSpaces}
+            promptText={(spaceHierarchyPayload as any)?.prompt_text ?? null}
+            basePrompt={(spaceHierarchyPayload as any)?.base_prompt ?? null}
           />
         )}
 
