@@ -2733,7 +2733,8 @@ function InstancesReportModal({
   const spaceList = useMemo(() => {
     const set = new Set<string>();
     // Start from the full hierarchy so spaces with 0 detections still appear.
-    const hierarchySpaces: any[] = spaceHierarchyPayload?.parsed?.physical_spaces || [];
+    const _p: any = spaceHierarchyPayload?.parsed;
+    const hierarchySpaces: any[] = _p?.physical_spaces || _p?.spatial_records || [];
     for (const sp of hierarchySpaces) {
       if (sp?.standardized_space_name) set.add(sp.standardized_space_name);
     }
