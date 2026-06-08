@@ -76,6 +76,8 @@ interface FileViewerModalProps {
    *  cell in a grid. The value changing also re-selects (so re-opens with a
    *  different class force-select correctly). */
   preselectClass?: string | null;
+  /** Optional element rendered next to the title (e.g. a space badge). */
+  titleAccessory?: React.ReactNode;
 }
 
 
@@ -105,6 +107,7 @@ export const FileViewerModal = ({
   expandedClasses,
   onExpandedClassesChange,
   preselectClass,
+  titleAccessory,
 }: FileViewerModalProps) => {
   const { toast } = useToast();
   const [hoveredCode, setHoveredCode] = useState<string | null>(null);
@@ -503,7 +506,10 @@ export const FileViewerModal = ({
     <Dialog open={isOpen} onOpenChange={onClose}>
       <DialogContent className="max-w-[95vw] w-[95vw] h-[90vh] flex flex-col p-4 [&>button]:top-4 [&>button]:right-4">
         <DialogHeader className="flex-shrink-0">
-          <DialogTitle className="truncate">{fileName}</DialogTitle>
+          <DialogTitle className="truncate flex items-center gap-2 min-w-0">
+            <span className="truncate">{fileName}</span>
+            {titleAccessory}
+          </DialogTitle>
         </DialogHeader>
 
         <div className="flex flex-1 gap-4 overflow-hidden min-h-0">

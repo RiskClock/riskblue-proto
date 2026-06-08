@@ -91,7 +91,7 @@ export const AppHeader = ({ leftContent }: AppHeaderProps) => {
                   </DropdownMenuItem>
                   <DropdownMenuItem onClick={() => navigate("/configuration")} className="cursor-pointer">
                     <Settings className="h-4 w-4 mr-2" />
-                    AWP Configuration
+                    App Configuration
                   </DropdownMenuItem>
                   <DropdownMenuItem onClick={() => navigate("/internal/analysis-queue")} className="cursor-pointer">
                     <FileText className="h-4 w-4 mr-2" />
