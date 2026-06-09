@@ -83,7 +83,7 @@ export function CreateProjectModal({ open, onOpenChange, onCreated }: CreateProj
   useEffect(() => {
     if (open) {
       setName("");
-      setUnitsStr("");
+      setSizeTier(null);
       setSelectedClassNames(new Set());
       setOtherEnabled(false);
       setOtherText("");
