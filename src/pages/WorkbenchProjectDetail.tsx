@@ -194,7 +194,7 @@ export default function WorkbenchProjectDetail() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("projects")
-        .select("id, name, user_id")
+        .select("id, name, user_id, selected_awp_class_names, selected_other_classes")
         .eq("id", projectId!)
         .maybeSingle();
       if (error) throw error;
