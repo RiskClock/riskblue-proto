@@ -481,11 +481,21 @@ export default function WorkbenchProjectDetail() {
         .eq("id", prefId)
         .maybeSingle();
       if (error) throw error;
-      return (data?.awp_class_names as string[]) || [];
+      // Return null (not []) when no row exists, so we can fall back to the
+      // project's original class selection chosen at creation time.
+      return data ? ((data.awp_class_names as string[]) || []) : null;
     },
   });
 
-  const enabledCols = prefs || [];
+  // Original classes chosen when the project was created (canonical + "other"
+  // free-text). Used as the workbench column default before the user customizes.
+  const projectSelectedClassNames = useMemo<string[]>(() => {
+    const canonical = ((project as any)?.selected_awp_class_names as string[] | null) || [];
+    const others = ((project as any)?.selected_other_classes as string[] | null) || [];
+    return [...canonical, ...others];
+  }, [project]);
+
+  const enabledCols = prefs ?? projectSelectedClassNames;
 
 
   // (sheet, class) -> { score, status } for triage cell rendering on sub-rows
