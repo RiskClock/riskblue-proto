@@ -95,7 +95,6 @@ serve(async (req) => {
       metadata: {
         userId: user.id,
         packageId,
-        tier,
         credits: String(pkg.credits),
         amountCents: String(amountCents),
         packageLabel: pkg.label,
