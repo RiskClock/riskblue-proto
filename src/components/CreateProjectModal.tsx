@@ -30,12 +30,27 @@ interface CreateProjectModalProps {
 
 const ACCEPTED_TYPES = ".pdf,.png,.jpg,.jpeg,.dwg,.dxf";
 
+export type ProjectSizeTier = "small" | "medium" | "large" | "enterprise";
+
+export const PROJECT_SIZE_TIERS: {
+  id: ProjectSizeTier;
+  label: string;
+  range: string;
+  units: number;
+  cost: number;
+}[] = [
+  { id: "small", label: "Small Project", range: "Up to 50 units", units: 50, cost: 25 },
+  { id: "medium", label: "Medium Project", range: "51 – 250 units", units: 250, cost: 50 },
+  { id: "large", label: "Large Project", range: "251 – 700 units", units: 700, cost: 100 },
+  { id: "enterprise", label: "Enterprise", range: "700+ units", units: 701, cost: 0 },
+];
+
 export function computeCreditCost(units: number | null): {
   cost: number | null;
   contact: boolean;
 } {
   if (units == null || Number.isNaN(units) || units <= 0) return { cost: null, contact: false };
-  if (units > 700) return { cost: null, contact: true };
+  if (units > 700) return { cost: 0, contact: false };
   if (units <= 50) return { cost: 25, contact: false };
   if (units <= 250) return { cost: 50, contact: false };
   return { cost: 100, contact: false };
