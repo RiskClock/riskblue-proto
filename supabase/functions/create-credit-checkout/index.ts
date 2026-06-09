@@ -61,17 +61,9 @@ serve(async (req) => {
       });
     }
 
-    // Server-side authoritative tier: only WMSV accounts get promo pricing.
-    const { data: profile } = await supabase
-      .from("profiles")
-      .select("account_type")
-      .eq("user_id", user.id)
-      .maybeSingle();
-    const isWMSV = (profile as any)?.account_type === "wmsv";
-    const tier: "wmsv" | "full" = isWMSV ? "wmsv" : "full";
-
-    const priceId = tier === "wmsv" ? pkg.wmsvPriceId : pkg.fullPriceId;
-    const amountCents = tier === "wmsv" ? pkg.wmsvAmountCents : pkg.fullAmountCents;
+    // Pricing is uniform — no tier distinction.
+    const priceId = pkg.priceId;
+    const amountCents = pkg.amountCents;
 
     const env = environment as StripeEnv;
     const stripe = createStripeClient(env);
