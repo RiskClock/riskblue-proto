@@ -155,22 +155,24 @@ export function CreateProjectModal({ open, onOpenChange, onCreated }: CreateProj
     const projectName = name.trim();
 
     try {
-      // 1) Consume credits up-front
-      const { data: consumeRes, error: consumeErr } = await supabase.rpc("consume_credits", {
-        p_user_id: user.id,
-        p_amount: cost,
-      });
-      if (consumeErr) throw consumeErr;
-      const ok = (consumeRes as any)?.success;
-      if (!ok) {
-        const reason = (consumeRes as any)?.reason;
-        if (reason === "insufficient_credits") {
-          setShowBuyCredits(true);
-          return;
+      // 1) Consume credits up-front (skip if free, e.g. Enterprise)
+      if (cost > 0) {
+        const { data: consumeRes, error: consumeErr } = await supabase.rpc("consume_credits", {
+          p_user_id: user.id,
+          p_amount: cost,
+        });
+        if (consumeErr) throw consumeErr;
+        const ok = (consumeRes as any)?.success;
+        if (!ok) {
+          const reason = (consumeRes as any)?.reason;
+          if (reason === "insufficient_credits") {
+            setShowBuyCredits(true);
+            return;
+          }
+          throw new Error(`Couldn't consume credits (${reason || "unknown"})`);
         }
-        throw new Error(`Couldn't consume credits (${reason || "unknown"})`);
+        await refetchCredits();
       }
-      await refetchCredits();
 
       // 2) Create the project
       const { data: project, error: pErr } = await supabase
