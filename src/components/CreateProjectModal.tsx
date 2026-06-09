@@ -295,20 +295,116 @@ export function CreateProjectModal({ open, onOpenChange, onCreated }: CreateProj
               />
             </div>
 
-            {/* Units */}
+            {/* Project Size */}
             <div className="space-y-2">
-              <Label htmlFor="cp-units">
-                Estimated Number of Units (Suites or Rooms){" "}
+              <Label>
+                Project Size (Suites or Rooms){" "}
                 <span className="text-destructive">*</span>
               </Label>
-              <Input
-                id="cp-units"
-                type="number"
-                min={1}
-                value={unitsStr}
-                onChange={(e) => setUnitsStr(e.target.value)}
-                placeholder="e.g. 150"
+              <div className="grid grid-cols-4 gap-2">
+                {PROJECT_SIZE_TIERS.map((tier) => {
+                  const selected = sizeTier === tier.id;
+                  return (
+                    <button
+                      key={tier.id}
+                      type="button"
+                      onClick={() => setSizeTier(tier.id)}
+                      className={`rounded-md border p-3 text-left transition-all ${
+                        selected
+                          ? "border-primary bg-primary/5 ring-2 ring-primary"
+                          : "border-border hover:border-primary/50"
+                      }`}
+                    >
+                      <div className="text-sm font-semibold">{tier.label}</div>
+                      <div className="text-xs text-muted-foreground mt-1">
+                        {tier.range}
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Cost summary */}
+            <div className="rounded-lg border bg-muted/40 p-4">
+              <div className="flex items-center gap-2 mb-1">
+                <Coins className="w-4 h-4 text-primary" />
+                <span className="text-sm font-semibold">Cost</span>
+              </div>
+              {!tierConfig ? (
+                <p className="text-sm text-muted-foreground">
+                  Select a project size to see the cost.
+                </p>
+              ) : tierConfig.id === "enterprise" ? (
+                <div className="text-sm">
+                  <div>
+                    <span className="text-2xl font-bold text-primary">0</span>{" "}
+                    <span className="text-muted-foreground">credits</span>
+                  </div>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Enterprise projects are free to create — our team will reach out to coordinate scope.
+                  </p>
+                </div>
+              ) : (
+                <div className="text-sm">
+                  <div>
+                    <span className="text-2xl font-bold text-primary">{cost}</span>{" "}
+                    <span className="text-muted-foreground">credits</span>
+                  </div>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Your balance: {balance} credit{balance === 1 ? "" : "s"}.
+                    {balance < (cost ?? 0) && " You don't have enough — you'll be prompted to purchase more."}
+                  </p>
+                </div>
+              )}
+            </div>
+
+            {/* Files */}
+            <div className="space-y-2">
+              <Label>Drawings (optional)</Label>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => fileInputRef.current?.click()}
+                type="button"
+              >
+                <Upload className="w-4 h-4 mr-1" />
+                Upload from Computer
+              </Button>
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept={ACCEPTED_TYPES}
+                multiple
+                className="hidden"
+                onChange={handleFileSelect}
               />
+              {files.length > 0 && (
+                <div className="border rounded-md p-2 space-y-1 max-h-40 overflow-y-auto">
+                  {files.map((file, idx) => (
+                    <div
+                      key={idx}
+                      className="flex items-center justify-between text-sm px-2 py-1 bg-muted/50 rounded"
+                    >
+                      <div className="flex items-center gap-2 min-w-0">
+                        <FileText className="w-3.5 h-3.5 shrink-0 text-muted-foreground" />
+                        <span className="truncate">{file.name}</span>
+                        <span className="text-muted-foreground text-xs shrink-0">
+                          {formatBytes(file.size)}
+                        </span>
+                      </div>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-6 w-6 p-0"
+                        onClick={() => removeFile(idx)}
+                      >
+                        <X className="w-3.5 h-3.5" />
+                      </Button>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
 
             {/* Classes */}
@@ -375,83 +471,6 @@ export function CreateProjectModal({ open, onOpenChange, onCreated }: CreateProj
                 </p>
               )}
             </div>
-
-            {/* Files */}
-            <div className="space-y-2">
-              <Label>Drawings (optional)</Label>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => fileInputRef.current?.click()}
-                type="button"
-              >
-                <Upload className="w-4 h-4 mr-1" />
-                Upload from Computer
-              </Button>
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept={ACCEPTED_TYPES}
-                multiple
-                className="hidden"
-                onChange={handleFileSelect}
-              />
-              {files.length > 0 && (
-                <div className="border rounded-md p-2 space-y-1 max-h-40 overflow-y-auto">
-                  {files.map((file, idx) => (
-                    <div
-                      key={idx}
-                      className="flex items-center justify-between text-sm px-2 py-1 bg-muted/50 rounded"
-                    >
-                      <div className="flex items-center gap-2 min-w-0">
-                        <FileText className="w-3.5 h-3.5 shrink-0 text-muted-foreground" />
-                        <span className="truncate">{file.name}</span>
-                        <span className="text-muted-foreground text-xs shrink-0">
-                          {formatBytes(file.size)}
-                        </span>
-                      </div>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="h-6 w-6 p-0"
-                        onClick={() => removeFile(idx)}
-                      >
-                        <X className="w-3.5 h-3.5" />
-                      </Button>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-
-            {/* Cost summary */}
-            <div className="rounded-lg border bg-muted/40 p-4">
-              <div className="flex items-center gap-2 mb-1">
-                <Coins className="w-4 h-4 text-primary" />
-                <span className="text-sm font-semibold">Cost</span>
-              </div>
-              {units == null || units <= 0 ? (
-                <p className="text-sm text-muted-foreground">
-                  Enter the estimated number of units to see the cost.
-                </p>
-              ) : contact ? (
-                <p className="text-sm font-medium">
-                  We will reach out for more information.
-                </p>
-              ) : (
-                <div className="text-sm">
-                  <div>
-                    <span className="text-2xl font-bold text-primary">{cost}</span>{" "}
-                    <span className="text-muted-foreground">credits</span>
-                  </div>
-                  <p className="text-xs text-muted-foreground mt-1">
-                    Your balance: {balance} credit{balance === 1 ? "" : "s"}.
-                    {balance < (cost ?? 0) && " You don't have enough — you'll be prompted to purchase more."}
-                  </p>
-                </div>
-              )}
-            </div>
-          </div>
 
           <DialogFooter>
             <Button
