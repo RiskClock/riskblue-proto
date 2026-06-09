@@ -35,6 +35,7 @@ export const BuyCreditsModal = ({ open, onOpenChange, reason }: BuyCreditsModalP
   const [loadingPackage, setLoadingPackage] = useState<string | null>(null);
   const [clientSecret, setClientSecret] = useState<string | null>(null);
   const [selectedPackage, setSelectedPackage] = useState<CreditPackage | null>(null);
+  const [acceptedTerms, setAcceptedTerms] = useState(false);
 
   // Reset on close
   useEffect(() => {
@@ -42,6 +43,7 @@ export const BuyCreditsModal = ({ open, onOpenChange, reason }: BuyCreditsModalP
       setClientSecret(null);
       setSelectedPackage(null);
       setLoadingPackage(null);
+      setAcceptedTerms(false);
     }
   }, [open]);
 
