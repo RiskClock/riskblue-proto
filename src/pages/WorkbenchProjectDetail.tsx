@@ -194,7 +194,7 @@ export default function WorkbenchProjectDetail() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("projects")
-        .select("id, name, user_id")
+        .select("id, name, user_id, selected_awp_class_names, selected_other_classes")
         .eq("id", projectId!)
         .maybeSingle();
       if (error) throw error;
@@ -481,11 +481,21 @@ export default function WorkbenchProjectDetail() {
         .eq("id", prefId)
         .maybeSingle();
       if (error) throw error;
-      return (data?.awp_class_names as string[]) || [];
+      // Return null (not []) when no row exists, so we can fall back to the
+      // project's original class selection chosen at creation time.
+      return data ? ((data.awp_class_names as string[]) || []) : null;
     },
   });
 
-  const enabledCols = prefs || [];
+  // Original classes chosen when the project was created (canonical + "other"
+  // free-text). Used as the workbench column default before the user customizes.
+  const projectSelectedClassNames = useMemo<string[]>(() => {
+    const canonical = ((project as any)?.selected_awp_class_names as string[] | null) || [];
+    const others = ((project as any)?.selected_other_classes as string[] | null) || [];
+    return [...canonical, ...others];
+  }, [project]);
+
+  const enabledCols = prefs ?? projectSelectedClassNames;
 
 
   // (sheet, class) -> { score, status } for triage cell rendering on sub-rows
@@ -2171,6 +2181,14 @@ export default function WorkbenchProjectDetail() {
                 Pick which assets and water systems appear as columns. Shared across
                 all internal users.
               </DialogDescription>
+              {projectSelectedClassNames.length > 0 && (
+                <div className="text-xs text-muted-foreground pt-2">
+                  <span className="font-medium text-foreground">
+                    Original selection at project creation:
+                  </span>{" "}
+                  {projectSelectedClassNames.join(", ")}
+                </div>
+              )}
             </DialogHeader>
             <div className="max-h-[60vh] overflow-auto space-y-5 py-2">
               {Object.entries(grouped).map(([category, opts]) => (

@@ -1814,6 +1814,7 @@ export type Database = {
           country: string | null
           created_at: string
           drive_folder_id: string | null
+          estimated_units: number | null
           filesearch_store_id: string | null
           has_builders_risk_policy: boolean | null
           id: string
@@ -1821,6 +1822,8 @@ export type Database = {
           name: string
           project_data: Json | null
           project_type: string | null
+          selected_awp_class_names: string[]
+          selected_other_classes: string[]
           state: string | null
           status: string | null
           total_floors: number | null
@@ -1846,6 +1849,7 @@ export type Database = {
           country?: string | null
           created_at?: string
           drive_folder_id?: string | null
+          estimated_units?: number | null
           filesearch_store_id?: string | null
           has_builders_risk_policy?: boolean | null
           id?: string
@@ -1853,6 +1857,8 @@ export type Database = {
           name: string
           project_data?: Json | null
           project_type?: string | null
+          selected_awp_class_names?: string[]
+          selected_other_classes?: string[]
           state?: string | null
           status?: string | null
           total_floors?: number | null
@@ -1878,6 +1884,7 @@ export type Database = {
           country?: string | null
           created_at?: string
           drive_folder_id?: string | null
+          estimated_units?: number | null
           filesearch_store_id?: string | null
           has_builders_risk_policy?: boolean | null
           id?: string
@@ -1885,6 +1892,8 @@ export type Database = {
           name?: string
           project_data?: Json | null
           project_type?: string | null
+          selected_awp_class_names?: string[]
+          selected_other_classes?: string[]
           state?: string | null
           status?: string | null
           total_floors?: number | null

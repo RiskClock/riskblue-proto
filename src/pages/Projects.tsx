@@ -16,6 +16,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/comp
 import { useAccountType } from "@/hooks/useAccountType";
 import { useCompanyControlsConfigured } from "@/hooks/useCompanyControlsConfigured";
 import { WMSVCreateProjectModal } from "@/components/WMSVCreateProjectModal";
+import { CreateProjectModal } from "@/components/CreateProjectModal";
 
 interface Project {
   id: string;
@@ -77,6 +78,7 @@ const Projects = () => {
   const { hasControls, loading: controlsLoading } = useCompanyControlsConfigured(company, isWMSV);
   const [projects, setProjects] = useState<ProjectWithCreator[]>([]);
   const [showWMSVModal, setShowWMSVModal] = useState(false);
+  const [showCreateModal, setShowCreateModal] = useState(false);
   const [loading, setLoading] = useState(true);
   const [userProjectRoles, setUserProjectRoles] = useState<Map<string, string>>(new Map());
   const [analysisStatuses, setAnalysisStatuses] = useState<Map<string, string>>(new Map());
@@ -262,7 +264,7 @@ const Projects = () => {
     if (isWMSV) {
       setShowWMSVModal(true);
     } else {
-      navigate("/project/new");
+      setShowCreateModal(true);
     }
   };
 
@@ -498,6 +500,12 @@ const Projects = () => {
       <WMSVCreateProjectModal
         open={showWMSVModal}
         onOpenChange={setShowWMSVModal}
+        onCreated={fetchProjects}
+      />
+
+      <CreateProjectModal
+        open={showCreateModal}
+        onOpenChange={setShowCreateModal}
         onCreated={fetchProjects}
       />
     </div>
