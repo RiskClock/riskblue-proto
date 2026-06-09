@@ -84,21 +84,23 @@ serve(async (req) => {
         returnUrl ||
         `${req.headers.get("origin")}/credits/return?session_id={CHECKOUT_SESSION_ID}`,
       customer_email: user.email,
-      // Full compliance handling: Stripe handles tax calculation, collection,
-      // filing & remittance for buyers in ~80 supported countries; for buyers
-      // elsewhere it falls back to tax calculation only. Adds +3.5% per
-      // transaction. Eligible because credit packs are general digital goods
-      // (tax_code txcd_10000000 set on each product).
-      // Do NOT add `automatic_tax`, `tax_id_collection`, or other parameters
-      // that conflict with `managed_payments` — see Stripe docs.
-      managed_payments: { enabled: true },
+      // Tax calculation & collection only (+0.5%): Stripe calculates and
+      // collects sales tax / VAT / GST at checkout; we handle registration,
+      // filing, and remittance. Required (instead of `managed_payments`) so
+      // we can render our ToS/Privacy links via `consent_collection` — those
+      // are mutually exclusive on a Checkout Session.
+      automatic_tax: { enabled: true },
+      // Render the Terms of Service & Privacy Policy URLs configured in the
+      // Stripe Dashboard (Settings → Public details / Store policies) as a
+      // required acceptance line inside the embedded checkout.
+      consent_collection: { terms_of_service: "required" },
       metadata: {
         userId: user.id,
         packageId,
         credits: String(pkg.credits),
         amountCents: String(amountCents),
         packageLabel: pkg.label,
-        managed_payments: "true",
+        managed_payments: "false",
       },
     });
 
