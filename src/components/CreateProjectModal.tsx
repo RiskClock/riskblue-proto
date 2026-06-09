@@ -30,12 +30,27 @@ interface CreateProjectModalProps {
 
 const ACCEPTED_TYPES = ".pdf,.png,.jpg,.jpeg,.dwg,.dxf";
 
+export type ProjectSizeTier = "small" | "medium" | "large" | "enterprise";
+
+export const PROJECT_SIZE_TIERS: {
+  id: ProjectSizeTier;
+  label: string;
+  range: string;
+  units: number;
+  cost: number;
+}[] = [
+  { id: "small", label: "Small Project", range: "Up to 50 units", units: 50, cost: 25 },
+  { id: "medium", label: "Medium Project", range: "51 – 250 units", units: 250, cost: 50 },
+  { id: "large", label: "Large Project", range: "251 – 700 units", units: 700, cost: 100 },
+  { id: "enterprise", label: "Enterprise", range: "700+ units", units: 701, cost: 0 },
+];
+
 export function computeCreditCost(units: number | null): {
   cost: number | null;
   contact: boolean;
 } {
   if (units == null || Number.isNaN(units) || units <= 0) return { cost: null, contact: false };
-  if (units > 700) return { cost: null, contact: true };
+  if (units > 700) return { cost: 0, contact: false };
   if (units <= 50) return { cost: 25, contact: false };
   if (units <= 250) return { cost: 50, contact: false };
   return { cost: 100, contact: false };
@@ -57,7 +72,7 @@ export function CreateProjectModal({ open, onOpenChange, onCreated }: CreateProj
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const [name, setName] = useState("");
-  const [unitsStr, setUnitsStr] = useState("");
+  const [sizeTier, setSizeTier] = useState<ProjectSizeTier | null>(null);
   const [selectedClassNames, setSelectedClassNames] = useState<Set<string>>(new Set());
   const [otherEnabled, setOtherEnabled] = useState(false);
   const [otherText, setOtherText] = useState("");
@@ -68,7 +83,7 @@ export function CreateProjectModal({ open, onOpenChange, onCreated }: CreateProj
   useEffect(() => {
     if (open) {
       setName("");
-      setUnitsStr("");
+      setSizeTier(null);
       setSelectedClassNames(new Set());
       setOtherEnabled(false);
       setOtherText("");
@@ -84,7 +99,8 @@ export function CreateProjectModal({ open, onOpenChange, onCreated }: CreateProj
   );
   const grouped = useMemo(() => groupAWPOptionsByCategory(eligibleOptions), [eligibleOptions]);
 
-  const units = unitsStr.trim() === "" ? null : Number(unitsStr);
+  const tierConfig = sizeTier ? PROJECT_SIZE_TIERS.find((t) => t.id === sizeTier)! : null;
+  const units = tierConfig ? tierConfig.units : null;
   const { cost, contact } = computeCreditCost(units);
 
   const otherList = useMemo(
@@ -139,22 +155,24 @@ export function CreateProjectModal({ open, onOpenChange, onCreated }: CreateProj
     const projectName = name.trim();
 
     try {
-      // 1) Consume credits up-front
-      const { data: consumeRes, error: consumeErr } = await supabase.rpc("consume_credits", {
-        p_user_id: user.id,
-        p_amount: cost,
-      });
-      if (consumeErr) throw consumeErr;
-      const ok = (consumeRes as any)?.success;
-      if (!ok) {
-        const reason = (consumeRes as any)?.reason;
-        if (reason === "insufficient_credits") {
-          setShowBuyCredits(true);
-          return;
+      // 1) Consume credits up-front (skip if free, e.g. Enterprise)
+      if (cost > 0) {
+        const { data: consumeRes, error: consumeErr } = await supabase.rpc("consume_credits", {
+          p_user_id: user.id,
+          p_amount: cost,
+        });
+        if (consumeErr) throw consumeErr;
+        const ok = (consumeRes as any)?.success;
+        if (!ok) {
+          const reason = (consumeRes as any)?.reason;
+          if (reason === "insufficient_credits") {
+            setShowBuyCredits(true);
+            return;
+          }
+          throw new Error(`Couldn't consume credits (${reason || "unknown"})`);
         }
-        throw new Error(`Couldn't consume credits (${reason || "unknown"})`);
+        await refetchCredits();
       }
-      await refetchCredits();
 
       // 2) Create the project
       const { data: project, error: pErr } = await supabase
@@ -279,20 +297,116 @@ export function CreateProjectModal({ open, onOpenChange, onCreated }: CreateProj
               />
             </div>
 
-            {/* Units */}
+            {/* Project Size */}
             <div className="space-y-2">
-              <Label htmlFor="cp-units">
-                Estimated Number of Units (Suites or Rooms){" "}
+              <Label>
+                Project Size (Suites or Rooms){" "}
                 <span className="text-destructive">*</span>
               </Label>
-              <Input
-                id="cp-units"
-                type="number"
-                min={1}
-                value={unitsStr}
-                onChange={(e) => setUnitsStr(e.target.value)}
-                placeholder="e.g. 150"
+              <div className="grid grid-cols-4 gap-2">
+                {PROJECT_SIZE_TIERS.map((tier) => {
+                  const selected = sizeTier === tier.id;
+                  return (
+                    <button
+                      key={tier.id}
+                      type="button"
+                      onClick={() => setSizeTier(tier.id)}
+                      className={`rounded-md border p-3 text-left transition-all ${
+                        selected
+                          ? "border-primary bg-primary/5 ring-2 ring-primary"
+                          : "border-border hover:border-primary/50"
+                      }`}
+                    >
+                      <div className="text-sm font-semibold">{tier.label}</div>
+                      <div className="text-xs text-muted-foreground mt-1">
+                        {tier.range}
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Cost summary */}
+            <div className="rounded-lg border bg-muted/40 p-4">
+              <div className="flex items-center gap-2 mb-1">
+                <Coins className="w-4 h-4 text-primary" />
+                <span className="text-sm font-semibold">Cost</span>
+              </div>
+              {!tierConfig ? (
+                <p className="text-sm text-muted-foreground">
+                  Select a project size to see the cost.
+                </p>
+              ) : tierConfig.id === "enterprise" ? (
+                <div className="text-sm">
+                  <div>
+                    <span className="text-2xl font-bold text-primary">0</span>{" "}
+                    <span className="text-muted-foreground">credits</span>
+                  </div>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Enterprise projects are free to create — our team will reach out to coordinate scope.
+                  </p>
+                </div>
+              ) : (
+                <div className="text-sm">
+                  <div>
+                    <span className="text-2xl font-bold text-primary">{cost}</span>{" "}
+                    <span className="text-muted-foreground">credits</span>
+                  </div>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Your balance: {balance} credit{balance === 1 ? "" : "s"}.
+                    {balance < (cost ?? 0) && " You don't have enough — you'll be prompted to purchase more."}
+                  </p>
+                </div>
+              )}
+            </div>
+
+            {/* Files */}
+            <div className="space-y-2">
+              <Label>Drawings (optional)</Label>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => fileInputRef.current?.click()}
+                type="button"
+              >
+                <Upload className="w-4 h-4 mr-1" />
+                Upload from Computer
+              </Button>
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept={ACCEPTED_TYPES}
+                multiple
+                className="hidden"
+                onChange={handleFileSelect}
               />
+              {files.length > 0 && (
+                <div className="border rounded-md p-2 space-y-1 max-h-40 overflow-y-auto">
+                  {files.map((file, idx) => (
+                    <div
+                      key={idx}
+                      className="flex items-center justify-between text-sm px-2 py-1 bg-muted/50 rounded"
+                    >
+                      <div className="flex items-center gap-2 min-w-0">
+                        <FileText className="w-3.5 h-3.5 shrink-0 text-muted-foreground" />
+                        <span className="truncate">{file.name}</span>
+                        <span className="text-muted-foreground text-xs shrink-0">
+                          {formatBytes(file.size)}
+                        </span>
+                      </div>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-6 w-6 p-0"
+                        onClick={() => removeFile(idx)}
+                      >
+                        <X className="w-3.5 h-3.5" />
+                      </Button>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
 
             {/* Classes */}
@@ -357,82 +471,6 @@ export function CreateProjectModal({ open, onOpenChange, onCreated }: CreateProj
                 <p className="text-xs text-muted-foreground">
                   Select at least one class.
                 </p>
-              )}
-            </div>
-
-            {/* Files */}
-            <div className="space-y-2">
-              <Label>Drawings (optional)</Label>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => fileInputRef.current?.click()}
-                type="button"
-              >
-                <Upload className="w-4 h-4 mr-1" />
-                Upload from Computer
-              </Button>
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept={ACCEPTED_TYPES}
-                multiple
-                className="hidden"
-                onChange={handleFileSelect}
-              />
-              {files.length > 0 && (
-                <div className="border rounded-md p-2 space-y-1 max-h-40 overflow-y-auto">
-                  {files.map((file, idx) => (
-                    <div
-                      key={idx}
-                      className="flex items-center justify-between text-sm px-2 py-1 bg-muted/50 rounded"
-                    >
-                      <div className="flex items-center gap-2 min-w-0">
-                        <FileText className="w-3.5 h-3.5 shrink-0 text-muted-foreground" />
-                        <span className="truncate">{file.name}</span>
-                        <span className="text-muted-foreground text-xs shrink-0">
-                          {formatBytes(file.size)}
-                        </span>
-                      </div>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="h-6 w-6 p-0"
-                        onClick={() => removeFile(idx)}
-                      >
-                        <X className="w-3.5 h-3.5" />
-                      </Button>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-
-            {/* Cost summary */}
-            <div className="rounded-lg border bg-muted/40 p-4">
-              <div className="flex items-center gap-2 mb-1">
-                <Coins className="w-4 h-4 text-primary" />
-                <span className="text-sm font-semibold">Cost</span>
-              </div>
-              {units == null || units <= 0 ? (
-                <p className="text-sm text-muted-foreground">
-                  Enter the estimated number of units to see the cost.
-                </p>
-              ) : contact ? (
-                <p className="text-sm font-medium">
-                  We will reach out for more information.
-                </p>
-              ) : (
-                <div className="text-sm">
-                  <div>
-                    <span className="text-2xl font-bold text-primary">{cost}</span>{" "}
-                    <span className="text-muted-foreground">credits</span>
-                  </div>
-                  <p className="text-xs text-muted-foreground mt-1">
-                    Your balance: {balance} credit{balance === 1 ? "" : "s"}.
-                    {balance < (cost ?? 0) && " You don't have enough — you'll be prompted to purchase more."}
-                  </p>
-                </div>
               )}
             </div>
           </div>
