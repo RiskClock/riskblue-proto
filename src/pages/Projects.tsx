@@ -264,7 +264,7 @@ const Projects = () => {
     if (isWMSV) {
       setShowWMSVModal(true);
     } else {
-      navigate("/project/new");
+      setShowCreateModal(true);
     }
   };
 
