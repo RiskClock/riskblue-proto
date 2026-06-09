@@ -502,6 +502,12 @@ const Projects = () => {
         onOpenChange={setShowWMSVModal}
         onCreated={fetchProjects}
       />
+
+      <CreateProjectModal
+        open={showCreateModal}
+        onOpenChange={setShowCreateModal}
+        onCreated={fetchProjects}
+      />
     </div>
   );
 };
