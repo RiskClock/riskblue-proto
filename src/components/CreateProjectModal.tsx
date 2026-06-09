@@ -72,7 +72,7 @@ export function CreateProjectModal({ open, onOpenChange, onCreated }: CreateProj
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const [name, setName] = useState("");
-  const [unitsStr, setUnitsStr] = useState("");
+  const [sizeTier, setSizeTier] = useState<ProjectSizeTier | null>(null);
   const [selectedClassNames, setSelectedClassNames] = useState<Set<string>>(new Set());
   const [otherEnabled, setOtherEnabled] = useState(false);
   const [otherText, setOtherText] = useState("");
