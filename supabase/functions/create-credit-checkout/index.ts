@@ -7,10 +7,9 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
-const PACKAGES: Record<string, { wmsvPriceId: string; fullPriceId: string; credits: number; label: string; wmsvAmountCents: number; fullAmountCents: number }> = {
-  pack_20: { wmsvPriceId: "credits_pack_20_usd", fullPriceId: "credits_pack_20_full_usd", credits: 20, label: "20 Scan Credits", wmsvAmountCents: 3000, fullAmountCents: 10000 },
-  pack_100: { wmsvPriceId: "credits_pack_100_usd", fullPriceId: "credits_pack_100_full_usd", credits: 100, label: "100 Scan Credits", wmsvAmountCents: 13000, fullAmountCents: 43000 },
-  pack_500: { wmsvPriceId: "credits_pack_500_usd", fullPriceId: "credits_pack_500_full_usd", credits: 500, label: "500 Scan Credits", wmsvAmountCents: 50000, fullAmountCents: 165000 },
+const PACKAGES: Record<string, { priceId: string; credits: number; label: string; amountCents: number }> = {
+  pack_100: { priceId: "credits_pack_100_v3_usd", credits: 100, label: "100 Scan Credits", amountCents: 10000 },
+  pack_500: { priceId: "credits_pack_500_v3_usd", credits: 500, label: "500 Scan Credits", amountCents: 40000 },
 };
 
 serve(async (req) => {
