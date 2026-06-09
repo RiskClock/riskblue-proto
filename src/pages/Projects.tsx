@@ -16,6 +16,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/comp
 import { useAccountType } from "@/hooks/useAccountType";
 import { useCompanyControlsConfigured } from "@/hooks/useCompanyControlsConfigured";
 import { WMSVCreateProjectModal } from "@/components/WMSVCreateProjectModal";
+import { CreateProjectModal } from "@/components/CreateProjectModal";
 
 interface Project {
   id: string;
