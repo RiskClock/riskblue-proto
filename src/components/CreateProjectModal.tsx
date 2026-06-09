@@ -99,7 +99,8 @@ export function CreateProjectModal({ open, onOpenChange, onCreated }: CreateProj
   );
   const grouped = useMemo(() => groupAWPOptionsByCategory(eligibleOptions), [eligibleOptions]);
 
-  const units = unitsStr.trim() === "" ? null : Number(unitsStr);
+  const tierConfig = sizeTier ? PROJECT_SIZE_TIERS.find((t) => t.id === sizeTier)! : null;
+  const units = tierConfig ? tierConfig.units : null;
   const { cost, contact } = computeCreditCost(units);
 
   const otherList = useMemo(
