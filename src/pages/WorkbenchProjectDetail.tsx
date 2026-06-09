@@ -2181,6 +2181,14 @@ export default function WorkbenchProjectDetail() {
                 Pick which assets and water systems appear as columns. Shared across
                 all internal users.
               </DialogDescription>
+              {projectSelectedClassNames.length > 0 && (
+                <div className="text-xs text-muted-foreground pt-2">
+                  <span className="font-medium text-foreground">
+                    Original selection at project creation:
+                  </span>{" "}
+                  {projectSelectedClassNames.join(", ")}
+                </div>
+              )}
             </DialogHeader>
             <div className="max-h-[60vh] overflow-auto space-y-5 py-2">
               {Object.entries(grouped).map(([category, opts]) => (
