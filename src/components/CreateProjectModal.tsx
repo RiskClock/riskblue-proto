@@ -471,6 +471,7 @@ export function CreateProjectModal({ open, onOpenChange, onCreated }: CreateProj
                 </p>
               )}
             </div>
+          </div>
 
           <DialogFooter>
             <Button
