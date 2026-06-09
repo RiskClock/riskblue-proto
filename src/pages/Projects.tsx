@@ -78,6 +78,7 @@ const Projects = () => {
   const { hasControls, loading: controlsLoading } = useCompanyControlsConfigured(company, isWMSV);
   const [projects, setProjects] = useState<ProjectWithCreator[]>([]);
   const [showWMSVModal, setShowWMSVModal] = useState(false);
+  const [showCreateModal, setShowCreateModal] = useState(false);
   const [loading, setLoading] = useState(true);
   const [userProjectRoles, setUserProjectRoles] = useState<Map<string, string>>(new Map());
   const [analysisStatuses, setAnalysisStatuses] = useState<Map<string, string>>(new Map());
