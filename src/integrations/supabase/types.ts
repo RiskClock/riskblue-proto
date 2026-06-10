@@ -1809,6 +1809,7 @@ export type Database = {
       project_user_roles: {
         Row: {
           created_at: string
+          email_notifications_enabled: boolean
           id: string
           project_id: string
           role: Database["public"]["Enums"]["project_role"]
@@ -1816,6 +1817,7 @@ export type Database = {
         }
         Insert: {
           created_at?: string
+          email_notifications_enabled?: boolean
           id?: string
           project_id: string
           role?: Database["public"]["Enums"]["project_role"]
@@ -1823,6 +1825,7 @@ export type Database = {
         }
         Update: {
           created_at?: string
+          email_notifications_enabled?: boolean
           id?: string
           project_id?: string
           role?: Database["public"]["Enums"]["project_role"]
