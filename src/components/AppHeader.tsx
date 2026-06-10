@@ -75,11 +75,6 @@ export const AppHeader = ({ leftContent }: AppHeaderProps) => {
                 </span>
               </DropdownMenuItem>
               <DropdownMenuSeparator />
-              <DropdownMenuItem onClick={() => navigate("/controls")} className="cursor-pointer">
-                <Shield className="h-4 w-4 mr-2" />
-                Controls
-              </DropdownMenuItem>
-              <DropdownMenuSeparator />
               {isInternalUser && (
                 <>
                   <DropdownMenuItem onClick={() => navigate("/internal/users")} className="cursor-pointer">
