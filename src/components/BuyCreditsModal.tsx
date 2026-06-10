@@ -10,6 +10,7 @@ import { EmbeddedCheckoutProvider, EmbeddedCheckout } from "@stripe/react-stripe
 import { getStripe, stripeEnvironment } from "@/lib/stripe";
 import { useAuth } from "@/contexts/AuthContext";
 import { PolicyReviewPanel, type PolicyDoc } from "@/components/checkout/PolicyReviewPanel";
+import { useActivityLogger } from "@/hooks/useActivityLogger";
 
 interface BuyCreditsModalProps {
   open: boolean;
