@@ -2937,10 +2937,9 @@ function InstancesReportModal({
         });
       } else {
         for (const [sp, m] of spaceToMember) {
-          const spId = sp.replace(/\s+/g, "_");
           rows.push({
             annotationBaseId: cg.label,
-            instanceId: `${cg.label}@${spId}`,
+            instanceId: cg.label,
             spaceName: sp,
             awpClassName: first.awp_class_name,
             category,
