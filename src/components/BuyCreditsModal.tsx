@@ -10,6 +10,7 @@ import { EmbeddedCheckoutProvider, EmbeddedCheckout } from "@stripe/react-stripe
 import { getStripe, stripeEnvironment } from "@/lib/stripe";
 import { useAuth } from "@/contexts/AuthContext";
 import { PolicyReviewPanel, type PolicyDoc } from "@/components/checkout/PolicyReviewPanel";
+import { useActivityLogger } from "@/hooks/useActivityLogger";
 
 interface BuyCreditsModalProps {
   open: boolean;
@@ -37,6 +38,7 @@ export const BuyCreditsModal = ({ open, onOpenChange, reason }: BuyCreditsModalP
   const { toast } = useToast();
   const { user } = useAuth();
   const { balance, refetch } = useCredits();
+  const { logActivity } = useActivityLogger();
 
   const [step, setStep] = useState<Step>("select");
   const [selectedPackage, setSelectedPackage] = useState<CreditPackage | null>(null);
@@ -150,6 +152,12 @@ export const BuyCreditsModal = ({ open, onOpenChange, reason }: BuyCreditsModalP
     setPackageLoading(pkg.id);
     setSelectedPackage(pkg);
     setStep("review_and_checkout");
+    logActivity("credits_purchase_initiated", undefined, {
+      package_id: pkg.id,
+      credits: pkg.credits,
+      price_usd: pkg.priceUsd,
+      environment: stripeEnvironment,
+    });
     // Kick off both fetches in parallel.
     await Promise.all([fetchPolicies(), fetchClientSecret(pkg)]);
     setPackageLoading(null);

@@ -36,6 +36,8 @@ const ACTION_LABEL_MAP: Record<string, string> = {
   admin_user_deactivated: "Deactivated User",
   admin_user_reactivated: "Reactivated User",
   admin_password_reset_sent: "Sent Password Reset",
+  credits_purchase_initiated: "Credits Checkout Started",
+  credits_purchased: "Credits Purchased",
 };
 
 const formatAction = (action: string) => {
@@ -213,6 +215,22 @@ export default function Logs() {
       lines.push({ value: `Reactivated ${m.target_email || "user"}` });
     } else if (log.action === "admin_password_reset_sent") {
       lines.push({ value: `Sent reset link to ${m.target_email || "user"}` });
+    } else if (log.action === "credits_purchase_initiated") {
+      const dollars = typeof m.price_usd === "number" ? `$${m.price_usd}` : null;
+      const bits: string[] = [];
+      if (m.credits) bits.push(`${m.credits} credit${m.credits === 1 ? "" : "s"}`);
+      if (dollars) bits.push(dollars);
+      if (m.environment) bits.push(`env: ${m.environment}`);
+      lines.push({ value: bits.join(" • ") || "Checkout started" });
+    } else if (log.action === "credits_purchased") {
+      const dollars = typeof m.amount_cents === "number" ? `$${(m.amount_cents / 100).toFixed(2)}` : null;
+      const bits: string[] = [];
+      if (m.credits) bits.push(`${m.credits} credit${m.credits === 1 ? "" : "s"}`);
+      if (dollars) bits.push(dollars);
+      if (m.package_label) bits.push(String(m.package_label));
+      if (m.environment) bits.push(`env: ${m.environment}`);
+      if (m.already_processed) bits.push("(duplicate webhook)");
+      lines.push({ value: bits.join(" • ") || "Purchase completed" });
     }
 
     // Project line
