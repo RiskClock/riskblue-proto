@@ -136,13 +136,23 @@ const Projects = () => {
   const fetchProjects = async () => {
     try {
       const isInternalUser = user?.email?.toLowerCase().endsWith("@riskclock.com") ?? false;
-      // First fetch projects — internal users see only their own (Workbench shows all)
+      // Internal users see projects they created OR are a member of (Workbench shows all)
       let query = supabase
         .from("projects")
         .select("*")
         .order("created_at", { ascending: false });
       if (isInternalUser) {
-        query = query.eq("user_id", user!.id);
+        // Fetch project ids the internal user is a member of (collaborator/admin)
+        const { data: memberRoles } = await supabase
+          .from("project_user_roles")
+          .select("project_id")
+          .eq("user_id", user!.id);
+        const memberProjectIds = (memberRoles || []).map(r => r.project_id);
+        if (memberProjectIds.length > 0) {
+          query = query.or(`user_id.eq.${user!.id},id.in.(${memberProjectIds.join(",")})`);
+        } else {
+          query = query.eq("user_id", user!.id);
+        }
       }
       const { data: projectsData, error: projectsError } = await query;
 
