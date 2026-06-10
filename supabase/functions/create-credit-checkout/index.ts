@@ -9,10 +9,15 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
-const PACKAGES: Record<string, { priceId: string; credits: number; label: string; amountCents: number }> = {
+const PACKAGES: Record<string, { priceId: string; credits: number; label: string; amountCents: number; internalOnly?: boolean }> = {
+  pack_1: { priceId: "credits_pack_1_v3_usd", credits: 1, label: "1 Scan Credit (Internal)", amountCents: 500, internalOnly: true },
   pack_100: { priceId: "credits_pack_100_v3_usd", credits: 100, label: "100 Scan Credits", amountCents: 10000 },
   pack_500: { priceId: "credits_pack_500_v3_usd", credits: 500, label: "500 Scan Credits", amountCents: 40000 },
 };
+
+function isInternalEmail(email?: string | null): boolean {
+  return !!email && email.toLowerCase().endsWith("@riskclock.com");
+}
 
 async function resolveOrCreateCustomer(
   stripe: StripeClient,
