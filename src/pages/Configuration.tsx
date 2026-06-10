@@ -213,6 +213,21 @@ export default function Configuration() {
 
   const handleRevert = () => { setPendingChanges(new Map()); setShowRevertDialog(false); };
 
+  const handleToggleSpan = async (awp: AWPItem, next: boolean) => {
+    try {
+      const { error } = await supabase
+        .from(awp.category)
+        .update({ can_span_multiple_spaces: next } as any)
+        .eq("id", awp.id);
+      if (error) throw error;
+      toast({ title: next ? "Enabled multi-space" : "Disabled multi-space", description: awp.name });
+      await refetchAWPs();
+      queryClient.invalidateQueries({ queryKey: ["awp-options"] });
+    } catch (error: any) {
+      toast({ title: "Could not update", description: (error as any)?.message, variant: "destructive" });
+    }
+  };
+
   // Link a Google Drive doc prompt (default)
   const handleLinkPrompt = async (awpName: string, category: string) => {
     const url = promptUrls.get(awpName);
