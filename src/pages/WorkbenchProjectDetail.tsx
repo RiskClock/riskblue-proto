@@ -24,6 +24,7 @@ import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Badge } from "@/components/ui/badge";
 import { SpaceEditModal } from "@/components/workbench/SpaceEditModal";
+import { ConsolidateRisersModal } from "@/components/workbench/ConsolidateRisersModal";
 import {
   AlertDialog,
   AlertDialogAction,
