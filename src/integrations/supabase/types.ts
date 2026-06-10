@@ -1493,6 +1493,42 @@ export type Database = {
         }
         Relationships: []
       }
+      policy_acceptances: {
+        Row: {
+          accepted_at: string
+          created_at: string
+          document_type: string
+          document_url: string
+          document_version: string
+          id: string
+          stripe_session_id: string | null
+          user_agent: string | null
+          user_id: string
+        }
+        Insert: {
+          accepted_at?: string
+          created_at?: string
+          document_type: string
+          document_url: string
+          document_version: string
+          id?: string
+          stripe_session_id?: string | null
+          user_agent?: string | null
+          user_id: string
+        }
+        Update: {
+          accepted_at?: string
+          created_at?: string
+          document_type?: string
+          document_url?: string
+          document_version?: string
+          id?: string
+          stripe_session_id?: string | null
+          user_agent?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
       processes: {
         Row: {
           cost: string
