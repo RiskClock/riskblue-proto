@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Loader2, AlertCircle, ChevronDown } from "lucide-react";
+import { Loader2, AlertCircle, ExternalLink } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 export interface PolicyDoc {
@@ -20,66 +20,65 @@ interface PolicyReviewPanelProps {
   onAcceptedChange: (next: boolean) => void;
 }
 
-function ScrollablePolicy({
-  html,
+function PolicyFrame({
   url,
-  onReachedBottom,
-  reached,
+  reviewed,
+  onReviewedChange,
+  label,
 }: {
-  html: string;
   url: string;
-  onReachedBottom: () => void;
-  reached: boolean;
+  reviewed: boolean;
+  onReviewedChange: (next: boolean) => void;
+  label: string;
 }) {
-  const ref = useRef<HTMLDivElement>(null);
+  const [loaded, setLoaded] = useState(false);
+  const iframeRef = useRef<HTMLIFrameElement>(null);
 
+  // Reset loaded state when URL changes
   useEffect(() => {
-    const el = ref.current;
-    if (!el) return;
-    // If content is short enough to not need scrolling, mark as read immediately.
-    if (el.scrollHeight - el.clientHeight <= 8) {
-      onReachedBottom();
-    }
-  }, [html, onReachedBottom]);
-
-  const handleScroll = () => {
-    const el = ref.current;
-    if (!el) return;
-    if (el.scrollTop + el.clientHeight >= el.scrollHeight - 8) {
-      onReachedBottom();
-    }
-  };
-
-  const scrollToBottom = () => {
-    const el = ref.current;
-    if (!el) return;
-    el.scrollTo({ top: el.scrollHeight, behavior: "smooth" });
-  };
+    setLoaded(false);
+  }, [url]);
 
   return (
-    <div className="relative">
-      <div
-        ref={ref}
-        onScroll={handleScroll}
-        className="h-[420px] overflow-y-auto rounded-md border bg-muted/20 p-4 text-sm leading-relaxed [&_a]:text-primary [&_a]:underline [&_h1]:text-base [&_h1]:font-semibold [&_h1]:mt-3 [&_h2]:text-sm [&_h2]:font-semibold [&_h2]:mt-3 [&_h3]:text-sm [&_h3]:font-semibold [&_p]:mb-2 [&_ul]:list-disc [&_ul]:pl-5 [&_ol]:list-decimal [&_ol]:pl-5 [&_li]:mb-1 [&_img]:max-w-full"
-      >
-        <div dangerouslySetInnerHTML={{ __html: html }} />
-        <div className="mt-4 pt-3 border-t text-xs text-muted-foreground">
-          Source:{" "}
-          <a href={url} target="_blank" rel="noopener noreferrer">
-            {url}
-          </a>
-        </div>
+    <div className="flex flex-col gap-2">
+      <div className="relative h-[420px] overflow-hidden rounded-md border bg-muted/20">
+        {!loaded && (
+          <div className="absolute inset-0 flex items-center justify-center">
+            <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+          </div>
+        )}
+        <iframe
+          ref={iframeRef}
+          src={url}
+          title={label}
+          onLoad={() => setLoaded(true)}
+          className="h-full w-full"
+          sandbox="allow-scripts allow-same-origin allow-popups allow-forms"
+        />
       </div>
-      {!reached && (
-        <button
-          type="button"
-          onClick={scrollToBottom}
-          className="absolute bottom-2 right-2 inline-flex items-center gap-1 rounded-full bg-primary px-3 py-1 text-xs font-medium text-primary-foreground shadow hover:bg-primary/90"
+      <div className="flex items-center justify-between gap-2">
+        <a
+          href={url}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
         >
-          <ChevronDown className="h-3 w-3" /> Scroll to bottom
-        </button>
-      )}
+          Open in new tab
+          <ExternalLink className="h-3 w-3" />
+        </a>
+        <label
+          className={`inline-flex items-center gap-2 text-xs ${
+            loaded ? "cursor-pointer" : "cursor-not-allowed opacity-60"
+          }`}
+        >
+          <Checkbox
+            checked={reviewed}
+            disabled={!loaded}
+            onCheckedChange={(v) => onReviewedChange(v === true)}
+          />
+          <span>I have read the {label}</span>
+        </label>
+      </div>
     </div>
   );
 }
@@ -93,11 +92,19 @@ export function PolicyReviewPanel({
   accepted,
   onAcceptedChange,
 }: PolicyReviewPanelProps) {
-  const [scrolledTos, setScrolledTos] = useState(false);
-  const [scrolledPrivacy, setScrolledPrivacy] = useState(false);
+  const [reviewedTos, setReviewedTos] = useState(false);
+  const [reviewedPrivacy, setReviewedPrivacy] = useState(false);
   const [tab, setTab] = useState<"tos" | "privacy">("tos");
 
-  const bothScrolled = scrolledTos && scrolledPrivacy;
+  const bothReviewed = reviewedTos && reviewedPrivacy;
+
+  // If acceptance got auto-set from prior history, treat both as reviewed.
+  useEffect(() => {
+    if (accepted) {
+      setReviewedTos(true);
+      setReviewedPrivacy(true);
+    }
+  }, [accepted]);
 
   if (loading) {
     return (
@@ -125,39 +132,39 @@ export function PolicyReviewPanel({
         <TabsList className="grid w-full grid-cols-2">
           <TabsTrigger value="tos" className="gap-2">
             Terms of Service
-            {scrolledTos && <span className="text-xs text-green-600">✓</span>}
+            {reviewedTos && <span className="text-xs text-green-600">✓</span>}
           </TabsTrigger>
           <TabsTrigger value="privacy" className="gap-2">
             Privacy Policy
-            {scrolledPrivacy && <span className="text-xs text-green-600">✓</span>}
+            {reviewedPrivacy && <span className="text-xs text-green-600">✓</span>}
           </TabsTrigger>
         </TabsList>
         <TabsContent value="tos" className="mt-3">
-          <ScrollablePolicy
-            html={tos.html}
+          <PolicyFrame
             url={tos.url}
-            reached={scrolledTos}
-            onReachedBottom={() => setScrolledTos(true)}
+            label="Terms of Service"
+            reviewed={reviewedTos}
+            onReviewedChange={setReviewedTos}
           />
         </TabsContent>
         <TabsContent value="privacy" className="mt-3">
-          <ScrollablePolicy
-            html={privacy.html}
+          <PolicyFrame
             url={privacy.url}
-            reached={scrolledPrivacy}
-            onReachedBottom={() => setScrolledPrivacy(true)}
+            label="Privacy Policy"
+            reviewed={reviewedPrivacy}
+            onReviewedChange={setReviewedPrivacy}
           />
         </TabsContent>
       </Tabs>
 
       <label
         className={`flex items-start gap-3 rounded-md border p-3 ${
-          bothScrolled ? "cursor-pointer hover:bg-muted/40" : "cursor-not-allowed opacity-70"
+          bothReviewed ? "cursor-pointer hover:bg-muted/40" : "cursor-not-allowed opacity-70"
         }`}
       >
         <Checkbox
           checked={accepted}
-          disabled={!bothScrolled}
+          disabled={!bothReviewed}
           onCheckedChange={(v) => onAcceptedChange(v === true)}
           className="mt-0.5"
         />
@@ -181,9 +188,9 @@ export function PolicyReviewPanel({
             Privacy Policy
           </a>
           .
-          {!bothScrolled && (
+          {!bothReviewed && (
             <span className="mt-1 block text-xs text-muted-foreground">
-              Scroll to the bottom of both documents to enable this checkbox.
+              Confirm you've read each document above to enable this checkbox.
             </span>
           )}
         </span>
