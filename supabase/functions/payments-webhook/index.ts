@@ -61,4 +61,24 @@ async function handleCheckoutCompleted(session: any) {
     throw error;
   }
   console.log("[payments-webhook] credits granted:", data);
+
+  // Activity log (best-effort; do not throw on failure)
+  try {
+    const alreadyProcessed = (data as any)?.already_processed === true;
+    const { error: logError } = await supabase.from("user_activity_logs").insert({
+      user_id: userId,
+      action: "credits_purchased",
+      metadata: {
+        credits,
+        amount_cents: amountCents || null,
+        package_label: packageLabel,
+        stripe_session_id: session.id,
+        environment: session.livemode ? "live" : "sandbox",
+        already_processed: alreadyProcessed,
+      },
+    });
+    if (logError) console.error("[payments-webhook] activity log failed:", logError);
+  } catch (e) {
+    console.error("[payments-webhook] activity log exception:", e);
+  }
 }
