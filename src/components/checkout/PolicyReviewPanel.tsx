@@ -96,8 +96,6 @@ export function PolicyReviewPanel({
   const [reviewedPrivacy, setReviewedPrivacy] = useState(false);
   const [tab, setTab] = useState<"tos" | "privacy">("tos");
 
-  const bothReviewed = reviewedTos && reviewedPrivacy;
-
   // If acceptance got auto-set from prior history, treat both as reviewed.
   useEffect(() => {
     if (accepted) {
@@ -105,6 +103,16 @@ export function PolicyReviewPanel({
       setReviewedPrivacy(true);
     }
   }, [accepted]);
+
+  // Drive parent acceptance from the two per-document checkboxes.
+  const bothReviewed = reviewedTos && reviewedPrivacy;
+  useEffect(() => {
+    if (bothReviewed && !accepted) {
+      onAcceptedChange(true);
+    } else if (!bothReviewed && accepted) {
+      onAcceptedChange(false);
+    }
+  }, [bothReviewed, accepted, onAcceptedChange]);
 
   if (loading) {
     return (
@@ -156,45 +164,7 @@ export function PolicyReviewPanel({
           />
         </TabsContent>
       </Tabs>
-
-      <label
-        className={`flex items-start gap-3 rounded-md border p-3 ${
-          bothReviewed ? "cursor-pointer hover:bg-muted/40" : "cursor-not-allowed opacity-70"
-        }`}
-      >
-        <Checkbox
-          checked={accepted}
-          disabled={!bothReviewed}
-          onCheckedChange={(v) => onAcceptedChange(v === true)}
-          className="mt-0.5"
-        />
-        <span className="text-sm">
-          I have read and agree to the{" "}
-          <a
-            href={tos.url}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="text-primary underline"
-          >
-            Terms of Service
-          </a>{" "}
-          and{" "}
-          <a
-            href={privacy.url}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="text-primary underline"
-          >
-            Privacy Policy
-          </a>
-          .
-          {!bothReviewed && (
-            <span className="mt-1 block text-xs text-muted-foreground">
-              Confirm you've read each document above to enable this checkbox.
-            </span>
-          )}
-        </span>
-      </label>
     </div>
   );
 }
+
