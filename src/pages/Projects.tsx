@@ -13,9 +13,6 @@ import { AppHeader } from "@/components/AppHeader";
 import { Trash2, X } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import { useAccountType } from "@/hooks/useAccountType";
-import { useCompanyControlsConfigured } from "@/hooks/useCompanyControlsConfigured";
-import { WMSVCreateProjectModal } from "@/components/WMSVCreateProjectModal";
 import { CreateProjectModal } from "@/components/CreateProjectModal";
 
 interface Project {
@@ -74,10 +71,7 @@ const Projects = () => {
   const { toast } = useToast();
   useHeapIdentify();
   const { logActivity } = useActivityLogger();
-  const { isWMSV, company, loading: accountLoading } = useAccountType();
-  const { hasControls, loading: controlsLoading } = useCompanyControlsConfigured(company, isWMSV);
   const [projects, setProjects] = useState<ProjectWithCreator[]>([]);
-  const [showWMSVModal, setShowWMSVModal] = useState(false);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [loading, setLoading] = useState(true);
   const [userProjectRoles, setUserProjectRoles] = useState<Map<string, string>>(new Map());
@@ -135,31 +129,6 @@ const Projects = () => {
     }
   }, [user]);
 
-  // Re-fetch analysis statuses when isWMSV hydrates or projects change
-  useEffect(() => {
-    if (isWMSV && projectIds.length > 0) {
-      fetchAnalysisStatuses(projectIds);
-    }
-  }, [isWMSV, projectIds, fetchAnalysisStatuses]);
-
-  // Realtime subscription for WMSV status badges — refetch instead of direct patch
-  useEffect(() => {
-    if (!isWMSV || !user) return;
-    const channel: RealtimeChannel = supabase
-      .channel("projects-analysis-status")
-      .on(
-        "postgres_changes",
-        { event: "UPDATE", schema: "public", table: "analysis_requests" },
-        () => {
-          debouncedFetchStatuses();
-        }
-      )
-      .subscribe();
-    return () => {
-      if (debounceTimerRef.current) clearTimeout(debounceTimerRef.current);
-      supabase.removeChannel(channel);
-    };
-  }, [isWMSV, user, debouncedFetchStatuses]);
 
   const fetchProjects = async () => {
     try {
@@ -195,13 +164,7 @@ const Projects = () => {
           `get-user-emails?userIds=${userIds.join(",")}`,
           { method: "GET" }
         ).catch(() => ({ data: null })),
-        isWMSV && projectIds.length > 0
-          ? supabase
-              .from("analysis_requests")
-              .select("project_id, status")
-              .in("project_id", projectIds)
-              .order("created_at", { ascending: false })
-          : Promise.resolve({ data: null }),
+        Promise.resolve({ data: null }),
       ]);
 
       // Create a map of user_id to display_name
@@ -260,12 +223,7 @@ const Projects = () => {
 
   const handleNewProject = () => {
     logActivity("add_new_clicked");
-    if (accountLoading) return;
-    if (isWMSV) {
-      setShowWMSVModal(true);
-    } else {
-      setShowCreateModal(true);
-    }
+    setShowCreateModal(true);
   };
 
   const handleDeleteProject = async (projectId: string, e: React.MouseEvent) => {
@@ -337,9 +295,7 @@ const Projects = () => {
                 <strong>👋 Welcome to RiskBlue!</strong>
               </p>
               <p className="text-sm text-muted-foreground">
-                {isWMSV
-                  ? "RiskBlue provides a secure, access-controlled environment to identify project-specific water risks, define mitigation strategies, and execute structured plans. All data is processed within isolated project workspaces to ensure integrity, accountability, and protection."
-                  : "RiskBlue helps builders identify project-specific water risks, determine the right mitigation strategies, and translate them into structured plans and coordinated execution. By unifying risk discovery, planning, and field operations, RiskBlue ensures consistent control, accountability, and rapid response across the entire water-mitigation lifecycle."}
+                RiskBlue helps builders identify project-specific water risks, determine the right mitigation strategies, and translate them into structured plans and coordinated execution. By unifying risk discovery, planning, and field operations, RiskBlue ensures consistent control, accountability, and rapid response across the entire water-mitigation lifecycle.
               </p>
             </div>
           )}
@@ -351,62 +307,29 @@ const Projects = () => {
               </h1>
             </div>
             <div className="flex gap-3">
-              {isWMSV && !company ? (
-                <TooltipProvider>
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <span tabIndex={0}>
-                        <Button onClick={handleNewProject} disabled>Add New Project</Button>
-                      </span>
-                    </TooltipTrigger>
-                    <TooltipContent>
-                      <p>Account misconfiguration — contact support</p>
-                    </TooltipContent>
-                  </Tooltip>
-                </TooltipProvider>
-              ) : (
-                <Button onClick={handleNewProject}>Add New Project</Button>
-              )}
+              <Button onClick={handleNewProject}>Add New Project</Button>
             </div>
           </div>
         </div>
 
-        {loading || !user || accountLoading ? (
+        {loading || !user ? (
           <div className="text-center py-12">
             <p className="text-muted-foreground">Loading projects...</p>
           </div>
         ) : projects.length === 0 ? (
-          isWMSV && !company ? (
-            <div className="text-center py-12">
-              <p className="text-muted-foreground mb-4">
-                Account misconfiguration detected. Please contact support to assign your company.
-              </p>
-              <Button asChild>
-                <a href="mailto:support@riskclock.com">Contact Support</a>
-              </Button>
-            </div>
-          ) : (
-            <div className="text-center py-12">
-              <p className="text-muted-foreground mb-4">No projects yet</p>
-              <Button onClick={handleNewProject}>Create your first project</Button>
-            </div>
-          )
+          <div className="text-center py-12">
+            <p className="text-muted-foreground mb-4">No projects yet</p>
+            <Button onClick={handleNewProject}>Create your first project</Button>
+          </div>
         ) : (
           <div className="bg-card rounded-lg border overflow-hidden">
             <table className="w-full">
               <thead className="bg-muted/50">
                 <tr className="text-left">
                   <th className="px-6 py-3 text-sm font-medium text-foreground">Project Name</th>
-                  {!isWMSV && (
-                    <>
-                      <th className="px-6 py-3 text-sm font-medium text-foreground">Project Type</th>
-                      <th className="px-6 py-3 text-sm font-medium text-foreground">Location</th>
-                      <th className="px-6 py-3 text-sm font-medium text-foreground">Construction Start</th>
-                    </>
-                  )}
-                  {isWMSV && (
-                    <th className="px-6 py-3 text-sm font-medium text-foreground">Status</th>
-                  )}
+                  <th className="px-6 py-3 text-sm font-medium text-foreground">Project Type</th>
+                  <th className="px-6 py-3 text-sm font-medium text-foreground">Location</th>
+                  <th className="px-6 py-3 text-sm font-medium text-foreground">Construction Start</th>
                   <th className="px-6 py-3 text-sm font-medium text-foreground">Created By</th>
                   <th className="px-6 py-3 text-sm font-medium text-foreground">Created On</th>
                   <th className="px-6 py-3 w-[80px]"></th>
@@ -417,46 +340,24 @@ const Projects = () => {
                   <tr
                     key={project.id}
                     className="border-t hover:bg-muted/30 cursor-pointer"
-                    onClick={() => navigate(isWMSV ? `/wmsv-project/${project.id}` : `/project/${project.id}`)}
+                    onClick={() => navigate(`/project/${project.id}`)}
                   >
                     <td className="px-6 py-4">
-                      {isWMSV ? (
+                      <div className="flex items-center gap-2">
                         <span className="text-foreground">{project.name}</span>
-                      ) : (
-                        <div className="flex items-center gap-2">
-                          <span className="text-foreground">{project.name}</span>
-                          <Badge
-                            variant={project.status === "completed" ? "default" : "secondary"}
-                            className="text-xs"
-                          >
-                            {project.status || "draft"}
-                          </Badge>
-                        </div>
-                      )}
+                        <Badge
+                          variant={project.status === "completed" ? "default" : "secondary"}
+                          className="text-xs"
+                        >
+                          {project.status || "draft"}
+                        </Badge>
+                      </div>
                     </td>
-                    {!isWMSV && (
-                      <>
-                        <td className="px-6 py-4 text-muted-foreground">{capitalizeFirst(project.project_type) || "—"}</td>
-                        <td className="px-6 py-4 text-muted-foreground">{formatLocation(project.city, project.country)}</td>
-                        <td className="px-6 py-4 text-muted-foreground">
-                          {formatDateShort(project.construction_start_date)}
-                        </td>
-                      </>
-                    )}
-                    {isWMSV && (
-                      <td className="px-6 py-4">
-                        {(() => {
-                          const aStatus = analysisStatuses.get(project.id);
-                          const label = aStatus ? analysisStatusLabels[aStatus] || capitalizeFirst(aStatus) : "New";
-                          const colorClass = aStatus ? analysisStatusColors[aStatus] || "" : "";
-                          return (
-                            <Badge variant="outline" className={`text-xs ${colorClass}`}>
-                              {label}
-                            </Badge>
-                          );
-                        })()}
-                      </td>
-                    )}
+                    <td className="px-6 py-4 text-muted-foreground">{capitalizeFirst(project.project_type) || "—"}</td>
+                    <td className="px-6 py-4 text-muted-foreground">{formatLocation(project.city, project.country)}</td>
+                    <td className="px-6 py-4 text-muted-foreground">
+                      {formatDateShort(project.construction_start_date)}
+                    </td>
                     <td className="px-6 py-4 text-muted-foreground">
                       {project.creator_email ? (
                         <TooltipProvider>
@@ -497,11 +398,6 @@ const Projects = () => {
         )}
       </main>
 
-      <WMSVCreateProjectModal
-        open={showWMSVModal}
-        onOpenChange={setShowWMSVModal}
-        onCreated={fetchProjects}
-      />
 
       <CreateProjectModal
         open={showCreateModal}
