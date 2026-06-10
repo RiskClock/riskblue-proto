@@ -24,6 +24,7 @@ interface AWPItem {
   id: string;
   name: string;
   default_control_ids: string[];
+  can_span_multiple_spaces: boolean;
   category: "critical_assets" | "water_systems" | "processes";
 }
 
