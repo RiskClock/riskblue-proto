@@ -13,9 +13,6 @@ import { AppHeader } from "@/components/AppHeader";
 import { Trash2, X } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import { useAccountType } from "@/hooks/useAccountType";
-import { useCompanyControlsConfigured } from "@/hooks/useCompanyControlsConfigured";
-import { WMSVCreateProjectModal } from "@/components/WMSVCreateProjectModal";
 import { CreateProjectModal } from "@/components/CreateProjectModal";
 
 interface Project {
@@ -74,10 +71,7 @@ const Projects = () => {
   const { toast } = useToast();
   useHeapIdentify();
   const { logActivity } = useActivityLogger();
-  const { isWMSV, company, loading: accountLoading } = useAccountType();
-  const { hasControls, loading: controlsLoading } = useCompanyControlsConfigured(company, isWMSV);
   const [projects, setProjects] = useState<ProjectWithCreator[]>([]);
-  const [showWMSVModal, setShowWMSVModal] = useState(false);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [loading, setLoading] = useState(true);
   const [userProjectRoles, setUserProjectRoles] = useState<Map<string, string>>(new Map());
