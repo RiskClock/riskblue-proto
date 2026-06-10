@@ -68,8 +68,10 @@ export const BuyCreditsModal = ({ open, onOpenChange, reason }: BuyCreditsModalP
       setCheckoutLoading(false);
       setCheckoutError(null);
       setPackageLoading(null);
+      persistedRef.current = null;
     }
   }, [open]);
+
 
   const handleCheckoutComplete = async () => {
     onOpenChange(false);
