@@ -2754,6 +2754,7 @@ function InstancesReportModal({
   spaceHierarchyPayload,
   projectName,
   enabledClassNames,
+  consolidations,
 }: {
   open: boolean;
   onOpenChange: (v: boolean) => void;
@@ -2764,6 +2765,13 @@ function InstancesReportModal({
   spaceHierarchyPayload: any | null | undefined;
   projectName: string;
   enabledClassNames: string[];
+  consolidations: Array<{
+    id: string;
+    awp_class_name: string;
+    label: string;
+    instance_number: number | null;
+    member_annotation_ids: string[];
+  }>;
 }) {
   const enabledClassSet = useMemo(
     () => new Set(enabledClassNames || []),
