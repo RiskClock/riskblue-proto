@@ -18,13 +18,15 @@ interface BuyCreditsModalProps {
 }
 
 interface CreditPackage {
-  id: "pack_100" | "pack_500";
+  id: "pack_1" | "pack_100" | "pack_500";
   credits: number;
   priceUsd: number;
   priceIdFull: string;
+  internalOnly?: boolean;
 }
 
 const PACKAGES: CreditPackage[] = [
+  { id: "pack_1", credits: 1, priceUsd: 5, priceIdFull: "credits_pack_1_v3_usd", internalOnly: true },
   { id: "pack_100", credits: 100, priceUsd: 100, priceIdFull: "credits_pack_100_v3_usd" },
   { id: "pack_500", credits: 500, priceUsd: 400, priceIdFull: "credits_pack_500_v3_usd" },
 ];
