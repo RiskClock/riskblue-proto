@@ -18,13 +18,15 @@ interface BuyCreditsModalProps {
 }
 
 interface CreditPackage {
-  id: "pack_100" | "pack_500";
+  id: "pack_1" | "pack_100" | "pack_500";
   credits: number;
   priceUsd: number;
   priceIdFull: string;
+  internalOnly?: boolean;
 }
 
 const PACKAGES: CreditPackage[] = [
+  { id: "pack_1", credits: 1, priceUsd: 5, priceIdFull: "credits_pack_1_v3_usd", internalOnly: true },
   { id: "pack_100", credits: 100, priceUsd: 100, priceIdFull: "credits_pack_100_v3_usd" },
   { id: "pack_500", credits: 500, priceUsd: 400, priceIdFull: "credits_pack_500_v3_usd" },
 ];
@@ -229,9 +231,13 @@ export const BuyCreditsModal = ({ open, onOpenChange, reason }: BuyCreditsModalP
           </DialogDescription>
         </DialogHeader>
 
-        {step === "select" && (
-          <div className="grid gap-4 md:grid-cols-2 mt-2">
-            {PACKAGES.map((pkg) => (
+        {step === "select" && (() => {
+          const isInternal = !!user?.email?.toLowerCase().endsWith("@riskclock.com");
+          const visiblePackages = PACKAGES.filter((p) => !p.internalOnly || isInternal);
+          const cols = visiblePackages.length >= 3 ? "md:grid-cols-3" : "md:grid-cols-2";
+          return (
+          <div className={`grid gap-4 ${cols} mt-2`}>
+            {visiblePackages.map((pkg) => (
               <Card
                 key={pkg.id}
                 className="relative overflow-hidden p-5 flex flex-col gap-3 transition-all border-primary/20 hover:border-primary/50 hover:shadow-lg hover:shadow-primary/10 bg-gradient-to-br from-card to-primary/5"
@@ -264,7 +270,8 @@ export const BuyCreditsModal = ({ open, onOpenChange, reason }: BuyCreditsModalP
               </Card>
             ))}
           </div>
-        )}
+          );
+        })()}
 
         {step === "review_and_checkout" && (
           <div className="mt-2">
