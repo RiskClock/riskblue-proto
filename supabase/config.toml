@@ -114,5 +114,5 @@ verify_jwt = false
 [functions.get-stripe-policies]
 verify_jwt = false
 
-[functions._probe-stripe-account]
+[functions.probe-stripe-account]
 verify_jwt = false
