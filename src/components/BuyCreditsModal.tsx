@@ -51,6 +51,8 @@ export const BuyCreditsModal = ({ open, onOpenChange, reason }: BuyCreditsModalP
   const [checkoutLoading, setCheckoutLoading] = useState(false);
   const [checkoutError, setCheckoutError] = useState<string | null>(null);
   const [packageLoading, setPackageLoading] = useState<string | null>(null);
+  const persistedRef = useRef<string | null>(null);
+
 
   // Reset everything when modal closes
   useEffect(() => {
