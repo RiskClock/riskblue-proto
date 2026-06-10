@@ -93,7 +93,6 @@ export function PolicyReviewPanel({
 }: PolicyReviewPanelProps) {
   const [reviewedTos, setReviewedTos] = useState(false);
   const [reviewedPrivacy, setReviewedPrivacy] = useState(false);
-  const [tab, setTab] = useState<"tos" | "privacy">("tos");
 
   // If acceptance got auto-set from prior history, treat both as reviewed.
   useEffect(() => {
@@ -134,35 +133,19 @@ export function PolicyReviewPanel({
   }
 
   return (
-    <div className="flex flex-col gap-3">
-      <Tabs value={tab} onValueChange={(v) => setTab(v as "tos" | "privacy")}>
-        <TabsList className="grid w-full grid-cols-2">
-          <TabsTrigger value="tos" className="gap-2">
-            Terms of Service
-            {reviewedTos && <span className="text-xs text-green-600">✓</span>}
-          </TabsTrigger>
-          <TabsTrigger value="privacy" className="gap-2">
-            Privacy Policy
-            {reviewedPrivacy && <span className="text-xs text-green-600">✓</span>}
-          </TabsTrigger>
-        </TabsList>
-        <TabsContent value="tos" className="mt-3">
-          <PolicyFrame
-            url={tos.url}
-            label="Terms of Service"
-            reviewed={reviewedTos}
-            onReviewedChange={setReviewedTos}
-          />
-        </TabsContent>
-        <TabsContent value="privacy" className="mt-3">
-          <PolicyFrame
-            url={privacy.url}
-            label="Privacy Policy"
-            reviewed={reviewedPrivacy}
-            onReviewedChange={setReviewedPrivacy}
-          />
-        </TabsContent>
-      </Tabs>
+    <div className="flex flex-col gap-6">
+      <PolicyFrame
+        url={tos.url}
+        label="Terms of Service"
+        reviewed={reviewedTos}
+        onReviewedChange={setReviewedTos}
+      />
+      <PolicyFrame
+        url={privacy.url}
+        label="Privacy Policy"
+        reviewed={reviewedPrivacy}
+        onReviewedChange={setReviewedPrivacy}
+      />
     </div>
   );
 }
