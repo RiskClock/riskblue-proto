@@ -377,24 +377,31 @@ export function ConsolidateRisersModal({
   );
 }
 
-// Naive proximity clustering: group annotations whose (nx, ny) are within 0.05.
-// Returns arrays of annotation ids (one per cluster).
+// Proximity clustering: assign each annotation to the NEAREST existing cluster
+// whose anchor (nx, ny) is within THRESH. The anchor is the first annotation's
+// position and never drifts, so a long chain of slightly offset annotations
+// can't absorb a clearly different riser at the other side of the page.
 function clusterByProximity(rows: AnnotationRow[]): string[][] {
-  const THRESH = 0.05;
-  const clusters: { cx: number; cy: number; ids: string[] }[] = [];
+  const THRESH = 0.08; // normalized page-coord distance
+  const clusters: { ax: number; ay: number; ids: string[] }[] = [];
   for (const r of rows) {
-    let assigned = false;
-    for (const c of clusters) {
-      if (Math.abs(c.cx - r.nx) <= THRESH && Math.abs(c.cy - r.ny) <= THRESH) {
-        c.ids.push(r.id);
-        // Update centroid
-        c.cx = (c.cx * (c.ids.length - 1) + r.nx) / c.ids.length;
-        c.cy = (c.cy * (c.ids.length - 1) + r.ny) / c.ids.length;
-        assigned = true;
-        break;
+    let bestIdx = -1;
+    let bestDist = Infinity;
+    for (let i = 0; i < clusters.length; i++) {
+      const c = clusters[i];
+      const dx = c.ax - r.nx;
+      const dy = c.ay - r.ny;
+      const d = Math.sqrt(dx * dx + dy * dy);
+      if (d <= THRESH && d < bestDist) {
+        bestDist = d;
+        bestIdx = i;
       }
     }
-    if (!assigned) clusters.push({ cx: r.nx, cy: r.ny, ids: [r.id] });
+    if (bestIdx >= 0) {
+      clusters[bestIdx].ids.push(r.id);
+    } else {
+      clusters.push({ ax: r.nx, ay: r.ny, ids: [r.id] });
+    }
   }
   return clusters.map((c) => c.ids);
 }
