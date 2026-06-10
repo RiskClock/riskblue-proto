@@ -366,7 +366,7 @@ export default function InternalWorkbench() {
       <main className="container mx-auto px-6 py-8 flex-1 overflow-auto">
         <div className="mb-6 flex items-center justify-between gap-3">
           <div>
-            <h1 className="text-3xl font-bold text-foreground">Workbench</h1>
+            <h1 className="text-3xl font-bold text-foreground">Risk Identification Workbench</h1>
             <p className="text-sm text-muted-foreground mt-1">
               All projects across every user. Internal access only.
             </p>

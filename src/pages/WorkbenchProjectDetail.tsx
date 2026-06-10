@@ -197,7 +197,7 @@ export default function WorkbenchProjectDetail() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("projects")
-        .select("id, name, user_id, selected_awp_class_names, selected_other_classes")
+        .select("id, name, user_id, selected_awp_class_names, selected_other_classes, report_file_path, report_file_name")
         .eq("id", projectId!)
         .maybeSingle();
       if (error) throw error;
@@ -3075,7 +3075,7 @@ function InstancesReportModal({
           </Table>
         </div>
         <div>
-          <h3 className="text-base font-bold mb-2">Detection Totals</h3>
+          <h3 className="text-base font-bold mb-2">Assets at Risk Detections</h3>
           {classCols.length === 0 ? (
             <div className="text-sm text-muted-foreground">No detections yet.</div>
           ) : (
@@ -3270,7 +3270,7 @@ function InstancesReportModal({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-[95vw] w-[95vw] sm:max-w-[95vw]">
         <DialogHeader>
-          <DialogTitle>Instances Report</DialogTitle>
+          <DialogTitle>Risk Instance Report</DialogTitle>
           <DialogDescription>
             Annotations expanded into per-space instance IDs based on the Space Hierarchy.
           </DialogDescription>
