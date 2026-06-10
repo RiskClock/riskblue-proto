@@ -469,18 +469,6 @@ export default function WorkbenchProjectDetail() {
     return m;
   }, [instanceRows]);
 
-  // Spannable classes (Configuration > "Can Span Multiple Spaces") that actually
-  // have annotations in this analysis request — used to gate the
-  // "Consolidate Risers" pre-report step.
-  const spannableClassesWithAnnotations = useMemo<
-    { name: string; idPrefix: string | null }[]
-  >(() => {
-    const classNamesWithAnn = new Set((instanceRows || []).map((r) => r.awp_class_name));
-    return (awpOptions || [])
-      .filter((o) => o.canSpanMultipleSpaces && classNamesWithAnn.has(o.name))
-      .map((o) => ({ name: o.name, idPrefix: o.idPrefix }));
-  }, [awpOptions, instanceRows]);
-
   const overrideMap = useMemo(() => {
     const m = new Map<string, "include" | "exclude">();
     for (const o of overrides || []) m.set(`${o.file_id}::${o.awp_class_name}`, o.override_type);
