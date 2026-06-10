@@ -513,28 +513,29 @@ export default function Configuration() {
                 <TableRow>
                   <TableHead className="w-[180px]">AWP Class</TableHead>
                   <TableHead className="w-[180px]">Default Mitigation Controls</TableHead>
+                  <TableHead className="w-[160px]">Can Span Multiple Spaces</TableHead>
                   <TableHead className="w-[350px]">Triaging Prompt</TableHead>
                   <TableHead className="w-[350px]">Full Prompt</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 <TableRow className="bg-muted/50 hover:bg-muted/50">
-                  <TableCell colSpan={4} className="font-semibold text-sm py-2">Critical Assets</TableCell>
+                  <TableCell colSpan={5} className="font-semibold text-sm py-2">Critical Assets</TableCell>
                 </TableRow>
                 {groupedAWPs.critical_assets.map((awp) => (
-                  <AWPRow key={awp.id} awp={awp} controls={controls} currentIds={getCurrentControlIds(awp)} hasChanges={hasAWPChanges(awp)} onEditControls={() => setEditingControlsAwp(awp)} triagePromptCell={renderTriagePromptCell(awp)} promptCell={renderPromptCell(awp)} />
+                  <AWPRow key={awp.id} awp={awp} controls={controls} currentIds={getCurrentControlIds(awp)} hasChanges={hasAWPChanges(awp)} onEditControls={() => setEditingControlsAwp(awp)} onToggleSpan={(v) => handleToggleSpan(awp, v)} triagePromptCell={renderTriagePromptCell(awp)} promptCell={renderPromptCell(awp)} />
                 ))}
                 <TableRow className="bg-muted/50 hover:bg-muted/50">
-                  <TableCell colSpan={4} className="font-semibold text-sm py-2">Water Systems</TableCell>
+                  <TableCell colSpan={5} className="font-semibold text-sm py-2">Water Systems</TableCell>
                 </TableRow>
                 {groupedAWPs.water_systems.map((awp) => (
-                  <AWPRow key={awp.id} awp={awp} controls={controls} currentIds={getCurrentControlIds(awp)} hasChanges={hasAWPChanges(awp)} onEditControls={() => setEditingControlsAwp(awp)} triagePromptCell={renderTriagePromptCell(awp)} promptCell={renderPromptCell(awp)} />
+                  <AWPRow key={awp.id} awp={awp} controls={controls} currentIds={getCurrentControlIds(awp)} hasChanges={hasAWPChanges(awp)} onEditControls={() => setEditingControlsAwp(awp)} onToggleSpan={(v) => handleToggleSpan(awp, v)} triagePromptCell={renderTriagePromptCell(awp)} promptCell={renderPromptCell(awp)} />
                 ))}
                 <TableRow className="bg-muted/50 hover:bg-muted/50">
-                  <TableCell colSpan={4} className="font-semibold text-sm py-2">Processes</TableCell>
+                  <TableCell colSpan={5} className="font-semibold text-sm py-2">Processes</TableCell>
                 </TableRow>
                 {groupedAWPs.processes.map((awp) => (
-                  <AWPRow key={awp.id} awp={awp} controls={controls} currentIds={getCurrentControlIds(awp)} hasChanges={hasAWPChanges(awp)} onEditControls={() => setEditingControlsAwp(awp)} triagePromptCell={renderTriagePromptCell(awp)} promptCell={renderPromptCell(awp)} />
+                  <AWPRow key={awp.id} awp={awp} controls={controls} currentIds={getCurrentControlIds(awp)} hasChanges={hasAWPChanges(awp)} onEditControls={() => setEditingControlsAwp(awp)} onToggleSpan={(v) => handleToggleSpan(awp, v)} triagePromptCell={renderTriagePromptCell(awp)} promptCell={renderPromptCell(awp)} />
                 ))}
               </TableBody>
             </Table>
