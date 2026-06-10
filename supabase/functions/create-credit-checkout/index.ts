@@ -153,9 +153,10 @@ serve(async (req) => {
       line_items: [{ price: stripePrice.id, quantity: 1 }],
       mode: "payment",
       ui_mode: "embedded_page",
-      return_url:
-        returnUrl ||
-        `${req.headers.get("origin")}/credits/return?session_id={CHECKOUT_SESSION_ID}`,
+      // Never redirect after completion — the modal stays mounted and our
+      // onComplete handler closes it inline, preserving the user's
+      // in-progress work on the underlying page (e.g. new project wizard).
+      redirect_on_completion: "never",
       customer: customerId,
       automatic_tax: { enabled: true },
       consent_collection: { terms_of_service: "required" },

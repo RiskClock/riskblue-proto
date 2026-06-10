@@ -75,6 +75,10 @@ export const BuyCreditsModal = ({ open, onOpenChange, reason }: BuyCreditsModalP
 
   const handleCheckoutComplete = async () => {
     onOpenChange(false);
+    toast({
+      title: "Payment received",
+      description: "Your credits will appear shortly.",
+    });
     for (let i = 0; i < 6; i++) {
       await new Promise((r) => setTimeout(r, 1000));
       const { data } = await refetch();
