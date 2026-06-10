@@ -2110,6 +2110,14 @@ async function runPipeline(params: PipelineParams) {
 
 
     // ======================== PHASE 4: SUMMARIZE (background) ========================
+    // Skip summarize + completion email for bounded phase overrides (e.g. "split").
+    // Only run when this is a full pipeline run (no override) or when the worker
+    // explicitly re-invoked us with phaseOverride='summarize'.
+    if (phaseOverride && phaseOverride !== "summarize") {
+      console.log(`[pipeline] phaseOverride=${phaseOverride} — skipping summarize + completion email`);
+      return;
+    }
+
     // Mark phase=summarizing but keep status=processing — the UI must not
     // see status=complete until summarization actually finishes (or is
     // explicitly skipped because there are no results to summarize).
