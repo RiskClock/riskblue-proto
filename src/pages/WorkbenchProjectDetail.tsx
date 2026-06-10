@@ -8,12 +8,14 @@ import {
   ChevronRight,
   Copy,
   Download,
+  FileText,
   Loader2,
   MoreVertical,
   Settings2,
   ShieldAlert,
   Square,
   Trash2,
+  Upload,
 } from "lucide-react";
 
 import { supabase } from "@/integrations/supabase/client";
@@ -173,6 +175,8 @@ export default function WorkbenchProjectDetail() {
   const [spaceEditTarget, setSpaceEditTarget] = useState<
     { fileName: string; pageNumber: number; current: string[] } | null
   >(null);
+  const [uploadingReport, setUploadingReport] = useState(false);
+  const reportInputRef = useRef<HTMLInputElement>(null);
 
   const toggleExpand = (fileId: string) => {
     setExpandedFiles((prev) => {
