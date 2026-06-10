@@ -253,6 +253,12 @@ export const BuyCreditsModal = ({ open, onOpenChange, reason }: BuyCreditsModalP
 
         {step === "review_and_checkout" && (
           <div className="mt-2">
+            <div className="mb-3 flex justify-start">
+              <Button variant="ghost" size="sm" onClick={handleBack}>
+                <ArrowLeft className="mr-1 h-4 w-4" />
+                Choose a different package
+              </Button>
+            </div>
             <div className="grid gap-6 lg:grid-cols-2">
               {/* Left: policies */}
               <PolicyReviewPanel
@@ -307,20 +313,14 @@ export const BuyCreditsModal = ({ open, onOpenChange, reason }: BuyCreditsModalP
                 >
                   <Lock className="h-6 w-6 text-muted-foreground" />
                   <div className="max-w-sm text-sm text-muted-foreground">
-                    Accept the Terms of Service and Privacy Policy to enable payment.
+                    Check the boxes confirming you've read the Terms of Service and Privacy Policy to enable payment.
                   </div>
                 </div>
               </div>
             </div>
-
-            <div className="mt-4 flex justify-between">
-              <Button variant="ghost" size="sm" onClick={handleBack}>
-                <ArrowLeft className="mr-1 h-4 w-4" />
-                Choose a different package
-              </Button>
-            </div>
           </div>
         )}
+
       </DialogContent>
     </Dialog>
   );
