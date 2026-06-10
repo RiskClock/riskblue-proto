@@ -221,7 +221,7 @@ export const BuyCreditsModal = ({ open, onOpenChange, reason }: BuyCreditsModalP
               ? "Review the Terms of Service and Privacy Policy, then complete your purchase."
               : reason
                 ? reason
-                : `You currently have ${balance} credit${balance === 1 ? "" : "s"}. Scanning each document uses 1 credit.`}
+                : `You currently have ${balance} credit${balance === 1 ? "" : "s"}.`}
           </DialogDescription>
         </DialogHeader>
 
