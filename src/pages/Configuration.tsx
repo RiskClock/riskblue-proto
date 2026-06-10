@@ -605,11 +605,12 @@ interface AWPRowProps {
   currentIds: string[];
   hasChanges: boolean;
   onEditControls: () => void;
+  onToggleSpan: (next: boolean) => void;
   triagePromptCell: React.ReactNode;
   promptCell: React.ReactNode;
 }
 
-function AWPRow({ awp, controls, currentIds, hasChanges, onEditControls, triagePromptCell, promptCell }: AWPRowProps) {
+function AWPRow({ awp, controls, currentIds, hasChanges, onEditControls, onToggleSpan, triagePromptCell, promptCell }: AWPRowProps) {
   const count = currentIds.length;
   return (
     <TableRow className={hasChanges ? "bg-yellow-50/50" : ""}>
@@ -619,6 +620,13 @@ function AWPRow({ awp, controls, currentIds, hasChanges, onEditControls, triageP
           <span className="text-sm text-muted-foreground">{count} control{count !== 1 ? "s" : ""}</span>
           <Button variant="outline" size="sm" className="h-6 text-xs" onClick={onEditControls}>Edit</Button>
         </div>
+      </TableCell>
+      <TableCell className="py-2">
+        <Checkbox
+          checked={!!awp.can_span_multiple_spaces}
+          onCheckedChange={(v) => onToggleSpan(v === true)}
+          aria-label="Can span multiple spaces"
+        />
       </TableCell>
       <TableCell className="py-2">{triagePromptCell}</TableCell>
       <TableCell className="py-2">{promptCell}</TableCell>
