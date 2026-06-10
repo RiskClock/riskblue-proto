@@ -258,7 +258,6 @@ export function CreateProjectModal({ open, onOpenChange, onCreated }: CreateProj
       });
       onOpenChange(false);
       onCreated?.(project.id);
-      navigate(`/project/${project.id}`);
     } catch (error: any) {
       toast({
         variant: "destructive",
@@ -363,7 +362,7 @@ export function CreateProjectModal({ open, onOpenChange, onCreated }: CreateProj
 
             {/* Files */}
             <div className="space-y-2">
-              <Label>Drawings (optional)</Label>
+              <Label>Drawings</Label>
               <Button
                 variant="outline"
                 size="sm"

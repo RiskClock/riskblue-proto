@@ -70,6 +70,7 @@ import {
 } from "@/components/viewer/hooks/useDocumentSource";
 import { useAWPOptions, groupAWPOptionsByCategory } from "@/hooks/useAWPOptions";
 import { getUserFriendlyError } from "@/lib/errorHandling";
+import { awpClassColor } from "@/lib/awpColor";
 
 const PREF_ID = "global";
 
@@ -495,7 +496,33 @@ export default function WorkbenchProjectDetail() {
     return [...canonical, ...others];
   }, [project]);
 
-  const enabledCols = prefs ?? projectSelectedClassNames;
+  // Custom (user-typed) classes at creation time that are NOT in the canonical
+  // AWP options list. These should not become workbench columns automatically,
+  // but their presence flags the Manage Columns button so internal users know
+  // the project creator entered free-text classes.
+  const customClassNames = useMemo<string[]>(() => {
+    if (!awpOptions) return [];
+    const known = new Set((awpOptions || []).map((o) => o.name));
+    const others = ((project as any)?.selected_other_classes as string[] | null) || [];
+    const canonical = ((project as any)?.selected_awp_class_names as string[] | null) || [];
+    const seen = new Set<string>();
+    const result: string[] = [];
+    for (const n of [...others, ...canonical]) {
+      if (!known.has(n) && !seen.has(n)) {
+        seen.add(n);
+        result.push(n);
+      }
+    }
+    return result;
+  }, [awpOptions, project]);
+
+  // Default columns exclude custom (non-canonical) entries.
+  const defaultEnabledCols = useMemo(
+    () => projectSelectedClassNames.filter((n) => !customClassNames.includes(n)),
+    [projectSelectedClassNames, customClassNames],
+  );
+  const enabledCols = prefs ?? defaultEnabledCols;
+
 
 
   // (sheet, class) -> { score, status } for triage cell rendering on sub-rows
@@ -846,6 +873,19 @@ export default function WorkbenchProjectDetail() {
     classesOverride?: string[],
   ) => {
     if (!requestId) return;
+    // Confirm rerun if a previous run already produced data for this phase.
+    const hasPrior =
+      phase === "extract"
+        ? (fileGroups || []).some((g) => fileExtractStatus.get(g.file.id) === "processed")
+        : phase === "triage"
+          ? (triage?.length ?? 0) > 0
+          : (analyzeRows?.length ?? 0) > 0;
+    if (hasPrior) {
+      const label = phase === "extract" ? "Extract Context" : phase === "triage" ? "Triage" : "Analyze";
+      if (!window.confirm(`${label} has already run for this project. Re-run and overwrite existing results?`)) {
+        return;
+      }
+    }
     setRunning(phase);
     try {
       // For Extract Context, proactively clear the per-sheet/file extracted
@@ -1148,6 +1188,11 @@ export default function WorkbenchProjectDetail() {
   // ---- Build Space Hierarchy ---------------------------------------------
   const buildSpaceHierarchy = async () => {
     if (!requestId) return;
+    if (spaceHierarchyHasResult) {
+      if (!window.confirm("Build Space Hierarchy has already run for this project. Re-run and overwrite existing results?")) {
+        return;
+      }
+    }
     setBuildingSpace(true);
     try {
       const token = session?.access_token;
@@ -1652,8 +1697,16 @@ export default function WorkbenchProjectDetail() {
                           onClick={openManage}
                           disabled={phaseRunning}
                           aria-label="Manage columns"
-                          title="Manage columns"
-                          className="h-8 w-8"
+                          title={
+                            customClassNames.length > 0
+                              ? `Custom class${customClassNames.length === 1 ? "" : "es"} were typed at project creation: ${customClassNames.join(", ")}`
+                              : "Manage columns"
+                          }
+                          className={`h-8 w-8 ${
+                            customClassNames.length > 0
+                              ? "bg-yellow-300 hover:bg-yellow-400 text-yellow-900 border-yellow-500"
+                              : ""
+                          }`}
                         >
                           <Settings2 className="h-4 w-4" />
                         </Button>
@@ -3015,7 +3068,7 @@ function InstancesReportModal({
                 bbox: [r.nx, r.ny, 0, 0] as [number, number, number, number],
                 coordSpace: "normalized" as const,
                 page: 1,
-                color: "#dc2626",
+                color: awpClassColor(r.awpClassName),
                 label: r.instanceId,
                 shape: "circle" as const,
               }));
