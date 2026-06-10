@@ -1188,6 +1188,11 @@ export default function WorkbenchProjectDetail() {
   // ---- Build Space Hierarchy ---------------------------------------------
   const buildSpaceHierarchy = async () => {
     if (!requestId) return;
+    if (spaceHierarchyHasResult) {
+      if (!window.confirm("Build Space Hierarchy has already run for this project. Re-run and overwrite existing results?")) {
+        return;
+      }
+    }
     setBuildingSpace(true);
     try {
       const token = session?.access_token;
