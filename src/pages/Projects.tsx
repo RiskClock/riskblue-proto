@@ -414,7 +414,7 @@ const Projects = () => {
                             <TooltipContent>
                               {project.report_file_path
                                 ? `Download ${project.report_file_name || "report"}`
-                                : "No report uploaded"}
+                                : "No report available"}
                             </TooltipContent>
                           </Tooltip>
                         </TooltipProvider>
