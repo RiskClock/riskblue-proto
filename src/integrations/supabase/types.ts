@@ -678,6 +678,50 @@ export type Database = {
           },
         ]
       }
+      annotation_consolidations: {
+        Row: {
+          analysis_request_id: string
+          awp_class_name: string
+          created_at: string
+          created_by: string | null
+          id: string
+          instance_number: number | null
+          label: string
+          member_annotation_ids: string[]
+          updated_at: string
+        }
+        Insert: {
+          analysis_request_id: string
+          awp_class_name: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          instance_number?: number | null
+          label: string
+          member_annotation_ids?: string[]
+          updated_at?: string
+        }
+        Update: {
+          analysis_request_id?: string
+          awp_class_name?: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          instance_number?: number | null
+          label?: string
+          member_annotation_ids?: string[]
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "annotation_consolidations_analysis_request_id_fkey"
+            columns: ["analysis_request_id"]
+            isOneToOne: false
+            referencedRelation: "analysis_requests"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       app_settings: {
         Row: {
           description: string | null
@@ -815,6 +859,7 @@ export type Database = {
       }
       awp_classes: {
         Row: {
+          can_span_multiple_spaces: boolean
           category: string
           created_at: string | null
           display_order: number | null
@@ -824,6 +869,7 @@ export type Database = {
           name: string
         }
         Insert: {
+          can_span_multiple_spaces?: boolean
           category: string
           created_at?: string | null
           display_order?: number | null
@@ -833,6 +879,7 @@ export type Database = {
           name: string
         }
         Update: {
+          can_span_multiple_spaces?: boolean
           category?: string
           created_at?: string | null
           display_order?: number | null
