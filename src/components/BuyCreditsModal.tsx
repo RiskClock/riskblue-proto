@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -51,6 +51,8 @@ export const BuyCreditsModal = ({ open, onOpenChange, reason }: BuyCreditsModalP
   const [checkoutLoading, setCheckoutLoading] = useState(false);
   const [checkoutError, setCheckoutError] = useState<string | null>(null);
   const [packageLoading, setPackageLoading] = useState<string | null>(null);
+  const persistedRef = useRef<string | null>(null);
+
 
   // Reset everything when modal closes
   useEffect(() => {
@@ -66,8 +68,10 @@ export const BuyCreditsModal = ({ open, onOpenChange, reason }: BuyCreditsModalP
       setCheckoutLoading(false);
       setCheckoutError(null);
       setPackageLoading(null);
+      persistedRef.current = null;
     }
   }, [open]);
+
 
   const handleCheckoutComplete = async () => {
     onOpenChange(false);
@@ -152,7 +156,13 @@ export const BuyCreditsModal = ({ open, onOpenChange, reason }: BuyCreditsModalP
     }
     if (!user?.id || !tos || !privacy) return;
 
-    // Persist acceptance for both documents.
+    // Optimistically flip so the scrim lifts immediately.
+    setAccepted(true);
+
+    // Only persist once per (tos.version, privacy.version) pair per session.
+    const key = `${tos.version}|${privacy.version}`;
+    if (persistedRef.current === key) return;
+
     const rows = [
       {
         user_id: user.id,
@@ -179,8 +189,9 @@ export const BuyCreditsModal = ({ open, onOpenChange, reason }: BuyCreditsModalP
       setAccepted(false);
       return;
     }
-    setAccepted(true);
+    persistedRef.current = key;
   };
+
 
   const handleBack = () => {
     setStep("select");
@@ -253,6 +264,12 @@ export const BuyCreditsModal = ({ open, onOpenChange, reason }: BuyCreditsModalP
 
         {step === "review_and_checkout" && (
           <div className="mt-2">
+            <div className="mb-3 flex justify-start">
+              <Button variant="ghost" size="sm" onClick={handleBack}>
+                <ArrowLeft className="mr-1 h-4 w-4" />
+                Choose a different package
+              </Button>
+            </div>
             <div className="grid gap-6 lg:grid-cols-2">
               {/* Left: policies */}
               <PolicyReviewPanel
@@ -307,20 +324,14 @@ export const BuyCreditsModal = ({ open, onOpenChange, reason }: BuyCreditsModalP
                 >
                   <Lock className="h-6 w-6 text-muted-foreground" />
                   <div className="max-w-sm text-sm text-muted-foreground">
-                    Accept the Terms of Service and Privacy Policy to enable payment.
+                    Check the boxes confirming you've read the Terms of Service and Privacy Policy to enable payment.
                   </div>
                 </div>
               </div>
             </div>
-
-            <div className="mt-4 flex justify-between">
-              <Button variant="ghost" size="sm" onClick={handleBack}>
-                <ArrowLeft className="mr-1 h-4 w-4" />
-                Choose a different package
-              </Button>
-            </div>
           </div>
         )}
+
       </DialogContent>
     </Dialog>
   );
