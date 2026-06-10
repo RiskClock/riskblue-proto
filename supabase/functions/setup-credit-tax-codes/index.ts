@@ -21,6 +21,8 @@ const PRICE_LOOKUP_KEYS = [
   "credits_pack_20_full_usd",
   "credits_pack_100_full_usd",
   "credits_pack_500_full_usd",
+  "credits_pack_100_v3_usd",
+  "credits_pack_500_v3_usd",
 ];
 
 serve(async (req) => {
