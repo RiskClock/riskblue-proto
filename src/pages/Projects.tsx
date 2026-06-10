@@ -10,7 +10,7 @@ import { useHeapIdentify } from "@/hooks/useHeapIdentify";
 import { getUserFriendlyError } from "@/lib/errorHandling";
 import { formatDateShort } from "@/lib/reportGenerator";
 import { AppHeader } from "@/components/AppHeader";
-import { Trash2, X } from "lucide-react";
+import { Trash2, X, Download } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { CreateProjectModal } from "@/components/CreateProjectModal";
@@ -26,6 +26,9 @@ interface Project {
   created_at: string;
   user_id: string;
   status?: string;
+  credits_consumed?: number | null;
+  report_file_path?: string | null;
+  report_file_name?: string | null;
 }
 
 interface ProjectWithCreator extends Project {
