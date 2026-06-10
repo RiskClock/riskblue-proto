@@ -6,7 +6,6 @@ import { Button } from "@/components/ui/button";
 
 export interface PolicyDoc {
   url: string;
-  html: string;
   version: string;
 }
 
