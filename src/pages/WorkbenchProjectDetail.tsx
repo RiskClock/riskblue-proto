@@ -1588,6 +1588,22 @@ export default function WorkbenchProjectDetail() {
                 ) : null}
                 {spaceHierarchyRunning ? "Building Space Hierarchy" : "Build Space Hierarchy"}
               </Button>
+              {spannableClassesWithAnnotations.length > 0 && (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => setConsolidateOpen(true)}
+                  disabled={!requestId}
+                  title="Group annotations of riser-type classes into multi-space instances before generating the report"
+                  className={
+                    (consolidations?.length ?? 0) === 0
+                      ? "bg-yellow-300 hover:bg-yellow-400 text-yellow-900 border-yellow-500"
+                      : ""
+                  }
+                >
+                  Consolidate Risers
+                </Button>
+              )}
               <Button
                 size="sm"
                 variant="outline"
