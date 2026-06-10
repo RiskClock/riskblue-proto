@@ -4,6 +4,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Loader2, AlertCircle, ExternalLink } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
+
 export interface PolicyDoc {
   url: string;
   version: string;
