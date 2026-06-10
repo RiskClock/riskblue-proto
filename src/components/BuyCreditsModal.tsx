@@ -231,9 +231,13 @@ export const BuyCreditsModal = ({ open, onOpenChange, reason }: BuyCreditsModalP
           </DialogDescription>
         </DialogHeader>
 
-        {step === "select" && (
-          <div className="grid gap-4 md:grid-cols-2 mt-2">
-            {PACKAGES.map((pkg) => (
+        {step === "select" && (() => {
+          const isInternal = !!user?.email?.toLowerCase().endsWith("@riskclock.com");
+          const visiblePackages = PACKAGES.filter((p) => !p.internalOnly || isInternal);
+          const cols = visiblePackages.length >= 3 ? "md:grid-cols-3" : "md:grid-cols-2";
+          return (
+          <div className={`grid gap-4 ${cols} mt-2`}>
+            {visiblePackages.map((pkg) => (
               <Card
                 key={pkg.id}
                 className="relative overflow-hidden p-5 flex flex-col gap-3 transition-all border-primary/20 hover:border-primary/50 hover:shadow-lg hover:shadow-primary/10 bg-gradient-to-br from-card to-primary/5"
