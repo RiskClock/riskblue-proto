@@ -330,12 +330,11 @@ const Projects = () => {
               <thead className="bg-muted/50">
                 <tr className="text-left">
                   <th className="px-6 py-3 text-sm font-medium text-foreground">Project Name</th>
-                  <th className="px-6 py-3 text-sm font-medium text-foreground">Project Type</th>
                   <th className="px-6 py-3 text-sm font-medium text-foreground">Location</th>
-                  <th className="px-6 py-3 text-sm font-medium text-foreground">Construction Start</th>
+                  <th className="px-6 py-3 text-sm font-medium text-foreground">Credits</th>
                   <th className="px-6 py-3 text-sm font-medium text-foreground">Created By</th>
                   <th className="px-6 py-3 text-sm font-medium text-foreground">Created On</th>
-                  <th className="px-6 py-3 w-[80px]"></th>
+                  <th className="px-6 py-3 w-[120px]"></th>
                 </tr>
               </thead>
               <tbody>
@@ -356,10 +355,9 @@ const Projects = () => {
                         </Badge>
                       </div>
                     </td>
-                    <td className="px-6 py-4 text-muted-foreground">{capitalizeFirst(project.project_type) || "—"}</td>
                     <td className="px-6 py-4 text-muted-foreground">{formatLocation(project.city, project.country)}</td>
-                    <td className="px-6 py-4 text-muted-foreground">
-                      {formatDateShort(project.construction_start_date)}
+                    <td className="px-6 py-4 text-muted-foreground tabular-nums">
+                      {typeof project.credits_consumed === "number" ? project.credits_consumed : "—"}
                     </td>
                     <td className="px-6 py-4 text-muted-foreground">
                       {project.creator_email ? (
@@ -381,7 +379,45 @@ const Projects = () => {
                       {formatDateShort(project.created_at)}
                     </td>
                     <td className="px-6 py-4">
-                      <div className="h-9 flex items-center justify-center">
+                      <div className="h-9 flex items-center justify-end gap-1">
+                        <TooltipProvider>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <span>
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  disabled={!project.report_file_path}
+                                  onClick={async (e) => {
+                                    e.stopPropagation();
+                                    if (!project.report_file_path) return;
+                                    const { data, error } = await supabase.storage
+                                      .from("project-reports")
+                                      .createSignedUrl(project.report_file_path, 60, {
+                                        download: project.report_file_name || true,
+                                      });
+                                    if (error || !data?.signedUrl) {
+                                      toast({
+                                        variant: "destructive",
+                                        title: "Download failed",
+                                        description: getUserFriendlyError(error),
+                                      });
+                                      return;
+                                    }
+                                    window.open(data.signedUrl, "_blank");
+                                  }}
+                                >
+                                  <Download className="h-4 w-4" />
+                                </Button>
+                              </span>
+                            </TooltipTrigger>
+                            <TooltipContent>
+                              {project.report_file_path
+                                ? `Download ${project.report_file_name || "report"}`
+                                : "No report uploaded"}
+                            </TooltipContent>
+                          </Tooltip>
+                        </TooltipProvider>
                         {userProjectRoles.get(project.id) === "admin" && (
                           <Button
                             variant="ghost"
