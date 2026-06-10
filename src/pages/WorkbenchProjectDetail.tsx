@@ -495,7 +495,33 @@ export default function WorkbenchProjectDetail() {
     return [...canonical, ...others];
   }, [project]);
 
-  const enabledCols = prefs ?? projectSelectedClassNames;
+  // Custom (user-typed) classes at creation time that are NOT in the canonical
+  // AWP options list. These should not become workbench columns automatically,
+  // but their presence flags the Manage Columns button so internal users know
+  // the project creator entered free-text classes.
+  const customClassNames = useMemo<string[]>(() => {
+    if (!awpOptions) return [];
+    const known = new Set((awpOptions || []).map((o) => o.name));
+    const others = ((project as any)?.selected_other_classes as string[] | null) || [];
+    const canonical = ((project as any)?.selected_awp_class_names as string[] | null) || [];
+    const seen = new Set<string>();
+    const result: string[] = [];
+    for (const n of [...others, ...canonical]) {
+      if (!known.has(n) && !seen.has(n)) {
+        seen.add(n);
+        result.push(n);
+      }
+    }
+    return result;
+  }, [awpOptions, project]);
+
+  // Default columns exclude custom (non-canonical) entries.
+  const defaultEnabledCols = useMemo(
+    () => projectSelectedClassNames.filter((n) => !customClassNames.includes(n)),
+    [projectSelectedClassNames, customClassNames],
+  );
+  const enabledCols = prefs ?? defaultEnabledCols;
+
 
 
   // (sheet, class) -> { score, status } for triage cell rendering on sub-rows
