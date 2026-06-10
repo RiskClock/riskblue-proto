@@ -270,7 +270,8 @@ export const BuyCreditsModal = ({ open, onOpenChange, reason }: BuyCreditsModalP
               </Card>
             ))}
           </div>
-        )}
+          );
+        })()}
 
         {step === "review_and_checkout" && (
           <div className="mt-2">
