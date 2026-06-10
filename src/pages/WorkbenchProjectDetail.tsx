@@ -168,6 +168,7 @@ export default function WorkbenchProjectDetail() {
   const [spaceModalOpen, setSpaceModalOpen] = useState(false);
   const [buildingSpace, setBuildingSpace] = useState(false);
   const [instancesReportOpen, setInstancesReportOpen] = useState(false);
+  const [consolidateOpen, setConsolidateOpen] = useState(false);
   const [spaceEditTarget, setSpaceEditTarget] = useState<
     { fileName: string; pageNumber: number; current: string[] } | null
   >(null);
