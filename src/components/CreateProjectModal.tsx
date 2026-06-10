@@ -411,7 +411,7 @@ export function CreateProjectModal({ open, onOpenChange, onCreated }: CreateProj
             {/* Classes */}
             <div className="space-y-2">
               <Label>
-                Asset & Water System Classes to identify for risks{" "}
+                Assets & Water Systems to identify{" "}
                 <span className="text-destructive">*</span>
               </Label>
               <div className="border rounded-md p-3 space-y-4 max-h-72 overflow-y-auto">

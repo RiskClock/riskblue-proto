@@ -8,12 +8,14 @@ import {
   ChevronRight,
   Copy,
   Download,
+  FileText,
   Loader2,
   MoreVertical,
   Settings2,
   ShieldAlert,
   Square,
   Trash2,
+  Upload,
 } from "lucide-react";
 
 import { supabase } from "@/integrations/supabase/client";
@@ -173,6 +175,8 @@ export default function WorkbenchProjectDetail() {
   const [spaceEditTarget, setSpaceEditTarget] = useState<
     { fileName: string; pageNumber: number; current: string[] } | null
   >(null);
+  const [uploadingReport, setUploadingReport] = useState(false);
+  const reportInputRef = useRef<HTMLInputElement>(null);
 
   const toggleExpand = (fileId: string) => {
     setExpandedFiles((prev) => {
@@ -197,7 +201,7 @@ export default function WorkbenchProjectDetail() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("projects")
-        .select("id, name, user_id, selected_awp_class_names, selected_other_classes")
+        .select("id, name, user_id, selected_awp_class_names, selected_other_classes, report_file_path, report_file_name")
         .eq("id", projectId!)
         .maybeSingle();
       if (error) throw error;
@@ -2135,6 +2139,92 @@ export default function WorkbenchProjectDetail() {
             )}
 
 
+
+            {/* Upload Report */}
+            <div className="bg-card rounded-lg border p-4 space-y-2">
+              <div className="flex items-center justify-between gap-3">
+                <div className="flex items-center gap-2 min-w-0">
+                  <FileText className="h-4 w-4 text-muted-foreground shrink-0" />
+                  <div className="min-w-0">
+                    <div className="text-sm font-semibold">Project Report</div>
+                    {(project as any)?.report_file_name ? (
+                      <button
+                        type="button"
+                        className="text-sm text-primary hover:underline truncate text-left"
+                        onClick={async () => {
+                          const path = (project as any)?.report_file_path;
+                          if (!path) return;
+                          const { data, error } = await supabase.storage
+                            .from("project-reports")
+                            .createSignedUrl(path, 60, {
+                              download: (project as any)?.report_file_name || true,
+                            });
+                          if (error || !data?.signedUrl) {
+                            toast({ variant: "destructive", title: "Download failed", description: getUserFriendlyError(error) });
+                            return;
+                          }
+                          window.open(data.signedUrl, "_blank");
+                        }}
+                      >
+                        {(project as any).report_file_name}
+                      </button>
+                    ) : (
+                      <div className="text-xs text-muted-foreground">No report uploaded yet.</div>
+                    )}
+                  </div>
+                </div>
+                <div className="flex items-center gap-2">
+                  <input
+                    ref={reportInputRef}
+                    type="file"
+                    className="hidden"
+                    onChange={async (e) => {
+                      const file = e.target.files?.[0];
+                      e.target.value = "";
+                      if (!file || !projectId) return;
+                      setUploadingReport(true);
+                      try {
+                        const safeName = file.name.replace(/[^\w.\-]+/g, "_");
+                        const path = `${projectId}/report-${Date.now()}-${safeName}`;
+                        const { error: upErr } = await supabase.storage
+                          .from("project-reports")
+                          .upload(path, file, { upsert: true, contentType: file.type || undefined });
+                        if (upErr) throw upErr;
+                        const prevPath = (project as any)?.report_file_path as string | null | undefined;
+                        const { error: updErr } = await supabase
+                          .from("projects")
+                          .update({ report_file_path: path, report_file_name: file.name } as any)
+                          .eq("id", projectId);
+                        if (updErr) throw updErr;
+                        if (prevPath && prevPath !== path) {
+                          await supabase.storage.from("project-reports").remove([prevPath]);
+                        }
+                        queryClient.invalidateQueries({ queryKey: ["workbench-project", projectId] });
+                        toast({ title: "Report uploaded", description: file.name });
+                      } catch (err: any) {
+                        toast({ variant: "destructive", title: "Upload failed", description: getUserFriendlyError(err) });
+                      } finally {
+                        setUploadingReport(false);
+                      }
+                    }}
+                  />
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => reportInputRef.current?.click()}
+                    disabled={uploadingReport}
+                  >
+                    {uploadingReport ? (
+                      <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />
+                    ) : (
+                      <Upload className="h-3.5 w-3.5 mr-1.5" />
+                    )}
+                    {(project as any)?.report_file_name ? "Replace Report" : "Upload Report"}
+                  </Button>
+                </div>
+              </div>
+            </div>
+
           </div>
         </main>
 
@@ -3075,7 +3165,7 @@ function InstancesReportModal({
           </Table>
         </div>
         <div>
-          <h3 className="text-base font-bold mb-2">Detection Totals</h3>
+          <h3 className="text-base font-bold mb-2">Assets at Risk Detections</h3>
           {classCols.length === 0 ? (
             <div className="text-sm text-muted-foreground">No detections yet.</div>
           ) : (
@@ -3270,7 +3360,7 @@ function InstancesReportModal({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-[95vw] w-[95vw] sm:max-w-[95vw]">
         <DialogHeader>
-          <DialogTitle>Instances Report</DialogTitle>
+          <DialogTitle>Risk Instance Report</DialogTitle>
           <DialogDescription>
             Annotations expanded into per-space instance IDs based on the Space Hierarchy.
           </DialogDescription>
