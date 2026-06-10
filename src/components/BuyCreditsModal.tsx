@@ -152,7 +152,13 @@ export const BuyCreditsModal = ({ open, onOpenChange, reason }: BuyCreditsModalP
     }
     if (!user?.id || !tos || !privacy) return;
 
-    // Persist acceptance for both documents.
+    // Optimistically flip so the scrim lifts immediately.
+    setAccepted(true);
+
+    // Only persist once per (tos.version, privacy.version) pair per session.
+    const key = `${tos.version}|${privacy.version}`;
+    if (persistedRef.current === key) return;
+
     const rows = [
       {
         user_id: user.id,
@@ -179,8 +185,9 @@ export const BuyCreditsModal = ({ open, onOpenChange, reason }: BuyCreditsModalP
       setAccepted(false);
       return;
     }
-    setAccepted(true);
+    persistedRef.current = key;
   };
+
 
   const handleBack = () => {
     setStep("select");
