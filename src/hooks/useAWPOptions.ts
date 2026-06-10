@@ -7,6 +7,7 @@ export interface AWPOption {
   category: "Asset" | "Water System" | "Process";
   idPrefix: string | null;
   defaultControlIds: string[];
+  canSpanMultipleSpaces: boolean;
 }
 
 /**
