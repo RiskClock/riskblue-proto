@@ -32,17 +32,6 @@ export function createStripeClient(env: StripeEnv): Stripe {
       return fetch(gatewayUrl, {
         ...init,
         headers,
-      }).then(async (response) => {
-        if (stripeUrl.includes("/v1/prices")) {
-          const body = await response.clone().text().catch(() => "<unreadable>");
-          console.log("[stripe-gateway-debug]", {
-            path: new URL(stripeUrl).pathname,
-            status: response.status,
-            contentType: response.headers.get("content-type"),
-            bodyPreview: body.slice(0, 800),
-          });
-        }
-        return response;
       });
     }),
   });
