@@ -152,6 +152,12 @@ export const BuyCreditsModal = ({ open, onOpenChange, reason }: BuyCreditsModalP
     setPackageLoading(pkg.id);
     setSelectedPackage(pkg);
     setStep("review_and_checkout");
+    logActivity("credits_purchase_initiated", undefined, {
+      package_id: pkg.id,
+      credits: pkg.credits,
+      price_usd: pkg.priceUsd,
+      environment: stripeEnvironment,
+    });
     // Kick off both fetches in parallel.
     await Promise.all([fetchPolicies(), fetchClientSecret(pkg)]);
     setPackageLoading(null);
