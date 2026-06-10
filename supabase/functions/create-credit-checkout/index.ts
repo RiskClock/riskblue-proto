@@ -68,14 +68,17 @@ serve(async (req) => {
     const env = environment as StripeEnv;
     const stripe = createStripeClient(env);
 
+    console.log("[create-credit-checkout] listing prices", { priceId, env });
     const prices = await stripe.prices.list({ lookup_keys: [priceId] });
-    if (!prices.data.length) {
+    console.log("[create-credit-checkout] prices result", { count: prices?.data?.length });
+    if (!prices?.data?.length) {
       return new Response(JSON.stringify({ error: "Price not found" }), {
         status: 404,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
+    console.log("[create-credit-checkout] creating session");
     const session = await stripe.checkout.sessions.create({
       line_items: [{ price: prices.data[0].id, quantity: 1 }],
       mode: "payment",
@@ -84,15 +87,7 @@ serve(async (req) => {
         returnUrl ||
         `${req.headers.get("origin")}/credits/return?session_id={CHECKOUT_SESSION_ID}`,
       customer_email: user.email,
-      // Tax calculation & collection only (+0.5%): Stripe calculates and
-      // collects sales tax / VAT / GST at checkout; we handle registration,
-      // filing, and remittance. Required (instead of `managed_payments`) so
-      // we can render our ToS/Privacy links via `consent_collection` — those
-      // are mutually exclusive on a Checkout Session.
       automatic_tax: { enabled: true },
-      // Render the Terms of Service & Privacy Policy URLs configured in the
-      // Stripe Dashboard (Settings → Public details / Store policies) as a
-      // required acceptance line inside the embedded checkout.
       consent_collection: { terms_of_service: "required" },
       metadata: {
         userId: user.id,
@@ -105,6 +100,7 @@ serve(async (req) => {
         ...(privacyVersion ? { privacyVersion: String(privacyVersion) } : {}),
       },
     });
+    console.log("[create-credit-checkout] session created", { id: session?.id, hasSecret: !!session?.client_secret });
 
     return new Response(JSON.stringify({ clientSecret: session.client_secret }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
