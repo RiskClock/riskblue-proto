@@ -1,66 +1,108 @@
+
 ## Goal
 
-Surface the pipeline's existing per-page granularity (sheets) in the workbench drawings table, and trigger PDF splitting immediately after upload instead of lazily.
+On the **same screen** as the Stripe Embedded Checkout iframe in `BuyCreditsModal`, show the full ToS and Privacy Policy content. The user must scroll to the bottom of each and tick a single checkbox; until then, the Stripe checkout iframe is mounted but **blocked from being interacted with**, so they can't pay without accepting.
 
-## 1. Auto-split immediately after upload
+## User-facing flow
 
-Currently splitting only runs as part of the full pipeline, with a fallback "auto-split" trigger when the user opens the project detail page. Change so it kicks off the moment uploads finish.
+`BuyCreditsModal` becomes two steps:
 
-- In the manual upload flow on the project detail page, after all `analysis_request_files` rows reach `copy_status = 'copied'`, invoke `run-analysis-pipeline` with `phaseOverride: "split"` once.
-- Same for cloud import flows (Drive / Procore / SharePoint) used in the workbench context: when the copy edge function finishes, enqueue a split-only pipeline run.
-- Keep the existing "files exist but no sheets" defensive auto-trigger as a safety net.
-- No backend logic changes — `phaseOverride: "split"` already exists and is non-destructive.
+```text
+[Step 1] Pick package  →  [Step 2] Review policies + Stripe Checkout (same screen)
+```
 
-## 2. Table: parent row + expandable per-page rows
+Step 2 layout (single screen, two-column on desktop / stacked on mobile):
 
-Replace today's flat file-row table with a two-level table.
+```text
+┌──────────────────────────────┬──────────────────────────────┐
+│  Terms of Service / Privacy  │   Stripe Embedded Checkout   │
+│  (tabs, scrollable panels)   │   (iframe)                   │
+│                              │                              │
+│  [✓] I have read and agree…  │   ← overlay scrim shown      │
+│  (disabled until both        │     until checkbox is ticked │
+│   panels scrolled to bottom) │                              │
+└──────────────────────────────┴──────────────────────────────┘
+```
 
-- **Parent row** = one `analysis_request_files` row. Shows file name, file-level aggregated status, and existing AWP class instance counts (summed across that file's sheets).
-- **Chevron** on parent row toggles a child block of per-page rows.
-- **Child row** = one `analysis_request_sheets` row. Shows:
-  - `{file.name} — p.{page_index}` (and `sheet_number` when present)
-  - Three small status badges: **Extract**, **Triage**, **Analyze**
-  - For each AWP class column: cell rendering per #3 below
-- Single-page PDFs render as a parent row with no chevron (the one sheet IS the file).
-- Clicking a child row opens the existing `FileViewerModal` scoped to that page (already supported — pages are individual storage objects).
+Behavior on the same screen:
 
-### Status badge rules per sheet
+- Left column: shadcn `Tabs` for "Terms of Service" and "Privacy Policy". Each tab is a fixed-height `ScrollArea` rendering sanitized HTML. A per-tab "scrolled to bottom" flag flips true when `scrollTop + clientHeight >= scrollHeight - 8`.
+- Below the tabs: checkbox "I have read and agree to the Terms of Service and Privacy Policy." Disabled until **both** panels have been scrolled to bottom; helper text explains why.
+- Right column: the Stripe `EmbeddedCheckoutProvider` + `EmbeddedCheckout` mounts as soon as Step 2 opens (we fetch the `clientSecret` up front so the iframe is ready). While the checkbox is unchecked, an absolutely-positioned scrim overlays the iframe with `pointer-events: auto`, blurs/dims it, and shows the text "Accept the Terms of Service and Privacy Policy to enable payment." When the checkbox is checked, the scrim is removed (`pointer-events: none` + fade out) and the user can interact with Stripe normally.
+- Acceptance is persisted the moment the checkbox is ticked (not when payment completes), so we have an audit trail even if the user abandons mid-payment.
+- Stripe's own short `consent_collection: { terms_of_service: "required" }` line stays on inside the iframe as a secondary safeguard.
 
-| Phase | Source | States rendered |
+## Content source
+
+A new edge function exposes the Stripe-Dashboard-configured ToS + Privacy URLs and proxies their HTML (avoiding CORS issues in the browser):
+
+- **Edge function: `get-stripe-policies`** (`verify_jwt = false`, accepts `{ environment }`)
+  - Calls `stripe.accounts.retrieve()` via `createStripeClient(env)`.
+  - Reads ToS + Privacy URLs from the account (`account.settings.branding` / `account.business_profile`; surface a clear error if either is unset).
+  - Server-side fetches each URL, sanitizes the HTML (strip `<script>`, `<iframe>`, inline event handlers via a minimal allow-list), and returns:
+    ```json
+    {
+      "tos":     { "url": "...", "html": "...", "version": "<sha256 of html>" },
+      "privacy": { "url": "...", "html": "...", "version": "<sha256 of html>" }
+    }
+    ```
+  - `version` = SHA-256 of the sanitized HTML so we can re-prompt only when content actually changes.
+
+## Acceptance persistence
+
+New table `public.policy_acceptances`:
+
+| column | type | notes |
 |---|---|---|
-| Extract | `analysis_request_sheets.extract_status` | pending / extracting / done / failed |
-| Triage | aggregate of `analysis_triage_results.status` for this sheet across all active AWP classes | pending / partial / done / failed |
-| Analyze | aggregate of `analysis_results` rows for this sheet | pending / running / done / failed |
+| `id` | uuid pk | |
+| `user_id` | uuid | maps to `auth.users` (no FK per project convention) |
+| `document_type` | text | `'tos'` or `'privacy'` |
+| `document_url` | text | URL fetched at acceptance time |
+| `document_version` | text | SHA-256 from `get-stripe-policies` |
+| `accepted_at` | timestamptz default now() | |
+| `stripe_session_id` | text null | filled if/when the Stripe Session is created |
+| `user_agent` | text null | |
+| `created_at` | timestamptz default now() | |
 
-Parent-row aggregated status = rollup of its sheets (e.g. "12/50 extracted").
+RLS: `authenticated` can INSERT and SELECT their own rows; `service_role` full access. No anon access.
 
-## 3. AWP class column per sheet — preserve current visual
+Two rows are written per acceptance (`tos`, `privacy`) the moment the checkbox is ticked. If the insert fails, the checkbox flips back off and an error toast is shown — the scrim stays in place.
 
-Match today's grid behavior:
+## Backend changes
 
-- **Per-sheet AWP cell**: green background with opacity proportional to the triage `score` (0–100) for that `(sheet, awp_class)`. Same opacity ramp already used in the grid (e.g. `score/100`). On hover, tooltip shows the exact numeric score (e.g. "Triage: 73%").
-- If no triage row yet for that sheet/class: empty cell (no fill).
-- If `status = failed`: small red indicator + tooltip with error.
-- Include/exclude overrides keep their current visual treatment.
-- **Parent-row AWP cell**: unchanged — shows the existing instance count summed across the file's sheets.
+1. **Migration**: create `policy_acceptances` table + GRANTs + RLS policies (see schema above).
+2. **New edge function** `supabase/functions/get-stripe-policies/index.ts` — returns the policy bundle described above. Uses existing Stripe gateway secrets; no new secrets needed.
+3. **`create-credit-checkout`**: accept optional `tosVersion` and `privacyVersion` in the body and mirror them into the Checkout Session `metadata` so the webhook can log them alongside the session. No other backend changes.
 
-## 4. Queries / data
+## Frontend changes
 
-- Extend the existing sheets query in `WorkbenchProjectDetail.tsx` to also pull `extract_status` (already pulled) + triage rows per sheet (score + status + override flags) for each active AWP class.
-- Add a query for `analysis_results` grouped by `sheet_id` to derive per-sheet analyze status.
-- All data is already keyed by `sheet_id` in the schema — no migration needed.
+1. `src/components/BuyCreditsModal.tsx`
+   - Add `step` state: `'select' | 'review_and_checkout'`.
+   - When entering Step 2, do two things in parallel:
+     - Fetch policies via `get-stripe-policies`.
+     - Call `create-credit-checkout` to get `clientSecret` and mount `EmbeddedCheckout` immediately.
+   - Track `scrolledTos`, `scrolledPrivacy`, `accepted` state. On `accepted` flipping true, insert two `policy_acceptances` rows (rollback on failure).
+   - Widen the dialog (e.g. `max-w-6xl`) to fit the two columns; stack on mobile.
+2. New file `src/components/checkout/PolicyReviewPanel.tsx`
+   - Tabs with two scrollable HTML panels and the acceptance checkbox.
+   - Props: `tos`, `privacy`, `accepted`, `onAcceptedChange`, plus error/loading states.
+   - Renders sanitized HTML via `dangerouslySetInnerHTML` inside a styled prose container.
+3. New file `src/components/checkout/CheckoutWithGate.tsx`
+   - Wraps `EmbeddedCheckoutProvider` + `EmbeddedCheckout` in a `relative` container.
+   - When `!accepted`, renders an absolutely-positioned scrim (`backdrop-blur-sm bg-background/60`) with the explanatory text and `pointer-events: auto` so clicks never reach the iframe.
+   - When `accepted`, scrim fades out and sets `pointer-events: none`.
+4. Reset all step / scroll / acceptance state when the modal closes (extend existing `useEffect` on `open`).
 
-## 5. Out of scope
+## Edge cases
 
-- No change to extract/triage/analyze backend logic (already per-sheet).
-- No change to numeric triage score storage or thresholding.
-- No UI change in WMSV detail page (workbench only).
+- Stripe Dashboard missing ToS/Privacy URL → `get-stripe-policies` returns `{ error: "Stripe ToS/Privacy URLs not configured" }`. Step 2 shows a blocking error in the left column; the scrim stays on (no payment possible).
+- Fetching policy HTML fails (4xx/5xx from publisher) → error state with a Retry button; scrim stays on.
+- User closes modal before checking the box → no acceptance row inserted; next open re-prompts.
+- Policy versions change after a prior acceptance → user is re-prompted (we filter prior acceptances by current SHA-256).
+- If, on Step 2 mount, the user already has acceptances for both current versions, auto-tick the checkbox and remove the scrim (no need to re-scroll).
 
-## Technical notes
+## Out of scope
 
-- Files to edit:
-  - `src/pages/WorkbenchProjectDetail.tsx` — table rendering, expand state (per parent file), new queries, post-upload split trigger.
-  - Possibly small helper in `src/lib/analysisUiState.ts` for the three new badge derivations.
-- Reuse the existing opacity-by-score cell renderer from the analysis grid so workbench and grid stay visually consistent. Wrap each cell in a shadcn `Tooltip` showing `"Triage: {score}%"`.
-- Expand state: local React state keyed by `file_id`, default collapsed. Optionally persist in `localStorage` per project (matches existing patterns).
-- No edge function changes. No migration.
+- Removing Stripe's in-iframe `consent_collection` line.
+- Versioned policy diffing / change-log UI.
+- Emailing the user a copy of the accepted documents.

@@ -41,7 +41,7 @@ serve(async (req) => {
       });
     }
 
-    const { packageId, environment, returnUrl } = await req.json();
+    const { packageId, environment, returnUrl, tosVersion, privacyVersion } = await req.json();
     // Note: any "tier" sent by the client is ignored — the server determines
     // pricing tier authoritatively from the user's profile.account_type.
     const pkg = PACKAGES[packageId];
@@ -101,6 +101,8 @@ serve(async (req) => {
         amountCents: String(amountCents),
         packageLabel: pkg.label,
         managed_payments: "false",
+        ...(tosVersion ? { tosVersion: String(tosVersion) } : {}),
+        ...(privacyVersion ? { privacyVersion: String(privacyVersion) } : {}),
       },
     });
 
