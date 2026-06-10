@@ -13,6 +13,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Input } from "@/components/ui/input";
+import { Checkbox } from "@/components/ui/checkbox";
 import { AppHeader } from "@/components/AppHeader";
 import { Plus, X, Save, RotateCcw, ShieldAlert, ExternalLink, AlertTriangle, Loader2, Link2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
