@@ -24,7 +24,7 @@ import WorkbenchProjectDetail from "./pages/WorkbenchProjectDetail";
 import UserManagement from "./pages/UserManagement";
 import AnalysisRequestDetail from "./pages/AnalysisRequestDetail";
 import Controls from "./pages/Controls";
-import WMSVProject from "./pages/WMSVProject";
+
 import InternalViewerTest from "./pages/InternalViewerTest";
 import CheckoutReturn from "./pages/CheckoutReturn";
 import NotFound from "./pages/NotFound";
@@ -68,7 +68,7 @@ const App = () => (
             <Route path="/auth" element={<PublicRoute><Auth /></PublicRoute>} />
             <Route path="/projects" element={<ProtectedRoute><Projects /></ProtectedRoute>} />
             <Route path="/project/:id" element={<ProtectedRoute><ProjectWizard /></ProtectedRoute>} />
-            <Route path="/wmsv-project/:id" element={<ProtectedRoute><WMSVProject /></ProtectedRoute>} />
+            
             <Route path="/solution-provider-portal" element={<ProtectedRoute><SolutionProviderPortal /></ProtectedRoute>} />
             <Route path="/configuration" element={<ProtectedRoute><Configuration /></ProtectedRoute>} />
             <Route path="/logs" element={<ProtectedRoute><Logs /></ProtectedRoute>} />

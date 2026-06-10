@@ -12,7 +12,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { LogOut, Settings, FileText, BarChart3, Shield, Coins, Users, KeyRound, UserCog, LayoutGrid } from "lucide-react";
 import riskBlueLogo from "@/assets/logo-riskblue.png";
-import { useAccountType } from "@/hooks/useAccountType";
+
 import { useCredits } from "@/hooks/useCredits";
 import { BuyCreditsModal } from "@/components/BuyCreditsModal";
 import { ChangePasswordModal } from "@/components/ChangePasswordModal";
@@ -27,7 +27,7 @@ export const AppHeader = ({ leftContent }: AppHeaderProps) => {
   const navigate = useNavigate();
   const location = useLocation();
   const { getInitial, avatarUrl } = useUserDisplayName();
-  const { isWMSV, loading: accountLoading } = useAccountType();
+  
   const { balance: credits } = useCredits();
   const [buyOpen, setBuyOpen] = useState(false);
   const [changePasswordOpen, setChangePasswordOpen] = useState(false);
@@ -47,9 +47,6 @@ export const AppHeader = ({ leftContent }: AppHeaderProps) => {
             className="h-8 cursor-pointer"
             onClick={() => navigate("/projects")}
           />
-          {!accountLoading && isWMSV && (
-            <span className="text-lg font-bold text-black">Workbench</span>
-          )}
           {leftContent}
         </div>
         <div className="flex items-center gap-6">

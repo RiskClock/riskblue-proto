@@ -299,7 +299,7 @@ export default function InternalWorkbench() {
     (filterCreators.length > 0 ? 1 : 0) + (filterStatuses.length > 0 ? 1 : 0);
 
   const handleView = (p: WorkbenchProject) => {
-    navigate(p.account_type === "wmsv" ? `/wmsv-project/${p.id}` : `/project/${p.id}`);
+    navigate(`/project/${p.id}`);
   };
 
   const openDelete = (p: WorkbenchProject) => {
