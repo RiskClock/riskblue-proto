@@ -79,28 +79,16 @@ serve(async (req) => {
   }
 
   try {
-    const { environment } = await req.json().catch(() => ({}));
-    if (environment !== "sandbox" && environment !== "live") {
-      return new Response(JSON.stringify({ error: "Invalid environment" }), {
-        status: 400,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
-    }
-
-    const stripe = createStripeClient(environment as StripeEnv);
-    const account = await stripe.accounts.retrieve();
-
-    // ToS + Privacy URLs live in account.settings.branding in dahlia.
-    const branding = (account as any).settings?.branding ?? {};
-    const tosUrl: string | undefined =
-      branding.terms_of_service_url || (account as any).tos_acceptance?.service_agreement;
-    const privacyUrl: string | undefined = branding.privacy_url;
+    // Stripe's Account API does NOT expose the Dashboard "Public details"
+    // ToS/Privacy URLs, so we read them from project secrets.
+    const tosUrl = Deno.env.get("STRIPE_TOS_URL");
+    const privacyUrl = Deno.env.get("STRIPE_PRIVACY_URL");
 
     if (!tosUrl || !privacyUrl) {
       return new Response(
         JSON.stringify({
           error:
-            "Stripe ToS/Privacy URLs not configured. Set them in Stripe Dashboard → Settings → Public details.",
+            "Policy URLs not configured. Add STRIPE_TOS_URL and STRIPE_PRIVACY_URL secrets.",
           tosUrl: tosUrl ?? null,
           privacyUrl: privacyUrl ?? null,
         }),
