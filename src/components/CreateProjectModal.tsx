@@ -258,7 +258,6 @@ export function CreateProjectModal({ open, onOpenChange, onCreated }: CreateProj
       });
       onOpenChange(false);
       onCreated?.(project.id);
-      navigate(`/project/${project.id}`);
     } catch (error: any) {
       toast({
         variant: "destructive",
