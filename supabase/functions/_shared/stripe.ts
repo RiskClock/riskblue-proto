@@ -24,15 +24,14 @@ export function createStripeClient(env: StripeEnv): Stripe {
     httpClient: Stripe.createFetchHttpClient((input, init) => {
       const stripeUrl = input instanceof Request ? input.url : input.toString();
       const gatewayUrl = stripeUrl.replace("https://api.stripe.com", GATEWAY_STRIPE_BASE);
+      const headers = new Headers(init?.headers ?? (input instanceof Request ? input.headers : undefined));
+      headers.delete("authorization");
+      headers.set("X-Connection-Api-Key", connectionApiKey);
+      headers.set("Lovable-API-Key", lovableApiKey);
+
       return fetch(gatewayUrl, {
         ...init,
-        headers: {
-          ...Object.fromEntries(
-            new Headers(init?.headers ?? (input instanceof Request ? input.headers : undefined)).entries(),
-          ),
-          "X-Connection-Api-Key": connectionApiKey,
-          "Lovable-API-Key": lovableApiKey,
-        },
+        headers,
       }).then(async (response) => {
         if (stripeUrl.includes("/v1/prices")) {
           const body = await response.clone().text().catch(() => "<unreadable>");
