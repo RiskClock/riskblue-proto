@@ -2,6 +2,8 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { type StripeEnv, createStripeClient } from "../_shared/stripe.ts";
 
+type StripeClient = ReturnType<typeof createStripeClient>;
+
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
@@ -11,6 +13,42 @@ const PACKAGES: Record<string, { priceId: string; credits: number; label: string
   pack_100: { priceId: "credits_pack_100_v3_usd", credits: 100, label: "100 Scan Credits", amountCents: 10000 },
   pack_500: { priceId: "credits_pack_500_v3_usd", credits: 500, label: "500 Scan Credits", amountCents: 40000 },
 };
+
+async function resolveOrCreateCustomer(
+  stripe: StripeClient,
+  options: { email?: string; userId?: string },
+): Promise<string> {
+  if (options.userId && !/^[a-zA-Z0-9_-]+$/.test(options.userId)) {
+    throw new Error("Invalid userId");
+  }
+
+  if (options.userId) {
+    const found = await stripe.customers.search({
+      query: `metadata['userId']:'${options.userId}'`,
+      limit: 1,
+    });
+    if (found.data.length) return found.data[0].id;
+  }
+
+  if (options.email) {
+    const existing = await stripe.customers.list({ email: options.email, limit: 1 });
+    if (existing.data.length) {
+      const customer = existing.data[0];
+      if (options.userId && customer.metadata?.userId !== options.userId) {
+        await stripe.customers.update(customer.id, {
+          metadata: { ...customer.metadata, userId: options.userId },
+        });
+      }
+      return customer.id;
+    }
+  }
+
+  const created = await stripe.customers.create({
+    ...(options.email && { email: options.email }),
+    ...(options.userId && { metadata: { userId: options.userId } }),
+  });
+  return created.id;
+}
 
 serve(async (req) => {
   if (req.method === "OPTIONS") {
@@ -68,27 +106,29 @@ serve(async (req) => {
     const env = environment as StripeEnv;
     const stripe = createStripeClient(env);
 
-    console.log("[create-credit-checkout] listing prices", { priceId, env });
     const prices = await stripe.prices.list({ lookup_keys: [priceId] });
-    console.log("[create-credit-checkout] prices result", { count: prices?.data?.length });
     if (!prices?.data?.length) {
       return new Response(JSON.stringify({ error: "Price not found" }), {
         status: 404,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
+    const stripePrice = prices.data[0];
+    const productId = typeof stripePrice.product === "string" ? stripePrice.product : stripePrice.product.id;
+    const product = await stripe.products.retrieve(productId);
+    const customerId = await resolveOrCreateCustomer(stripe, { email: user.email, userId: user.id });
 
-    console.log("[create-credit-checkout] creating session");
     const session = await stripe.checkout.sessions.create({
-      line_items: [{ price: prices.data[0].id, quantity: 1 }],
+      line_items: [{ price: stripePrice.id, quantity: 1 }],
       mode: "payment",
-      ui_mode: "embedded",
+      ui_mode: "embedded_page",
       return_url:
         returnUrl ||
         `${req.headers.get("origin")}/credits/return?session_id={CHECKOUT_SESSION_ID}`,
-      customer_email: user.email,
+      customer: customerId,
       automatic_tax: { enabled: true },
       consent_collection: { terms_of_service: "required" },
+      payment_intent_data: { description: product.name },
       metadata: {
         userId: user.id,
         packageId,
@@ -100,7 +140,6 @@ serve(async (req) => {
         ...(privacyVersion ? { privacyVersion: String(privacyVersion) } : {}),
       },
     });
-    console.log("[create-credit-checkout] session created", { id: session?.id, hasSecret: !!session?.client_secret });
 
     return new Response(JSON.stringify({ clientSecret: session.client_secret }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
