@@ -1678,8 +1678,16 @@ export default function WorkbenchProjectDetail() {
                           onClick={openManage}
                           disabled={phaseRunning}
                           aria-label="Manage columns"
-                          title="Manage columns"
-                          className="h-8 w-8"
+                          title={
+                            customClassNames.length > 0
+                              ? `Custom class${customClassNames.length === 1 ? "" : "es"} were typed at project creation: ${customClassNames.join(", ")}`
+                              : "Manage columns"
+                          }
+                          className={`h-8 w-8 ${
+                            customClassNames.length > 0
+                              ? "bg-yellow-300 hover:bg-yellow-400 text-yellow-900 border-yellow-500"
+                              : ""
+                          }`}
                         >
                           <Settings2 className="h-4 w-4" />
                         </Button>
