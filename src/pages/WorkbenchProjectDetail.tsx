@@ -2833,6 +2833,18 @@ function InstancesReportModal({
     return m;
   }, [spaceHierarchyPayload]);
 
+  // Map annotation id -> consolidation group it belongs to (if any).
+  const consolidationByAnnId = useMemo(() => {
+    const m = new Map<string, { label: string; className: string; groupKey: string }>();
+    for (const c of consolidations || []) {
+      const groupKey = `${c.awp_class_name}::${c.id}`;
+      for (const annId of c.member_annotation_ids || []) {
+        m.set(annId, { label: c.label, className: c.awp_class_name, groupKey });
+      }
+    }
+    return m;
+  }, [consolidations]);
+
   const expanded = useMemo(() => {
     type Row = {
       annotationBaseId: string;
@@ -2844,10 +2856,23 @@ function InstancesReportModal({
       pageIndex: number;
       nx: number;
       ny: number;
+      // Stable key per logical instance — used to de-duplicate the same
+      // consolidated riser appearing across multiple pages.
+      logicalKey: string;
     };
     const rows: Row[] = [];
+
+    // Bucket consolidated members so we emit one row per (group, space).
+    const groupedMembers = new Map<string, any[]>();
     for (const inst of instances) {
       if (enabledClassSet.size > 0 && !enabledClassSet.has(inst.awp_class_name)) continue;
+      const cg = consolidationByAnnId.get(inst.id);
+      if (cg) {
+        const list = groupedMembers.get(cg.groupKey) || [];
+        list.push(inst);
+        groupedMembers.set(cg.groupKey, list);
+        continue; // emit later as a single consolidated instance
+      }
       const opt = optionByName.get(inst.awp_class_name);
       const prefix = opt?.idPrefix || inst.awp_class_name.slice(0, 3).toUpperCase();
       const category = opt?.category || "Other";
@@ -2863,6 +2888,7 @@ function InstancesReportModal({
         pageIndex: inst.page_index,
         nx: Number(inst.nx) || 0,
         ny: Number(inst.ny) || 0,
+        logicalKey: `ann::${inst.id}`,
       };
       if (sps.length === 0) {
         rows.push({ ...common, instanceId: base, spaceName: null });
@@ -2873,8 +2899,66 @@ function InstancesReportModal({
         }
       }
     }
+
+    // Emit consolidated groups: one row per (group, space) using ANY member
+    // annotation as the on-drawing anchor for that space.
+    for (const [groupKey, members] of groupedMembers) {
+      if (members.length === 0) continue;
+      const first = members[0];
+      const opt = optionByName.get(first.awp_class_name);
+      const category = opt?.category || "Other";
+      const cg = consolidationByAnnId.get(first.id)!;
+      // For each unique space across all members, pick the member that lives there
+      // (so the drawing overlay anchors to that page).
+      const spaceToMember = new Map<string, any>();
+      const unassignedMembers: any[] = [];
+      for (const m of members) {
+        const fname = fileNameById.get(m.file_id) || "";
+        const sps = pageSpaceMap.get(`${fname}::${m.page_index}`) || [];
+        if (sps.length === 0) {
+          unassignedMembers.push(m);
+        } else {
+          for (const sp of sps) {
+            if (!spaceToMember.has(sp)) spaceToMember.set(sp, m);
+          }
+        }
+      }
+      if (spaceToMember.size === 0 && unassignedMembers.length === 0) continue;
+      if (spaceToMember.size === 0) {
+        const m = unassignedMembers[0];
+        rows.push({
+          annotationBaseId: cg.label,
+          instanceId: cg.label,
+          spaceName: null,
+          awpClassName: first.awp_class_name,
+          category,
+          fileId: m.file_id,
+          pageIndex: m.page_index,
+          nx: Number(m.nx) || 0,
+          ny: Number(m.ny) || 0,
+          logicalKey: `cons::${groupKey}`,
+        });
+      } else {
+        for (const [sp, m] of spaceToMember) {
+          const spId = sp.replace(/\s+/g, "_");
+          rows.push({
+            annotationBaseId: cg.label,
+            instanceId: `${cg.label}@${spId}`,
+            spaceName: sp,
+            awpClassName: first.awp_class_name,
+            category,
+            fileId: m.file_id,
+            pageIndex: m.page_index,
+            nx: Number(m.nx) || 0,
+            ny: Number(m.ny) || 0,
+            logicalKey: `cons::${groupKey}`,
+          });
+        }
+      }
+    }
+
     return rows;
-  }, [instances, optionByName, fileNameById, pageSpaceMap, enabledClassSet]);
+  }, [instances, optionByName, fileNameById, pageSpaceMap, enabledClassSet, consolidationByAnnId]);
 
   const spaceList = useMemo(() => {
     const set = new Set<string>();
