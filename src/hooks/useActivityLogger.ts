@@ -10,7 +10,9 @@ type ActivityAction =
   | "manage_collaborators_clicked"
   | "session_start"
   | "google_drive_analysis_request"
-  | "manual_drawings_upload";
+  | "manual_drawings_upload"
+  | "credits_purchase_initiated"
+  | "credits_purchased";
 
 export const useActivityLogger = () => {
   const logActivity = useCallback(async (
