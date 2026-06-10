@@ -873,6 +873,19 @@ export default function WorkbenchProjectDetail() {
     classesOverride?: string[],
   ) => {
     if (!requestId) return;
+    // Confirm rerun if a previous run already produced data for this phase.
+    const hasPrior =
+      phase === "extract"
+        ? (fileGroups || []).some((g) => fileExtractStatus.get(g.file.id) === "processed")
+        : phase === "triage"
+          ? (triage?.length ?? 0) > 0
+          : (rows?.length ?? 0) > 0;
+    if (hasPrior) {
+      const label = phase === "extract" ? "Extract Context" : phase === "triage" ? "Triage" : "Analyze";
+      if (!window.confirm(`${label} has already run for this project. Re-run and overwrite existing results?`)) {
+        return;
+      }
+    }
     setRunning(phase);
     try {
       // For Extract Context, proactively clear the per-sheet/file extracted
