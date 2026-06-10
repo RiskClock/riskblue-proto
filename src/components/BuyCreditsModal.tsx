@@ -38,6 +38,7 @@ export const BuyCreditsModal = ({ open, onOpenChange, reason }: BuyCreditsModalP
   const { toast } = useToast();
   const { user } = useAuth();
   const { balance, refetch } = useCredits();
+  const { logActivity } = useActivityLogger();
 
   const [step, setStep] = useState<Step>("select");
   const [selectedPackage, setSelectedPackage] = useState<CreditPackage | null>(null);
