@@ -3002,8 +3002,15 @@ function InstancesReportModal({
 
   const overviewTotals = useMemo(() => {
     const m = new Map<string, number>();
+    const seenConsolidated = new Set<string>();
     for (const r of expanded) {
       if (r.category !== "Asset" && r.category !== "Water System") continue;
+      // Each consolidated logical instance counts once; each plain annotation
+      // counts per row (preserves existing per-space counting behavior).
+      if (r.logicalKey.startsWith("cons::")) {
+        if (seenConsolidated.has(r.logicalKey)) continue;
+        seenConsolidated.add(r.logicalKey);
+      }
       m.set(r.awpClassName, (m.get(r.awpClassName) || 0) + 1);
     }
     return m;
