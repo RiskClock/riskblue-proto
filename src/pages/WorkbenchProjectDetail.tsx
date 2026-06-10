@@ -70,6 +70,7 @@ import {
 } from "@/components/viewer/hooks/useDocumentSource";
 import { useAWPOptions, groupAWPOptionsByCategory } from "@/hooks/useAWPOptions";
 import { getUserFriendlyError } from "@/lib/errorHandling";
+import { awpClassColor } from "@/lib/awpColor";
 
 const PREF_ID = "global";
 
