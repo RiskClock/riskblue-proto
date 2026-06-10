@@ -83,13 +83,20 @@ export default function Configuration() {
     queryKey: ["configuration-awps"],
     queryFn: async (): Promise<AWPItem[]> => {
       const [assetsRes, systemsRes, processesRes] = await Promise.all([
-        supabase.from("critical_assets").select("id, name, default_control_ids").eq("is_active", true).order("display_order"),
-        supabase.from("water_systems").select("id, name, default_control_ids").eq("is_active", true).order("display_order"),
-        supabase.from("processes").select("id, name, default_control_ids").eq("is_active", true).order("display_order"),
+        supabase.from("critical_assets").select("id, name, default_control_ids, can_span_multiple_spaces" as any).eq("is_active", true).order("display_order"),
+        supabase.from("water_systems").select("id, name, default_control_ids, can_span_multiple_spaces" as any).eq("is_active", true).order("display_order"),
+        supabase.from("processes").select("id, name, default_control_ids, can_span_multiple_spaces" as any).eq("is_active", true).order("display_order"),
       ]);
-      const assets: AWPItem[] = (assetsRes.data || []).map(a => ({ ...a, category: "critical_assets" as const }));
-      const systems: AWPItem[] = (systemsRes.data || []).map(s => ({ ...s, category: "water_systems" as const }));
-      const processes: AWPItem[] = (processesRes.data || []).map(p => ({ ...p, category: "processes" as const }));
+      const toItem = (cat: AWPItem["category"]) => (r: any): AWPItem => ({
+        id: r.id,
+        name: r.name,
+        default_control_ids: (r.default_control_ids as string[]) || [],
+        can_span_multiple_spaces: !!r.can_span_multiple_spaces,
+        category: cat,
+      });
+      const assets: AWPItem[] = ((assetsRes.data as any[]) || []).map(toItem("critical_assets"));
+      const systems: AWPItem[] = ((systemsRes.data as any[]) || []).map(toItem("water_systems"));
+      const processes: AWPItem[] = ((processesRes.data as any[]) || []).map(toItem("processes"));
       return [...assets, ...systems, ...processes];
     },
   });
