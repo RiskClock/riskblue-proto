@@ -51,6 +51,13 @@ export function useDriveToken() {
 
       const data = await response.json();
 
+      // "Not connected" sentinel — 200 OK with needs_reauth flag
+      if (data?.needs_reauth === true || data?.connected === false) {
+        setDriveToken(null);
+        setNeedsReauth(true);
+        return;
+      }
+
       // Check if token is expired
       if (data.isExpired) {
         // Try to refresh the token
