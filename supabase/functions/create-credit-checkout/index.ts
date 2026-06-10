@@ -106,14 +106,45 @@ serve(async (req) => {
     const env = environment as StripeEnv;
     const stripe = createStripeClient(env);
 
-    const prices = await stripe.prices.list({ lookup_keys: [priceId] });
-    if (!prices?.data?.length) {
-      return new Response(JSON.stringify({ error: "Price not found" }), {
+    console.log("[create-credit-checkout] looking up price", { priceId, env });
+    let stripePrice: any = null;
+    try {
+      const searched = await stripe.prices.search({
+        query: `lookup_key:'${priceId}' AND active:'true'`,
+        limit: 1,
+      });
+      console.log("[create-credit-checkout] search result", {
+        count: searched?.data?.length,
+      });
+      if (searched?.data?.length) stripePrice = searched.data[0];
+    } catch (e) {
+      console.error("[create-credit-checkout] search error", e);
+    }
+
+    if (!stripePrice) {
+      // Fallback: paginate through prices and match by lookup_key
+      console.log("[create-credit-checkout] falling back to list pagination");
+      let starting_after: string | undefined;
+      for (let i = 0; i < 10 && !stripePrice; i++) {
+        const page: any = await stripe.prices.list({
+          limit: 100,
+          active: true,
+          ...(starting_after ? { starting_after } : {}),
+        });
+        console.log("[create-credit-checkout] page", { i, count: page?.data?.length, has_more: page?.has_more });
+        const hit = page?.data?.find((p: any) => p.lookup_key === priceId);
+        if (hit) { stripePrice = hit; break; }
+        if (!page?.has_more || !page?.data?.length) break;
+        starting_after = page.data[page.data.length - 1].id;
+      }
+    }
+
+    if (!stripePrice) {
+      return new Response(JSON.stringify({ error: `Price not found for lookup_key ${priceId}` }), {
         status: 404,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
-    const stripePrice = prices.data[0];
     const productId = typeof stripePrice.product === "string" ? stripePrice.product : stripePrice.product.id;
     const product = await stripe.products.retrieve(productId);
     const customerId = await resolveOrCreateCustomer(stripe, { email: user.email, userId: user.id });
