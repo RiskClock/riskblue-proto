@@ -3050,7 +3050,7 @@ function InstancesReportModal({
                 bbox: [r.nx, r.ny, 0, 0] as [number, number, number, number],
                 coordSpace: "normalized" as const,
                 page: 1,
-                color: "#dc2626",
+                color: awpClassColor(r.awpClassName),
                 label: r.instanceId,
                 shape: "circle" as const,
               }));
