@@ -136,9 +136,10 @@ serve(async (req) => {
       }
 
       if (!tokenData) {
+        // Return 200 (not 404) — "not connected yet" is a normal state, not an error.
         return new Response(
-          JSON.stringify({ error: "No token found", needs_reauth: true }),
-          { status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          JSON.stringify({ connected: false, needs_reauth: true }),
+          { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
         );
       }
 
