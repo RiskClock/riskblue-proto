@@ -2446,6 +2446,19 @@ export default function WorkbenchProjectDetail() {
           spaceHierarchyPayload={spaceHierarchyPayload}
           projectName={project?.name || "Project"}
           enabledClassNames={enabledCols}
+          consolidations={consolidations || []}
+        />
+
+        <ConsolidateRisersModal
+          open={consolidateOpen}
+          onOpenChange={setConsolidateOpen}
+          requestId={requestId}
+          spannableClasses={spannableClassesWithAnnotations}
+          fileNameById={new Map(fileGroups.map((g) => [g.file.id, g.file.name]))}
+          pageSpaceMap={pageSpaceMap}
+          onSaved={() => {
+            queryClient.invalidateQueries({ queryKey: ["workbench-consolidations", requestId] });
+          }}
         />
       </div>
     </TooltipProvider>
