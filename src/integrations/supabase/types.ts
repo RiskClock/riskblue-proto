@@ -1905,6 +1905,7 @@ export type Database = {
           construction_start_date: string | null
           country: string | null
           created_at: string
+          credits_consumed: number | null
           drive_folder_id: string | null
           estimated_units: number | null
           filesearch_store_id: string | null
@@ -1914,6 +1915,8 @@ export type Database = {
           name: string
           project_data: Json | null
           project_type: string | null
+          report_file_name: string | null
+          report_file_path: string | null
           selected_awp_class_names: string[]
           selected_other_classes: string[]
           state: string | null
@@ -1940,6 +1943,7 @@ export type Database = {
           construction_start_date?: string | null
           country?: string | null
           created_at?: string
+          credits_consumed?: number | null
           drive_folder_id?: string | null
           estimated_units?: number | null
           filesearch_store_id?: string | null
@@ -1949,6 +1953,8 @@ export type Database = {
           name: string
           project_data?: Json | null
           project_type?: string | null
+          report_file_name?: string | null
+          report_file_path?: string | null
           selected_awp_class_names?: string[]
           selected_other_classes?: string[]
           state?: string | null
@@ -1975,6 +1981,7 @@ export type Database = {
           construction_start_date?: string | null
           country?: string | null
           created_at?: string
+          credits_consumed?: number | null
           drive_folder_id?: string | null
           estimated_units?: number | null
           filesearch_store_id?: string | null
@@ -1984,6 +1991,8 @@ export type Database = {
           name?: string
           project_data?: Json | null
           project_type?: string | null
+          report_file_name?: string | null
+          report_file_path?: string | null
           selected_awp_class_names?: string[]
           selected_other_classes?: string[]
           state?: string | null
