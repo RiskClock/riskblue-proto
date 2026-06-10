@@ -36,6 +36,8 @@ const ACTION_LABEL_MAP: Record<string, string> = {
   admin_user_deactivated: "Deactivated User",
   admin_user_reactivated: "Reactivated User",
   admin_password_reset_sent: "Sent Password Reset",
+  credits_purchase_initiated: "Credits Checkout Started",
+  credits_purchased: "Credits Purchased",
 };
 
 const formatAction = (action: string) => {
