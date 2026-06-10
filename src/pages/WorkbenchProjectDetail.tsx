@@ -879,7 +879,7 @@ export default function WorkbenchProjectDetail() {
         ? (fileGroups || []).some((g) => fileExtractStatus.get(g.file.id) === "processed")
         : phase === "triage"
           ? (triage?.length ?? 0) > 0
-          : (rows?.length ?? 0) > 0;
+          : (analyzeRows?.length ?? 0) > 0;
     if (hasPrior) {
       const label = phase === "extract" ? "Extract Context" : phase === "triage" ? "Triage" : "Analyze";
       if (!window.confirm(`${label} has already run for this project. Re-run and overwrite existing results?`)) {
