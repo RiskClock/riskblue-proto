@@ -491,6 +491,18 @@ export default function WorkbenchProjectDetail() {
     return m;
   }, [awpOptions]);
 
+  // Spannable classes (Configuration > "Can Span Multiple Spaces") that actually
+  // have annotations in this analysis request — used to gate the
+  // "Consolidate Risers" pre-report step.
+  const spannableClassesWithAnnotations = useMemo<
+    { name: string; idPrefix: string | null }[]
+  >(() => {
+    const classNamesWithAnn = new Set((instanceRows || []).map((r) => r.awp_class_name));
+    return (awpOptions || [])
+      .filter((o) => o.canSpanMultipleSpaces && classNamesWithAnn.has(o.name))
+      .map((o) => ({ name: o.name, idPrefix: o.idPrefix }));
+  }, [awpOptions, instanceRows]);
+
   // Column preferences are scoped per project. Legacy rows used id='global';
   // each project now persists its own row keyed by projectId.
   const prefId = projectId || PREF_ID;
