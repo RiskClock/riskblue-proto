@@ -1211,6 +1211,7 @@ export type Database = {
       }
       critical_assets: {
         Row: {
+          can_span_multiple_spaces: boolean
           cost: string
           created_at: string
           default_control_ids: string[]
@@ -1232,6 +1233,7 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          can_span_multiple_spaces?: boolean
           cost: string
           created_at?: string
           default_control_ids?: string[]
@@ -1253,6 +1255,7 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          can_span_multiple_spaces?: boolean
           cost?: string
           created_at?: string
           default_control_ids?: string[]
@@ -1578,6 +1581,7 @@ export type Database = {
       }
       processes: {
         Row: {
+          can_span_multiple_spaces: boolean
           cost: string
           created_at: string
           default_control_ids: string[]
@@ -1599,6 +1603,7 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          can_span_multiple_spaces?: boolean
           cost: string
           created_at?: string
           default_control_ids?: string[]
@@ -1620,6 +1625,7 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          can_span_multiple_spaces?: boolean
           cost?: string
           created_at?: string
           default_control_ids?: string[]
@@ -2459,6 +2465,7 @@ export type Database = {
       }
       water_systems: {
         Row: {
+          can_span_multiple_spaces: boolean
           cost: string
           created_at: string
           default_control_ids: string[]
@@ -2480,6 +2487,7 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          can_span_multiple_spaces?: boolean
           cost: string
           created_at?: string
           default_control_ids?: string[]
@@ -2501,6 +2509,7 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          can_span_multiple_spaces?: boolean
           cost?: string
           created_at?: string
           default_control_ids?: string[]
