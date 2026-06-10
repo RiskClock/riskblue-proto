@@ -429,6 +429,26 @@ export default function WorkbenchProjectDetail() {
     },
   });
 
+  // Persisted multi-space consolidation groups for this analysis request.
+  const { data: consolidations } = useQuery({
+    queryKey: ["workbench-consolidations", requestId],
+    enabled: !!requestId,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("annotation_consolidations" as any)
+        .select("id, awp_class_name, label, instance_number, member_annotation_ids")
+        .eq("analysis_request_id", requestId!);
+      if (error) throw error;
+      return ((data as unknown) as {
+        id: string;
+        awp_class_name: string;
+        label: string;
+        instance_number: number | null;
+        member_annotation_ids: string[];
+      }[]) || [];
+    },
+  });
+
   const instanceCountLookup = useMemo(() => {
     const m = new Map<string, number>();
     for (const r of instanceRows || []) {
