@@ -168,7 +168,14 @@ serve(async (req) => {
       // address entered in Checkout so automatic tax can be calculated.
       customer_update: { address: "auto" },
       consent_collection: { terms_of_service: "required" },
-      payment_intent_data: { description: product.name },
+      payment_intent_data: {
+        description: product.name,
+        // Ensure Stripe emails a receipt for every successful charge. Without
+        // this, Checkout sessions created with embedded UI mode do not
+        // automatically trigger receipt emails even when the Customer has an
+        // email on file.
+        ...(user.email ? { receipt_email: user.email } : {}),
+      },
       metadata: {
         userId: user.id,
         packageId,
