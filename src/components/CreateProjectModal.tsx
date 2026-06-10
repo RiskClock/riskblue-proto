@@ -362,7 +362,7 @@ export function CreateProjectModal({ open, onOpenChange, onCreated }: CreateProj
 
             {/* Files */}
             <div className="space-y-2">
-              <Label>Drawings (optional)</Label>
+              <Label>Drawings</Label>
               <Button
                 variant="outline"
                 size="sm"
