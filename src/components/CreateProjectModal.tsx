@@ -414,42 +414,44 @@ export function CreateProjectModal({ open, onOpenChange, onCreated }: CreateProj
                 Assets & Water Systems to identify{" "}
                 <span className="text-destructive">*</span>
               </Label>
-              <div className="border rounded-md p-3 space-y-4 max-h-72 overflow-y-auto">
-                {Object.entries(grouped).map(([category, opts]) => (
-                  <div key={category}>
-                    <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-2">
-                      {category}
+              <div className="border rounded-md">
+                <div className="p-3 space-y-4 max-h-72 overflow-y-auto">
+                  {Object.entries(grouped).map(([category, opts]) => (
+                    <div key={category}>
+                      <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-2">
+                        {category}
+                      </div>
+                      <div className="space-y-2">
+                        {opts.map((opt) => {
+                          const checked = selectedClassNames.has(opt.name);
+                          return (
+                            <label
+                              key={opt.id}
+                              className="flex items-center gap-2 text-sm cursor-pointer"
+                            >
+                              <Checkbox
+                                checked={checked}
+                                onCheckedChange={() => toggleClass(opt.name)}
+                              />
+                              <span>
+                                {opt.idPrefix && (
+                                  <span className="font-mono text-xs text-muted-foreground mr-2">
+                                    {opt.idPrefix}
+                                  </span>
+                                )}
+                                {opt.name}
+                              </span>
+                            </label>
+                          );
+                        })}
+                      </div>
                     </div>
-                    <div className="space-y-2">
-                      {opts.map((opt) => {
-                        const checked = selectedClassNames.has(opt.name);
-                        return (
-                          <label
-                            key={opt.id}
-                            className="flex items-center gap-2 text-sm cursor-pointer"
-                          >
-                            <Checkbox
-                              checked={checked}
-                              onCheckedChange={() => toggleClass(opt.name)}
-                            />
-                            <span>
-                              {opt.idPrefix && (
-                                <span className="font-mono text-xs text-muted-foreground mr-2">
-                                  {opt.idPrefix}
-                                </span>
-                              )}
-                              {opt.name}
-                            </span>
-                          </label>
-                        );
-                      })}
-                    </div>
-                  </div>
-                ))}
+                  ))}
+                </div>
 
                 <Separator />
 
-                <div className="space-y-2">
+                <div className="p-3 space-y-2 bg-muted/30">
                   <label className="flex items-center gap-2 text-sm cursor-pointer">
                     <Checkbox
                       checked={otherEnabled}
@@ -457,13 +459,16 @@ export function CreateProjectModal({ open, onOpenChange, onCreated }: CreateProj
                     />
                     <span>Other (specify)</span>
                   </label>
-                  {otherEnabled && (
-                    <Input
-                      value={otherText}
-                      onChange={(e) => setOtherText(e.target.value)}
-                      placeholder="Type anything (comma-separate to add multiple)"
-                    />
-                  )}
+                  <Input
+                    value={otherText}
+                    onChange={(e) => {
+                      setOtherText(e.target.value);
+                      if (e.target.value.trim().length > 0 && !otherEnabled) {
+                        setOtherEnabled(true);
+                      }
+                    }}
+                    placeholder="Type anything (comma-separate to add multiple)"
+                  />
                 </div>
               </div>
               {!hasAnyClass && (
