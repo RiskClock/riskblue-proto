@@ -7,6 +7,7 @@ export interface AWPOption {
   category: "Asset" | "Water System" | "Process";
   idPrefix: string | null;
   defaultControlIds: string[];
+  canSpanMultipleSpaces: boolean;
 }
 
 /**
@@ -21,17 +22,17 @@ export function useAWPOptions() {
       const [assetsRes, systemsRes, processesRes] = await Promise.all([
         supabase
           .from("critical_assets")
-          .select("id, name, display_order, id_prefix, default_control_ids")
+          .select("id, name, display_order, id_prefix, default_control_ids, can_span_multiple_spaces" as any)
           .eq("is_active", true)
           .order("display_order"),
         supabase
           .from("water_systems")
-          .select("id, name, display_order, id_prefix, default_control_ids")
+          .select("id, name, display_order, id_prefix, default_control_ids, can_span_multiple_spaces" as any)
           .eq("is_active", true)
           .order("display_order"),
         supabase
           .from("processes")
-          .select("id, name, display_order, id_prefix, default_control_ids")
+          .select("id, name, display_order, id_prefix, default_control_ids, can_span_multiple_spaces" as any)
           .eq("is_active", true)
           .order("display_order"),
       ]);
@@ -46,29 +47,18 @@ export function useAWPOptions() {
         console.error("Error fetching processes:", processesRes.error);
       }
 
-      const assets: AWPOption[] = (assetsRes.data || []).map((a) => ({
-        id: a.id,
-        name: a.name,
-        category: "Asset" as const,
-        idPrefix: a.id_prefix || null,
-        defaultControlIds: (a.default_control_ids as string[]) || [],
-      }));
+      const toOpt = (cat: AWPOption["category"]) => (r: any): AWPOption => ({
+        id: r.id,
+        name: r.name,
+        category: cat,
+        idPrefix: r.id_prefix || null,
+        defaultControlIds: (r.default_control_ids as string[]) || [],
+        canSpanMultipleSpaces: !!r.can_span_multiple_spaces,
+      });
 
-      const systems: AWPOption[] = (systemsRes.data || []).map((s) => ({
-        id: s.id,
-        name: s.name,
-        category: "Water System" as const,
-        idPrefix: s.id_prefix || null,
-        defaultControlIds: (s.default_control_ids as string[]) || [],
-      }));
-
-      const processes: AWPOption[] = (processesRes.data || []).map((p) => ({
-        id: p.id,
-        name: p.name,
-        category: "Process" as const,
-        idPrefix: p.id_prefix || null,
-        defaultControlIds: (p.default_control_ids as string[]) || [],
-      }));
+      const assets: AWPOption[] = ((assetsRes.data as any[]) || []).map(toOpt("Asset"));
+      const systems: AWPOption[] = ((systemsRes.data as any[]) || []).map(toOpt("Water System"));
+      const processes: AWPOption[] = ((processesRes.data as any[]) || []).map(toOpt("Process"));
 
       return [...assets, ...systems, ...processes];
     },

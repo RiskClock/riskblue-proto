@@ -24,6 +24,7 @@ import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Badge } from "@/components/ui/badge";
 import { SpaceEditModal } from "@/components/workbench/SpaceEditModal";
+import { ConsolidateRisersModal } from "@/components/workbench/ConsolidateRisersModal";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -168,6 +169,7 @@ export default function WorkbenchProjectDetail() {
   const [spaceModalOpen, setSpaceModalOpen] = useState(false);
   const [buildingSpace, setBuildingSpace] = useState(false);
   const [instancesReportOpen, setInstancesReportOpen] = useState(false);
+  const [consolidateOpen, setConsolidateOpen] = useState(false);
   const [spaceEditTarget, setSpaceEditTarget] = useState<
     { fileName: string; pageNumber: number; current: string[] } | null
   >(null);
@@ -428,6 +430,26 @@ export default function WorkbenchProjectDetail() {
     },
   });
 
+  // Persisted multi-space consolidation groups for this analysis request.
+  const { data: consolidations } = useQuery({
+    queryKey: ["workbench-consolidations", requestId],
+    enabled: !!requestId,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("annotation_consolidations" as any)
+        .select("id, awp_class_name, label, instance_number, member_annotation_ids")
+        .eq("analysis_request_id", requestId!);
+      if (error) throw error;
+      return ((data as unknown) as {
+        id: string;
+        awp_class_name: string;
+        label: string;
+        instance_number: number | null;
+        member_annotation_ids: string[];
+      }[]) || [];
+    },
+  });
+
   const instanceCountLookup = useMemo(() => {
     const m = new Map<string, number>();
     for (const r of instanceRows || []) {
@@ -468,6 +490,18 @@ export default function WorkbenchProjectDetail() {
       m.set(o.name, { name: o.name, idPrefix: o.idPrefix, category: o.category });
     return m;
   }, [awpOptions]);
+
+  // Spannable classes (Configuration > "Can Span Multiple Spaces") that actually
+  // have annotations in this analysis request — used to gate the
+  // "Consolidate Risers" pre-report step.
+  const spannableClassesWithAnnotations = useMemo<
+    { name: string; idPrefix: string | null }[]
+  >(() => {
+    const classNamesWithAnn = new Set((instanceRows || []).map((r) => r.awp_class_name));
+    return (awpOptions || [])
+      .filter((o) => o.canSpanMultipleSpaces && classNamesWithAnn.has(o.name))
+      .map((o) => ({ name: o.name, idPrefix: o.idPrefix }));
+  }, [awpOptions, instanceRows]);
 
   // Column preferences are scoped per project. Legacy rows used id='global';
   // each project now persists its own row keyed by projectId.
@@ -1554,6 +1588,22 @@ export default function WorkbenchProjectDetail() {
                 ) : null}
                 {spaceHierarchyRunning ? "Building Space Hierarchy" : "Build Space Hierarchy"}
               </Button>
+              {spannableClassesWithAnnotations.length > 0 && (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => setConsolidateOpen(true)}
+                  disabled={!requestId}
+                  title="Group annotations of riser-type classes into multi-space instances before generating the report"
+                  className={
+                    (consolidations?.length ?? 0) === 0
+                      ? "bg-yellow-300 hover:bg-yellow-400 text-yellow-900 border-yellow-500"
+                      : ""
+                  }
+                >
+                  Consolidate Risers
+                </Button>
+              )}
               <Button
                 size="sm"
                 variant="outline"
@@ -2396,6 +2446,19 @@ export default function WorkbenchProjectDetail() {
           spaceHierarchyPayload={spaceHierarchyPayload}
           projectName={project?.name || "Project"}
           enabledClassNames={enabledCols}
+          consolidations={consolidations || []}
+        />
+
+        <ConsolidateRisersModal
+          open={consolidateOpen}
+          onOpenChange={setConsolidateOpen}
+          requestId={requestId}
+          spannableClasses={spannableClassesWithAnnotations}
+          fileNameById={new Map(fileGroups.map((g) => [g.file.id, g.file.name]))}
+          pageSpaceMap={pageSpaceMap}
+          onSaved={() => {
+            queryClient.invalidateQueries({ queryKey: ["workbench-consolidations", requestId] });
+          }}
         />
       </div>
     </TooltipProvider>
@@ -2691,6 +2754,7 @@ function InstancesReportModal({
   spaceHierarchyPayload,
   projectName,
   enabledClassNames,
+  consolidations,
 }: {
   open: boolean;
   onOpenChange: (v: boolean) => void;
@@ -2701,6 +2765,13 @@ function InstancesReportModal({
   spaceHierarchyPayload: any | null | undefined;
   projectName: string;
   enabledClassNames: string[];
+  consolidations: Array<{
+    id: string;
+    awp_class_name: string;
+    label: string;
+    instance_number: number | null;
+    member_annotation_ids: string[];
+  }>;
 }) {
   const enabledClassSet = useMemo(
     () => new Set(enabledClassNames || []),
@@ -2762,6 +2833,18 @@ function InstancesReportModal({
     return m;
   }, [spaceHierarchyPayload]);
 
+  // Map annotation id -> consolidation group it belongs to (if any).
+  const consolidationByAnnId = useMemo(() => {
+    const m = new Map<string, { label: string; className: string; groupKey: string }>();
+    for (const c of consolidations || []) {
+      const groupKey = `${c.awp_class_name}::${c.id}`;
+      for (const annId of c.member_annotation_ids || []) {
+        m.set(annId, { label: c.label, className: c.awp_class_name, groupKey });
+      }
+    }
+    return m;
+  }, [consolidations]);
+
   const expanded = useMemo(() => {
     type Row = {
       annotationBaseId: string;
@@ -2773,10 +2856,23 @@ function InstancesReportModal({
       pageIndex: number;
       nx: number;
       ny: number;
+      // Stable key per logical instance — used to de-duplicate the same
+      // consolidated riser appearing across multiple pages.
+      logicalKey: string;
     };
     const rows: Row[] = [];
+
+    // Bucket consolidated members so we emit one row per (group, space).
+    const groupedMembers = new Map<string, any[]>();
     for (const inst of instances) {
       if (enabledClassSet.size > 0 && !enabledClassSet.has(inst.awp_class_name)) continue;
+      const cg = consolidationByAnnId.get(inst.id);
+      if (cg) {
+        const list = groupedMembers.get(cg.groupKey) || [];
+        list.push(inst);
+        groupedMembers.set(cg.groupKey, list);
+        continue; // emit later as a single consolidated instance
+      }
       const opt = optionByName.get(inst.awp_class_name);
       const prefix = opt?.idPrefix || inst.awp_class_name.slice(0, 3).toUpperCase();
       const category = opt?.category || "Other";
@@ -2792,6 +2888,7 @@ function InstancesReportModal({
         pageIndex: inst.page_index,
         nx: Number(inst.nx) || 0,
         ny: Number(inst.ny) || 0,
+        logicalKey: `ann::${inst.id}`,
       };
       if (sps.length === 0) {
         rows.push({ ...common, instanceId: base, spaceName: null });
@@ -2802,8 +2899,66 @@ function InstancesReportModal({
         }
       }
     }
+
+    // Emit consolidated groups: one row per (group, space) using ANY member
+    // annotation as the on-drawing anchor for that space.
+    for (const [groupKey, members] of groupedMembers) {
+      if (members.length === 0) continue;
+      const first = members[0];
+      const opt = optionByName.get(first.awp_class_name);
+      const category = opt?.category || "Other";
+      const cg = consolidationByAnnId.get(first.id)!;
+      // For each unique space across all members, pick the member that lives there
+      // (so the drawing overlay anchors to that page).
+      const spaceToMember = new Map<string, any>();
+      const unassignedMembers: any[] = [];
+      for (const m of members) {
+        const fname = fileNameById.get(m.file_id) || "";
+        const sps = pageSpaceMap.get(`${fname}::${m.page_index}`) || [];
+        if (sps.length === 0) {
+          unassignedMembers.push(m);
+        } else {
+          for (const sp of sps) {
+            if (!spaceToMember.has(sp)) spaceToMember.set(sp, m);
+          }
+        }
+      }
+      if (spaceToMember.size === 0 && unassignedMembers.length === 0) continue;
+      if (spaceToMember.size === 0) {
+        const m = unassignedMembers[0];
+        rows.push({
+          annotationBaseId: cg.label,
+          instanceId: cg.label,
+          spaceName: null,
+          awpClassName: first.awp_class_name,
+          category,
+          fileId: m.file_id,
+          pageIndex: m.page_index,
+          nx: Number(m.nx) || 0,
+          ny: Number(m.ny) || 0,
+          logicalKey: `cons::${groupKey}`,
+        });
+      } else {
+        for (const [sp, m] of spaceToMember) {
+          const spId = sp.replace(/\s+/g, "_");
+          rows.push({
+            annotationBaseId: cg.label,
+            instanceId: `${cg.label}@${spId}`,
+            spaceName: sp,
+            awpClassName: first.awp_class_name,
+            category,
+            fileId: m.file_id,
+            pageIndex: m.page_index,
+            nx: Number(m.nx) || 0,
+            ny: Number(m.ny) || 0,
+            logicalKey: `cons::${groupKey}`,
+          });
+        }
+      }
+    }
+
     return rows;
-  }, [instances, optionByName, fileNameById, pageSpaceMap, enabledClassSet]);
+  }, [instances, optionByName, fileNameById, pageSpaceMap, enabledClassSet, consolidationByAnnId]);
 
   const spaceList = useMemo(() => {
     const set = new Set<string>();
@@ -2847,8 +3002,15 @@ function InstancesReportModal({
 
   const overviewTotals = useMemo(() => {
     const m = new Map<string, number>();
+    const seenConsolidated = new Set<string>();
     for (const r of expanded) {
       if (r.category !== "Asset" && r.category !== "Water System") continue;
+      // Each consolidated logical instance counts once; each plain annotation
+      // counts per row (preserves existing per-space counting behavior).
+      if (r.logicalKey.startsWith("cons::")) {
+        if (seenConsolidated.has(r.logicalKey)) continue;
+        seenConsolidated.add(r.logicalKey);
+      }
       m.set(r.awpClassName, (m.get(r.awpClassName) || 0) + 1);
     }
     return m;

@@ -13,6 +13,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Input } from "@/components/ui/input";
+import { Checkbox } from "@/components/ui/checkbox";
 import { AppHeader } from "@/components/AppHeader";
 import { Plus, X, Save, RotateCcw, ShieldAlert, ExternalLink, AlertTriangle, Loader2, Link2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
@@ -24,6 +25,7 @@ interface AWPItem {
   id: string;
   name: string;
   default_control_ids: string[];
+  can_span_multiple_spaces: boolean;
   category: "critical_assets" | "water_systems" | "processes";
 }
 
@@ -82,13 +84,20 @@ export default function Configuration() {
     queryKey: ["configuration-awps"],
     queryFn: async (): Promise<AWPItem[]> => {
       const [assetsRes, systemsRes, processesRes] = await Promise.all([
-        supabase.from("critical_assets").select("id, name, default_control_ids").eq("is_active", true).order("display_order"),
-        supabase.from("water_systems").select("id, name, default_control_ids").eq("is_active", true).order("display_order"),
-        supabase.from("processes").select("id, name, default_control_ids").eq("is_active", true).order("display_order"),
+        supabase.from("critical_assets").select("id, name, default_control_ids, can_span_multiple_spaces" as any).eq("is_active", true).order("display_order"),
+        supabase.from("water_systems").select("id, name, default_control_ids, can_span_multiple_spaces" as any).eq("is_active", true).order("display_order"),
+        supabase.from("processes").select("id, name, default_control_ids, can_span_multiple_spaces" as any).eq("is_active", true).order("display_order"),
       ]);
-      const assets: AWPItem[] = (assetsRes.data || []).map(a => ({ ...a, category: "critical_assets" as const }));
-      const systems: AWPItem[] = (systemsRes.data || []).map(s => ({ ...s, category: "water_systems" as const }));
-      const processes: AWPItem[] = (processesRes.data || []).map(p => ({ ...p, category: "processes" as const }));
+      const toItem = (cat: AWPItem["category"]) => (r: any): AWPItem => ({
+        id: r.id,
+        name: r.name,
+        default_control_ids: (r.default_control_ids as string[]) || [],
+        can_span_multiple_spaces: !!r.can_span_multiple_spaces,
+        category: cat,
+      });
+      const assets: AWPItem[] = ((assetsRes.data as any[]) || []).map(toItem("critical_assets"));
+      const systems: AWPItem[] = ((systemsRes.data as any[]) || []).map(toItem("water_systems"));
+      const processes: AWPItem[] = ((processesRes.data as any[]) || []).map(toItem("processes"));
       return [...assets, ...systems, ...processes];
     },
   });
@@ -203,6 +212,21 @@ export default function Configuration() {
   };
 
   const handleRevert = () => { setPendingChanges(new Map()); setShowRevertDialog(false); };
+
+  const handleToggleSpan = async (awp: AWPItem, next: boolean) => {
+    try {
+      const { error } = await supabase
+        .from(awp.category)
+        .update({ can_span_multiple_spaces: next } as any)
+        .eq("id", awp.id);
+      if (error) throw error;
+      toast({ title: next ? "Enabled multi-space" : "Disabled multi-space", description: awp.name });
+      await refetchAWPs();
+      queryClient.invalidateQueries({ queryKey: ["awp-options"] });
+    } catch (error: any) {
+      toast({ title: "Could not update", description: (error as any)?.message, variant: "destructive" });
+    }
+  };
 
   // Link a Google Drive doc prompt (default)
   const handleLinkPrompt = async (awpName: string, category: string) => {
@@ -489,28 +513,29 @@ export default function Configuration() {
                 <TableRow>
                   <TableHead className="w-[180px]">AWP Class</TableHead>
                   <TableHead className="w-[180px]">Default Mitigation Controls</TableHead>
+                  <TableHead className="w-[160px]">Can Span Multiple Spaces</TableHead>
                   <TableHead className="w-[350px]">Triaging Prompt</TableHead>
                   <TableHead className="w-[350px]">Full Prompt</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 <TableRow className="bg-muted/50 hover:bg-muted/50">
-                  <TableCell colSpan={4} className="font-semibold text-sm py-2">Critical Assets</TableCell>
+                  <TableCell colSpan={5} className="font-semibold text-sm py-2">Critical Assets</TableCell>
                 </TableRow>
                 {groupedAWPs.critical_assets.map((awp) => (
-                  <AWPRow key={awp.id} awp={awp} controls={controls} currentIds={getCurrentControlIds(awp)} hasChanges={hasAWPChanges(awp)} onEditControls={() => setEditingControlsAwp(awp)} triagePromptCell={renderTriagePromptCell(awp)} promptCell={renderPromptCell(awp)} />
+                  <AWPRow key={awp.id} awp={awp} controls={controls} currentIds={getCurrentControlIds(awp)} hasChanges={hasAWPChanges(awp)} onEditControls={() => setEditingControlsAwp(awp)} onToggleSpan={(v) => handleToggleSpan(awp, v)} triagePromptCell={renderTriagePromptCell(awp)} promptCell={renderPromptCell(awp)} />
                 ))}
                 <TableRow className="bg-muted/50 hover:bg-muted/50">
-                  <TableCell colSpan={4} className="font-semibold text-sm py-2">Water Systems</TableCell>
+                  <TableCell colSpan={5} className="font-semibold text-sm py-2">Water Systems</TableCell>
                 </TableRow>
                 {groupedAWPs.water_systems.map((awp) => (
-                  <AWPRow key={awp.id} awp={awp} controls={controls} currentIds={getCurrentControlIds(awp)} hasChanges={hasAWPChanges(awp)} onEditControls={() => setEditingControlsAwp(awp)} triagePromptCell={renderTriagePromptCell(awp)} promptCell={renderPromptCell(awp)} />
+                  <AWPRow key={awp.id} awp={awp} controls={controls} currentIds={getCurrentControlIds(awp)} hasChanges={hasAWPChanges(awp)} onEditControls={() => setEditingControlsAwp(awp)} onToggleSpan={(v) => handleToggleSpan(awp, v)} triagePromptCell={renderTriagePromptCell(awp)} promptCell={renderPromptCell(awp)} />
                 ))}
                 <TableRow className="bg-muted/50 hover:bg-muted/50">
-                  <TableCell colSpan={4} className="font-semibold text-sm py-2">Processes</TableCell>
+                  <TableCell colSpan={5} className="font-semibold text-sm py-2">Processes</TableCell>
                 </TableRow>
                 {groupedAWPs.processes.map((awp) => (
-                  <AWPRow key={awp.id} awp={awp} controls={controls} currentIds={getCurrentControlIds(awp)} hasChanges={hasAWPChanges(awp)} onEditControls={() => setEditingControlsAwp(awp)} triagePromptCell={renderTriagePromptCell(awp)} promptCell={renderPromptCell(awp)} />
+                  <AWPRow key={awp.id} awp={awp} controls={controls} currentIds={getCurrentControlIds(awp)} hasChanges={hasAWPChanges(awp)} onEditControls={() => setEditingControlsAwp(awp)} onToggleSpan={(v) => handleToggleSpan(awp, v)} triagePromptCell={renderTriagePromptCell(awp)} promptCell={renderPromptCell(awp)} />
                 ))}
               </TableBody>
             </Table>
@@ -580,11 +605,12 @@ interface AWPRowProps {
   currentIds: string[];
   hasChanges: boolean;
   onEditControls: () => void;
+  onToggleSpan: (next: boolean) => void;
   triagePromptCell: React.ReactNode;
   promptCell: React.ReactNode;
 }
 
-function AWPRow({ awp, controls, currentIds, hasChanges, onEditControls, triagePromptCell, promptCell }: AWPRowProps) {
+function AWPRow({ awp, controls, currentIds, hasChanges, onEditControls, onToggleSpan, triagePromptCell, promptCell }: AWPRowProps) {
   const count = currentIds.length;
   return (
     <TableRow className={hasChanges ? "bg-yellow-50/50" : ""}>
@@ -594,6 +620,13 @@ function AWPRow({ awp, controls, currentIds, hasChanges, onEditControls, triageP
           <span className="text-sm text-muted-foreground">{count} control{count !== 1 ? "s" : ""}</span>
           <Button variant="outline" size="sm" className="h-6 text-xs" onClick={onEditControls}>Edit</Button>
         </div>
+      </TableCell>
+      <TableCell className="py-2">
+        <Checkbox
+          checked={!!awp.can_span_multiple_spaces}
+          onCheckedChange={(v) => onToggleSpan(v === true)}
+          aria-label="Can span multiple spaces"
+        />
       </TableCell>
       <TableCell className="py-2">{triagePromptCell}</TableCell>
       <TableCell className="py-2">{promptCell}</TableCell>
