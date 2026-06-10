@@ -159,6 +159,9 @@ serve(async (req) => {
       redirect_on_completion: "never",
       customer: customerId,
       automatic_tax: { enabled: true },
+      // Live customers may not have a saved address; save the billing
+      // address entered in Checkout so automatic tax can be calculated.
+      customer_update: { address: "auto" },
       consent_collection: { terms_of_service: "required" },
       payment_intent_data: { description: product.name },
       metadata: {
