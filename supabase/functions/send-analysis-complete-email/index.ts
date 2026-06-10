@@ -91,6 +91,24 @@ serve(async (req) => {
       .eq("user_id", request.user_id)
       .maybeSingle();
 
+    // Per-project notification opt-out check.
+    const { data: roleRow } = await admin
+      .from("project_user_roles")
+      .select("email_notifications_enabled")
+      .eq("project_id", request.project_id)
+      .eq("user_id", request.user_id)
+      .maybeSingle();
+    if (roleRow && (roleRow as any).email_notifications_enabled === false) {
+      console.log("[send-analysis-complete-email] notifications disabled — skipping", {
+        user_id: request.user_id,
+        project_id: request.project_id,
+      });
+      return new Response(
+        JSON.stringify({ success: true, skipped: "notifications_disabled" }),
+        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+      );
+    }
+
     const isWMSV = profile?.account_type === "wmsv";
     const projectPath = isWMSV
       ? `/wmsv-project/${request.project_id}`
