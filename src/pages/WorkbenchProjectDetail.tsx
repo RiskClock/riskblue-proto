@@ -1749,7 +1749,25 @@ export default function WorkbenchProjectDetail() {
                   <TableHeader className="sticky top-[57px] z-20 bg-card">
                     <TableRow>
                       <TableHead className={`${stickyHeadFirst} h-9 py-1`}>
-                        Files ({totalFiles} file{totalFiles === 1 ? "" : "s"})
+                        <div className="inline-flex items-center gap-1.5">
+                          <span>Files ({totalFiles} file{totalFiles === 1 ? "" : "s"})</span>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <button
+                                type="button"
+                                onClick={handleDownloadAllFiles}
+                                disabled={downloadingAll || totalFiles === 0}
+                                className="text-muted-foreground hover:text-foreground p-0.5 rounded hover:bg-muted/50 disabled:opacity-50 disabled:cursor-not-allowed"
+                                aria-label="Download all files"
+                              >
+                                <Download className={`h-3.5 w-3.5 ${downloadingAll ? "animate-pulse" : ""}`} />
+                              </button>
+                            </TooltipTrigger>
+                            <TooltipContent side="bottom">
+                              {downloadingAll ? "Preparing ZIP…" : "Download all files (ZIP)"}
+                            </TooltipContent>
+                          </Tooltip>
+                        </div>
                       </TableHead>
                       {enabledCols.map((name) => {
                         const opt = optionByName.get(name);
