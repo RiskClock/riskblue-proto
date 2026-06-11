@@ -370,15 +370,17 @@ export function CreateProjectModal({ open, onOpenChange, onCreated }: CreateProj
             {/* Files */}
             <div className="space-y-2">
               <Label>Drawings</Label>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => fileInputRef.current?.click()}
-                type="button"
-              >
-                <Upload className="w-4 h-4 mr-1" />
-                Upload from Computer
-              </Button>
+              <div className="pt-1">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => fileInputRef.current?.click()}
+                  type="button"
+                >
+                  <Upload className="w-4 h-4 mr-1" />
+                  Upload from Computer
+                </Button>
+              </div>
               <input
                 ref={fileInputRef}
                 type="file"
