@@ -177,6 +177,7 @@ export default function WorkbenchProjectDetail() {
   >(null);
   const [uploadingReport, setUploadingReport] = useState(false);
   const reportInputRef = useRef<HTMLInputElement>(null);
+  const [downloadingAll, setDownloadingAll] = useState(false);
 
   const toggleExpand = (fileId: string) => {
     setExpandedFiles((prev) => {
