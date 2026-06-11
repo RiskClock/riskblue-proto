@@ -300,11 +300,33 @@ export default function WorkbenchProjectDetail() {
     );
   }, [rows]);
 
-  // NOTE: Auto-triggering the split phase on upload has been intentionally
-  // removed. Users must explicitly start the pipeline (Extract / Triage /
-  // Analyze) from the toolbar; nothing runs automatically after upload.
+  // Auto-trigger split phase if files exist with zero sheets and the
+  // pipeline isn't currently running. Acts as a safety net — uploads
+  // also invoke split immediately, but this catches legacy/imported
+  // projects where split was never run. Stops at split; downstream
+  // phases (extract/triage/analyze) are user-initiated only.
   const autoSplitInvokedRef = useRef<Set<string>>(new Set());
-  void autoSplitInvokedRef;
+  useEffect(() => {
+    if (!requestId || !rows) return;
+    if (rows.files.length === 0) return;
+    if (rows.sheets.length > 0) return;
+    if (analysisRequest?.pipeline_phase) return; // already running
+    if (autoSplitInvokedRef.current.has(requestId)) return;
+    autoSplitInvokedRef.current.add(requestId);
+    supabase.functions
+      .invoke("run-analysis-pipeline", {
+        body: { analysisRequestId: requestId, phaseOverride: "split" },
+      })
+      .then(() => {
+        queryClient.invalidateQueries({ queryKey: ["workbench-rows", requestId] });
+        queryClient.invalidateQueries({
+          queryKey: ["workbench-analysis-request", projectId],
+        });
+      })
+      .catch((e) => {
+        console.error("[workbench] auto-split failed", e);
+      });
+  }, [requestId, rows, analysisRequest?.pipeline_phase, queryClient, projectId]);
 
   // Prewarm PDFs into the shared cache so opening the viewer is instant.
   useEffect(() => {

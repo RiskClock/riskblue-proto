@@ -234,7 +234,16 @@ const ProjectWizardContent = () => {
         })
         .eq("id", analysisRequest.id);
 
-      // 5. Log activity
+      // 5. Auto-trigger split phase (PDF page normalization) so workbench
+      // shows "ready" without user having to open the project first.
+      // Bounded to split only — no downstream agents run automatically.
+      supabase.functions
+        .invoke("run-analysis-pipeline", {
+          body: { analysisRequestId: analysisRequest.id, phaseOverride: "split" },
+        })
+        .catch((e) => console.error("[wizard] auto-split kickoff failed", e));
+
+      // 6. Log activity
       logActivity("manual_drawings_upload", id, { 
         file_count: files.length,
         analysis_request_id: analysisRequest.id 

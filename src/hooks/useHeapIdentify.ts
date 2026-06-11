@@ -22,10 +22,23 @@ export const useHeapIdentify = () => {
         return;
       }
 
-      // Identify user by email
-      heap.identify(user.email);
+      // Identify user — wrapped because Heap's loader snippet can throw
+      // "heap.push is not a function" before the real SDK has loaded.
+      try {
+        heap.identify(user.email);
+      } catch (e) {
+        console.warn("Heap identify skipped (not initialized):", e);
+        return;
+      }
 
-      // Fetch display name from profiles
+      const safeAddProps = (props: Record<string, string>) => {
+        try {
+          heap.addUserProperties(props);
+        } catch (e) {
+          console.warn("Heap addUserProperties skipped:", e);
+        }
+      };
+
       try {
         const { data: profile } = await supabase
           .from("profiles")
@@ -34,22 +47,13 @@ export const useHeapIdentify = () => {
           .single();
 
         if (profile?.display_name) {
-          heap.addUserProperties({
-            Name: profile.display_name,
-            Email: user.email,
-          });
+          safeAddProps({ Name: profile.display_name, Email: user.email });
         } else {
-          // Still set email as property even without display name
-          heap.addUserProperties({
-            Email: user.email,
-          });
+          safeAddProps({ Email: user.email });
         }
       } catch (error) {
         console.error("Failed to fetch profile for Heap:", error);
-        // Still set email even if profile fetch fails
-        heap.addUserProperties({
-          Email: user.email,
-        });
+        safeAddProps({ Email: user.email });
       }
     };
 
