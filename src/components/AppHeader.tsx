@@ -56,6 +56,13 @@ export const AppHeader = ({ leftContent }: AppHeaderProps) => {
           >
             Projects
           </button>
+          <button
+            onClick={() => setBuyOpen(true)}
+            className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground"
+          >
+            <Coins className="h-4 w-4" />
+            <span>Credits: <span className="tabular-nums font-medium text-foreground">{credits}</span></span>
+          </button>
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Avatar className="cursor-pointer">
@@ -64,17 +71,6 @@ export const AppHeader = ({ leftContent }: AppHeaderProps) => {
               </Avatar>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-56">
-              <DropdownMenuItem
-                onClick={() => setBuyOpen(true)}
-                className="cursor-pointer"
-              >
-                <Coins className="h-4 w-4 mr-2" />
-                <span className="flex-1">Credits</span>
-                <span className="text-xs font-semibold tabular-nums text-muted-foreground">
-                  {credits}
-                </span>
-              </DropdownMenuItem>
-              <DropdownMenuSeparator />
               {isInternalUser && (
                 <>
                   <DropdownMenuItem onClick={() => navigate("/internal/users")} className="cursor-pointer">
