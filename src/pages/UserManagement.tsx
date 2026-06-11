@@ -718,7 +718,7 @@ const UserManagement = () => {
                                     <TooltipTrigger asChild>
                                       <span className="cursor-default">{format(new Date(u.created_at), "MMM d, yyyy")}</span>
                                     </TooltipTrigger>
-                                    <TooltipContent>{format(new Date(u.created_at), "PPpp:ss").replace(/:(\d{2}) (AM|PM)/, ":$1 $2")}</TooltipContent>
+                                    <TooltipContent>{format(new Date(u.created_at), "MMM d, yyyy h:mm:ss a")}</TooltipContent>
                                   </Tooltip>
                                 </TooltipProvider>
                               </TableCell>
@@ -732,7 +732,7 @@ const UserManagement = () => {
                                       <TooltipTrigger asChild>
                                         <span className="cursor-default">{format(new Date(u.last_sign_in_at), "MMM d, yyyy")}</span>
                                       </TooltipTrigger>
-                                      <TooltipContent>{format(new Date(u.last_sign_in_at!), "PPpp:ss").replace(/:(\d{2}) (AM|PM)/, ":$1 $2")}</TooltipContent>
+                                      <TooltipContent>{format(new Date(u.last_sign_in_at!), "MMM d, yyyy h:mm:ss a")}</TooltipContent>
                                     </Tooltip>
                                   </TooltipProvider>
                                 ) : "Never"}
