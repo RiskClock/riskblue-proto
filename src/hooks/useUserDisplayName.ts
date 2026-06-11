@@ -43,7 +43,15 @@ export const useUserDisplayName = () => {
   }, [user?.id]);
 
   const getInitial = () => {
-    return (displayName?.[0] || user?.email?.[0] || "?").toUpperCase();
+    const name = displayName?.trim();
+    if (name) {
+      const parts = name.split(/\s+/).filter(Boolean);
+      if (parts.length >= 2) {
+        return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+      }
+      return parts[0][0].toUpperCase();
+    }
+    return (user?.email?.[0] || "?").toUpperCase();
   };
 
   return { displayName, avatarUrl, getInitial };
