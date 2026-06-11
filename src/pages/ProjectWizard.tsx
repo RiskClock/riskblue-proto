@@ -184,35 +184,66 @@ const ProjectWizardContent = () => {
     setUploadingDrawings(true);
 
     try {
-      // 1. Create analysis_request record with source_type = 'manual_upload'
-      const { data: analysisRequest, error: insertError } = await supabase
+      // 1. Find latest manual_upload analysis_request for this project, or create one.
+      // Appending to the existing request avoids replacing previously uploaded files.
+      const { data: existingReq } = await supabase
         .from("analysis_requests")
-        .insert({
-          project_id: id,
-          user_id: user.id,
-          drive_folder_id: null,
-          source_type: "manual_upload",
-          status: "pending",
-          file_count: files.length,
-        })
-        .select()
-        .single();
+        .select("id, file_count, total_size_bytes")
+        .eq("project_id", id)
+        .eq("source_type", "manual_upload")
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
 
-      if (insertError) throw insertError;
+      let analysisRequest: { id: string; file_count: number | null; total_size_bytes: number | null };
 
-      // 2. Upload each file to 'uploaded-drawings' bucket
-      let totalBytes = 0;
+      if (existingReq) {
+        analysisRequest = existingReq as any;
+      } else {
+        const { data: created, error: insertError } = await supabase
+          .from("analysis_requests")
+          .insert({
+            project_id: id,
+            user_id: user.id,
+            drive_folder_id: null,
+            source_type: "manual_upload",
+            status: "pending",
+            file_count: 0,
+          })
+          .select("id, file_count, total_size_bytes")
+          .single();
+
+        if (insertError) throw insertError;
+        analysisRequest = created as any;
+      }
+
+      // Existing file names — skip duplicates so re-uploads don't error or overwrite.
+      const { data: existingFiles } = await supabase
+        .from("analysis_request_files")
+        .select("name")
+        .eq("analysis_request_id", analysisRequest.id);
+      const existingNames = new Set((existingFiles || []).map((f: any) => f.name));
+
+      // 2. Upload each new file to 'uploaded-drawings' bucket
+      let addedBytes = 0;
+      let addedCount = 0;
+      let skippedCount = 0;
       for (const file of Array.from(files)) {
+        if (existingNames.has(file.name)) {
+          skippedCount += 1;
+          continue;
+        }
         const filePath = `${id}/${analysisRequest.id}/${file.name}`;
-        
+
         const { error: uploadError } = await supabase.storage
           .from("uploaded-drawings")
           .upload(filePath, file);
 
         if (uploadError) throw uploadError;
-        totalBytes += file.size;
+        addedBytes += file.size;
+        addedCount += 1;
 
-        // 3. Create analysis_request_files record for each file
+        // 3. Create analysis_request_files record for each new file
         await supabase.from("analysis_request_files").insert({
           analysis_request_id: analysisRequest.id,
           drive_file_id: `manual_${Date.now()}_${file.name}`,
@@ -225,12 +256,13 @@ const ProjectWizardContent = () => {
         });
       }
 
-      // 4. Update analysis_request with total size and status
+      // 4. Update analysis_request with accumulated counts/size and status
       await supabase
         .from("analysis_requests")
         .update({
           status: "copied",
-          total_size_bytes: totalBytes,
+          file_count: (analysisRequest.file_count || 0) + addedCount,
+          total_size_bytes: (analysisRequest.total_size_bytes || 0) + addedBytes,
         })
         .eq("id", analysisRequest.id);
 
