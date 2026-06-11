@@ -125,6 +125,7 @@ export function CreateProjectModal({ open, onOpenChange, onCreated }: CreateProj
     !contact &&
     cost != null &&
     hasAnyClass &&
+    files.length > 0 &&
     !submitting;
 
   const toggleClass = (n: string) => {
@@ -369,7 +370,9 @@ export function CreateProjectModal({ open, onOpenChange, onCreated }: CreateProj
 
             {/* Files */}
             <div className="space-y-2">
-              <Label>Drawings</Label>
+              <Label>
+                Drawings <span className="text-destructive">*</span>
+              </Label>
               <div className="pt-1">
                 <Button
                   variant="outline"
