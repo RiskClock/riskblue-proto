@@ -266,25 +266,35 @@ const ProjectWizardContent = () => {
         })
         .eq("id", analysisRequest.id);
 
-      // 5. Auto-trigger split phase (PDF page normalization) so workbench
-      // shows "ready" without user having to open the project first.
-      // Bounded to split only — no downstream agents run automatically.
-      supabase.functions
-        .invoke("run-analysis-pipeline", {
-          body: { analysisRequestId: analysisRequest.id, phaseOverride: "split" },
-        })
-        .catch((e) => console.error("[wizard] auto-split kickoff failed", e));
+      // 5. Auto-trigger split phase only if new files were added
+      if (addedCount > 0) {
+        supabase.functions
+          .invoke("run-analysis-pipeline", {
+            body: { analysisRequestId: analysisRequest.id, phaseOverride: "split" },
+          })
+          .catch((e) => console.error("[wizard] auto-split kickoff failed", e));
+      }
 
       // 6. Log activity
-      logActivity("manual_drawings_upload", id, { 
-        file_count: files.length,
-        analysis_request_id: analysisRequest.id 
+      logActivity("manual_drawings_upload", id, {
+        file_count: addedCount,
+        skipped_count: skippedCount,
+        analysis_request_id: analysisRequest.id,
       });
 
-      toast({
-        title: "Analysis queued",
-        description: "You will be notified when results are ready for your review.",
-      });
+      if (addedCount === 0 && skippedCount > 0) {
+        toast({
+          title: "No new files added",
+          description: `${skippedCount} file${skippedCount === 1 ? "" : "s"} already uploaded.`,
+        });
+      } else {
+        toast({
+          title: addedCount > 0 ? `${addedCount} file${addedCount === 1 ? "" : "s"} added` : "Analysis queued",
+          description: skippedCount > 0
+            ? `${skippedCount} duplicate${skippedCount === 1 ? "" : "s"} skipped. You will be notified when results are ready.`
+            : "You will be notified when results are ready for your review.",
+        });
+      }
 
     } catch (error) {
       console.error("Upload error:", error);
