@@ -2232,7 +2232,7 @@ export default function WorkbenchProjectDetail() {
                   .length === 1;
               return single
                 ? activeSheet.file_name
-                : `${activeSheet.file_name} — Page ${activeSheet.page_index}`;
+                : `${activeSheet.file_name} | Page ${activeSheet.page_index}`;
             })()}
             titleAccessory={
               <span className="inline-flex items-center max-w-[40%] shrink-0">
