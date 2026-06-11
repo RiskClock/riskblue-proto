@@ -691,6 +691,73 @@ export default function WorkbenchProjectDetail() {
   }, [fileGroups]);
 
   const totalFiles = fileGroups.length;
+
+  const handleDownloadAllFiles = async () => {
+    if (downloadingAll || fileGroups.length === 0) return;
+    setDownloadingAll(true);
+    try {
+      const { default: JSZip } = await import("jszip");
+      const zip = new JSZip();
+      const usedNames = new Set<string>();
+      let added = 0;
+      const failures: string[] = [];
+
+      for (const g of fileGroups) {
+        const f = g.file;
+        if (!f.storage_path) {
+          failures.push(f.name);
+          continue;
+        }
+        const bucket = bucketForSource(f.source_type);
+        const { data, error } = await supabase.storage.from(bucket).download(f.storage_path);
+        if (error || !data) {
+          failures.push(f.name);
+          continue;
+        }
+        let name = f.name || "file";
+        if (usedNames.has(name)) {
+          const dot = name.lastIndexOf(".");
+          const base = dot > 0 ? name.slice(0, dot) : name;
+          const ext = dot > 0 ? name.slice(dot) : "";
+          let i = 2;
+          while (usedNames.has(`${base} (${i})${ext}`)) i++;
+          name = `${base} (${i})${ext}`;
+        }
+        usedNames.add(name);
+        zip.file(name, await data.arrayBuffer());
+        added++;
+      }
+
+      if (added === 0) {
+        toast({ title: "Download failed", description: "No files could be downloaded.", variant: "destructive" });
+        return;
+      }
+
+      const blob = await zip.generateAsync({ type: "blob" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      const safeProject = (project?.name || "Project").replace(/[\\/:*?"<>|]/g, "_");
+      a.download = `${safeProject} - Drawings.zip`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+
+      toast({
+        title: "Download ready",
+        description:
+          failures.length > 0
+            ? `${added} file${added === 1 ? "" : "s"} downloaded; ${failures.length} failed.`
+            : `${added} file${added === 1 ? "" : "s"} downloaded.`,
+      });
+    } catch (e: any) {
+      toast({ title: "Download failed", description: (e as any)?.message || "Unknown error", variant: "destructive" });
+    } finally {
+      setDownloadingAll(false);
+    }
+  };
+
   const anyFileProcessed = useMemo(
     () => [...fileExtractStatus.values()].some((s) => s === "processed"),
     [fileExtractStatus],
