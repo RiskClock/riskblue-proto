@@ -282,16 +282,13 @@ export function CreateProjectModal({ open, onOpenChange, onCreated }: CreateProj
   return (
     <>
       <Dialog open={open} onOpenChange={(o) => !submitting && onOpenChange(o)}>
-        <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto">
-          <DialogHeader>
+        <DialogContent className="sm:max-w-2xl max-h-[90vh] p-0 flex flex-col gap-0">
+          <DialogHeader className="px-6 pt-6 pb-4 border-b shrink-0">
             <DialogTitle>Add New Project</DialogTitle>
-            <DialogDescription>
-              Set up your project, pick the asset & water-system classes to scan,
-              and we'll calculate the credit cost.
-            </DialogDescription>
           </DialogHeader>
 
-          <div className="space-y-5 py-2">
+          <div className="flex-1 overflow-y-auto px-6 py-4">
+          <div className="space-y-5">
             {/* Name */}
             <div className="space-y-2">
               <Label htmlFor="cp-name">
