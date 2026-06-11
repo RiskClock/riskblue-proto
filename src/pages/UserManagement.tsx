@@ -48,6 +48,7 @@ import {
   CommandItem,
   CommandList,
 } from "@/components/ui/command";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -712,13 +713,29 @@ const UserManagement = () => {
                           case "created":
                             return (
                               <TableCell key={colId} className={cn("text-muted-foreground tabular-nums whitespace-nowrap", dim)}>
-                                {format(new Date(u.created_at), "MMM d, yyyy")}
+                                <TooltipProvider delayDuration={150}>
+                                  <Tooltip>
+                                    <TooltipTrigger asChild>
+                                      <span className="cursor-default">{format(new Date(u.created_at), "MMM d, yyyy")}</span>
+                                    </TooltipTrigger>
+                                    <TooltipContent>{format(new Date(u.created_at), "MMM d, yyyy h:mm:ss a")}</TooltipContent>
+                                  </Tooltip>
+                                </TooltipProvider>
                               </TableCell>
                             );
                           case "last_sign_in":
                             return (
                               <TableCell key={colId} className={cn("text-muted-foreground tabular-nums whitespace-nowrap", dim)}>
-                                {u.last_sign_in_at ? format(new Date(u.last_sign_in_at), "MMM d, yyyy") : "Never"}
+                                {u.last_sign_in_at ? (
+                                  <TooltipProvider delayDuration={150}>
+                                    <Tooltip>
+                                      <TooltipTrigger asChild>
+                                        <span className="cursor-default">{format(new Date(u.last_sign_in_at), "MMM d, yyyy")}</span>
+                                      </TooltipTrigger>
+                                      <TooltipContent>{format(new Date(u.last_sign_in_at!), "MMM d, yyyy h:mm:ss a")}</TooltipContent>
+                                    </Tooltip>
+                                  </TooltipProvider>
+                                ) : "Never"}
                               </TableCell>
                             );
                           default:
