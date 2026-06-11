@@ -125,6 +125,7 @@ export function CreateProjectModal({ open, onOpenChange, onCreated }: CreateProj
     !contact &&
     cost != null &&
     hasAnyClass &&
+    files.length > 0 &&
     !submitting;
 
   const toggleClass = (n: string) => {
