@@ -177,6 +177,7 @@ export default function WorkbenchProjectDetail() {
   >(null);
   const [uploadingReport, setUploadingReport] = useState(false);
   const reportInputRef = useRef<HTMLInputElement>(null);
+  const [downloadingAll, setDownloadingAll] = useState(false);
 
   const toggleExpand = (fileId: string) => {
     setExpandedFiles((prev) => {
@@ -690,6 +691,73 @@ export default function WorkbenchProjectDetail() {
   }, [fileGroups]);
 
   const totalFiles = fileGroups.length;
+
+  const handleDownloadAllFiles = async () => {
+    if (downloadingAll || fileGroups.length === 0) return;
+    setDownloadingAll(true);
+    try {
+      const { default: JSZip } = await import("jszip");
+      const zip = new JSZip();
+      const usedNames = new Set<string>();
+      let added = 0;
+      const failures: string[] = [];
+
+      for (const g of fileGroups) {
+        const f = g.file;
+        if (!f.storage_path) {
+          failures.push(f.name);
+          continue;
+        }
+        const bucket = bucketForSource(f.source_type);
+        const { data, error } = await supabase.storage.from(bucket).download(f.storage_path);
+        if (error || !data) {
+          failures.push(f.name);
+          continue;
+        }
+        let name = f.name || "file";
+        if (usedNames.has(name)) {
+          const dot = name.lastIndexOf(".");
+          const base = dot > 0 ? name.slice(0, dot) : name;
+          const ext = dot > 0 ? name.slice(dot) : "";
+          let i = 2;
+          while (usedNames.has(`${base} (${i})${ext}`)) i++;
+          name = `${base} (${i})${ext}`;
+        }
+        usedNames.add(name);
+        zip.file(name, await data.arrayBuffer());
+        added++;
+      }
+
+      if (added === 0) {
+        toast({ title: "Download failed", description: "No files could be downloaded.", variant: "destructive" });
+        return;
+      }
+
+      const blob = await zip.generateAsync({ type: "blob" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      const safeProject = (project?.name || "Project").replace(/[\\/:*?"<>|]/g, "_");
+      a.download = `${safeProject} - Drawings.zip`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+
+      toast({
+        title: "Download ready",
+        description:
+          failures.length > 0
+            ? `${added} file${added === 1 ? "" : "s"} downloaded; ${failures.length} failed.`
+            : `${added} file${added === 1 ? "" : "s"} downloaded.`,
+      });
+    } catch (e: any) {
+      toast({ title: "Download failed", description: (e as any)?.message || "Unknown error", variant: "destructive" });
+    } finally {
+      setDownloadingAll(false);
+    }
+  };
+
   const anyFileProcessed = useMemo(
     () => [...fileExtractStatus.values()].some((s) => s === "processed"),
     [fileExtractStatus],
@@ -1681,7 +1749,25 @@ export default function WorkbenchProjectDetail() {
                   <TableHeader className="sticky top-[57px] z-20 bg-card">
                     <TableRow>
                       <TableHead className={`${stickyHeadFirst} h-9 py-1`}>
-                        Files ({totalFiles} file{totalFiles === 1 ? "" : "s"})
+                        <div className="inline-flex items-center gap-1.5">
+                          <span>Files ({totalFiles} file{totalFiles === 1 ? "" : "s"})</span>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <button
+                                type="button"
+                                onClick={handleDownloadAllFiles}
+                                disabled={downloadingAll || totalFiles === 0}
+                                className="text-muted-foreground hover:text-foreground p-0.5 rounded hover:bg-muted/50 disabled:opacity-50 disabled:cursor-not-allowed"
+                                aria-label="Download all files"
+                              >
+                                <Download className={`h-3.5 w-3.5 ${downloadingAll ? "animate-pulse" : ""}`} />
+                              </button>
+                            </TooltipTrigger>
+                            <TooltipContent side="bottom">
+                              {downloadingAll ? "Preparing ZIP…" : "Download all files (ZIP)"}
+                            </TooltipContent>
+                          </Tooltip>
+                        </div>
                       </TableHead>
                       {enabledCols.map((name) => {
                         const opt = optionByName.get(name);
