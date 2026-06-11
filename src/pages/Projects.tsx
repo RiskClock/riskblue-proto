@@ -341,7 +341,7 @@ const Projects = () => {
                 <tr className="text-left">
                   <th className="px-6 py-3 text-sm font-medium text-foreground">Project Name</th>
                   <th className="px-6 py-3 text-sm font-medium text-foreground">Location</th>
-                  <th className="px-6 py-3 text-sm font-medium text-foreground">Credits</th>
+                  <th className="px-6 py-3 text-sm font-medium text-foreground">Credit Cost</th>
                   <th className="px-6 py-3 text-sm font-medium text-foreground">Created By</th>
                   <th className="px-6 py-3 text-sm font-medium text-foreground">Created On</th>
                   <th className="px-6 py-3 w-[120px]"></th>
@@ -355,15 +355,7 @@ const Projects = () => {
                     onClick={() => navigate(`/project/${project.id}`)}
                   >
                     <td className="px-6 py-4">
-                      <div className="flex items-center gap-2">
-                        <span className="text-foreground">{project.name}</span>
-                        <Badge
-                          variant={project.status === "completed" ? "default" : "secondary"}
-                          className="text-xs"
-                        >
-                          {project.status || "draft"}
-                        </Badge>
-                      </div>
+                      <span className="text-foreground">{project.name}</span>
                     </td>
                     <td className="px-6 py-4 text-muted-foreground">{formatLocation(project.city, project.country)}</td>
                     <td className="px-6 py-4 text-muted-foreground tabular-nums">
