@@ -485,8 +485,9 @@ export function CreateProjectModal({ open, onOpenChange, onCreated }: CreateProj
               )}
             </div>
           </div>
+          </div>
 
-          <DialogFooter>
+          <DialogFooter className="px-6 py-4 border-t shrink-0">
             <Button
               variant="outline"
               onClick={() => onOpenChange(false)}
