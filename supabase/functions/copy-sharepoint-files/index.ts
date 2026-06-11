@@ -234,6 +234,25 @@ async function copyFiles(analysisRequestId: string, supabaseUrl: string, supabas
     }).eq("id", analysisRequestId);
 
     console.log(`Completed copying ${copiedCount}/${files.length} SharePoint files`);
+
+    // Auto-trigger split phase (bounded — no downstream agents).
+    if (copiedCount > 0) {
+      try {
+        const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
+        const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+        await fetch(`${supabaseUrl}/functions/v1/run-analysis-pipeline`, {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${serviceKey}`,
+            apikey: serviceKey,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ analysisRequestId, phaseOverride: "split" }),
+        });
+      } catch (e) {
+        console.error("[copy-sharepoint-files] auto-split kickoff failed:", e);
+      }
+    }
   } catch (error) {
     console.error("SharePoint copy error:", error);
     await supabase.from("analysis_requests").update({
