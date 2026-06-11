@@ -109,11 +109,7 @@ serve(async (req) => {
       );
     }
 
-    const isWMSV = profile?.account_type === "wmsv";
-    const projectPath = isWMSV
-      ? `/wmsv-project/${request.project_id}`
-      : `/project/${request.project_id}`;
-    const projectUrl = `${appUrl.replace(/\/$/, "")}${projectPath}`;
+    const projectUrl = `${appUrl.replace(/\/$/, "")}/project/${request.project_id}`;
 
     // Prefer the deduplicated summary_data (one row per AWP class with a unique
     // instance count). Fall back to raw analysis_results if summary is missing.
