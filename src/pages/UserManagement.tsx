@@ -832,6 +832,7 @@ const UserManagement = () => {
         onOpenChange={setCreateOpen}
         companies={companies}
         availableTags={allTags}
+        allProjects={allProjects}
         onSubmit={(payload) => createMutation.mutate({ action: "create", ...payload })}
         loading={createMutation.isPending}
       />
@@ -841,11 +842,13 @@ const UserManagement = () => {
         onOpenChange={(o) => !o && setEditing(null)}
         companies={companies}
         availableTags={allTags}
+        allProjects={allProjects}
         onSubmit={(payload) =>
           updateMutation.mutate({ action: "update", user_id: editing!.user_id, ...payload })
         }
         loading={updateMutation.isPending}
       />
+
 
       <AlertDialog open={!!confirmAction} onOpenChange={(o) => !o && setConfirmAction(null)}>
         <AlertDialogContent>
