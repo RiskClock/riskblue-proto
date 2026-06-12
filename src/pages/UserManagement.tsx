@@ -378,6 +378,10 @@ const UserManagement = () => {
           va = a.credits_balance ?? 0;
           vb = b.credits_balance ?? 0;
           break;
+        case "projects":
+          va = a.projects.length;
+          vb = b.projects.length;
+          break;
         case "created_at":
         default:
           va = new Date(a.created_at).getTime();
