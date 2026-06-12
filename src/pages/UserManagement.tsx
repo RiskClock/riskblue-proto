@@ -1265,6 +1265,7 @@ function EditUserDialog({
   onOpenChange,
   companies,
   availableTags,
+  allProjects,
   onSubmit,
   loading,
 }: {
@@ -1272,6 +1273,7 @@ function EditUserDialog({
   onOpenChange: (o: boolean) => void;
   companies: string[];
   availableTags: TagOption[];
+  allProjects: ProjectOption[];
   onSubmit: (p: {
     name: string;
     is_wmsv: boolean;
@@ -1279,6 +1281,7 @@ function EditUserDialog({
     tags: string[];
     credits: number | null;
     password: string | null;
+    projects: { project_id: string; role: "admin" | "contributor" }[];
   }) => void;
   loading: boolean;
 }) {
@@ -1288,6 +1291,7 @@ function EditUserDialog({
   const [tags, setTags] = useState<string[]>([]);
   const [credits, setCredits] = useState<string>("");
   const [password, setPassword] = useState("");
+  const [projects, setProjects] = useState<{ project_id: string; role: "admin" | "contributor" }[]>([]);
 
   useEffect(() => {
     if (user) {
@@ -1297,6 +1301,12 @@ function EditUserDialog({
       setTags(user.tags.map((t) => t.name));
       setCredits(String(user.credits_balance ?? 0));
       setPassword("");
+      setProjects(
+        user.projects.map((p) => ({
+          project_id: p.id,
+          role: p.role === "admin" ? "admin" : "contributor",
+        })),
+      );
     }
   }, [user]);
 
@@ -1305,7 +1315,7 @@ function EditUserDialog({
 
   return (
     <Dialog open={!!user} onOpenChange={onOpenChange}>
-      <DialogContent>
+      <DialogContent className="max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Edit user</DialogTitle>
           <DialogDescription>{user?.email}</DialogDescription>
@@ -1355,6 +1365,11 @@ function EditUserDialog({
               <TagPicker selected={tags} onChange={setTags} available={availableTags} />
             </div>
           </div>
+          <ProjectsAssigner
+            allProjects={allProjects}
+            value={projects}
+            onChange={setProjects}
+          />
         </div>
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)} disabled={loading}>
@@ -1369,6 +1384,7 @@ function EditUserDialog({
                 tags,
                 credits: credits.trim() === "" ? null : Math.max(0, Math.floor(Number(credits))),
                 password: password.length > 0 ? password : null,
+                projects,
               })
             }
             disabled={loading || !name.trim() || !creditsValid || !pwdValid}
@@ -1378,6 +1394,121 @@ function EditUserDialog({
         </DialogFooter>
       </DialogContent>
     </Dialog>
+  );
+}
+
+// ---------- Projects assigner ----------
+
+function ProjectsAssigner({
+  allProjects,
+  value,
+  onChange,
+}: {
+  allProjects: ProjectOption[];
+  value: { project_id: string; role: "admin" | "contributor" }[];
+  onChange: (v: { project_id: string; role: "admin" | "contributor" }[]) => void;
+}) {
+  const [pickerOpen, setPickerOpen] = useState(false);
+  const [query, setQuery] = useState("");
+  const projectName = useMemo(() => {
+    const m = new Map(allProjects.map((p) => [p.id, p.name]));
+    return (id: string) => m.get(id) || "Unknown project";
+  }, [allProjects]);
+
+  const selectedIds = new Set(value.map((v) => v.project_id));
+  const available = allProjects.filter((p) => !selectedIds.has(p.id));
+  const filtered = query
+    ? available.filter((p) => p.name.toLowerCase().includes(query.toLowerCase()))
+    : available;
+
+  const addProject = (project_id: string) => {
+    onChange([...value, { project_id, role: "contributor" }]);
+    setPickerOpen(false);
+    setQuery("");
+  };
+
+  const setRole = (project_id: string, role: "admin" | "contributor") => {
+    onChange(value.map((v) => (v.project_id === project_id ? { ...v, role } : v)));
+  };
+
+  const removeProject = (project_id: string) => {
+    onChange(value.filter((v) => v.project_id !== project_id));
+  };
+
+  return (
+    <div>
+      <Label>Projects</Label>
+      <div className="mt-1 space-y-2">
+        {value.length === 0 && (
+          <p className="text-xs text-muted-foreground">No projects assigned.</p>
+        )}
+        {value.map((assignment) => (
+          <div
+            key={assignment.project_id}
+            className="flex items-center gap-2 rounded-md border bg-muted/30 px-2 py-1.5"
+          >
+            <span className="flex-1 text-sm truncate" title={projectName(assignment.project_id)}>
+              {projectName(assignment.project_id)}
+            </span>
+            <select
+              value={assignment.role}
+              onChange={(e) => setRole(assignment.project_id, e.target.value as "admin" | "contributor")}
+              className="h-8 rounded-md border bg-background text-sm px-2"
+            >
+              <option value="contributor">Contributor</option>
+              <option value="admin">Admin</option>
+            </select>
+            <Button
+              type="button"
+              size="icon"
+              variant="ghost"
+              className="h-7 w-7 shrink-0"
+              onClick={() => removeProject(assignment.project_id)}
+              aria-label="Remove project"
+            >
+              <X className="h-4 w-4" />
+            </Button>
+          </div>
+        ))}
+        <Popover open={pickerOpen} onOpenChange={setPickerOpen}>
+          <PopoverTrigger asChild>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              disabled={available.length === 0}
+              className="w-full justify-start"
+            >
+              <Plus className="h-4 w-4 mr-2" />
+              {available.length === 0 ? "All projects assigned" : "Add project"}
+            </Button>
+          </PopoverTrigger>
+          <PopoverContent className="w-[--radix-popover-trigger-width] p-0" align="start">
+            <Command>
+              <CommandInput
+                placeholder="Search projects..."
+                value={query}
+                onValueChange={setQuery}
+              />
+              <CommandList>
+                <CommandEmpty>No projects found.</CommandEmpty>
+                <CommandGroup>
+                  {filtered.map((p) => (
+                    <CommandItem
+                      key={p.id}
+                      value={p.name}
+                      onSelect={() => addProject(p.id)}
+                    >
+                      {p.name}
+                    </CommandItem>
+                  ))}
+                </CommandGroup>
+              </CommandList>
+            </Command>
+          </PopoverContent>
+        </Popover>
+      </div>
+    </div>
   );
 }
 
