@@ -295,7 +295,7 @@ const UserManagement = () => {
       });
       if (error) throw error;
       if (!data?.success) throw new Error(data?.error || "Failed to load users");
-      return data as { users: UserRow[]; companies: string[]; tags: TagOption[] };
+      return data as { users: UserRow[]; companies: string[]; tags: TagOption[]; all_projects: ProjectOption[] };
     },
     enabled: isInternal,
   });
@@ -303,6 +303,7 @@ const UserManagement = () => {
   const users = data?.users || [];
   const companies = data?.companies || [];
   const allTags = data?.tags || [];
+  const allProjects = data?.all_projects || [];
 
   // ---- persisted filters / sort ----
   const [prefs, setPrefs] = useState<PersistedPrefs>(() => loadPrefs());
