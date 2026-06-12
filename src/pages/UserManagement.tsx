@@ -704,6 +704,16 @@ const UserManagement = () => {
                                 {u.company || <span className="text-muted-foreground">—</span>}
                               </TableCell>
                             );
+                          case "projects":
+                            return (
+                              <TableCell key={colId} className={cn("text-center tabular-nums", dim)}>
+                                {u.projects.length > 0 ? (
+                                  u.projects.length
+                                ) : (
+                                  <span className="text-muted-foreground">—</span>
+                                )}
+                              </TableCell>
+                            );
                           case "tags":
                             return (
                               <TableCell key={colId} className={dim}>
