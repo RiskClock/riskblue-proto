@@ -189,12 +189,13 @@ function loadColumnPrefs(): ColumnPrefs {
     // explicitly positioned by the user (i.e. it was just auto-appended).
     const migrated = window.localStorage.getItem(PROJECTS_COL_MIGRATION_KEY) === "1";
     if (!migrated) {
-      const withoutProjects = order.filter((id) => id !== "projects");
+      const withoutProjects: ColumnId[] = order.filter((id) => id !== "projects");
       const companyIdx = withoutProjects.indexOf("company");
       const tagsIdx = withoutProjects.indexOf("tags");
       const insertIdx =
         companyIdx >= 0 ? companyIdx + 1 : tagsIdx >= 0 ? tagsIdx : withoutProjects.length;
       withoutProjects.splice(insertIdx, 0, "projects");
+
       order = withoutProjects;
       window.localStorage.setItem(PROJECTS_COL_MIGRATION_KEY, "1");
     }
