@@ -631,8 +631,9 @@ const UserManagement = () => {
         )}
 
         {!isLoading && !error && (
-          <div className="rounded-md border bg-card">
-            <Table className="[&_td]:py-2 [&_th]:py-2">
+          <div className="rounded-md border bg-card [&>div]:max-h-[calc(100vh-260px)]">
+            <Table className="[&_td]:py-2 [&_th]:py-2 [&_thead_th]:sticky [&_thead_th]:top-0 [&_thead_th]:z-10 [&_thead_th]:bg-card [&_thead_th]:shadow-[inset_0_-1px_0_hsl(var(--border))]">
+
               <TableHeader>
                 <TableRow>
                   {visibleColumns.map((colId) => {
