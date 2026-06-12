@@ -626,6 +626,12 @@ const UserManagement = () => {
                             Company <SortIcon k="company" />
                           </TableHead>
                         );
+                      case "projects":
+                        return (
+                          <TableHead key={colId} className="cursor-pointer select-none text-center" onClick={() => toggleSort("projects")}>
+                            Projects <SortIcon k="projects" />
+                          </TableHead>
+                        );
                       case "tags":
                         return (
                           <TableHead key={colId} className="cursor-pointer select-none w-[180px]" onClick={() => toggleSort("tags")}>
