@@ -86,6 +86,17 @@ interface TagOption {
   name: string;
 }
 
+interface ProjectAssignment {
+  id: string;
+  name: string;
+  role: "admin" | "contributor";
+}
+
+interface ProjectOption {
+  id: string;
+  name: string;
+}
+
 interface UserRow {
   user_id: string;
   email: string;
@@ -101,6 +112,7 @@ interface UserRow {
   banned_until: string | null;
   has_profile: boolean;
   tags: TagOption[];
+  projects: ProjectAssignment[];
 }
 
 type SortKey =
@@ -110,13 +122,15 @@ type SortKey =
   | "last_sign_in_at"
   | "status"
   | "tags"
-  | "credits";
+  | "credits"
+  | "projects";
 type SortDir = "asc" | "desc";
 
 // ---- Column configuration ----
 type ColumnId =
   | "user"
   | "company"
+  | "projects"
   | "tags"
   | "type"
   | "credits"
@@ -132,6 +146,7 @@ interface ColumnDef {
 const ALL_COLUMNS: ColumnDef[] = [
   { id: "user", label: "User" },
   { id: "company", label: "Company" },
+  { id: "projects", label: "Projects" },
   { id: "tags", label: "Tags" },
   { id: "type", label: "Type" },
   { id: "credits", label: "Credits" },
