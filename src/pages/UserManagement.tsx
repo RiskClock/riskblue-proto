@@ -1088,6 +1088,7 @@ function CreateUserDialog({
   onOpenChange,
   companies,
   availableTags,
+  allProjects,
   onSubmit,
   loading,
 }: {
@@ -1095,6 +1096,7 @@ function CreateUserDialog({
   onOpenChange: (o: boolean) => void;
   companies: string[];
   availableTags: TagOption[];
+  allProjects: ProjectOption[];
   onSubmit: (p: {
     email: string;
     name: string;
@@ -1104,6 +1106,7 @@ function CreateUserDialog({
     tags: string[];
     credits: number;
     send_welcome_email: boolean;
+    projects: { project_id: string; role: "admin" | "contributor" }[];
   }) => void;
   loading: boolean;
 }) {
@@ -1115,6 +1118,7 @@ function CreateUserDialog({
   const [tags, setTags] = useState<string[]>([]);
   const [credits, setCredits] = useState<string>("20");
   const [sendWelcomeEmail, setSendWelcomeEmail] = useState(true);
+  const [projects, setProjects] = useState<{ project_id: string; role: "admin" | "contributor" }[]>([]);
 
   useEffect(() => {
     if (open) {
@@ -1126,6 +1130,7 @@ function CreateUserDialog({
       setTags([]);
       setCredits("20");
       setSendWelcomeEmail(true);
+      setProjects([]);
     }
   }, [open]);
 
@@ -1146,17 +1151,15 @@ function CreateUserDialog({
       tags,
       credits: creditsNum,
       send_welcome_email: sendWelcomeEmail,
+      projects,
     });
   };
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent>
+      <DialogContent className="max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Create new user</DialogTitle>
-          <DialogDescription>
-            If you don't set a password, the user will receive an email with a link to set one (expires in 3 days).
-          </DialogDescription>
         </DialogHeader>
         <div className="space-y-4">
           <div>
@@ -1233,6 +1236,11 @@ function CreateUserDialog({
               <TagPicker selected={tags} onChange={setTags} available={availableTags} />
             </div>
           </div>
+          <ProjectsAssigner
+            allProjects={allProjects}
+            value={projects}
+            onChange={setProjects}
+          />
         </div>
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)} disabled={loading}>
