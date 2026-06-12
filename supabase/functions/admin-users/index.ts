@@ -135,6 +135,26 @@ async function actionList() {
 
   const profileMap = new Map((profiles || []).map((p) => [p.user_id, p]));
 
+  // Projects index (all projects + per-user role assignments)
+  const { data: allProjectsData } = await adminClient
+    .from("projects")
+    .select("id, name")
+    .order("name", { ascending: true });
+  const allProjects = (allProjectsData || []) as { id: string; name: string }[];
+  const projectNameById = new Map(allProjects.map((p) => [p.id, p.name]));
+
+  const { data: rolesData } = await adminClient
+    .from("project_user_roles")
+    .select("user_id, project_id, role");
+  const projectsByUser = new Map<string, { id: string; name: string; role: string }[]>();
+  (rolesData || []).forEach((r: any) => {
+    const name = projectNameById.get(r.project_id);
+    if (!name) return;
+    const arr = projectsByUser.get(r.user_id) || [];
+    arr.push({ id: r.project_id, name, role: r.role });
+    projectsByUser.set(r.user_id, arr);
+  });
+
   // Tags
   const { data: tagsData } = await adminClient
     .from("user_tags")
@@ -162,6 +182,9 @@ async function actionList() {
     const tags = (tagsByUser.get(u.id) || []).sort((a, b) =>
       a.name.localeCompare(b.name)
     );
+    const projects = (projectsByUser.get(u.id) || []).sort((a, b) =>
+      a.name.localeCompare(b.name)
+    );
     return {
       user_id: u.id,
       email: u.email,
@@ -177,6 +200,7 @@ async function actionList() {
       credits_balance: typeof p.credits_balance === "number" ? p.credits_balance : 0,
       has_profile: !!profileMap.get(u.id),
       tags,
+      projects,
     };
   });
 
@@ -189,7 +213,33 @@ async function actionList() {
     )
   ).sort((a, b) => a.localeCompare(b));
 
-  return { users, companies, tags: allTags };
+  return { users, companies, tags: allTags, all_projects: allProjects };
+}
+
+async function setUserProjects(
+  userId: string,
+  assignments: { project_id: string; role: string }[],
+) {
+  const cleaned = (assignments || [])
+    .filter((a) => a && typeof a.project_id === "string" && a.project_id.length > 0)
+    .map((a) => ({
+      project_id: a.project_id,
+      role: a.role === "admin" ? "admin" : "contributor",
+    }));
+
+  // Replace existing assignments with the new set.
+  await adminClient.from("project_user_roles").delete().eq("user_id", userId);
+  if (cleaned.length === 0) return;
+
+  const rows = cleaned.map((a) => ({
+    project_id: a.project_id,
+    user_id: userId,
+    role: a.role,
+  }));
+  const { error } = await adminClient
+    .from("project_user_roles")
+    .upsert(rows, { onConflict: "project_id,user_id" });
+  if (error) throw error;
 }
 
 async function ensureTagIds(tagNames: string[], userId: string | null): Promise<string[]> {
@@ -327,6 +377,14 @@ async function actionCreate(body: any, actor: { id: string | null; email: string
     console.error("setUserTags create err:", e);
   }
 
+  // Assign projects
+  const projectAssignments = Array.isArray(body.projects) ? body.projects : [];
+  try {
+    await setUserProjects(created.user.id, projectAssignments);
+  } catch (e) {
+    console.error("setUserProjects create err:", e);
+  }
+
   // Send email
   if (sendWelcomeEmail) {
     if (password) {
@@ -454,6 +512,14 @@ async function actionUpdate(body: any, actor: { id: string | null; email: string
     }
   }
 
+  if (Array.isArray(body.projects)) {
+    try {
+      await setUserProjects(userId, body.projects);
+    } catch (e: any) {
+      return json({ success: false, error: e?.message || "Failed to set projects" }, 500);
+    }
+  }
+
   // Lookup target email for log
   const { data: targetUser } = await adminClient.auth.admin.getUserById(userId);
   await logAdminEvent(userId, "admin_user_updated", actor, {
@@ -464,6 +530,7 @@ async function actionUpdate(body: any, actor: { id: string | null; email: string
       ...(typeof body.is_wmsv === "boolean" ? { account_type: body.is_wmsv ? "wmsv" : "standard" } : {}),
       ...(updates.credits_balance !== undefined ? { credits_balance: updates.credits_balance } : {}),
       ...(Array.isArray(body.tags) ? { tags: body.tags } : {}),
+      ...(Array.isArray(body.projects) ? { projects: body.projects } : {}),
       ...(passwordChanged ? { password_set: true } : {}),
     },
   });
