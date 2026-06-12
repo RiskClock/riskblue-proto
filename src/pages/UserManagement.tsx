@@ -162,6 +162,8 @@ interface ColumnPrefs {
   visible: Record<ColumnId, boolean>;
 }
 
+const PROJECTS_COL_MIGRATION_KEY = "user-management-columns:projects-placed:v1";
+
 function loadColumnPrefs(): ColumnPrefs {
   const defaults: ColumnPrefs = {
     order: ALL_COLUMNS.map((c) => c.id),
@@ -170,14 +172,32 @@ function loadColumnPrefs(): ColumnPrefs {
   if (typeof window === "undefined") return defaults;
   try {
     const raw = window.localStorage.getItem(COLUMN_PREFS_KEY);
-    if (!raw) return defaults;
+    if (!raw) {
+      // First-time user: mark migration as done so we don't relocate on later loads
+      window.localStorage.setItem(PROJECTS_COL_MIGRATION_KEY, "1");
+      return defaults;
+    }
     const parsed = JSON.parse(raw);
     const validIds = new Set(ALL_COLUMNS.map((c) => c.id));
-    const order: ColumnId[] = Array.isArray(parsed.order)
+    let order: ColumnId[] = Array.isArray(parsed.order)
       ? parsed.order.filter((id: any) => validIds.has(id))
       : defaults.order;
+    const hadProjects = order.includes("projects");
     // Append any missing
     for (const c of ALL_COLUMNS) if (!order.includes(c.id)) order.push(c.id);
+    // One-time migration: place "projects" between "company" and "tags" if it wasn't
+    // explicitly positioned by the user (i.e. it was just auto-appended).
+    const migrated = window.localStorage.getItem(PROJECTS_COL_MIGRATION_KEY) === "1";
+    if (!migrated) {
+      const withoutProjects = order.filter((id) => id !== "projects");
+      const companyIdx = withoutProjects.indexOf("company");
+      const tagsIdx = withoutProjects.indexOf("tags");
+      const insertIdx =
+        companyIdx >= 0 ? companyIdx + 1 : tagsIdx >= 0 ? tagsIdx : withoutProjects.length;
+      withoutProjects.splice(insertIdx, 0, "projects");
+      order = withoutProjects;
+      window.localStorage.setItem(PROJECTS_COL_MIGRATION_KEY, "1");
+    }
     // Force "user" first
     const filtered = order.filter((id) => id !== "user");
     const finalOrder = ["user" as ColumnId, ...filtered];
@@ -188,11 +208,13 @@ function loadColumnPrefs(): ColumnPrefs {
       }
     }
     visible.user = true; // always visible
+    void hadProjects;
     return { order: finalOrder, visible };
   } catch {
     return defaults;
   }
 }
+
 
 function formatCredits(n: number): string {
   if (!Number.isFinite(n)) return "0";
