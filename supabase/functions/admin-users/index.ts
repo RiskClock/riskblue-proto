@@ -512,6 +512,14 @@ async function actionUpdate(body: any, actor: { id: string | null; email: string
     }
   }
 
+  if (Array.isArray(body.projects)) {
+    try {
+      await setUserProjects(userId, body.projects);
+    } catch (e: any) {
+      return json({ success: false, error: e?.message || "Failed to set projects" }, 500);
+    }
+  }
+
   // Lookup target email for log
   const { data: targetUser } = await adminClient.auth.admin.getUserById(userId);
   await logAdminEvent(userId, "admin_user_updated", actor, {
@@ -522,6 +530,7 @@ async function actionUpdate(body: any, actor: { id: string | null; email: string
       ...(typeof body.is_wmsv === "boolean" ? { account_type: body.is_wmsv ? "wmsv" : "standard" } : {}),
       ...(updates.credits_balance !== undefined ? { credits_balance: updates.credits_balance } : {}),
       ...(Array.isArray(body.tags) ? { tags: body.tags } : {}),
+      ...(Array.isArray(body.projects) ? { projects: body.projects } : {}),
       ...(passwordChanged ? { password_set: true } : {}),
     },
   });
