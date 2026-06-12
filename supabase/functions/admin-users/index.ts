@@ -377,6 +377,14 @@ async function actionCreate(body: any, actor: { id: string | null; email: string
     console.error("setUserTags create err:", e);
   }
 
+  // Assign projects
+  const projectAssignments = Array.isArray(body.projects) ? body.projects : [];
+  try {
+    await setUserProjects(created.user.id, projectAssignments);
+  } catch (e) {
+    console.error("setUserProjects create err:", e);
+  }
+
   // Send email
   if (sendWelcomeEmail) {
     if (password) {
