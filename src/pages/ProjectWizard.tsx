@@ -1406,7 +1406,7 @@ const ProjectWizardContent = () => {
               <h2 className="text-md font-medium text-foreground">
                 {projectData.name || "Unnamed Project"}
               </h2>
-              {isAdmin && id && id !== "new" && (
+              {(isAdmin || isInternalUser) && id && id !== "new" && (
                 <Button
                   variant="outline"
                   size="sm"
