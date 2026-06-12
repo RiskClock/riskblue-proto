@@ -135,6 +135,26 @@ async function actionList() {
 
   const profileMap = new Map((profiles || []).map((p) => [p.user_id, p]));
 
+  // Projects index (all projects + per-user role assignments)
+  const { data: allProjectsData } = await adminClient
+    .from("projects")
+    .select("id, name")
+    .order("name", { ascending: true });
+  const allProjects = (allProjectsData || []) as { id: string; name: string }[];
+  const projectNameById = new Map(allProjects.map((p) => [p.id, p.name]));
+
+  const { data: rolesData } = await adminClient
+    .from("project_user_roles")
+    .select("user_id, project_id, role");
+  const projectsByUser = new Map<string, { id: string; name: string; role: string }[]>();
+  (rolesData || []).forEach((r: any) => {
+    const name = projectNameById.get(r.project_id);
+    if (!name) return;
+    const arr = projectsByUser.get(r.user_id) || [];
+    arr.push({ id: r.project_id, name, role: r.role });
+    projectsByUser.set(r.user_id, arr);
+  });
+
   // Tags
   const { data: tagsData } = await adminClient
     .from("user_tags")
