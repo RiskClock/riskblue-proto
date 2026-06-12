@@ -168,6 +168,19 @@ export default function WorkbenchProjectDetail() {
   // (but not across browser refresh).
   const [sidebarExpandedClasses, setSidebarExpandedClasses] = useState<Set<string>>(new Set());
   const [exporting, setExporting] = useState(false);
+  // Space Determinator
+  const [spaceDeterminatorRunning, setSpaceDeterminatorRunning] = useState(false);
+  const [spaceDeterminatorOpen, setSpaceDeterminatorOpen] = useState(false);
+  const [spaceDeterminatorResults, setSpaceDeterminatorResults] = useState<Array<{
+    sheetId: string;
+    name: string;
+    sheet_number: string | null;
+    page_index: number;
+    is_floor_plan: boolean | null;
+    confidence: number | null;
+    reason: string | null;
+    error?: string;
+  }>>([]);
   const [spaceModalOpen, setSpaceModalOpen] = useState(false);
   const [buildingSpace, setBuildingSpace] = useState(false);
   const [instancesReportOpen, setInstancesReportOpen] = useState(false);
