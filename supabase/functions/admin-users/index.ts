@@ -182,6 +182,9 @@ async function actionList() {
     const tags = (tagsByUser.get(u.id) || []).sort((a, b) =>
       a.name.localeCompare(b.name)
     );
+    const projects = (projectsByUser.get(u.id) || []).sort((a, b) =>
+      a.name.localeCompare(b.name)
+    );
     return {
       user_id: u.id,
       email: u.email,
@@ -197,6 +200,7 @@ async function actionList() {
       credits_balance: typeof p.credits_balance === "number" ? p.credits_balance : 0,
       has_profile: !!profileMap.get(u.id),
       tags,
+      projects,
     };
   });
 
@@ -209,7 +213,33 @@ async function actionList() {
     )
   ).sort((a, b) => a.localeCompare(b));
 
-  return { users, companies, tags: allTags };
+  return { users, companies, tags: allTags, all_projects: allProjects };
+}
+
+async function setUserProjects(
+  userId: string,
+  assignments: { project_id: string; role: string }[],
+) {
+  const cleaned = (assignments || [])
+    .filter((a) => a && typeof a.project_id === "string" && a.project_id.length > 0)
+    .map((a) => ({
+      project_id: a.project_id,
+      role: a.role === "admin" ? "admin" : "contributor",
+    }));
+
+  // Replace existing assignments with the new set.
+  await adminClient.from("project_user_roles").delete().eq("user_id", userId);
+  if (cleaned.length === 0) return;
+
+  const rows = cleaned.map((a) => ({
+    project_id: a.project_id,
+    user_id: userId,
+    role: a.role,
+  }));
+  const { error } = await adminClient
+    .from("project_user_roles")
+    .upsert(rows, { onConflict: "project_id,user_id" });
+  if (error) throw error;
 }
 
 async function ensureTagIds(tagNames: string[], userId: string | null): Promise<string[]> {
