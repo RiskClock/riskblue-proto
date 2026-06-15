@@ -994,25 +994,64 @@ export default function WorkbenchProjectDetail() {
     classesOverride?: string[],
   ) => {
     if (!requestId) return;
-    // Confirm rerun if a previous run already produced data for this phase.
-    const hasPrior =
-      phase === "extract"
-        ? (fileGroups || []).some((g) => fileExtractStatus.get(g.file.id) === "processed")
-        : phase === "triage"
+
+    // --- Extract Context: three-way branch -------------------------------
+    // 1) Resume: any sheet still pending OR the pipeline_phase is stuck on
+    //    'extracting' (timed-out prior run). Skip the wipe + only re-process
+    //    sheets that don't yet have extracted text.
+    // 2) Re-run: every sheet is already extracted → confirm overwrite,
+    //    full wipe + re-extract everything (legacy behavior).
+    // 3) Fresh: nothing extracted yet → run as today (no confirm, no wipe).
+    let isResumeExtract = false;
+    if (phase === "extract") {
+      const allSheets = rows?.sheets ?? [];
+      const totalSheets = allSheets.length;
+      const pendingSheets = allSheets.filter(
+        (s) => s.extract_status !== "extracted" && s.extract_status !== "skipped",
+      ).length;
+      const phaseStalledOnExtract =
+        (analysisRequest?.pipeline_phase ?? null) === "extracting" &&
+        (analysisRequest?.status ?? "") !== "complete";
+      const hasAnyExtracted = totalSheets > 0 && pendingSheets < totalSheets;
+
+      if (pendingSheets > 0 && (hasAnyExtracted || phaseStalledOnExtract)) {
+        // Resume path
+        const msg = phaseStalledOnExtract
+          ? `Extract Context appears stalled. Resume? ${pendingSheets} of ${totalSheets} pages still need extraction. Already-extracted pages will be kept.`
+          : `Resume extracting context? ${pendingSheets} of ${totalSheets} pages still need extraction.`;
+        if (!window.confirm(msg)) return;
+        isResumeExtract = true;
+      } else {
+        const hasPrior = (fileGroups || []).some(
+          (g) => fileExtractStatus.get(g.file.id) === "processed",
+        );
+        if (hasPrior) {
+          if (!window.confirm(
+            `Extract Context has already run for this project. Re-run and overwrite existing results?`,
+          )) {
+            return;
+          }
+        }
+      }
+    } else {
+      const hasPrior =
+        phase === "triage"
           ? (triage?.length ?? 0) > 0
           : (analyzeRows?.length ?? 0) > 0;
-    if (hasPrior) {
-      const label = phase === "extract" ? "Extract Context" : phase === "triage" ? "Triage" : "Analyze";
-      if (!window.confirm(`${label} has already run for this project. Re-run and overwrite existing results?`)) {
-        return;
+      if (hasPrior) {
+        const label = phase === "triage" ? "Triage" : "Analyze";
+        if (!window.confirm(`${label} has already run for this project. Re-run and overwrite existing results?`)) {
+          return;
+        }
       }
     }
     setRunning(phase);
     try {
-      // For Extract Context, proactively clear the per-sheet/file extracted
-      // text so the "Processed" badges disappear immediately while the new
-      // extraction is in flight.
-      if (phase === "extract") {
+      // For a full Extract Context re-run, proactively clear the per-sheet/file
+      // extracted text so the "Processed" badges disappear immediately while
+      // the new extraction is in flight. Skip this on a Resume so partial
+      // progress is preserved.
+      if (phase === "extract" && !isResumeExtract) {
         await Promise.all([
           supabase
             .from("analysis_request_sheets")
@@ -1031,6 +1070,9 @@ export default function WorkbenchProjectDetail() {
         analysisRequestId: requestId,
         phaseOverride: phase,
       };
+      if (phase === "extract" && isResumeExtract) {
+        body.resumeExtract = true;
+      }
       if (phase === "triage" || phase === "analyze") {
         // Send eligible classes (those visible as columns) so triage actually runs
         const enabledAwpClasses = classesOverride
@@ -1046,6 +1088,7 @@ export default function WorkbenchProjectDetail() {
       if (error) throw error;
       if (phase === "triage") toast({ title: "Triage started" });
       else if (phase === "analyze") toast({ title: "Analyze started" });
+      else if (isResumeExtract) toast({ title: "Resuming Extract Context" });
       queryClient.invalidateQueries({ queryKey: ["workbench-rows", requestId] });
       queryClient.invalidateQueries({ queryKey: ["workbench-triage", requestId] });
       queryClient.invalidateQueries({ queryKey: ["workbench-analyze", requestId] });

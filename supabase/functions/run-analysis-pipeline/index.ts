@@ -698,6 +698,7 @@ Deno.serve(async (req) => {
       analyzeModel,
       phaseOverride,
       scopedSheetIds,
+      resumeExtract,
     } = body as {
       analysisRequestId: string;
       action?: string;
@@ -706,11 +707,13 @@ Deno.serve(async (req) => {
       analyzeModel?: string;
       phaseOverride?: string;
       scopedSheetIds?: string[];
+      resumeExtract?: boolean;
     };
     const sheetScope =
       Array.isArray(scopedSheetIds) && scopedSheetIds.length > 0
         ? scopedSheetIds
         : null;
+    const isResumeExtract = phaseOverride === "extract" && resumeExtract === true;
 
     if (!analysisRequestId) return json({ error: "Missing analysisRequestId" }, 400);
 
@@ -807,7 +810,8 @@ Deno.serve(async (req) => {
       phaseOverride === "summarize" ||
       phaseOverride === "analyze" ||
       phaseOverride === "triage" ||
-      phaseOverride === "split";
+      phaseOverride === "split" ||
+      isResumeExtract;
 
     if (preserveRun) {
       const { data: cur } = await admin
@@ -887,9 +891,10 @@ Deno.serve(async (req) => {
     }
 
     // ---- Phase-aware cleanup
-    if (phaseOverride === "summarize" || phaseOverride === "split") {
+    if (phaseOverride === "summarize" || phaseOverride === "split" || isResumeExtract) {
       // summarize: internal worker re-invocation — keep analyze results intact.
       // split: lightweight prep run — must not wipe any data.
+      // resume extract: keep already-extracted sheets + downstream artifacts.
     } else {
       // Cancel any stale pending/processing jobs from PRIOR runs (different
       // run id or NULL). For preserved-run phases, current-run jobs are
@@ -1020,6 +1025,7 @@ Deno.serve(async (req) => {
       phaseOverride,
       activeRunId,
       scopedSheetIds: sheetScope,
+      resumeExtract: isResumeExtract,
     });
 
     if (typeof (globalThis as any).EdgeRuntime?.waitUntil === "function") {
@@ -1056,6 +1062,7 @@ interface PipelineParams {
   phaseOverride?: string;
   activeRunId: string | null;
   scopedSheetIds?: string[] | null;
+  resumeExtract?: boolean;
 }
 
 async function runPipeline(params: PipelineParams) {
@@ -1072,6 +1079,7 @@ async function runPipeline(params: PipelineParams) {
     phaseOverride,
     activeRunId,
     scopedSheetIds,
+    resumeExtract,
   } = params;
   const sheetScopeSet =
     Array.isArray(scopedSheetIds) && scopedSheetIds.length > 0
@@ -1168,7 +1176,10 @@ async function runPipeline(params: PipelineParams) {
     // Backfill: when override is triage or analyze, the extract phase runs
     // only for units that don't yet have extracted text. Likewise for triage
     // under override=analyze.
-    const isBackfillExtract = phaseOverride === "triage" || phaseOverride === "analyze";
+    const isBackfillExtract =
+      phaseOverride === "triage" ||
+      phaseOverride === "analyze" ||
+      (phaseOverride === "extract" && resumeExtract === true);
     const isBackfillTriage = phaseOverride === "analyze";
 
     // Helper for stopped cleanup
