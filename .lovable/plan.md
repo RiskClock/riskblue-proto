@@ -1,42 +1,40 @@
-# Space Determinator
+# Fix stuck Extract Context + prevent it from happening again
 
-Add a "Space Determinator" button at the bottom of the Workbench project detail page. Clicking it classifies every page (sheet) that already has extracted text by calling OpenAI's Responses API, then surfaces results as toast/console output (no persistence yet).
+## Root cause (corrected)
+"Combined Mech - Brownlow.pdf" (51 pages) is stuck because the Extract phase runs as a sequential in-process loop calling `triage-drawings` per sheet inside one edge function invocation. With 163 sheets, the invocation hit the edge runtime wall-time limit at sheet 111. The row was left at `pipeline_phase='extracting'` with no jobs queued and no watchdog, so nothing ever resumes it.
 
-## Scope
-- Pages: `analysis_request_sheets` for the project's latest analysis request, filtered to rows where `extracted_text` is non-null/non-empty.
-- One Responses API call per sheet (a "page/subpage" = one row in `analysis_request_sheets`).
-- No DB writes — results returned to the client and shown via toast + `console.log` table.
+The split→extract handoff actually worked. The real gaps are: (a) the extract phase isn't resumable, (b) the UI's "already run, overwrite?" confirm forces a full restart even when most work is done, and (c) there's no watchdog to surface stalled runs.
 
-## UI
-- Location: bottom of `src/pages/WorkbenchProjectDetail.tsx`, after the existing content (a new section above the footer with a single primary button).
-- Label: "Space Determinator".
-- Visible to internal (`@riskclock.com`) users only, matching the rest of the workbench gating.
-- Behavior:
-  - Disabled when no analysis request / no sheets with extracted text.
-  - While running: spinner, button disabled, live toast "Classifying N pages…".
-  - On completion: success toast `"X of N pages classified as floor plans"`; a result modal (simple `Dialog`) listing each sheet (`name` / `sheet_number` · `page_index`) with `is_floor_plan` badge, confidence %, and short reason. Closable; nothing persisted.
-  - On error: error toast with message extracted via `(error as any)?.message`.
+## Changes
 
-## Backend — new edge function `space-determinator`
-- Path: `supabase/functions/space-determinator/index.ts`.
-- Input: `{ analysisRequestId: string }`.
-- Auth: verify caller is internal (email ends with `@riskclock.com`) using the user's JWT; otherwise 403.
-- Steps:
-  1. Load all sheets for the request where `extracted_text` is not null and length > 0. Select `id, name, sheet_number, page_index, extracted_text`.
-  2. For each sheet, call `https://api.openai.com/v1/responses` with model `gpt-5-mini`, the developer system prompt provided by the user, and the user prompt with `{insert_your_extracted_text_here}` replaced by the sheet's extracted text (truncated to ~20k chars to stay within token budget).
-  3. Use OpenAI structured output (`response_format: json_schema`) with schema:
-     ```json
-     { "is_floor_plan": boolean, "confidence": number (0..1), "reason": string }
-     ```
-  4. Run requests with a small concurrency limit (e.g. 5 in flight) to avoid rate-limiting.
-  5. Return `{ results: [{ sheetId, name, sheet_number, page_index, is_floor_plan, confidence, reason, error? }], summary: { total, floor_plans, errors } }`.
-- Uses existing `OPENAI_API_KEY` secret. Standard CORS headers.
+### 1. Backend — `supabase/functions/run-analysis-pipeline/index.ts`
+- Accept a new body flag `resumeExtract: boolean`.
+- When `phaseOverride === 'extract'` AND (`resumeExtract === true` OR the request row is already `pipeline_phase='extracting'` with some sheets still `extract_status='pending'`), treat extract like backfill: only process sheets where `extract_status != 'extracted'` and `extracted_text` is empty. Do not clear anything.
+- Keep existing behavior for explicit full re-run.
+
+### 2. Frontend — `src/pages/WorkbenchProjectDetail.tsx` (`runPipeline('extract')`)
+Three-way branch on Extract Context click:
+- **Stalled / partial** (any sheet `extract_status='pending'` OR `pipeline_phase='extracting'`):
+  Confirm `"Resume extracting context? X of Y sheets remaining."` → invoke with `{ phaseOverride: 'extract', resumeExtract: true }`. **Do not clear sheets.**
+- **All sheets already extracted**:
+  Keep current `"Extract Context has already run… Re-run and overwrite?"` → clear + full re-run (current behavior).
+- **Fresh**:
+  Run as today.
+
+### 3. Watchdog — pg_cron via `supabase--migration`
+Add `public.watchdog_stalled_pipelines()` and a 2-minute pg_cron schedule:
+- Find `analysis_requests` where `status='processing'` AND `pipeline_phase IN ('splitting','extracting','triaging','analyzing','summarizing','dispatching_analyze')` AND `updated_at < now() - interval '10 minutes'`.
+- Set `status='failed'`, `error_message='Pipeline stalled: no progress for >10 minutes in phase <phase>. Click the phase button to resume.'`. This unblocks the UI (button returns to idle) without losing partial progress (extracted sheets stay extracted).
+- Excludes `pipeline_stop_requested=true` rows.
+
+### 4. Unstick the current row (one-time)
+Use `supabase--insert` to reset request `edb96f71-5db8-44cb-b55e-bb5854af3b29` so the user can click Extract Context and get the new "Resume extracting? 51 of 163 sheets remaining" path immediately. No sheet data is touched.
 
 ## Files touched
-- New: `supabase/functions/space-determinator/index.ts`.
-- Edited: `src/pages/WorkbenchProjectDetail.tsx` — add button, dialog, invoke logic; reuse `supabase.functions.invoke("space-determinator", …)`.
+- `supabase/functions/run-analysis-pipeline/index.ts` — add `resumeExtract` flag + skip-already-extracted filter when set.
+- `src/pages/WorkbenchProjectDetail.tsx` — branch Extract Context handler; suppress sheet wipe on resume.
+- Migration — `watchdog_stalled_pipelines()` function + pg_cron schedule.
+- Data fix — reset the one stuck row.
 
-## Out of scope (per answers)
-- No DB persistence, no new columns, no new pipeline phase.
-- No retries beyond a single attempt per sheet.
-- No changes to triage/analyze pipelines.
+## Out of scope (intentionally)
+- Not converting Extract into a job-queue–driven phase (bigger refactor). Resumability + watchdog cover the failure mode end-to-end for now; if Extract phase keeps stalling on very large uploads we revisit then.
