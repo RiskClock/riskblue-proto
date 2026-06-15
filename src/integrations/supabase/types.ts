@@ -322,9 +322,12 @@ export type Database = {
           openai_file_uploaded_at: string | null
           page_index: number
           parent_file_id: string
+          png_storage_path: string | null
           sheet_number: string | null
           sheet_title: string | null
           storage_path: string | null
+          survey_result: string | null
+          survey_updated_at: string | null
           updated_at: string
         }
         Insert: {
@@ -346,9 +349,12 @@ export type Database = {
           openai_file_uploaded_at?: string | null
           page_index: number
           parent_file_id: string
+          png_storage_path?: string | null
           sheet_number?: string | null
           sheet_title?: string | null
           storage_path?: string | null
+          survey_result?: string | null
+          survey_updated_at?: string | null
           updated_at?: string
         }
         Update: {
@@ -370,9 +376,12 @@ export type Database = {
           openai_file_uploaded_at?: string | null
           page_index?: number
           parent_file_id?: string
+          png_storage_path?: string | null
           sheet_number?: string | null
           sheet_title?: string | null
           storage_path?: string | null
+          survey_result?: string | null
+          survey_updated_at?: string | null
           updated_at?: string
         }
         Relationships: [
