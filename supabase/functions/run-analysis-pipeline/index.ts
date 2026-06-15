@@ -1062,6 +1062,7 @@ interface PipelineParams {
   phaseOverride?: string;
   activeRunId: string | null;
   scopedSheetIds?: string[] | null;
+  resumeExtract?: boolean;
 }
 
 async function runPipeline(params: PipelineParams) {
@@ -1078,6 +1079,7 @@ async function runPipeline(params: PipelineParams) {
     phaseOverride,
     activeRunId,
     scopedSheetIds,
+    resumeExtract,
   } = params;
   const sheetScopeSet =
     Array.isArray(scopedSheetIds) && scopedSheetIds.length > 0
