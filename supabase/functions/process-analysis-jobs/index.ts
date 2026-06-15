@@ -5,6 +5,38 @@
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { PDFDocument } from "https://esm.sh/pdf-lib@1.17.1";
+import * as mupdf from "npm:mupdf@1.3.0";
+
+// Render a single PDF page (0-based index) from raw PDF bytes to a PNG Uint8Array.
+// Uses MuPDF WASM (works in Deno edge runtime). Scale ~1.5 ≈ 108 DPI.
+async function renderPageToPng(
+  pdfBytes: Uint8Array,
+  pageIndex: number,
+  scale = 1.5,
+): Promise<Uint8Array> {
+  const doc = (mupdf as any).Document.openDocument(pdfBytes, "application/pdf");
+  try {
+    const page = doc.loadPage(pageIndex);
+    try {
+      const matrix = (mupdf as any).Matrix.scale(scale, scale);
+      const pixmap = page.toPixmap(
+        matrix,
+        (mupdf as any).ColorSpace.DeviceRGB,
+        false,
+        true,
+      );
+      try {
+        return pixmap.asPNG();
+      } finally {
+        pixmap.destroy?.();
+      }
+    } finally {
+      page.destroy?.();
+    }
+  } finally {
+    doc.destroy?.();
+  }
+}
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -866,6 +898,7 @@ async function runSplitPdfChunk(
     const pageNumber = pageIndex + 1;
     const sheetName = `${baseName} — p${pageNumber}.pdf`;
     const storagePath = `${sheetPrefix}/page-${String(pageNumber).padStart(4, "0")}.pdf`;
+    const pngStoragePath = `${sheetPrefix}/page-${String(pageNumber).padStart(4, "0")}.png`;
 
     try {
       const newDoc = await PDFDocument.create();
@@ -880,6 +913,29 @@ async function runSplitPdfChunk(
       );
       if (upErr) throw new Error(`upload: ${upErr.message}`);
 
+      // Render PNG of this page and upload alongside the PDF. PNG render is
+      // best-effort: a failure logs a warning but does not fail the split job.
+      let pngPathToStore: string | null = null;
+      try {
+        const pngBytes = await renderPageToPng(bytes, 0, 1.5);
+        const { error: pngErr } = await admin.storage.from(bucket).upload(
+          pngStoragePath,
+          new Blob([pngBytes], { type: "image/png" }),
+          { contentType: "image/png", upsert: true },
+        );
+        if (pngErr) {
+          console.warn(
+            `[split] job=${job.id} page ${pageIndex} png upload failed: ${pngErr.message}`,
+          );
+        } else {
+          pngPathToStore = pngStoragePath;
+        }
+      } catch (e: any) {
+        console.warn(
+          `[split] job=${job.id} page ${pageIndex} png render failed: ${e?.message ?? e}`,
+        );
+      }
+
       // Idempotent upsert keyed by (parent_file_id, page_index)
       // page_index is stored as 1-based to match human page numbers.
       const { error: upsertErr } = await admin
@@ -891,6 +947,7 @@ async function runSplitPdfChunk(
             page_index: pageNumber,
             name: sheetName,
             storage_path: storagePath,
+            png_storage_path: pngPathToStore,
             extract_status: "pending",
             extract_error: null,
           } as any,
