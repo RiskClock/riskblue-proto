@@ -542,6 +542,7 @@ export default function Configuration() {
           </div>
         )}
 
+        <SurveyPagePromptSection />
         <SpaceHierarchyPromptSection />
       </main>
 
