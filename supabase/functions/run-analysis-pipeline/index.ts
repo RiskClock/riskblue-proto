@@ -891,9 +891,10 @@ Deno.serve(async (req) => {
     }
 
     // ---- Phase-aware cleanup
-    if (phaseOverride === "summarize" || phaseOverride === "split") {
+    if (phaseOverride === "summarize" || phaseOverride === "split" || isResumeExtract) {
       // summarize: internal worker re-invocation — keep analyze results intact.
       // split: lightweight prep run — must not wipe any data.
+      // resume extract: keep already-extracted sheets + downstream artifacts.
     } else {
       // Cancel any stale pending/processing jobs from PRIOR runs (different
       // run id or NULL). For preserved-run phases, current-run jobs are
