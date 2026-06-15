@@ -898,6 +898,7 @@ async function runSplitPdfChunk(
     const pageNumber = pageIndex + 1;
     const sheetName = `${baseName} — p${pageNumber}.pdf`;
     const storagePath = `${sheetPrefix}/page-${String(pageNumber).padStart(4, "0")}.pdf`;
+    const pngStoragePath = `${sheetPrefix}/page-${String(pageNumber).padStart(4, "0")}.png`;
 
     try {
       const newDoc = await PDFDocument.create();
@@ -912,6 +913,29 @@ async function runSplitPdfChunk(
       );
       if (upErr) throw new Error(`upload: ${upErr.message}`);
 
+      // Render PNG of this page and upload alongside the PDF. PNG render is
+      // best-effort: a failure logs a warning but does not fail the split job.
+      let pngPathToStore: string | null = null;
+      try {
+        const pngBytes = await renderPageToPng(bytes, 0, 1.5);
+        const { error: pngErr } = await admin.storage.from(bucket).upload(
+          pngStoragePath,
+          new Blob([pngBytes], { type: "image/png" }),
+          { contentType: "image/png", upsert: true },
+        );
+        if (pngErr) {
+          console.warn(
+            `[split] job=${job.id} page ${pageIndex} png upload failed: ${pngErr.message}`,
+          );
+        } else {
+          pngPathToStore = pngStoragePath;
+        }
+      } catch (e: any) {
+        console.warn(
+          `[split] job=${job.id} page ${pageIndex} png render failed: ${e?.message ?? e}`,
+        );
+      }
+
       // Idempotent upsert keyed by (parent_file_id, page_index)
       // page_index is stored as 1-based to match human page numbers.
       const { error: upsertErr } = await admin
@@ -923,6 +947,7 @@ async function runSplitPdfChunk(
             page_index: pageNumber,
             name: sheetName,
             storage_path: storagePath,
+            png_storage_path: pngPathToStore,
             extract_status: "pending",
             extract_error: null,
           } as any,
