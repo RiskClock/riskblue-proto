@@ -1176,7 +1176,10 @@ async function runPipeline(params: PipelineParams) {
     // Backfill: when override is triage or analyze, the extract phase runs
     // only for units that don't yet have extracted text. Likewise for triage
     // under override=analyze.
-    const isBackfillExtract = phaseOverride === "triage" || phaseOverride === "analyze";
+    const isBackfillExtract =
+      phaseOverride === "triage" ||
+      phaseOverride === "analyze" ||
+      (phaseOverride === "extract" && resumeExtract === true);
     const isBackfillTriage = phaseOverride === "analyze";
 
     // Helper for stopped cleanup
