@@ -1025,6 +1025,7 @@ Deno.serve(async (req) => {
       phaseOverride,
       activeRunId,
       scopedSheetIds: sheetScope,
+      resumeExtract: isResumeExtract,
     });
 
     if (typeof (globalThis as any).EdgeRuntime?.waitUntil === "function") {
