@@ -810,7 +810,8 @@ Deno.serve(async (req) => {
       phaseOverride === "summarize" ||
       phaseOverride === "analyze" ||
       phaseOverride === "triage" ||
-      phaseOverride === "split";
+      phaseOverride === "split" ||
+      isResumeExtract;
 
     if (preserveRun) {
       const { data: cur } = await admin
