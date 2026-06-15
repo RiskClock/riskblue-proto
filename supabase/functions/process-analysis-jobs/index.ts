@@ -5,6 +5,38 @@
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { PDFDocument } from "https://esm.sh/pdf-lib@1.17.1";
+import * as mupdf from "npm:mupdf@1.0.0";
+
+// Render a single PDF page (0-based index) from raw PDF bytes to a PNG Uint8Array.
+// Uses MuPDF WASM (works in Deno edge runtime). Scale ~1.5 ≈ 108 DPI.
+async function renderPageToPng(
+  pdfBytes: Uint8Array,
+  pageIndex: number,
+  scale = 1.5,
+): Promise<Uint8Array> {
+  const doc = (mupdf as any).Document.openDocument(pdfBytes, "application/pdf");
+  try {
+    const page = doc.loadPage(pageIndex);
+    try {
+      const matrix = (mupdf as any).Matrix.scale(scale, scale);
+      const pixmap = page.toPixmap(
+        matrix,
+        (mupdf as any).ColorSpace.DeviceRGB,
+        false,
+        true,
+      );
+      try {
+        return pixmap.asPNG();
+      } finally {
+        pixmap.destroy?.();
+      }
+    } finally {
+      page.destroy?.();
+    }
+  } finally {
+    doc.destroy?.();
+  }
+}
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
