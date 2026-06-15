@@ -54,7 +54,7 @@ export function deriveAnalysisUiState(row: AnalysisRowLike | null | undefined): 
   if (row.pipeline_stop_requested && status === "processing") return "stopping";
 
   if (status === "processing") {
-    if (phase === "extracting") return "extracting";
+    if (phase === "extracting" || phase === "splitting") return "extracting";
     if (phase === "triaging") return "triaging";
     if (phase === "analyzing") return "analyzing";
     // Transient phase set by the triage finalizer between triage completion
