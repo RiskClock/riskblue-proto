@@ -2357,113 +2357,108 @@ export default function WorkbenchProjectDetail() {
               </Button>
             </div>
 
-            {/* Space Determinator */}
-            <div className="mt-6 flex justify-center border-t pt-6">
-              <Button
-                onClick={async () => {
-                  if (!requestId) return;
-                  setSpaceDeterminatorRunning(true);
-                  setSpaceDeterminatorResults([]);
-                  try {
-                    const { data, error } = await supabase.functions.invoke("space-determinator", {
-                      body: { analysisRequestId: requestId },
-                    });
-                    if (error) throw error;
-                    const results = (data?.results ?? []) as typeof spaceDeterminatorResults;
-                    const summary = data?.summary ?? { total: 0, floor_plans: 0, errors: 0 };
-                    setSpaceDeterminatorResults(results);
-                    setSpaceDeterminatorOpen(true);
-                    console.table(
-                      results.map((r) => ({
-                        name: r.name,
-                        page: r.page_index,
-                        sheet: r.sheet_number ?? "",
-                        is_floor_plan: r.is_floor_plan,
-                        confidence: r.confidence,
-                        reason: r.reason,
-                        error: r.error ?? "",
-                      })),
-                    );
-                    toast({
-                      title: "Space Determinator complete",
-                      description: `${summary.floor_plans} of ${summary.total} pages classified as floor plans${summary.errors ? ` (${summary.errors} errors)` : ""}.`,
-                    });
-                  } catch (err) {
-                    toast({
-                      variant: "destructive",
-                      title: "Space Determinator failed",
-                      description: (err as any)?.message ?? "Unknown error",
-                    });
-                  } finally {
-                    setSpaceDeterminatorRunning(false);
-                  }
-                }}
-                disabled={!requestId || spaceDeterminatorRunning}
-              >
-                {spaceDeterminatorRunning ? (
-                  <>
-                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                    Classifying pages…
-                  </>
-                ) : (
-                  "Space Determinator"
-                )}
-              </Button>
+            {/* Survey Pages */}
+            <div className="mt-6 border-t pt-6 space-y-3">
+              <div className="flex justify-center">
+                <Button
+                  onClick={async () => {
+                    if (!requestId) return;
+                    setSurveyRunning(true);
+                    setSurveyResults([]);
+                    setSurveyRawText("");
+                    try {
+                      const { data, error } = await supabase.functions.invoke("survey-pages", {
+                        body: { analysisRequestId: requestId },
+                      });
+                      if (error) throw error;
+                      if ((data as any)?.error) throw new Error((data as any).error);
+                      const results = ((data as any)?.results ?? []) as typeof surveyResults;
+                      const summary = (data as any)?.summary ?? { total: 0, with_result: 0, errors: 0 };
+                      setSurveyResults(results);
+                      setSurveyRawText(((data as any)?.rawText ?? "") as string);
+                      toast({
+                        title: "Survey Pages complete",
+                        description: `${summary.with_result} of ${summary.total} pages received a result${summary.errors ? ` (${summary.errors} skipped — no PNG)` : ""}.`,
+                      });
+                    } catch (err) {
+                      toast({
+                        variant: "destructive",
+                        title: "Survey Pages failed",
+                        description: (err as any)?.message ?? "Unknown error",
+                      });
+                    } finally {
+                      setSurveyRunning(false);
+                    }
+                  }}
+                  disabled={!requestId || surveyRunning}
+                >
+                  {surveyRunning ? (
+                    <>
+                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                      Surveying pages…
+                    </>
+                  ) : (
+                    "Survey Pages"
+                  )}
+                </Button>
+              </div>
+
+              {/* Result list — per-page expandable cards. */}
+              {(surveyResults.length > 0 || surveyRawText) && (
+                <div className="border rounded-md bg-background">
+                  <div className="px-3 py-2 border-b text-xs text-muted-foreground">
+                    {surveyResults.length > 0
+                      ? `${surveyResults.length} page result${surveyResults.length === 1 ? "" : "s"} · click a row to expand`
+                      : "Raw response (could not parse per-page results):"}
+                  </div>
+                  {surveyResults.length > 0 ? (
+                    <ul className="divide-y max-h-[60vh] overflow-auto">
+                      {surveyResults.map((r) => {
+                        const open = surveyExpandedSheets.has(r.sheetId);
+                        return (
+                          <li key={r.sheetId}>
+                            <button
+                              type="button"
+                              className="w-full text-left px-3 py-2 hover:bg-muted/50 flex items-center justify-between gap-2"
+                              onClick={() => {
+                                setSurveyExpandedSheets((prev) => {
+                                  const next = new Set(prev);
+                                  if (next.has(r.sheetId)) next.delete(r.sheetId);
+                                  else next.add(r.sheetId);
+                                  return next;
+                                });
+                              }}
+                            >
+                              <span className="text-sm truncate">
+                                <span className="font-medium">{r.file}</span>
+                                <span className="text-muted-foreground"> · page {r.page}{r.sheet_number ? ` · ${r.sheet_number}` : ""}</span>
+                              </span>
+                              <span className="text-xs text-muted-foreground shrink-0">{open ? "Hide" : "Show"}</span>
+                            </button>
+                            {open && (
+                              <div className="px-3 pb-3 text-xs whitespace-pre-wrap text-foreground/90">
+                                {r.content || <span className="text-muted-foreground">(empty)</span>}
+                              </div>
+                            )}
+                          </li>
+                        );
+                      })}
+                    </ul>
+                  ) : (
+                    <Textarea
+                      readOnly
+                      value={surveyRawText}
+                      className="font-mono text-xs min-h-[200px] border-0 rounded-none"
+                    />
+                  )}
+                </div>
+              )}
             </div>
 
           </div>
         </main>
 
-        {/* Space Determinator results */}
-        <Dialog open={spaceDeterminatorOpen} onOpenChange={setSpaceDeterminatorOpen}>
-          <DialogContent className="max-w-3xl">
-            <DialogHeader>
-              <DialogTitle>Space Determinator results</DialogTitle>
-              <DialogDescription>
-                {(() => {
-                  const total = spaceDeterminatorResults.length;
-                  const fp = spaceDeterminatorResults.filter((r) => r.is_floor_plan === true).length;
-                  const errs = spaceDeterminatorResults.filter((r) => r.error).length;
-                  return `${fp} of ${total} pages classified as floor plans${errs ? ` · ${errs} errors` : ""}.`;
-                })()}
-              </DialogDescription>
-            </DialogHeader>
-            <div className="max-h-[60vh] overflow-auto space-y-2 py-2">
-              {spaceDeterminatorResults.length === 0 ? (
-                <div className="text-sm text-muted-foreground">No results.</div>
-              ) : (
-                spaceDeterminatorResults.map((r) => (
-                  <div key={r.sheetId} className="border rounded-md p-3 text-sm space-y-1">
-                    <div className="flex items-center justify-between gap-2">
-                      <div className="font-medium truncate">
-                        {r.name} <span className="text-muted-foreground font-normal">· page {r.page_index}{r.sheet_number ? ` · ${r.sheet_number}` : ""}</span>
-                      </div>
-                      {r.error ? (
-                        <Badge variant="destructive">error</Badge>
-                      ) : r.is_floor_plan ? (
-                        <Badge className="bg-emerald-100 text-emerald-800 border border-emerald-300">
-                          Floor plan{r.confidence != null ? ` · ${Math.round(r.confidence * 100)}%` : ""}
-                        </Badge>
-                      ) : (
-                        <Badge variant="outline">
-                          Not floor plan{r.confidence != null ? ` · ${Math.round(r.confidence * 100)}%` : ""}
-                        </Badge>
-                      )}
-                    </div>
-                    <div className="text-xs text-muted-foreground whitespace-pre-wrap">
-                      {r.error ?? r.reason ?? ""}
-                    </div>
-                  </div>
-                ))
-              )}
-            </div>
-            <DialogFooter>
-              <Button variant="outline" onClick={() => setSpaceDeterminatorOpen(false)}>
-                Close
-              </Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
+
 
 
         {/* Drawing modal — single sheet */}
