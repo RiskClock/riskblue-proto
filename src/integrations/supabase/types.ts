@@ -2764,6 +2764,7 @@ export type Database = {
         Returns: boolean
       }
       user_owns_company: { Args: { _company: string }; Returns: boolean }
+      watchdog_stalled_pipelines: { Args: never; Returns: number }
     }
     Enums: {
       app_role: "admin" | "moderator" | "user"
