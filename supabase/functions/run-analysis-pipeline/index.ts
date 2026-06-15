@@ -698,6 +698,7 @@ Deno.serve(async (req) => {
       analyzeModel,
       phaseOverride,
       scopedSheetIds,
+      resumeExtract,
     } = body as {
       analysisRequestId: string;
       action?: string;
@@ -706,11 +707,13 @@ Deno.serve(async (req) => {
       analyzeModel?: string;
       phaseOverride?: string;
       scopedSheetIds?: string[];
+      resumeExtract?: boolean;
     };
     const sheetScope =
       Array.isArray(scopedSheetIds) && scopedSheetIds.length > 0
         ? scopedSheetIds
         : null;
+    const isResumeExtract = phaseOverride === "extract" && resumeExtract === true;
 
     if (!analysisRequestId) return json({ error: "Missing analysisRequestId" }, 400);
 
