@@ -5,7 +5,7 @@
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { PDFDocument } from "https://esm.sh/pdf-lib@1.17.1";
-import * as mupdf from "npm:mupdf@1.0.0";
+import * as mupdf from "npm:mupdf@1.3.0";
 
 // Render a single PDF page (0-based index) from raw PDF bytes to a PNG Uint8Array.
 // Uses MuPDF WASM (works in Deno edge runtime). Scale ~1.5 ≈ 108 DPI.
