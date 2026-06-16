@@ -262,7 +262,7 @@ export default function WorkbenchProjectDetail() {
         supabase
           .from("analysis_request_sheets")
           .select(
-            "id, parent_file_id, page_index, sheet_number, sheet_title, storage_path, extract_status, extracted_text",
+            "id, parent_file_id, page_index, sheet_number, sheet_title, storage_path, extract_status, extracted_text, survey_result",
           )
           .eq("analysis_request_id", requestId!)
           .order("page_index", { ascending: true }),
