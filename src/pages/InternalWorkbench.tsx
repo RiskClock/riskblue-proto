@@ -494,8 +494,13 @@ export default function InternalWorkbench() {
               </TableHeader>
               <TableBody>
                 {filteredSorted.map((p) => {
-                  const label = p.status ? statusLabels[p.status] || p.status : "New";
+                  const baseLabel = p.status ? statusLabels[p.status] || p.status : "New";
+                  const label =
+                    p.status === "processing" && p.pipeline_phase && phaseLabels[p.pipeline_phase]
+                      ? phaseLabels[p.pipeline_phase].split(" ")[0] // e.g. "Splitting", "Extracting"
+                      : baseLabel;
                   const colorClass = p.status ? statusColors[p.status] || "" : "";
+
                   return (
                     <TableRow
                       key={p.id}
