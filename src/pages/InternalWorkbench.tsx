@@ -236,6 +236,7 @@ export default function InternalWorkbench() {
           pipeline_progress_done: analysis?.pipeline_progress_done ?? null,
           pipeline_progress_total: analysis?.pipeline_progress_total ?? null,
           request_updated_at: analysis?.updated_at ?? null,
+          analysis_request_id: analysis?.id ?? null,
         };
       });
 
