@@ -32,6 +32,10 @@ const Auth = () => {
   const [rememberMe, setRememberMe] = useState(false);
   const [resetEmailSent, setResetEmailSent] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  // Surface a one-time warning when AuthContext forced a sign-out due to a
+  // cross-tab / cross-session swap of the active user.
+  // (toast is from useToast() declared later in this component — re-use it.)
   
   // Request access modal state
   const [showRequestModal, setShowRequestModal] = useState(false);
@@ -46,6 +50,23 @@ const Auth = () => {
   const { signIn, user, loading } = useAuth();
   const navigate = useNavigate();
   const { toast } = useToast();
+
+  // One-time warning if AuthContext forced a sign-out due to a session swap.
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("reason") === "session_swap") {
+      toast({
+        title: "You were signed out for safety",
+        description:
+          "Another session tried to take over this tab (a different user appeared in browser storage). Please sign in again.",
+        variant: "destructive",
+      });
+      params.delete("reason");
+      const qs = params.toString();
+      window.history.replaceState({}, "", window.location.pathname + (qs ? `?${qs}` : ""));
+    }
+  }, [toast]);
 
   // Redirect to projects if already authenticated
   useEffect(() => {
