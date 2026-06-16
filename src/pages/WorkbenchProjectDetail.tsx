@@ -341,7 +341,7 @@ export default function WorkbenchProjectDetail() {
         return {
           sheetId: s.id,
           file: s.file_name,
-          page: s.page_index + 1,
+          page: s.page_index,
           sheet_number: s.sheet_number,
           content,
         };
@@ -2565,6 +2565,11 @@ export default function WorkbenchProjectDetail() {
               {/* Per-file progress status */}
               {surveyProgress && (
                 <div className="text-center text-xs text-muted-foreground">
+                  {surveyRecoveredRun && !surveyRunning && surveyProgress.phase !== "done" && (
+                    <div className="mb-1 text-amber-700">
+                      Browser refreshed during Survey Pages. Saved file results below were recovered from the database; rerun to continue unfinished files.
+                    </div>
+                  )}
                   {surveyProgress.phase === "done" ? (
                     <span>Finished {surveyProgress.total} file{surveyProgress.total === 1 ? "" : "s"}.</span>
                   ) : (
