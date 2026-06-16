@@ -348,6 +348,47 @@ export default function InternalWorkbench() {
     navigate(`/project/${p.id}`);
   };
 
+  const handleResume = async (p: WorkbenchProject) => {
+    if (!p.analysis_request_id) return;
+    const phaseKey = p.pipeline_phase ?? "";
+    const phaseOverride = phaseToOverride[phaseKey] ?? "split";
+    setResumingId(p.analysis_request_id);
+    try {
+      // Clear the failed status + error so the UI immediately reflects the retry.
+      await supabase
+        .from("analysis_requests")
+        .update({
+          status: "processing",
+          error_message: null,
+          pipeline_stop_requested: false,
+        })
+        .eq("id", p.analysis_request_id);
+
+      const body: Record<string, unknown> = {
+        analysisRequestId: p.analysis_request_id,
+        phaseOverride,
+      };
+      if (phaseOverride === "extract") body.resumeExtract = true;
+
+      const { error } = await supabase.functions.invoke("run-analysis-pipeline", {
+        body,
+      });
+      if (error) throw error;
+      toast({ title: "Resumed", description: `Re-enqueued ${phaseLabels[phaseKey] || phaseOverride}.` });
+      refetch();
+    } catch (err: any) {
+      toast({
+        variant: "destructive",
+        title: "Resume failed",
+        description: getUserFriendlyError(err),
+      });
+    } finally {
+      setResumingId(null);
+    }
+  };
+
+
+
   const openDelete = (p: WorkbenchProject) => {
     setDeleteTarget(p);
     setConfirmName("");
