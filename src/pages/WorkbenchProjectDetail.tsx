@@ -98,6 +98,7 @@ interface SheetRow {
   extracted_text: string | null;
   file_name: string;
   file_source_type: string;
+  survey_result?: any;
 }
 
 interface TriageCount {
