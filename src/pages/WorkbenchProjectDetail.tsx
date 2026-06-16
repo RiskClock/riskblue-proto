@@ -312,6 +312,36 @@ export default function WorkbenchProjectDetail() {
     refetchInterval: 3000,
   });
 
+  // Rehydrate survey results from DB after refresh.
+  useEffect(() => {
+    if (surveyRunning) return;
+    if (!rows?.sheets?.length) return;
+    const key = `${requestId}:${rows.sheets.length}`;
+    if (hydratedSurveyKeyRef.current === key) return;
+    if (surveyResults.length > 0) return;
+    const persisted = rows.sheets
+      .filter((s) => s.survey_result != null)
+      .map((s) => {
+        const r: any = s.survey_result;
+        const content =
+          typeof r === "string"
+            ? r
+            : r?.content ?? r?.summary ?? r?.text ?? JSON.stringify(r, null, 2);
+        return {
+          sheetId: s.id,
+          file: s.file_name,
+          page: s.page_index + 1,
+          sheet_number: s.sheet_number,
+          content: String(content ?? ""),
+        };
+      })
+      .sort((a, b) => a.file.localeCompare(b.file) || a.page - b.page);
+    if (persisted.length > 0) {
+      setSurveyResults(persisted);
+      hydratedSurveyKeyRef.current = key;
+    }
+  }, [rows, requestId, surveyRunning, surveyResults.length]);
+
   // Group: every file is a group, with optional sheets underneath
   const fileGroups = useMemo(() => {
     if (!rows) return [];
