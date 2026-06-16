@@ -294,6 +294,7 @@ export default function WorkbenchProjectDetail() {
             extracted_text: s.extracted_text ?? null,
             file_name: f.name,
             file_source_type: f.source_type,
+            survey_result: s.survey_result ?? null,
           };
         })
         .filter((s): s is SheetRow => s !== null)
