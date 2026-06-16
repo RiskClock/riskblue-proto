@@ -98,6 +98,7 @@ interface SheetRow {
   extracted_text: string | null;
   file_name: string;
   file_source_type: string;
+  survey_result?: any;
 }
 
 interface TriageCount {
@@ -213,6 +214,11 @@ export default function WorkbenchProjectDetail() {
     if (user && !isInternal) navigate("/projects", { replace: true });
   }, [user, isInternal, navigate]);
 
+  // Hydrate survey results from persisted analysis_request_sheets.survey_result
+  // so a page refresh doesn't drop the rendered output.
+  // Runs whenever rows.sheets change AND we have no in-memory results AND no run in progress.
+  const hydratedSurveyKeyRef = useRef<string | null>(null);
+
   // Project metadata
   const { data: project } = useQuery({
     queryKey: ["workbench-project", projectId],
@@ -262,7 +268,7 @@ export default function WorkbenchProjectDetail() {
         supabase
           .from("analysis_request_sheets")
           .select(
-            "id, parent_file_id, page_index, sheet_number, sheet_title, storage_path, extract_status, extracted_text",
+            "id, parent_file_id, page_index, sheet_number, sheet_title, storage_path, extract_status, extracted_text, survey_result",
           )
           .eq("analysis_request_id", requestId!)
           .order("page_index", { ascending: true }),
@@ -293,6 +299,7 @@ export default function WorkbenchProjectDetail() {
             extracted_text: s.extracted_text ?? null,
             file_name: f.name,
             file_source_type: f.source_type,
+            survey_result: s.survey_result ?? null,
           };
         })
         .filter((s): s is SheetRow => s !== null)
@@ -304,6 +311,36 @@ export default function WorkbenchProjectDetail() {
     },
     refetchInterval: 3000,
   });
+
+  // Rehydrate survey results from DB after refresh.
+  useEffect(() => {
+    if (surveyRunning) return;
+    if (!rows?.sheets?.length) return;
+    const key = `${requestId}:${rows.sheets.length}`;
+    if (hydratedSurveyKeyRef.current === key) return;
+    if (surveyResults.length > 0) return;
+    const persisted = rows.sheets
+      .filter((s) => s.survey_result != null)
+      .map((s) => {
+        const r: any = s.survey_result;
+        const content =
+          typeof r === "string"
+            ? r
+            : r?.content ?? r?.summary ?? r?.text ?? JSON.stringify(r, null, 2);
+        return {
+          sheetId: s.id,
+          file: s.file_name,
+          page: s.page_index + 1,
+          sheet_number: s.sheet_number,
+          content: String(content ?? ""),
+        };
+      })
+      .sort((a, b) => a.file.localeCompare(b.file) || a.page - b.page);
+    if (persisted.length > 0) {
+      setSurveyResults(persisted);
+      hydratedSurveyKeyRef.current = key;
+    }
+  }, [rows, requestId, surveyRunning, surveyResults.length]);
 
   // Group: every file is a group, with optional sheets underneath
   const fileGroups = useMemo(() => {
