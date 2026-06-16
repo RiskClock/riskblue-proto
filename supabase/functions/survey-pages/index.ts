@@ -259,26 +259,83 @@ Deno.serve(async (req) => {
     // prompt returns a top-level file object with surveyed_pages[], while older
     // prompts returned flat per-page objects, so support both shapes.
     const parsed = extractJsonArray(rawText);
-    const resultsBySheet = new Map<string, string>();
     const pageItems = flattenSurveyPages(parsed);
+
+    // Determine total pages reported by the model (if any) so we can backfill
+    // sheet rows for pages that don't yet exist in analysis_request_sheets.
+    let totalPages = 0;
+    if (parsed) {
+      for (const it of parsed) {
+        const tp = Number((it as any)?.total_pages);
+        if (Number.isFinite(tp) && tp > totalPages) totalPages = tp;
+      }
+    }
+    const maxItemPage = pageItems.reduce((m, it) => {
+      const p = pageValue(it);
+      return p != null && p > m ? p : m;
+    }, 0);
+    const maxKnownSheet = sheetRows.reduce((m, s) => s.page_index > m ? s.page_index : m, 0);
+    const pageCount = Math.max(totalPages, maxItemPage, maxKnownSheet);
+
+    // Upsert a sheet row for EVERY page so the user sees the full sheet index,
+    // not just floor-plan pages. Backfilled rows get a placeholder name and
+    // status=skipped so downstream pipelines can ignore them.
+    const missing: Array<{ analysis_request_id: string; parent_file_id: string; page_index: number; name: string; extract_status: string }> = [];
+    for (let p = 1; p <= pageCount; p++) {
+      if (sheetByPage.has(p)) continue;
+      missing.push({
+        analysis_request_id: analysisRequestId,
+        parent_file_id: fileId,
+        page_index: p,
+        name: `${fileName} · page ${p}`,
+        extract_status: "skipped",
+      });
+    }
+    if (missing.length) {
+      const { data: inserted, error: insErr } = await admin
+        .from("analysis_request_sheets")
+        .upsert(missing, { onConflict: "parent_file_id,page_index" })
+        .select("id, sheet_number, page_index");
+      if (insErr) {
+        console.error("[survey-pages] backfill sheets failed:", insErr.message);
+      } else {
+        for (const s of (inserted ?? []) as any[]) {
+          sheetByPage.set(s.page_index, { id: s.id, sheet_number: s.sheet_number });
+          sheetRows.push({ id: s.id, sheet_number: s.sheet_number, page_index: s.page_index });
+        }
+        sheetRows.sort((a, b) => a.page_index - b.page_index);
+      }
+    }
+
+    // Map model items by page so every sheet row gets persisted, even pages
+    // the model marked as contains_floor_plan=false (or omitted entirely).
+    const itemByPage = new Map<number, any>();
     for (const item of pageItems) {
       const page = pageValue(item);
       if (page == null) continue;
-      const sheet = sheetByPage.get(page);
-      if (!sheet) continue;
-      const content =
-        typeof item?.summary === "string"
-          ? item.summary
-          : typeof item?.content === "string"
-            ? item.content
-            : JSON.stringify(item, null, 2);
-      resultsBySheet.set(sheet.id, content);
+      itemByPage.set(page, item);
     }
-    console.log(`[survey-pages] parsed_pages=${pageItems.length} matched_sheets=${resultsBySheet.size} file=${fileName}`);
 
-    const fallback = parsed ? null : rawText;
+    const resultsBySheet = new Map<string, string>();
     for (const s of sheetRows) {
-      const result = resultsBySheet.get(s.id) ?? fallback;
+      const item = itemByPage.get(s.page_index);
+      let content: string;
+      if (item) {
+        content =
+          typeof item?.summary === "string"
+            ? item.summary
+            : typeof item?.content === "string"
+              ? item.content
+              : JSON.stringify(item, null, 2);
+      } else {
+        content = JSON.stringify({ page_number: s.page_index, contains_floor_plan: false, note: "not returned by model" }, null, 2);
+      }
+      resultsBySheet.set(s.id, content);
+    }
+    console.log(`[survey-pages] parsed_pages=${pageItems.length} total_sheets=${sheetRows.length} persisted=${resultsBySheet.size} file=${fileName}`);
+
+    for (const s of sheetRows) {
+      const result = resultsBySheet.get(s.id);
       if (!result) continue;
       await admin
         .from("analysis_request_sheets")
@@ -289,14 +346,12 @@ Deno.serve(async (req) => {
         .eq("id", s.id);
     }
 
-    const results = sheetRows
-      .map((s) => ({
-        sheetId: s.id,
-        page: s.page_index,
-        sheet_number: s.sheet_number,
-        content: resultsBySheet.get(s.id) ?? fallback ?? "",
-      }))
-      .filter((r) => r.content);
+    const results = sheetRows.map((s) => ({
+      sheetId: s.id,
+      page: s.page_index,
+      sheet_number: s.sheet_number,
+      content: resultsBySheet.get(s.id) ?? "",
+    }));
 
     return json({
       fileId,
