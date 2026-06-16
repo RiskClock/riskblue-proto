@@ -282,7 +282,7 @@ export default function WorkbenchProjectDetail() {
         supabase
           .from("analysis_request_sheets")
           .select(
-            "id, parent_file_id, page_index, sheet_number, sheet_title, storage_path, extract_status, extracted_text, survey_result",
+            "id, parent_file_id, page_index, sheet_number, sheet_title, storage_path, extract_status, extracted_text, survey_result, survey_updated_at",
           )
           .eq("analysis_request_id", requestId!)
           .order("page_index", { ascending: true }),
@@ -314,6 +314,7 @@ export default function WorkbenchProjectDetail() {
             file_name: f.name,
             file_source_type: f.source_type,
             survey_result: s.survey_result ?? null,
+            survey_updated_at: s.survey_updated_at ?? null,
           };
         })
         .filter((s): s is SheetRow => s !== null)
@@ -330,23 +331,18 @@ export default function WorkbenchProjectDetail() {
   useEffect(() => {
     if (surveyRunning) return;
     if (!rows?.sheets?.length) return;
-    const key = `${requestId}:${rows.sheets.length}`;
+    const key = `${requestId}:${rows.sheets.length}:${rows.sheets.map((s) => s.survey_updated_at ?? "").join("|")}`;
     if (hydratedSurveyKeyRef.current === key) return;
     if (surveyResults.length > 0) return;
     const persisted = rows.sheets
       .filter((s) => s.survey_result != null)
       .map((s) => {
-        const r: any = s.survey_result;
-        const content =
-          typeof r === "string"
-            ? r
-            : r?.content ?? r?.summary ?? r?.text ?? JSON.stringify(r, null, 2);
         return {
           sheetId: s.id,
           file: s.file_name,
           page: s.page_index + 1,
           sheet_number: s.sheet_number,
-          content: String(content ?? ""),
+          content: formatSurveyContent(s.survey_result),
         };
       })
       .sort((a, b) => a.file.localeCompare(b.file) || a.page - b.page);
