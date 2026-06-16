@@ -2370,22 +2370,83 @@ export default function WorkbenchProjectDetail() {
                 <Button
                   onClick={async () => {
                     if (!requestId) return;
+                    // Collect original PDFs attached to this request.
+                    const { data: filesData, error: filesErr } = await supabase
+                      .from("analysis_request_files")
+                      .select("id, name")
+                      .eq("analysis_request_id", requestId)
+                      .order("name");
+                    if (filesErr) {
+                      toast({ variant: "destructive", title: "Survey Pages failed", description: filesErr.message });
+                      return;
+                    }
+                    const files = (filesData ?? []) as Array<{ id: string; name: string }>;
+                    if (files.length === 0) {
+                      toast({ variant: "destructive", title: "No files", description: "This analysis request has no source PDFs." });
+                      return;
+                    }
+
                     setSurveyRunning(true);
                     setSurveyResults([]);
                     setSurveyRawText("");
+                    setSurveyExpandedSheets(new Set());
+
+                    const aggregated: typeof surveyResults = [];
+                    const rawChunks: string[] = [];
+                    let totalSheets = 0;
+                    let withResult = 0;
+
                     try {
-                      const { data, error } = await supabase.functions.invoke("survey-pages", {
-                        body: { analysisRequestId: requestId },
+                      for (let i = 0; i < files.length; i++) {
+                        const f = files[i];
+                        setSurveyProgress({
+                          current: i + 1,
+                          total: files.length,
+                          fileName: f.name,
+                          phase: "uploading",
+                        });
+                        // Tiny tick so the UI renders "uploading" before invoke blocks.
+                        await new Promise((r) => setTimeout(r, 30));
+                        setSurveyProgress({
+                          current: i + 1,
+                          total: files.length,
+                          fileName: f.name,
+                          phase: "querying",
+                        });
+
+                        const { data, error } = await supabase.functions.invoke("survey-pages", {
+                          body: { analysisRequestId: requestId, fileId: f.id },
+                        });
+                        if (error) throw error;
+                        if ((data as any)?.error) throw new Error((data as any).error);
+
+                        const results = ((data as any)?.results ?? []).map((r: any) => ({
+                          sheetId: r.sheetId,
+                          file: (data as any).fileName ?? f.name,
+                          page: r.page,
+                          sheet_number: r.sheet_number,
+                          content: r.content,
+                        })) as typeof surveyResults;
+                        aggregated.push(...results);
+                        rawChunks.push(`===== ${f.name} =====\n${(data as any)?.rawText ?? ""}`);
+                        const summary = (data as any)?.summary ?? { total: 0, with_result: 0 };
+                        totalSheets += summary.total ?? 0;
+                        withResult += summary.with_result ?? 0;
+
+                        // Stream results into the UI as each file finishes.
+                        setSurveyResults([...aggregated]);
+                        setSurveyRawText(rawChunks.join("\n\n"));
+                      }
+
+                      setSurveyProgress({
+                        current: files.length,
+                        total: files.length,
+                        fileName: "",
+                        phase: "done",
                       });
-                      if (error) throw error;
-                      if ((data as any)?.error) throw new Error((data as any).error);
-                      const results = ((data as any)?.results ?? []) as typeof surveyResults;
-                      const summary = (data as any)?.summary ?? { total: 0, with_result: 0, errors: 0 };
-                      setSurveyResults(results);
-                      setSurveyRawText(((data as any)?.rawText ?? "") as string);
                       toast({
                         title: "Survey Pages complete",
-                        description: `${summary.with_result} of ${summary.total} pages received a result${summary.errors ? ` (${summary.errors} skipped — no PNG)` : ""}.`,
+                        description: `${withResult} of ${totalSheets} pages received a result across ${files.length} file${files.length === 1 ? "" : "s"}.`,
                       });
                     } catch (err) {
                       toast({
@@ -2409,6 +2470,21 @@ export default function WorkbenchProjectDetail() {
                   )}
                 </Button>
               </div>
+
+              {/* Per-file progress status */}
+              {surveyProgress && (
+                <div className="text-center text-xs text-muted-foreground">
+                  {surveyProgress.phase === "done" ? (
+                    <span>Finished {surveyProgress.total} file{surveyProgress.total === 1 ? "" : "s"}.</span>
+                  ) : (
+                    <span>
+                      File {surveyProgress.current} of {surveyProgress.total} ·{" "}
+                      <span className="font-medium text-foreground">{surveyProgress.fileName}</span>{" "}
+                      · {surveyProgress.phase === "uploading" ? "uploading PDF…" : "querying Gemini…"}
+                    </span>
+                  )}
+                </div>
+              )}
 
               {/* Result list — per-page expandable cards. */}
               {(surveyResults.length > 0 || surveyRawText) && (
@@ -2464,6 +2540,7 @@ export default function WorkbenchProjectDetail() {
 
           </div>
         </main>
+
 
 
 
