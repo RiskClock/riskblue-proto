@@ -84,13 +84,14 @@ serve(async (req) => {
     if (selectedNames.length > 0) {
       const { data: classes } = await admin
         .from("awp_classes")
-        .select("name, category")
-        .in("name", selectedNames);
-      const catByName = new Map<string, string>(
-        (classes || []).map((c: any) => [c.name, c.category]),
+        .select("name, category");
+      const normalize = (s: string) =>
+        s.trim().toLowerCase().replace(/s$/, "");
+      const catByNorm = new Map<string, string>(
+        (classes || []).map((c: any) => [normalize(c.name), c.category]),
       );
       for (const name of selectedNames) {
-        const cat = catByName.get(name);
+        const cat = catByNorm.get(normalize(name));
         if (cat === "Asset") groups["Critical Assets"].push(name);
         else if (cat === "Water System") groups["Water Systems"].push(name);
         else if (cat === "Process") groups["Processes"].push(name);
