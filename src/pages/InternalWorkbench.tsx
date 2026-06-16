@@ -524,11 +524,73 @@ export default function InternalWorkbench() {
                       <TableCell className="text-right tabular-nums">
                         {formatBytes(p.total_size_bytes)}
                       </TableCell>
-                      <TableCell>
-                        <Badge variant="outline" className={`text-xs ${colorClass}`}>
-                          {label}
-                        </Badge>
+                      <TableCell onClick={(e) => e.stopPropagation()}>
+                        {(p.status === "failed" || p.status === "processing" || p.error_message) ? (
+                          <Popover>
+                            <PopoverTrigger asChild>
+                              <button
+                                type="button"
+                                className="inline-flex items-center gap-1.5 rounded-md border px-2 py-0.5 text-xs hover:opacity-80 transition-opacity"
+                                style={{}}
+                              >
+                                <Badge variant="outline" className={`text-xs ${colorClass} border-0 px-0 py-0`}>
+                                  {label}
+                                </Badge>
+                                <span className="h-1.5 w-1.5 rounded-full bg-current opacity-50" />
+                              </button>
+                            </PopoverTrigger>
+                            <PopoverContent align="start" className="w-80 text-sm">
+                              <div className="space-y-2">
+                                <div className="flex items-center justify-between">
+                                  <span className="font-semibold">Status</span>
+                                  <Badge variant="outline" className={`text-xs ${colorClass}`}>{label}</Badge>
+                                </div>
+                                {p.pipeline_phase && (
+                                  <div className="flex justify-between text-xs">
+                                    <span className="text-muted-foreground">Phase</span>
+                                    <span className="font-medium">{phaseLabels[p.pipeline_phase] || p.pipeline_phase}</span>
+                                  </div>
+                                )}
+                                {p.pipeline_progress_total != null && p.pipeline_progress_total > 0 && (
+                                  <div className="flex justify-between text-xs">
+                                    <span className="text-muted-foreground">Progress</span>
+                                    <span className="font-medium tabular-nums">
+                                      {p.pipeline_progress_done ?? 0} / {p.pipeline_progress_total}
+                                    </span>
+                                  </div>
+                                )}
+                                <div className="flex justify-between text-xs">
+                                  <span className="text-muted-foreground">Last activity</span>
+                                  <span className="font-medium">{formatRelative(p.request_updated_at)}</span>
+                                </div>
+                                {p.error_message && (
+                                  <div className="space-y-1">
+                                    <div className="text-xs text-muted-foreground">Error</div>
+                                    <pre className="text-[11px] whitespace-pre-wrap break-words rounded bg-muted p-2 max-h-40 overflow-auto">
+                                      {p.error_message}
+                                    </pre>
+                                  </div>
+                                )}
+                                <div className="pt-2 border-t">
+                                  <Button
+                                    size="sm"
+                                    variant="default"
+                                    className="w-full"
+                                    onClick={() => navigate(`/internal/workbench/project/${p.id}`)}
+                                  >
+                                    {p.status === "failed" ? "Open & Resume" : "Open Project"}
+                                  </Button>
+                                </div>
+                              </div>
+                            </PopoverContent>
+                          </Popover>
+                        ) : (
+                          <Badge variant="outline" className={`text-xs ${colorClass}`}>
+                            {label}
+                          </Badge>
+                        )}
                       </TableCell>
+
                       <TableCell className="text-right" onClick={(e) => e.stopPropagation()}>
                         <div className="flex items-center justify-end gap-1">
                           <Button
