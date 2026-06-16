@@ -264,16 +264,17 @@ Deno.serve(async (req) => {
     for (const item of pageItems) {
       const page = pageValue(item);
       if (page == null) continue;
-        const sheet = sheetByPage.get(page);
-        if (!sheet) continue;
-        const content =
-          typeof item?.summary === "string"
-            ? item.summary
-            : typeof item?.content === "string"
-              ? item.content
-              : JSON.stringify(item, null, 2);
-        resultsBySheet.set(sheet.id, content);
+      const sheet = sheetByPage.get(page);
+      if (!sheet) continue;
+      const content =
+        typeof item?.summary === "string"
+          ? item.summary
+          : typeof item?.content === "string"
+            ? item.content
+            : JSON.stringify(item, null, 2);
+      resultsBySheet.set(sheet.id, content);
     }
+    console.log(`[survey-pages] parsed_pages=${pageItems.length} matched_sheets=${resultsBySheet.size} file=${fileName}`);
 
     const fallback = parsed ? null : rawText;
     for (const s of sheetRows) {
