@@ -98,7 +98,7 @@ interface SheetRow {
   extracted_text: string | null;
   file_name: string;
   file_source_type: string;
-  survey_result?: any;
+  survey_result?: unknown;
   survey_updated_at?: string | null;
 }
 
@@ -108,10 +108,15 @@ function surveyProgressStorageKey(requestId: string) {
   return `${SURVEY_PROGRESS_KEY_PREFIX}:${requestId}`;
 }
 
-function formatSurveyContent(result: any): string {
+function formatSurveyContent(result: unknown): string {
   if (result == null) return "";
   if (typeof result === "string") return result;
-  return result?.content ?? result?.summary ?? result?.text ?? JSON.stringify(result, null, 2);
+  if (typeof result === "object") {
+    const record = result as Record<string, unknown>;
+    const preferred = record.content ?? record.summary ?? record.text;
+    if (preferred != null) return typeof preferred === "string" ? preferred : JSON.stringify(preferred, null, 2);
+  }
+  return JSON.stringify(result, null, 2);
 }
 
 interface TriageCount {
