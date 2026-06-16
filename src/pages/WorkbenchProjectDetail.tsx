@@ -2543,12 +2543,13 @@ export default function WorkbenchProjectDetail() {
                         title: "Survey Pages complete",
                         description: `${withResult} of ${totalSheets} pages received a result across ${files.length} file${files.length === 1 ? "" : "s"}.`,
                       });
-                    } catch (err) {
+                    } catch (err: unknown) {
                       window.sessionStorage.removeItem(surveyProgressStorageKey(requestId));
+                      const message = err instanceof Error ? err.message : "Unknown error";
                       toast({
                         variant: "destructive",
                         title: "Survey Pages failed",
-                        description: (err as any)?.message ?? "Unknown error",
+                        description: message,
                       });
                     } finally {
                       setSurveyRunning(false);
