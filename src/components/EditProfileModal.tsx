@@ -58,7 +58,11 @@ export const EditProfileModal = ({ open, onOpenChange }: EditProfileModalProps) 
       });
   }, [open, user?.id]);
 
-  const initial = (firstName?.[0] || user?.email?.[0] || "?").toUpperCase();
+  const initial = (
+    ((firstName?.[0] ?? "") + (lastName?.[0] ?? "")) ||
+    user?.email?.[0] ||
+    "?"
+  ).toUpperCase();
 
   const handlePickFile = () => fileInputRef.current?.click();
 
