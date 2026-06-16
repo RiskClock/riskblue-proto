@@ -62,7 +62,17 @@ interface WorkbenchProject {
   pipeline_progress_done: number | null;
   pipeline_progress_total: number | null;
   request_updated_at: string | null;
+  analysis_request_id: string | null;
 }
+
+const phaseToOverride: Record<string, "split" | "extract" | "triage" | "analyze" | "summarize"> = {
+  splitting: "split",
+  extracting: "extract",
+  triaging: "triage",
+  dispatching_analyze: "analyze",
+  analyzing: "analyze",
+  summarizing: "summarize",
+};
 
 const phaseLabels: Record<string, string> = {
   splitting: "Splitting PDFs",
@@ -132,6 +142,7 @@ export default function InternalWorkbench() {
   const [deleteTarget, setDeleteTarget] = useState<WorkbenchProject | null>(null);
   const [confirmName, setConfirmName] = useState("");
   const [deleting, setDeleting] = useState(false);
+  const [resumingId, setResumingId] = useState<string | null>(null);
 
   const STORAGE_KEY = "workbench-filter";
 
@@ -186,7 +197,7 @@ export default function InternalWorkbench() {
         ids.length > 0
           ? supabase
               .from("analysis_requests")
-              .select("project_id, status, file_count, total_size_bytes, created_at, pipeline_phase, error_message, pipeline_progress_done, pipeline_progress_total, updated_at")
+              .select("id, project_id, status, file_count, total_size_bytes, created_at, pipeline_phase, error_message, pipeline_progress_done, pipeline_progress_total, updated_at")
               .in("project_id", ids)
               .order("created_at", { ascending: false })
           : Promise.resolve({ data: [] as any[] }),
@@ -226,6 +237,7 @@ export default function InternalWorkbench() {
           pipeline_progress_done: analysis?.pipeline_progress_done ?? null,
           pipeline_progress_total: analysis?.pipeline_progress_total ?? null,
           request_updated_at: analysis?.updated_at ?? null,
+          analysis_request_id: analysis?.id ?? null,
         };
       });
 
@@ -335,6 +347,47 @@ export default function InternalWorkbench() {
   const handleView = (p: WorkbenchProject) => {
     navigate(`/project/${p.id}`);
   };
+
+  const handleResume = async (p: WorkbenchProject) => {
+    if (!p.analysis_request_id) return;
+    const phaseKey = p.pipeline_phase ?? "";
+    const phaseOverride = phaseToOverride[phaseKey] ?? "split";
+    setResumingId(p.analysis_request_id);
+    try {
+      // Clear the failed status + error so the UI immediately reflects the retry.
+      await supabase
+        .from("analysis_requests")
+        .update({
+          status: "processing",
+          error_message: null,
+          pipeline_stop_requested: false,
+        })
+        .eq("id", p.analysis_request_id);
+
+      const body: Record<string, unknown> = {
+        analysisRequestId: p.analysis_request_id,
+        phaseOverride,
+      };
+      if (phaseOverride === "extract") body.resumeExtract = true;
+
+      const { error } = await supabase.functions.invoke("run-analysis-pipeline", {
+        body,
+      });
+      if (error) throw error;
+      toast({ title: "Resumed", description: `Re-enqueued ${phaseLabels[phaseKey] || phaseOverride}.` });
+      refetch();
+    } catch (err: any) {
+      toast({
+        variant: "destructive",
+        title: "Resume failed",
+        description: getUserFriendlyError(err),
+      });
+    } finally {
+      setResumingId(null);
+    }
+  };
+
+
 
   const openDelete = (p: WorkbenchProject) => {
     setDeleteTarget(p);
@@ -578,14 +631,29 @@ export default function InternalWorkbench() {
                                     </pre>
                                   </div>
                                 )}
-                                <div className="pt-2 border-t">
+                                <div className="pt-2 border-t space-y-2">
+                                  {p.status === "failed" && p.analysis_request_id && (
+                                    <Button
+                                      size="sm"
+                                      variant="default"
+                                      className="w-full"
+                                      disabled={resumingId === p.analysis_request_id}
+                                      onClick={() => handleResume(p)}
+                                    >
+                                      {resumingId === p.analysis_request_id ? (
+                                        <><Loader2 className="h-3 w-3 mr-1 animate-spin" />Resuming…</>
+                                      ) : (
+                                        "Resume"
+                                      )}
+                                    </Button>
+                                  )}
                                   <Button
                                     size="sm"
-                                    variant="default"
+                                    variant={p.status === "failed" ? "outline" : "default"}
                                     className="w-full"
                                     onClick={() => navigate(`/internal/workbench/project/${p.id}`)}
                                   >
-                                    {p.status === "failed" ? "Open & Resume" : "Open Project"}
+                                    Open Project
                                   </Button>
                                 </div>
                               </div>
