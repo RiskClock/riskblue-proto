@@ -366,6 +366,15 @@ export default function WorkbenchProjectDetail() {
       setSurveyResults(persisted);
       hydratedSurveyKeyRef.current = key;
     }
+    // Hydrate raw response text from persisted file rows.
+    if (rows?.files?.length) {
+      const rawChunks = rows.files
+        .filter((f) => (f.survey_raw_response ?? "").trim().length > 0)
+        .sort((a, b) => a.name.localeCompare(b.name))
+        .map((f) => `===== ${f.name} =====\n${f.survey_raw_response}`);
+      if (rawChunks.length > 0) setSurveyRawText(rawChunks.join("\n\n"));
+    }
+
   }, [rows, requestId, surveyRunning, surveyResults.length]);
 
   useEffect(() => {
