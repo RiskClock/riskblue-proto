@@ -289,12 +289,14 @@ Deno.serve(async (req) => {
         .eq("id", s.id);
     }
 
-    const results = sheetRows.map((s) => ({
-      sheetId: s.id,
-      page: s.page_index,
-      sheet_number: s.sheet_number,
-      content: resultsBySheet.get(s.id) ?? fallback ?? "",
-    }));
+    const results = sheetRows
+      .map((s) => ({
+        sheetId: s.id,
+        page: s.page_index,
+        sheet_number: s.sheet_number,
+        content: resultsBySheet.get(s.id) ?? fallback ?? "",
+      }))
+      .filter((r) => r.content);
 
     return json({
       fileId,
