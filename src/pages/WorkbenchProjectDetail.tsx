@@ -99,6 +99,19 @@ interface SheetRow {
   file_name: string;
   file_source_type: string;
   survey_result?: any;
+  survey_updated_at?: string | null;
+}
+
+const SURVEY_PROGRESS_KEY_PREFIX = "riskblue:survey-progress";
+
+function surveyProgressStorageKey(requestId: string) {
+  return `${SURVEY_PROGRESS_KEY_PREFIX}:${requestId}`;
+}
+
+function formatSurveyContent(result: any): string {
+  if (result == null) return "";
+  if (typeof result === "string") return result;
+  return result?.content ?? result?.summary ?? result?.text ?? JSON.stringify(result, null, 2);
 }
 
 interface TriageCount {
@@ -187,6 +200,7 @@ export default function WorkbenchProjectDetail() {
   }>>([]);
   const [surveyRawText, setSurveyRawText] = useState<string>("");
   const [surveyExpandedSheets, setSurveyExpandedSheets] = useState<Set<string>>(new Set());
+  const [surveyRecoveredRun, setSurveyRecoveredRun] = useState(false);
   const [spaceModalOpen, setSpaceModalOpen] = useState(false);
   const [buildingSpace, setBuildingSpace] = useState(false);
   const [instancesReportOpen, setInstancesReportOpen] = useState(false);
