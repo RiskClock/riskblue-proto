@@ -62,7 +62,17 @@ interface WorkbenchProject {
   pipeline_progress_done: number | null;
   pipeline_progress_total: number | null;
   request_updated_at: string | null;
+  analysis_request_id: string | null;
 }
+
+const phaseToOverride: Record<string, "split" | "extract" | "triage" | "analyze" | "summarize"> = {
+  splitting: "split",
+  extracting: "extract",
+  triaging: "triage",
+  dispatching_analyze: "analyze",
+  analyzing: "analyze",
+  summarizing: "summarize",
+};
 
 const phaseLabels: Record<string, string> = {
   splitting: "Splitting PDFs",
