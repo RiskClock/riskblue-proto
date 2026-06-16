@@ -142,6 +142,7 @@ export default function InternalWorkbench() {
   const [deleteTarget, setDeleteTarget] = useState<WorkbenchProject | null>(null);
   const [confirmName, setConfirmName] = useState("");
   const [deleting, setDeleting] = useState(false);
+  const [resumingId, setResumingId] = useState<string | null>(null);
 
   const STORAGE_KEY = "workbench-filter";
 
