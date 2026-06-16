@@ -352,6 +352,36 @@ export default function WorkbenchProjectDetail() {
     }
   }, [rows, requestId, surveyRunning, surveyResults.length]);
 
+  useEffect(() => {
+    if (!requestId || surveyRunning) return;
+    const raw = window.sessionStorage.getItem(surveyProgressStorageKey(requestId));
+    if (!raw) return;
+    try {
+      const saved = JSON.parse(raw);
+      if (saved?.total && saved?.current) {
+        setSurveyRecoveredRun(true);
+        setSurveyProgress({
+          current: saved.current,
+          total: saved.total,
+          fileName: saved.fileName ?? "",
+          phase: saved.phase === "uploading" ? "uploading" : "querying",
+        });
+      }
+    } catch {
+      window.sessionStorage.removeItem(surveyProgressStorageKey(requestId));
+    }
+  }, [requestId, surveyRunning]);
+
+  useEffect(() => {
+    if (!surveyRunning) return;
+    const warnBeforeRefresh = (event: BeforeUnloadEvent) => {
+      event.preventDefault();
+      event.returnValue = "";
+    };
+    window.addEventListener("beforeunload", warnBeforeRefresh);
+    return () => window.removeEventListener("beforeunload", warnBeforeRefresh);
+  }, [surveyRunning]);
+
   // Group: every file is a group, with optional sheets underneath
   const fileGroups = useMemo(() => {
     if (!rows) return [];
