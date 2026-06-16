@@ -98,7 +98,25 @@ interface SheetRow {
   extracted_text: string | null;
   file_name: string;
   file_source_type: string;
-  survey_result?: any;
+  survey_result?: unknown;
+  survey_updated_at?: string | null;
+}
+
+const SURVEY_PROGRESS_KEY_PREFIX = "riskblue:survey-progress";
+
+function surveyProgressStorageKey(requestId: string) {
+  return `${SURVEY_PROGRESS_KEY_PREFIX}:${requestId}`;
+}
+
+function formatSurveyContent(result: unknown): string {
+  if (result == null) return "";
+  if (typeof result === "string") return result;
+  if (typeof result === "object") {
+    const record = result as Record<string, unknown>;
+    const preferred = record.content ?? record.summary ?? record.text;
+    if (preferred != null) return typeof preferred === "string" ? preferred : JSON.stringify(preferred, null, 2);
+  }
+  return JSON.stringify(result, null, 2);
 }
 
 interface TriageCount {
@@ -187,6 +205,7 @@ export default function WorkbenchProjectDetail() {
   }>>([]);
   const [surveyRawText, setSurveyRawText] = useState<string>("");
   const [surveyExpandedSheets, setSurveyExpandedSheets] = useState<Set<string>>(new Set());
+  const [surveyRecoveredRun, setSurveyRecoveredRun] = useState(false);
   const [spaceModalOpen, setSpaceModalOpen] = useState(false);
   const [buildingSpace, setBuildingSpace] = useState(false);
   const [instancesReportOpen, setInstancesReportOpen] = useState(false);
@@ -268,7 +287,7 @@ export default function WorkbenchProjectDetail() {
         supabase
           .from("analysis_request_sheets")
           .select(
-            "id, parent_file_id, page_index, sheet_number, sheet_title, storage_path, extract_status, extracted_text, survey_result",
+            "id, parent_file_id, page_index, sheet_number, sheet_title, storage_path, extract_status, extracted_text, survey_result, survey_updated_at",
           )
           .eq("analysis_request_id", requestId!)
           .order("page_index", { ascending: true }),
@@ -300,6 +319,7 @@ export default function WorkbenchProjectDetail() {
             file_name: f.name,
             file_source_type: f.source_type,
             survey_result: s.survey_result ?? null,
+            survey_updated_at: s.survey_updated_at ?? null,
           };
         })
         .filter((s): s is SheetRow => s !== null)
@@ -316,31 +336,58 @@ export default function WorkbenchProjectDetail() {
   useEffect(() => {
     if (surveyRunning) return;
     if (!rows?.sheets?.length) return;
-    const key = `${requestId}:${rows.sheets.length}`;
+    const key = `${requestId}:${rows.sheets.length}:${rows.sheets.map((s) => s.survey_updated_at ?? "").join("|")}`;
     if (hydratedSurveyKeyRef.current === key) return;
     if (surveyResults.length > 0) return;
     const persisted = rows.sheets
-      .filter((s) => s.survey_result != null)
       .map((s) => {
-        const r: any = s.survey_result;
-        const content =
-          typeof r === "string"
-            ? r
-            : r?.content ?? r?.summary ?? r?.text ?? JSON.stringify(r, null, 2);
+        const content = formatSurveyContent(s.survey_result);
+        if (!content.trim()) return null;
         return {
           sheetId: s.id,
           file: s.file_name,
-          page: s.page_index + 1,
+          page: s.page_index,
           sheet_number: s.sheet_number,
-          content: String(content ?? ""),
+          content,
         };
       })
+      .filter((r): r is NonNullable<typeof r> => r !== null)
       .sort((a, b) => a.file.localeCompare(b.file) || a.page - b.page);
     if (persisted.length > 0) {
       setSurveyResults(persisted);
       hydratedSurveyKeyRef.current = key;
     }
   }, [rows, requestId, surveyRunning, surveyResults.length]);
+
+  useEffect(() => {
+    if (!requestId || surveyRunning) return;
+    const raw = window.sessionStorage.getItem(surveyProgressStorageKey(requestId));
+    if (!raw) return;
+    try {
+      const saved = JSON.parse(raw);
+      if (saved?.total && saved?.current) {
+        setSurveyRecoveredRun(true);
+        setSurveyProgress({
+          current: saved.current,
+          total: saved.total,
+          fileName: saved.fileName ?? "",
+          phase: saved.phase === "uploading" ? "uploading" : "querying",
+        });
+      }
+    } catch {
+      window.sessionStorage.removeItem(surveyProgressStorageKey(requestId));
+    }
+  }, [requestId, surveyRunning]);
+
+  useEffect(() => {
+    if (!surveyRunning) return;
+    const warnBeforeRefresh = (event: BeforeUnloadEvent) => {
+      event.preventDefault();
+      event.returnValue = "";
+    };
+    window.addEventListener("beforeunload", warnBeforeRefresh);
+    return () => window.removeEventListener("beforeunload", warnBeforeRefresh);
+  }, [surveyRunning]);
 
   // Group: every file is a group, with optional sheets underneath
   const fileGroups = useMemo(() => {
@@ -2405,6 +2452,7 @@ export default function WorkbenchProjectDetail() {
             <div className="mt-6 border-t pt-6 space-y-3">
               <div className="flex justify-center">
                 <Button
+                  type="button"
                   onClick={async () => {
                     if (!requestId) return;
                     // Collect original PDFs attached to this request.
@@ -2424,6 +2472,7 @@ export default function WorkbenchProjectDetail() {
                     }
 
                     setSurveyRunning(true);
+                    setSurveyRecoveredRun(false);
                     setSurveyResults([]);
                     setSurveyRawText("");
                     setSurveyExpandedSheets(new Set());
@@ -2436,6 +2485,10 @@ export default function WorkbenchProjectDetail() {
                     try {
                       for (let i = 0; i < files.length; i++) {
                         const f = files[i];
+                        window.sessionStorage.setItem(
+                          surveyProgressStorageKey(requestId),
+                          JSON.stringify({ current: i + 1, total: files.length, fileName: f.name, phase: "uploading" }),
+                        );
                         setSurveyProgress({
                           current: i + 1,
                           total: files.length,
@@ -2444,6 +2497,10 @@ export default function WorkbenchProjectDetail() {
                         });
                         // Tiny tick so the UI renders "uploading" before invoke blocks.
                         await new Promise((r) => setTimeout(r, 30));
+                        window.sessionStorage.setItem(
+                          surveyProgressStorageKey(requestId),
+                          JSON.stringify({ current: i + 1, total: files.length, fileName: f.name, phase: "querying" }),
+                        );
                         setSurveyProgress({
                           current: i + 1,
                           total: files.length,
@@ -2481,15 +2538,18 @@ export default function WorkbenchProjectDetail() {
                         fileName: "",
                         phase: "done",
                       });
+                      window.sessionStorage.removeItem(surveyProgressStorageKey(requestId));
                       toast({
                         title: "Survey Pages complete",
                         description: `${withResult} of ${totalSheets} pages received a result across ${files.length} file${files.length === 1 ? "" : "s"}.`,
                       });
-                    } catch (err) {
+                    } catch (err: unknown) {
+                      window.sessionStorage.removeItem(surveyProgressStorageKey(requestId));
+                      const message = err instanceof Error ? err.message : "Unknown error";
                       toast({
                         variant: "destructive",
                         title: "Survey Pages failed",
-                        description: (err as any)?.message ?? "Unknown error",
+                        description: message,
                       });
                     } finally {
                       setSurveyRunning(false);
@@ -2511,6 +2571,11 @@ export default function WorkbenchProjectDetail() {
               {/* Per-file progress status */}
               {surveyProgress && (
                 <div className="text-center text-xs text-muted-foreground">
+                  {surveyRecoveredRun && !surveyRunning && surveyProgress.phase !== "done" && (
+                    <div className="mb-1 text-amber-700">
+                      Browser refreshed during Survey Pages. Saved file results below were recovered from the database; rerun to continue unfinished files.
+                    </div>
+                  )}
                   {surveyProgress.phase === "done" ? (
                     <span>Finished {surveyProgress.total} file{surveyProgress.total === 1 ? "" : "s"}.</span>
                   ) : (

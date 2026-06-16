@@ -58,10 +58,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         setSession(null);
         setUser(null);
         setLoading(false);
-        if (typeof window !== "undefined") {
-          // Force a full reload so any cached React Query / context data is wiped.
-          window.location.replace("/auth?reason=session_swap");
-        }
+        navigate("/auth?reason=session_swap", { replace: true });
         return;
       }
 
@@ -103,7 +100,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       subscription.unsubscribe();
       window.removeEventListener("storage", onStorage);
     };
-  }, []);
+  }, [navigate]);
 
   const signIn = async (email: string, password: string) => {
     const { error } = await supabase.auth.signInWithPassword({

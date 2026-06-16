@@ -59,6 +59,27 @@ function extractJsonArray(text: string): any[] | null {
   return null;
 }
 
+function pageValue(item: any): number | null {
+  const raw = item?.page_number ?? item?.page ?? item?.page_index ?? item?.pageNumber;
+  const n = Number(raw);
+  return Number.isFinite(n) ? n : null;
+}
+
+function flattenSurveyPages(parsed: any[] | null): any[] {
+  if (!parsed) return [];
+  const pages: any[] = [];
+  for (const item of parsed) {
+    if (Array.isArray(item?.surveyed_pages)) {
+      for (const page of item.surveyed_pages) {
+        pages.push({ file_name: item?.file_name, total_pages: item?.total_pages, ...page });
+      }
+    } else {
+      pages.push(item);
+    }
+  }
+  return pages;
+}
+
 async function uploadPdfToGemini(
   apiKey: string,
   bytes: Uint8Array,
@@ -216,9 +237,8 @@ Deno.serve(async (req) => {
                 { file_data: { file_uri: uri, mime_type: mimeType } },
                 {
                   text:
-                    `File: ${fileName}\nReturn a JSON array with one object per page. ` +
-                    `Each object MUST include a "page" field that matches the 1-based PDF page number. ` +
-                    `Include any other fields the system prompt requests.`,
+                    `File: ${fileName}\nReturn ONLY the strict JSON array requested by the system prompt. ` +
+                    `Every surveyed_pages item MUST include a page_number matching the source PDF page number.`,
                 },
               ],
             },
@@ -235,42 +255,48 @@ Deno.serve(async (req) => {
     const rawText: string =
       raw?.candidates?.[0]?.content?.parts?.map((p: any) => p?.text ?? "").join("") ?? "";
 
-    // Parse JSON array → match to sheet rows by page number.
+    // Parse JSON array → match to sheet rows by page number. The configured
+    // prompt returns a top-level file object with surveyed_pages[], while older
+    // prompts returned flat per-page objects, so support both shapes.
     const parsed = extractJsonArray(rawText);
     const resultsBySheet = new Map<string, string>();
-    if (parsed) {
-      for (const item of parsed) {
-        const page = Number(item?.page ?? item?.page_index ?? item?.pageNumber);
-        if (!Number.isFinite(page)) continue;
-        const sheet = sheetByPage.get(page);
-        if (!sheet) continue;
-        const content =
-          typeof item?.summary === "string"
-            ? item.summary
-            : typeof item?.content === "string"
-              ? item.content
-              : JSON.stringify(item, null, 2);
-        resultsBySheet.set(sheet.id, content);
-      }
+    const pageItems = flattenSurveyPages(parsed);
+    for (const item of pageItems) {
+      const page = pageValue(item);
+      if (page == null) continue;
+      const sheet = sheetByPage.get(page);
+      if (!sheet) continue;
+      const content =
+        typeof item?.summary === "string"
+          ? item.summary
+          : typeof item?.content === "string"
+            ? item.content
+            : JSON.stringify(item, null, 2);
+      resultsBySheet.set(sheet.id, content);
     }
+    console.log(`[survey-pages] parsed_pages=${pageItems.length} matched_sheets=${resultsBySheet.size} file=${fileName}`);
 
     const fallback = parsed ? null : rawText;
     for (const s of sheetRows) {
+      const result = resultsBySheet.get(s.id) ?? fallback;
+      if (!result) continue;
       await admin
         .from("analysis_request_sheets")
         .update({
-          survey_result: resultsBySheet.get(s.id) ?? fallback,
+          survey_result: result,
           survey_updated_at: new Date().toISOString(),
         } as any)
         .eq("id", s.id);
     }
 
-    const results = sheetRows.map((s) => ({
-      sheetId: s.id,
-      page: s.page_index,
-      sheet_number: s.sheet_number,
-      content: resultsBySheet.get(s.id) ?? fallback ?? "",
-    }));
+    const results = sheetRows
+      .map((s) => ({
+        sheetId: s.id,
+        page: s.page_index,
+        sheet_number: s.sheet_number,
+        content: resultsBySheet.get(s.id) ?? fallback ?? "",
+      }))
+      .filter((r) => r.content);
 
     return json({
       fileId,
