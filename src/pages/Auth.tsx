@@ -32,6 +32,10 @@ const Auth = () => {
   const [rememberMe, setRememberMe] = useState(false);
   const [resetEmailSent, setResetEmailSent] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  // Surface a one-time warning when AuthContext forced a sign-out due to a
+  // cross-tab / cross-session swap of the active user.
+  // (toast is from useToast() declared later in this component — re-use it.)
   
   // Request access modal state
   const [showRequestModal, setShowRequestModal] = useState(false);
