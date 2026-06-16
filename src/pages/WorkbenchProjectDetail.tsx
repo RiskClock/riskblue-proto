@@ -206,6 +206,8 @@ export default function WorkbenchProjectDetail() {
   const [surveyRawText, setSurveyRawText] = useState<string>("");
   const [surveyExpandedSheets, setSurveyExpandedSheets] = useState<Set<string>>(new Set());
   const [surveyRecoveredRun, setSurveyRecoveredRun] = useState(false);
+  const [showSurveyRaw, setShowSurveyRaw] = useState(false);
+
   const [spaceModalOpen, setSpaceModalOpen] = useState(false);
   const [buildingSpace, setBuildingSpace] = useState(false);
   const [instancesReportOpen, setInstancesReportOpen] = useState(false);
