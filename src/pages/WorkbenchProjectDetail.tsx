@@ -85,7 +85,10 @@ interface FileRow {
   extracted_text: string | null;
   storage_path: string | null;
   mime_type: string | null;
+  survey_raw_response?: string | null;
+  survey_raw_updated_at?: string | null;
 }
+
 
 interface SheetRow {
   id: string;
