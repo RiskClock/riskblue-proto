@@ -346,6 +346,17 @@ Deno.serve(async (req) => {
         .eq("id", s.id);
     }
 
+    // Persist the full raw Gemini response on the file row so it survives
+    // browser reloads and can be re-viewed later for debugging.
+    await admin
+      .from("analysis_request_files")
+      .update({
+        survey_raw_response: rawText,
+        survey_raw_updated_at: new Date().toISOString(),
+      } as any)
+      .eq("id", fileId);
+
+
     const results = sheetRows.map((s) => ({
       sheetId: s.id,
       page: s.page_index,
