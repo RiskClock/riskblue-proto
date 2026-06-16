@@ -45,7 +45,7 @@ serve(async (req) => {
 
     const { data: project } = await admin
       .from("projects")
-      .select("id, name, user_id, created_at")
+      .select("id, name, user_id, created_at, selected_awp_class_names, selected_other_classes")
       .eq("id", projectId)
       .single();
 
@@ -66,6 +66,50 @@ serve(async (req) => {
       .maybeSingle();
     const creatorName = profile?.display_name || creatorEmail;
 
+    // Categorize selected classes by looking them up in awp_classes
+    const selectedNames: string[] = Array.isArray((project as any).selected_awp_class_names)
+      ? (project as any).selected_awp_class_names
+      : [];
+    const otherClasses: string[] = Array.isArray((project as any).selected_other_classes)
+      ? (project as any).selected_other_classes
+      : [];
+
+    const groups: Record<string, string[]> = {
+      "Critical Assets": [],
+      "Water Systems": [],
+      "Processes": [],
+      "Other": [...otherClasses],
+    };
+
+    if (selectedNames.length > 0) {
+      const { data: classes } = await admin
+        .from("awp_classes")
+        .select("name, category")
+        .in("name", selectedNames);
+      const catByName = new Map<string, string>(
+        (classes || []).map((c: any) => [c.name, c.category]),
+      );
+      for (const name of selectedNames) {
+        const cat = catByName.get(name);
+        if (cat === "Asset") groups["Critical Assets"].push(name);
+        else if (cat === "Water System") groups["Water Systems"].push(name);
+        else if (cat === "Process") groups["Processes"].push(name);
+        else groups["Other"].push(name);
+      }
+    }
+
+    const renderGroup = (title: string, items: string[]) =>
+      items.length === 0
+        ? ""
+        : `<h3 style="margin:18px 0 6px;font-size:14px;">${escapeHtml(title)} (${items.length})</h3>
+           <ul style="margin:0;padding-left:20px;">${items
+             .map((n) => `<li>${escapeHtml(n)}</li>`)
+             .join("")}</ul>`;
+
+    const selectionsHtml = ["Critical Assets", "Water Systems", "Processes", "Other"]
+      .map((k) => renderGroup(k, groups[k]))
+      .join("");
+
     const subject = `New project created: ${project.name}`;
     const html = `
       <div style="font-family: Arial, sans-serif; max-width: 560px; padding: 20px;">
@@ -74,8 +118,10 @@ serve(async (req) => {
         <p><strong>Created by:</strong> ${escapeHtml(creatorName)} &lt;${escapeHtml(creatorEmail)}&gt;</p>
         <p><strong>Project ID:</strong> ${project.id}</p>
         <p><strong>Created at:</strong> ${new Date(project.created_at).toISOString()}</p>
+        ${selectionsHtml || '<p style="color:#666;">No assets, water systems, or processes selected.</p>'}
       </div>
     `;
+
 
     const res = await fetch("https://api.resend.com/emails", {
       method: "POST",
