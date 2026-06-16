@@ -7,34 +7,30 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { PDFDocument } from "https://esm.sh/pdf-lib@1.17.1";
 import * as mupdf from "npm:mupdf@1.3.0";
 
-// Render a single PDF page (0-based index) from raw PDF bytes to a PNG Uint8Array.
-// Uses MuPDF WASM (works in Deno edge runtime). Scale ~1.5 ≈ 108 DPI.
-async function renderPageToPng(
-  pdfBytes: Uint8Array,
+// Render a single PDF page (0-based index) from an already-opened MuPDF
+// Document to a PNG Uint8Array. Scale ~1.0 ≈ 72 DPI — good enough for
+// downstream OpenAI vision; keeps memory low on big sheets.
+function renderPageFromDocToPng(
+  doc: any,
   pageIndex: number,
-  scale = 1.5,
-): Promise<Uint8Array> {
-  const doc = (mupdf as any).Document.openDocument(pdfBytes, "application/pdf");
+  scale = 1.0,
+): Uint8Array {
+  const page = doc.loadPage(pageIndex);
   try {
-    const page = doc.loadPage(pageIndex);
+    const matrix = (mupdf as any).Matrix.scale(scale, scale);
+    const pixmap = page.toPixmap(
+      matrix,
+      (mupdf as any).ColorSpace.DeviceRGB,
+      false,
+      true,
+    );
     try {
-      const matrix = (mupdf as any).Matrix.scale(scale, scale);
-      const pixmap = page.toPixmap(
-        matrix,
-        (mupdf as any).ColorSpace.DeviceRGB,
-        false,
-        true,
-      );
-      try {
-        return pixmap.asPNG();
-      } finally {
-        pixmap.destroy?.();
-      }
+      return pixmap.asPNG();
     } finally {
-      page.destroy?.();
+      pixmap.destroy?.();
     }
   } finally {
-    doc.destroy?.();
+    page.destroy?.();
   }
 }
 
@@ -766,8 +762,33 @@ async function runSplitPdfChunk(
   admin: ReturnType<typeof createClient>,
   job: any,
 ) {
+  try {
+    await runSplitPdfChunkInner(admin, job);
+  } catch (e: any) {
+    const msg = e?.message ?? String(e);
+    console.error(`[split] job=${job.id} uncaught error: ${msg}`, e?.stack);
+    // Surface the real error to the row so failures don't have to wait for
+    // the 5-minute reaper "did not progress" message.
+    await updateJobGuarded(admin, job, {
+      status: "failed",
+      completed_at: new Date().toISOString(),
+      error_message: `Split crashed: ${msg.slice(0, 500)}`,
+    }).catch(() => {});
+  }
+}
+
+async function runSplitPdfChunkInner(
+  admin: ReturnType<typeof createClient>,
+  job: any,
+) {
   const startedAt = Date.now();
-  const SOFT_DEADLINE_MS = 40_000;
+  // Tight deadline so a killed isolate loses at most ~20s of work; the
+  // unfinished pages are re-queued and the next worker tick picks them up.
+  const SOFT_DEADLINE_MS = 20_000;
+  // Skip PNG rendering above this raw page-PDF size to avoid mupdf OOM on
+  // dense sheets (rasterizing a multi-MB single-page PDF can spike past the
+  // edge-runtime memory ceiling and kill the whole worker silently).
+  const PNG_SKIP_BYTES = 8 * 1024 * 1024;
 
   const parentFileId: string = job.parent_file_id || job.file_id;
   const pageFrom: number = Number.isInteger(job.page_from) ? job.page_from : 0;
@@ -840,8 +861,10 @@ async function runSplitPdfChunk(
   }
 
   let srcDoc: any;
+  let parentBytes: Uint8Array;
   try {
     const ab = await blob.arrayBuffer();
+    parentBytes = new Uint8Array(ab);
     srcDoc = await PDFDocument.load(ab, { ignoreEncryption: true });
   } catch (e: any) {
     await updateJobGuarded(admin, job, {
@@ -852,144 +875,158 @@ async function runSplitPdfChunk(
     return;
   }
 
-  const totalPages = srcDoc.getPageCount();
-  const fromIdx = Math.max(0, pageFrom);
-  const toIdx = Math.min(totalPages - 1, pageTo);
-  console.log(
-    `[split] job=${job.id} parent has ${totalPages} pages, splitting ${fromIdx}..${toIdx}`,
-  );
-
-  // Derive base storage prefix for sheets: {parentDir}/_sheets/{parentFileId}/page-XXXX.pdf
-  // parentStoragePath = "<projectId>/<requestId>/<relative>".
-  // We strip the filename and place sheets next to source dir under _sheets/<parentFileId>.
-  const lastSlash = parentStoragePath.lastIndexOf("/");
-  const parentDir =
-    lastSlash >= 0 ? parentStoragePath.slice(0, lastSlash) : parentStoragePath;
-  const sheetPrefix = `${parentDir}/_sheets/${parentFileId}`;
-  const baseName = parentName.replace(/\.pdf$/i, "");
-
-  let okCount = 0;
-  const failures: Array<{ page: number; error: string }> = [];
-
-  for (let pageIndex = fromIdx; pageIndex <= toIdx; pageIndex++) {
-    if (Date.now() - startedAt > SOFT_DEADLINE_MS) {
-      // Re-queue remainder by failing-with-retry: mark this chunk pending with
-      // a tighter range so the next worker tick picks up where we left off.
-      const remainingFrom = pageIndex;
-      console.warn(
-        `[split] job=${job.id} hit soft deadline at page ${pageIndex}; rescheduling ${remainingFrom}..${toIdx}`,
-      );
-      await admin
-        .from("analysis_pipeline_jobs")
-        .update({
-          status: "pending",
-          worker_id: null,
-          claimed_at: null,
-          page_from: remainingFrom,
-          next_attempt_at: new Date(Date.now() + 2_000).toISOString(),
-          error_message: `Resumed at page ${remainingFrom} after deadline`,
-        } as any)
-        .eq("id", job.id);
-      // Persist completed sheets count progress on parent file
-      await persistSplitProgress(admin, parentFileId, requestId);
-      return;
-    }
-
-    const pageNumber = pageIndex + 1;
-    const sheetName = `${baseName} — p${pageNumber}.pdf`;
-    const storagePath = `${sheetPrefix}/page-${String(pageNumber).padStart(4, "0")}.pdf`;
-    const pngStoragePath = `${sheetPrefix}/page-${String(pageNumber).padStart(4, "0")}.png`;
-
-    try {
-      const newDoc = await PDFDocument.create();
-      const [copied] = await newDoc.copyPages(srcDoc, [pageIndex]);
-      newDoc.addPage(copied);
-      const bytes = await newDoc.save();
-
-      const { error: upErr } = await admin.storage.from(bucket).upload(
-        storagePath,
-        new Blob([bytes], { type: "application/pdf" }),
-        { contentType: "application/pdf", upsert: true },
-      );
-      if (upErr) throw new Error(`upload: ${upErr.message}`);
-
-      // Render PNG of this page and upload alongside the PDF. PNG render is
-      // best-effort: a failure logs a warning but does not fail the split job.
-      let pngPathToStore: string | null = null;
-      try {
-        const pngBytes = await renderPageToPng(bytes, 0, 1.5);
-        const { error: pngErr } = await admin.storage.from(bucket).upload(
-          pngStoragePath,
-          new Blob([pngBytes], { type: "image/png" }),
-          { contentType: "image/png", upsert: true },
-        );
-        if (pngErr) {
-          console.warn(
-            `[split] job=${job.id} page ${pageIndex} png upload failed: ${pngErr.message}`,
-          );
-        } else {
-          pngPathToStore = pngStoragePath;
-        }
-      } catch (e: any) {
-        console.warn(
-          `[split] job=${job.id} page ${pageIndex} png render failed: ${e?.message ?? e}`,
-        );
-      }
-
-      // Idempotent upsert keyed by (parent_file_id, page_index)
-      // page_index is stored as 1-based to match human page numbers.
-      const { error: upsertErr } = await admin
-        .from("analysis_request_sheets")
-        .upsert(
-          {
-            analysis_request_id: requestId,
-            parent_file_id: parentFileId,
-            page_index: pageNumber,
-            name: sheetName,
-            storage_path: storagePath,
-            png_storage_path: pngPathToStore,
-            extract_status: "pending",
-            extract_error: null,
-          } as any,
-          { onConflict: "parent_file_id,page_index" },
-        );
-      if (upsertErr) throw new Error(`upsert: ${upsertErr.message}`);
-
-      okCount++;
-    } catch (e: any) {
-      const msg = e?.message ?? String(e);
-      console.error(
-        `[split] job=${job.id} page ${pageIndex} failed: ${msg}`,
-      );
-      failures.push({ page: pageIndex, error: msg });
-    }
+  // Open MuPDF ONCE for the whole chunk; reuse for every page render.
+  // Previously we re-opened mupdf per page on the single-page PDF bytes which
+  // both wasted memory and contributed to the OOM kills.
+  let mupdfDoc: any = null;
+  try {
+    mupdfDoc = (mupdf as any).Document.openDocument(
+      parentBytes,
+      "application/pdf",
+    );
+  } catch (e: any) {
+    console.warn(
+      `[split] job=${job.id} mupdf open failed (PNGs will be skipped): ${e?.message ?? e}`,
+    );
   }
 
-  // Persist a per-parent split status snapshot
-  await persistSplitProgress(admin, parentFileId, requestId);
-
-  if (failures.length === 0) {
-    await updateJobGuarded(admin, job, {
-      status: "complete",
-      completed_at: new Date().toISOString(),
-      error_message: null,
-    });
+  try {
+    const totalPages = srcDoc.getPageCount();
+    const fromIdx = Math.max(0, pageFrom);
+    const toIdx = Math.min(totalPages - 1, pageTo);
     console.log(
-      `[split] job=${job.id} done: ${okCount} pages written (${fromIdx}..${toIdx})`,
+      `[split] job=${job.id} parent has ${totalPages} pages, splitting ${fromIdx}..${toIdx}`,
     );
-  } else {
-    // Partial success — mark failed with a summary; pipeline can still proceed
-    // with the sheets that did upsert.
-    await updateJobGuarded(admin, job, {
-      status: "failed",
-      completed_at: new Date().toISOString(),
-      error_message:
-        `Split partial: ${okCount} ok, ${failures.length} failed. ` +
-        failures
-          .slice(0, 3)
-          .map((f) => `p${f.page}:${f.error}`)
-          .join("; "),
-    });
+
+    const lastSlash = parentStoragePath.lastIndexOf("/");
+    const parentDir =
+      lastSlash >= 0 ? parentStoragePath.slice(0, lastSlash) : parentStoragePath;
+    const sheetPrefix = `${parentDir}/_sheets/${parentFileId}`;
+    const baseName = parentName.replace(/\.pdf$/i, "");
+
+    let okCount = 0;
+    const failures: Array<{ page: number; error: string }> = [];
+
+    for (let pageIndex = fromIdx; pageIndex <= toIdx; pageIndex++) {
+      if (Date.now() - startedAt > SOFT_DEADLINE_MS) {
+        const remainingFrom = pageIndex;
+        console.warn(
+          `[split] job=${job.id} hit soft deadline at page ${pageIndex}; rescheduling ${remainingFrom}..${toIdx}`,
+        );
+        await admin
+          .from("analysis_pipeline_jobs")
+          .update({
+            status: "pending",
+            worker_id: null,
+            claimed_at: null,
+            page_from: remainingFrom,
+            next_attempt_at: new Date(Date.now() + 2_000).toISOString(),
+            error_message: `Resumed at page ${remainingFrom} after deadline`,
+          } as any)
+          .eq("id", job.id);
+        await persistSplitProgress(admin, parentFileId, requestId);
+        return;
+      }
+
+      const pageNumber = pageIndex + 1;
+      const sheetName = `${baseName} — p${pageNumber}.pdf`;
+      const storagePath = `${sheetPrefix}/page-${String(pageNumber).padStart(4, "0")}.pdf`;
+      const pngStoragePath = `${sheetPrefix}/page-${String(pageNumber).padStart(4, "0")}.png`;
+
+      try {
+        const newDoc = await PDFDocument.create();
+        const [copied] = await newDoc.copyPages(srcDoc, [pageIndex]);
+        newDoc.addPage(copied);
+        const bytes = await newDoc.save();
+
+        const { error: upErr } = await admin.storage.from(bucket).upload(
+          storagePath,
+          new Blob([bytes], { type: "application/pdf" }),
+          { contentType: "application/pdf", upsert: true },
+        );
+        if (upErr) throw new Error(`upload: ${upErr.message}`);
+
+        // PNG render — best effort. Skip on huge pages or when mupdf failed
+        // to open, to avoid OOM-killing the worker isolate.
+        let pngPathToStore: string | null = null;
+        if (mupdfDoc && bytes.byteLength <= PNG_SKIP_BYTES) {
+          try {
+            const pngBytes = renderPageFromDocToPng(mupdfDoc, pageIndex, 1.0);
+            const { error: pngErr } = await admin.storage.from(bucket).upload(
+              pngStoragePath,
+              new Blob([pngBytes], { type: "image/png" }),
+              { contentType: "image/png", upsert: true },
+            );
+            if (pngErr) {
+              console.warn(
+                `[split] job=${job.id} page ${pageIndex} png upload failed: ${pngErr.message}`,
+              );
+            } else {
+              pngPathToStore = pngStoragePath;
+            }
+          } catch (e: any) {
+            console.warn(
+              `[split] job=${job.id} page ${pageIndex} png render failed: ${e?.message ?? e}`,
+            );
+          }
+        } else if (mupdfDoc) {
+          console.warn(
+            `[split] job=${job.id} page ${pageIndex} skipped PNG (page bytes=${bytes.byteLength} > ${PNG_SKIP_BYTES})`,
+          );
+        }
+
+        const { error: upsertErr } = await admin
+          .from("analysis_request_sheets")
+          .upsert(
+            {
+              analysis_request_id: requestId,
+              parent_file_id: parentFileId,
+              page_index: pageNumber,
+              name: sheetName,
+              storage_path: storagePath,
+              png_storage_path: pngPathToStore,
+              extract_status: "pending",
+              extract_error: null,
+            } as any,
+            { onConflict: "parent_file_id,page_index" },
+          );
+        if (upsertErr) throw new Error(`upsert: ${upsertErr.message}`);
+
+        okCount++;
+      } catch (e: any) {
+        const msg = e?.message ?? String(e);
+        console.error(
+          `[split] job=${job.id} page ${pageIndex} failed: ${msg}`,
+        );
+        failures.push({ page: pageIndex, error: msg });
+      }
+    }
+
+    await persistSplitProgress(admin, parentFileId, requestId);
+
+    if (failures.length === 0) {
+      await updateJobGuarded(admin, job, {
+        status: "complete",
+        completed_at: new Date().toISOString(),
+        error_message: null,
+      });
+      console.log(
+        `[split] job=${job.id} done: ${okCount} pages written (${fromIdx}..${toIdx})`,
+      );
+    } else {
+      await updateJobGuarded(admin, job, {
+        status: "failed",
+        completed_at: new Date().toISOString(),
+        error_message:
+          `Split partial: ${okCount} ok, ${failures.length} failed. ` +
+          failures
+            .slice(0, 3)
+            .map((f) => `p${f.page}:${f.error}`)
+            .join("; "),
+      });
+    }
+  } finally {
+    try { mupdfDoc?.destroy?.(); } catch { /* noop */ }
   }
 }
 

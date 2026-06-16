@@ -165,6 +165,8 @@ export default function InternalWorkbench() {
 
   const { data: projects, isLoading, refetch } = useQuery({
     queryKey: ["workbench-projects"],
+    refetchInterval: 10_000,
+    refetchIntervalInBackground: false,
     enabled: !!user && isInternal,
     queryFn: async (): Promise<WorkbenchProject[]> => {
       const { data: projectsData, error } = await supabase
