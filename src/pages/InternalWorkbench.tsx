@@ -196,7 +196,7 @@ export default function InternalWorkbench() {
         ids.length > 0
           ? supabase
               .from("analysis_requests")
-              .select("project_id, status, file_count, total_size_bytes, created_at, pipeline_phase, error_message, pipeline_progress_done, pipeline_progress_total, updated_at")
+              .select("id, project_id, status, file_count, total_size_bytes, created_at, pipeline_phase, error_message, pipeline_progress_done, pipeline_progress_total, updated_at")
               .in("project_id", ids)
               .order("created_at", { ascending: false })
           : Promise.resolve({ data: [] as any[] }),
