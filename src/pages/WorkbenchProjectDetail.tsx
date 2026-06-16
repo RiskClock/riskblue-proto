@@ -335,16 +335,18 @@ export default function WorkbenchProjectDetail() {
     if (hydratedSurveyKeyRef.current === key) return;
     if (surveyResults.length > 0) return;
     const persisted = rows.sheets
-      .filter((s) => s.survey_result != null)
       .map((s) => {
+        const content = formatSurveyContent(s.survey_result);
+        if (!content.trim()) return null;
         return {
           sheetId: s.id,
           file: s.file_name,
           page: s.page_index + 1,
           sheet_number: s.sheet_number,
-          content: formatSurveyContent(s.survey_result),
+          content,
         };
       })
+      .filter((r): r is NonNullable<typeof r> => r !== null)
       .sort((a, b) => a.file.localeCompare(b.file) || a.page - b.page);
     if (persisted.length > 0) {
       setSurveyResults(persisted);
