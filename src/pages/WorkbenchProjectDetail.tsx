@@ -85,7 +85,10 @@ interface FileRow {
   extracted_text: string | null;
   storage_path: string | null;
   mime_type: string | null;
+  survey_raw_response?: string | null;
+  survey_raw_updated_at?: string | null;
 }
+
 
 interface SheetRow {
   id: string;
@@ -206,6 +209,8 @@ export default function WorkbenchProjectDetail() {
   const [surveyRawText, setSurveyRawText] = useState<string>("");
   const [surveyExpandedSheets, setSurveyExpandedSheets] = useState<Set<string>>(new Set());
   const [surveyRecoveredRun, setSurveyRecoveredRun] = useState(false);
+  const [showSurveyRaw, setShowSurveyRaw] = useState(false);
+
   const [spaceModalOpen, setSpaceModalOpen] = useState(false);
   const [buildingSpace, setBuildingSpace] = useState(false);
   const [instancesReportOpen, setInstancesReportOpen] = useState(false);
@@ -281,9 +286,10 @@ export default function WorkbenchProjectDetail() {
       const [filesRes, sheetsRes] = await Promise.all([
         supabase
           .from("analysis_request_files")
-          .select("id, name, extracted_text, storage_path, mime_type")
+          .select("id, name, extracted_text, storage_path, mime_type, survey_raw_response, survey_raw_updated_at")
           .eq("analysis_request_id", requestId!)
           .order("name"),
+
         supabase
           .from("analysis_request_sheets")
           .select(
@@ -301,7 +307,10 @@ export default function WorkbenchProjectDetail() {
         extracted_text: f.extracted_text ?? null,
         storage_path: f.storage_path ?? null,
         mime_type: f.mime_type ?? null,
+        survey_raw_response: f.survey_raw_response ?? null,
+        survey_raw_updated_at: f.survey_raw_updated_at ?? null,
       }));
+
       const fileMap = new Map(files.map((f) => [f.id, f]));
       const sheets: SheetRow[] = (sheetsRes.data || [])
         .map((s: any): SheetRow | null => {
@@ -357,6 +366,15 @@ export default function WorkbenchProjectDetail() {
       setSurveyResults(persisted);
       hydratedSurveyKeyRef.current = key;
     }
+    // Hydrate raw response text from persisted file rows.
+    if (rows?.files?.length) {
+      const rawChunks = rows.files
+        .filter((f) => (f.survey_raw_response ?? "").trim().length > 0)
+        .sort((a, b) => a.name.localeCompare(b.name))
+        .map((f) => `===== ${f.name} =====\n${f.survey_raw_response}`);
+      if (rawChunks.length > 0) setSurveyRawText(rawChunks.join("\n\n"));
+    }
+
   }, [rows, requestId, surveyRunning, surveyResults.length]);
 
   useEffect(() => {
@@ -2591,10 +2609,21 @@ export default function WorkbenchProjectDetail() {
               {/* Result list — per-page expandable cards. */}
               {(surveyResults.length > 0 || surveyRawText) && (
                 <div className="border rounded-md bg-background">
-                  <div className="px-3 py-2 border-b text-xs text-muted-foreground">
-                    {surveyResults.length > 0
-                      ? `${surveyResults.length} page result${surveyResults.length === 1 ? "" : "s"} · click a row to expand`
-                      : "Raw response (could not parse per-page results):"}
+                  <div className="px-3 py-2 border-b text-xs text-muted-foreground flex items-center justify-between gap-2">
+                    <span>
+                      {surveyResults.length > 0
+                        ? `${surveyResults.length} page result${surveyResults.length === 1 ? "" : "s"} · click a row to expand`
+                        : "Raw response (could not parse per-page results):"}
+                    </span>
+                    {surveyRawText && surveyResults.length > 0 && (
+                      <button
+                        type="button"
+                        className="text-xs underline text-foreground/80 hover:text-foreground"
+                        onClick={() => setShowSurveyRaw((v) => !v)}
+                      >
+                        {showSurveyRaw ? "Hide raw response" : "View raw response"}
+                      </button>
+                    )}
                   </div>
                   {surveyResults.length > 0 ? (
                     <ul className="divide-y max-h-[60vh] overflow-auto">
@@ -2636,6 +2665,17 @@ export default function WorkbenchProjectDetail() {
                       className="font-mono text-xs min-h-[200px] border-0 rounded-none"
                     />
                   )}
+                  {showSurveyRaw && surveyResults.length > 0 && surveyRawText && (
+                    <div className="border-t">
+                      <div className="px-3 py-2 text-xs text-muted-foreground">Raw Gemini response (per file)</div>
+                      <Textarea
+                        readOnly
+                        value={surveyRawText}
+                        className="font-mono text-xs min-h-[300px] border-0 rounded-none"
+                      />
+                    </div>
+                  )}
+
                 </div>
               )}
             </div>

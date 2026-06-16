@@ -253,6 +253,8 @@ export type Database = {
           size_bytes: number | null
           split_status: string
           storage_path: string | null
+          survey_raw_response: string | null
+          survey_raw_updated_at: string | null
         }
         Insert: {
           analysis_request_id: string
@@ -272,6 +274,8 @@ export type Database = {
           size_bytes?: number | null
           split_status?: string
           storage_path?: string | null
+          survey_raw_response?: string | null
+          survey_raw_updated_at?: string | null
         }
         Update: {
           analysis_request_id?: string
@@ -291,6 +295,8 @@ export type Database = {
           size_bytes?: number | null
           split_status?: string
           storage_path?: string | null
+          survey_raw_response?: string | null
+          survey_raw_updated_at?: string | null
         }
         Relationships: [
           {
