@@ -384,7 +384,7 @@ async function runPool<T>(
 // terminal. Idempotent: re-running upserts sheet rows by (parent, page_index)
 // and skips parents already marked 'split'.
 // ---------------------------------------------------------------------------
-const SPLIT_CHUNK_PAGES = 8;
+const SPLIT_CHUNK_PAGES = 2;
 const SPLIT_POLL_INTERVAL_MS = 3_000;
 const SPLIT_POLL_TIMEOUT_MS = 10 * 60 * 1000; // 10 min hard cap
 
