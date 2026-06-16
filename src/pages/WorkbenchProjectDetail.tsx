@@ -2629,8 +2629,9 @@ export default function WorkbenchProjectDetail() {
                     <ul className="divide-y max-h-[60vh] overflow-auto">
                       {surveyResults.map((r) => {
                         const open = surveyExpandedSheets.has(r.sheetId);
+                        const notReturned = /"note"\s*:\s*"not returned by model"/i.test(r.content);
                         return (
-                          <li key={r.sheetId}>
+                          <li key={r.sheetId} className={notReturned ? "bg-amber-50" : undefined}>
                             <button
                               type="button"
                               className="w-full text-left px-3 py-2 hover:bg-muted/50 flex items-center justify-between gap-2"
@@ -2643,9 +2644,14 @@ export default function WorkbenchProjectDetail() {
                                 });
                               }}
                             >
-                              <span className="text-sm truncate">
+                              <span className="text-sm truncate flex items-center gap-2">
                                 <span className="font-medium">{r.file}</span>
                                 <span className="text-muted-foreground"> · page {r.page}{r.sheet_number ? ` · ${r.sheet_number}` : ""}</span>
+                                {notReturned && (
+                                  <span className="inline-flex items-center rounded border border-amber-400 bg-amber-100 text-amber-900 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide">
+                                    Not returned by model
+                                  </span>
+                                )}
                               </span>
                               <span className="text-xs text-muted-foreground shrink-0">{open ? "Hide" : "Show"}</span>
                             </button>
@@ -2657,6 +2663,7 @@ export default function WorkbenchProjectDetail() {
                           </li>
                         );
                       })}
+
                     </ul>
                   ) : (
                     <Textarea
