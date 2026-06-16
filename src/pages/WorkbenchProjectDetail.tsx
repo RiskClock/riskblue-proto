@@ -171,6 +171,12 @@ export default function WorkbenchProjectDetail() {
   const [exporting, setExporting] = useState(false);
   // Survey Pages
   const [surveyRunning, setSurveyRunning] = useState(false);
+  const [surveyProgress, setSurveyProgress] = useState<{
+    current: number;
+    total: number;
+    fileName: string;
+    phase: "uploading" | "querying" | "done";
+  } | null>(null);
   const [surveyResults, setSurveyResults] = useState<Array<{
     sheetId: string;
     file: string;
