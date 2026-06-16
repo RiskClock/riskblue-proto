@@ -2609,10 +2609,21 @@ export default function WorkbenchProjectDetail() {
               {/* Result list — per-page expandable cards. */}
               {(surveyResults.length > 0 || surveyRawText) && (
                 <div className="border rounded-md bg-background">
-                  <div className="px-3 py-2 border-b text-xs text-muted-foreground">
-                    {surveyResults.length > 0
-                      ? `${surveyResults.length} page result${surveyResults.length === 1 ? "" : "s"} · click a row to expand`
-                      : "Raw response (could not parse per-page results):"}
+                  <div className="px-3 py-2 border-b text-xs text-muted-foreground flex items-center justify-between gap-2">
+                    <span>
+                      {surveyResults.length > 0
+                        ? `${surveyResults.length} page result${surveyResults.length === 1 ? "" : "s"} · click a row to expand`
+                        : "Raw response (could not parse per-page results):"}
+                    </span>
+                    {surveyRawText && surveyResults.length > 0 && (
+                      <button
+                        type="button"
+                        className="text-xs underline text-foreground/80 hover:text-foreground"
+                        onClick={() => setShowSurveyRaw((v) => !v)}
+                      >
+                        {showSurveyRaw ? "Hide raw response" : "View raw response"}
+                      </button>
+                    )}
                   </div>
                   {surveyResults.length > 0 ? (
                     <ul className="divide-y max-h-[60vh] overflow-auto">
@@ -2654,6 +2665,17 @@ export default function WorkbenchProjectDetail() {
                       className="font-mono text-xs min-h-[200px] border-0 rounded-none"
                     />
                   )}
+                  {showSurveyRaw && surveyResults.length > 0 && surveyRawText && (
+                    <div className="border-t">
+                      <div className="px-3 py-2 text-xs text-muted-foreground">Raw Gemini response (per file)</div>
+                      <Textarea
+                        readOnly
+                        value={surveyRawText}
+                        className="font-mono text-xs min-h-[300px] border-0 rounded-none"
+                      />
+                    </div>
+                  )}
+
                 </div>
               )}
             </div>
