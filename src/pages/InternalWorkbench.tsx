@@ -590,14 +590,29 @@ export default function InternalWorkbench() {
                                     </pre>
                                   </div>
                                 )}
-                                <div className="pt-2 border-t">
+                                <div className="pt-2 border-t space-y-2">
+                                  {p.status === "failed" && p.analysis_request_id && (
+                                    <Button
+                                      size="sm"
+                                      variant="default"
+                                      className="w-full"
+                                      disabled={resumingId === p.analysis_request_id}
+                                      onClick={() => handleResume(p)}
+                                    >
+                                      {resumingId === p.analysis_request_id ? (
+                                        <><Loader2 className="h-3 w-3 mr-1 animate-spin" />Resuming…</>
+                                      ) : (
+                                        "Resume"
+                                      )}
+                                    </Button>
+                                  )}
                                   <Button
                                     size="sm"
-                                    variant="default"
+                                    variant={p.status === "failed" ? "outline" : "default"}
                                     className="w-full"
                                     onClick={() => navigate(`/internal/workbench/project/${p.id}`)}
                                   >
-                                    {p.status === "failed" ? "Open & Resume" : "Open Project"}
+                                    Open Project
                                   </Button>
                                 </div>
                               </div>
