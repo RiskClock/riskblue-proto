@@ -21,27 +21,88 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const navigate = useNavigate();
 
   useEffect(() => {
+    const TAB_USER_KEY = "rb-tab-bound-user-id";
+    const getTabUser = () => {
+      try { return sessionStorage.getItem(TAB_USER_KEY); } catch { return null; }
+    };
+    const setTabUser = (id: string | null) => {
+      try {
+        if (id) sessionStorage.setItem(TAB_USER_KEY, id);
+        else sessionStorage.removeItem(TAB_USER_KEY);
+      } catch { /* ignore */ }
+    };
+
+    const handleSession = async (session: Session | null, source: string) => {
+      const incomingId = session?.user?.id ?? null;
+      const boundId = getTabUser();
+
+      // First session in this tab → bind it.
+      if (incomingId && !boundId) {
+        setTabUser(incomingId);
+      }
+
+      // Silent swap detected: a different user appeared without an explicit
+      // sign-in in this tab (e.g. another tab signed in and overwrote
+      // localStorage, or a password manager auto-filled). Refuse to follow.
+      if (incomingId && boundId && incomingId !== boundId) {
+        console.warn(
+          `[auth] Session swap blocked (source=${source}). bound=${boundId} incoming=${incomingId}`
+        );
+        setTabUser(null);
+        try { await supabase.auth.signOut({ scope: "local" }); } catch { /* ignore */ }
+        try {
+          for (const key of Object.keys(localStorage)) {
+            if (key.startsWith("sb-")) localStorage.removeItem(key);
+          }
+        } catch { /* ignore */ }
+        setSession(null);
+        setUser(null);
+        setLoading(false);
+        if (typeof window !== "undefined") {
+          // Force a full reload so any cached React Query / context data is wiped.
+          window.location.replace("/auth?reason=session_swap");
+        }
+        return;
+      }
+
+      setSession(session);
+      setUser(session?.user ?? null);
+      setLoading(false);
+
+      if (session?.user?.email && typeof window !== "undefined" && (window as any).heap) {
+        (window as any).heap.identify(session.user.email);
+      }
+    };
+
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       (event, session) => {
-        setSession(session);
-        setUser(session?.user ?? null);
-        setLoading(false);
-        
-        // Identify user in Heap Analytics
-        if (session?.user?.email && typeof window !== 'undefined' && (window as any).heap) {
-          (window as any).heap.identify(session.user.email);
+        if (event === "SIGNED_OUT") {
+          setTabUser(null);
         }
-
+        // Fire and forget — never block the auth event loop with await.
+        void handleSession(session, `event:${event}`);
       }
     );
 
     supabase.auth.getSession().then(({ data: { session } }) => {
-      setSession(session);
-      setUser(session?.user ?? null);
-      setLoading(false);
+      void handleSession(session, "getSession");
     });
 
-    return () => subscription.unsubscribe();
+    // Detect cross-tab localStorage swap of the supabase auth token.
+    const onStorage = (e: StorageEvent) => {
+      if (!e.key || !e.key.startsWith("sb-") || !e.key.endsWith("-auth-token")) return;
+      // A different tab wrote a new token. Re-read and let handleSession
+      // decide whether it's a legitimate refresh or a foreign user swap.
+      supabase.auth.getSession().then(({ data: { session } }) => {
+        void handleSession(session, "storage-event");
+      });
+    };
+    window.addEventListener("storage", onStorage);
+
+    return () => {
+      subscription.unsubscribe();
+      window.removeEventListener("storage", onStorage);
+    };
   }, []);
 
   const signIn = async (email: string, password: string) => {
