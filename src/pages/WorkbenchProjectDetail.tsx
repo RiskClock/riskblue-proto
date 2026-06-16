@@ -307,7 +307,10 @@ export default function WorkbenchProjectDetail() {
         extracted_text: f.extracted_text ?? null,
         storage_path: f.storage_path ?? null,
         mime_type: f.mime_type ?? null,
+        survey_raw_response: f.survey_raw_response ?? null,
+        survey_raw_updated_at: f.survey_raw_updated_at ?? null,
       }));
+
       const fileMap = new Map(files.map((f) => [f.id, f]));
       const sheets: SheetRow[] = (sheetsRes.data || [])
         .map((s: any): SheetRow | null => {
