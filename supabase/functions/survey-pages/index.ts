@@ -59,6 +59,27 @@ function extractJsonArray(text: string): any[] | null {
   return null;
 }
 
+function pageValue(item: any): number | null {
+  const raw = item?.page_number ?? item?.page ?? item?.page_index ?? item?.pageNumber;
+  const n = Number(raw);
+  return Number.isFinite(n) ? n : null;
+}
+
+function flattenSurveyPages(parsed: any[] | null): any[] {
+  if (!parsed) return [];
+  const pages: any[] = [];
+  for (const item of parsed) {
+    if (Array.isArray(item?.surveyed_pages)) {
+      for (const page of item.surveyed_pages) {
+        pages.push({ file_name: item?.file_name, total_pages: item?.total_pages, ...page });
+      }
+    } else {
+      pages.push(item);
+    }
+  }
+  return pages;
+}
+
 async function uploadPdfToGemini(
   apiKey: string,
   bytes: Uint8Array,
@@ -235,13 +256,15 @@ Deno.serve(async (req) => {
     const rawText: string =
       raw?.candidates?.[0]?.content?.parts?.map((p: any) => p?.text ?? "").join("") ?? "";
 
-    // Parse JSON array → match to sheet rows by page number.
+    // Parse JSON array → match to sheet rows by page number. The configured
+    // prompt returns a top-level file object with surveyed_pages[], while older
+    // prompts returned flat per-page objects, so support both shapes.
     const parsed = extractJsonArray(rawText);
     const resultsBySheet = new Map<string, string>();
-    if (parsed) {
-      for (const item of parsed) {
-        const page = Number(item?.page ?? item?.page_index ?? item?.pageNumber);
-        if (!Number.isFinite(page)) continue;
+    const pageItems = flattenSurveyPages(parsed);
+    for (const item of pageItems) {
+      const page = pageValue(item);
+      if (page == null) continue;
         const sheet = sheetByPage.get(page);
         if (!sheet) continue;
         const content =
@@ -251,15 +274,16 @@ Deno.serve(async (req) => {
               ? item.content
               : JSON.stringify(item, null, 2);
         resultsBySheet.set(sheet.id, content);
-      }
     }
 
     const fallback = parsed ? null : rawText;
     for (const s of sheetRows) {
+      const result = resultsBySheet.get(s.id) ?? fallback;
+      if (!result) continue;
       await admin
         .from("analysis_request_sheets")
         .update({
-          survey_result: resultsBySheet.get(s.id) ?? fallback,
+          survey_result: result,
           survey_updated_at: new Date().toISOString(),
         } as any)
         .eq("id", s.id);
