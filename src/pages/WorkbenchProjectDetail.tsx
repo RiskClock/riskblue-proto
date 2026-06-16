@@ -214,6 +214,11 @@ export default function WorkbenchProjectDetail() {
     if (user && !isInternal) navigate("/projects", { replace: true });
   }, [user, isInternal, navigate]);
 
+  // Hydrate survey results from persisted analysis_request_sheets.survey_result
+  // so a page refresh doesn't drop the rendered output.
+  // Runs whenever rows.sheets change AND we have no in-memory results AND no run in progress.
+  const hydratedSurveyKeyRef = useRef<string | null>(null);
+
   // Project metadata
   const { data: project } = useQuery({
     queryKey: ["workbench-project", projectId],
