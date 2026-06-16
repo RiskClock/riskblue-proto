@@ -7,34 +7,30 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { PDFDocument } from "https://esm.sh/pdf-lib@1.17.1";
 import * as mupdf from "npm:mupdf@1.3.0";
 
-// Render a single PDF page (0-based index) from raw PDF bytes to a PNG Uint8Array.
-// Uses MuPDF WASM (works in Deno edge runtime). Scale ~1.5 ≈ 108 DPI.
-async function renderPageToPng(
-  pdfBytes: Uint8Array,
+// Render a single PDF page (0-based index) from an already-opened MuPDF
+// Document to a PNG Uint8Array. Scale ~1.0 ≈ 72 DPI — good enough for
+// downstream OpenAI vision; keeps memory low on big sheets.
+function renderPageFromDocToPng(
+  doc: any,
   pageIndex: number,
-  scale = 1.5,
-): Promise<Uint8Array> {
-  const doc = (mupdf as any).Document.openDocument(pdfBytes, "application/pdf");
+  scale = 1.0,
+): Uint8Array {
+  const page = doc.loadPage(pageIndex);
   try {
-    const page = doc.loadPage(pageIndex);
+    const matrix = (mupdf as any).Matrix.scale(scale, scale);
+    const pixmap = page.toPixmap(
+      matrix,
+      (mupdf as any).ColorSpace.DeviceRGB,
+      false,
+      true,
+    );
     try {
-      const matrix = (mupdf as any).Matrix.scale(scale, scale);
-      const pixmap = page.toPixmap(
-        matrix,
-        (mupdf as any).ColorSpace.DeviceRGB,
-        false,
-        true,
-      );
-      try {
-        return pixmap.asPNG();
-      } finally {
-        pixmap.destroy?.();
-      }
+      return pixmap.asPNG();
     } finally {
-      page.destroy?.();
+      pixmap.destroy?.();
     }
   } finally {
-    doc.destroy?.();
+    page.destroy?.();
   }
 }
 
