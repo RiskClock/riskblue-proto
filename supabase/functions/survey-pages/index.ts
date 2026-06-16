@@ -237,9 +237,8 @@ Deno.serve(async (req) => {
                 { file_data: { file_uri: uri, mime_type: mimeType } },
                 {
                   text:
-                    `File: ${fileName}\nReturn a JSON array with one object per page. ` +
-                    `Each object MUST include a "page" field that matches the 1-based PDF page number. ` +
-                    `Include any other fields the system prompt requests.`,
+                    `File: ${fileName}\nReturn ONLY the strict JSON array requested by the system prompt. ` +
+                    `Every surveyed_pages item MUST include a page_number matching the source PDF page number.`,
                 },
               ],
             },
