@@ -2447,6 +2447,7 @@ export default function WorkbenchProjectDetail() {
             <div className="mt-6 border-t pt-6 space-y-3">
               <div className="flex justify-center">
                 <Button
+                  type="button"
                   onClick={async () => {
                     if (!requestId) return;
                     // Collect original PDFs attached to this request.
@@ -2466,6 +2467,7 @@ export default function WorkbenchProjectDetail() {
                     }
 
                     setSurveyRunning(true);
+                    setSurveyRecoveredRun(false);
                     setSurveyResults([]);
                     setSurveyRawText("");
                     setSurveyExpandedSheets(new Set());
@@ -2478,6 +2480,10 @@ export default function WorkbenchProjectDetail() {
                     try {
                       for (let i = 0; i < files.length; i++) {
                         const f = files[i];
+                        window.sessionStorage.setItem(
+                          surveyProgressStorageKey(requestId),
+                          JSON.stringify({ current: i + 1, total: files.length, fileName: f.name, phase: "uploading" }),
+                        );
                         setSurveyProgress({
                           current: i + 1,
                           total: files.length,
@@ -2486,6 +2492,10 @@ export default function WorkbenchProjectDetail() {
                         });
                         // Tiny tick so the UI renders "uploading" before invoke blocks.
                         await new Promise((r) => setTimeout(r, 30));
+                        window.sessionStorage.setItem(
+                          surveyProgressStorageKey(requestId),
+                          JSON.stringify({ current: i + 1, total: files.length, fileName: f.name, phase: "querying" }),
+                        );
                         setSurveyProgress({
                           current: i + 1,
                           total: files.length,
@@ -2523,11 +2533,13 @@ export default function WorkbenchProjectDetail() {
                         fileName: "",
                         phase: "done",
                       });
+                      window.sessionStorage.removeItem(surveyProgressStorageKey(requestId));
                       toast({
                         title: "Survey Pages complete",
                         description: `${withResult} of ${totalSheets} pages received a result across ${files.length} file${files.length === 1 ? "" : "s"}.`,
                       });
                     } catch (err) {
+                      window.sessionStorage.removeItem(surveyProgressStorageKey(requestId));
                       toast({
                         variant: "destructive",
                         title: "Survey Pages failed",
