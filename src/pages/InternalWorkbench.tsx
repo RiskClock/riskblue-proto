@@ -184,7 +184,7 @@ export default function InternalWorkbench() {
         ids.length > 0
           ? supabase
               .from("analysis_requests")
-              .select("project_id, status, file_count, total_size_bytes, created_at")
+              .select("project_id, status, file_count, total_size_bytes, created_at, pipeline_phase, error_message, pipeline_progress_done, pipeline_progress_total, updated_at")
               .in("project_id", ids)
               .order("created_at", { ascending: false })
           : Promise.resolve({ data: [] as any[] }),
@@ -219,8 +219,14 @@ export default function InternalWorkbench() {
           file_count: analysis?.file_count ?? 0,
           total_size_bytes: analysis?.total_size_bytes ?? null,
           status: analysis?.status ?? null,
+          pipeline_phase: analysis?.pipeline_phase ?? null,
+          error_message: analysis?.error_message ?? null,
+          pipeline_progress_done: analysis?.pipeline_progress_done ?? null,
+          pipeline_progress_total: analysis?.pipeline_progress_total ?? null,
+          request_updated_at: analysis?.updated_at ?? null,
         };
       });
+
     },
   });
 
