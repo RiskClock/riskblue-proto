@@ -3356,8 +3356,13 @@ export default function WorkbenchProjectDetail() {
             sourceOverride={activePageViewSource}
             analysisRequestId={requestId}
             parentFileId={activePageView.file.id}
-            sheetId={null}
+            sheetId={activeSheetIdForPage}
             pageIndex={activePageView.page}
+            floorPlans={activePageFloorPlans}
+            allUnitPlans={activeFileAllUnitPlans}
+            floorPlanOverrides={activeFloorPlanOverrides}
+            onSaveFloorPlanOverride={saveFloorPlanOverride}
+            onEditFloors={openFloorEditForPlan}
             singlePageOnly
             awpClasses={enabledCols.map((name) => ({
               name,
