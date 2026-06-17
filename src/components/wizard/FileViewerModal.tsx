@@ -544,23 +544,18 @@ export const FileViewerModal = ({
       }));
   }, [instances, effectivePage, sheetId, parentFileId, numberByInstanceId, prefixByClass]);
 
-  // Floor-plan bbox overlays. Survey agent now returns `xy_width_height_pt`
-  // as normalized units on a 0-1000 grid (top-left origin) of the visual
-  // page. Scale those directly to the rendered page element size.
+  // Floor-plan bbox overlays. Survey agent returns `xy_width_height_pct` as
+  // [left, top, width, height] percentages (0..100) of the visible page.
+  // Pass them straight through as normalized (0..1) coordinates; the
+  // OverlayLayer multiplies by the rendered page size so the browser's native
+  // layout keeps the boxes in sync on any resize or zoom level.
   const floorPlanOverlays: OverlayInput[] = useMemo(() => {
     if (!floorPlans || floorPlans.length === 0) return [];
-    if (!renderedPageSize || renderedPageSize.width <= 0 || renderedPageSize.height <= 0) return [];
     const out: OverlayInput[] = [];
     for (const fp of floorPlans) {
-      const bb = fp.xy_width_height_pt;
+      const bb = fp.xy_width_height_pct;
       if (!Array.isArray(bb) || bb.length < 4) continue;
-      const [x, y, w, h] = bb;
-      const sx = renderedPageSize.width / 1000;
-      const sy = renderedPageSize.height / 1000;
-      const left = x * sx;
-      const top = y * sy;
-      const width = w * sx;
-      const height = h * sy;
+      const [left, top, width, height] = bb;
       const override = floorPlanOverrides?.[fp.plan_id];
       const effectiveFloors = override?.floors ?? fp.floors;
       const labelBase = fp.reference_id
@@ -570,9 +565,8 @@ export const FileViewerModal = ({
           : fp.plan_id;
       out.push({
         id: `fp-${fp.plan_id}`,
-        bbox: [left, top, left + width, top + height],
-        coordSpace: "pixels" as const,
-        pixelSize: { w: renderedPageSize.width, h: renderedPageSize.height },
+        bbox: [left / 100, top / 100, width / 100, height / 100],
+        coordSpace: "normalized" as const,
         page: currentPage,
         shape: "rect" as const,
         color: awpClassColor(fp.type || "unknown"),
@@ -580,7 +574,7 @@ export const FileViewerModal = ({
       });
     }
     return out;
-  }, [floorPlans, floorPlanOverrides, currentPage, renderedPageSize]);
+  }, [floorPlans, floorPlanOverrides, currentPage]);
 
   const overlays = [...detectionOverlays, ...instanceOverlays, ...floorPlanOverlays];
 
