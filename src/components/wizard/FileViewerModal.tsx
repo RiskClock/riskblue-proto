@@ -106,12 +106,18 @@ interface FileViewerModalProps {
   /** Persist a single plan override. */
   onSaveFloorPlanOverride?: (
     planId: string,
-    next: { floors?: string[]; units?: string[] },
+    next: { floors?: string[]; units?: string[]; annotations?: string[] },
   ) => Promise<void> | void;
   /** Page-level handler that opens SpaceEditModal scoped to a plan. */
   onEditFloors?: (planId: string, currentFloors: string[]) => void;
   /** Open the units-editor modal for a level plan. */
   onEditLevelUnits?: (plan: ParsedFloorPlan, currentUnits: string[]) => void;
+  /** AWP class names that have risk_element_results for this file. */
+  riskElementClasses?: string[];
+  /** Map of className -> planId (assignment). Missing => Unassigned. */
+  annotationAssignments?: Record<string, string>;
+  /** Reassign an annotation (class) to a plan, or to null to unassign. */
+  onAssignAnnotation?: (className: string, planId: string | null) => Promise<void> | void;
 }
 
 const BOUNDING_BOX_COLOR = "#39FF14"; // legacy detections (green)
@@ -150,6 +156,9 @@ export const FileViewerModal = ({
   onSaveFloorPlanOverride,
   onEditFloors,
   onEditLevelUnits,
+  riskElementClasses,
+  annotationAssignments,
+  onAssignAnnotation,
 }: FileViewerModalProps) => {
   const { toast } = useToast();
   const [hoveredCode, setHoveredCode] = useState<string | null>(null);
@@ -646,6 +655,9 @@ export const FileViewerModal = ({
                       onSaveOverride={onSaveFloorPlanOverride}
                       onEditFloors={onEditFloors}
                       onEditLevelUnits={onEditLevelUnits}
+                      riskElementClasses={riskElementClasses ?? []}
+                      annotationAssignments={annotationAssignments ?? {}}
+                      onAssignAnnotation={onAssignAnnotation}
                     />
                   </div>
                 </TabsContent>
@@ -913,19 +925,25 @@ interface FloorPlansPanelProps {
   floorPlans: ParsedFloorPlan[];
   allUnitPlans: ParsedFloorPlan[];
   allLevelPlans: ParsedFloorPlan[];
-  overrides: Record<string, { floors?: string[]; units?: string[] }>;
+  overrides: Record<string, any>;
   onSaveOverride?: (
     planId: string,
-    next: { floors?: string[]; units?: string[] },
+    next: { floors?: string[]; units?: string[]; annotations?: string[] },
   ) => Promise<void> | void;
   onEditFloors?: (planId: string, currentFloors: string[]) => void;
   onEditLevelUnits?: (plan: ParsedFloorPlan, currentUnits: string[]) => void;
+  riskElementClasses: string[];
+  annotationAssignments: Record<string, string>;
+  onAssignAnnotation?: (className: string, planId: string | null) => Promise<void> | void;
 }
 
 const FloorPlansPanel = ({
   floorPlans,
   allLevelPlans,
   overrides,
+  riskElementClasses,
+  annotationAssignments,
+  onAssignAnnotation,
 }: FloorPlansPanelProps) => {
   // For a unit floor plan, list the pages of level plans that reference it.
   const findReferencingLevels = (unit: ParsedFloorPlan): string[] => {
@@ -943,8 +961,90 @@ const FloorPlansPanel = ({
       .map((p) => `Page ${p}`);
   };
 
+  // Annotations available on this page: classes that have a risk element
+  // result for the file. Each class is assigned to at most one plan on this
+  // page (annotationAssignments[className] === planId); unassigned otherwise.
+  const planIdSet = new Set(floorPlans.map((p) => p.plan_id));
+  const annotationsByPlan = new Map<string, string[]>();
+  const unassigned: string[] = [];
+  for (const cn of riskElementClasses) {
+    const planId = annotationAssignments[cn];
+    if (planId && planIdSet.has(planId)) {
+      const arr = annotationsByPlan.get(planId) ?? [];
+      arr.push(cn);
+      annotationsByPlan.set(planId, arr);
+    } else {
+      unassigned.push(cn);
+    }
+  }
+
+  const handleDragStart = (e: React.DragEvent, className: string) => {
+    e.dataTransfer.setData("text/x-annotation-class", className);
+    e.dataTransfer.effectAllowed = "move";
+  };
+  const handleDropOnPlan = (e: React.DragEvent, planId: string | null) => {
+    e.preventDefault();
+    const cn = e.dataTransfer.getData("text/x-annotation-class");
+    if (!cn || !onAssignAnnotation) return;
+    if ((annotationAssignments[cn] ?? null) === planId) return;
+    void onAssignAnnotation(cn, planId);
+  };
+  const allowDrop = (e: React.DragEvent) => {
+    if (e.dataTransfer.types.includes("text/x-annotation-class")) {
+      e.preventDefault();
+      e.dataTransfer.dropEffect = "move";
+    }
+  };
+
+  const renderAnnotations = (classes: string[]) => {
+    if (classes.length === 0) {
+      return (
+        <div className="text-[10px] italic text-muted-foreground px-1 py-0.5">
+          No annotations.
+        </div>
+      );
+    }
+    return (
+      <div className="flex flex-wrap gap-1">
+        {classes.map((cn) => {
+          const c = awpClassColor(cn);
+          return (
+            <div
+              key={cn}
+              draggable={!!onAssignAnnotation}
+              onDragStart={(e) => handleDragStart(e, cn)}
+              className="px-1.5 py-0.5 rounded text-[10px] font-medium cursor-grab active:cursor-grabbing border"
+              style={{
+                backgroundColor: c,
+                color: readableTextOn(c),
+                borderColor: c,
+              }}
+              title={`Drag to reassign · ${cn}`}
+            >
+              {cn}
+            </div>
+          );
+        })}
+      </div>
+    );
+  };
+
   return (
     <div className="p-2 space-y-2">
+      {/* Unassigned bucket */}
+      {riskElementClasses.length > 0 && (
+        <div
+          className="border border-dashed rounded-md p-2 space-y-1 bg-muted/20"
+          onDragOver={allowDrop}
+          onDrop={(e) => handleDropOnPlan(e, null)}
+        >
+          <div className="text-[11px] font-medium text-muted-foreground">
+            Unassigned annotations ({unassigned.length})
+          </div>
+          {renderAnnotations(unassigned)}
+        </div>
+      )}
+
       {floorPlans.map((fp) => {
         const ovr = overrides[fp.plan_id] ?? {};
         const effFloors = ovr.floors ?? fp.floors;
@@ -952,10 +1052,15 @@ const FloorPlansPanel = ({
         const label = floorPlanDisplayLabel({ ...fp, floors: effFloors });
         const isUnit = fp.type === "unit_floor_plan";
         const referencedIn = isUnit ? findReferencingLevels(fp) : [];
-
+        const planAnns = annotationsByPlan.get(fp.plan_id) ?? [];
 
         return (
-          <div key={fp.plan_id} className="border rounded-md p-2 space-y-2 bg-card">
+          <div
+            key={fp.plan_id}
+            className="border rounded-md p-2 space-y-2 bg-card"
+            onDragOver={allowDrop}
+            onDrop={(e) => handleDropOnPlan(e, fp.plan_id)}
+          >
             <div className="flex items-center gap-2 min-w-0">
               <span
                 className="h-2.5 w-2.5 rounded-sm shrink-0"
@@ -987,10 +1092,18 @@ const FloorPlansPanel = ({
               </div>
             )}
 
+            {riskElementClasses.length > 0 && (
+              <div className="space-y-1">
+                <div className="text-[10px] uppercase tracking-wide text-muted-foreground">
+                  Annotations ({planAnns.length})
+                </div>
+                {renderAnnotations(planAnns)}
+              </div>
+            )}
           </div>
         );
       })}
-      {floorPlans.length === 0 && (
+      {floorPlans.length === 0 && riskElementClasses.length === 0 && (
         <div className="text-xs text-muted-foreground italic p-2">
           No floor plan info available.
         </div>

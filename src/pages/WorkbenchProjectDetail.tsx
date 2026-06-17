@@ -71,6 +71,10 @@ import { FileViewerModal } from "@/components/wizard/FileViewerModal";
 import {
   parseSurveyFloorPlans,
   floorPlanDisplayLabel,
+  getAddedUnitPlans,
+  addedUnitPlanToParsed,
+  makeAddedUnitPlanId,
+  ADDED_UNIT_PLANS_KEY,
   type ParsedFloorPlan,
 } from "@/lib/surveyFloorPlans";
 import { DrawingViewer } from "@/components/viewer";
@@ -275,14 +279,16 @@ export default function WorkbenchProjectDetail() {
   const [activeFileSurveyRaw, setActiveFileSurveyRaw] = useState<string | null>(null);
   const [activeSheetIdForPage, setActiveSheetIdForPage] = useState<string | null>(null);
   const [activeFloorPlanOverrides, setActiveFloorPlanOverrides] = useState<
-    Record<string, { floors?: string[]; units?: string[] }>
+    Record<string, any>
   >({});
+  const [activeFileRiskClasses, setActiveFileRiskClasses] = useState<string[]>([]);
 
   useEffect(() => {
     if (!activePageView) {
       setActiveFileSurveyRaw(null);
       setActiveSheetIdForPage(null);
       setActiveFloorPlanOverrides({});
+      setActiveFileRiskClasses([]);
       return;
     }
     let cancelled = false;
@@ -292,7 +298,7 @@ export default function WorkbenchProjectDetail() {
       const [fileRes, sheetRes] = await Promise.all([
         supabase
           .from("analysis_request_files")
-          .select("survey_raw_response")
+          .select("survey_raw_response, risk_element_results")
           .eq("id", fileId)
           .maybeSingle(),
         supabase
@@ -304,6 +310,14 @@ export default function WorkbenchProjectDetail() {
       ]);
       if (cancelled) return;
       setActiveFileSurveyRaw((fileRes.data as any)?.survey_raw_response ?? null);
+      const rer = (fileRes.data as any)?.risk_element_results as Record<string, any> | null;
+      const classes = rer && typeof rer === "object"
+        ? Object.keys(rer).filter((k) => {
+            const v = rer[k];
+            return v && typeof v === "object" && typeof v.result_text === "string" && v.result_text.length > 0;
+          })
+        : [];
+      setActiveFileRiskClasses(classes);
       setActiveSheetIdForPage((sheetRes.data as any)?.id ?? null);
       const overrides = (sheetRes.data as any)?.floor_plan_overrides;
       setActiveFloorPlanOverrides(
@@ -320,8 +334,11 @@ export default function WorkbenchProjectDetail() {
 
   const activePageFloorPlans = useMemo<ParsedFloorPlan[]>(() => {
     if (!activePageView) return [];
-    return activeFileFloorPlansByPage.get(activePageView.page) ?? [];
-  }, [activeFileFloorPlansByPage, activePageView]);
+    const base = activeFileFloorPlansByPage.get(activePageView.page) ?? [];
+    const added = getAddedUnitPlans(activeFloorPlanOverrides, activePageView.page)
+      .map(addedUnitPlanToParsed);
+    return [...base, ...added];
+  }, [activeFileFloorPlansByPage, activePageView, activeFloorPlanOverrides]);
 
   const activeFileAllUnitPlans = useMemo<ParsedFloorPlan[]>(() => {
     const out: ParsedFloorPlan[] = [];
@@ -330,8 +347,11 @@ export default function WorkbenchProjectDetail() {
         if (p.type === "unit_floor_plan") out.push(p);
       }
     }
+    for (const entry of getAddedUnitPlans(activeFloorPlanOverrides)) {
+      out.push(addedUnitPlanToParsed(entry));
+    }
     return out;
-  }, [activeFileFloorPlansByPage]);
+  }, [activeFileFloorPlansByPage, activeFloorPlanOverrides]);
 
   const activeFileAllLevelPlans = useMemo<ParsedFloorPlan[]>(() => {
     const out: ParsedFloorPlan[] = [];
@@ -343,9 +363,25 @@ export default function WorkbenchProjectDetail() {
     return out;
   }, [activeFileFloorPlansByPage]);
 
+  // className -> planId derived from per-plan `annotations: string[]` overrides.
+  const activeAnnotationAssignments = useMemo<Record<string, string>>(() => {
+    const out: Record<string, string> = {};
+    for (const [planId, ovr] of Object.entries(activeFloorPlanOverrides)) {
+      if (planId.startsWith("__")) continue;
+      const anns = (ovr as any)?.annotations;
+      if (Array.isArray(anns)) {
+        for (const cn of anns) {
+          if (typeof cn === "string") out[cn] = planId;
+        }
+      }
+    }
+    return out;
+  }, [activeFloorPlanOverrides]);
+
+
   const saveFloorPlanOverride = async (
     planId: string,
-    next: { floors?: string[]; units?: string[] },
+    next: { floors?: string[]; units?: string[]; annotations?: string[] },
   ) => {
     if (!activeSheetIdForPage) {
       toast({
@@ -374,6 +410,52 @@ export default function WorkbenchProjectDetail() {
       });
     }
   };
+
+  // Reassign an annotation (AWP class) to a plan on this page, or unassign.
+  // We mutate every plan override's `annotations` array so each class belongs
+  // to at most one plan on the page.
+  const assignAnnotationToPlan = async (
+    className: string,
+    planId: string | null,
+  ) => {
+    if (!activeSheetIdForPage) {
+      toast({
+        variant: "destructive",
+        title: "Cannot save",
+        description: "No sheet row exists yet for this page.",
+      });
+      return;
+    }
+    const next: Record<string, any> = { ...activeFloorPlanOverrides };
+    // Strip className from every plan's annotations list.
+    for (const [pid, ovr] of Object.entries(next)) {
+      if (pid.startsWith("__")) continue;
+      const arr = Array.isArray((ovr as any)?.annotations)
+        ? ((ovr as any).annotations as string[]).filter((c) => c !== className)
+        : [];
+      next[pid] = { ...(ovr as any), annotations: arr };
+    }
+    // Add to the target plan (if any).
+    if (planId) {
+      const prev = (next[planId] ?? {}) as any;
+      const arr = Array.isArray(prev.annotations) ? prev.annotations.slice() : [];
+      if (!arr.includes(className)) arr.push(className);
+      next[planId] = { ...prev, annotations: arr };
+    }
+    setActiveFloorPlanOverrides(next);
+    const { error } = await supabase
+      .from("analysis_request_sheets")
+      .update({ floor_plan_overrides: next } as any)
+      .eq("id", activeSheetIdForPage);
+    if (error) {
+      toast({
+        variant: "destructive",
+        title: "Could not save assignment",
+        description: getUserFriendlyError(error),
+      });
+    }
+  };
+
 
   const openFloorEditForPlan = (planId: string, currentFloors: string[]) => {
     if (!activePageView || !activeSheetIdForPage) return;
@@ -3488,6 +3570,9 @@ export default function WorkbenchProjectDetail() {
             persistKey={projectId}
             expandedClasses={sidebarExpandedClasses}
             onExpandedClassesChange={setSidebarExpandedClasses}
+            riskElementClasses={activeFileRiskClasses}
+            annotationAssignments={activeAnnotationAssignments}
+            onAssignAnnotation={assignAnnotationToPlan}
           />
         )}
 
@@ -3528,7 +3613,7 @@ export default function WorkbenchProjectDetail() {
                     .filter((p) => p.type === "unit_floor_plan")
                 : []) as ParsedFloorPlan[]
             }
-            onSave={async (units) => {
+            onSave={async (units, createdRefs) => {
               // Look up the sheet row for this (file, page) and merge override.
               const { data: sheet, error: sheetErr } = await supabase
                 .from("analysis_request_sheets")
@@ -3545,15 +3630,34 @@ export default function WorkbenchProjectDetail() {
                 return;
               }
               const existing =
-                ((sheet as any).floor_plan_overrides as Record<
-                  string,
-                  { floors?: string[]; units?: string[] }
-                >) ?? {};
+                ((sheet as any).floor_plan_overrides as Record<string, any>) ?? {};
               const planId = unitsEditTarget.plan.plan_id;
-              const merged = {
+              const merged: Record<string, any> = {
                 ...existing,
                 [planId]: { ...(existing[planId] ?? {}), units },
               };
+              // Persist any newly created refs as user-added unit floor plans
+              // on this page so they show up alongside parsed plans.
+              if (createdRefs && createdRefs.length > 0) {
+                const existingAdded = Array.isArray(existing[ADDED_UNIT_PLANS_KEY])
+                  ? (existing[ADDED_UNIT_PLANS_KEY] as any[])
+                  : [];
+                const existingRefs = new Set(
+                  existingAdded
+                    .filter((e) => e?.page_number === unitsEditTarget.page)
+                    .map((e) => e?.reference_id),
+                );
+                const toAdd = createdRefs
+                  .filter((r) => !existingRefs.has(r))
+                  .map((r) => ({
+                    plan_id: makeAddedUnitPlanId(r, unitsEditTarget.page),
+                    reference_id: r,
+                    page_number: unitsEditTarget.page,
+                  }));
+                if (toAdd.length > 0) {
+                  merged[ADDED_UNIT_PLANS_KEY] = [...existingAdded, ...toAdd];
+                }
+              }
               const { error } = await supabase
                 .from("analysis_request_sheets")
                 .update({ floor_plan_overrides: merged } as any)
@@ -3574,6 +3678,7 @@ export default function WorkbenchProjectDetail() {
             }}
           />
         )}
+
 
 
 
