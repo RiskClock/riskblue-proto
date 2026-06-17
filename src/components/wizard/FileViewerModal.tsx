@@ -1016,14 +1016,17 @@ const FloorPlansPanel = ({
               key={cn}
               draggable={!!onAssignAnnotation}
               onDragStart={(e) => handleDragStart(e, cn)}
-              className="px-1.5 py-0.5 rounded text-[10px] font-medium cursor-grab active:cursor-grabbing border"
+              className="inline-flex items-center gap-1 pl-1 pr-1.5 py-0.5 rounded text-[10px] font-medium cursor-grab active:cursor-grabbing border"
               style={{
                 backgroundColor: c,
                 color: readableTextOn(c),
                 borderColor: c,
               }}
-              title={`Drag to reassign · ${cn}`}
+              title={`Drag to another floor plan to reassign · ${cn}`}
             >
+              {onAssignAnnotation && (
+                <GripVertical className="h-2.5 w-2.5 opacity-70" />
+              )}
               {cn}
             </div>
           );
