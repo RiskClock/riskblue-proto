@@ -526,8 +526,10 @@ export const FileViewerModal = ({
   }, [detections]);
 
   // User-placed circles, but only for THIS file and current page.
-  // In sheet mode the rendered PDF has exactly one page (1), so overlay.page
-  // must be 1 regardless of the instance's original page_index.
+  // Overlay page depends on the source shape:
+  //  - singlePageOnly = full PDF rendered at a specific page → use currentPage
+  //  - sheetId (and !singlePageOnly) = per-sheet single-page raster → always 1
+  //  - otherwise (full multi-page navigation) → instance's page_index
   const instanceOverlays: OverlayInput[] = useMemo(() => {
     return instances
       .filter(
@@ -538,11 +540,11 @@ export const FileViewerModal = ({
         // bbox width/height = 0 so the centroid is exactly the click point
         bbox: [i.nx, i.ny, 0, 0] as [number, number, number, number],
         coordSpace: "normalized" as const,
-        page: sheetId ? 1 : i.page_index,
+        page: singlePageOnly ? currentPage : sheetId ? 1 : i.page_index,
         color: awpClassColor(i.awp_class_name),
         label: instanceLabel(i),
       }));
-  }, [instances, effectivePage, sheetId, parentFileId, numberByInstanceId, prefixByClass]);
+  }, [instances, effectivePage, sheetId, singlePageOnly, currentPage, parentFileId, numberByInstanceId, prefixByClass]);
 
   // Floor-plan bbox overlays. Survey agent returns `xy_width_height_pct` as
   // [left, top, width, height] percentages (0..100) of the visible page.

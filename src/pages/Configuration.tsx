@@ -543,6 +543,7 @@ export default function Configuration() {
         )}
 
         <SurveyPagePromptSection />
+        <AnalyzePromptSection />
         <SpaceHierarchyPromptSection />
       </main>
 
@@ -774,6 +775,99 @@ function SurveyPagePromptSection() {
               {updatedAt
                 ? `Last updated ${format(new Date(updatedAt), "MMM d, yyyy 'at' h:mm a")}`
                 : "Edit and save the prompt used by Survey Pages."}
+            </DialogDescription>
+          </DialogHeader>
+          {loading ? (
+            <div className="flex items-center justify-center py-12 text-muted-foreground">
+              <Loader2 className="h-4 w-4 animate-spin mr-2" /> Loading…
+            </div>
+          ) : (
+            <Textarea
+              value={content}
+              onChange={(e) => setContent(e.target.value)}
+              className="font-mono text-xs flex-1 min-h-[400px]"
+            />
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setOpen(false)} disabled={saving}>Cancel</Button>
+            <Button onClick={save} disabled={saving || loading}>
+              {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : "Save"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </div>
+  );
+}
+
+// ---------------- Analyze Prompt ----------------
+function AnalyzePromptSection() {
+  const { toast } = useToast();
+  const [open, setOpen] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [content, setContent] = useState("");
+  const [updatedAt, setUpdatedAt] = useState<string | null>(null);
+
+  const loadPrompt = async () => {
+    setLoading(true);
+    try {
+      const { data, error } = await supabase
+        .from("app_settings" as any)
+        .select("value, updated_at")
+        .eq("key", "analyze_prompt")
+        .maybeSingle();
+      if (error) throw error;
+      setContent((data as any)?.value ?? "");
+      setUpdatedAt((data as any)?.updated_at ?? null);
+    } catch (e: any) {
+      toast({ title: "Failed to load prompt", description: (e as any)?.message, variant: "destructive" });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const openModal = async () => {
+    setOpen(true);
+    await loadPrompt();
+  };
+
+  const save = async () => {
+    setSaving(true);
+    try {
+      const { error } = await supabase
+        .from("app_settings" as any)
+        .upsert({ key: "analyze_prompt", value: content, updated_at: new Date().toISOString() } as any, { onConflict: "key" });
+      if (error) throw error;
+      toast({ title: "Prompt saved", description: "Analyze (Identify Risk Elements) will use the updated prompt next run." });
+      setOpen(false);
+    } catch (e: any) {
+      toast({ title: "Save failed", description: (e as any)?.message, variant: "destructive" });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="mt-8 bg-card rounded-lg border p-4">
+      <div className="flex items-center justify-between">
+        <div>
+          <h2 className="text-lg font-semibold">Analyze Prompt</h2>
+          <p className="text-sm text-muted-foreground">
+            System prompt used by the Analyze stage (Identify Risk Elements). Sent to Gemini with the cached PDF context.
+          </p>
+        </div>
+        <Button variant="outline" onClick={openModal}>Edit Prompt</Button>
+      </div>
+
+      <Dialog open={open} onOpenChange={setOpen}>
+        <DialogContent className="max-w-4xl max-h-[85vh] flex flex-col">
+          <DialogHeader>
+            <DialogTitle>Analyze Prompt</DialogTitle>
+            <DialogDescription>
+              {updatedAt
+                ? `Last updated ${format(new Date(updatedAt), "MMM d, yyyy 'at' h:mm a")}`
+                : "Edit and save the prompt used by the Analyze stage."}
             </DialogDescription>
           </DialogHeader>
           {loading ? (
