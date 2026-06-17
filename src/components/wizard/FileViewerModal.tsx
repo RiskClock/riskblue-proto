@@ -111,10 +111,17 @@ export const FileViewerModal = ({
   onExpandedClassesChange,
   preselectClass,
   titleAccessory,
+  singlePageOnly = false,
 }: FileViewerModalProps) => {
   const { toast } = useToast();
   const [hoveredCode, setHoveredCode] = useState<string | null>(null);
-  const [currentPage, setCurrentPage] = useState(1);
+  const [currentPage, setCurrentPage] = useState(pageIndex);
+
+  // Keep currentPage in sync with the requested pageIndex when the modal opens
+  // or when the parent changes the target page.
+  useEffect(() => {
+    setCurrentPage(pageIndex);
+  }, [pageIndex, fileId]);
 
   const sidebarEnabled =
     !!awpClasses && !!analysisRequestId && !!parentFileId;
