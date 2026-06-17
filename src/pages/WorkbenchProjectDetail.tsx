@@ -2827,8 +2827,102 @@ export default function WorkbenchProjectDetail() {
               )}
             </div>
 
+            {/* Pages by File — lightweight enumeration (no splitting). */}
+            <div className="mt-6 border-t pt-6 space-y-3">
+              <div className="flex items-center justify-between">
+                <h3 className="text-sm font-medium">Pages by File</h3>
+                {pageInfoLoading && (
+                  <span className="text-xs text-muted-foreground inline-flex items-center gap-1.5">
+                    <Loader2 className="h-3 w-3 animate-spin" /> Counting pages…
+                  </span>
+                )}
+              </div>
+
+              {pageInfoRows.length === 0 ? (
+                <div className="text-sm text-muted-foreground text-center py-6">
+                  {pageInfoLoading ? "Loading…" : "No files in this request."}
+                </div>
+              ) : (
+                <div className="bg-card rounded-lg border">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead className="h-9 py-1">
+                          Files ({pageInfoRows.length} file{pageInfoRows.length === 1 ? "" : "s"})
+                        </TableHead>
+                        <TableHead className="h-9 py-1 text-right w-32">Pages</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {pageInfoRows.map((row) => {
+                        const count = row.page_count ?? 0;
+                        const singlePage = count === 1;
+                        const isExpanded = pageInfoExpanded.has(row.id);
+                        return (
+                          <Fragment key={row.id}>
+                            <TableRow
+                              className="group h-8 cursor-pointer"
+                              onClick={() => {
+                                if (singlePage) setActivePageView({ file: row, page: 1 });
+                                else if (count > 0) togglePageInfoExpand(row.id);
+                              }}
+                            >
+                              <TableCell className="py-1 text-sm">
+                                <div className="flex items-center gap-2 min-w-0">
+                                  {!singlePage && count > 0 ? (
+                                    <button
+                                      type="button"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        togglePageInfoExpand(row.id);
+                                      }}
+                                      className="shrink-0 text-muted-foreground hover:text-foreground"
+                                      aria-label={isExpanded ? "Collapse pages" : "Expand pages"}
+                                    >
+                                      {isExpanded ? (
+                                        <ChevronDown className="h-3.5 w-3.5" />
+                                      ) : (
+                                        <ChevronRight className="h-3.5 w-3.5" />
+                                      )}
+                                    </button>
+                                  ) : (
+                                    <span className="inline-block w-3.5 shrink-0" />
+                                  )}
+                                  <span className="font-medium truncate min-w-0">{row.name}</span>
+                                </div>
+                              </TableCell>
+                              <TableCell className="py-1 text-right text-sm tabular-nums text-muted-foreground">
+                                {row.page_count == null ? "—" : `${count} page${count === 1 ? "" : "s"}`}
+                              </TableCell>
+                            </TableRow>
+                            {!singlePage && isExpanded && count > 0 &&
+                              Array.from({ length: count }, (_, i) => i + 1).map((p) => (
+                                <TableRow
+                                  key={`${row.id}:${p}`}
+                                  className="group h-8 cursor-pointer bg-muted/10"
+                                  onClick={() => setActivePageView({ file: row, page: p })}
+                                >
+                                  <TableCell className="py-1 text-sm">
+                                    <div className="flex items-center gap-2 min-w-0 pl-7">
+                                      <span className="text-muted-foreground">Page {p}</span>
+                                    </div>
+                                  </TableCell>
+                                  <TableCell className="py-1" />
+                                </TableRow>
+                              ))
+                            }
+                          </Fragment>
+                        );
+                      })}
+                    </TableBody>
+                  </Table>
+                </div>
+              )}
+            </div>
+
           </div>
         </main>
+
 
 
 
