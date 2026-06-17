@@ -312,6 +312,69 @@ export default function WorkbenchProjectDetail() {
 
   const requestId = analysisRequest?.id;
 
+  // Load Page Info: list files, fill missing page counts via pdf.js, cache to DB.
+  useEffect(() => {
+    if (!requestId) { setPageInfoRows([]); return; }
+    let cancelled = false;
+    (async () => {
+      setPageInfoLoading(true);
+      try {
+        const { data, error } = await supabase
+          .from("analysis_request_files")
+          .select("id, name, source_type, storage_path, mime_type, expected_page_count")
+          .eq("analysis_request_id", requestId)
+          .order("name");
+        if (error) throw error;
+        const initial: PageInfoRow[] = ((data ?? []) as any[]).map((r) => ({
+          id: r.id,
+          name: r.name,
+          source_type: r.source_type,
+          storage_path: r.storage_path,
+          mime_type: r.mime_type,
+          page_count: r.expected_page_count ?? null,
+        }));
+        if (cancelled) return;
+        setPageInfoRows(initial);
+
+        const missing = initial.filter(
+          (r) => r.page_count == null && r.storage_path && (r.mime_type ?? "application/pdf").includes("pdf"),
+        );
+        if (missing.length === 0) return;
+        const pdfjsLib = await import("pdfjs-dist");
+        for (const row of missing) {
+          if (cancelled) return;
+          try {
+            const { data: signed, error: signErr } = await supabase.storage
+              .from(bucketForSource(row.source_type))
+              .createSignedUrl(row.storage_path!, 600);
+            if (signErr || !signed?.signedUrl) continue;
+            const resp = await fetch(signed.signedUrl);
+            const buf = await resp.arrayBuffer();
+            const doc = await pdfjsLib.getDocument({ data: buf }).promise;
+            const count = doc.numPages;
+            try { doc.destroy(); } catch { /* ignore */ }
+            if (cancelled) return;
+            setPageInfoRows((prev) =>
+              prev.map((r) => (r.id === row.id ? { ...r, page_count: count } : r)),
+            );
+            void supabase
+              .from("analysis_request_files")
+              .update({ expected_page_count: count })
+              .eq("id", row.id);
+          } catch (e) {
+            console.warn("[page-info] count failed for", row.name, e);
+          }
+        }
+      } catch (e) {
+        console.warn("[page-info] load failed", e);
+      } finally {
+        if (!cancelled) setPageInfoLoading(false);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [requestId]);
+
+
   // Files + sheets for the latest request
   const { data: rows, isLoading } = useQuery({
     queryKey: ["workbench-rows", requestId],
