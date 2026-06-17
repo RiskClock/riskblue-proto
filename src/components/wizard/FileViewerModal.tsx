@@ -538,29 +538,47 @@ export const FileViewerModal = ({
   // viewer geometry projects them via the page's PageViewport.
   const floorPlanOverlays: OverlayInput[] = useMemo(() => {
     if (!floorPlans || floorPlans.length === 0) return [];
-    return floorPlans
-      .filter((fp) => Array.isArray(fp.bounding_box_pt) && fp.bounding_box_pt.length === 4)
-      .map((fp) => {
-        const override = floorPlanOverrides?.[fp.plan_id];
-        const effectiveFloors = override?.floors ?? fp.floors;
-        const labelBase = fp.reference_id
-          ? fp.reference_id
-          : effectiveFloors.length > 0
-            ? effectiveFloors.join(" / ")
-            : fp.plan_id;
-        return {
-          id: `fp-${fp.plan_id}`,
-          bbox: fp.bounding_box_pt as [number, number, number, number],
-          coordSpace: "pdf-points" as const,
-          // In singlePageOnly mode the full PDF is loaded and we navigate to
-          // `currentPage`; bind the overlay to that page (not 1). In sheet
-          // mode the PDF has a single page so currentPage === 1 anyway.
-          page: currentPage,
-          shape: "rect" as const,
-          color: awpClassColor(fp.type || "unknown"),
-          label: labelBase,
-        };
+    const out: OverlayInput[] = [];
+    for (const fp of floorPlans) {
+      const bb = fp.bounding_box_pt;
+      if (!Array.isArray(bb) || bb.length < 4) continue;
+      const dims = fp.page_dimensions_pt;
+      if (!dims || !dims.width || !dims.height) continue;
+      // Gemini bbox is [x_min, y_min, x_max, y_max] in PDF points with a
+      // bottom-left origin. Convert explicitly to a top-left normalized
+      // [x, y, w, h] rect so we don't rely on pdfjs viewport rotation.
+      const [x1, y1, x2, y2] = bb;
+      const W = dims.width;
+      const H = dims.height;
+      const left = Math.min(x1, x2);
+      const right = Math.max(x1, x2);
+      const bottom = Math.min(y1, y2);
+      const top = Math.max(y1, y2);
+      const nx = left / W;
+      const ny = (H - top) / H; // y-flip
+      const nw = (right - left) / W;
+      const nh = (top - bottom) / H;
+      const override = floorPlanOverrides?.[fp.plan_id];
+      const effectiveFloors = override?.floors ?? fp.floors;
+      const labelBase = fp.reference_id
+        ? fp.reference_id
+        : effectiveFloors.length > 0
+          ? effectiveFloors.join(" / ")
+          : fp.plan_id;
+      out.push({
+        id: `fp-${fp.plan_id}`,
+        bbox: [nx, ny, nw, nh],
+        coordSpace: "normalized" as const,
+        // In singlePageOnly mode the full PDF is loaded and we navigate to
+        // `currentPage`; bind the overlay to that page (not 1). In sheet
+        // mode the PDF has a single page so currentPage === 1 anyway.
+        page: currentPage,
+        shape: "rect" as const,
+        color: awpClassColor(fp.type || "unknown"),
+        label: labelBase,
       });
+    }
+    return out;
   }, [floorPlans, floorPlanOverrides, currentPage]);
 
   const overlays = [...detectionOverlays, ...instanceOverlays, ...floorPlanOverlays];
