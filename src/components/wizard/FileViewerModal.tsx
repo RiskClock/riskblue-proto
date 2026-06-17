@@ -924,15 +924,9 @@ interface FloorPlansPanelProps {
 
 const FloorPlansPanel = ({
   floorPlans,
-  allUnitPlans,
   allLevelPlans,
   overrides,
-  onSaveOverride,
-  onEditLevelUnits,
 }: FloorPlansPanelProps) => {
-  const unitColor = awpClassColor("unit_floor_plan");
-  const unitTextColor = readableTextOn(unitColor);
-
   // For a unit floor plan, list the pages of level plans that reference it.
   const findReferencingLevels = (unit: ParsedFloorPlan): string[] => {
     const key = unitPlanRefKey(unit);
@@ -954,12 +948,11 @@ const FloorPlansPanel = ({
       {floorPlans.map((fp) => {
         const ovr = overrides[fp.plan_id] ?? {};
         const effFloors = ovr.floors ?? fp.floors;
-        const effUnits = ovr.units ?? fp.referenced_unit_ids;
         const color = awpClassColor(fp.type || "unknown");
-        const isLevel = fp.type === "level_floor_plan";
         const label = floorPlanDisplayLabel({ ...fp, floors: effFloors });
         const isUnit = fp.type === "unit_floor_plan";
         const referencedIn = isUnit ? findReferencingLevels(fp) : [];
+
 
         return (
           <div key={fp.plan_id} className="border rounded-md p-2 space-y-2 bg-card">
