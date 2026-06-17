@@ -1176,7 +1176,7 @@ const FloorPlansPanel = ({
               </div>
             )}
 
-            {riskElementClasses.length > 0 && (
+            {instancesOnPage.length > 0 && (
               <div className="space-y-1">
                 <div className="text-[10px] uppercase tracking-wide text-muted-foreground">
                   Annotations ({planAnns.length})
@@ -1187,7 +1187,7 @@ const FloorPlansPanel = ({
           </div>
         );
       })}
-      {floorPlans.length === 0 && riskElementClasses.length === 0 && (
+      {floorPlans.length === 0 && instancesOnPage.length === 0 && (
         <div className="text-xs text-muted-foreground italic p-2">
           No floor plan info available.
         </div>
