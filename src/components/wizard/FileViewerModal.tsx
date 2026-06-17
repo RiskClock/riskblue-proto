@@ -156,6 +156,9 @@ export const FileViewerModal = ({
   onSaveFloorPlanOverride,
   onEditFloors,
   onEditLevelUnits,
+  riskElementClasses,
+  annotationAssignments,
+  onAssignAnnotation,
 }: FileViewerModalProps) => {
   const { toast } = useToast();
   const [hoveredCode, setHoveredCode] = useState<string | null>(null);
