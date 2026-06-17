@@ -56,6 +56,8 @@ export interface DrawingViewerProps {
   onCanvasClick?: (nx: number, ny: number, pageNum: number) => void;
   /** Called when user clicks on an overlay element; receives its id. */
   onOverlayClick?: (overlayId: string) => void;
+  /** Reports the active rendered page element size in CSS pixels. */
+  onActivePageRenderedSizeChange?: (size: { width: number; height: number }) => void;
   className?: string;
   /** When false, disables wheel zoom, pinch, pan, and double-click zoom. */
   interactive?: boolean;
@@ -84,6 +86,7 @@ export const DrawingViewer = forwardRef<DrawingViewerApi, DrawingViewerProps>(
       onTotalPagesChange,
       onCanvasClick,
       onOverlayClick,
+      onActivePageRenderedSizeChange,
       className,
       interactive = true,
     },
@@ -384,6 +387,7 @@ export const DrawingViewer = forwardRef<DrawingViewerApi, DrawingViewerProps>(
                         : undefined
                     }
                     onOverlayClick={onOverlayClick}
+                    onRenderedSizeChange={onActivePageRenderedSizeChange}
                   />
                 ) : (
                   <div className="flex flex-col gap-4">
@@ -406,6 +410,7 @@ export const DrawingViewer = forwardRef<DrawingViewerApi, DrawingViewerProps>(
                               : undefined
                           }
                           onOverlayClick={onOverlayClick}
+                          onRenderedSizeChange={onActivePageRenderedSizeChange}
                         />
                       );
                     })}

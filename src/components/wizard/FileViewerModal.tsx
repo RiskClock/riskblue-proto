@@ -153,11 +153,16 @@ export const FileViewerModal = ({
   const { toast } = useToast();
   const [hoveredCode, setHoveredCode] = useState<string | null>(null);
   const [currentPage, setCurrentPage] = useState(pageIndex);
+  const [renderedPageSize, setRenderedPageSize] = useState<{
+    width: number;
+    height: number;
+  } | null>(null);
 
   // Keep currentPage in sync with the requested pageIndex when the modal opens
   // or when the parent changes the target page.
   useEffect(() => {
     setCurrentPage(pageIndex);
+    setRenderedPageSize(null);
   }, [pageIndex, fileId]);
 
   const sidebarEnabled =
@@ -534,13 +539,13 @@ export const FileViewerModal = ({
       }));
   }, [instances, effectivePage, sheetId, parentFileId, numberByInstanceId, prefixByClass]);
 
-  // Floor-plan bbox overlays (rect outline). Survey agent now returns
+  // Floor-plan bbox overlays (rect outline). Survey agent returns
   // `xy_width_height_pt` = [x, y, width, height] in PDF points using a
-  // top-left origin (web/canvas convention). Convert directly to a
-  // normalized 0..1 rect against `page_dimensions_pt` — no Y-flip, no
-  // delta math, no PageViewport projection.
+  // top-left origin. Scale those points against the actual rendered page
+  // element size so responsive sizing/fit state cannot drift the overlay.
   const floorPlanOverlays: OverlayInput[] = useMemo(() => {
     if (!floorPlans || floorPlans.length === 0) return [];
+    if (!renderedPageSize || renderedPageSize.width <= 0 || renderedPageSize.height <= 0) return [];
     const out: OverlayInput[] = [];
     for (const fp of floorPlans) {
       const bb = fp.xy_width_height_pt;
@@ -549,10 +554,12 @@ export const FileViewerModal = ({
       const pageH = fp.page_dimensions_pt?.height ?? 0;
       if (!(pageW > 0) || !(pageH > 0)) continue;
       const [x, y, w, h] = bb;
-      const nx = x / pageW;
-      const ny = y / pageH;
-      const nw = w / pageW;
-      const nh = h / pageH;
+      const scaleX = renderedPageSize.width / pageW;
+      const scaleY = renderedPageSize.height / pageH;
+      const left = x * scaleX;
+      const top = y * scaleY;
+      const width = w * scaleX;
+      const height = h * scaleY;
       const override = floorPlanOverrides?.[fp.plan_id];
       const effectiveFloors = override?.floors ?? fp.floors;
       const labelBase = fp.reference_id
@@ -562,8 +569,9 @@ export const FileViewerModal = ({
           : fp.plan_id;
       out.push({
         id: `fp-${fp.plan_id}`,
-        bbox: [nx, ny, nw, nh],
-        coordSpace: "normalized" as const,
+        bbox: [left, top, left + width, top + height],
+        coordSpace: "pixels" as const,
+        pixelSize: { w: renderedPageSize.width, h: renderedPageSize.height },
         page: currentPage,
         shape: "rect" as const,
         color: awpClassColor(fp.type || "unknown"),
@@ -571,7 +579,7 @@ export const FileViewerModal = ({
       });
     }
     return out;
-  }, [floorPlans, floorPlanOverrides, currentPage]);
+  }, [floorPlans, floorPlanOverrides, currentPage, renderedPageSize]);
 
   const overlays = [...detectionOverlays, ...instanceOverlays, ...floorPlanOverlays];
 
@@ -618,6 +626,7 @@ export const FileViewerModal = ({
               maxScale={8}
               onCanvasClick={sidebarEnabled ? handleCanvasClick : undefined}
               onOverlayClick={sidebarEnabled ? handleOverlayClick : undefined}
+              onActivePageRenderedSizeChange={setRenderedPageSize}
             />
           </div>
 
@@ -984,8 +993,13 @@ const FloorPlansPanel = ({
                           <Plus className="h-3 w-3" />
                         </button>
                       </PopoverTrigger>
-                      <PopoverContent align="end" className="w-56 p-1">
-                        <div className="max-h-56 overflow-y-auto">
+                      <PopoverContent
+                        align="end"
+                        className="w-56 p-1 max-h-[min(16rem,var(--radix-popover-content-available-height))] overflow-y-auto overscroll-contain"
+                        onWheelCapture={(e) => e.stopPropagation()}
+                        onTouchMoveCapture={(e) => e.stopPropagation()}
+                      >
+                        <div className="space-y-0.5">
                           {pickerOptions.map((u) => (
                             <button
                               key={u}
