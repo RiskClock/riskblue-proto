@@ -534,30 +534,17 @@ export const FileViewerModal = ({
       }));
   }, [instances, effectivePage, sheetId, parentFileId, numberByInstanceId, prefixByClass]);
 
-  // Floor-plan bbox overlays (rect outline). Drawn from PDF points so the
-  // viewer geometry projects them via the page's PageViewport.
+  // Floor-plan bbox overlays (rect outline). Keep these in native PDF points
+  // and let DrawingViewer project them through the same pdf.js PageViewport
+  // used for the rendered page. That keeps crop boxes, rotation, and raster
+  // scale aligned with the actual image instead of re-scaling by survey dims.
   const floorPlanOverlays: OverlayInput[] = useMemo(() => {
     if (!floorPlans || floorPlans.length === 0) return [];
     const out: OverlayInput[] = [];
     for (const fp of floorPlans) {
       const bb = fp.bounding_box_pt;
       if (!Array.isArray(bb) || bb.length < 4) continue;
-      const dims = fp.page_dimensions_pt;
-      if (!dims || !dims.width || !dims.height) continue;
-      // Gemini bbox is [x_min, y_min, x_max, y_max] in PDF points with a
-      // bottom-left origin. Convert explicitly to a top-left normalized
-      // [x, y, w, h] rect so we don't rely on pdfjs viewport rotation.
       const [x1, y1, x2, y2] = bb;
-      const W = dims.width;
-      const H = dims.height;
-      const left = Math.min(x1, x2);
-      const right = Math.max(x1, x2);
-      const bottom = Math.min(y1, y2);
-      const top = Math.max(y1, y2);
-      const nx = left / W;
-      const ny = (H - top) / H; // y-flip
-      const nw = (right - left) / W;
-      const nh = (top - bottom) / H;
       const override = floorPlanOverrides?.[fp.plan_id];
       const effectiveFloors = override?.floors ?? fp.floors;
       const labelBase = fp.reference_id
@@ -567,8 +554,8 @@ export const FileViewerModal = ({
           : fp.plan_id;
       out.push({
         id: `fp-${fp.plan_id}`,
-        bbox: [nx, ny, nw, nh],
-        coordSpace: "normalized" as const,
+        bbox: [x1, y1, x2, y2],
+        coordSpace: "pdf-points" as const,
         // In singlePageOnly mode the full PDF is loaded and we navigate to
         // `currentPage`; bind the overlay to that page (not 1). In sheet
         // mode the PDF has a single page so currentPage === 1 anyway.
