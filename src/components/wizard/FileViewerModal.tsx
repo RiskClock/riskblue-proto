@@ -106,12 +106,18 @@ interface FileViewerModalProps {
   /** Persist a single plan override. */
   onSaveFloorPlanOverride?: (
     planId: string,
-    next: { floors?: string[]; units?: string[] },
+    next: { floors?: string[]; units?: string[]; annotations?: string[] },
   ) => Promise<void> | void;
   /** Page-level handler that opens SpaceEditModal scoped to a plan. */
   onEditFloors?: (planId: string, currentFloors: string[]) => void;
   /** Open the units-editor modal for a level plan. */
   onEditLevelUnits?: (plan: ParsedFloorPlan, currentUnits: string[]) => void;
+  /** AWP class names that have risk_element_results for this file. */
+  riskElementClasses?: string[];
+  /** Map of className -> planId (assignment). Missing => Unassigned. */
+  annotationAssignments?: Record<string, string>;
+  /** Reassign an annotation (class) to a plan, or to null to unassign. */
+  onAssignAnnotation?: (className: string, planId: string | null) => Promise<void> | void;
 }
 
 const BOUNDING_BOX_COLOR = "#39FF14"; // legacy detections (green)
