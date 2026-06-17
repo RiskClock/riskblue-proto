@@ -12,8 +12,10 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import {
   ChevronDown,
   ChevronRight,
+  GripVertical,
   Loader2,
   Pencil,
+  Plus,
   Redo2,
   Undo2,
 } from "lucide-react";
