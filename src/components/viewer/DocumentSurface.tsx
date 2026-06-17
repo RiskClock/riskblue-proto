@@ -1,4 +1,9 @@
-import { CSSProperties, PointerEvent as ReactPointerEvent, useRef } from "react";
+import {
+  CSSProperties,
+  PointerEvent as ReactPointerEvent,
+  useLayoutEffect,
+  useRef,
+} from "react";
 import { OverlayLayer } from "./OverlayLayer";
 import type { NormalizedOverlay } from "./viewerGeometry";
 
@@ -13,6 +18,8 @@ interface DocumentSurfaceProps {
   onCanvasClick?: (nx: number, ny: number) => void;
   /** Optional click handler invoked when user clicks on an overlay. */
   onOverlayClick?: (overlayId: string) => void;
+  /** Reports the actual rendered page element size in CSS pixels. */
+  onRenderedSizeChange?: (size: { width: number; height: number }) => void;
 }
 
 /** Max pointer movement (CSS px) between down and up to still count as a click,
@@ -31,8 +38,10 @@ export const DocumentSurface = ({
   viewScale,
   onCanvasClick,
   onOverlayClick,
+  onRenderedSizeChange,
 }: DocumentSurfaceProps) => {
   const downRef = useRef<{ x: number; y: number } | null>(null);
+  const imgRef = useRef<HTMLImageElement>(null);
   const style: CSSProperties = {
     width: pageSize.width,
     height: pageSize.height,
@@ -55,9 +64,37 @@ export const DocumentSurface = ({
     const ny = (e.clientY - rect.top) / rect.height;
     if (nx >= 0 && nx <= 1 && ny >= 0 && ny <= 1) onCanvasClick(nx, ny);
   };
+
+  useLayoutEffect(() => {
+    const el = imgRef.current;
+    if (!el || !onRenderedSizeChange) return;
+
+    let frame = 0;
+    const report = () => {
+      const rect = el.getBoundingClientRect();
+      const width = el.clientWidth || rect.width;
+      const height = el.clientHeight || rect.height;
+      if (width > 0 && height > 0) onRenderedSizeChange({ width, height });
+    };
+    const scheduleReport = () => {
+      if (frame) cancelAnimationFrame(frame);
+      frame = requestAnimationFrame(report);
+    };
+
+    report();
+    const ro = new ResizeObserver(scheduleReport);
+    ro.observe(el);
+    return () => {
+      if (frame) cancelAnimationFrame(frame);
+      ro.disconnect();
+    };
+  }, [imageUrl, pageSize.width, pageSize.height, onRenderedSizeChange]);
+
   return (
     <div style={style} onPointerDown={handlePointerDown} onPointerUp={handlePointerUp}>
       <img
+        ref={imgRef}
+        className="pdf-canvas-element"
         src={imageUrl}
         draggable={false}
         style={{
