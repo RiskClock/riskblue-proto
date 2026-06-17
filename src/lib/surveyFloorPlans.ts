@@ -11,10 +11,9 @@ export interface ParsedFloorPlan {
   plan_id: string;
   type: FloorPlanType;
   reference_id: string | null;
-  /** [x, y, width, height] in PDF points (origin TOP-LEFT, web/canvas convention). */
-  xy_width_height_pt: [number, number, number, number] | null;
+  /** [left, top, width, height] as percentages (0..100) of the visible page. */
+  xy_width_height_pct: [number, number, number, number] | null;
   page_number: number;
-  page_dimensions_pt?: { width: number; height: number } | null;
   floors: string[];
   referenced_unit_ids: string[];
 }
@@ -86,12 +85,6 @@ export function parseSurveyFloorPlans(
     const pageNum = Number(p?.page_number ?? p?.page ?? p?.pageNumber);
     if (!Number.isFinite(pageNum)) continue;
     const plans = Array.isArray(p?.floor_plans) ? p.floor_plans : [];
-    const dims = p?.page_dimensions_pt
-      ? {
-          width: Number(p.page_dimensions_pt.width) || 0,
-          height: Number(p.page_dimensions_pt.height) || 0,
-        }
-      : null;
     const items: ParsedFloorPlan[] = [];
     for (let i = 0; i < plans.length; i++) {
       const fp = plans[i];
@@ -109,9 +102,8 @@ export function parseSurveyFloorPlans(
         plan_id,
         type: (fp.type as FloorPlanType) ?? "unknown",
         reference_id,
-        xy_width_height_pt: asBbox(fp.xy_width_height_pt),
+        xy_width_height_pct: asBbox(fp.xy_width_height_pct ?? fp.xy_width_height_pt),
         page_number: pageNum,
-        page_dimensions_pt: dims,
         floors,
         referenced_unit_ids,
       });
@@ -152,14 +144,14 @@ export function isPointInsideUnitPlan(
 ): boolean {
   if (plan.type !== "unit_floor_plan") return false;
   if (plan.page_number !== page) return false;
-  const bb = plan.xy_width_height_pt;
+  const bb = plan.xy_width_height_pct;
   if (!bb) return false;
   const [x, y, w, h] = bb;
-  // bbox is normalized on a 0..1000 grid (top-left origin).
-  const x1 = x / 1000;
-  const y1 = y / 1000;
-  const x2 = (x + w) / 1000;
-  const y2 = (y + h) / 1000;
+  // bbox is in percentages (0..100) of the visible page.
+  const x1 = x / 100;
+  const y1 = y / 100;
+  const x2 = (x + w) / 100;
+  const y2 = (y + h) / 100;
   return nx >= x1 && nx <= x2 && ny >= y1 && ny <= y2;
 }
 
