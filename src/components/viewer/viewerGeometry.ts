@@ -37,6 +37,8 @@ export interface NormalizedRect {
   ny: number; // 0..1
   nw: number; // 0..1
   nh: number; // 0..1
+  /** Original rendered-page CSS pixel rect, when the caller supplied one. */
+  px?: { x: number; y: number; w: number; h: number };
 }
 
 export interface OverlayInput {
@@ -93,11 +95,16 @@ export function toNormalizedRect(input: OverlayInput): NormalizedRect | null {
     if (!input.pixelSize) return null;
     const [x1, y1, x2, y2] = b;
     const { w, h } = input.pixelSize;
+    const x = Math.min(x1, x2);
+    const y = Math.min(y1, y2);
+    const width = Math.abs(x2 - x1);
+    const height = Math.abs(y2 - y1);
     return {
-      nx: Math.min(x1, x2) / w,
-      ny: Math.min(y1, y2) / h,
-      nw: Math.abs(x2 - x1) / w,
-      nh: Math.abs(y2 - y1) / h,
+      nx: x / w,
+      ny: y / h,
+      nw: width / w,
+      nh: height / h,
+      px: { x, y, w: width, h: height },
     };
   }
 
