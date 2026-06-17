@@ -85,12 +85,6 @@ export function parseSurveyFloorPlans(
     const pageNum = Number(p?.page_number ?? p?.page ?? p?.pageNumber);
     if (!Number.isFinite(pageNum)) continue;
     const plans = Array.isArray(p?.floor_plans) ? p.floor_plans : [];
-    const dims = p?.page_dimensions_pt
-      ? {
-          width: Number(p.page_dimensions_pt.width) || 0,
-          height: Number(p.page_dimensions_pt.height) || 0,
-        }
-      : null;
     const items: ParsedFloorPlan[] = [];
     for (let i = 0; i < plans.length; i++) {
       const fp = plans[i];
@@ -108,9 +102,8 @@ export function parseSurveyFloorPlans(
         plan_id,
         type: (fp.type as FloorPlanType) ?? "unknown",
         reference_id,
-        xy_width_height_pt: asBbox(fp.xy_width_height_pt),
+        xy_width_height_pct: asBbox(fp.xy_width_height_pct ?? fp.xy_width_height_pt),
         page_number: pageNum,
-        page_dimensions_pt: dims,
         floors,
         referenced_unit_ids,
       });
