@@ -3570,6 +3570,9 @@ export default function WorkbenchProjectDetail() {
             persistKey={projectId}
             expandedClasses={sidebarExpandedClasses}
             onExpandedClassesChange={setSidebarExpandedClasses}
+            riskElementClasses={activeFileRiskClasses}
+            annotationAssignments={activeAnnotationAssignments}
+            onAssignAnnotation={assignAnnotationToPlan}
           />
         )}
 
