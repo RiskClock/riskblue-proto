@@ -1160,6 +1160,13 @@ export default function WorkbenchProjectDetail() {
 
   const handleSaveSpaces = async (newSpaces: string[]) => {
     if (!spaceEditTarget || !analysisRequest?.id) return;
+    // Branch: per-plan edit (from FloorPlansPanel) writes to floor_plan_overrides
+    // for that single plan and does NOT mutate the page-level space hierarchy.
+    if (spaceEditTarget.planId) {
+      await saveFloorPlanOverride(spaceEditTarget.planId, { floors: newSpaces });
+      setSpaceEditTarget(null);
+      return;
+    }
     const { fileName, pageNumber } = spaceEditTarget;
     const payload = spaceHierarchyPayload
       ? JSON.parse(JSON.stringify(spaceHierarchyPayload))
