@@ -83,6 +83,7 @@ export const DrawingViewer = forwardRef<DrawingViewerApi, DrawingViewerProps>(
       minScale = DEFAULT_MIN,
       maxScale = DEFAULT_MAX,
       showToolbar = true,
+      hidePageNav = false,
       toolbarSlot = "top",
       onApiReady,
       onTotalPagesChange,
