@@ -3012,6 +3012,39 @@ export default function WorkbenchProjectDetail() {
           />
         )}
 
+        {/* Single-page viewer for Pages by File table */}
+        {activePageView && activePageViewSource && (
+          <FileViewerModal
+            isOpen={!!activePageView}
+            onClose={() => setActivePageView(null)}
+            fileId={activePageView.file.id}
+            fileName={`${activePageView.file.name} | Page ${activePageView.page}`}
+            mimeType={activePageView.file.mime_type || "application/pdf"}
+            accessToken=""
+            detections={[]}
+            sourceOverride={activePageViewSource}
+            analysisRequestId={requestId}
+            parentFileId={activePageView.file.id}
+            sheetId={null}
+            pageIndex={activePageView.page}
+            singlePageOnly
+            awpClasses={enabledCols.map((name) => ({
+              name,
+              prefix: optionByName.get(name)?.idPrefix ?? null,
+              analysisCount:
+                fileCountLookup.get(`${activePageView.file.id}::${name}`) || 0,
+            }))}
+            fileNameById={Object.fromEntries(
+              fileGroups.map((g) => [g.file.id, g.file.name]),
+            )}
+            persistKey={projectId}
+            expandedClasses={sidebarExpandedClasses}
+            onExpandedClassesChange={setSidebarExpandedClasses}
+          />
+        )}
+
+
+
         {/* AWP class prompt modal */}
         <AwpPromptModal
           className={promptClass}
