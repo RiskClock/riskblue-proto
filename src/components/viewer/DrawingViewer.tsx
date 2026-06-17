@@ -158,7 +158,7 @@ export const DrawingViewer = forwardRef<DrawingViewerApi, DrawingViewerProps>(
     // or natural pdfSize (stacked mode lets pages flow vertically).
     const activePage =
       layout === "single-page"
-        ? allPages.find((p) => p.pageNum === page) ?? allPages[0]
+        ? allPages.find((p) => p.pageNum === page) ?? null
         : allPages[0];
 
     const pageCssSize = useMemo(() => {
