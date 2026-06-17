@@ -568,6 +568,19 @@ export default function WorkbenchProjectDetail() {
     refetchInterval: 3000,
   });
 
+  // Map every file to its parsed floor plans by page number, so the Pages by
+  // File table can render per-page badges (floors + reference_id) without
+  // hitting the network.
+  const floorPlansByFile = useMemo(() => {
+    const m = new Map<string, Map<number, ParsedFloorPlan[]>>();
+    for (const f of rows?.files ?? []) {
+      const raw = (f as any).survey_raw_response as string | null | undefined;
+      if (!raw) continue;
+      m.set(f.id, parseSurveyFloorPlans(raw));
+    }
+    return m;
+  }, [rows?.files]);
+
   // Rehydrate survey results from DB after refresh.
   useEffect(() => {
     if (surveyRunning) return;
@@ -2702,7 +2715,7 @@ export default function WorkbenchProjectDetail() {
 
             {/* Survey Pages */}
             <div className="mt-6 border-t pt-6 space-y-3">
-              <div className="flex justify-center">
+              <div className="flex justify-center gap-2">
                 <Button
                   type="button"
                   onClick={async () => {
@@ -2860,6 +2873,19 @@ export default function WorkbenchProjectDetail() {
                   ) : (
                     "Survey Pages"
                   )}
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  disabled={!requestId || surveyRunning}
+                  onClick={() => {
+                    toast({
+                      title: "Identify Risk Elements",
+                      description: "Coming soon — Gemini explicit context caching pipeline.",
+                    });
+                  }}
+                >
+                  Identify Risk Elements
                 </Button>
               </div>
 
@@ -3199,27 +3225,76 @@ export default function WorkbenchProjectDetail() {
 
                             {/* Per-page sub-rows (only when multi-page AND expanded) — matches first table */}
                             {!singlePage && isExpanded && count > 0 &&
-                              Array.from({ length: count }, (_, i) => i + 1).map((p) => (
-                                <TableRow
-                                  key={`${row.id}:${p}`}
-                                  className="group h-8 cursor-pointer bg-muted/10"
-                                  onClick={() => setActivePageView({ file: row, page: p })}
-                                >
-                                  <TableCell
-                                    className={`${stickyCellFirstBase} bg-muted/10 group-hover:bg-muted/30 py-1 text-sm`}
+                              Array.from({ length: count }, (_, i) => i + 1).map((p) => {
+                                const pagePlans =
+                                  floorPlansByFile.get(row.id)?.get(p) ?? [];
+                                const floorBadges = Array.from(
+                                  new Set(pagePlans.flatMap((fp) => fp.floors)),
+                                );
+                                const refBadges = Array.from(
+                                  new Set(
+                                    pagePlans
+                                      .map((fp) => fp.reference_id)
+                                      .filter((r): r is string => !!r),
+                                  ),
+                                );
+                                return (
+                                  <TableRow
+                                    key={`${row.id}:${p}`}
+                                    className="group h-8 cursor-pointer bg-muted/10"
+                                    onClick={() => setActivePageView({ file: row, page: p })}
                                   >
-                                    <div className="flex items-center gap-2 min-w-0 pl-7">
-                                      <span className="text-muted-foreground shrink-0">
-                                        Page {p}
-                                      </span>
-                                    </div>
-                                  </TableCell>
-                                  {enabledCols.map((name) => (
-                                    <TableCell key={name} className="py-1" />
-                                  ))}
-                                  <TableCell className="py-1" />
-                                </TableRow>
-                              ))
+                                    <TableCell
+                                      className={`${stickyCellFirstBase} bg-muted/10 group-hover:bg-muted/30 py-1 text-sm`}
+                                    >
+                                      <div className="flex items-center gap-1.5 min-w-0 pl-7 flex-wrap">
+                                        <span className="text-muted-foreground shrink-0">
+                                          Page {p}
+                                        </span>
+                                        {floorBadges.map((f) => (
+                                          <Badge
+                                            key={`f-${f}`}
+                                            variant="outline"
+                                            className="h-5 px-1.5 text-[10px] bg-sky-500/10 text-sky-700 border-sky-500/30"
+                                          >
+                                            {f}
+                                          </Badge>
+                                        ))}
+                                        {refBadges.map((r) => (
+                                          <Badge
+                                            key={`r-${r}`}
+                                            variant="outline"
+                                            className="h-5 px-1.5 text-[10px] font-mono bg-muted text-foreground"
+                                          >
+                                            {r}
+                                          </Badge>
+                                        ))}
+                                      </div>
+                                    </TableCell>
+                                    {enabledCols.map((name) => {
+                                      const cnt =
+                                        pageInstanceCountLookup.get(
+                                          `${row.id}::${p}::${name}`,
+                                        ) || 0;
+                                      return (
+                                        <TableCell
+                                          key={name}
+                                          className="text-center py-1"
+                                        >
+                                          {cnt > 0 ? (
+                                            <span className="font-medium tabular-nums">
+                                              {cnt}
+                                            </span>
+                                          ) : (
+                                            <span className="text-muted-foreground">—</span>
+                                          )}
+                                        </TableCell>
+                                      );
+                                    })}
+                                    <TableCell className="py-1" />
+                                  </TableRow>
+                                );
+                              })
                             }
                           </Fragment>
                         );

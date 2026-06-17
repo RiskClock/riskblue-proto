@@ -801,6 +801,12 @@ function SurveyPagePromptSection() {
 }
 
 // ---------------- Analyze Prompt ----------------
+// The developer/user-message text that the analyze-drawings edge function
+// sends alongside each AWP class's system prompt. Keep in sync with
+// supabase/functions/analyze-drawings/index.ts.
+const DEFAULT_ANALYZE_PROMPT =
+  "Analyze this drawing according to the instructions provided.";
+
 function AnalyzePromptSection() {
   const { toast } = useToast();
   const [open, setOpen] = useState(false);
@@ -818,7 +824,10 @@ function AnalyzePromptSection() {
         .eq("key", "analyze_prompt")
         .maybeSingle();
       if (error) throw error;
-      setContent((data as any)?.value ?? "");
+      const stored = (data as any)?.value;
+      setContent(
+        typeof stored === "string" && stored.length > 0 ? stored : DEFAULT_ANALYZE_PROMPT,
+      );
       setUpdatedAt((data as any)?.updated_at ?? null);
     } catch (e: any) {
       toast({ title: "Failed to load prompt", description: (e as any)?.message, variant: "destructive" });
