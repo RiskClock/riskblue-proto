@@ -2926,27 +2926,30 @@ export default function WorkbenchProjectDetail() {
                     "Identify Risk Elements"
                   )}
                 </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => toast({ title: "Build Space Hierarchy", description: "Not wired up yet." })}
+                >
+                  Build Space Hierarchy
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => toast({ title: "Consolidate Risers", description: "Not wired up yet." })}
+                >
+                  Consolidate Risers
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => toast({ title: "Generate Instance Report", description: "Not wired up yet." })}
+                >
+                  Generate Instance Report
+                </Button>
               </div>
 
-              {/* Per-file progress status */}
-              {surveyProgress && (
-                <div className="text-center text-xs text-muted-foreground">
-                  {surveyRecoveredRun && !surveyRunning && surveyProgress.phase !== "done" && (
-                    <div className="mb-1 text-amber-700">
-                      Browser refreshed during Survey Pages. Saved file results below were recovered from the database; rerun to continue unfinished files.
-                    </div>
-                  )}
-                  {surveyProgress.phase === "done" ? (
-                    <span>Finished {surveyProgress.total} file{surveyProgress.total === 1 ? "" : "s"}.</span>
-                  ) : (
-                    <span>
-                      File {surveyProgress.current} of {surveyProgress.total} ·{" "}
-                      <span className="font-medium text-foreground">{surveyProgress.fileName}</span>{" "}
-                      · {surveyProgress.phase === "uploading" ? "uploading PDF…" : "querying Gemini…"}
-                    </span>
-                  )}
-                </div>
-              )}
+
 
               {/* Per-file raw response list. Click "View Response" to open the raw Gemini output in a modal. */}
               {rows?.files?.some((f) => (f.survey_raw_response ?? "").trim().length > 0) && (
