@@ -543,6 +543,7 @@ export default function Configuration() {
         )}
 
         <SurveyPagePromptSection />
+        <AnalyzePromptSection />
         <SpaceHierarchyPromptSection />
       </main>
 
