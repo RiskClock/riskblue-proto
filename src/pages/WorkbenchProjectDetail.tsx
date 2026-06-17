@@ -2715,7 +2715,7 @@ export default function WorkbenchProjectDetail() {
 
             {/* Survey Pages */}
             <div className="mt-6 border-t pt-6 space-y-3">
-              <div className="flex justify-center">
+              <div className="flex justify-center gap-2">
                 <Button
                   type="button"
                   onClick={async () => {
