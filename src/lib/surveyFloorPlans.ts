@@ -151,7 +151,7 @@ export function isPointInsideUnitPlan(
   const x1 = x / 100;
   const y1 = y / 100;
   const x2 = (x + w) / 100;
-  const y2 = (y + h) / 1000;
+  const y2 = (y + h) / 100;
   return nx >= x1 && nx <= x2 && ny >= y1 && ny <= y2;
 }
 
