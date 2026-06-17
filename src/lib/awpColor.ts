@@ -48,3 +48,16 @@ export function readableTextOn(hex: string): string {
   const contrastWhite = 1.05 / (L + 0.05);
   return contrastWhite >= 4.5 ? "#ffffff" : "#1f2937"; // tailwind gray-800
 }
+
+/**
+ * Soft, translucent version of a hex color — for badge backgrounds that should
+ * remain readable when paired with the original color as the text color.
+ */
+export function softBgFrom(hex: string, alpha = 0.18): string {
+  const m = hex.trim().match(/^#?([0-9a-f]{6})$/i);
+  if (!m) return hex;
+  const a = Math.round(Math.max(0, Math.min(1, alpha)) * 255)
+    .toString(16)
+    .padStart(2, "0");
+  return `#${m[1]}${a}`;
+}
