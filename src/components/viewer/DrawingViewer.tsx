@@ -48,6 +48,8 @@ export interface DrawingViewerProps {
   minScale?: number;
   maxScale?: number;
   showToolbar?: boolean;
+  /** Hide page-navigation arrows + jump input even when totalPages > 1. */
+  hidePageNav?: boolean;
   toolbarSlot?: "top" | "external";
   /** When toolbarSlot === 'external', callbacks are exposed via onApiReady. */
   onApiReady?: (api: DrawingViewerApi) => void;
