@@ -627,71 +627,51 @@ export const FileViewerModal = ({
 
           {sidebarEnabled && awpClasses ? (
             <div className="w-80 flex-shrink-0 border rounded-lg flex flex-col min-h-0">
-              {(floorPlans && floorPlans.length > 0) ? (
-                <Tabs defaultValue="floor-plans" className="flex-1 flex flex-col min-h-0">
-                  <TabsList className="m-2 grid grid-cols-2">
-                    <TabsTrigger value="floor-plans">Floor Plans</TabsTrigger>
-                    <TabsTrigger value="detections">Detections</TabsTrigger>
-                  </TabsList>
-                  <TabsContent
-                    value="floor-plans"
-                    forceMount
-                    className="flex-1 min-h-0 m-0 mt-0 overflow-hidden data-[state=inactive]:hidden"
-                  >
-                    <div className="h-full overflow-y-auto">
-                      <FloorPlansPanel
-                        floorPlans={floorPlans}
-                        allUnitPlans={allUnitPlans ?? []}
-                        allLevelPlans={allLevelPlans ?? []}
-                        overrides={floorPlanOverrides ?? {}}
-                        onSaveOverride={onSaveFloorPlanOverride}
-                        onEditFloors={onEditFloors}
-                        onEditLevelUnits={onEditLevelUnits}
-                      />
-                    </div>
-                  </TabsContent>
-                  <TabsContent value="detections" className="flex-1 overflow-hidden m-0 mt-0 flex flex-col min-h-0">
-                    <DetectionsPanel
-                      awpClasses={awpClasses}
-                      selectedClass={selectedClass}
-                      setSelectedClass={setSelectedClass}
-                      expanded={expanded}
-                      setExpanded={setExpanded}
-                      instancesByClassThisFile={instancesByClassThisFile}
-                      numberByInstanceId={numberByInstanceId}
-                      effectivePage={effectivePage}
-                      instanceLabel={instanceLabel}
-                      handleDeleteFromList={handleDeleteFromList}
-                      loadingInstances={loadingInstances}
-                      undo={undo}
-                      redo={redo}
-                      pastLen={past.length}
-                      futureLen={future.length}
-                      floorPlans={floorPlans}
+              <Tabs defaultValue="floor-plans" className="flex-1 flex flex-col min-h-0">
+                <TabsList className="m-2 grid grid-cols-2">
+                  <TabsTrigger value="floor-plans">Floor Plans</TabsTrigger>
+                  <TabsTrigger value="detections">Detections</TabsTrigger>
+                </TabsList>
+                <TabsContent
+                  value="floor-plans"
+                  forceMount
+                  className="flex-1 min-h-0 m-0 mt-0 overflow-hidden data-[state=inactive]:hidden"
+                >
+                  <div className="h-full overflow-y-auto">
+                    <FloorPlansPanel
+                      floorPlans={floorPlans ?? []}
+                      allUnitPlans={allUnitPlans ?? []}
+                      allLevelPlans={allLevelPlans ?? []}
+                      overrides={floorPlanOverrides ?? {}}
+                      onSaveOverride={onSaveFloorPlanOverride}
+                      onEditFloors={onEditFloors}
+                      onEditLevelUnits={onEditLevelUnits}
                     />
-                  </TabsContent>
-                </Tabs>
-              ) : (
-                <DetectionsPanel
-                  awpClasses={awpClasses}
-                  selectedClass={selectedClass}
-                  setSelectedClass={setSelectedClass}
-                  expanded={expanded}
-                  setExpanded={setExpanded}
-                  instancesByClassThisFile={instancesByClassThisFile}
-                  numberByInstanceId={numberByInstanceId}
-                  effectivePage={effectivePage}
-                  instanceLabel={instanceLabel}
-                  handleDeleteFromList={handleDeleteFromList}
-                  loadingInstances={loadingInstances}
-                  undo={undo}
-                  redo={redo}
-                  pastLen={past.length}
-                  futureLen={future.length}
-                  withHeader
-                />
-              )}
+                  </div>
+                </TabsContent>
+                <TabsContent value="detections" className="flex-1 overflow-hidden m-0 mt-0 flex flex-col min-h-0">
+                  <DetectionsPanel
+                    awpClasses={awpClasses}
+                    selectedClass={selectedClass}
+                    setSelectedClass={setSelectedClass}
+                    expanded={expanded}
+                    setExpanded={setExpanded}
+                    instancesByClassThisFile={instancesByClassThisFile}
+                    numberByInstanceId={numberByInstanceId}
+                    effectivePage={effectivePage}
+                    instanceLabel={instanceLabel}
+                    handleDeleteFromList={handleDeleteFromList}
+                    loadingInstances={loadingInstances}
+                    undo={undo}
+                    redo={redo}
+                    pastLen={past.length}
+                    futureLen={future.length}
+                    floorPlans={floorPlans}
+                  />
+                </TabsContent>
+              </Tabs>
             </div>
+
           ) : detections.length > 0 ? (
             <div className="w-64 flex-shrink-0 border rounded-lg p-3 flex flex-col">
               <h4 className="text-sm font-medium mb-2">
