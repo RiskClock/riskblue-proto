@@ -583,51 +583,23 @@ export const FileViewerModal = ({
       }));
   }, [instances, effectivePage, sheetId, parentFileId, numberByInstanceId, prefixByClass]);
 
-  // Floor-plan bbox overlays (rect outline). Survey agent returns
-  // `xy_width_height_pt` = [x, y, width, height] in PDF points using a
-  // top-left origin. Scale those points against the actual rendered page
-  // element size so responsive sizing/fit state cannot drift the overlay.
+  // Floor-plan bbox overlays. Survey agent now returns `xy_width_height_pt`
+  // as normalized units on a 0-1000 grid (top-left origin) of the visual
+  // page. Scale those directly to the rendered page element size.
   const floorPlanOverlays: OverlayInput[] = useMemo(() => {
     if (!floorPlans || floorPlans.length === 0) return [];
     if (!renderedPageSize || renderedPageSize.width <= 0 || renderedPageSize.height <= 0) return [];
-    const maxPlanBounds = floorPlans.reduce(
-      (acc, fp) => {
-        const bb = fp.xy_width_height_pt;
-        if (!bb) return acc;
-        const [x, y, w, h] = bb;
-        return {
-          right: Math.max(acc.right, x + w),
-          bottom: Math.max(acc.bottom, y + h),
-        };
-      },
-      { right: 0, bottom: 0 },
-    );
     const out: OverlayInput[] = [];
     for (const fp of floorPlans) {
       const bb = fp.xy_width_height_pt;
       if (!Array.isArray(bb) || bb.length < 4) continue;
-      const coordSize = resolvePlanCoordinateSize(fp, renderedPageSize, maxPlanBounds);
-      if (!coordSize) continue;
       const [x, y, w, h] = bb;
-      const scaleX = renderedPageSize.width / coordSize.width;
-      const scaleY = renderedPageSize.height / coordSize.height;
-      const left = x * scaleX;
-      const top = y * scaleY;
-      const width = w * scaleX;
-      const height = h * scaleY;
-      // eslint-disable-next-line no-console
-      console.log("[bbox-debug]", {
-        plan_id: fp.plan_id,
-        type: fp.type,
-        page: fp.page_number,
-        currentPage,
-        xy_width_height_pt: { x, y, w, h },
-        page_dimensions_pt: fp.page_dimensions_pt,
-        coordinateSizeUsed: coordSize,
-        renderedPageSize,
-        scale: { scaleX, scaleY },
-        pixels: { left, top, width, height, right: left + width, bottom: top + height },
-      });
+      const sx = renderedPageSize.width / 1000;
+      const sy = renderedPageSize.height / 1000;
+      const left = x * sx;
+      const top = y * sy;
+      const width = w * sx;
+      const height = h * sy;
       const override = floorPlanOverrides?.[fp.plan_id];
       const effectiveFloors = override?.floors ?? fp.floors;
       const labelBase = fp.reference_id
