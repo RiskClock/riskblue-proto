@@ -655,6 +655,9 @@ export const FileViewerModal = ({
                       onSaveOverride={onSaveFloorPlanOverride}
                       onEditFloors={onEditFloors}
                       onEditLevelUnits={onEditLevelUnits}
+                      riskElementClasses={riskElementClasses ?? []}
+                      annotationAssignments={annotationAssignments ?? {}}
+                      onAssignAnnotation={onAssignAnnotation}
                     />
                   </div>
                 </TabsContent>
