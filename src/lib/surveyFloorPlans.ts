@@ -11,10 +11,9 @@ export interface ParsedFloorPlan {
   plan_id: string;
   type: FloorPlanType;
   reference_id: string | null;
-  /** [x, y, width, height] in PDF points (origin TOP-LEFT, web/canvas convention). */
-  xy_width_height_pt: [number, number, number, number] | null;
+  /** [left, top, width, height] as percentages (0..100) of the visible page. */
+  xy_width_height_pct: [number, number, number, number] | null;
   page_number: number;
-  page_dimensions_pt?: { width: number; height: number } | null;
   floors: string[];
   referenced_unit_ids: string[];
 }
