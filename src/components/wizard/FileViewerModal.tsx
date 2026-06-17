@@ -1054,9 +1054,11 @@ const FloorPlansPanel = ({
       {floorPlans.map((fp) => {
         const ovr = overrides[fp.plan_id] ?? {};
         const effFloors = ovr.floors ?? fp.floors;
+        const effUnits: string[] = ovr.units ?? fp.referenced_unit_ids;
         const color = awpClassColor(fp.type || "unknown");
         const label = floorPlanDisplayLabel({ ...fp, floors: effFloors });
         const isUnit = fp.type === "unit_floor_plan";
+        const isLevel = fp.type === "level_floor_plan";
         const referencedIn = isUnit ? findReferencingLevels(fp) : [];
         const planAnns = annotationsByPlan.get(fp.plan_id) ?? [];
 
@@ -1077,6 +1079,52 @@ const FloorPlansPanel = ({
                 {fp.type.replace(/_/g, " ")}
               </span>
             </div>
+
+            {isLevel && (
+              <div className="space-y-1">
+                <div className="flex items-center justify-between gap-2">
+                  <div className="text-[10px] uppercase tracking-wide text-muted-foreground">
+                    Units ({effUnits.length})
+                  </div>
+                  {onEditLevelUnits && (
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="ghost"
+                      className="h-6 px-1.5 text-[10px] gap-1"
+                      onClick={() => onEditLevelUnits(fp, effUnits)}
+                    >
+                      <Plus className="h-3 w-3" />
+                      Add / edit
+                    </Button>
+                  )}
+                </div>
+                {effUnits.length === 0 ? (
+                  <div className="text-[10px] italic text-muted-foreground px-1 py-0.5">
+                    No units assigned.
+                  </div>
+                ) : (
+                  <div className="flex flex-wrap gap-1">
+                    {effUnits.map((u) => {
+                      const uc = awpClassColor("unit_floor_plan");
+                      return (
+                        <span
+                          key={u}
+                          className="px-1.5 py-0.5 rounded text-[10px] font-medium border"
+                          style={{
+                            backgroundColor: uc,
+                            color: readableTextOn(uc),
+                            borderColor: uc,
+                          }}
+                        >
+                          {u}
+                        </span>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            )}
 
             {isUnit && (
               <div className="flex items-start gap-1 text-[11px] text-muted-foreground">
