@@ -70,6 +70,7 @@ import {
 import { FileViewerModal } from "@/components/wizard/FileViewerModal";
 import {
   parseSurveyFloorPlans,
+  floorPlanDisplayLabel,
   type ParsedFloorPlan,
 } from "@/lib/surveyFloorPlans";
 import { DrawingViewer } from "@/components/viewer";
@@ -80,7 +81,6 @@ import {
 import { useAWPOptions, groupAWPOptionsByCategory } from "@/hooks/useAWPOptions";
 import { getUserFriendlyError } from "@/lib/errorHandling";
 import { awpClassColor, readableTextOn } from "@/lib/awpColor";
-import { floorPlanDisplayLabel, type ParsedFloorPlan } from "@/lib/surveyFloorPlans";
 
 const PREF_ID = "global";
 
