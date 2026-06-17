@@ -635,8 +635,12 @@ export const FileViewerModal = ({
                     <TabsTrigger value="floor-plans">Floor Plans</TabsTrigger>
                     <TabsTrigger value="detections">Detections</TabsTrigger>
                   </TabsList>
-                  <TabsContent value="floor-plans" className="flex-1 min-h-0 m-0 mt-0 data-[state=active]:flex data-[state=active]:flex-col">
-                    <div className="flex-1 min-h-0 overflow-y-auto">
+                  <TabsContent
+                    value="floor-plans"
+                    forceMount
+                    className="flex-1 min-h-0 m-0 mt-0 overflow-hidden data-[state=inactive]:hidden"
+                  >
+                    <div className="h-full overflow-y-auto">
                       <FloorPlansPanel
                         floorPlans={floorPlans}
                         allUnitPlans={allUnitPlans ?? []}
