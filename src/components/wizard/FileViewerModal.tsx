@@ -633,15 +633,17 @@ export const FileViewerModal = ({
                     <TabsTrigger value="floor-plans">Floor Plans</TabsTrigger>
                     <TabsTrigger value="detections">Detections</TabsTrigger>
                   </TabsList>
-                  <TabsContent value="floor-plans" className="flex-1 overflow-y-auto m-0 mt-0">
-                    <FloorPlansPanel
-                      floorPlans={floorPlans}
-                      allUnitPlans={allUnitPlans ?? []}
-                      allLevelPlans={allLevelPlans ?? []}
-                      overrides={floorPlanOverrides ?? {}}
-                      onSaveOverride={onSaveFloorPlanOverride}
-                      onEditFloors={onEditFloors}
-                    />
+                  <TabsContent value="floor-plans" className="flex-1 min-h-0 m-0 mt-0 data-[state=active]:flex data-[state=active]:flex-col">
+                    <div className="flex-1 min-h-0 overflow-y-auto">
+                      <FloorPlansPanel
+                        floorPlans={floorPlans}
+                        allUnitPlans={allUnitPlans ?? []}
+                        allLevelPlans={allLevelPlans ?? []}
+                        overrides={floorPlanOverrides ?? {}}
+                        onSaveOverride={onSaveFloorPlanOverride}
+                        onEditFloors={onEditFloors}
+                      />
+                    </div>
                   </TabsContent>
                   <TabsContent value="detections" className="flex-1 overflow-hidden m-0 mt-0 flex flex-col min-h-0">
                     <DetectionsPanel
@@ -660,6 +662,7 @@ export const FileViewerModal = ({
                       redo={redo}
                       pastLen={past.length}
                       futureLen={future.length}
+                      floorPlans={floorPlans}
                     />
                   </TabsContent>
                 </Tabs>
@@ -748,7 +751,33 @@ interface DetectionsPanelProps {
   pastLen: number;
   futureLen: number;
   withHeader?: boolean;
+  floorPlans?: ParsedFloorPlan[];
 }
+
+// Find the floor plan whose bbox contains the normalized (0..1) point.
+// Prefers smaller (more specific) bboxes when multiple contain the point.
+const findContainingPlan = (
+  plans: ParsedFloorPlan[],
+  nx: number,
+  ny: number,
+): ParsedFloorPlan | null => {
+  const x = nx * 100;
+  const y = ny * 100;
+  let best: ParsedFloorPlan | null = null;
+  let bestArea = Infinity;
+  for (const fp of plans) {
+    const bb = fp.xy_width_height_pct;
+    if (!bb) continue;
+    const [bx, by, bw, bh] = bb;
+    if (x < bx || x > bx + bw || y < by || y > by + bh) continue;
+    const area = bw * bh;
+    if (area < bestArea) {
+      best = fp;
+      bestArea = area;
+    }
+  }
+  return best;
+};
 
 const DetectionsPanel = ({
   awpClasses,
@@ -767,7 +796,9 @@ const DetectionsPanel = ({
   pastLen,
   futureLen,
   withHeader,
+  floorPlans,
 }: DetectionsPanelProps) => {
+  const showPlanBadges = (floorPlans?.length ?? 0) > 1;
   return (
     <div className="flex-1 flex flex-col min-h-0">
       <div className={`px-3 py-2 ${withHeader ? "border-b" : ""} flex items-start justify-between gap-2`}>
@@ -845,22 +876,43 @@ const DetectionsPanel = ({
                     {subList
                       .slice()
                       .sort((a, b) => (numberByInstanceId.get(a.id) ?? 0) - (numberByInstanceId.get(b.id) ?? 0))
-                      .map((i) => (
-                        <div key={i.id} className="flex items-center gap-2 text-[11px]">
-                          <span className="h-2 w-2 rounded-full shrink-0" style={{ backgroundColor: color }} />
-                          <span className="flex-1 min-w-0 font-mono truncate">
-                            {instanceLabel(i)}
-                            {i.page_index !== effectivePage ? ` (p.${i.page_index})` : ""}
-                          </span>
-                          <button
-                            onClick={() => handleDeleteFromList(i.id)}
-                            className="shrink-0 text-muted-foreground hover:text-destructive px-1"
-                            aria-label="Remove marker"
-                          >
-                            ×
-                          </button>
-                        </div>
-                      ))}
+                      .map((i) => {
+                        const containingPlan =
+                          showPlanBadges && floorPlans
+                            ? findContainingPlan(floorPlans, i.nx, i.ny)
+                            : null;
+                        const planLabel = containingPlan
+                          ? floorPlanDisplayLabel(containingPlan)
+                          : null;
+                        return (
+                          <div key={i.id} className="flex items-center gap-2 text-[11px]">
+                            <span className="h-2 w-2 rounded-full shrink-0" style={{ backgroundColor: color }} />
+                            <span className="flex-1 min-w-0 font-mono truncate">
+                              {instanceLabel(i)}
+                              {i.page_index !== effectivePage ? ` (p.${i.page_index})` : ""}
+                            </span>
+                            {planLabel && (
+                              <span
+                                className="shrink-0 px-1.5 py-0.5 rounded text-[9px] font-medium max-w-[80px] truncate"
+                                style={{
+                                  backgroundColor: awpClassColor(containingPlan!.type || "unknown"),
+                                  color: readableTextOn(awpClassColor(containingPlan!.type || "unknown")),
+                                }}
+                                title={`In ${planLabel}`}
+                              >
+                                {planLabel}
+                              </span>
+                            )}
+                            <button
+                              onClick={() => handleDeleteFromList(i.id)}
+                              className="shrink-0 text-muted-foreground hover:text-destructive px-1"
+                              aria-label="Remove marker"
+                            >
+                              ×
+                            </button>
+                          </div>
+                        );
+                      })}
                   </div>
                 )}
               </div>
@@ -896,19 +948,21 @@ const FloorPlansPanel = ({
   const unitColor = awpClassColor("unit_floor_plan");
   const unitTextColor = readableTextOn(unitColor);
 
-  // For a unit floor plan, list the level plans (by reference_id or plan_id)
-  // that reference it. Honors per-level overrides where available.
+  // For a unit floor plan, list the pages of level plans that reference it.
+  // Honors per-level overrides where available.
   const findReferencingLevels = (unit: ParsedFloorPlan): string[] => {
     const key = unitPlanRefKey(unit);
-    const labels: string[] = [];
+    const pages = new Set<number>();
     for (const lvl of allLevelPlans) {
       const ovr = overrides[lvl.plan_id];
       const effUnits = ovr?.units ?? lvl.referenced_unit_ids;
       if (effUnits.includes(key)) {
-        labels.push(lvl.reference_id || lvl.plan_id);
+        pages.add(lvl.page_number);
       }
     }
-    return Array.from(new Set(labels));
+    return Array.from(pages)
+      .sort((a, b) => a - b)
+      .map((p) => `Page ${p}`);
   };
 
   return (
