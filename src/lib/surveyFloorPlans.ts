@@ -11,8 +11,8 @@ export interface ParsedFloorPlan {
   plan_id: string;
   type: FloorPlanType;
   reference_id: string | null;
-  /** [x1, y1, x2, y2] in PDF points (origin bottom-left). */
-  bounding_box_pt: [number, number, number, number] | null;
+  /** [x, y, width, height] in PDF points (origin TOP-LEFT, web/canvas convention). */
+  xy_width_height_pt: [number, number, number, number] | null;
   page_number: number;
   page_dimensions_pt?: { width: number; height: number } | null;
   floors: string[];
@@ -109,7 +109,7 @@ export function parseSurveyFloorPlans(
         plan_id,
         type: (fp.type as FloorPlanType) ?? "unknown",
         reference_id,
-        bounding_box_pt: asBbox(fp.bounding_box_pt),
+        xy_width_height_pt: asBbox(fp.xy_width_height_pt),
         page_number: pageNum,
         page_dimensions_pt: dims,
         floors,
