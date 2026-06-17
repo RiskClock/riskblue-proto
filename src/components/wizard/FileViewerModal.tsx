@@ -552,13 +552,16 @@ export const FileViewerModal = ({
           id: `fp-${fp.plan_id}`,
           bbox: fp.bounding_box_pt as [number, number, number, number],
           coordSpace: "pdf-points" as const,
-          page: 1,
+          // In singlePageOnly mode the full PDF is loaded and we navigate to
+          // `currentPage`; bind the overlay to that page (not 1). In sheet
+          // mode the PDF has a single page so currentPage === 1 anyway.
+          page: currentPage,
           shape: "rect" as const,
           color: awpClassColor(fp.type || "unknown"),
           label: labelBase,
         };
       });
-  }, [floorPlans, floorPlanOverrides]);
+  }, [floorPlans, floorPlanOverrides, currentPage]);
 
   const overlays = [...detectionOverlays, ...instanceOverlays, ...floorPlanOverlays];
 
