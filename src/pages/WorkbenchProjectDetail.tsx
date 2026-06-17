@@ -313,22 +313,24 @@ export default function WorkbenchProjectDetail() {
   const requestId = analysisRequest?.id;
 
   // Load Page Info: list files, fill missing page counts via pdf.js, cache to DB.
+  // source_type lives on analysis_requests, not on analysis_request_files.
+  const requestSourceType = (analysisRequest as any)?.source_type as string | undefined;
   useEffect(() => {
-    if (!requestId) { setPageInfoRows([]); return; }
+    if (!requestId || !requestSourceType) { setPageInfoRows([]); return; }
     let cancelled = false;
     (async () => {
       setPageInfoLoading(true);
       try {
         const { data, error } = await supabase
           .from("analysis_request_files")
-          .select("id, name, source_type, storage_path, mime_type, expected_page_count")
+          .select("id, name, storage_path, mime_type, expected_page_count")
           .eq("analysis_request_id", requestId)
           .order("name");
         if (error) throw error;
         const initial: PageInfoRow[] = ((data ?? []) as any[]).map((r) => ({
           id: r.id,
           name: r.name,
-          source_type: r.source_type,
+          source_type: requestSourceType,
           storage_path: r.storage_path,
           mime_type: r.mime_type,
           page_count: r.expected_page_count ?? null,
@@ -372,7 +374,8 @@ export default function WorkbenchProjectDetail() {
       }
     })();
     return () => { cancelled = true; };
-  }, [requestId]);
+  }, [requestId, requestSourceType]);
+
 
 
   // Files + sheets for the latest request
@@ -2843,14 +2846,16 @@ export default function WorkbenchProjectDetail() {
                   {pageInfoLoading ? "Loading…" : "No files in this request."}
                 </div>
               ) : (
-                <div className="bg-card rounded-lg border">
+                <div className="bg-card rounded-lg border relative [&>div]:overflow-visible">
                   <Table>
-                    <TableHeader>
+                    <TableHeader className="bg-card">
                       <TableRow>
-                        <TableHead className="h-9 py-1">
+                        <TableHead className={`${stickyHeadFirst} h-9 py-1`}>
                           Files ({pageInfoRows.length} file{pageInfoRows.length === 1 ? "" : "s"})
                         </TableHead>
-                        <TableHead className="h-9 py-1 text-right w-32">Pages</TableHead>
+                        <TableHead className="text-right whitespace-nowrap h-9 py-1 pr-4">
+                          Pages
+                        </TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
@@ -2860,6 +2865,7 @@ export default function WorkbenchProjectDetail() {
                         const isExpanded = pageInfoExpanded.has(row.id);
                         return (
                           <Fragment key={row.id}>
+                            {/* File-level row — matches first table */}
                             <TableRow
                               className="group h-8 cursor-pointer"
                               onClick={() => {
@@ -2867,7 +2873,9 @@ export default function WorkbenchProjectDetail() {
                                 else if (count > 0) togglePageInfoExpand(row.id);
                               }}
                             >
-                              <TableCell className="py-1 text-sm">
+                              <TableCell
+                                className={`${stickyCellFirstBase} bg-card group-hover:bg-muted/50 py-1 text-sm`}
+                              >
                                 <div className="flex items-center gap-2 min-w-0">
                                   {!singlePage && count > 0 ? (
                                     <button
@@ -2888,13 +2896,22 @@ export default function WorkbenchProjectDetail() {
                                   ) : (
                                     <span className="inline-block w-3.5 shrink-0" />
                                   )}
-                                  <span className="font-medium truncate min-w-0">{row.name}</span>
+                                  <span className="font-medium truncate min-w-0">
+                                    {row.name}
+                                  </span>
+                                  {!singlePage && count > 0 && (
+                                    <span className="text-xs text-muted-foreground shrink-0">
+                                      {count} pages
+                                    </span>
+                                  )}
                                 </div>
                               </TableCell>
-                              <TableCell className="py-1 text-right text-sm tabular-nums text-muted-foreground">
+                              <TableCell className="text-right py-1 text-sm tabular-nums text-muted-foreground pr-4">
                                 {row.page_count == null ? "—" : `${count} page${count === 1 ? "" : "s"}`}
                               </TableCell>
                             </TableRow>
+
+                            {/* Per-page sub-rows (only when multi-page AND expanded) — matches first table */}
                             {!singlePage && isExpanded && count > 0 &&
                               Array.from({ length: count }, (_, i) => i + 1).map((p) => (
                                 <TableRow
@@ -2902,9 +2919,13 @@ export default function WorkbenchProjectDetail() {
                                   className="group h-8 cursor-pointer bg-muted/10"
                                   onClick={() => setActivePageView({ file: row, page: p })}
                                 >
-                                  <TableCell className="py-1 text-sm">
+                                  <TableCell
+                                    className={`${stickyCellFirstBase} bg-muted/10 group-hover:bg-muted/30 py-1 text-sm`}
+                                  >
                                     <div className="flex items-center gap-2 min-w-0 pl-7">
-                                      <span className="text-muted-foreground">Page {p}</span>
+                                      <span className="text-muted-foreground shrink-0">
+                                        Page {p}
+                                      </span>
                                     </div>
                                   </TableCell>
                                   <TableCell className="py-1" />
@@ -2919,6 +2940,7 @@ export default function WorkbenchProjectDetail() {
                 </div>
               )}
             </div>
+
 
           </div>
         </main>
