@@ -149,6 +149,7 @@ export const FileViewerModal = ({
   singlePageOnly = false,
   floorPlans,
   allUnitPlans,
+  allLevelPlans,
   floorPlanOverrides,
   onSaveFloorPlanOverride,
   onEditFloors,
