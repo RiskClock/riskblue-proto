@@ -2874,6 +2874,19 @@ export default function WorkbenchProjectDetail() {
                     "Survey Pages"
                   )}
                 </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  disabled={!requestId || surveyRunning}
+                  onClick={() => {
+                    toast({
+                      title: "Identify Risk Elements",
+                      description: "Coming soon — Gemini explicit context caching pipeline.",
+                    });
+                  }}
+                >
+                  Identify Risk Elements
+                </Button>
               </div>
 
               {/* Per-file progress status */}
