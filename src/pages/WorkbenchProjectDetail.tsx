@@ -313,22 +313,24 @@ export default function WorkbenchProjectDetail() {
   const requestId = analysisRequest?.id;
 
   // Load Page Info: list files, fill missing page counts via pdf.js, cache to DB.
+  // source_type lives on analysis_requests, not on analysis_request_files.
+  const requestSourceType = (analysisRequest as any)?.source_type as string | undefined;
   useEffect(() => {
-    if (!requestId) { setPageInfoRows([]); return; }
+    if (!requestId || !requestSourceType) { setPageInfoRows([]); return; }
     let cancelled = false;
     (async () => {
       setPageInfoLoading(true);
       try {
         const { data, error } = await supabase
           .from("analysis_request_files")
-          .select("id, name, source_type, storage_path, mime_type, expected_page_count")
+          .select("id, name, storage_path, mime_type, expected_page_count")
           .eq("analysis_request_id", requestId)
           .order("name");
         if (error) throw error;
         const initial: PageInfoRow[] = ((data ?? []) as any[]).map((r) => ({
           id: r.id,
           name: r.name,
-          source_type: r.source_type,
+          source_type: requestSourceType,
           storage_path: r.storage_path,
           mime_type: r.mime_type,
           page_count: r.expected_page_count ?? null,
@@ -372,7 +374,8 @@ export default function WorkbenchProjectDetail() {
       }
     })();
     return () => { cancelled = true; };
-  }, [requestId]);
+  }, [requestId, requestSourceType]);
+
 
 
   // Files + sheets for the latest request
