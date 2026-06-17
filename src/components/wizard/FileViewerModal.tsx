@@ -994,42 +994,16 @@ const FloorPlansPanel = ({
               </div>
             )}
 
-            {isLevel && (
-              <div className="flex items-center gap-2">
-                <span className="text-[11px] font-medium text-muted-foreground">Units</span>
-                <button
-                  type="button"
-                  onClick={() => onEditLevelUnits?.(fp, effUnits)}
-                  disabled={!onEditLevelUnits || !onSaveOverride}
-                  className="inline-flex items-center gap-1 disabled:opacity-50 disabled:cursor-default"
-                  title="Edit units"
-                >
-                  <Badge
-                    variant="outline"
-                    className="h-5 px-1.5 text-[10px] gap-1"
-                    style={{
-                      backgroundColor: unitColor,
-                      color: unitTextColor,
-                      borderColor: unitColor,
-                    }}
-                  >
-                    {effUnits.length} unit{effUnits.length === 1 ? "" : "s"}
-                  </Badge>
-                  {onEditLevelUnits && onSaveOverride && (
-                    <Pencil className="h-3 w-3 text-muted-foreground" />
-                  )}
-                </button>
-              </div>
-            )}
           </div>
         );
       })}
       {floorPlans.length === 0 && (
         <div className="text-xs text-muted-foreground italic p-2">
-          No floor plans detected on this page.
+          No floor plan info available.
         </div>
       )}
     </div>
   );
 };
+
 
