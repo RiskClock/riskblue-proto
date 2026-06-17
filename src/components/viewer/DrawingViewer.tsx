@@ -318,7 +318,7 @@ export const DrawingViewer = forwardRef<DrawingViewerApi, DrawingViewerProps>(
                   : undefined
               }
               pageNav={
-                layout === "single-page" && totalPages > 1
+                !hidePageNav && layout === "single-page" && totalPages > 1
                   ? {
                       current: page,
                       total: totalPages,
