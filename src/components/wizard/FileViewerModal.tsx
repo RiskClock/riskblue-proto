@@ -606,6 +606,7 @@ export const FileViewerModal = ({
               layout="single-page"
               page={currentPage}
               onPageChange={singlePageOnly ? () => {} : setCurrentPage}
+              hidePageNav
               overlays={overlays}
               hoveredOverlayId={
                 hoveredCode
@@ -622,6 +623,7 @@ export const FileViewerModal = ({
               onActivePageRenderedSizeChange={setRenderedPageSize}
             />
           </div>
+
 
           {sidebarEnabled && awpClasses ? (
             <div className="w-80 flex-shrink-0 border rounded-lg flex flex-col min-h-0">
