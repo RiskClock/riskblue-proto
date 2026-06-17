@@ -750,7 +750,33 @@ interface DetectionsPanelProps {
   pastLen: number;
   futureLen: number;
   withHeader?: boolean;
+  floorPlans?: ParsedFloorPlan[];
 }
+
+// Find the floor plan whose bbox contains the normalized (0..1) point.
+// Prefers smaller (more specific) bboxes when multiple contain the point.
+const findContainingPlan = (
+  plans: ParsedFloorPlan[],
+  nx: number,
+  ny: number,
+): ParsedFloorPlan | null => {
+  const x = nx * 100;
+  const y = ny * 100;
+  let best: ParsedFloorPlan | null = null;
+  let bestArea = Infinity;
+  for (const fp of plans) {
+    const bb = fp.xy_width_height_pct;
+    if (!bb) continue;
+    const [bx, by, bw, bh] = bb;
+    if (x < bx || x > bx + bw || y < by || y > by + bh) continue;
+    const area = bw * bh;
+    if (area < bestArea) {
+      best = fp;
+      bestArea = area;
+    }
+  }
+  return best;
+};
 
 const DetectionsPanel = ({
   awpClasses,
@@ -769,7 +795,9 @@ const DetectionsPanel = ({
   pastLen,
   futureLen,
   withHeader,
+  floorPlans,
 }: DetectionsPanelProps) => {
+  const showPlanBadges = (floorPlans?.length ?? 0) > 1;
   return (
     <div className="flex-1 flex flex-col min-h-0">
       <div className={`px-3 py-2 ${withHeader ? "border-b" : ""} flex items-start justify-between gap-2`}>
