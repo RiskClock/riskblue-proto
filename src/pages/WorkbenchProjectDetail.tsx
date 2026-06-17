@@ -2717,7 +2717,7 @@ export default function WorkbenchProjectDetail() {
                     setSurveyRecoveredRun(false);
                     setSurveyResults([]);
                     setSurveyRawText("");
-                    setSurveyExpandedSheets(new Set());
+                    
 
                     const aggregated: typeof surveyResults = [];
                     const rawChunks: string[] = [];
