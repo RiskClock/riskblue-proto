@@ -125,6 +125,46 @@ type HistoryAction =
   | { type: "add"; instance: DrawingInstanceRow }
   | { type: "delete"; instance: DrawingInstanceRow };
 
+const PLAN_DIMENSION_ASPECT_TOLERANCE = 0.02;
+const PLAN_DIMENSION_FIT_TOLERANCE_PT = 6;
+
+function resolvePlanCoordinateSize(
+  plan: ParsedFloorPlan,
+  renderedPageSize: { width: number; height: number },
+  maxPlanBounds: { right: number; bottom: number },
+): { width: number; height: number } | null {
+  const declaredW = plan.page_dimensions_pt?.width ?? 0;
+  const declaredH = plan.page_dimensions_pt?.height ?? 0;
+  if (!(declaredW > 0) || !(declaredH > 0)) return null;
+  if (!(renderedPageSize.width > 0) || !(renderedPageSize.height > 0)) {
+    return { width: declaredW, height: declaredH };
+  }
+
+  const renderedAspect = renderedPageSize.width / renderedPageSize.height;
+  const declaredAspect = declaredW / declaredH;
+  const aspectDelta = Math.abs(declaredAspect - renderedAspect) / renderedAspect;
+  if (aspectDelta <= PLAN_DIMENSION_ASPECT_TOLERANCE) {
+    return { width: declaredW, height: declaredH };
+  }
+
+  // The parser sometimes reports a page height that does not match the actual
+  // rendered PDF aspect. Keep the coordinate width returned with the bbox and
+  // infer the coordinate height from the rendered page so x/y share one scale.
+  const widthBased = { width: declaredW, height: declaredW / renderedAspect };
+  const heightBased = { width: declaredH * renderedAspect, height: declaredH };
+  const fitsWidthBased =
+    maxPlanBounds.right <= widthBased.width + PLAN_DIMENSION_FIT_TOLERANCE_PT &&
+    maxPlanBounds.bottom <= widthBased.height + PLAN_DIMENSION_FIT_TOLERANCE_PT;
+  if (fitsWidthBased) return widthBased;
+
+  const fitsHeightBased =
+    maxPlanBounds.right <= heightBased.width + PLAN_DIMENSION_FIT_TOLERANCE_PT &&
+    maxPlanBounds.bottom <= heightBased.height + PLAN_DIMENSION_FIT_TOLERANCE_PT;
+  if (fitsHeightBased) return heightBased;
+
+  return { width: declaredW, height: declaredH };
+}
+
 export const FileViewerModal = ({
   isOpen,
   onClose,
