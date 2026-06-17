@@ -222,6 +222,38 @@ export default function WorkbenchProjectDetail() {
   const reportInputRef = useRef<HTMLInputElement>(null);
   const [downloadingAll, setDownloadingAll] = useState(false);
 
+  // Page Info table (lightweight: just enumerate pages per file, no splitting)
+  type PageInfoRow = {
+    id: string;
+    name: string;
+    source_type: string;
+    storage_path: string | null;
+    mime_type: string | null;
+    page_count: number | null;
+  };
+  const [pageInfoRows, setPageInfoRows] = useState<PageInfoRow[]>([]);
+  const [pageInfoLoading, setPageInfoLoading] = useState(false);
+  const [pageInfoExpanded, setPageInfoExpanded] = useState<Set<string>>(new Set());
+  const [activePageView, setActivePageView] = useState<{ file: PageInfoRow; page: number } | null>(null);
+
+  const togglePageInfoExpand = (fileId: string) => {
+    setPageInfoExpanded((prev) => {
+      const next = new Set(prev);
+      if (next.has(fileId)) next.delete(fileId); else next.add(fileId);
+      return next;
+    });
+  };
+
+  const activePageViewSource = useMemo<DocumentSourceDescriptor | null>(() => {
+    if (!activePageView || !activePageView.file.storage_path) return null;
+    return {
+      kind: "supabase-storage",
+      bucket: bucketForSource(activePageView.file.source_type),
+      path: activePageView.file.storage_path,
+      mimeType: activePageView.file.mime_type || "application/pdf",
+    };
+  }, [activePageView]);
+
   const toggleExpand = (fileId: string) => {
     setExpandedFiles((prev) => {
       const next = new Set(prev);
@@ -237,6 +269,8 @@ export default function WorkbenchProjectDetail() {
   useEffect(() => {
     if (user && !isInternal) navigate("/projects", { replace: true });
   }, [user, isInternal, navigate]);
+
+
 
   // Hydrate survey results from persisted analysis_request_sheets.survey_result
   // so a page refresh doesn't drop the rendered output.
@@ -277,6 +311,69 @@ export default function WorkbenchProjectDetail() {
   });
 
   const requestId = analysisRequest?.id;
+
+  // Load Page Info: list files, fill missing page counts via pdf.js, cache to DB.
+  useEffect(() => {
+    if (!requestId) { setPageInfoRows([]); return; }
+    let cancelled = false;
+    (async () => {
+      setPageInfoLoading(true);
+      try {
+        const { data, error } = await supabase
+          .from("analysis_request_files")
+          .select("id, name, source_type, storage_path, mime_type, expected_page_count")
+          .eq("analysis_request_id", requestId)
+          .order("name");
+        if (error) throw error;
+        const initial: PageInfoRow[] = ((data ?? []) as any[]).map((r) => ({
+          id: r.id,
+          name: r.name,
+          source_type: r.source_type,
+          storage_path: r.storage_path,
+          mime_type: r.mime_type,
+          page_count: r.expected_page_count ?? null,
+        }));
+        if (cancelled) return;
+        setPageInfoRows(initial);
+
+        const missing = initial.filter(
+          (r) => r.page_count == null && r.storage_path && (r.mime_type ?? "application/pdf").includes("pdf"),
+        );
+        if (missing.length === 0) return;
+        const pdfjsLib = await import("pdfjs-dist");
+        for (const row of missing) {
+          if (cancelled) return;
+          try {
+            const { data: signed, error: signErr } = await supabase.storage
+              .from(bucketForSource(row.source_type))
+              .createSignedUrl(row.storage_path!, 600);
+            if (signErr || !signed?.signedUrl) continue;
+            const resp = await fetch(signed.signedUrl);
+            const buf = await resp.arrayBuffer();
+            const doc = await pdfjsLib.getDocument({ data: buf }).promise;
+            const count = doc.numPages;
+            try { doc.destroy(); } catch { /* ignore */ }
+            if (cancelled) return;
+            setPageInfoRows((prev) =>
+              prev.map((r) => (r.id === row.id ? { ...r, page_count: count } : r)),
+            );
+            void supabase
+              .from("analysis_request_files")
+              .update({ expected_page_count: count })
+              .eq("id", row.id);
+          } catch (e) {
+            console.warn("[page-info] count failed for", row.name, e);
+          }
+        }
+      } catch (e) {
+        console.warn("[page-info] load failed", e);
+      } finally {
+        if (!cancelled) setPageInfoLoading(false);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [requestId]);
+
 
   // Files + sheets for the latest request
   const { data: rows, isLoading } = useQuery({
@@ -2730,8 +2827,102 @@ export default function WorkbenchProjectDetail() {
               )}
             </div>
 
+            {/* Pages by File — lightweight enumeration (no splitting). */}
+            <div className="mt-6 border-t pt-6 space-y-3">
+              <div className="flex items-center justify-between">
+                <h3 className="text-sm font-medium">Pages by File</h3>
+                {pageInfoLoading && (
+                  <span className="text-xs text-muted-foreground inline-flex items-center gap-1.5">
+                    <Loader2 className="h-3 w-3 animate-spin" /> Counting pages…
+                  </span>
+                )}
+              </div>
+
+              {pageInfoRows.length === 0 ? (
+                <div className="text-sm text-muted-foreground text-center py-6">
+                  {pageInfoLoading ? "Loading…" : "No files in this request."}
+                </div>
+              ) : (
+                <div className="bg-card rounded-lg border">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead className="h-9 py-1">
+                          Files ({pageInfoRows.length} file{pageInfoRows.length === 1 ? "" : "s"})
+                        </TableHead>
+                        <TableHead className="h-9 py-1 text-right w-32">Pages</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {pageInfoRows.map((row) => {
+                        const count = row.page_count ?? 0;
+                        const singlePage = count === 1;
+                        const isExpanded = pageInfoExpanded.has(row.id);
+                        return (
+                          <Fragment key={row.id}>
+                            <TableRow
+                              className="group h-8 cursor-pointer"
+                              onClick={() => {
+                                if (singlePage) setActivePageView({ file: row, page: 1 });
+                                else if (count > 0) togglePageInfoExpand(row.id);
+                              }}
+                            >
+                              <TableCell className="py-1 text-sm">
+                                <div className="flex items-center gap-2 min-w-0">
+                                  {!singlePage && count > 0 ? (
+                                    <button
+                                      type="button"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        togglePageInfoExpand(row.id);
+                                      }}
+                                      className="shrink-0 text-muted-foreground hover:text-foreground"
+                                      aria-label={isExpanded ? "Collapse pages" : "Expand pages"}
+                                    >
+                                      {isExpanded ? (
+                                        <ChevronDown className="h-3.5 w-3.5" />
+                                      ) : (
+                                        <ChevronRight className="h-3.5 w-3.5" />
+                                      )}
+                                    </button>
+                                  ) : (
+                                    <span className="inline-block w-3.5 shrink-0" />
+                                  )}
+                                  <span className="font-medium truncate min-w-0">{row.name}</span>
+                                </div>
+                              </TableCell>
+                              <TableCell className="py-1 text-right text-sm tabular-nums text-muted-foreground">
+                                {row.page_count == null ? "—" : `${count} page${count === 1 ? "" : "s"}`}
+                              </TableCell>
+                            </TableRow>
+                            {!singlePage && isExpanded && count > 0 &&
+                              Array.from({ length: count }, (_, i) => i + 1).map((p) => (
+                                <TableRow
+                                  key={`${row.id}:${p}`}
+                                  className="group h-8 cursor-pointer bg-muted/10"
+                                  onClick={() => setActivePageView({ file: row, page: p })}
+                                >
+                                  <TableCell className="py-1 text-sm">
+                                    <div className="flex items-center gap-2 min-w-0 pl-7">
+                                      <span className="text-muted-foreground">Page {p}</span>
+                                    </div>
+                                  </TableCell>
+                                  <TableCell className="py-1" />
+                                </TableRow>
+                              ))
+                            }
+                          </Fragment>
+                        );
+                      })}
+                    </TableBody>
+                  </Table>
+                </div>
+              )}
+            </div>
+
           </div>
         </main>
+
 
 
 
@@ -2820,6 +3011,39 @@ export default function WorkbenchProjectDetail() {
             preselectClass={preselectClass}
           />
         )}
+
+        {/* Single-page viewer for Pages by File table */}
+        {activePageView && activePageViewSource && (
+          <FileViewerModal
+            isOpen={!!activePageView}
+            onClose={() => setActivePageView(null)}
+            fileId={activePageView.file.id}
+            fileName={`${activePageView.file.name} | Page ${activePageView.page}`}
+            mimeType={activePageView.file.mime_type || "application/pdf"}
+            accessToken=""
+            detections={[]}
+            sourceOverride={activePageViewSource}
+            analysisRequestId={requestId}
+            parentFileId={activePageView.file.id}
+            sheetId={null}
+            pageIndex={activePageView.page}
+            singlePageOnly
+            awpClasses={enabledCols.map((name) => ({
+              name,
+              prefix: optionByName.get(name)?.idPrefix ?? null,
+              analysisCount:
+                fileCountLookup.get(`${activePageView.file.id}::${name}`) || 0,
+            }))}
+            fileNameById={Object.fromEntries(
+              fileGroups.map((g) => [g.file.id, g.file.name]),
+            )}
+            persistKey={projectId}
+            expandedClasses={sidebarExpandedClasses}
+            onExpandedClassesChange={setSidebarExpandedClasses}
+          />
+        )}
+
+
 
         {/* AWP class prompt modal */}
         <AwpPromptModal
