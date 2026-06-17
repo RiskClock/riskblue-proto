@@ -934,9 +934,14 @@ interface FloorPlansPanelProps {
   ) => Promise<void> | void;
   onEditFloors?: (planId: string, currentFloors: string[]) => void;
   onEditLevelUnits?: (plan: ParsedFloorPlan, currentUnits: string[]) => void;
-  riskElementClasses: string[];
+  /** Real markers placed on this page (one row per instance). */
+  instancesOnPage?: DrawingInstanceRow[];
+  numberByInstanceId?: Map<string, number>;
+  instanceLabel?: (i: DrawingInstanceRow) => string;
+  /** Map of instance_id -> planId (explicit assignment). */
   annotationAssignments: Record<string, string>;
-  onAssignAnnotation?: (className: string, planId: string | null) => Promise<void> | void;
+  /** Reassign one annotation (by instance_id) to a plan, or null to unassign. */
+  onAssignAnnotation?: (annotationKey: string, planId: string | null) => Promise<void> | void;
 }
 
 const FloorPlansPanel = ({
