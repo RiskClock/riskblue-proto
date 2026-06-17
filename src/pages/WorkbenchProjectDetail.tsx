@@ -337,6 +337,19 @@ export default function WorkbenchProjectDetail() {
     return out;
   }, [activeFileFloorPlansByPage]);
 
+  // Map every file to its parsed floor plans by page number, so the Pages by
+  // File table can render per-page badges (floors + reference_id) without
+  // hitting the network.
+  const floorPlansByFile = useMemo(() => {
+    const m = new Map<string, Map<number, ParsedFloorPlan[]>>();
+    for (const f of rows?.files ?? []) {
+      const raw = (f as any).survey_raw_response;
+      if (!raw) continue;
+      m.set(f.id, parseSurveyFloorPlans(raw));
+    }
+    return m;
+  }, [rows?.files]);
+
   const saveFloorPlanOverride = async (
     planId: string,
     next: { floors?: string[]; units?: string[] },
