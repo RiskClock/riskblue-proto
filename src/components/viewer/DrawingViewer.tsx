@@ -422,7 +422,14 @@ export const DrawingViewer = forwardRef<DrawingViewerApi, DrawingViewerProps>(
 
               </TransformComponent>
             </TransformWrapper>
-          ) : null}
+          ) : (
+            <div className="flex items-center justify-center h-full">
+              <div className="text-center space-y-2">
+                <Loader2 className="w-8 h-8 animate-spin text-muted-foreground mx-auto" />
+                <p className="text-sm text-muted-foreground">Loading page {page}…</p>
+              </div>
+            </div>
+          )}
         </div>
       </div>
     );
