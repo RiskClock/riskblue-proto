@@ -242,6 +242,8 @@ export type Database = {
           drive_file_id: string
           expected_page_count: number | null
           extracted_text: string | null
+          gemini_cache_expires_at: string | null
+          gemini_cache_id: string | null
           id: string
           mime_type: string
           name: string
@@ -263,6 +265,8 @@ export type Database = {
           drive_file_id: string
           expected_page_count?: number | null
           extracted_text?: string | null
+          gemini_cache_expires_at?: string | null
+          gemini_cache_id?: string | null
           id?: string
           mime_type: string
           name: string
@@ -284,6 +288,8 @@ export type Database = {
           drive_file_id?: string
           expected_page_count?: number | null
           extracted_text?: string | null
+          gemini_cache_expires_at?: string | null
+          gemini_cache_id?: string | null
           id?: string
           mime_type?: string
           name?: string
