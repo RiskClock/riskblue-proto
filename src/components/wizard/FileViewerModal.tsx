@@ -165,10 +165,6 @@ export const FileViewerModal = ({
     setRenderedPageSize(null);
   }, [pageIndex, fileId]);
 
-  useEffect(() => {
-    setRenderedPageSize(null);
-  }, [currentPage]);
-
   const sidebarEnabled =
     !!awpClasses && !!analysisRequestId && !!parentFileId;
 
