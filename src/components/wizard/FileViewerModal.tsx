@@ -590,16 +590,27 @@ export const FileViewerModal = ({
   const floorPlanOverlays: OverlayInput[] = useMemo(() => {
     if (!floorPlans || floorPlans.length === 0) return [];
     if (!renderedPageSize || renderedPageSize.width <= 0 || renderedPageSize.height <= 0) return [];
+    const maxPlanBounds = floorPlans.reduce(
+      (acc, fp) => {
+        const bb = fp.xy_width_height_pt;
+        if (!bb) return acc;
+        const [x, y, w, h] = bb;
+        return {
+          right: Math.max(acc.right, x + w),
+          bottom: Math.max(acc.bottom, y + h),
+        };
+      },
+      { right: 0, bottom: 0 },
+    );
     const out: OverlayInput[] = [];
     for (const fp of floorPlans) {
       const bb = fp.xy_width_height_pt;
       if (!Array.isArray(bb) || bb.length < 4) continue;
-      const pageW = fp.page_dimensions_pt?.width ?? 0;
-      const pageH = fp.page_dimensions_pt?.height ?? 0;
-      if (!(pageW > 0) || !(pageH > 0)) continue;
+      const coordSize = resolvePlanCoordinateSize(fp, renderedPageSize, maxPlanBounds);
+      if (!coordSize) continue;
       const [x, y, w, h] = bb;
-      const scaleX = renderedPageSize.width / pageW;
-      const scaleY = renderedPageSize.height / pageH;
+      const scaleX = renderedPageSize.width / coordSize.width;
+      const scaleY = renderedPageSize.height / coordSize.height;
       const left = x * scaleX;
       const top = y * scaleY;
       const width = w * scaleX;
@@ -611,7 +622,8 @@ export const FileViewerModal = ({
         page: fp.page_number,
         currentPage,
         xy_width_height_pt: { x, y, w, h },
-        page_dimensions_pt: { width: pageW, height: pageH },
+        page_dimensions_pt: fp.page_dimensions_pt,
+        coordinateSizeUsed: coordSize,
         renderedPageSize,
         scale: { scaleX, scaleY },
         pixels: { left, top, width, height, right: left + width, bottom: top + height },
