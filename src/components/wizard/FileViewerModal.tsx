@@ -12,8 +12,10 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import {
   ChevronDown,
   ChevronRight,
+  GripVertical,
   Loader2,
   Pencil,
+  Plus,
   Redo2,
   Undo2,
 } from "lucide-react";
@@ -944,6 +946,7 @@ const FloorPlansPanel = ({
   riskElementClasses,
   annotationAssignments,
   onAssignAnnotation,
+  onEditLevelUnits,
 }: FloorPlansPanelProps) => {
   // For a unit floor plan, list the pages of level plans that reference it.
   const findReferencingLevels = (unit: ParsedFloorPlan): string[] => {
@@ -1013,14 +1016,17 @@ const FloorPlansPanel = ({
               key={cn}
               draggable={!!onAssignAnnotation}
               onDragStart={(e) => handleDragStart(e, cn)}
-              className="px-1.5 py-0.5 rounded text-[10px] font-medium cursor-grab active:cursor-grabbing border"
+              className="inline-flex items-center gap-1 pl-1 pr-1.5 py-0.5 rounded text-[10px] font-medium cursor-grab active:cursor-grabbing border"
               style={{
                 backgroundColor: c,
                 color: readableTextOn(c),
                 borderColor: c,
               }}
-              title={`Drag to reassign · ${cn}`}
+              title={`Drag to another floor plan to reassign · ${cn}`}
             >
+              {onAssignAnnotation && (
+                <GripVertical className="h-2.5 w-2.5 opacity-70" />
+              )}
               {cn}
             </div>
           );
@@ -1048,9 +1054,11 @@ const FloorPlansPanel = ({
       {floorPlans.map((fp) => {
         const ovr = overrides[fp.plan_id] ?? {};
         const effFloors = ovr.floors ?? fp.floors;
+        const effUnits: string[] = ovr.units ?? fp.referenced_unit_ids;
         const color = awpClassColor(fp.type || "unknown");
         const label = floorPlanDisplayLabel({ ...fp, floors: effFloors });
         const isUnit = fp.type === "unit_floor_plan";
+        const isLevel = fp.type === "level_floor_plan";
         const referencedIn = isUnit ? findReferencingLevels(fp) : [];
         const planAnns = annotationsByPlan.get(fp.plan_id) ?? [];
 
@@ -1071,6 +1079,52 @@ const FloorPlansPanel = ({
                 {fp.type.replace(/_/g, " ")}
               </span>
             </div>
+
+            {isLevel && (
+              <div className="space-y-1">
+                <div className="flex items-center justify-between gap-2">
+                  <div className="text-[10px] uppercase tracking-wide text-muted-foreground">
+                    Units ({effUnits.length})
+                  </div>
+                  {onEditLevelUnits && (
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="ghost"
+                      className="h-6 px-1.5 text-[10px] gap-1"
+                      onClick={() => onEditLevelUnits(fp, effUnits)}
+                    >
+                      <Plus className="h-3 w-3" />
+                      Add / edit
+                    </Button>
+                  )}
+                </div>
+                {effUnits.length === 0 ? (
+                  <div className="text-[10px] italic text-muted-foreground px-1 py-0.5">
+                    No units assigned.
+                  </div>
+                ) : (
+                  <div className="flex flex-wrap gap-1">
+                    {effUnits.map((u) => {
+                      const uc = awpClassColor("unit_floor_plan");
+                      return (
+                        <span
+                          key={u}
+                          className="px-1.5 py-0.5 rounded text-[10px] font-medium border"
+                          style={{
+                            backgroundColor: uc,
+                            color: readableTextOn(uc),
+                            borderColor: uc,
+                          }}
+                        >
+                          {u}
+                        </span>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            )}
 
             {isUnit && (
               <div className="flex items-start gap-1 text-[11px] text-muted-foreground">
