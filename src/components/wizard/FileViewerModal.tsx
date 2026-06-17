@@ -948,10 +948,12 @@ const FloorPlansPanel = ({
   floorPlans,
   allLevelPlans,
   overrides,
-  riskElementClasses,
   annotationAssignments,
   onAssignAnnotation,
   onEditLevelUnits,
+  instancesOnPage = [],
+  numberByInstanceId,
+  instanceLabel,
 }: FloorPlansPanelProps) => {
   // For a unit floor plan, list the pages of level plans that reference it.
   const findReferencingLevels = (unit: ParsedFloorPlan): string[] => {
@@ -969,43 +971,63 @@ const FloorPlansPanel = ({
       .map((p) => `Page ${p}`);
   };
 
-  // Annotations available on this page: classes that have a risk element
-  // result for the file. Each class is assigned to at most one plan on this
-  // page (annotationAssignments[className] === planId); unassigned otherwise.
+  // Group per-instance annotations by plan. An explicit override (instance_id
+  // present in a plan's `annotations` array) wins; otherwise fall back to
+  // bbox containment of the marker's (nx, ny) on this page.
   const planIdSet = new Set(floorPlans.map((p) => p.plan_id));
-  const annotationsByPlan = new Map<string, string[]>();
-  const unassigned: string[] = [];
-  for (const cn of riskElementClasses) {
-    const planId = annotationAssignments[cn];
-    if (planId && planIdSet.has(planId)) {
-      const arr = annotationsByPlan.get(planId) ?? [];
-      arr.push(cn);
-      annotationsByPlan.set(planId, arr);
+  const annotationsByPlan = new Map<string, DrawingInstanceRow[]>();
+  const unassigned: DrawingInstanceRow[] = [];
+  const resolvedAssignment = (inst: DrawingInstanceRow): string | null => {
+    const explicit = annotationAssignments[inst.id];
+    if (explicit && planIdSet.has(explicit)) return explicit;
+    // Don't auto-place if the user explicitly unassigned (key present but empty)
+    if (explicit === "") return null;
+    const auto = findContainingPlan(floorPlans, inst.nx, inst.ny);
+    return auto ? auto.plan_id : null;
+  };
+  for (const inst of instancesOnPage) {
+    const pid = resolvedAssignment(inst);
+    if (pid) {
+      const arr = annotationsByPlan.get(pid) ?? [];
+      arr.push(inst);
+      annotationsByPlan.set(pid, arr);
     } else {
-      unassigned.push(cn);
+      unassigned.push(inst);
     }
   }
+  const sortInstances = (rows: DrawingInstanceRow[]) =>
+    rows.slice().sort((a, b) => {
+      if (a.awp_class_name !== b.awp_class_name) {
+        return a.awp_class_name.localeCompare(b.awp_class_name);
+      }
+      const na = numberByInstanceId?.get(a.id) ?? a.instance_number ?? 0;
+      const nb = numberByInstanceId?.get(b.id) ?? b.instance_number ?? 0;
+      return na - nb;
+    });
 
-  const handleDragStart = (e: React.DragEvent, className: string) => {
-    e.dataTransfer.setData("text/x-annotation-class", className);
+  const handleDragStart = (e: React.DragEvent, instanceId: string) => {
+    e.dataTransfer.setData("text/x-annotation-id", instanceId);
     e.dataTransfer.effectAllowed = "move";
   };
   const handleDropOnPlan = (e: React.DragEvent, planId: string | null) => {
     e.preventDefault();
-    const cn = e.dataTransfer.getData("text/x-annotation-class");
-    if (!cn || !onAssignAnnotation) return;
-    if ((annotationAssignments[cn] ?? null) === planId) return;
-    void onAssignAnnotation(cn, planId);
+    const id = e.dataTransfer.getData("text/x-annotation-id");
+    if (!id || !onAssignAnnotation) return;
+    const current = resolvedAssignment(
+      instancesOnPage.find((i) => i.id === id) as DrawingInstanceRow,
+    );
+    if (current === planId) return;
+    void onAssignAnnotation(id, planId);
   };
   const allowDrop = (e: React.DragEvent) => {
-    if (e.dataTransfer.types.includes("text/x-annotation-class")) {
+    if (e.dataTransfer.types.includes("text/x-annotation-id")) {
       e.preventDefault();
       e.dataTransfer.dropEffect = "move";
     }
   };
 
-  const renderAnnotations = (classes: string[]) => {
-    if (classes.length === 0) {
+  const renderAnnotations = (rows: DrawingInstanceRow[]) => {
+    if (rows.length === 0) {
       return (
         <div className="text-[10px] italic text-muted-foreground px-1 py-0.5">
           No annotations.
@@ -1014,25 +1036,28 @@ const FloorPlansPanel = ({
     }
     return (
       <div className="flex flex-wrap gap-1">
-        {classes.map((cn) => {
-          const c = awpClassColor(cn);
+        {sortInstances(rows).map((inst) => {
+          const c = awpClassColor(inst.awp_class_name);
+          const label = instanceLabel
+            ? instanceLabel(inst)
+            : `${inst.awp_class_name}-${inst.instance_number ?? "?"}`;
           return (
             <div
-              key={cn}
+              key={inst.id}
               draggable={!!onAssignAnnotation}
-              onDragStart={(e) => handleDragStart(e, cn)}
+              onDragStart={(e) => handleDragStart(e, inst.id)}
               className="inline-flex items-center gap-1 pl-1 pr-1.5 py-0.5 rounded text-[10px] font-medium cursor-grab active:cursor-grabbing border"
               style={{
                 backgroundColor: c,
                 color: readableTextOn(c),
                 borderColor: c,
               }}
-              title={`Drag to another floor plan to reassign · ${cn}`}
+              title={`Drag to another floor plan to reassign · ${label}`}
             >
               {onAssignAnnotation && (
                 <GripVertical className="h-2.5 w-2.5 opacity-70" />
               )}
-              {cn}
+              {label}
             </div>
           );
         })}
@@ -1043,7 +1068,7 @@ const FloorPlansPanel = ({
   return (
     <div className="p-2 space-y-2">
       {/* Unassigned bucket */}
-      {riskElementClasses.length > 0 && (
+      {instancesOnPage.length > 0 && (
         <div
           className="border border-dashed rounded-md p-2 space-y-1 bg-muted/20"
           onDragOver={allowDrop}
