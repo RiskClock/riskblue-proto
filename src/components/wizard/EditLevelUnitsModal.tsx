@@ -8,6 +8,7 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Input } from "@/components/ui/input";
 import {
   Popover,
   PopoverContent,
@@ -27,7 +28,9 @@ interface EditLevelUnitsModalProps {
   levelPlan: ParsedFloorPlan;
   currentUnits: string[];
   allUnitPlans: ParsedFloorPlan[];
-  onSave: (units: string[]) => void | Promise<void>;
+  /** units = full referenced list; createdRefs = subset that didn't exist before
+   *  and should be persisted as new __added_unit_plans entries on this page. */
+  onSave: (units: string[], createdRefs?: string[]) => void | Promise<void>;
 }
 
 export const EditLevelUnitsModal = ({
@@ -39,25 +42,43 @@ export const EditLevelUnitsModal = ({
   onSave,
 }: EditLevelUnitsModalProps) => {
   const [units, setUnits] = useState<string[]>(currentUnits);
+  const [createdRefs, setCreatedRefs] = useState<string[]>([]);
+  const [newRefInput, setNewRefInput] = useState("");
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
     setUnits(currentUnits);
+    setCreatedRefs([]);
+    setNewRefInput("");
   }, [currentUnits, isOpen]);
 
   const unitColor = awpClassColor("unit_floor_plan");
   const unitTextColor = readableTextOn(unitColor);
 
-  const pickerOptions = Array.from(
-    new Set(allUnitPlans.map((u) => unitPlanRefKey(u))),
-  )
+  const knownRefs = new Set(allUnitPlans.map((u) => unitPlanRefKey(u)));
+  const pickerOptions = Array.from(knownRefs)
     .filter((u) => !!u && !units.includes(u))
     .sort();
+
+  const handleCreate = () => {
+    const v = newRefInput.trim();
+    if (!v || units.includes(v)) {
+      setNewRefInput("");
+      return;
+    }
+    setUnits((prev) => [...prev, v]);
+    if (!knownRefs.has(v) && !createdRefs.includes(v)) {
+      setCreatedRefs((prev) => [...prev, v]);
+    }
+    setNewRefInput("");
+  };
 
   const handleSave = async () => {
     setSaving(true);
     try {
-      await onSave(units);
+      // Only the ones still in `units` should be persisted as added plans.
+      const persistCreated = createdRefs.filter((r) => units.includes(r));
+      await onSave(units, persistCreated);
       onClose();
     } finally {
       setSaving(false);
@@ -84,7 +105,7 @@ export const EditLevelUnitsModal = ({
                   <PopoverTrigger asChild>
                     <Button type="button" variant="outline" size="sm" className="h-7">
                       <Plus className="h-3 w-3 mr-1" />
-                      Add unit
+                      Add existing
                     </Button>
                   </PopoverTrigger>
                   <PopoverContent align="end" className="w-56 p-1 max-h-64 overflow-y-auto">
@@ -110,32 +131,70 @@ export const EditLevelUnitsModal = ({
                   No units assigned.
                 </span>
               ) : (
-                units.map((u) => (
-                  <Badge
-                    key={u}
-                    variant="outline"
-                    className="h-6 px-2 text-xs gap-1"
-                    style={{
-                      backgroundColor: unitColor,
-                      color: unitTextColor,
-                      borderColor: unitColor,
-                    }}
-                  >
-                    {u}
-                    <button
-                      type="button"
-                      onClick={() =>
-                        setUnits((prev) => prev.filter((x) => x !== u))
-                      }
-                      className="hover:opacity-70"
-                      aria-label={`Remove ${u}`}
+                units.map((u) => {
+                  const isNew = createdRefs.includes(u);
+                  return (
+                    <Badge
+                      key={u}
+                      variant="outline"
+                      className="h-6 px-2 text-xs gap-1"
+                      style={{
+                        backgroundColor: unitColor,
+                        color: unitTextColor,
+                        borderColor: unitColor,
+                      }}
+                      title={isNew ? "New unit (will be created on save)" : undefined}
                     >
-                      <X className="h-3 w-3" />
-                    </button>
-                  </Badge>
-                ))
+                      {u}{isNew ? " *" : ""}
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setUnits((prev) => prev.filter((x) => x !== u));
+                          setCreatedRefs((prev) => prev.filter((x) => x !== u));
+                        }}
+                        className="hover:opacity-70"
+                        aria-label={`Remove ${u}`}
+                      >
+                        <X className="h-3 w-3" />
+                      </button>
+                    </Badge>
+                  );
+                })
               )}
             </div>
+          </div>
+
+          <div>
+            <label className="text-xs font-medium text-muted-foreground mb-1 block">
+              Create new unit
+            </label>
+            <div className="flex gap-2">
+              <Input
+                value={newRefInput}
+                onChange={(e) => setNewRefInput(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    e.preventDefault();
+                    handleCreate();
+                  }
+                }}
+                placeholder="e.g. Unit A-101"
+                className="h-8 text-sm"
+              />
+              <Button
+                type="button"
+                size="sm"
+                variant="secondary"
+                onClick={handleCreate}
+                disabled={!newRefInput.trim()}
+                className="h-8"
+              >
+                Add
+              </Button>
+            </div>
+            <p className="text-[10px] text-muted-foreground mt-1">
+              New units (marked with *) will be created on this page when you save.
+            </p>
           </div>
         </div>
 
@@ -151,3 +210,4 @@ export const EditLevelUnitsModal = ({
     </Dialog>
   );
 };
+
