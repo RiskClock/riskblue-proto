@@ -2526,24 +2526,67 @@ export default function WorkbenchProjectDetail() {
                           phase: "querying",
                         });
 
+                        // Capture the baseline updated_at so we can detect
+                        // when the background job finishes.
+                        const { data: baselineRow } = await supabase
+                          .from("analysis_request_files")
+                          .select("survey_raw_updated_at")
+                          .eq("id", f.id)
+                          .maybeSingle();
+                        const baselineUpdatedAt = (baselineRow as any)?.survey_raw_updated_at ?? null;
+
                         const { data, error } = await supabase.functions.invoke("survey-pages", {
                           body: { analysisRequestId: requestId, fileId: f.id },
                         });
                         if (error) throw error;
                         if ((data as any)?.error) throw new Error((data as any).error);
 
-                        const results = ((data as any)?.results ?? []).map((r: any) => ({
-                          sheetId: r.sheetId,
-                          file: (data as any).fileName ?? f.name,
-                          page: r.page,
-                          sheet_number: r.sheet_number,
-                          content: r.content,
+                        // Poll for completion (background job writes
+                        // survey_raw_updated_at last). Up to 8 minutes.
+                        const maxAttempts = 240;
+                        let attempts = 0;
+                        let finalRawText = "";
+                        while (attempts < maxAttempts) {
+                          await new Promise((r) => setTimeout(r, 2000));
+                          attempts++;
+                          const { data: pollRow } = await supabase
+                            .from("analysis_request_files")
+                            .select("survey_raw_response, survey_raw_updated_at")
+                            .eq("id", f.id)
+                            .maybeSingle();
+                          const updatedAt = (pollRow as any)?.survey_raw_updated_at ?? null;
+                          if (updatedAt && updatedAt !== baselineUpdatedAt) {
+                            finalRawText = (pollRow as any)?.survey_raw_response ?? "";
+                            if (finalRawText.startsWith("ERROR: ")) {
+                              throw new Error(finalRawText.slice(7));
+                            }
+                            break;
+                          }
+                        }
+                        if (!finalRawText && attempts >= maxAttempts) {
+                          throw new Error(`Timed out waiting for Survey Pages on ${f.name}.`);
+                        }
+
+                        // Fetch persisted sheet results for this file.
+                        const { data: sheetRows, error: sheetsErr } = await supabase
+                          .from("analysis_request_sheets")
+                          .select("id, page_index, sheet_number, survey_result")
+                          .eq("analysis_request_id", requestId!)
+                          .eq("parent_file_id", f.id)
+                          .order("page_index", { ascending: true });
+                        if (sheetsErr) throw sheetsErr;
+
+                        const results = (sheetRows ?? []).map((s: any) => ({
+                          sheetId: s.id,
+                          file: f.name,
+                          page: s.page_index,
+                          sheet_number: s.sheet_number,
+                          content: formatSurveyContent(s.survey_result),
                         })) as typeof surveyResults;
                         aggregated.push(...results);
-                        rawChunks.push(`===== ${f.name} =====\n${(data as any)?.rawText ?? ""}`);
-                        const summary = (data as any)?.summary ?? { total: 0, with_result: 0 };
-                        totalSheets += summary.total ?? 0;
-                        withResult += summary.with_result ?? 0;
+                        rawChunks.push(`===== ${f.name} =====\n${finalRawText}`);
+                        totalSheets += results.length;
+                        withResult += results.filter((r) => r.content.trim().length > 0).length;
 
                         // Stream results into the UI as each file finishes.
                         setSurveyResults([...aggregated]);
