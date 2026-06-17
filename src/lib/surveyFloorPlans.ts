@@ -153,13 +153,13 @@ export function isPointInsideUnitPlan(
   if (plan.type !== "unit_floor_plan") return false;
   if (plan.page_number !== page) return false;
   const bb = plan.xy_width_height_pt;
-  const dims = plan.page_dimensions_pt;
-  if (!bb || !dims || !(dims.width > 0) || !(dims.height > 0)) return false;
+  if (!bb) return false;
   const [x, y, w, h] = bb;
-  const x1 = x / dims.width;
-  const y1 = y / dims.height;
-  const x2 = (x + w) / dims.width;
-  const y2 = (y + h) / dims.height;
+  // bbox is normalized on a 0..1000 grid (top-left origin).
+  const x1 = x / 1000;
+  const y1 = y / 1000;
+  const x2 = (x + w) / 1000;
+  const y2 = (y + h) / 1000;
   return nx >= x1 && nx <= x2 && ny >= y1 && ny <= y2;
 }
 
