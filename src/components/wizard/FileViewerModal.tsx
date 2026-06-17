@@ -528,7 +528,7 @@ export const FileViewerModal = ({
               source={source}
               layout="single-page"
               page={currentPage}
-              onPageChange={setCurrentPage}
+              onPageChange={singlePageOnly ? () => {} : setCurrentPage}
               overlays={overlays}
               hoveredOverlayId={
                 hoveredCode
