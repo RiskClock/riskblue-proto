@@ -3230,15 +3230,11 @@ export default function WorkbenchProjectDetail() {
                               Array.from({ length: count }, (_, i) => i + 1).map((p) => {
                                 const pagePlans =
                                   floorPlansByFile.get(row.id)?.get(p) ?? [];
-                                const floorBadges = Array.from(
-                                  new Set(pagePlans.flatMap((fp) => fp.floors)),
+                                const levelPlans = pagePlans.filter(
+                                  (p) => p.type === "level_floor_plan",
                                 );
-                                const refBadges = Array.from(
-                                  new Set(
-                                    pagePlans
-                                      .map((fp) => fp.reference_id)
-                                      .filter((r): r is string => !!r),
-                                  ),
+                                const unitPlans = pagePlans.filter(
+                                  (p) => p.type === "unit_floor_plan",
                                 );
                                 return (
                                   <TableRow
@@ -3253,24 +3249,60 @@ export default function WorkbenchProjectDetail() {
                                         <span className="text-muted-foreground shrink-0">
                                           Page {p}
                                         </span>
-                                        {floorBadges.map((f) => (
-                                          <Badge
-                                            key={`f-${f}`}
-                                            variant="outline"
-                                            className="h-5 px-1.5 text-[10px] bg-sky-500/10 text-sky-700 border-sky-500/30"
-                                          >
-                                            {f}
-                                          </Badge>
-                                        ))}
-                                        {refBadges.map((r) => (
-                                          <Badge
-                                            key={`r-${r}`}
-                                            variant="outline"
-                                            className="h-5 px-1.5 text-[10px] font-mono bg-muted text-foreground"
-                                          >
-                                            {r}
-                                          </Badge>
-                                        ))}
+                                        {levelPlans.map((lvl) => {
+                                          const c = awpClassColor(lvl.type);
+                                          const tc = readableTextOn(c);
+                                          const lbl = floorPlanDisplayLabel(lvl);
+                                          const units = lvl.referenced_unit_ids;
+                                          return (
+                                            <span key={`lvl-${lvl.plan_id}`} className="inline-flex items-center gap-1">
+                                              <Badge
+                                                variant="outline"
+                                                className="h-5 px-1.5 text-[10px]"
+                                                style={{ backgroundColor: c, color: tc, borderColor: c }}
+                                              >
+                                                {lbl}
+                                              </Badge>
+                                              {units.length > 0 && (
+                                                <button
+                                                  type="button"
+                                                  onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    setUnitsEditTarget({ file: row, page: p, plan: lvl });
+                                                  }}
+                                                  className="inline-flex"
+                                                  title="Edit units"
+                                                >
+                                                  <Badge
+                                                    variant="outline"
+                                                    className="h-5 px-1.5 text-[10px] hover:opacity-80"
+                                                    style={{
+                                                      backgroundColor: awpClassColor("unit_floor_plan"),
+                                                      color: readableTextOn(awpClassColor("unit_floor_plan")),
+                                                      borderColor: awpClassColor("unit_floor_plan"),
+                                                    }}
+                                                  >
+                                                    {units.length} unit{units.length === 1 ? "" : "s"}
+                                                  </Badge>
+                                                </button>
+                                              )}
+                                            </span>
+                                          );
+                                        })}
+                                        {unitPlans.map((u) => {
+                                          const c = awpClassColor(u.type);
+                                          const tc = readableTextOn(c);
+                                          return (
+                                            <Badge
+                                              key={`u-${u.plan_id}`}
+                                              variant="outline"
+                                              className="h-5 px-1.5 text-[10px]"
+                                              style={{ backgroundColor: c, color: tc, borderColor: c }}
+                                            >
+                                              {floorPlanDisplayLabel(u)}
+                                            </Badge>
+                                          );
+                                        })}
                                       </div>
                                     </TableCell>
                                     {enabledCols.map((name) => {
