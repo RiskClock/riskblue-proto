@@ -946,6 +946,7 @@ const FloorPlansPanel = ({
   riskElementClasses,
   annotationAssignments,
   onAssignAnnotation,
+  onEditLevelUnits,
 }: FloorPlansPanelProps) => {
   // For a unit floor plan, list the pages of level plans that reference it.
   const findReferencingLevels = (unit: ParsedFloorPlan): string[] => {
