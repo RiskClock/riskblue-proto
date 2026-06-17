@@ -252,6 +252,7 @@ export type Database = {
           openai_file_status: string | null
           openai_file_uploaded_at: string | null
           relative_path: string
+          risk_element_results: Json
           size_bytes: number | null
           split_status: string
           storage_path: string | null
@@ -275,6 +276,7 @@ export type Database = {
           openai_file_status?: string | null
           openai_file_uploaded_at?: string | null
           relative_path: string
+          risk_element_results?: Json
           size_bytes?: number | null
           split_status?: string
           storage_path?: string | null
@@ -298,6 +300,7 @@ export type Database = {
           openai_file_status?: string | null
           openai_file_uploaded_at?: string | null
           relative_path?: string
+          risk_element_results?: Json
           size_bytes?: number | null
           split_status?: string
           storage_path?: string | null
