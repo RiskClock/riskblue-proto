@@ -230,7 +230,7 @@ export default function WorkbenchProjectDetail() {
     } | null
   >(null);
   const [unitsEditTarget, setUnitsEditTarget] = useState<
-    { file: FileRow; page: number; plan: ParsedFloorPlan } | null
+    { fileId: string; fileName: string; page: number; plan: ParsedFloorPlan } | null
   >(null);
   const [identifyRunning, setIdentifyRunning] = useState(false);
   const [uploadingReport, setUploadingReport] = useState(false);
