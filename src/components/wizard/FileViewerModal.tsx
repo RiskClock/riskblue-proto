@@ -78,6 +78,9 @@ interface FileViewerModalProps {
   preselectClass?: string | null;
   /** Optional element rendered next to the title (e.g. a space badge). */
   titleAccessory?: React.ReactNode;
+  /** When true, lock the viewer to `pageIndex` and disable page navigation
+   *  (the full multi-page PDF is still loaded, but only this page is shown). */
+  singlePageOnly?: boolean;
 }
 
 
