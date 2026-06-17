@@ -71,6 +71,10 @@ import { FileViewerModal } from "@/components/wizard/FileViewerModal";
 import {
   parseSurveyFloorPlans,
   floorPlanDisplayLabel,
+  getAddedUnitPlans,
+  addedUnitPlanToParsed,
+  makeAddedUnitPlanId,
+  ADDED_UNIT_PLANS_KEY,
   type ParsedFloorPlan,
 } from "@/lib/surveyFloorPlans";
 import { DrawingViewer } from "@/components/viewer";
