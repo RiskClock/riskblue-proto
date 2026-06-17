@@ -875,22 +875,43 @@ const DetectionsPanel = ({
                     {subList
                       .slice()
                       .sort((a, b) => (numberByInstanceId.get(a.id) ?? 0) - (numberByInstanceId.get(b.id) ?? 0))
-                      .map((i) => (
-                        <div key={i.id} className="flex items-center gap-2 text-[11px]">
-                          <span className="h-2 w-2 rounded-full shrink-0" style={{ backgroundColor: color }} />
-                          <span className="flex-1 min-w-0 font-mono truncate">
-                            {instanceLabel(i)}
-                            {i.page_index !== effectivePage ? ` (p.${i.page_index})` : ""}
-                          </span>
-                          <button
-                            onClick={() => handleDeleteFromList(i.id)}
-                            className="shrink-0 text-muted-foreground hover:text-destructive px-1"
-                            aria-label="Remove marker"
-                          >
-                            ×
-                          </button>
-                        </div>
-                      ))}
+                      .map((i) => {
+                        const containingPlan =
+                          showPlanBadges && floorPlans
+                            ? findContainingPlan(floorPlans, i.nx, i.ny)
+                            : null;
+                        const planLabel = containingPlan
+                          ? floorPlanDisplayLabel(containingPlan)
+                          : null;
+                        return (
+                          <div key={i.id} className="flex items-center gap-2 text-[11px]">
+                            <span className="h-2 w-2 rounded-full shrink-0" style={{ backgroundColor: color }} />
+                            <span className="flex-1 min-w-0 font-mono truncate">
+                              {instanceLabel(i)}
+                              {i.page_index !== effectivePage ? ` (p.${i.page_index})` : ""}
+                            </span>
+                            {planLabel && (
+                              <span
+                                className="shrink-0 px-1.5 py-0.5 rounded text-[9px] font-medium max-w-[80px] truncate"
+                                style={{
+                                  backgroundColor: awpClassColor(containingPlan!.type || "unknown"),
+                                  color: readableTextOn(awpClassColor(containingPlan!.type || "unknown")),
+                                }}
+                                title={`In ${planLabel}`}
+                              >
+                                {planLabel}
+                              </span>
+                            )}
+                            <button
+                              onClick={() => handleDeleteFromList(i.id)}
+                              className="shrink-0 text-muted-foreground hover:text-destructive px-1"
+                              aria-label="Remove marker"
+                            >
+                              ×
+                            </button>
+                          </div>
+                        );
+                      })}
                   </div>
                 )}
               </div>
