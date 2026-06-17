@@ -106,6 +106,8 @@ interface FileViewerModalProps {
   floorPlans?: ParsedFloorPlan[];
   /** All unit_floor_plan items across the parent file, used as the "Add unit" picker. */
   allUnitPlans?: ParsedFloorPlan[];
+  /** All level_floor_plan items across the parent file, used to show where a unit is referenced. */
+  allLevelPlans?: ParsedFloorPlan[];
   /** Per-plan user overrides keyed by plan_id. */
   floorPlanOverrides?: Record<string, { floors?: string[]; units?: string[] }>;
   /** Persist a single plan override. */
