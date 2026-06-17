@@ -2873,85 +2873,57 @@ export default function WorkbenchProjectDetail() {
                 </div>
               )}
 
-              {/* Result list — per-page expandable cards. */}
-              {(surveyResults.length > 0 || surveyRawText) && (
+              {/* Per-file raw response list. Click "View Response" to open the raw Gemini output in a modal. */}
+              {rows?.files?.some((f) => (f.survey_raw_response ?? "").trim().length > 0) && (
                 <div className="border rounded-md bg-background">
-                  <div className="px-3 py-2 border-b text-xs text-muted-foreground flex items-center justify-between gap-2">
-                    <span>
-                      {surveyResults.length > 0
-                        ? `${surveyResults.length} page result${surveyResults.length === 1 ? "" : "s"} · click a row to expand`
-                        : "Raw response (could not parse per-page results):"}
-                    </span>
-                    {surveyRawText && surveyResults.length > 0 && (
-                      <button
-                        type="button"
-                        className="text-xs underline text-foreground/80 hover:text-foreground"
-                        onClick={() => setShowSurveyRaw((v) => !v)}
-                      >
-                        {showSurveyRaw ? "Hide raw response" : "View raw response"}
-                      </button>
-                    )}
+                  <div className="px-3 py-2 border-b text-xs text-muted-foreground">
+                    Survey responses · one per file
                   </div>
-                  {surveyResults.length > 0 ? (
-                    <ul className="divide-y max-h-[60vh] overflow-auto">
-                      {surveyResults.map((r) => {
-                        const open = surveyExpandedSheets.has(r.sheetId);
-                        const notReturned = /"note"\s*:\s*"not returned by model"/i.test(r.content);
-                        return (
-                          <li key={r.sheetId} className={notReturned ? "bg-amber-50" : undefined}>
-                            <button
-                              type="button"
-                              className="w-full text-left px-3 py-2 hover:bg-muted/50 flex items-center justify-between gap-2"
-                              onClick={() => {
-                                setSurveyExpandedSheets((prev) => {
-                                  const next = new Set(prev);
-                                  if (next.has(r.sheetId)) next.delete(r.sheetId);
-                                  else next.add(r.sheetId);
-                                  return next;
-                                });
-                              }}
-                            >
-                              <span className="text-sm truncate flex items-center gap-2">
-                                <span className="font-medium">{r.file}</span>
-                                <span className="text-muted-foreground"> · page {r.page}{r.sheet_number ? ` · ${r.sheet_number}` : ""}</span>
-                                {notReturned && (
-                                  <span className="inline-flex items-center rounded border border-amber-400 bg-amber-100 text-amber-900 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide">
-                                    Not returned by model
-                                  </span>
-                                )}
-                              </span>
-                              <span className="text-xs text-muted-foreground shrink-0">{open ? "Hide" : "Show"}</span>
-                            </button>
-                            {open && (
-                              <div className="px-3 pb-3 text-xs whitespace-pre-wrap text-foreground/90">
-                                {r.content || <span className="text-muted-foreground">(empty)</span>}
-                              </div>
-                            )}
-                          </li>
-                        );
-                      })}
-
-                    </ul>
-                  ) : (
-                    <Textarea
-                      readOnly
-                      value={surveyRawText}
-                      className="font-mono text-xs min-h-[200px] border-0 rounded-none"
-                    />
-                  )}
-                  {showSurveyRaw && surveyResults.length > 0 && surveyRawText && (
-                    <div className="border-t">
-                      <div className="px-3 py-2 text-xs text-muted-foreground">Raw Gemini response (per file)</div>
-                      <Textarea
-                        readOnly
-                        value={surveyRawText}
-                        className="font-mono text-xs min-h-[300px] border-0 rounded-none"
-                      />
-                    </div>
-                  )}
-
+                  <ul className="divide-y max-h-[60vh] overflow-auto">
+                    {rows.files
+                      .filter((f) => (f.survey_raw_response ?? "").trim().length > 0)
+                      .sort((a, b) => a.name.localeCompare(b.name))
+                      .map((f) => (
+                        <li
+                          key={f.id}
+                          className="px-3 py-2 flex items-center justify-between gap-2"
+                        >
+                          <span className="text-sm truncate font-medium">{f.name}</span>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() =>
+                              setSurveyResponseModal({
+                                fileName: f.name,
+                                raw: f.survey_raw_response ?? "",
+                              })
+                            }
+                          >
+                            View Response
+                          </Button>
+                        </li>
+                      ))}
+                  </ul>
                 </div>
               )}
+
+              <Dialog
+                open={!!surveyResponseModal}
+                onOpenChange={(open) => !open && setSurveyResponseModal(null)}
+              >
+                <DialogContent className="max-w-[80vw] w-[80vw] h-[80vh] flex flex-col">
+                  <DialogHeader>
+                    <DialogTitle className="truncate">
+                      Survey response · {surveyResponseModal?.fileName}
+                    </DialogTitle>
+                  </DialogHeader>
+                  <Textarea
+                    readOnly
+                    value={surveyResponseModal?.raw ?? ""}
+                    className="font-mono text-xs flex-1 min-h-0 resize-none"
+                  />
+                </DialogContent>
+              </Dialog>
             </div>
 
             {/* Pages by File — lightweight enumeration (no splitting). */}
