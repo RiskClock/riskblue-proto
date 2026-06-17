@@ -657,10 +657,13 @@ export const FileViewerModal = ({
                       onSaveOverride={onSaveFloorPlanOverride}
                       onEditFloors={onEditFloors}
                       onEditLevelUnits={onEditLevelUnits}
-                      riskElementClasses={riskElementClasses ?? []}
                       annotationAssignments={annotationAssignments ?? {}}
                       onAssignAnnotation={onAssignAnnotation}
+                      instancesOnPage={Array.from(instancesByClassThisFile.values()).flat()}
+                      numberByInstanceId={numberByInstanceId}
+                      instanceLabel={instanceLabel}
                     />
+
                   </div>
                 </TabsContent>
                 <TabsContent value="detections" className="flex-1 overflow-hidden m-0 mt-0 flex flex-col min-h-0">
