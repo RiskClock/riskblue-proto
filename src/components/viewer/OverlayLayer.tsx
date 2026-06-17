@@ -246,10 +246,10 @@ export const OverlayLayer = ({
       .filter((o) => o.shape === "rect")
       .map((o) => ({
         id: o.id,
-        x: o.rect.nx * pageSize.width,
-        y: o.rect.ny * pageSize.height,
-        w: Math.max(1, o.rect.nw * pageSize.width),
-        h: Math.max(1, o.rect.nh * pageSize.height),
+        x: o.rect.px?.x ?? o.rect.nx * pageSize.width,
+        y: o.rect.px?.y ?? o.rect.ny * pageSize.height,
+        w: Math.max(1, o.rect.px?.w ?? o.rect.nw * pageSize.width),
+        h: Math.max(1, o.rect.px?.h ?? o.rect.nh * pageSize.height),
         color: o.color ?? defaultColor,
         label: o.label,
         hovered: hoveredId === o.id,
