@@ -898,19 +898,21 @@ const FloorPlansPanel = ({
   const unitColor = awpClassColor("unit_floor_plan");
   const unitTextColor = readableTextOn(unitColor);
 
-  // For a unit floor plan, list the level plans (by reference_id or plan_id)
-  // that reference it. Honors per-level overrides where available.
+  // For a unit floor plan, list the pages of level plans that reference it.
+  // Honors per-level overrides where available.
   const findReferencingLevels = (unit: ParsedFloorPlan): string[] => {
     const key = unitPlanRefKey(unit);
-    const labels: string[] = [];
+    const pages = new Set<number>();
     for (const lvl of allLevelPlans) {
       const ovr = overrides[lvl.plan_id];
       const effUnits = ovr?.units ?? lvl.referenced_unit_ids;
       if (effUnits.includes(key)) {
-        labels.push(lvl.reference_id || lvl.plan_id);
+        pages.add(lvl.page_number);
       }
     }
-    return Array.from(new Set(labels));
+    return Array.from(pages)
+      .sort((a, b) => a - b)
+      .map((p) => `Page ${p}`);
   };
 
   return (
