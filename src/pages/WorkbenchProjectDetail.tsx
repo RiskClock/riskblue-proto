@@ -222,6 +222,38 @@ export default function WorkbenchProjectDetail() {
   const reportInputRef = useRef<HTMLInputElement>(null);
   const [downloadingAll, setDownloadingAll] = useState(false);
 
+  // Page Info table (lightweight: just enumerate pages per file, no splitting)
+  type PageInfoRow = {
+    id: string;
+    name: string;
+    source_type: string;
+    storage_path: string | null;
+    mime_type: string | null;
+    page_count: number | null;
+  };
+  const [pageInfoRows, setPageInfoRows] = useState<PageInfoRow[]>([]);
+  const [pageInfoLoading, setPageInfoLoading] = useState(false);
+  const [pageInfoExpanded, setPageInfoExpanded] = useState<Set<string>>(new Set());
+  const [activePageView, setActivePageView] = useState<{ file: PageInfoRow; page: number } | null>(null);
+
+  const togglePageInfoExpand = (fileId: string) => {
+    setPageInfoExpanded((prev) => {
+      const next = new Set(prev);
+      if (next.has(fileId)) next.delete(fileId); else next.add(fileId);
+      return next;
+    });
+  };
+
+  const activePageViewSource = useMemo<DocumentSourceDescriptor | null>(() => {
+    if (!activePageView || !activePageView.file.storage_path) return null;
+    return {
+      kind: "supabase-storage",
+      bucket: bucketForSource(activePageView.file.source_type),
+      path: activePageView.file.storage_path,
+      mimeType: activePageView.file.mime_type || "application/pdf",
+    };
+  }, [activePageView]);
+
   const toggleExpand = (fileId: string) => {
     setExpandedFiles((prev) => {
       const next = new Set(prev);
