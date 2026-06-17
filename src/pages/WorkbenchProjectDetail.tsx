@@ -2851,10 +2851,105 @@ export default function WorkbenchProjectDetail() {
                     <TableHeader className="bg-card">
                       <TableRow>
                         <TableHead className={`${stickyHeadFirst} h-9 py-1`}>
-                          Files ({pageInfoRows.length} file{pageInfoRows.length === 1 ? "" : "s"})
+                          <div className="inline-flex items-center gap-1.5">
+                            <span>Files ({pageInfoRows.length} file{pageInfoRows.length === 1 ? "" : "s"})</span>
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <button
+                                  type="button"
+                                  onClick={handleDownloadAllFiles}
+                                  disabled={downloadingAll || pageInfoRows.length === 0}
+                                  className="text-muted-foreground hover:text-foreground p-0.5 rounded hover:bg-muted/50 disabled:opacity-50 disabled:cursor-not-allowed"
+                                  aria-label="Download all files"
+                                >
+                                  <Download className={`h-3.5 w-3.5 ${downloadingAll ? "animate-pulse" : ""}`} />
+                                </button>
+                              </TooltipTrigger>
+                              <TooltipContent side="bottom">
+                                {downloadingAll ? "Preparing ZIP…" : "Download all files (ZIP)"}
+                              </TooltipContent>
+                            </Tooltip>
+                          </div>
                         </TableHead>
-                        <TableHead className="text-right whitespace-nowrap h-9 py-1 pr-4">
-                          Pages
+                        {enabledCols.map((name) => {
+                          const opt = optionByName.get(name);
+                          const label = opt?.idPrefix || name;
+                          const classHasTriage = (triage || []).some(
+                            (t) => t.awp_class_name === name,
+                          );
+                          return (
+                            <TableHead
+                              key={name}
+                              className="text-center whitespace-nowrap h-9 py-1"
+                            >
+                              <div className="inline-flex items-center gap-1">
+                                <Tooltip>
+                                  <TooltipTrigger asChild>
+                                    <button
+                                      type="button"
+                                      className="font-semibold hover:underline underline-offset-2"
+                                      onClick={() => setPromptClass(name)}
+                                    >
+                                      {label}
+                                    </button>
+                                  </TooltipTrigger>
+                                  <TooltipContent side="bottom">{name} — click to view prompt</TooltipContent>
+                                </Tooltip>
+                                <DropdownMenu>
+                                  <DropdownMenuTrigger asChild>
+                                    <button
+                                      type="button"
+                                      className="text-muted-foreground hover:text-foreground p-0.5 rounded hover:bg-muted/50"
+                                      aria-label={`Actions for ${name}`}
+                                    >
+                                      <MoreVertical className="h-3.5 w-3.5" />
+                                    </button>
+                                  </DropdownMenuTrigger>
+                                  <DropdownMenuContent align="end">
+                                    <DropdownMenuItem
+                                      disabled={!anyFileProcessed || phaseRunning}
+                                      onClick={() => runPipeline("triage", [name])}
+                                    >
+                                      {classHasTriage ? "Re-Triage" : "Triage"}
+                                    </DropdownMenuItem>
+                                    <DropdownMenuItem
+                                      disabled={!anyFileProcessed || !classHasTriage || phaseRunning}
+                                      onClick={() => runPipeline("analyze", [name])}
+                                    >
+                                      Analyze
+                                    </DropdownMenuItem>
+                                    <DropdownMenuItem
+                                      disabled={phaseRunning}
+                                      onClick={() => clearClassResults(name)}
+                                    >
+                                      Clear
+                                    </DropdownMenuItem>
+                                  </DropdownMenuContent>
+                                </DropdownMenu>
+                              </div>
+                            </TableHead>
+                          );
+                        })}
+                        <TableHead className="text-right w-[1%] whitespace-nowrap h-9 py-1">
+                          <Button
+                            variant="outline"
+                            size="icon"
+                            onClick={openManage}
+                            disabled={phaseRunning}
+                            aria-label="Manage columns"
+                            title={
+                              customClassNames.length > 0
+                                ? `Custom class${customClassNames.length === 1 ? "" : "es"} were typed at project creation: ${customClassNames.join(", ")}`
+                                : "Manage columns"
+                            }
+                            className={`h-8 w-8 ${
+                              customClassNames.length > 0
+                                ? "bg-yellow-300 hover:bg-yellow-400 text-yellow-900 border-yellow-500"
+                                : ""
+                            }`}
+                          >
+                            <Settings2 className="h-4 w-4" />
+                          </Button>
                         </TableHead>
                       </TableRow>
                     </TableHeader>
@@ -2863,6 +2958,77 @@ export default function WorkbenchProjectDetail() {
                         const count = row.page_count ?? 0;
                         const singlePage = count === 1;
                         const isExpanded = pageInfoExpanded.has(row.id);
+
+                        const renderTriageCell = (
+                          fileId: string,
+                          awpClassName: string,
+                          cnt: number,
+                          scoreKnown: boolean,
+                          score?: number,
+                        ) => {
+                          const key = `${fileId}::${awpClassName}`;
+                          const override = overrideMap.get(key);
+                          const clickable = hasTriageRun;
+                          const hasScore = typeof score === "number";
+                          const opacity = hasScore ? Math.max(0, Math.min(100, score!)) / 100 : 0;
+                          const inner =
+                            cnt > 0 ? (
+                              <span className="font-medium tabular-nums">{cnt}</span>
+                            ) : (
+                              <span className="text-muted-foreground">
+                                {scoreKnown ? "" : "—"}
+                              </span>
+                            );
+                          const title = !clickable
+                            ? undefined
+                            : override === "include"
+                              ? "Manually included — click to clear"
+                              : override === "exclude"
+                                ? "Manually excluded — click to clear"
+                                : hasScore
+                                  ? `Triage: ${score}%${cnt > 0 ? ` · ${cnt}` : ""} — click to ${cnt > 0 ? "exclude" : "include"}`
+                                  : cnt > 0
+                                    ? "Click to exclude"
+                                    : "Click to include";
+                          return (
+                            <TableCell
+                              key={awpClassName}
+                              title={title}
+                              className={`text-center py-1 relative group ${
+                                clickable ? "cursor-pointer" : ""
+                              } ${
+                                override === "exclude"
+                                  ? "bg-muted/60"
+                                  : override === "include"
+                                    ? "bg-emerald-500/20"
+                                    : clickable
+                                      ? "hover:bg-muted/40"
+                                      : ""
+                              }`}
+                              style={
+                                hasScore && override !== "exclude" && override !== "include"
+                                  ? { backgroundColor: `rgba(16, 185, 129, ${opacity * 0.55})` }
+                                  : undefined
+                              }
+                              onClick={(e) => {
+                                if (!clickable) return;
+                                e.stopPropagation();
+                                toggleOverride(fileId, awpClassName, cnt);
+                              }}
+                            >
+                              <span className="inline-flex items-center justify-center w-full">
+                                {override === "exclude" ? (
+                                  <span className="line-through text-muted-foreground">
+                                    {cnt > 0 ? cnt : "—"}
+                                  </span>
+                                ) : (
+                                  inner
+                                )}
+                              </span>
+                            </TableCell>
+                          );
+                        };
+
                         return (
                           <Fragment key={row.id}>
                             {/* File-level row — matches first table */}
@@ -2906,9 +3072,23 @@ export default function WorkbenchProjectDetail() {
                                   )}
                                 </div>
                               </TableCell>
-                              <TableCell className="text-right py-1 text-sm tabular-nums text-muted-foreground pr-4">
-                                {row.page_count == null ? "—" : `${count} page${count === 1 ? "" : "s"}`}
-                              </TableCell>
+                              {enabledCols.map((name) => {
+                                const baseCount =
+                                  fileCountLookup.get(`${row.id}::${name}`) || 0;
+                                const userCount =
+                                  instanceCountLookup.get(`${row.id}::${name}`) || 0;
+                                const cnt = baseCount + userCount;
+                                const fileScore = fileScoreLookup.get(`${row.id}::${name}`);
+                                const scoreKnown =
+                                  fileScore != null ||
+                                  (triage || []).some(
+                                    (t) => t.file_id === row.id && t.awp_class_name === name,
+                                  ) ||
+                                  userCount > 0 ||
+                                  baseCount > 0;
+                                return renderTriageCell(row.id, name, cnt, scoreKnown, fileScore);
+                              })}
+                              <TableCell className="py-1" />
                             </TableRow>
 
                             {/* Per-page sub-rows (only when multi-page AND expanded) — matches first table */}
@@ -2928,6 +3108,9 @@ export default function WorkbenchProjectDetail() {
                                       </span>
                                     </div>
                                   </TableCell>
+                                  {enabledCols.map((name) => (
+                                    <TableCell key={name} className="py-1" />
+                                  ))}
                                   <TableCell className="py-1" />
                                 </TableRow>
                               ))
@@ -2940,6 +3123,7 @@ export default function WorkbenchProjectDetail() {
                 </div>
               )}
             </div>
+
 
 
           </div>
