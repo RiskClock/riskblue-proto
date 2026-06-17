@@ -1072,14 +1072,19 @@ const FloorPlansPanel = ({
                       <Badge
                         key={u}
                         variant="outline"
-                        className="bg-amber-500/10 text-amber-700 border-amber-500/30 h-5 px-1.5 text-[10px] gap-1"
+                        className="h-5 px-1.5 text-[10px] gap-1"
+                        style={{
+                          backgroundColor: unitColor,
+                          color: unitTextColor,
+                          borderColor: unitColor,
+                        }}
                       >
                         {u}
                         {onSaveOverride && (
                           <button
                             type="button"
                             onClick={() => removeUnit(u)}
-                            className="hover:text-destructive"
+                            className="hover:opacity-70"
                             aria-label={`Remove ${u}`}
                           >
                             <X className="h-2.5 w-2.5" />
