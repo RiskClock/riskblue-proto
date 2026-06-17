@@ -633,15 +633,17 @@ export const FileViewerModal = ({
                     <TabsTrigger value="floor-plans">Floor Plans</TabsTrigger>
                     <TabsTrigger value="detections">Detections</TabsTrigger>
                   </TabsList>
-                  <TabsContent value="floor-plans" className="flex-1 overflow-y-auto m-0 mt-0">
-                    <FloorPlansPanel
-                      floorPlans={floorPlans}
-                      allUnitPlans={allUnitPlans ?? []}
-                      allLevelPlans={allLevelPlans ?? []}
-                      overrides={floorPlanOverrides ?? {}}
-                      onSaveOverride={onSaveFloorPlanOverride}
-                      onEditFloors={onEditFloors}
-                    />
+                  <TabsContent value="floor-plans" className="flex-1 min-h-0 overflow-y-auto m-0 mt-0 data-[state=active]:flex data-[state=active]:flex-col">
+                    <div className="flex-1 min-h-0 overflow-y-auto">
+                      <FloorPlansPanel
+                        floorPlans={floorPlans}
+                        allUnitPlans={allUnitPlans ?? []}
+                        allLevelPlans={allLevelPlans ?? []}
+                        overrides={floorPlanOverrides ?? {}}
+                        onSaveOverride={onSaveFloorPlanOverride}
+                        onEditFloors={onEditFloors}
+                      />
+                    </div>
                   </TabsContent>
                   <TabsContent value="detections" className="flex-1 overflow-hidden m-0 mt-0 flex flex-col min-h-0">
                     <DetectionsPanel
