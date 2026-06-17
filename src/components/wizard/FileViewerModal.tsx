@@ -884,6 +884,7 @@ const DetectionsPanel = ({
 interface FloorPlansPanelProps {
   floorPlans: ParsedFloorPlan[];
   allUnitPlans: ParsedFloorPlan[];
+  allLevelPlans: ParsedFloorPlan[];
   overrides: Record<string, { floors?: string[]; units?: string[] }>;
   onSaveOverride?: (
     planId: string,
@@ -895,10 +896,30 @@ interface FloorPlansPanelProps {
 const FloorPlansPanel = ({
   floorPlans,
   allUnitPlans,
+  allLevelPlans,
   overrides,
   onSaveOverride,
   onEditFloors,
 }: FloorPlansPanelProps) => {
+  // Shared color for unit chips + unit floor-plan bounding boxes.
+  const unitColor = awpClassColor("unit_floor_plan");
+  const unitTextColor = readableTextOn(unitColor);
+
+  // For a unit floor plan, list the level plans (by reference_id or plan_id)
+  // that reference it. Honors per-level overrides where available.
+  const findReferencingLevels = (unit: ParsedFloorPlan): string[] => {
+    const key = unitPlanRefKey(unit);
+    const labels: string[] = [];
+    for (const lvl of allLevelPlans) {
+      const ovr = overrides[lvl.plan_id];
+      const effUnits = ovr?.units ?? lvl.referenced_unit_ids;
+      if (effUnits.includes(key)) {
+        labels.push(lvl.reference_id || lvl.plan_id);
+      }
+    }
+    return Array.from(new Set(labels));
+  };
+
   return (
     <div className="p-2 space-y-2">
       {floorPlans.map((fp) => {
