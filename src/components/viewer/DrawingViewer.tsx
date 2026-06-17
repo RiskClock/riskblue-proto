@@ -189,7 +189,7 @@ export const DrawingViewer = forwardRef<DrawingViewerApi, DrawingViewerProps>(
           id: ov.id,
           page: p.pageNum,
           rect,
-          shape: ov.shape ?? "rect",
+          shape: ov.shape ?? "circle",
           color: ov.color,
           label: ov.label,
         });

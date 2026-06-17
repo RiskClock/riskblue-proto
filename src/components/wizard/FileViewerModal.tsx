@@ -7,7 +7,23 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { ChevronDown, ChevronRight, Loader2, Redo2, Undo2 } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
+import {
+  ChevronDown,
+  ChevronRight,
+  Loader2,
+  Pencil,
+  Plus,
+  Redo2,
+  Undo2,
+  X,
+} from "lucide-react";
 import { DrawingViewer } from "@/components/viewer";
 import type {
   DocumentSourceDescriptor,
@@ -17,6 +33,10 @@ import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { getUserFriendlyError } from "@/lib/errorHandling";
 import { awpClassColor } from "@/lib/awpColor";
+import {
+  type ParsedFloorPlan,
+  floorPlanDisplayLabel,
+} from "@/lib/surveyFloorPlans";
 
 interface SystemDetection {
   lineMonitored: string;
@@ -81,8 +101,20 @@ interface FileViewerModalProps {
   /** When true, lock the viewer to `pageIndex` and disable page navigation
    *  (the full multi-page PDF is still loaded, but only this page is shown). */
   singlePageOnly?: boolean;
+  /** Floor-plan items for the current page (parsed from survey response). */
+  floorPlans?: ParsedFloorPlan[];
+  /** All unit_floor_plan items across the parent file, used as the "Add unit" picker. */
+  allUnitPlans?: ParsedFloorPlan[];
+  /** Per-plan user overrides keyed by plan_id. */
+  floorPlanOverrides?: Record<string, { floors?: string[]; units?: string[] }>;
+  /** Persist a single plan override. */
+  onSaveFloorPlanOverride?: (
+    planId: string,
+    next: { floors?: string[]; units?: string[] },
+  ) => Promise<void> | void;
+  /** Page-level handler that opens SpaceEditModal scoped to a plan. */
+  onEditFloors?: (planId: string, currentFloors: string[]) => void;
 }
-
 
 const BOUNDING_BOX_COLOR = "#39FF14"; // legacy detections (green)
 
@@ -112,6 +144,11 @@ export const FileViewerModal = ({
   preselectClass,
   titleAccessory,
   singlePageOnly = false,
+  floorPlans,
+  allUnitPlans,
+  floorPlanOverrides,
+  onSaveFloorPlanOverride,
+  onEditFloors,
 }: FileViewerModalProps) => {
   const { toast } = useToast();
   const [hoveredCode, setHoveredCode] = useState<string | null>(null);
@@ -497,7 +534,33 @@ export const FileViewerModal = ({
       }));
   }, [instances, effectivePage, sheetId, parentFileId, numberByInstanceId, prefixByClass]);
 
-  const overlays = [...detectionOverlays, ...instanceOverlays];
+  // Floor-plan bbox overlays (rect outline). Drawn from PDF points so the
+  // viewer geometry projects them via the page's PageViewport.
+  const floorPlanOverlays: OverlayInput[] = useMemo(() => {
+    if (!floorPlans || floorPlans.length === 0) return [];
+    return floorPlans
+      .filter((fp) => Array.isArray(fp.bounding_box_pt) && fp.bounding_box_pt.length === 4)
+      .map((fp) => {
+        const override = floorPlanOverrides?.[fp.plan_id];
+        const effectiveFloors = override?.floors ?? fp.floors;
+        const labelBase = fp.reference_id
+          ? fp.reference_id
+          : effectiveFloors.length > 0
+            ? effectiveFloors.join(" / ")
+            : fp.plan_id;
+        return {
+          id: `fp-${fp.plan_id}`,
+          bbox: fp.bounding_box_pt as [number, number, number, number],
+          coordSpace: "pdf-points" as const,
+          page: 1,
+          shape: "rect" as const,
+          color: awpClassColor(fp.type || "unknown"),
+          label: labelBase,
+        };
+      });
+  }, [floorPlans, floorPlanOverrides]);
+
+  const overlays = [...detectionOverlays, ...instanceOverlays, ...floorPlanOverlays];
 
   // For the sidebar: instances for THIS file, on the current page, grouped by class.
   const instancesByClassThisFile = useMemo(() => {
@@ -546,154 +609,62 @@ export const FileViewerModal = ({
           </div>
 
           {sidebarEnabled && awpClasses ? (
-            <div className="w-72 flex-shrink-0 border rounded-lg flex flex-col">
-              <div className="px-3 py-2 border-b flex items-start justify-between gap-2">
-                <div>
-                  <h4 className="text-sm font-medium">AWP classes</h4>
-                  <p className="text-[11px] text-muted-foreground">
-                    Click the canvas to mark; click a marker to remove.
-                  </p>
-                </div>
-                <div className="flex items-center gap-1">
-                  <Button
-                    size="icon"
-                    variant="ghost"
-                    className="h-7 w-7"
-                    onClick={undo}
-                    disabled={past.length === 0}
-                    aria-label="Undo"
-                    title="Undo"
-                  >
-                    <Undo2 className="h-3.5 w-3.5" />
-                  </Button>
-                  <Button
-                    size="icon"
-                    variant="ghost"
-                    className="h-7 w-7"
-                    onClick={redo}
-                    disabled={future.length === 0}
-                    aria-label="Redo"
-                    title="Redo"
-                  >
-                    <Redo2 className="h-3.5 w-3.5" />
-                  </Button>
-                </div>
-              </div>
-              <div className="flex-1 overflow-y-auto overflow-x-hidden min-w-0">
-                <div className="py-1 w-full min-w-0">
-                  {loadingInstances && (
-                    <div className="flex items-center gap-2 px-3 py-2 text-xs text-muted-foreground">
-                      <Loader2 className="h-3 w-3 animate-spin" /> Loading
-                      markers…
-                    </div>
-                  )}
-                  {awpClasses.map((c) => {
-                    const subList = instancesByClassThisFile.get(c.name) || [];
-                    const userCount = subList.length;
-                    const total = c.analysisCount + userCount;
-                    const isSelected = selectedClass === c.name;
-                    const isExpanded = expanded.has(c.name);
-                    const color = awpClassColor(c.name);
-                    return (
-                      <div key={c.name} className="border-b last:border-b-0 min-w-0">
-                        <div
-                          className={`flex items-center gap-2 px-3 py-1.5 text-sm cursor-pointer hover:bg-muted/50 min-w-0 ${
-                            isSelected ? "bg-muted/40" : ""
-                          }`}
-                          onClick={() => setSelectedClass(c.name)}
-                        >
-                          <input
-                            type="radio"
-                            checked={isSelected}
-                            onChange={() => setSelectedClass(c.name)}
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setSelectedClass(c.name);
-                            }}
-                            className="h-3.5 w-3.5 shrink-0"
-                          />
-                          <span
-                            className="h-2 w-2 rounded-full shrink-0"
-                            style={{ backgroundColor: color }}
-                          />
-                          <span className="font-mono text-xs text-muted-foreground shrink-0">
-                            {c.prefix ?? "—"}
-                          </span>
-                          <span className="flex-1 min-w-0 truncate" title={c.name}>{c.name}</span>
-                          <span className="text-xs tabular-nums text-muted-foreground shrink-0">
-                            {total}
-                          </span>
-                          <button
-                            type="button"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setExpanded((prev) => {
-                                const next = new Set(prev);
-                                if (next.has(c.name)) next.delete(c.name);
-                                else next.add(c.name);
-                                return next;
-                              });
-                            }}
-                            className="shrink-0 text-muted-foreground hover:text-foreground p-0.5 rounded hover:bg-muted/50"
-                            aria-label={isExpanded ? "Collapse" : "Expand"}
-                          >
-                            {isExpanded ? (
-                              <ChevronDown className="h-4 w-4" />
-                            ) : (
-                              <ChevronRight className="h-4 w-4" />
-                            )}
-                          </button>
-                        </div>
-                        {isExpanded && (
-                          <div className="px-8 py-1 space-y-1 bg-muted/20">
-                            {c.analysisCount > 0 && (
-                              <div className="text-[11px] text-muted-foreground">
-                                {c.analysisCount} from analysis
-                              </div>
-                            )}
-                            {subList.length === 0 && c.analysisCount === 0 && (
-                              <div className="text-[11px] text-muted-foreground italic">
-                                No instances yet.
-                              </div>
-                            )}
-                            {subList
-                              .slice()
-                              .sort(
-                                (a, b) =>
-                                  (numberByInstanceId.get(a.id) ?? 0) -
-                                  (numberByInstanceId.get(b.id) ?? 0),
-                              )
-                              .map((i) => (
-                                <div
-                                  key={i.id}
-                                  className="flex items-center gap-2 text-[11px]"
-                                >
-                                  <span
-                                    className="h-2 w-2 rounded-full shrink-0"
-                                    style={{ backgroundColor: color }}
-                                  />
-                                  <span className="flex-1 min-w-0 font-mono truncate">
-                                    {instanceLabel(i)}
-                                    {i.page_index !== effectivePage
-                                      ? ` (p.${i.page_index})`
-                                      : ""}
-                                  </span>
-                                  <button
-                                    onClick={() => handleDeleteFromList(i.id)}
-                                    className="shrink-0 text-muted-foreground hover:text-destructive px-1"
-                                    aria-label="Remove marker"
-                                  >
-                                    ×
-                                  </button>
-                                </div>
-                              ))}
-                          </div>
-                        )}
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
+            <div className="w-80 flex-shrink-0 border rounded-lg flex flex-col min-h-0">
+              {(floorPlans && floorPlans.length > 0) ? (
+                <Tabs defaultValue="floor-plans" className="flex-1 flex flex-col min-h-0">
+                  <TabsList className="m-2 grid grid-cols-2">
+                    <TabsTrigger value="floor-plans">Floor Plans</TabsTrigger>
+                    <TabsTrigger value="detections">Detections</TabsTrigger>
+                  </TabsList>
+                  <TabsContent value="floor-plans" className="flex-1 overflow-y-auto m-0 mt-0">
+                    <FloorPlansPanel
+                      floorPlans={floorPlans}
+                      allUnitPlans={allUnitPlans ?? []}
+                      overrides={floorPlanOverrides ?? {}}
+                      onSaveOverride={onSaveFloorPlanOverride}
+                      onEditFloors={onEditFloors}
+                    />
+                  </TabsContent>
+                  <TabsContent value="detections" className="flex-1 overflow-hidden m-0 mt-0 flex flex-col min-h-0">
+                    <DetectionsPanel
+                      awpClasses={awpClasses}
+                      selectedClass={selectedClass}
+                      setSelectedClass={setSelectedClass}
+                      expanded={expanded}
+                      setExpanded={setExpanded}
+                      instancesByClassThisFile={instancesByClassThisFile}
+                      numberByInstanceId={numberByInstanceId}
+                      effectivePage={effectivePage}
+                      instanceLabel={instanceLabel}
+                      handleDeleteFromList={handleDeleteFromList}
+                      loadingInstances={loadingInstances}
+                      undo={undo}
+                      redo={redo}
+                      pastLen={past.length}
+                      futureLen={future.length}
+                    />
+                  </TabsContent>
+                </Tabs>
+              ) : (
+                <DetectionsPanel
+                  awpClasses={awpClasses}
+                  selectedClass={selectedClass}
+                  setSelectedClass={setSelectedClass}
+                  expanded={expanded}
+                  setExpanded={setExpanded}
+                  instancesByClassThisFile={instancesByClassThisFile}
+                  numberByInstanceId={numberByInstanceId}
+                  effectivePage={effectivePage}
+                  instanceLabel={instanceLabel}
+                  handleDeleteFromList={handleDeleteFromList}
+                  loadingInstances={loadingInstances}
+                  undo={undo}
+                  redo={redo}
+                  pastLen={past.length}
+                  futureLen={future.length}
+                  withHeader
+                />
+              )}
             </div>
           ) : detections.length > 0 ? (
             <div className="w-64 flex-shrink-0 border rounded-lg p-3 flex flex-col">
@@ -735,5 +706,323 @@ export const FileViewerModal = ({
         </div>
       </DialogContent>
     </Dialog>
+  );
+};
+
+// ============================================================================
+// Sub-components
+// ============================================================================
+
+interface DetectionsPanelProps {
+  awpClasses: AwpClassOption[];
+  selectedClass: string | null;
+  setSelectedClass: (n: string | null) => void;
+  expanded: Set<string>;
+  setExpanded: (updater: (prev: Set<string>) => Set<string>) => void;
+  instancesByClassThisFile: Map<string, DrawingInstanceRow[]>;
+  numberByInstanceId: Map<string, number>;
+  effectivePage: number;
+  instanceLabel: (i: DrawingInstanceRow) => string;
+  handleDeleteFromList: (id: string) => void;
+  loadingInstances: boolean;
+  undo: () => void;
+  redo: () => void;
+  pastLen: number;
+  futureLen: number;
+  withHeader?: boolean;
+}
+
+const DetectionsPanel = ({
+  awpClasses,
+  selectedClass,
+  setSelectedClass,
+  expanded,
+  setExpanded,
+  instancesByClassThisFile,
+  numberByInstanceId,
+  effectivePage,
+  instanceLabel,
+  handleDeleteFromList,
+  loadingInstances,
+  undo,
+  redo,
+  pastLen,
+  futureLen,
+  withHeader,
+}: DetectionsPanelProps) => {
+  return (
+    <div className="flex-1 flex flex-col min-h-0">
+      <div className={`px-3 py-2 ${withHeader ? "border-b" : ""} flex items-start justify-between gap-2`}>
+        <div>
+          <h4 className="text-sm font-medium">AWP classes</h4>
+          <p className="text-[11px] text-muted-foreground">
+            Click the canvas to mark; click a marker to remove.
+          </p>
+        </div>
+        <div className="flex items-center gap-1">
+          <Button size="icon" variant="ghost" className="h-7 w-7" onClick={undo} disabled={pastLen === 0} aria-label="Undo" title="Undo">
+            <Undo2 className="h-3.5 w-3.5" />
+          </Button>
+          <Button size="icon" variant="ghost" className="h-7 w-7" onClick={redo} disabled={futureLen === 0} aria-label="Redo" title="Redo">
+            <Redo2 className="h-3.5 w-3.5" />
+          </Button>
+        </div>
+      </div>
+      <div className="flex-1 overflow-y-auto overflow-x-hidden min-w-0">
+        <div className="py-1 w-full min-w-0">
+          {loadingInstances && (
+            <div className="flex items-center gap-2 px-3 py-2 text-xs text-muted-foreground">
+              <Loader2 className="h-3 w-3 animate-spin" /> Loading markers…
+            </div>
+          )}
+          {awpClasses.map((c) => {
+            const subList = instancesByClassThisFile.get(c.name) || [];
+            const userCount = subList.length;
+            const total = c.analysisCount + userCount;
+            const isSelected = selectedClass === c.name;
+            const isExpanded = expanded.has(c.name);
+            const color = awpClassColor(c.name);
+            return (
+              <div key={c.name} className="border-b last:border-b-0 min-w-0">
+                <div
+                  className={`flex items-center gap-2 px-3 py-1.5 text-sm cursor-pointer hover:bg-muted/50 min-w-0 ${isSelected ? "bg-muted/40" : ""}`}
+                  onClick={() => setSelectedClass(c.name)}
+                >
+                  <input
+                    type="radio"
+                    checked={isSelected}
+                    onChange={() => setSelectedClass(c.name)}
+                    onClick={(e) => { e.stopPropagation(); setSelectedClass(c.name); }}
+                    className="h-3.5 w-3.5 shrink-0"
+                  />
+                  <span className="h-2 w-2 rounded-full shrink-0" style={{ backgroundColor: color }} />
+                  <span className="font-mono text-xs text-muted-foreground shrink-0">{c.prefix ?? "—"}</span>
+                  <span className="flex-1 min-w-0 truncate" title={c.name}>{c.name}</span>
+                  <span className="text-xs tabular-nums text-muted-foreground shrink-0">{total}</span>
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setExpanded((prev) => {
+                        const next = new Set(prev);
+                        if (next.has(c.name)) next.delete(c.name);
+                        else next.add(c.name);
+                        return next;
+                      });
+                    }}
+                    className="shrink-0 text-muted-foreground hover:text-foreground p-0.5 rounded hover:bg-muted/50"
+                    aria-label={isExpanded ? "Collapse" : "Expand"}
+                  >
+                    {isExpanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+                  </button>
+                </div>
+                {isExpanded && (
+                  <div className="px-8 py-1 space-y-1 bg-muted/20">
+                    {c.analysisCount > 0 && (
+                      <div className="text-[11px] text-muted-foreground">{c.analysisCount} from analysis</div>
+                    )}
+                    {subList.length === 0 && c.analysisCount === 0 && (
+                      <div className="text-[11px] text-muted-foreground italic">No instances yet.</div>
+                    )}
+                    {subList
+                      .slice()
+                      .sort((a, b) => (numberByInstanceId.get(a.id) ?? 0) - (numberByInstanceId.get(b.id) ?? 0))
+                      .map((i) => (
+                        <div key={i.id} className="flex items-center gap-2 text-[11px]">
+                          <span className="h-2 w-2 rounded-full shrink-0" style={{ backgroundColor: color }} />
+                          <span className="flex-1 min-w-0 font-mono truncate">
+                            {instanceLabel(i)}
+                            {i.page_index !== effectivePage ? ` (p.${i.page_index})` : ""}
+                          </span>
+                          <button
+                            onClick={() => handleDeleteFromList(i.id)}
+                            className="shrink-0 text-muted-foreground hover:text-destructive px-1"
+                            aria-label="Remove marker"
+                          >
+                            ×
+                          </button>
+                        </div>
+                      ))}
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    </div>
+  );
+};
+
+interface FloorPlansPanelProps {
+  floorPlans: ParsedFloorPlan[];
+  allUnitPlans: ParsedFloorPlan[];
+  overrides: Record<string, { floors?: string[]; units?: string[] }>;
+  onSaveOverride?: (
+    planId: string,
+    next: { floors?: string[]; units?: string[] },
+  ) => Promise<void> | void;
+  onEditFloors?: (planId: string, currentFloors: string[]) => void;
+}
+
+const FloorPlansPanel = ({
+  floorPlans,
+  allUnitPlans,
+  overrides,
+  onSaveOverride,
+  onEditFloors,
+}: FloorPlansPanelProps) => {
+  return (
+    <div className="p-2 space-y-2">
+      {floorPlans.map((fp) => {
+        const ovr = overrides[fp.plan_id] ?? {};
+        const effFloors = ovr.floors ?? fp.floors;
+        const effUnits = ovr.units ?? fp.referenced_unit_ids;
+        const color = awpClassColor(fp.type || "unknown");
+        const isLevel = fp.type === "level_floor_plan";
+        const label = floorPlanDisplayLabel({ ...fp, floors: effFloors });
+
+        const removeUnit = (u: string) => {
+          if (!onSaveOverride) return;
+          onSaveOverride(fp.plan_id, {
+            floors: effFloors,
+            units: effUnits.filter((x) => x !== u),
+          });
+        };
+        const addUnit = (u: string) => {
+          if (!onSaveOverride || effUnits.includes(u)) return;
+          onSaveOverride(fp.plan_id, {
+            floors: effFloors,
+            units: [...effUnits, u],
+          });
+        };
+
+        const pickerOptions = allUnitPlans
+          .map((u) => u.reference_id || u.plan_id)
+          .filter((u, i, arr) => u && !effUnits.includes(u) && arr.indexOf(u) === i);
+
+        return (
+          <div key={fp.plan_id} className="border rounded-md p-2 space-y-2 bg-card">
+            <div className="flex items-center gap-2 min-w-0">
+              <span
+                className="h-2.5 w-2.5 rounded-sm shrink-0"
+                style={{ backgroundColor: color, border: `1px solid ${color}` }}
+              />
+              <span className="font-medium text-sm truncate flex-1" title={label}>{label}</span>
+              <span className="text-[10px] uppercase tracking-wide text-muted-foreground shrink-0">
+                {fp.type.replace(/_/g, " ")}
+              </span>
+            </div>
+
+            {isLevel && (
+              <div className="space-y-1">
+                <div className="flex items-center justify-between">
+                  <span className="text-[11px] font-medium text-muted-foreground">Floors</span>
+                  {onEditFloors && (
+                    <button
+                      type="button"
+                      onClick={() => onEditFloors(fp.plan_id, effFloors)}
+                      className="text-muted-foreground hover:text-foreground p-0.5 rounded hover:bg-muted/50"
+                      aria-label="Edit floors"
+                      title="Edit floors"
+                    >
+                      <Pencil className="h-3 w-3" />
+                    </button>
+                  )}
+                </div>
+                <div className="flex flex-wrap gap-1">
+                  {effFloors.length === 0 ? (
+                    <button
+                      type="button"
+                      onClick={() => onEditFloors?.(fp.plan_id, effFloors)}
+                      className="text-[11px] italic text-muted-foreground hover:text-foreground"
+                    >
+                      No floors — add
+                    </button>
+                  ) : (
+                    effFloors.map((f) => (
+                      <Badge
+                        key={f}
+                        variant="outline"
+                        className="bg-sky-500/10 text-sky-700 border-sky-500/30 h-5 px-1.5 text-[10px] cursor-pointer hover:opacity-80"
+                        onClick={() => onEditFloors?.(fp.plan_id, effFloors)}
+                      >
+                        {f}
+                      </Badge>
+                    ))
+                  )}
+                </div>
+              </div>
+            )}
+
+            {isLevel && (
+              <div className="space-y-1">
+                <div className="flex items-center justify-between">
+                  <span className="text-[11px] font-medium text-muted-foreground">Units</span>
+                  {pickerOptions.length > 0 && onSaveOverride && (
+                    <Popover>
+                      <PopoverTrigger asChild>
+                        <button
+                          type="button"
+                          className="text-muted-foreground hover:text-foreground p-0.5 rounded hover:bg-muted/50"
+                          aria-label="Add unit"
+                          title="Add unit"
+                        >
+                          <Plus className="h-3 w-3" />
+                        </button>
+                      </PopoverTrigger>
+                      <PopoverContent align="end" className="w-56 p-1">
+                        <div className="max-h-56 overflow-y-auto">
+                          {pickerOptions.map((u) => (
+                            <button
+                              key={u}
+                              type="button"
+                              onClick={() => addUnit(u)}
+                              className="w-full text-left text-xs px-2 py-1 rounded hover:bg-muted"
+                            >
+                              {u}
+                            </button>
+                          ))}
+                        </div>
+                      </PopoverContent>
+                    </Popover>
+                  )}
+                </div>
+                <div className="flex flex-wrap gap-1">
+                  {effUnits.length === 0 ? (
+                    <span className="text-[11px] italic text-muted-foreground">No units</span>
+                  ) : (
+                    effUnits.map((u) => (
+                      <Badge
+                        key={u}
+                        variant="outline"
+                        className="bg-amber-500/10 text-amber-700 border-amber-500/30 h-5 px-1.5 text-[10px] gap-1"
+                      >
+                        {u}
+                        {onSaveOverride && (
+                          <button
+                            type="button"
+                            onClick={() => removeUnit(u)}
+                            className="hover:text-destructive"
+                            aria-label={`Remove ${u}`}
+                          >
+                            <X className="h-2.5 w-2.5" />
+                          </button>
+                        )}
+                      </Badge>
+                    ))
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
+        );
+      })}
+      {floorPlans.length === 0 && (
+        <div className="text-xs text-muted-foreground italic p-2">
+          No floor plans detected on this page.
+        </div>
+      )}
+    </div>
   );
 };

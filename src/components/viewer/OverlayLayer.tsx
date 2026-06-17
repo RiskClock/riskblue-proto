@@ -214,28 +214,46 @@ export const OverlayLayer = ({
   void viewScale;
 
   const circles: CircleInfo[] = useMemo(() => {
-    return overlays.map((o) => {
-      const color = o.color ?? defaultColor;
-      const cx = (o.rect.nx + o.rect.nw / 2) * pageSize.width;
-      const cy = (o.rect.ny + o.rect.nh / 2) * pageSize.height;
-      const bboxSidePx = Math.max(
-        o.rect.nw * pageSize.width,
-        o.rect.nh * pageSize.height,
-      );
-      // Static minimum diameter floor (in page CSS px) so very tiny bboxes
-      // remain visible at fit-to-page scale. Scales with zoom naturally.
-      const diameter = Math.max(MIN_CIRCLE_DIAMETER_CSS, bboxSidePx * 1.5);
+    return overlays
+      .filter((o) => (o.shape ?? "circle") !== "rect")
+      .map((o) => {
+        const color = o.color ?? defaultColor;
+        const cx = (o.rect.nx + o.rect.nw / 2) * pageSize.width;
+        const cy = (o.rect.ny + o.rect.nh / 2) * pageSize.height;
+        const bboxSidePx = Math.max(
+          o.rect.nw * pageSize.width,
+          o.rect.nh * pageSize.height,
+        );
+        // Static minimum diameter floor (in page CSS px) so very tiny bboxes
+        // remain visible at fit-to-page scale. Scales with zoom naturally.
+        const diameter = Math.max(MIN_CIRCLE_DIAMETER_CSS, bboxSidePx * 1.5);
 
-      return {
+        return {
+          id: o.id,
+          cx,
+          cy,
+          r: diameter / 2,
+          color,
+          label: o.label,
+          hovered: hoveredId === o.id,
+        };
+      });
+  }, [overlays, pageSize.width, pageSize.height, defaultColor, hoveredId]);
+
+  // Rectangle overlays (outline only, no fill) — used for floor-plan bboxes.
+  const rects = useMemo(() => {
+    return overlays
+      .filter((o) => o.shape === "rect")
+      .map((o) => ({
         id: o.id,
-        cx,
-        cy,
-        r: diameter / 2,
-        color,
+        x: o.rect.nx * pageSize.width,
+        y: o.rect.ny * pageSize.height,
+        w: Math.max(1, o.rect.nw * pageSize.width),
+        h: Math.max(1, o.rect.nh * pageSize.height),
+        color: o.color ?? defaultColor,
         label: o.label,
         hovered: hoveredId === o.id,
-      };
-    });
+      }));
   }, [overlays, pageSize.width, pageSize.height, defaultColor, hoveredId]);
 
   // Label sizing in unscaled page CSS px (constant in document space).
@@ -356,6 +374,50 @@ export const OverlayLayer = ({
           />
         );
       })}
+
+      {/* Rectangle overlays — outline only, label pinned top-left. */}
+      {rects.map((r) => {
+        const labelFs = LABEL_FONT_PX;
+        return (
+          <div key={r.id} style={{ position: "absolute", left: r.x, top: r.y }}>
+            <div
+              style={{
+                width: r.w,
+                height: r.h,
+                borderColor: r.color,
+                borderWidth: r.hovered ? 3 : 2,
+                borderStyle: "solid",
+                backgroundColor: "transparent",
+                boxSizing: "border-box",
+                pointerEvents: "none",
+                boxShadow: `0 0 0 1px rgba(255,255,255,0.6)`,
+              }}
+            />
+            {r.label ? (
+              <div
+                className="absolute font-bold whitespace-nowrap pointer-events-none"
+                style={{
+                  left: 0,
+                  top: -(LABEL_H + 2),
+                  height: LABEL_H,
+                  lineHeight: `${LABEL_H}px`,
+                  fontSize: labelFs,
+                  paddingLeft: LABEL_PAD_X,
+                  paddingRight: LABEL_PAD_X,
+                  borderRadius: 3,
+                  backgroundColor: r.color,
+                  color: readableTextOn(r.color),
+                  boxShadow: `0 0 0 1px rgba(255,255,255,0.9)`,
+                  opacity: LABEL_OPACITY,
+                }}
+              >
+                {r.label}
+              </div>
+            ) : null}
+          </div>
+        );
+      })}
+
 
       {/* Labels (above circles). Intrinsic width hugs the text. */}
       {placedLabels.map((p) => (

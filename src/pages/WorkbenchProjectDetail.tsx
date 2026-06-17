@@ -67,6 +67,10 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { FileViewerModal } from "@/components/wizard/FileViewerModal";
+import {
+  parseSurveyFloorPlans,
+  type ParsedFloorPlan,
+} from "@/lib/surveyFloorPlans";
 import { DrawingViewer } from "@/components/viewer";
 import {
   prewarmDocumentSource,
@@ -216,7 +220,13 @@ export default function WorkbenchProjectDetail() {
   const [instancesReportOpen, setInstancesReportOpen] = useState(false);
   const [consolidateOpen, setConsolidateOpen] = useState(false);
   const [spaceEditTarget, setSpaceEditTarget] = useState<
-    { fileName: string; pageNumber: number; current: string[] } | null
+    {
+      fileName: string;
+      pageNumber: number;
+      current: string[];
+      planId?: string;
+      sheetId?: string;
+    } | null
   >(null);
   const [uploadingReport, setUploadingReport] = useState(false);
   const reportInputRef = useRef<HTMLInputElement>(null);
@@ -253,6 +263,114 @@ export default function WorkbenchProjectDetail() {
       mimeType: activePageView.file.mime_type || "application/pdf",
     };
   }, [activePageView]);
+
+  // ---------------------------------------------------------------
+  // Floor-plan data for the activePageView modal (single-page modal)
+  // ---------------------------------------------------------------
+  const [activeFileSurveyRaw, setActiveFileSurveyRaw] = useState<string | null>(null);
+  const [activeSheetIdForPage, setActiveSheetIdForPage] = useState<string | null>(null);
+  const [activeFloorPlanOverrides, setActiveFloorPlanOverrides] = useState<
+    Record<string, { floors?: string[]; units?: string[] }>
+  >({});
+
+  useEffect(() => {
+    if (!activePageView) {
+      setActiveFileSurveyRaw(null);
+      setActiveSheetIdForPage(null);
+      setActiveFloorPlanOverrides({});
+      return;
+    }
+    let cancelled = false;
+    (async () => {
+      const fileId = activePageView.file.id;
+      const page = activePageView.page;
+      const [fileRes, sheetRes] = await Promise.all([
+        supabase
+          .from("analysis_request_files")
+          .select("survey_raw_response")
+          .eq("id", fileId)
+          .maybeSingle(),
+        supabase
+          .from("analysis_request_sheets")
+          .select("id, floor_plan_overrides")
+          .eq("parent_file_id", fileId)
+          .eq("page_index", page)
+          .maybeSingle(),
+      ]);
+      if (cancelled) return;
+      setActiveFileSurveyRaw((fileRes.data as any)?.survey_raw_response ?? null);
+      setActiveSheetIdForPage((sheetRes.data as any)?.id ?? null);
+      const overrides = (sheetRes.data as any)?.floor_plan_overrides;
+      setActiveFloorPlanOverrides(
+        overrides && typeof overrides === "object" ? overrides : {},
+      );
+    })();
+    return () => { cancelled = true; };
+  }, [activePageView]);
+
+  const activeFileFloorPlansByPage = useMemo(
+    () => parseSurveyFloorPlans(activeFileSurveyRaw),
+    [activeFileSurveyRaw],
+  );
+
+  const activePageFloorPlans = useMemo<ParsedFloorPlan[]>(() => {
+    if (!activePageView) return [];
+    return activeFileFloorPlansByPage.get(activePageView.page) ?? [];
+  }, [activeFileFloorPlansByPage, activePageView]);
+
+  const activeFileAllUnitPlans = useMemo<ParsedFloorPlan[]>(() => {
+    const out: ParsedFloorPlan[] = [];
+    for (const plans of activeFileFloorPlansByPage.values()) {
+      for (const p of plans) {
+        if (p.type === "unit_floor_plan") out.push(p);
+      }
+    }
+    return out;
+  }, [activeFileFloorPlansByPage]);
+
+  const saveFloorPlanOverride = async (
+    planId: string,
+    next: { floors?: string[]; units?: string[] },
+  ) => {
+    if (!activeSheetIdForPage) {
+      toast({
+        variant: "destructive",
+        title: "Cannot save",
+        description: "No sheet row exists yet for this page.",
+      });
+      return;
+    }
+    const merged = {
+      ...activeFloorPlanOverrides,
+      [planId]: { ...(activeFloorPlanOverrides[planId] ?? {}), ...next },
+    };
+    setActiveFloorPlanOverrides(merged);
+    // Coalesce-safe: we re-write the full object derived from prior fetch
+    // (the column has a NOT NULL DEFAULT '{}' so the row is never null).
+    const { error } = await supabase
+      .from("analysis_request_sheets")
+      .update({ floor_plan_overrides: merged } as any)
+      .eq("id", activeSheetIdForPage);
+    if (error) {
+      toast({
+        variant: "destructive",
+        title: "Could not save floor plan",
+        description: getUserFriendlyError(error),
+      });
+    }
+  };
+
+  const openFloorEditForPlan = (planId: string, currentFloors: string[]) => {
+    if (!activePageView || !activeSheetIdForPage) return;
+    setSpaceEditTarget({
+      fileName: activePageView.file.name,
+      pageNumber: activePageView.page,
+      current: currentFloors,
+      planId,
+      sheetId: activeSheetIdForPage,
+    });
+  };
+
 
   const toggleExpand = (fileId: string) => {
     setExpandedFiles((prev) => {

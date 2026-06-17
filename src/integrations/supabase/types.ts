@@ -318,6 +318,7 @@ export type Database = {
           extract_status: string
           extracted_text: string | null
           floor_or_level: string | null
+          floor_plan_overrides: Json
           id: string
           metadata_confidence: number | null
           metadata_source: string | null
@@ -345,6 +346,7 @@ export type Database = {
           extract_status?: string
           extracted_text?: string | null
           floor_or_level?: string | null
+          floor_plan_overrides?: Json
           id?: string
           metadata_confidence?: number | null
           metadata_source?: string | null
@@ -372,6 +374,7 @@ export type Database = {
           extract_status?: string
           extracted_text?: string | null
           floor_or_level?: string | null
+          floor_plan_overrides?: Json
           id?: string
           metadata_confidence?: number | null
           metadata_source?: string | null
