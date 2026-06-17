@@ -125,6 +125,46 @@ type HistoryAction =
   | { type: "add"; instance: DrawingInstanceRow }
   | { type: "delete"; instance: DrawingInstanceRow };
 
+const PLAN_DIMENSION_ASPECT_TOLERANCE = 0.02;
+const PLAN_DIMENSION_FIT_TOLERANCE_PT = 6;
+
+function resolvePlanCoordinateSize(
+  plan: ParsedFloorPlan,
+  renderedPageSize: { width: number; height: number },
+  maxPlanBounds: { right: number; bottom: number },
+): { width: number; height: number } | null {
+  const declaredW = plan.page_dimensions_pt?.width ?? 0;
+  const declaredH = plan.page_dimensions_pt?.height ?? 0;
+  if (!(declaredW > 0) || !(declaredH > 0)) return null;
+  if (!(renderedPageSize.width > 0) || !(renderedPageSize.height > 0)) {
+    return { width: declaredW, height: declaredH };
+  }
+
+  const renderedAspect = renderedPageSize.width / renderedPageSize.height;
+  const declaredAspect = declaredW / declaredH;
+  const aspectDelta = Math.abs(declaredAspect - renderedAspect) / renderedAspect;
+  if (aspectDelta <= PLAN_DIMENSION_ASPECT_TOLERANCE) {
+    return { width: declaredW, height: declaredH };
+  }
+
+  // The parser sometimes reports a page height that does not match the actual
+  // rendered PDF aspect. Keep the coordinate width returned with the bbox and
+  // infer the coordinate height from the rendered page so x/y share one scale.
+  const widthBased = { width: declaredW, height: declaredW / renderedAspect };
+  const heightBased = { width: declaredH * renderedAspect, height: declaredH };
+  const fitsWidthBased =
+    maxPlanBounds.right <= widthBased.width + PLAN_DIMENSION_FIT_TOLERANCE_PT &&
+    maxPlanBounds.bottom <= widthBased.height + PLAN_DIMENSION_FIT_TOLERANCE_PT;
+  if (fitsWidthBased) return widthBased;
+
+  const fitsHeightBased =
+    maxPlanBounds.right <= heightBased.width + PLAN_DIMENSION_FIT_TOLERANCE_PT &&
+    maxPlanBounds.bottom <= heightBased.height + PLAN_DIMENSION_FIT_TOLERANCE_PT;
+  if (fitsHeightBased) return heightBased;
+
+  return { width: declaredW, height: declaredH };
+}
+
 export const FileViewerModal = ({
   isOpen,
   onClose,
@@ -550,16 +590,27 @@ export const FileViewerModal = ({
   const floorPlanOverlays: OverlayInput[] = useMemo(() => {
     if (!floorPlans || floorPlans.length === 0) return [];
     if (!renderedPageSize || renderedPageSize.width <= 0 || renderedPageSize.height <= 0) return [];
+    const maxPlanBounds = floorPlans.reduce(
+      (acc, fp) => {
+        const bb = fp.xy_width_height_pt;
+        if (!bb) return acc;
+        const [x, y, w, h] = bb;
+        return {
+          right: Math.max(acc.right, x + w),
+          bottom: Math.max(acc.bottom, y + h),
+        };
+      },
+      { right: 0, bottom: 0 },
+    );
     const out: OverlayInput[] = [];
     for (const fp of floorPlans) {
       const bb = fp.xy_width_height_pt;
       if (!Array.isArray(bb) || bb.length < 4) continue;
-      const pageW = fp.page_dimensions_pt?.width ?? 0;
-      const pageH = fp.page_dimensions_pt?.height ?? 0;
-      if (!(pageW > 0) || !(pageH > 0)) continue;
+      const coordSize = resolvePlanCoordinateSize(fp, renderedPageSize, maxPlanBounds);
+      if (!coordSize) continue;
       const [x, y, w, h] = bb;
-      const scaleX = renderedPageSize.width / pageW;
-      const scaleY = renderedPageSize.height / pageH;
+      const scaleX = renderedPageSize.width / coordSize.width;
+      const scaleY = renderedPageSize.height / coordSize.height;
       const left = x * scaleX;
       const top = y * scaleY;
       const width = w * scaleX;
@@ -571,7 +622,8 @@ export const FileViewerModal = ({
         page: fp.page_number,
         currentPage,
         xy_width_height_pt: { x, y, w, h },
-        page_dimensions_pt: { width: pageW, height: pageH },
+        page_dimensions_pt: fp.page_dimensions_pt,
+        coordinateSizeUsed: coordSize,
         renderedPageSize,
         scale: { scaleX, scaleY },
         pixels: { left, top, width, height, right: left + width, bottom: top + height },
