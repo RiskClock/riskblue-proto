@@ -229,6 +229,10 @@ export default function WorkbenchProjectDetail() {
       sheetId?: string;
     } | null
   >(null);
+  const [unitsEditTarget, setUnitsEditTarget] = useState<
+    { file: FileRow; page: number; plan: ParsedFloorPlan } | null
+  >(null);
+  const [identifyRunning, setIdentifyRunning] = useState(false);
   const [uploadingReport, setUploadingReport] = useState(false);
   const reportInputRef = useRef<HTMLInputElement>(null);
   const [downloadingAll, setDownloadingAll] = useState(false);
