@@ -275,14 +275,16 @@ export default function WorkbenchProjectDetail() {
   const [activeFileSurveyRaw, setActiveFileSurveyRaw] = useState<string | null>(null);
   const [activeSheetIdForPage, setActiveSheetIdForPage] = useState<string | null>(null);
   const [activeFloorPlanOverrides, setActiveFloorPlanOverrides] = useState<
-    Record<string, { floors?: string[]; units?: string[] }>
+    Record<string, any>
   >({});
+  const [activeFileRiskClasses, setActiveFileRiskClasses] = useState<string[]>([]);
 
   useEffect(() => {
     if (!activePageView) {
       setActiveFileSurveyRaw(null);
       setActiveSheetIdForPage(null);
       setActiveFloorPlanOverrides({});
+      setActiveFileRiskClasses([]);
       return;
     }
     let cancelled = false;
@@ -292,7 +294,7 @@ export default function WorkbenchProjectDetail() {
       const [fileRes, sheetRes] = await Promise.all([
         supabase
           .from("analysis_request_files")
-          .select("survey_raw_response")
+          .select("survey_raw_response, risk_element_results")
           .eq("id", fileId)
           .maybeSingle(),
         supabase
@@ -304,6 +306,14 @@ export default function WorkbenchProjectDetail() {
       ]);
       if (cancelled) return;
       setActiveFileSurveyRaw((fileRes.data as any)?.survey_raw_response ?? null);
+      const rer = (fileRes.data as any)?.risk_element_results as Record<string, any> | null;
+      const classes = rer && typeof rer === "object"
+        ? Object.keys(rer).filter((k) => {
+            const v = rer[k];
+            return v && typeof v === "object" && typeof v.result_text === "string" && v.result_text.length > 0;
+          })
+        : [];
+      setActiveFileRiskClasses(classes);
       setActiveSheetIdForPage((sheetRes.data as any)?.id ?? null);
       const overrides = (sheetRes.data as any)?.floor_plan_overrides;
       setActiveFloorPlanOverrides(
@@ -320,8 +330,11 @@ export default function WorkbenchProjectDetail() {
 
   const activePageFloorPlans = useMemo<ParsedFloorPlan[]>(() => {
     if (!activePageView) return [];
-    return activeFileFloorPlansByPage.get(activePageView.page) ?? [];
-  }, [activeFileFloorPlansByPage, activePageView]);
+    const base = activeFileFloorPlansByPage.get(activePageView.page) ?? [];
+    const added = getAddedUnitPlans(activeFloorPlanOverrides, activePageView.page)
+      .map(addedUnitPlanToParsed);
+    return [...base, ...added];
+  }, [activeFileFloorPlansByPage, activePageView, activeFloorPlanOverrides]);
 
   const activeFileAllUnitPlans = useMemo<ParsedFloorPlan[]>(() => {
     const out: ParsedFloorPlan[] = [];
@@ -330,8 +343,11 @@ export default function WorkbenchProjectDetail() {
         if (p.type === "unit_floor_plan") out.push(p);
       }
     }
+    for (const entry of getAddedUnitPlans(activeFloorPlanOverrides)) {
+      out.push(addedUnitPlanToParsed(entry));
+    }
     return out;
-  }, [activeFileFloorPlansByPage]);
+  }, [activeFileFloorPlansByPage, activeFloorPlanOverrides]);
 
   const activeFileAllLevelPlans = useMemo<ParsedFloorPlan[]>(() => {
     const out: ParsedFloorPlan[] = [];
@@ -342,6 +358,22 @@ export default function WorkbenchProjectDetail() {
     }
     return out;
   }, [activeFileFloorPlansByPage]);
+
+  // className -> planId derived from per-plan `annotations: string[]` overrides.
+  const activeAnnotationAssignments = useMemo<Record<string, string>>(() => {
+    const out: Record<string, string> = {};
+    for (const [planId, ovr] of Object.entries(activeFloorPlanOverrides)) {
+      if (planId.startsWith("__")) continue;
+      const anns = (ovr as any)?.annotations;
+      if (Array.isArray(anns)) {
+        for (const cn of anns) {
+          if (typeof cn === "string") out[cn] = planId;
+        }
+      }
+    }
+    return out;
+  }, [activeFloorPlanOverrides]);
+
 
   const saveFloorPlanOverride = async (
     planId: string,
