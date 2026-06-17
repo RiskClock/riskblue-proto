@@ -646,6 +646,7 @@ export const FileViewerModal = ({
                     <FloorPlansPanel
                       floorPlans={floorPlans}
                       allUnitPlans={allUnitPlans ?? []}
+                      allLevelPlans={allLevelPlans ?? []}
                       overrides={floorPlanOverrides ?? {}}
                       onSaveOverride={onSaveFloorPlanOverride}
                       onEditFloors={onEditFloors}
