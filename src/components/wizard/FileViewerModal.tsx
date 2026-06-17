@@ -606,6 +606,7 @@ export const FileViewerModal = ({
               layout="single-page"
               page={currentPage}
               onPageChange={singlePageOnly ? () => {} : setCurrentPage}
+              hidePageNav
               overlays={overlays}
               hoveredOverlayId={
                 hoveredCode
@@ -623,73 +624,54 @@ export const FileViewerModal = ({
             />
           </div>
 
+
           {sidebarEnabled && awpClasses ? (
             <div className="w-80 flex-shrink-0 border rounded-lg flex flex-col min-h-0">
-              {(floorPlans && floorPlans.length > 0) ? (
-                <Tabs defaultValue="floor-plans" className="flex-1 flex flex-col min-h-0">
-                  <TabsList className="m-2 grid grid-cols-2">
-                    <TabsTrigger value="floor-plans">Floor Plans</TabsTrigger>
-                    <TabsTrigger value="detections">Detections</TabsTrigger>
-                  </TabsList>
-                  <TabsContent
-                    value="floor-plans"
-                    forceMount
-                    className="flex-1 min-h-0 m-0 mt-0 overflow-hidden data-[state=inactive]:hidden"
-                  >
-                    <div className="h-full overflow-y-auto">
-                      <FloorPlansPanel
-                        floorPlans={floorPlans}
-                        allUnitPlans={allUnitPlans ?? []}
-                        allLevelPlans={allLevelPlans ?? []}
-                        overrides={floorPlanOverrides ?? {}}
-                        onSaveOverride={onSaveFloorPlanOverride}
-                        onEditFloors={onEditFloors}
-                        onEditLevelUnits={onEditLevelUnits}
-                      />
-                    </div>
-                  </TabsContent>
-                  <TabsContent value="detections" className="flex-1 overflow-hidden m-0 mt-0 flex flex-col min-h-0">
-                    <DetectionsPanel
-                      awpClasses={awpClasses}
-                      selectedClass={selectedClass}
-                      setSelectedClass={setSelectedClass}
-                      expanded={expanded}
-                      setExpanded={setExpanded}
-                      instancesByClassThisFile={instancesByClassThisFile}
-                      numberByInstanceId={numberByInstanceId}
-                      effectivePage={effectivePage}
-                      instanceLabel={instanceLabel}
-                      handleDeleteFromList={handleDeleteFromList}
-                      loadingInstances={loadingInstances}
-                      undo={undo}
-                      redo={redo}
-                      pastLen={past.length}
-                      futureLen={future.length}
-                      floorPlans={floorPlans}
+              <Tabs defaultValue="floor-plans" className="flex-1 flex flex-col min-h-0">
+                <TabsList className="m-2 grid grid-cols-2">
+                  <TabsTrigger value="floor-plans">Floor Plans</TabsTrigger>
+                  <TabsTrigger value="detections">Detections</TabsTrigger>
+                </TabsList>
+                <TabsContent
+                  value="floor-plans"
+                  forceMount
+                  className="flex-1 min-h-0 m-0 mt-0 overflow-hidden data-[state=inactive]:hidden"
+                >
+                  <div className="h-full overflow-y-auto">
+                    <FloorPlansPanel
+                      floorPlans={floorPlans ?? []}
+                      allUnitPlans={allUnitPlans ?? []}
+                      allLevelPlans={allLevelPlans ?? []}
+                      overrides={floorPlanOverrides ?? {}}
+                      onSaveOverride={onSaveFloorPlanOverride}
+                      onEditFloors={onEditFloors}
+                      onEditLevelUnits={onEditLevelUnits}
                     />
-                  </TabsContent>
-                </Tabs>
-              ) : (
-                <DetectionsPanel
-                  awpClasses={awpClasses}
-                  selectedClass={selectedClass}
-                  setSelectedClass={setSelectedClass}
-                  expanded={expanded}
-                  setExpanded={setExpanded}
-                  instancesByClassThisFile={instancesByClassThisFile}
-                  numberByInstanceId={numberByInstanceId}
-                  effectivePage={effectivePage}
-                  instanceLabel={instanceLabel}
-                  handleDeleteFromList={handleDeleteFromList}
-                  loadingInstances={loadingInstances}
-                  undo={undo}
-                  redo={redo}
-                  pastLen={past.length}
-                  futureLen={future.length}
-                  withHeader
-                />
-              )}
+                  </div>
+                </TabsContent>
+                <TabsContent value="detections" className="flex-1 overflow-hidden m-0 mt-0 flex flex-col min-h-0">
+                  <DetectionsPanel
+                    awpClasses={awpClasses}
+                    selectedClass={selectedClass}
+                    setSelectedClass={setSelectedClass}
+                    expanded={expanded}
+                    setExpanded={setExpanded}
+                    instancesByClassThisFile={instancesByClassThisFile}
+                    numberByInstanceId={numberByInstanceId}
+                    effectivePage={effectivePage}
+                    instanceLabel={instanceLabel}
+                    handleDeleteFromList={handleDeleteFromList}
+                    loadingInstances={loadingInstances}
+                    undo={undo}
+                    redo={redo}
+                    pastLen={past.length}
+                    futureLen={future.length}
+                    floorPlans={floorPlans}
+                  />
+                </TabsContent>
+              </Tabs>
             </div>
+
           ) : detections.length > 0 ? (
             <div className="w-64 flex-shrink-0 border rounded-lg p-3 flex flex-col">
               <h4 className="text-sm font-medium mb-2">
@@ -942,15 +924,9 @@ interface FloorPlansPanelProps {
 
 const FloorPlansPanel = ({
   floorPlans,
-  allUnitPlans,
   allLevelPlans,
   overrides,
-  onSaveOverride,
-  onEditLevelUnits,
 }: FloorPlansPanelProps) => {
-  const unitColor = awpClassColor("unit_floor_plan");
-  const unitTextColor = readableTextOn(unitColor);
-
   // For a unit floor plan, list the pages of level plans that reference it.
   const findReferencingLevels = (unit: ParsedFloorPlan): string[] => {
     const key = unitPlanRefKey(unit);
@@ -972,12 +948,11 @@ const FloorPlansPanel = ({
       {floorPlans.map((fp) => {
         const ovr = overrides[fp.plan_id] ?? {};
         const effFloors = ovr.floors ?? fp.floors;
-        const effUnits = ovr.units ?? fp.referenced_unit_ids;
         const color = awpClassColor(fp.type || "unknown");
-        const isLevel = fp.type === "level_floor_plan";
         const label = floorPlanDisplayLabel({ ...fp, floors: effFloors });
         const isUnit = fp.type === "unit_floor_plan";
         const referencedIn = isUnit ? findReferencingLevels(fp) : [];
+
 
         return (
           <div key={fp.plan_id} className="border rounded-md p-2 space-y-2 bg-card">
@@ -1012,42 +987,16 @@ const FloorPlansPanel = ({
               </div>
             )}
 
-            {isLevel && (
-              <div className="flex items-center gap-2">
-                <span className="text-[11px] font-medium text-muted-foreground">Units</span>
-                <button
-                  type="button"
-                  onClick={() => onEditLevelUnits?.(fp, effUnits)}
-                  disabled={!onEditLevelUnits || !onSaveOverride}
-                  className="inline-flex items-center gap-1 disabled:opacity-50 disabled:cursor-default"
-                  title="Edit units"
-                >
-                  <Badge
-                    variant="outline"
-                    className="h-5 px-1.5 text-[10px] gap-1"
-                    style={{
-                      backgroundColor: unitColor,
-                      color: unitTextColor,
-                      borderColor: unitColor,
-                    }}
-                  >
-                    {effUnits.length} unit{effUnits.length === 1 ? "" : "s"}
-                  </Badge>
-                  {onEditLevelUnits && onSaveOverride && (
-                    <Pencil className="h-3 w-3 text-muted-foreground" />
-                  )}
-                </button>
-              </div>
-            )}
           </div>
         );
       })}
       {floorPlans.length === 0 && (
         <div className="text-xs text-muted-foreground italic p-2">
-          No floor plans detected on this page.
+          No floor plan info available.
         </div>
       )}
     </div>
   );
 };
+
 

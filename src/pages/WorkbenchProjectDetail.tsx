@@ -80,7 +80,7 @@ import {
 } from "@/components/viewer/hooks/useDocumentSource";
 import { useAWPOptions, groupAWPOptionsByCategory } from "@/hooks/useAWPOptions";
 import { getUserFriendlyError } from "@/lib/errorHandling";
-import { awpClassColor, readableTextOn } from "@/lib/awpColor";
+import { awpClassColor, readableTextOn, softBgFrom } from "@/lib/awpColor";
 
 const PREF_ID = "global";
 
@@ -2926,27 +2926,30 @@ export default function WorkbenchProjectDetail() {
                     "Identify Risk Elements"
                   )}
                 </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => toast({ title: "Build Space Hierarchy", description: "Not wired up yet." })}
+                >
+                  Build Space Hierarchy
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => toast({ title: "Consolidate Risers", description: "Not wired up yet." })}
+                >
+                  Consolidate Risers
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => toast({ title: "Generate Instance Report", description: "Not wired up yet." })}
+                >
+                  Generate Instance Report
+                </Button>
               </div>
 
-              {/* Per-file progress status */}
-              {surveyProgress && (
-                <div className="text-center text-xs text-muted-foreground">
-                  {surveyRecoveredRun && !surveyRunning && surveyProgress.phase !== "done" && (
-                    <div className="mb-1 text-amber-700">
-                      Browser refreshed during Survey Pages. Saved file results below were recovered from the database; rerun to continue unfinished files.
-                    </div>
-                  )}
-                  {surveyProgress.phase === "done" ? (
-                    <span>Finished {surveyProgress.total} file{surveyProgress.total === 1 ? "" : "s"}.</span>
-                  ) : (
-                    <span>
-                      File {surveyProgress.current} of {surveyProgress.total} ·{" "}
-                      <span className="font-medium text-foreground">{surveyProgress.fileName}</span>{" "}
-                      · {surveyProgress.phase === "uploading" ? "uploading PDF…" : "querying Gemini…"}
-                    </span>
-                  )}
-                </div>
-              )}
+
 
               {/* Per-file raw response list. Click "View Response" to open the raw Gemini output in a modal. */}
               {rows?.files?.some((f) => (f.survey_raw_response ?? "").trim().length > 0) && (
@@ -3288,58 +3291,31 @@ export default function WorkbenchProjectDetail() {
                                         </span>
                                         {levelPlans.map((lvl) => {
                                           const c = awpClassColor(lvl.type);
-                                          const tc = readableTextOn(c);
                                           const lbl = floorPlanDisplayLabel(lvl);
-                                          const units = lvl.referenced_unit_ids;
-                                          return (
-                                            <span key={`lvl-${lvl.plan_id}`} className="inline-flex items-center gap-1">
-                                              <Badge
-                                                variant="outline"
-                                                className="h-5 px-1.5 text-[10px]"
-                                                style={{ backgroundColor: c, color: tc, borderColor: c }}
-                                              >
-                                                {lbl}
-                                              </Badge>
-                                              {units.length > 0 && (
-                                                <button
-                                                  type="button"
-                                                  onClick={(e) => {
-                                                    e.stopPropagation();
-                                                    setUnitsEditTarget({ fileId: row.id, fileName: row.name, page: p, plan: lvl });
-                                                  }}
-                                                  className="inline-flex"
-                                                  title="Edit units"
-                                                >
-                                                  <Badge
-                                                    variant="outline"
-                                                    className="h-5 px-1.5 text-[10px] hover:opacity-80"
-                                                    style={{
-                                                      backgroundColor: awpClassColor("unit_floor_plan"),
-                                                      color: readableTextOn(awpClassColor("unit_floor_plan")),
-                                                      borderColor: awpClassColor("unit_floor_plan"),
-                                                    }}
-                                                  >
-                                                    {units.length} unit{units.length === 1 ? "" : "s"}
-                                                  </Badge>
-                                                </button>
-                                              )}
-                                            </span>
-                                          );
-                                        })}
-                                        {unitPlans.map((u) => {
-                                          const c = awpClassColor(u.type);
-                                          const tc = readableTextOn(c);
                                           return (
                                             <Badge
-                                              key={`u-${u.plan_id}`}
+                                              key={`lvl-${lvl.plan_id}`}
                                               variant="outline"
                                               className="h-5 px-1.5 text-[10px]"
-                                              style={{ backgroundColor: c, color: tc, borderColor: c }}
+                                              style={{ backgroundColor: softBgFrom(c), color: c, borderColor: softBgFrom(c, 0.5) }}
                                             >
-                                              {floorPlanDisplayLabel(u)}
+                                              {lbl}
                                             </Badge>
                                           );
                                         })}
+                                        {unitPlans.length > 0 && (() => {
+                                          const c = awpClassColor("unit_floor_plan");
+                                          return (
+                                            <Badge
+                                              variant="outline"
+                                              className="h-5 px-1.5 text-[10px]"
+                                              style={{ backgroundColor: softBgFrom(c), color: c, borderColor: softBgFrom(c, 0.5) }}
+                                            >
+                                              {unitPlans.length} unit plan{unitPlans.length === 1 ? "" : "s"}
+                                            </Badge>
+                                          );
+                                        })()}
+
                                       </div>
                                     </TableCell>
                                     {enabledCols.map((name) => {

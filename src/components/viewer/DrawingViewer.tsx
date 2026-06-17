@@ -48,6 +48,8 @@ export interface DrawingViewerProps {
   minScale?: number;
   maxScale?: number;
   showToolbar?: boolean;
+  /** Hide page-navigation arrows + jump input even when totalPages > 1. */
+  hidePageNav?: boolean;
   toolbarSlot?: "top" | "external";
   /** When toolbarSlot === 'external', callbacks are exposed via onApiReady. */
   onApiReady?: (api: DrawingViewerApi) => void;
@@ -81,6 +83,7 @@ export const DrawingViewer = forwardRef<DrawingViewerApi, DrawingViewerProps>(
       minScale = DEFAULT_MIN,
       maxScale = DEFAULT_MAX,
       showToolbar = true,
+      hidePageNav = false,
       toolbarSlot = "top",
       onApiReady,
       onTotalPagesChange,
@@ -155,7 +158,7 @@ export const DrawingViewer = forwardRef<DrawingViewerApi, DrawingViewerProps>(
     // or natural pdfSize (stacked mode lets pages flow vertically).
     const activePage =
       layout === "single-page"
-        ? allPages.find((p) => p.pageNum === page) ?? allPages[0]
+        ? allPages.find((p) => p.pageNum === page) ?? null
         : allPages[0];
 
     const pageCssSize = useMemo(() => {
@@ -315,7 +318,7 @@ export const DrawingViewer = forwardRef<DrawingViewerApi, DrawingViewerProps>(
                   : undefined
               }
               pageNav={
-                layout === "single-page" && totalPages > 1
+                !hidePageNav && layout === "single-page" && totalPages > 1
                   ? {
                       current: page,
                       total: totalPages,
@@ -419,7 +422,14 @@ export const DrawingViewer = forwardRef<DrawingViewerApi, DrawingViewerProps>(
 
               </TransformComponent>
             </TransformWrapper>
-          ) : null}
+          ) : (
+            <div className="flex items-center justify-center h-full">
+              <div className="text-center space-y-2">
+                <Loader2 className="w-8 h-8 animate-spin text-muted-foreground mx-auto" />
+                <p className="text-sm text-muted-foreground">Loading page {page}…</p>
+              </div>
+            </div>
+          )}
         </div>
       </div>
     );
