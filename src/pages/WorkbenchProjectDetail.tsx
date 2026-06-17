@@ -3212,27 +3212,76 @@ export default function WorkbenchProjectDetail() {
 
                             {/* Per-page sub-rows (only when multi-page AND expanded) — matches first table */}
                             {!singlePage && isExpanded && count > 0 &&
-                              Array.from({ length: count }, (_, i) => i + 1).map((p) => (
-                                <TableRow
-                                  key={`${row.id}:${p}`}
-                                  className="group h-8 cursor-pointer bg-muted/10"
-                                  onClick={() => setActivePageView({ file: row, page: p })}
-                                >
-                                  <TableCell
-                                    className={`${stickyCellFirstBase} bg-muted/10 group-hover:bg-muted/30 py-1 text-sm`}
+                              Array.from({ length: count }, (_, i) => i + 1).map((p) => {
+                                const pagePlans =
+                                  floorPlansByFile.get(row.id)?.get(p) ?? [];
+                                const floorBadges = Array.from(
+                                  new Set(pagePlans.flatMap((fp) => fp.floors)),
+                                );
+                                const refBadges = Array.from(
+                                  new Set(
+                                    pagePlans
+                                      .map((fp) => fp.reference_id)
+                                      .filter((r): r is string => !!r),
+                                  ),
+                                );
+                                return (
+                                  <TableRow
+                                    key={`${row.id}:${p}`}
+                                    className="group h-8 cursor-pointer bg-muted/10"
+                                    onClick={() => setActivePageView({ file: row, page: p })}
                                   >
-                                    <div className="flex items-center gap-2 min-w-0 pl-7">
-                                      <span className="text-muted-foreground shrink-0">
-                                        Page {p}
-                                      </span>
-                                    </div>
-                                  </TableCell>
-                                  {enabledCols.map((name) => (
-                                    <TableCell key={name} className="py-1" />
-                                  ))}
-                                  <TableCell className="py-1" />
-                                </TableRow>
-                              ))
+                                    <TableCell
+                                      className={`${stickyCellFirstBase} bg-muted/10 group-hover:bg-muted/30 py-1 text-sm`}
+                                    >
+                                      <div className="flex items-center gap-1.5 min-w-0 pl-7 flex-wrap">
+                                        <span className="text-muted-foreground shrink-0">
+                                          Page {p}
+                                        </span>
+                                        {floorBadges.map((f) => (
+                                          <Badge
+                                            key={`f-${f}`}
+                                            variant="outline"
+                                            className="h-5 px-1.5 text-[10px] bg-sky-500/10 text-sky-700 border-sky-500/30"
+                                          >
+                                            {f}
+                                          </Badge>
+                                        ))}
+                                        {refBadges.map((r) => (
+                                          <Badge
+                                            key={`r-${r}`}
+                                            variant="outline"
+                                            className="h-5 px-1.5 text-[10px] font-mono bg-muted text-foreground"
+                                          >
+                                            {r}
+                                          </Badge>
+                                        ))}
+                                      </div>
+                                    </TableCell>
+                                    {enabledCols.map((name) => {
+                                      const cnt =
+                                        pageInstanceCountLookup.get(
+                                          `${row.id}::${p}::${name}`,
+                                        ) || 0;
+                                      return (
+                                        <TableCell
+                                          key={name}
+                                          className="text-center py-1"
+                                        >
+                                          {cnt > 0 ? (
+                                            <span className="font-medium tabular-nums">
+                                              {cnt}
+                                            </span>
+                                          ) : (
+                                            <span className="text-muted-foreground">—</span>
+                                          )}
+                                        </TableCell>
+                                      );
+                                    })}
+                                    <TableCell className="py-1" />
+                                  </TableRow>
+                                );
+                              })
                             }
                           </Fragment>
                         );
