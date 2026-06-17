@@ -109,7 +109,7 @@ export function parseSurveyFloorPlans(
         plan_id,
         type: (fp.type as FloorPlanType) ?? "unknown",
         reference_id,
-        bounding_box_pt: asBbox(fp.bounding_box_pt),
+        xy_width_height_pt: asBbox(fp.xy_width_height_pt),
         page_number: pageNum,
         page_dimensions_pt: dims,
         floors,
