@@ -117,6 +117,8 @@ interface FileViewerModalProps {
   ) => Promise<void> | void;
   /** Page-level handler that opens SpaceEditModal scoped to a plan. */
   onEditFloors?: (planId: string, currentFloors: string[]) => void;
+  /** Open the units-editor modal for a level plan. */
+  onEditLevelUnits?: (plan: ParsedFloorPlan, currentUnits: string[]) => void;
 }
 
 const BOUNDING_BOX_COLOR = "#39FF14"; // legacy detections (green)
