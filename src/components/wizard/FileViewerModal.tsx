@@ -10,19 +10,12 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from "@/components/ui/popover";
-import {
   ChevronDown,
   ChevronRight,
   Loader2,
   Pencil,
-  Plus,
   Redo2,
   Undo2,
-  X,
 } from "lucide-react";
 import { DrawingViewer } from "@/components/viewer";
 import type {
@@ -117,6 +110,8 @@ interface FileViewerModalProps {
   ) => Promise<void> | void;
   /** Page-level handler that opens SpaceEditModal scoped to a plan. */
   onEditFloors?: (planId: string, currentFloors: string[]) => void;
+  /** Open the units-editor modal for a level plan. */
+  onEditLevelUnits?: (plan: ParsedFloorPlan, currentUnits: string[]) => void;
 }
 
 const BOUNDING_BOX_COLOR = "#39FF14"; // legacy detections (green)
@@ -154,6 +149,7 @@ export const FileViewerModal = ({
   floorPlanOverrides,
   onSaveFloorPlanOverride,
   onEditFloors,
+  onEditLevelUnits,
 }: FileViewerModalProps) => {
   const { toast } = useToast();
   const [hoveredCode, setHoveredCode] = useState<string | null>(null);
@@ -648,6 +644,7 @@ export const FileViewerModal = ({
                         overrides={floorPlanOverrides ?? {}}
                         onSaveOverride={onSaveFloorPlanOverride}
                         onEditFloors={onEditFloors}
+                        onEditLevelUnits={onEditLevelUnits}
                       />
                     </div>
                   </TabsContent>
@@ -940,6 +937,7 @@ interface FloorPlansPanelProps {
     next: { floors?: string[]; units?: string[] },
   ) => Promise<void> | void;
   onEditFloors?: (planId: string, currentFloors: string[]) => void;
+  onEditLevelUnits?: (plan: ParsedFloorPlan, currentUnits: string[]) => void;
 }
 
 const FloorPlansPanel = ({
@@ -948,14 +946,12 @@ const FloorPlansPanel = ({
   allLevelPlans,
   overrides,
   onSaveOverride,
-  onEditFloors,
+  onEditLevelUnits,
 }: FloorPlansPanelProps) => {
-  // Shared color for unit chips + unit floor-plan bounding boxes.
   const unitColor = awpClassColor("unit_floor_plan");
   const unitTextColor = readableTextOn(unitColor);
 
   // For a unit floor plan, list the pages of level plans that reference it.
-  // Honors per-level overrides where available.
   const findReferencingLevels = (unit: ParsedFloorPlan): string[] => {
     const key = unitPlanRefKey(unit);
     const pages = new Set<number>();
@@ -980,26 +976,6 @@ const FloorPlansPanel = ({
         const color = awpClassColor(fp.type || "unknown");
         const isLevel = fp.type === "level_floor_plan";
         const label = floorPlanDisplayLabel({ ...fp, floors: effFloors });
-
-        const removeUnit = (u: string) => {
-          if (!onSaveOverride) return;
-          onSaveOverride(fp.plan_id, {
-            floors: effFloors,
-            units: effUnits.filter((x) => x !== u),
-          });
-        };
-        const addUnit = (u: string) => {
-          if (!onSaveOverride || effUnits.includes(u)) return;
-          onSaveOverride(fp.plan_id, {
-            floors: effFloors,
-            units: [...effUnits, u],
-          });
-        };
-
-        const pickerOptions = allUnitPlans
-          .map((u) => u.reference_id || u.plan_id)
-          .filter((u, i, arr) => u && !effUnits.includes(u) && arr.indexOf(u) === i);
-
         const isUnit = fp.type === "unit_floor_plan";
         const referencedIn = isUnit ? findReferencingLevels(fp) : [];
 
@@ -1037,114 +1013,30 @@ const FloorPlansPanel = ({
             )}
 
             {isLevel && (
-              <div className="space-y-1">
-                <div className="flex items-center justify-between">
-                  <span className="text-[11px] font-medium text-muted-foreground">Floors</span>
-                  {onEditFloors && (
-                    <button
-                      type="button"
-                      onClick={() => onEditFloors(fp.plan_id, effFloors)}
-                      className="text-muted-foreground hover:text-foreground p-0.5 rounded hover:bg-muted/50"
-                      aria-label="Edit floors"
-                      title="Edit floors"
-                    >
-                      <Pencil className="h-3 w-3" />
-                    </button>
+              <div className="flex items-center gap-2">
+                <span className="text-[11px] font-medium text-muted-foreground">Units</span>
+                <button
+                  type="button"
+                  onClick={() => onEditLevelUnits?.(fp, effUnits)}
+                  disabled={!onEditLevelUnits || !onSaveOverride}
+                  className="inline-flex items-center gap-1 disabled:opacity-50 disabled:cursor-default"
+                  title="Edit units"
+                >
+                  <Badge
+                    variant="outline"
+                    className="h-5 px-1.5 text-[10px] gap-1"
+                    style={{
+                      backgroundColor: unitColor,
+                      color: unitTextColor,
+                      borderColor: unitColor,
+                    }}
+                  >
+                    {effUnits.length} unit{effUnits.length === 1 ? "" : "s"}
+                  </Badge>
+                  {onEditLevelUnits && onSaveOverride && (
+                    <Pencil className="h-3 w-3 text-muted-foreground" />
                   )}
-                </div>
-                <div className="flex flex-wrap gap-1">
-                  {effFloors.length === 0 ? (
-                    <button
-                      type="button"
-                      onClick={() => onEditFloors?.(fp.plan_id, effFloors)}
-                      className="text-[11px] italic text-muted-foreground hover:text-foreground"
-                    >
-                      No floors — add
-                    </button>
-                  ) : (
-                    effFloors.map((f) => (
-                      <Badge
-                        key={f}
-                        variant="outline"
-                        className="bg-sky-500/10 text-sky-700 border-sky-500/30 h-5 px-1.5 text-[10px] cursor-pointer hover:opacity-80"
-                        onClick={() => onEditFloors?.(fp.plan_id, effFloors)}
-                      >
-                        {f}
-                      </Badge>
-                    ))
-                  )}
-                </div>
-              </div>
-            )}
-
-            {isLevel && (
-              <div className="space-y-1">
-                <div className="flex items-center justify-between">
-                  <span className="text-[11px] font-medium text-muted-foreground">Units</span>
-                  {pickerOptions.length > 0 && onSaveOverride && (
-                    <Popover>
-                      <PopoverTrigger asChild>
-                        <button
-                          type="button"
-                          className="text-muted-foreground hover:text-foreground p-0.5 rounded hover:bg-muted/50"
-                          aria-label="Add unit"
-                          title="Add unit"
-                        >
-                          <Plus className="h-3 w-3" />
-                        </button>
-                      </PopoverTrigger>
-                      <PopoverContent
-                        align="end"
-                        className="w-56 p-1 max-h-[min(16rem,var(--radix-popover-content-available-height))] overflow-y-auto overscroll-contain"
-                        onWheelCapture={(e) => e.stopPropagation()}
-                        onTouchMoveCapture={(e) => e.stopPropagation()}
-                      >
-                        <div className="space-y-0.5">
-                          {pickerOptions.map((u) => (
-                            <button
-                              key={u}
-                              type="button"
-                              onClick={() => addUnit(u)}
-                              className="w-full text-left text-xs px-2 py-1 rounded hover:bg-muted"
-                            >
-                              {u}
-                            </button>
-                          ))}
-                        </div>
-                      </PopoverContent>
-                    </Popover>
-                  )}
-                </div>
-                <div className="flex flex-wrap gap-1">
-                  {effUnits.length === 0 ? (
-                    <span className="text-[11px] italic text-muted-foreground">No units</span>
-                  ) : (
-                    effUnits.map((u) => (
-                      <Badge
-                        key={u}
-                        variant="outline"
-                        className="h-5 px-1.5 text-[10px] gap-1"
-                        style={{
-                          backgroundColor: unitColor,
-                          color: unitTextColor,
-                          borderColor: unitColor,
-                        }}
-                      >
-                        {u}
-                        {onSaveOverride && (
-                          <button
-                            type="button"
-                            onClick={() => removeUnit(u)}
-                            className="hover:opacity-70"
-                            aria-label={`Remove ${u}`}
-                          >
-                            <X className="h-2.5 w-2.5" />
-                          </button>
-                        )}
-                      </Badge>
-                    ))
-                  )}
-                </div>
+                </button>
               </div>
             )}
           </div>
@@ -1158,3 +1050,4 @@ const FloorPlansPanel = ({
     </div>
   );
 };
+

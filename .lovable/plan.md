@@ -1,48 +1,103 @@
-# Plan
+## 1 — Badge colors + label format
 
-## 1. Project-created email: include selected assets & water systems
+**File:** `src/pages/WorkbenchProjectDetail.tsx` (per-page sub-row in second table)
 
-**File:** `supabase/functions/send-project-created-email/index.ts`
+Rebuild page-row badges so each badge matches its source plan's bounding-box color and uses the same label format level/unit plans use elsewhere:
 
-- After loading the project, also read `projects.selected_awp_class_names` and `projects.selected_other_classes`.
-- Look up matching rows in `awp_classes` (by `name`) to split into:
-  - **Critical Assets** (`category = 'Asset'`)
-  - **Water Systems** (`category = 'Water System'`)
-  - **Processes** (`category = 'Process'`)
-  - **Other** (any names not found in `awp_classes`, from `selected_other_classes`)
-- Render each group as a bulleted named list under headings. If a group is empty, omit the heading.
-- Keep the existing project / creator / id / timestamp block at the top.
+- For each plan on the page render a single badge:
+  - `label = floorPlanDisplayLabel(plan)` (reference_id → floors → plan_id)
+  - background/border = `awpClassColor(plan.type)` (same color the bbox uses)
+  - text color = `readableTextOn(color)`
+- Drop the separate floor / reference_id badge tracks.
+- Append a small secondary `{N} units` pill after each **level** plan badge when `referenced_unit_ids.length > 0` (clickable — see #3).
 
-No schema changes.
+## 2 — Remove "Floors" section in the drawing-modal floor-plan card
 
-## 2. Workbench: rich failure popover instead of bare "Failed"
+**File:** `src/components/wizard/FileViewerModal.tsx` → `FloorPlansPanel`
 
-**File:** `src/pages/InternalWorkbench.tsx`
+Delete the `isLevel && (… Floors …)` block. Leave bbox label, type, Referenced-in (units) and Units (levels) sections intact.
 
-- Extend the row fetch to also pull `pipeline_phase`, `error_message`, `pipeline_progress_done`, `pipeline_progress_total`, and `updated_at` from `analysis_requests` for each project.
-- Replace the static Status badge cell with a shadcn `Popover` (click-to-open) that shows for any non-terminal/failed status:
-  - **Phase**: human label of `pipeline_phase` (Splitting / Extracting / Triaging / Analyzing / Summarizing).
-  - **Error**: `error_message` if present (mono, wrapped).
-  - **Progress**: `done / total` if both present.
-  - **Last activity**: relative time from `updated_at` (e.g. "stalled 14m ago").
-  - A **Resume / Retry** shortcut button that navigates to `/internal/workbench/project/{id}` (where the existing phase-action button lives).
-- The trigger stays the colored status badge so the table layout doesn't change. Add a small info dot on `failed` / `processing` rows to hint it's clickable.
+## 3 — Units → count + edit modal
 
-No backend changes for this item.
+**Where:**
+- `FloorPlansPanel` (drawing modal): replace the per-unit Badge list with `Badge: "{N} units"` + pencil button.
+- `WorkbenchProjectDetail` page-row: the new `{N} units` pill after each level badge from #1.
 
-## 3. Splitting status clarity (proposed changes for #3)
+Both buttons open a new `EditLevelUnitsModal` (added to `src/components/wizard/`):
+- Props: `levelPlan`, `allUnitPlans`, current units, `onSave(units)`.
+- UI: list of current unit refs with `X` remove + an "Add unit" combobox sourced from `allUnitPlans` filtered to those not already added.
+- Persistence: reuses existing `onSaveFloorPlanOverride(planId, { floors, units })` writing to `floor_plan_overrides` JSONB on `analysis_request_sheets`.
 
-These are improvements based on the explanation above. Confirm which you want before I build:
+The workbench page-row needs an `onEditLevelUnits(plan, page)` callback wired up; it already has `floorPlansByFile` and a `saveFloorPlanOverride` helper.
 
-a. **Per-row phase label in workbench status** — show the active `pipeline_phase` (e.g. "Splitting 3/12") as the badge text while `status = processing`, instead of just "Processing". Keeps a single column; no schema change.
+## 4 — Gemini explicit context cache + Identify Risk Elements
 
-b. **Surface per-file split state in the project detail page** — show `analysis_request_files.split_status` (`splitting` / `split_partial` / `split` / `failed`) next to each file row, with a tooltip explaining what each means. Helps answer "why is this one file stuck".
+### 4a. Schema migration
 
-c. **Auto-kickoff on upload** (optional) — today the pipeline only starts when the user clicks Start. If you want uploads to begin splitting immediately, we can have the upload flow call `run-analysis-pipeline` with a `phase_override = 'split_only'` so PNGs are ready by the time the user gets back. (Skip if you prefer the current manual gate.)
+Add two columns to `analysis_request_files`:
+- `gemini_cache_id text`
+- `gemini_cache_expires_at timestamptz`
 
-d. **No change to parallelism** — recommend keeping serial-per-invocation split (memory-bound). The cron tick rate already gives effective cross-file parallelism. Flag only if you want me to revisit.
+No RLS changes — table already has policies.
 
-## Out of scope
-- Changing the cron schedule or worker concurrency caps.
-- Reworking `analysis_requests.status` enum.
-- Email template restructure beyond adding the selection sections.
+### 4b. `supabase/functions/survey-pages/index.ts`
+
+Switch to `npm:@google/genai`. After uploading the PDF to the Files API:
+
+1. **Create a sterile, multi-purpose cache** — pass only the PDF blob. **Do not** put the survey prompt or any agent instructions inside the cache so downstream agents (Risk Elements, Kitchen, etc.) can reuse the same cache id without contamination.
+
+   ```ts
+   const cache = await ai.caches.create({
+     model: 'gemini-3.5-flash',
+     config: {
+       displayName: `sheet-analysis-${fileId}`,
+       contents: [{ role: 'user', parts: [{ fileData: { fileUri: uri, mimeType } }] }],
+       ttl: '7200s',   // 2 hours
+     },
+   });
+   ```
+
+2. **Run the survey call** passing the survey system prompt at *execution* time via `config.systemInstruction`, and reference the sterile cache via `config.cachedContent`:
+
+   ```ts
+   await ai.models.generateContent({
+     model: 'gemini-3.5-flash',
+     contents: [{ role: 'user', parts: [{ text: 'Process this file layout structure.' }] }],
+     config: {
+       cachedContent: cache.name,
+       systemInstruction: SURVEY_PAGES_PROMPT,
+     },
+   });
+   ```
+
+3. Persist `{ gemini_cache_id: cache.name, gemini_cache_expires_at: now + 2h }` on the `analysis_request_files` row alongside the existing `survey_raw_response` update.
+
+If `caches.create` fails (Gemini requires the cached prefix to exceed its minimum token count for the model), fall back to a direct non-cached call and leave the cache columns null.
+
+### 4c. New edge function `supabase/functions/identify-risk-elements/index.ts`
+
+Input: `{ analysisRequestId, fileId, awpClassNames: string[] }` — the classes currently enabled in the workbench column toggles.
+
+Per invocation:
+1. Load file row → read `gemini_cache_id`, `gemini_cache_expires_at`.
+2. If missing/expired, rebuild the sterile cache using the same helper as 4b (re-download PDF, re-upload to Files API, `caches.create` with only the PDF blob, update row).
+3. Load `awp_class_prompts.prompt_text` for each requested class.
+4. Fan out in parallel — one `ai.models.generateContent` per class, passing the class prompt as `config.systemInstruction` and the sterile cache id as `config.cachedContent`. User part is a short generic kicker like `"Identify all risk elements per the system instruction."`.
+5. Persist raw text per class into `analysis_results` keyed by `(analysis_request_id, file_id, awp_class_name, kind='risk_elements')`.
+
+Return `202 { started: true }` and use `EdgeRuntime.waitUntil` like survey-pages.
+
+### 4d. Client wiring
+
+`src/pages/WorkbenchProjectDetail.tsx`:
+- Existing "Identify Risk Elements" button → loop uploaded files, invoke `identify-risk-elements` for each with the currently enabled `enabledCols` class list. Toast on dispatch; do not block UI.
+
+## Technical notes
+
+- `@google/genai` works in Deno via `npm:@google/genai`: `import { GoogleGenAI } from 'npm:@google/genai'; const ai = new GoogleGenAI({ apiKey: Deno.env.get('GEMINI_API_KEY')! });`
+- Model id stays `gemini-3.5-flash` everywhere — `caches.create` and `generateContent` must use the same model id.
+- `gemini_cache_expires_at` is informational only; the SDK call relies on the cache name still being valid server-side.
+
+## Out of scope (this turn)
+
+- Where per-class risk-element results render in the UI — we just persist them. Confirm afterwards if you want a column/row treatment.

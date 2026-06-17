@@ -242,6 +242,8 @@ export type Database = {
           drive_file_id: string
           expected_page_count: number | null
           extracted_text: string | null
+          gemini_cache_expires_at: string | null
+          gemini_cache_id: string | null
           id: string
           mime_type: string
           name: string
@@ -250,6 +252,7 @@ export type Database = {
           openai_file_status: string | null
           openai_file_uploaded_at: string | null
           relative_path: string
+          risk_element_results: Json
           size_bytes: number | null
           split_status: string
           storage_path: string | null
@@ -263,6 +266,8 @@ export type Database = {
           drive_file_id: string
           expected_page_count?: number | null
           extracted_text?: string | null
+          gemini_cache_expires_at?: string | null
+          gemini_cache_id?: string | null
           id?: string
           mime_type: string
           name: string
@@ -271,6 +276,7 @@ export type Database = {
           openai_file_status?: string | null
           openai_file_uploaded_at?: string | null
           relative_path: string
+          risk_element_results?: Json
           size_bytes?: number | null
           split_status?: string
           storage_path?: string | null
@@ -284,6 +290,8 @@ export type Database = {
           drive_file_id?: string
           expected_page_count?: number | null
           extracted_text?: string | null
+          gemini_cache_expires_at?: string | null
+          gemini_cache_id?: string | null
           id?: string
           mime_type?: string
           name?: string
@@ -292,6 +300,7 @@ export type Database = {
           openai_file_status?: string | null
           openai_file_uploaded_at?: string | null
           relative_path?: string
+          risk_element_results?: Json
           size_bytes?: number | null
           split_status?: string
           storage_path?: string | null

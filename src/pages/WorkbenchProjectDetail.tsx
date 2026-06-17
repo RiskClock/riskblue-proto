@@ -28,6 +28,7 @@ import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
 import { SpaceEditModal } from "@/components/workbench/SpaceEditModal";
 import { ConsolidateRisersModal } from "@/components/workbench/ConsolidateRisersModal";
+import { EditLevelUnitsModal } from "@/components/wizard/EditLevelUnitsModal";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -69,6 +70,7 @@ import {
 import { FileViewerModal } from "@/components/wizard/FileViewerModal";
 import {
   parseSurveyFloorPlans,
+  floorPlanDisplayLabel,
   type ParsedFloorPlan,
 } from "@/lib/surveyFloorPlans";
 import { DrawingViewer } from "@/components/viewer";
@@ -78,7 +80,7 @@ import {
 } from "@/components/viewer/hooks/useDocumentSource";
 import { useAWPOptions, groupAWPOptionsByCategory } from "@/hooks/useAWPOptions";
 import { getUserFriendlyError } from "@/lib/errorHandling";
-import { awpClassColor } from "@/lib/awpColor";
+import { awpClassColor, readableTextOn } from "@/lib/awpColor";
 
 const PREF_ID = "global";
 
@@ -227,6 +229,10 @@ export default function WorkbenchProjectDetail() {
       sheetId?: string;
     } | null
   >(null);
+  const [unitsEditTarget, setUnitsEditTarget] = useState<
+    { fileId: string; fileName: string; page: number; plan: ParsedFloorPlan } | null
+  >(null);
+  const [identifyRunning, setIdentifyRunning] = useState(false);
   const [uploadingReport, setUploadingReport] = useState(false);
   const reportInputRef = useRef<HTMLInputElement>(null);
   const [downloadingAll, setDownloadingAll] = useState(false);
@@ -2877,15 +2883,48 @@ export default function WorkbenchProjectDetail() {
                 <Button
                   type="button"
                   variant="outline"
-                  disabled={!requestId || surveyRunning}
-                  onClick={() => {
-                    toast({
-                      title: "Identify Risk Elements",
-                      description: "Coming soon — Gemini explicit context caching pipeline.",
-                    });
+                  disabled={!requestId || surveyRunning || identifyRunning || enabledCols.length === 0}
+                  onClick={async () => {
+                    if (!requestId || !rows?.files?.length) return;
+                    setIdentifyRunning(true);
+                    try {
+                      const results = await Promise.allSettled(
+                        rows.files.map((f) =>
+                          supabase.functions.invoke("identify-risk-elements", {
+                            body: {
+                              analysisRequestId: requestId,
+                              fileId: f.id,
+                              awpClassNames: enabledCols,
+                            },
+                          }),
+                        ),
+                      );
+                      const ok = results.filter((r) => r.status === "fulfilled" && !(r.value as any)?.error).length;
+                      const failed = results.length - ok;
+                      toast({
+                        title: "Identify Risk Elements dispatched",
+                        description: `${ok} file${ok === 1 ? "" : "s"} started${failed ? `, ${failed} failed` : ""}.`,
+                        variant: failed ? "destructive" : "default",
+                      });
+                    } catch (err: any) {
+                      toast({
+                        variant: "destructive",
+                        title: "Identify Risk Elements failed",
+                        description: err?.message ?? "Unknown error",
+                      });
+                    } finally {
+                      setIdentifyRunning(false);
+                    }
                   }}
                 >
-                  Identify Risk Elements
+                  {identifyRunning ? (
+                    <>
+                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                      Identifying…
+                    </>
+                  ) : (
+                    "Identify Risk Elements"
+                  )}
                 </Button>
               </div>
 
@@ -3228,15 +3267,11 @@ export default function WorkbenchProjectDetail() {
                               Array.from({ length: count }, (_, i) => i + 1).map((p) => {
                                 const pagePlans =
                                   floorPlansByFile.get(row.id)?.get(p) ?? [];
-                                const floorBadges = Array.from(
-                                  new Set(pagePlans.flatMap((fp) => fp.floors)),
+                                const levelPlans = pagePlans.filter(
+                                  (p) => p.type === "level_floor_plan",
                                 );
-                                const refBadges = Array.from(
-                                  new Set(
-                                    pagePlans
-                                      .map((fp) => fp.reference_id)
-                                      .filter((r): r is string => !!r),
-                                  ),
+                                const unitPlans = pagePlans.filter(
+                                  (p) => p.type === "unit_floor_plan",
                                 );
                                 return (
                                   <TableRow
@@ -3251,24 +3286,60 @@ export default function WorkbenchProjectDetail() {
                                         <span className="text-muted-foreground shrink-0">
                                           Page {p}
                                         </span>
-                                        {floorBadges.map((f) => (
-                                          <Badge
-                                            key={`f-${f}`}
-                                            variant="outline"
-                                            className="h-5 px-1.5 text-[10px] bg-sky-500/10 text-sky-700 border-sky-500/30"
-                                          >
-                                            {f}
-                                          </Badge>
-                                        ))}
-                                        {refBadges.map((r) => (
-                                          <Badge
-                                            key={`r-${r}`}
-                                            variant="outline"
-                                            className="h-5 px-1.5 text-[10px] font-mono bg-muted text-foreground"
-                                          >
-                                            {r}
-                                          </Badge>
-                                        ))}
+                                        {levelPlans.map((lvl) => {
+                                          const c = awpClassColor(lvl.type);
+                                          const tc = readableTextOn(c);
+                                          const lbl = floorPlanDisplayLabel(lvl);
+                                          const units = lvl.referenced_unit_ids;
+                                          return (
+                                            <span key={`lvl-${lvl.plan_id}`} className="inline-flex items-center gap-1">
+                                              <Badge
+                                                variant="outline"
+                                                className="h-5 px-1.5 text-[10px]"
+                                                style={{ backgroundColor: c, color: tc, borderColor: c }}
+                                              >
+                                                {lbl}
+                                              </Badge>
+                                              {units.length > 0 && (
+                                                <button
+                                                  type="button"
+                                                  onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    setUnitsEditTarget({ fileId: row.id, fileName: row.name, page: p, plan: lvl });
+                                                  }}
+                                                  className="inline-flex"
+                                                  title="Edit units"
+                                                >
+                                                  <Badge
+                                                    variant="outline"
+                                                    className="h-5 px-1.5 text-[10px] hover:opacity-80"
+                                                    style={{
+                                                      backgroundColor: awpClassColor("unit_floor_plan"),
+                                                      color: readableTextOn(awpClassColor("unit_floor_plan")),
+                                                      borderColor: awpClassColor("unit_floor_plan"),
+                                                    }}
+                                                  >
+                                                    {units.length} unit{units.length === 1 ? "" : "s"}
+                                                  </Badge>
+                                                </button>
+                                              )}
+                                            </span>
+                                          );
+                                        })}
+                                        {unitPlans.map((u) => {
+                                          const c = awpClassColor(u.type);
+                                          const tc = readableTextOn(c);
+                                          return (
+                                            <Badge
+                                              key={`u-${u.plan_id}`}
+                                              variant="outline"
+                                              className="h-5 px-1.5 text-[10px]"
+                                              style={{ backgroundColor: c, color: tc, borderColor: c }}
+                                            >
+                                              {floorPlanDisplayLabel(u)}
+                                            </Badge>
+                                          );
+                                        })}
                                       </div>
                                     </TableCell>
                                     {enabledCols.map((name) => {
@@ -3420,6 +3491,14 @@ export default function WorkbenchProjectDetail() {
             floorPlanOverrides={activeFloorPlanOverrides}
             onSaveFloorPlanOverride={saveFloorPlanOverride}
             onEditFloors={openFloorEditForPlan}
+            onEditLevelUnits={(plan, _currentUnits) =>
+              setUnitsEditTarget({
+                fileId: activePageView.file.id,
+                fileName: activePageView.file.name,
+                page: activePageView.page,
+                plan,
+              })
+            }
             singlePageOnly
             awpClasses={enabledCols.map((name) => ({
               name,
@@ -3458,6 +3537,69 @@ export default function WorkbenchProjectDetail() {
             basePrompt={(spaceHierarchyPayload as any)?.base_prompt ?? null}
           />
         )}
+
+        {/* Edit-units modal: shared by drawing modal + workbench page row */}
+        {unitsEditTarget && (
+          <EditLevelUnitsModal
+            isOpen={!!unitsEditTarget}
+            onClose={() => setUnitsEditTarget(null)}
+            levelPlan={unitsEditTarget.plan}
+            currentUnits={unitsEditTarget.plan.referenced_unit_ids}
+            allUnitPlans={
+              (floorPlansByFile.get(unitsEditTarget.fileId)
+                ? Array.from(floorPlansByFile.get(unitsEditTarget.fileId)!.values())
+                    .flat()
+                    .filter((p) => p.type === "unit_floor_plan")
+                : []) as ParsedFloorPlan[]
+            }
+            onSave={async (units) => {
+              // Look up the sheet row for this (file, page) and merge override.
+              const { data: sheet, error: sheetErr } = await supabase
+                .from("analysis_request_sheets")
+                .select("id, floor_plan_overrides")
+                .eq("parent_file_id", unitsEditTarget.fileId)
+                .eq("page_index", unitsEditTarget.page)
+                .maybeSingle();
+              if (sheetErr || !sheet) {
+                toast({
+                  variant: "destructive",
+                  title: "Cannot save units",
+                  description: sheetErr?.message ?? "No sheet row found for this page.",
+                });
+                return;
+              }
+              const existing =
+                ((sheet as any).floor_plan_overrides as Record<
+                  string,
+                  { floors?: string[]; units?: string[] }
+                >) ?? {};
+              const planId = unitsEditTarget.plan.plan_id;
+              const merged = {
+                ...existing,
+                [planId]: { ...(existing[planId] ?? {}), units },
+              };
+              const { error } = await supabase
+                .from("analysis_request_sheets")
+                .update({ floor_plan_overrides: merged } as any)
+                .eq("id", (sheet as any).id);
+              if (error) {
+                toast({
+                  variant: "destructive",
+                  title: "Could not save units",
+                  description: getUserFriendlyError(error),
+                });
+                return;
+              }
+              // If we're editing the active sheet via the drawing modal, mirror state.
+              if (activeSheetIdForPage === (sheet as any).id) {
+                setActiveFloorPlanOverrides(merged);
+              }
+              queryClient.invalidateQueries({ queryKey: ["workbench-rows", requestId] });
+            }}
+          />
+        )}
+
+
 
 
         {/* Extracted-text modal */}
