@@ -10,19 +10,12 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from "@/components/ui/popover";
-import {
   ChevronDown,
   ChevronRight,
   Loader2,
   Pencil,
-  Plus,
   Redo2,
   Undo2,
-  X,
 } from "lucide-react";
 import { DrawingViewer } from "@/components/viewer";
 import type {
