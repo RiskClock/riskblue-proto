@@ -949,6 +949,9 @@ const FloorPlansPanel = ({
           .map((u) => u.reference_id || u.plan_id)
           .filter((u, i, arr) => u && !effUnits.includes(u) && arr.indexOf(u) === i);
 
+        const isUnit = fp.type === "unit_floor_plan";
+        const referencedIn = isUnit ? findReferencingLevels(fp) : [];
+
         return (
           <div key={fp.plan_id} className="border rounded-md p-2 space-y-2 bg-card">
             <div className="flex items-center gap-2 min-w-0">
@@ -961,6 +964,26 @@ const FloorPlansPanel = ({
                 {fp.type.replace(/_/g, " ")}
               </span>
             </div>
+
+            {isUnit && (
+              <div className="flex items-start gap-1 text-[11px] text-muted-foreground">
+                <span className="font-medium shrink-0">Referenced in:</span>
+                {referencedIn.length === 0 ? (
+                  <span className="italic">none</span>
+                ) : (
+                  <div className="flex flex-wrap gap-1">
+                    {referencedIn.map((r) => (
+                      <span
+                        key={r}
+                        className="px-1.5 py-0.5 rounded bg-muted text-foreground text-[10px] font-mono"
+                      >
+                        {r}
+                      </span>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
 
             {isLevel && (
               <div className="space-y-1">
