@@ -3458,6 +3458,14 @@ export default function WorkbenchProjectDetail() {
             floorPlanOverrides={activeFloorPlanOverrides}
             onSaveFloorPlanOverride={saveFloorPlanOverride}
             onEditFloors={openFloorEditForPlan}
+            onEditLevelUnits={(plan, _currentUnits) =>
+              setUnitsEditTarget({
+                fileId: activePageView.file.id,
+                fileName: activePageView.file.name,
+                page: activePageView.page,
+                plan,
+              })
+            }
             singlePageOnly
             awpClasses={enabledCols.map((name) => ({
               name,
