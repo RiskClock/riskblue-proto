@@ -3505,6 +3505,69 @@ export default function WorkbenchProjectDetail() {
           />
         )}
 
+        {/* Edit-units modal: shared by drawing modal + workbench page row */}
+        {unitsEditTarget && (
+          <EditLevelUnitsModal
+            isOpen={!!unitsEditTarget}
+            onClose={() => setUnitsEditTarget(null)}
+            levelPlan={unitsEditTarget.plan}
+            currentUnits={unitsEditTarget.plan.referenced_unit_ids}
+            allUnitPlans={
+              (floorPlansByFile.get(unitsEditTarget.fileId)
+                ? Array.from(floorPlansByFile.get(unitsEditTarget.fileId)!.values())
+                    .flat()
+                    .filter((p) => p.type === "unit_floor_plan")
+                : []) as ParsedFloorPlan[]
+            }
+            onSave={async (units) => {
+              // Look up the sheet row for this (file, page) and merge override.
+              const { data: sheet, error: sheetErr } = await supabase
+                .from("analysis_request_sheets")
+                .select("id, floor_plan_overrides")
+                .eq("parent_file_id", unitsEditTarget.fileId)
+                .eq("page_index", unitsEditTarget.page)
+                .maybeSingle();
+              if (sheetErr || !sheet) {
+                toast({
+                  variant: "destructive",
+                  title: "Cannot save units",
+                  description: sheetErr?.message ?? "No sheet row found for this page.",
+                });
+                return;
+              }
+              const existing =
+                ((sheet as any).floor_plan_overrides as Record<
+                  string,
+                  { floors?: string[]; units?: string[] }
+                >) ?? {};
+              const planId = unitsEditTarget.plan.plan_id;
+              const merged = {
+                ...existing,
+                [planId]: { ...(existing[planId] ?? {}), units },
+              };
+              const { error } = await supabase
+                .from("analysis_request_sheets")
+                .update({ floor_plan_overrides: merged } as any)
+                .eq("id", (sheet as any).id);
+              if (error) {
+                toast({
+                  variant: "destructive",
+                  title: "Could not save units",
+                  description: getUserFriendlyError(error),
+                });
+                return;
+              }
+              // If we're editing the active sheet via the drawing modal, mirror state.
+              if (activeSheetIdForPage === (sheet as any).id) {
+                setActiveFloorPlanOverrides(merged);
+              }
+              queryClient.invalidateQueries({ queryKey: ["workbench-rows", requestId] });
+            }}
+          />
+        )}
+
+
+
 
         {/* Extracted-text modal */}
         <Dialog
