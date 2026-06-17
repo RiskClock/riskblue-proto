@@ -381,7 +381,7 @@ export default function WorkbenchProjectDetail() {
 
   const saveFloorPlanOverride = async (
     planId: string,
-    next: { floors?: string[]; units?: string[] },
+    next: { floors?: string[]; units?: string[]; annotations?: string[] },
   ) => {
     if (!activeSheetIdForPage) {
       toast({
@@ -410,6 +410,52 @@ export default function WorkbenchProjectDetail() {
       });
     }
   };
+
+  // Reassign an annotation (AWP class) to a plan on this page, or unassign.
+  // We mutate every plan override's `annotations` array so each class belongs
+  // to at most one plan on the page.
+  const assignAnnotationToPlan = async (
+    className: string,
+    planId: string | null,
+  ) => {
+    if (!activeSheetIdForPage) {
+      toast({
+        variant: "destructive",
+        title: "Cannot save",
+        description: "No sheet row exists yet for this page.",
+      });
+      return;
+    }
+    const next: Record<string, any> = { ...activeFloorPlanOverrides };
+    // Strip className from every plan's annotations list.
+    for (const [pid, ovr] of Object.entries(next)) {
+      if (pid.startsWith("__")) continue;
+      const arr = Array.isArray((ovr as any)?.annotations)
+        ? ((ovr as any).annotations as string[]).filter((c) => c !== className)
+        : [];
+      next[pid] = { ...(ovr as any), annotations: arr };
+    }
+    // Add to the target plan (if any).
+    if (planId) {
+      const prev = (next[planId] ?? {}) as any;
+      const arr = Array.isArray(prev.annotations) ? prev.annotations.slice() : [];
+      if (!arr.includes(className)) arr.push(className);
+      next[planId] = { ...prev, annotations: arr };
+    }
+    setActiveFloorPlanOverrides(next);
+    const { error } = await supabase
+      .from("analysis_request_sheets")
+      .update({ floor_plan_overrides: next } as any)
+      .eq("id", activeSheetIdForPage);
+    if (error) {
+      toast({
+        variant: "destructive",
+        title: "Could not save assignment",
+        description: getUserFriendlyError(error),
+      });
+    }
+  };
+
 
   const openFloorEditForPlan = (planId: string, currentFloors: string[]) => {
     if (!activePageView || !activeSheetIdForPage) return;
