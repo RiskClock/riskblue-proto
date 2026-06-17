@@ -534,17 +534,25 @@ export const FileViewerModal = ({
       }));
   }, [instances, effectivePage, sheetId, parentFileId, numberByInstanceId, prefixByClass]);
 
-  // Floor-plan bbox overlays (rect outline). Keep these in native PDF points
-  // and let DrawingViewer project them through the same pdf.js PageViewport
-  // used for the rendered page. That keeps crop boxes, rotation, and raster
-  // scale aligned with the actual image instead of re-scaling by survey dims.
+  // Floor-plan bbox overlays (rect outline). Survey agent now returns
+  // `xy_width_height_pt` = [x, y, width, height] in PDF points using a
+  // top-left origin (web/canvas convention). Convert directly to a
+  // normalized 0..1 rect against `page_dimensions_pt` — no Y-flip, no
+  // delta math, no PageViewport projection.
   const floorPlanOverlays: OverlayInput[] = useMemo(() => {
     if (!floorPlans || floorPlans.length === 0) return [];
     const out: OverlayInput[] = [];
     for (const fp of floorPlans) {
-      const bb = fp.bounding_box_pt;
+      const bb = fp.xy_width_height_pt;
       if (!Array.isArray(bb) || bb.length < 4) continue;
-      const [x1, y1, x2, y2] = bb;
+      const pageW = fp.page_dimensions_pt?.width ?? 0;
+      const pageH = fp.page_dimensions_pt?.height ?? 0;
+      if (!(pageW > 0) || !(pageH > 0)) continue;
+      const [x, y, w, h] = bb;
+      const nx = x / pageW;
+      const ny = y / pageH;
+      const nw = w / pageW;
+      const nh = h / pageH;
       const override = floorPlanOverrides?.[fp.plan_id];
       const effectiveFloors = override?.floors ?? fp.floors;
       const labelBase = fp.reference_id
@@ -554,11 +562,8 @@ export const FileViewerModal = ({
           : fp.plan_id;
       out.push({
         id: `fp-${fp.plan_id}`,
-        bbox: [x1, y1, x2, y2],
-        coordSpace: "pdf-points" as const,
-        // In singlePageOnly mode the full PDF is loaded and we navigate to
-        // `currentPage`; bind the overlay to that page (not 1). In sheet
-        // mode the PDF has a single page so currentPage === 1 anyway.
+        bbox: [nx, ny, nw, nh],
+        coordSpace: "normalized" as const,
         page: currentPage,
         shape: "rect" as const,
         color: awpClassColor(fp.type || "unknown"),
