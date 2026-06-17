@@ -327,6 +327,16 @@ export default function WorkbenchProjectDetail() {
     return out;
   }, [activeFileFloorPlansByPage]);
 
+  const activeFileAllLevelPlans = useMemo<ParsedFloorPlan[]>(() => {
+    const out: ParsedFloorPlan[] = [];
+    for (const plans of activeFileFloorPlansByPage.values()) {
+      for (const p of plans) {
+        if (p.type === "level_floor_plan") out.push(p);
+      }
+    }
+    return out;
+  }, [activeFileFloorPlansByPage]);
+
   const saveFloorPlanOverride = async (
     planId: string,
     next: { floors?: string[]; units?: string[] },
@@ -3331,6 +3341,7 @@ export default function WorkbenchProjectDetail() {
             pageIndex={activePageView.page}
             floorPlans={activePageFloorPlans}
             allUnitPlans={activeFileAllUnitPlans}
+            allLevelPlans={activeFileAllLevelPlans}
             floorPlanOverrides={activeFloorPlanOverrides}
             onSaveFloorPlanOverride={saveFloorPlanOverride}
             onEditFloors={openFloorEditForPlan}

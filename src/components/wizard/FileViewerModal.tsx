@@ -32,10 +32,11 @@ import type {
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { getUserFriendlyError } from "@/lib/errorHandling";
-import { awpClassColor } from "@/lib/awpColor";
+import { awpClassColor, readableTextOn } from "@/lib/awpColor";
 import {
   type ParsedFloorPlan,
   floorPlanDisplayLabel,
+  unitPlanRefKey,
 } from "@/lib/surveyFloorPlans";
 
 interface SystemDetection {
@@ -105,6 +106,8 @@ interface FileViewerModalProps {
   floorPlans?: ParsedFloorPlan[];
   /** All unit_floor_plan items across the parent file, used as the "Add unit" picker. */
   allUnitPlans?: ParsedFloorPlan[];
+  /** All level_floor_plan items across the parent file, used to show where a unit is referenced. */
+  allLevelPlans?: ParsedFloorPlan[];
   /** Per-plan user overrides keyed by plan_id. */
   floorPlanOverrides?: Record<string, { floors?: string[]; units?: string[] }>;
   /** Persist a single plan override. */
@@ -146,6 +149,7 @@ export const FileViewerModal = ({
   singlePageOnly = false,
   floorPlans,
   allUnitPlans,
+  allLevelPlans,
   floorPlanOverrides,
   onSaveFloorPlanOverride,
   onEditFloors,
@@ -642,6 +646,7 @@ export const FileViewerModal = ({
                     <FloorPlansPanel
                       floorPlans={floorPlans}
                       allUnitPlans={allUnitPlans ?? []}
+                      allLevelPlans={allLevelPlans ?? []}
                       overrides={floorPlanOverrides ?? {}}
                       onSaveOverride={onSaveFloorPlanOverride}
                       onEditFloors={onEditFloors}
@@ -879,6 +884,7 @@ const DetectionsPanel = ({
 interface FloorPlansPanelProps {
   floorPlans: ParsedFloorPlan[];
   allUnitPlans: ParsedFloorPlan[];
+  allLevelPlans: ParsedFloorPlan[];
   overrides: Record<string, { floors?: string[]; units?: string[] }>;
   onSaveOverride?: (
     planId: string,
@@ -890,10 +896,30 @@ interface FloorPlansPanelProps {
 const FloorPlansPanel = ({
   floorPlans,
   allUnitPlans,
+  allLevelPlans,
   overrides,
   onSaveOverride,
   onEditFloors,
 }: FloorPlansPanelProps) => {
+  // Shared color for unit chips + unit floor-plan bounding boxes.
+  const unitColor = awpClassColor("unit_floor_plan");
+  const unitTextColor = readableTextOn(unitColor);
+
+  // For a unit floor plan, list the level plans (by reference_id or plan_id)
+  // that reference it. Honors per-level overrides where available.
+  const findReferencingLevels = (unit: ParsedFloorPlan): string[] => {
+    const key = unitPlanRefKey(unit);
+    const labels: string[] = [];
+    for (const lvl of allLevelPlans) {
+      const ovr = overrides[lvl.plan_id];
+      const effUnits = ovr?.units ?? lvl.referenced_unit_ids;
+      if (effUnits.includes(key)) {
+        labels.push(lvl.reference_id || lvl.plan_id);
+      }
+    }
+    return Array.from(new Set(labels));
+  };
+
   return (
     <div className="p-2 space-y-2">
       {floorPlans.map((fp) => {
@@ -923,6 +949,9 @@ const FloorPlansPanel = ({
           .map((u) => u.reference_id || u.plan_id)
           .filter((u, i, arr) => u && !effUnits.includes(u) && arr.indexOf(u) === i);
 
+        const isUnit = fp.type === "unit_floor_plan";
+        const referencedIn = isUnit ? findReferencingLevels(fp) : [];
+
         return (
           <div key={fp.plan_id} className="border rounded-md p-2 space-y-2 bg-card">
             <div className="flex items-center gap-2 min-w-0">
@@ -935,6 +964,26 @@ const FloorPlansPanel = ({
                 {fp.type.replace(/_/g, " ")}
               </span>
             </div>
+
+            {isUnit && (
+              <div className="flex items-start gap-1 text-[11px] text-muted-foreground">
+                <span className="font-medium shrink-0">Referenced in:</span>
+                {referencedIn.length === 0 ? (
+                  <span className="italic">none</span>
+                ) : (
+                  <div className="flex flex-wrap gap-1">
+                    {referencedIn.map((r) => (
+                      <span
+                        key={r}
+                        className="px-1.5 py-0.5 rounded bg-muted text-foreground text-[10px] font-mono"
+                      >
+                        {r}
+                      </span>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
 
             {isLevel && (
               <div className="space-y-1">
@@ -1023,14 +1072,19 @@ const FloorPlansPanel = ({
                       <Badge
                         key={u}
                         variant="outline"
-                        className="bg-amber-500/10 text-amber-700 border-amber-500/30 h-5 px-1.5 text-[10px] gap-1"
+                        className="h-5 px-1.5 text-[10px] gap-1"
+                        style={{
+                          backgroundColor: unitColor,
+                          color: unitTextColor,
+                          borderColor: unitColor,
+                        }}
                       >
                         {u}
                         {onSaveOverride && (
                           <button
                             type="button"
                             onClick={() => removeUnit(u)}
-                            className="hover:text-destructive"
+                            className="hover:opacity-70"
                             aria-label={`Remove ${u}`}
                           >
                             <X className="h-2.5 w-2.5" />
