@@ -564,6 +564,18 @@ export const FileViewerModal = ({
       const top = y * scaleY;
       const width = w * scaleX;
       const height = h * scaleY;
+      // eslint-disable-next-line no-console
+      console.log("[bbox-debug]", {
+        plan_id: fp.plan_id,
+        type: fp.type,
+        page: fp.page_number,
+        currentPage,
+        xy_width_height_pt: { x, y, w, h },
+        page_dimensions_pt: { width: pageW, height: pageH },
+        renderedPageSize,
+        scale: { scaleX, scaleY },
+        pixels: { left, top, width, height, right: left + width, bottom: top + height },
+      });
       const override = floorPlanOverrides?.[fp.plan_id];
       const effectiveFloors = override?.floors ?? fp.floors;
       const labelBase = fp.reference_id
