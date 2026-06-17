@@ -662,6 +662,7 @@ export const FileViewerModal = ({
                       redo={redo}
                       pastLen={past.length}
                       futureLen={future.length}
+                      floorPlans={floorPlans}
                     />
                   </TabsContent>
                 </Tabs>
