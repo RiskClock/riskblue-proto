@@ -3272,7 +3272,7 @@ export default function WorkbenchProjectDetail() {
                                                   type="button"
                                                   onClick={(e) => {
                                                     e.stopPropagation();
-                                                    setUnitsEditTarget({ file: row, page: p, plan: lvl });
+                                                    setUnitsEditTarget({ fileId: row.id, fileName: row.name, page: p, plan: lvl });
                                                   }}
                                                   className="inline-flex"
                                                   title="Edit units"
