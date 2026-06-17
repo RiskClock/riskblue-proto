@@ -651,6 +651,7 @@ export const FileViewerModal = ({
                         overrides={floorPlanOverrides ?? {}}
                         onSaveOverride={onSaveFloorPlanOverride}
                         onEditFloors={onEditFloors}
+                        onEditLevelUnits={onEditLevelUnits}
                       />
                     </div>
                   </TabsContent>
