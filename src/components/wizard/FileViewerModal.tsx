@@ -32,13 +32,12 @@ import type {
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { getUserFriendlyError } from "@/lib/errorHandling";
-import { awpClassColor } from "@/lib/awpColor";
+import { awpClassColor, readableTextOn } from "@/lib/awpColor";
 import {
   type ParsedFloorPlan,
   floorPlanDisplayLabel,
   unitPlanRefKey,
 } from "@/lib/surveyFloorPlans";
-import { readableTextOn } from "@/lib/awpColor";
 
 interface SystemDetection {
   lineMonitored: string;
