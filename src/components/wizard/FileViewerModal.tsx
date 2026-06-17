@@ -165,6 +165,10 @@ export const FileViewerModal = ({
     setRenderedPageSize(null);
   }, [pageIndex, fileId]);
 
+  useEffect(() => {
+    setRenderedPageSize(null);
+  }, [currentPage]);
+
   const sidebarEnabled =
     !!awpClasses && !!analysisRequestId && !!parentFileId;
 
@@ -993,8 +997,13 @@ const FloorPlansPanel = ({
                           <Plus className="h-3 w-3" />
                         </button>
                       </PopoverTrigger>
-                      <PopoverContent align="end" className="w-56 p-1">
-                        <div className="max-h-56 overflow-y-auto">
+                      <PopoverContent
+                        align="end"
+                        className="w-56 p-1 max-h-[min(16rem,var(--radix-popover-content-available-height))] overflow-y-auto overscroll-contain"
+                        onWheelCapture={(e) => e.stopPropagation()}
+                        onTouchMoveCapture={(e) => e.stopPropagation()}
+                      >
+                        <div className="space-y-0.5">
                           {pickerOptions.map((u) => (
                             <button
                               key={u}
