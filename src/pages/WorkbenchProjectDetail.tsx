@@ -3613,7 +3613,7 @@ export default function WorkbenchProjectDetail() {
                     .filter((p) => p.type === "unit_floor_plan")
                 : []) as ParsedFloorPlan[]
             }
-            onSave={async (units) => {
+            onSave={async (units, createdRefs) => {
               // Look up the sheet row for this (file, page) and merge override.
               const { data: sheet, error: sheetErr } = await supabase
                 .from("analysis_request_sheets")
@@ -3630,15 +3630,34 @@ export default function WorkbenchProjectDetail() {
                 return;
               }
               const existing =
-                ((sheet as any).floor_plan_overrides as Record<
-                  string,
-                  { floors?: string[]; units?: string[] }
-                >) ?? {};
+                ((sheet as any).floor_plan_overrides as Record<string, any>) ?? {};
               const planId = unitsEditTarget.plan.plan_id;
-              const merged = {
+              const merged: Record<string, any> = {
                 ...existing,
                 [planId]: { ...(existing[planId] ?? {}), units },
               };
+              // Persist any newly created refs as user-added unit floor plans
+              // on this page so they show up alongside parsed plans.
+              if (createdRefs && createdRefs.length > 0) {
+                const existingAdded = Array.isArray(existing[ADDED_UNIT_PLANS_KEY])
+                  ? (existing[ADDED_UNIT_PLANS_KEY] as any[])
+                  : [];
+                const existingRefs = new Set(
+                  existingAdded
+                    .filter((e) => e?.page_number === unitsEditTarget.page)
+                    .map((e) => e?.reference_id),
+                );
+                const toAdd = createdRefs
+                  .filter((r) => !existingRefs.has(r))
+                  .map((r) => ({
+                    plan_id: makeAddedUnitPlanId(r, unitsEditTarget.page),
+                    reference_id: r,
+                    page_number: unitsEditTarget.page,
+                  }));
+                if (toAdd.length > 0) {
+                  merged[ADDED_UNIT_PLANS_KEY] = [...existingAdded, ...toAdd];
+                }
+              }
               const { error } = await supabase
                 .from("analysis_request_sheets")
                 .update({ floor_plan_overrides: merged } as any)
@@ -3659,6 +3678,7 @@ export default function WorkbenchProjectDetail() {
             }}
           />
         )}
+
 
 
 
