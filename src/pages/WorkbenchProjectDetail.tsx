@@ -2664,7 +2664,7 @@ export default function WorkbenchProjectDetail() {
                             </TableHead>
                           );
                         })}
-                        <TableHead className="text-right w-[1%] whitespace-nowrap h-9 py-1">
+                        <TableHead className="text-right w-[1%] whitespace-nowrap h-9 py-1 bg-card">
                           <Button
                             variant="outline"
                             size="icon"
