@@ -1084,6 +1084,10 @@ export default function WorkbenchProjectDetail() {
   );
   const enabledCols = prefs ?? defaultEnabledCols;
 
+  const hasRisersSelected = useMemo(() => {
+    return enabledCols.some((col) => col === "Electrical Riser" || col === "Mechanical Riser");
+  }, [enabledCols]);
+
 
 
   // (sheet, class) -> { score, status } for triage cell rendering on sub-rows
