@@ -566,6 +566,15 @@ export const FileViewerModal = ({
   // full multi-page parent PDF, instances live on whatever page the user is
   // currently on.
   const effectivePage = sheetId ? pageIndex : currentPage;
+  // After mutating annotations, drop focus from the just-clicked overlay/list
+  // button. Otherwise Radix's DismissableLayer treats the first scrim click as
+  // "refocus the previously focused element" and the user has to click a
+  // second time before the dialog closes.
+  const blurActive = () => {
+    if (typeof document === "undefined") return;
+    const el = document.activeElement as HTMLElement | null;
+    if (el && typeof el.blur === "function") el.blur();
+  };
 
   // ---- User-initiated actions ---------------------------------------------
   const handleCanvasClick = async (nx: number, ny: number) => {
@@ -580,6 +589,7 @@ export const FileViewerModal = ({
     setInstances((prev) => [...prev, row]);
     setPast((p) => [...p, { type: "add", instance: row }]);
     setFuture([]);
+    blurActive();
   };
 
   const handleOverlayClick = async (overlayId: string) => {
@@ -592,6 +602,7 @@ export const FileViewerModal = ({
     setInstances((prev) => prev.filter((i) => i.id !== inst.id));
     setPast((p) => [...p, { type: "delete", instance: inst }]);
     setFuture([]);
+    blurActive();
   };
 
   const handleDeleteFromList = async (id: string) => {
@@ -602,6 +613,7 @@ export const FileViewerModal = ({
     setInstances((prev) => prev.filter((i) => i.id !== id));
     setPast((p) => [...p, { type: "delete", instance: inst }]);
     setFuture([]);
+    blurActive();
   };
 
   // ---- Undo / redo --------------------------------------------------------
