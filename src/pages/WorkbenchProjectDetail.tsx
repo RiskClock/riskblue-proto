@@ -2614,7 +2614,7 @@ export default function WorkbenchProjectDetail() {
                           return (
                             <TableHead
                               key={name}
-                              className="text-center whitespace-nowrap h-9 py-1"
+                              className="text-center whitespace-nowrap h-9 py-1 bg-card"
                             >
                               <div className="inline-flex items-center gap-1">
                                 <Tooltip>
