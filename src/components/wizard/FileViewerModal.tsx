@@ -214,6 +214,7 @@ export const FileViewerModal = ({
   onSaveFloorPlanOverride,
   onEditFloors,
   onEditLevelUnits,
+  onSaveLevelUnits,
   onDeletePlan,
   onAddPlan,
   riskElementClasses,
