@@ -764,7 +764,9 @@ export const FileViewerModal = ({
         coordSpace: "normalized" as const,
         page: currentPage,
         shape: "rect" as const,
-        color: awpClassColor(fp.type || "unknown"),
+        color: awpClassColor(
+          ((floorPlanOverrides ?? {})[fp.plan_id] as any)?.type || fp.type || "unknown",
+        ),
         label: labelBase,
       });
     }
