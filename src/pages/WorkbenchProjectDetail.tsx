@@ -2188,15 +2188,15 @@ export default function WorkbenchProjectDetail() {
           </div>
         </div>
 
-        <main className="flex-1 flex flex-col overflow-hidden h-full">
-          <div className="container mx-auto px-6 pt-4 pb-6 flex-1 flex flex-col overflow-hidden gap-4 space-y-0">
+        <main className="flex-1 overflow-auto">
+          <div className="container mx-auto px-6 pt-4 pb-6 space-y-4">
             {/* Action toolbar — the Agents row lives further below in the
                 page (Scout · Vulnerability Radar · Spatial Architect · Unify
                 Riser · Threat Report · Clear All · Renumber IDs · 🐛). */}
 
 
             {/* Survey Pages */}
-            <div className="space-y-3 shrink-0">
+            <div className="space-y-3">
               <div className="flex flex-wrap items-center justify-start gap-2">
                 <span className="text-sm font-medium text-muted-foreground mr-1">Agents:</span>
                 <Button
@@ -2573,14 +2573,14 @@ export default function WorkbenchProjectDetail() {
             </div>
 
 
-            <div className="flex-1 flex flex-col overflow-hidden min-h-0 mt-6 space-y-3">
+            <div className="mt-6 space-y-3">
 
               {pageInfoRows.length === 0 ? (
                 <div className="text-sm text-muted-foreground text-center py-6">
                   {pageInfoLoading ? "Loading…" : "No files in this request."}
                 </div>
               ) : (
-                <div className="flex-1 overflow-auto rounded-lg border relative [&>div]:overflow-visible min-h-0 bg-card">
+                <div className="bg-card rounded-lg border relative [&>div]:overflow-visible">
                   <Table>
                     <TableHeader className="bg-card">
                       <TableRow>
@@ -2913,7 +2913,7 @@ export default function WorkbenchProjectDetail() {
             </div>
 
             {/* Upload Report - moved below Pages by File table */}
-            <div className="flex items-center justify-end gap-3 mt-4 shrink-0">
+            <div className="flex items-center justify-end gap-3 mt-4">
               <input
                 ref={reportInputRef}
                 type="file"
