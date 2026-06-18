@@ -2189,7 +2189,7 @@ export default function WorkbenchProjectDetail() {
         </div>
 
         <main className="flex-1 overflow-auto">
-          <div className="container mx-auto px-6 pt-0 pb-6 space-y-4">
+          <div className="container mx-auto px-6 pt-4 pb-6 space-y-4">
             {/* Action toolbar — the Agents row lives further below in the
                 page (Scout · Vulnerability Radar · Spatial Architect · Unify
                 Riser · Threat Report · Clear All · Renumber IDs · 🐛). */}
