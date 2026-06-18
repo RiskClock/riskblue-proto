@@ -3918,6 +3918,8 @@ export default function WorkbenchProjectDetail() {
           fileGroups={fileGroups}
           optionByName={optionByName}
           pageSpaceMap={pageSpaceMap}
+          pageSpaceUnitMap={pageSpaceUnitMap}
+
           spaceHierarchyPayload={spaceHierarchyPayload}
           projectName={project?.name || "Project"}
           enabledClassNames={enabledCols}
