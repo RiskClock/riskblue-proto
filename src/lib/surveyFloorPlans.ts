@@ -218,3 +218,38 @@ export function makeAddedUnitPlanId(refId: string, page: number): string {
   return `added_p${page}_${slug}_${Math.random().toString(36).slice(2, 6)}`;
 }
 
+// ---- Deleted plans -------------------------------------------------------
+export const DELETED_PLAN_IDS_KEY = "__deleted_plan_ids";
+
+export function getDeletedPlanIds(
+  overrides: Record<string, any> | null | undefined,
+): Set<string> {
+  const raw = overrides?.[DELETED_PLAN_IDS_KEY];
+  if (!Array.isArray(raw)) return new Set();
+  return new Set(raw.filter((x) => typeof x === "string"));
+}
+
+// ---- Per-plan effective bbox / name --------------------------------------
+export function getEffectiveBbox(
+  fp: ParsedFloorPlan,
+  overrides: Record<string, any> | null | undefined,
+): [number, number, number, number] | null {
+  const ovr = overrides?.[fp.plan_id];
+  const o = ovr?.bbox_pct;
+  if (Array.isArray(o) && o.length === 4 && o.every((n: any) => Number.isFinite(n))) {
+    return [o[0], o[1], o[2], o[3]];
+  }
+  return fp.xy_width_height_pct;
+}
+
+export function getEffectiveLabel(
+  fp: ParsedFloorPlan,
+  overrides: Record<string, any> | null | undefined,
+): string {
+  const ovr = overrides?.[fp.plan_id];
+  const name = typeof ovr?.name === "string" && ovr.name.trim() ? ovr.name.trim() : null;
+  if (name) return name;
+  return floorPlanDisplayLabel(fp);
+}
+
+

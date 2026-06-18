@@ -24,6 +24,7 @@ import {
   type NormalizedOverlay,
   type OverlayInput,
 } from "./viewerGeometry";
+import type { EditorBbox } from "./DocumentSurface";
 
 export type ViewerLayout = "single-page" | "stacked-pages";
 
@@ -33,7 +34,9 @@ export interface DrawingViewerApi {
   reset: () => void;
   fitPage: () => void;
   fitToOverlay: (overlayId: string, opts?: { paddingRatio?: number; maxScale?: number; animate?: boolean }) => void;
+  fitToRect: (rect: { nx: number; ny: number; nw: number; nh: number }, opts?: { paddingRatio?: number; maxScale?: number; animate?: boolean }) => void;
 }
+
 
 export interface DrawingViewerProps {
   source: DocumentSourceDescriptor | null;
@@ -63,7 +66,12 @@ export interface DrawingViewerProps {
   className?: string;
   /** When false, disables wheel zoom, pinch, pan, and double-click zoom. */
   interactive?: boolean;
+  /** When set, renders a bbox editor on top of the active page. */
+  editorBbox?: EditorBbox | null;
+  /** Live updates while the user drags the editor. */
+  onEditorBboxChange?: (next: EditorBbox) => void;
 }
+
 
 
 const DEFAULT_MIN = 0.8;
@@ -92,7 +100,10 @@ export const DrawingViewer = forwardRef<DrawingViewerApi, DrawingViewerProps>(
       onActivePageRenderedSizeChange,
       className,
       interactive = true,
+      editorBbox,
+      onEditorBboxChange,
     },
+
     ref
   ) {
 
@@ -288,10 +299,20 @@ export const DrawingViewer = forwardRef<DrawingViewerApi, DrawingViewerProps>(
         reset: fitPage,
         fitPage,
         fitToOverlay: doFitOverlay,
+        fitToRect: (rect, opts) => {
+          if (!activePage || pageCssSize.width === 0) return;
+          fitToOverlay(rect, pageCssSize, viewportSize, {
+            paddingRatio: opts?.paddingRatio ?? 0.3,
+            minScale,
+            maxScale: opts?.maxScale ?? Math.min(maxScale, 4),
+            animate: opts?.animate,
+          });
+        },
       }),
       // eslint-disable-next-line react-hooks/exhaustive-deps
       [pageCssSize.width, pageCssSize.height, activePage?.pageNum, viewportSize.width, viewportSize.height]
     );
+
     useImperativeHandle(ref, () => api, [api]);
     useEffect(() => {
       onApiReady?.(api);
@@ -391,6 +412,8 @@ export const DrawingViewer = forwardRef<DrawingViewerApi, DrawingViewerProps>(
                     }
                     onOverlayClick={onOverlayClick}
                     onRenderedSizeChange={onActivePageRenderedSizeChange}
+                    editorBbox={editorBbox ?? null}
+                    onEditorBboxChange={onEditorBboxChange}
                   />
                 ) : (
                   <div className="flex flex-col gap-4">
@@ -405,6 +428,7 @@ export const DrawingViewer = forwardRef<DrawingViewerApi, DrawingViewerProps>(
                           imageUrl={p.imageUrl}
                           pageSize={{ width: w, height: h }}
                           overlays={normalizedByPage.get(p.pageNum) ?? []}
+
                           hoveredOverlayId={hoveredOverlayId}
                           viewScale={scale}
                           onCanvasClick={

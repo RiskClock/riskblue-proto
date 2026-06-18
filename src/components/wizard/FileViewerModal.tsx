@@ -24,15 +24,32 @@ import type {
   DocumentSourceDescriptor,
   OverlayInput,
 } from "@/components/viewer";
+import { X as XIcon } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { getUserFriendlyError } from "@/lib/errorHandling";
 import { awpClassColor, readableTextOn } from "@/lib/awpColor";
+
+
 import {
   type ParsedFloorPlan,
   floorPlanDisplayLabel,
   unitPlanRefKey,
+  getEffectiveBbox,
+  getEffectiveLabel,
 } from "@/lib/surveyFloorPlans";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import { Input } from "@/components/ui/input";
+
 
 interface SystemDetection {
   lineMonitored: string;
@@ -108,12 +125,21 @@ interface FileViewerModalProps {
   /** Persist a single plan override. */
   onSaveFloorPlanOverride?: (
     planId: string,
-    next: { floors?: string[]; units?: string[]; annotations?: string[] },
+    next: {
+      floors?: string[];
+      units?: string[];
+      annotations?: string[];
+      bbox_pct?: [number, number, number, number] | null;
+      name?: string | null;
+    },
   ) => Promise<void> | void;
   /** Page-level handler that opens SpaceEditModal scoped to a plan. */
   onEditFloors?: (planId: string, currentFloors: string[]) => void;
   /** Open the units-editor modal for a level plan. */
   onEditLevelUnits?: (plan: ParsedFloorPlan, currentUnits: string[]) => void;
+  /** Delete a floor plan entirely (parsed plans go to `__deleted_plan_ids`,
+   *  added unit plans are removed from `__added_unit_plans`). */
+  onDeletePlan?: (planId: string) => Promise<void> | void;
   /** AWP class names that have risk_element_results for this file. */
   riskElementClasses?: string[];
   /** Map of className -> planId (assignment). Missing => Unassigned. */
@@ -121,6 +147,7 @@ interface FileViewerModalProps {
   /** Reassign an annotation (class) to a plan, or to null to unassign. */
   onAssignAnnotation?: (className: string, planId: string | null) => Promise<void> | void;
 }
+
 
 const BOUNDING_BOX_COLOR = "#39FF14"; // legacy detections (green)
 
@@ -158,10 +185,12 @@ export const FileViewerModal = ({
   onSaveFloorPlanOverride,
   onEditFloors,
   onEditLevelUnits,
+  onDeletePlan,
   riskElementClasses,
   annotationAssignments,
   onAssignAnnotation,
 }: FileViewerModalProps) => {
+
   const { toast } = useToast();
   const [hoveredCode, setHoveredCode] = useState<string | null>(null);
   const [currentPage, setCurrentPage] = useState(pageIndex);
@@ -217,6 +246,115 @@ export const FileViewerModal = ({
   const [loadingInstances, setLoadingInstances] = useState(false);
   const [past, setPast] = useState<HistoryAction[]>([]);
   const [future, setFuture] = useState<HistoryAction[]>([]);
+
+  // ---- Floor-plan bbox editor state --------------------------------------
+  type EditingPlanState = {
+    planId: string;
+    bbox: [number, number, number, number]; // pct 0..100
+    name: string;
+    origBbox: [number, number, number, number];
+    origName: string;
+  };
+  const [editingPlan, setEditingPlan] = useState<EditingPlanState | null>(null);
+  const [activeTab, setActiveTab] = useState<"floor-plans" | "detections">("floor-plans");
+  const [confirmExit, setConfirmExit] = useState<null | {
+    kind: "tab" | "close";
+    next: () => void;
+  }>(null);
+  const [confirmDelete, setConfirmDelete] = useState<null | { planId: string; label: string }>(null);
+  const viewerApiRef = useRef<any>(null);
+  const viewerContainerRef = useRef<HTMLDivElement>(null);
+
+  const isEditingDirty = !!(
+    editingPlan &&
+    (editingPlan.name !== editingPlan.origName ||
+      editingPlan.bbox.some((v, i) => v !== editingPlan.origBbox[i]))
+  );
+
+  // Reset editor state when modal closes or page changes
+  useEffect(() => {
+    if (!isOpen) {
+      setEditingPlan(null);
+      setActiveTab("floor-plans");
+      setConfirmExit(null);
+      setConfirmDelete(null);
+    }
+  }, [isOpen]);
+  useEffect(() => {
+    setEditingPlan(null);
+  }, [currentPage, fileId]);
+
+  const enterPlanEdit = useCallback(
+    (fp: ParsedFloorPlan) => {
+      if (editingPlan) return; // only one at a time
+      const bb = getEffectiveBbox(fp, floorPlanOverrides ?? {}) ?? [25, 25, 50, 50];
+      const name = getEffectiveLabel(fp, floorPlanOverrides ?? {});
+      const state: EditingPlanState = {
+        planId: fp.plan_id,
+        bbox: [bb[0], bb[1], bb[2], bb[3]],
+        name,
+        origBbox: [bb[0], bb[1], bb[2], bb[3]],
+        origName: name,
+      };
+      setEditingPlan(state);
+      // Conditional auto-scroll: only if the bbox is completely off-screen.
+      requestAnimationFrame(() => {
+        const surface = document.querySelector("[data-doc-surface]") as HTMLElement | null;
+        const cont = viewerContainerRef.current;
+        if (!surface || !cont || !viewerApiRef.current) return;
+        const sr = surface.getBoundingClientRect();
+        const cr = cont.getBoundingClientRect();
+        const bx = sr.left + (bb[0] / 100) * sr.width;
+        const by = sr.top + (bb[1] / 100) * sr.height;
+        const bw = (bb[2] / 100) * sr.width;
+        const bh = (bb[3] / 100) * sr.height;
+        const intersects = !(
+          bx + bw < cr.left ||
+          bx > cr.right ||
+          by + bh < cr.top ||
+          by > cr.bottom
+        );
+        if (!intersects) {
+          viewerApiRef.current.fitToRect?.(
+            {
+              nx: bb[0] / 100,
+              ny: bb[1] / 100,
+              nw: bb[2] / 100,
+              nh: bb[3] / 100,
+            },
+            { paddingRatio: 0.4, animate: true },
+          );
+        }
+      });
+    },
+    [editingPlan, floorPlanOverrides],
+  );
+
+  const cancelPlanEdit = useCallback(() => setEditingPlan(null), []);
+
+  const savePlanEdit = useCallback(async () => {
+    if (!editingPlan || !onSaveFloorPlanOverride) return;
+    await onSaveFloorPlanOverride(editingPlan.planId, {
+      bbox_pct: editingPlan.bbox,
+      name: editingPlan.name.trim() || null,
+    });
+    setEditingPlan(null);
+  }, [editingPlan, onSaveFloorPlanOverride]);
+
+  // Guard tab/close transitions when there are unsaved edits.
+  const guardThen = useCallback(
+    (kind: "tab" | "close", next: () => void) => {
+      if (editingPlan && isEditingDirty) {
+        setConfirmExit({ kind, next });
+      } else {
+        setEditingPlan(null);
+        next();
+      }
+    },
+    [editingPlan, isEditingDirty],
+  );
+
+
 
   // Reset history on open. Selected class is re-synced from localStorage.
   // Expansion state is NOT reset — it should persist across modal opens
@@ -562,16 +700,13 @@ export const FileViewerModal = ({
     if (!floorPlans || floorPlans.length === 0) return [];
     const out: OverlayInput[] = [];
     for (const fp of floorPlans) {
-      const bb = fp.xy_width_height_pct;
-      if (!Array.isArray(bb) || bb.length < 4) continue;
+      // Hide the underlying rect for the plan currently in edit mode;
+      // the editor overlay replaces it visually with a dotted box.
+      if (editingPlan?.planId === fp.plan_id) continue;
+      const bb = getEffectiveBbox(fp, floorPlanOverrides ?? {});
+      if (!bb) continue;
       const [left, top, width, height] = bb;
-      const override = floorPlanOverrides?.[fp.plan_id];
-      const effectiveFloors = override?.floors ?? fp.floors;
-      const labelBase = fp.reference_id
-        ? fp.reference_id
-        : effectiveFloors.length > 0
-          ? effectiveFloors.join(" / ")
-          : fp.plan_id;
+      const labelBase = getEffectiveLabel(fp, floorPlanOverrides ?? {});
       out.push({
         id: `fp-${fp.plan_id}`,
         bbox: [left / 100, top / 100, width / 100, height / 100],
@@ -583,7 +718,8 @@ export const FileViewerModal = ({
       });
     }
     return out;
-  }, [floorPlans, floorPlanOverrides, currentPage]);
+  }, [floorPlans, floorPlanOverrides, currentPage, editingPlan]);
+
 
   const overlays = [...detectionOverlays, ...instanceOverlays, ...floorPlanOverlays];
 
@@ -601,7 +737,14 @@ export const FileViewerModal = ({
   }, [instances, parentFileId, effectivePage]);
 
   return (
-    <Dialog open={isOpen} onOpenChange={onClose}>
+    <Dialog
+      open={isOpen}
+      onOpenChange={(open) => {
+        if (!open) {
+          guardThen("close", onClose);
+        }
+      }}
+    >
       <DialogContent className="max-w-[95vw] w-[95vw] h-[90vh] flex flex-col p-4 [&>button]:top-4 [&>button]:right-4">
         <DialogHeader className="flex-shrink-0">
           <DialogTitle className="truncate flex items-center gap-2 min-w-0">
@@ -611,7 +754,10 @@ export const FileViewerModal = ({
         </DialogHeader>
 
         <div className="flex flex-1 gap-4 overflow-hidden min-h-0">
-          <div className="flex-1 border rounded-lg overflow-hidden bg-muted/30 min-h-0">
+          <div
+            ref={viewerContainerRef}
+            className="flex-1 border rounded-lg overflow-hidden bg-muted/30 min-h-0"
+          >
             <DrawingViewer
               source={source}
               layout="single-page"
@@ -632,13 +778,47 @@ export const FileViewerModal = ({
               onCanvasClick={sidebarEnabled ? handleCanvasClick : undefined}
               onOverlayClick={sidebarEnabled ? handleOverlayClick : undefined}
               onActivePageRenderedSizeChange={setRenderedPageSize}
+              onApiReady={(api) => (viewerApiRef.current = api)}
+              editorBbox={
+                editingPlan
+                  ? {
+                      nx: editingPlan.bbox[0] / 100,
+                      ny: editingPlan.bbox[1] / 100,
+                      nw: editingPlan.bbox[2] / 100,
+                      nh: editingPlan.bbox[3] / 100,
+                    }
+                  : null
+              }
+              onEditorBboxChange={(next) =>
+                setEditingPlan((prev) =>
+                  prev
+                    ? {
+                        ...prev,
+                        bbox: [
+                          next.nx * 100,
+                          next.ny * 100,
+                          next.nw * 100,
+                          next.nh * 100,
+                        ],
+                      }
+                    : prev,
+                )
+              }
             />
           </div>
 
 
           {sidebarEnabled && awpClasses ? (
             <div className="w-80 flex-shrink-0 border rounded-lg flex flex-col min-h-0">
-              <Tabs defaultValue="floor-plans" className="flex-1 flex flex-col min-h-0">
+              <Tabs
+                value={activeTab}
+                onValueChange={(v) => {
+                  const target = v as "floor-plans" | "detections";
+                  if (target === activeTab) return;
+                  guardThen("tab", () => setActiveTab(target));
+                }}
+                className="flex-1 flex flex-col min-h-0"
+              >
                 <TabsList className="m-2 grid grid-cols-2">
                   <TabsTrigger value="floor-plans">Floor Plans</TabsTrigger>
                   <TabsTrigger value="detections">Detections</TabsTrigger>
@@ -662,6 +842,16 @@ export const FileViewerModal = ({
                       instancesOnPage={Array.from(instancesByClassThisFile.values()).flat()}
                       numberByInstanceId={numberByInstanceId}
                       instanceLabel={instanceLabel}
+                      editingPlan={editingPlan}
+                      onEnterEdit={enterPlanEdit}
+                      onCancelEdit={cancelPlanEdit}
+                      onSaveEdit={savePlanEdit}
+                      onEditingNameChange={(name) =>
+                        setEditingPlan((p) => (p ? { ...p, name } : p))
+                      }
+                      onRequestDelete={(planId, label) =>
+                        setConfirmDelete({ planId, label })
+                      }
                     />
 
                   </div>
@@ -688,6 +878,8 @@ export const FileViewerModal = ({
                 </TabsContent>
               </Tabs>
             </div>
+
+
 
           ) : detections.length > 0 ? (
             <div className="w-64 flex-shrink-0 border rounded-lg p-3 flex flex-col">
@@ -727,10 +919,88 @@ export const FileViewerModal = ({
             </div>
           ) : null}
         </div>
+
+        {/* Unsaved-changes prompt when leaving edit mode */}
+        <AlertDialog
+          open={!!confirmExit}
+          onOpenChange={(o) => {
+            if (!o) setConfirmExit(null);
+          }}
+        >
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Unsaved bounding box edits</AlertDialogTitle>
+              <AlertDialogDescription>
+                You've made changes to a floor plan's bounding box. Save them
+                before leaving?
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel onClick={() => setConfirmExit(null)}>
+                Cancel
+              </AlertDialogCancel>
+              <Button
+                variant="outline"
+                onClick={() => {
+                  const next = confirmExit?.next;
+                  setConfirmExit(null);
+                  setEditingPlan(null);
+                  next?.();
+                }}
+              >
+                Discard Changes
+              </Button>
+              <AlertDialogAction
+                onClick={async () => {
+                  const next = confirmExit?.next;
+                  setConfirmExit(null);
+                  await savePlanEdit();
+                  next?.();
+                }}
+              >
+                Save Edits
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+
+        {/* Delete plan confirmation */}
+        <AlertDialog
+          open={!!confirmDelete}
+          onOpenChange={(o) => {
+            if (!o) setConfirmDelete(null);
+          }}
+        >
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Delete floor plan?</AlertDialogTitle>
+              <AlertDialogDescription>
+                This removes "{confirmDelete?.label}" from this page. Annotation
+                assignments tied to it will be lost. This can't be undone.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>Cancel</AlertDialogCancel>
+              <AlertDialogAction
+                onClick={async () => {
+                  const planId = confirmDelete?.planId;
+                  setConfirmDelete(null);
+                  if (planId) {
+                    if (editingPlan?.planId === planId) setEditingPlan(null);
+                    await onDeletePlan?.(planId);
+                  }
+                }}
+              >
+                Delete
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
       </DialogContent>
     </Dialog>
   );
 };
+
 
 // ============================================================================
 // Sub-components
@@ -926,6 +1196,14 @@ const DetectionsPanel = ({
   );
 };
 
+interface EditingPlanShape {
+  planId: string;
+  bbox: [number, number, number, number];
+  name: string;
+  origBbox: [number, number, number, number];
+  origName: string;
+}
+
 interface FloorPlansPanelProps {
   floorPlans: ParsedFloorPlan[];
   allUnitPlans: ParsedFloorPlan[];
@@ -933,7 +1211,13 @@ interface FloorPlansPanelProps {
   overrides: Record<string, any>;
   onSaveOverride?: (
     planId: string,
-    next: { floors?: string[]; units?: string[]; annotations?: string[] },
+    next: {
+      floors?: string[];
+      units?: string[];
+      annotations?: string[];
+      bbox_pct?: [number, number, number, number] | null;
+      name?: string | null;
+    },
   ) => Promise<void> | void;
   onEditFloors?: (planId: string, currentFloors: string[]) => void;
   onEditLevelUnits?: (plan: ParsedFloorPlan, currentUnits: string[]) => void;
@@ -945,6 +1229,13 @@ interface FloorPlansPanelProps {
   annotationAssignments: Record<string, string>;
   /** Reassign one annotation (by instance_id) to a plan, or null to unassign. */
   onAssignAnnotation?: (annotationKey: string, planId: string | null) => Promise<void> | void;
+  /** Bbox-edit integration. */
+  editingPlan?: EditingPlanShape | null;
+  onEnterEdit?: (fp: ParsedFloorPlan) => void;
+  onCancelEdit?: () => void;
+  onSaveEdit?: () => void | Promise<void>;
+  onEditingNameChange?: (name: string) => void;
+  onRequestDelete?: (planId: string, label: string) => void;
 }
 
 const FloorPlansPanel = ({
@@ -957,7 +1248,14 @@ const FloorPlansPanel = ({
   instancesOnPage = [],
   numberByInstanceId,
   instanceLabel,
+  editingPlan,
+  onEnterEdit,
+  onCancelEdit,
+  onSaveEdit,
+  onEditingNameChange,
+  onRequestDelete,
 }: FloorPlansPanelProps) => {
+
   // For a unit floor plan, list the pages of level plans that reference it.
   const findReferencingLevels = (unit: ParsedFloorPlan): string[] => {
     const key = unitPlanRefKey(unit);
@@ -1089,16 +1387,23 @@ const FloorPlansPanel = ({
         const effFloors = ovr.floors ?? fp.floors;
         const effUnits: string[] = ovr.units ?? fp.referenced_unit_ids;
         const color = awpClassColor(fp.type || "unknown");
-        const label = floorPlanDisplayLabel({ ...fp, floors: effFloors });
+        const fallbackLabel = getEffectiveLabel(fp, overrides) ||
+          floorPlanDisplayLabel({ ...fp, floors: effFloors });
         const isUnit = fp.type === "unit_floor_plan";
         const isLevel = fp.type === "level_floor_plan";
         const referencedIn = isUnit ? findReferencingLevels(fp) : [];
         const planAnns = annotationsByPlan.get(fp.plan_id) ?? [];
+        const isEditingThis = editingPlan?.planId === fp.plan_id;
+        const anyEditing = !!editingPlan;
+        const disabledRow = anyEditing && !isEditingThis;
+        const displayLabel = isEditingThis ? editingPlan!.name : fallbackLabel;
 
         return (
           <div
             key={fp.plan_id}
-            className="border rounded-md p-2 space-y-2 bg-card"
+            className={`border rounded-md p-2 space-y-2 bg-card ${
+              isEditingThis ? "ring-2 ring-primary/40" : ""
+            } ${disabledRow ? "opacity-50" : ""}`}
             onDragOver={allowDrop}
             onDrop={(e) => handleDropOnPlan(e, fp.plan_id)}
           >
@@ -1107,11 +1412,76 @@ const FloorPlansPanel = ({
                 className="h-2.5 w-2.5 rounded-sm shrink-0"
                 style={{ backgroundColor: color, border: `1px solid ${color}` }}
               />
-              <span className="font-medium text-sm truncate flex-1" title={label}>{label}</span>
+              {isEditingThis ? (
+                <Input
+                  value={editingPlan!.name}
+                  onChange={(e) => onEditingNameChange?.(e.target.value)}
+                  className="h-7 text-sm flex-1 min-w-0"
+                  placeholder="Plan name"
+                  autoFocus
+                />
+              ) : (
+                <span
+                  className="font-medium text-sm truncate flex-1"
+                  title={displayLabel}
+                >
+                  {displayLabel}
+                </span>
+              )}
               <span className="text-[10px] uppercase tracking-wide text-muted-foreground shrink-0">
                 {fp.type.replace(/_/g, " ")}
               </span>
+              {!isEditingThis && onRequestDelete && !anyEditing && (
+                <button
+                  type="button"
+                  onClick={() => onRequestDelete(fp.plan_id, fallbackLabel)}
+                  className="shrink-0 text-muted-foreground hover:text-destructive p-0.5 rounded hover:bg-muted/50"
+                  title="Delete floor plan"
+                  aria-label="Delete floor plan"
+                >
+                  <XIcon className="h-3.5 w-3.5" />
+                </button>
+              )}
             </div>
+
+            {onEnterEdit && (
+              <div className="flex items-center gap-1">
+                {isEditingThis ? (
+                  <>
+                    <Button
+                      type="button"
+                      size="sm"
+                      className="h-6 px-2 text-[11px]"
+                      onClick={() => void onSaveEdit?.()}
+                    >
+                      Done
+                    </Button>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="ghost"
+                      className="h-6 px-2 text-[11px]"
+                      onClick={() => onCancelEdit?.()}
+                    >
+                      Cancel
+                    </Button>
+                  </>
+                ) : (
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    className="h-6 px-2 text-[11px]"
+                    disabled={disabledRow}
+                    onClick={() => onEnterEdit(fp)}
+                  >
+                    Edit Bounding Box
+                  </Button>
+                )}
+              </div>
+            )}
+
+
 
             {isLevel && (
               <div className="space-y-1">

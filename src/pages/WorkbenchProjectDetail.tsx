@@ -75,8 +75,11 @@ import {
   addedUnitPlanToParsed,
   makeAddedUnitPlanId,
   ADDED_UNIT_PLANS_KEY,
+  DELETED_PLAN_IDS_KEY,
+  getDeletedPlanIds,
   type ParsedFloorPlan,
 } from "@/lib/surveyFloorPlans";
+
 import { DrawingViewer } from "@/components/viewer";
 import {
   prewarmDocumentSource,
@@ -334,34 +337,41 @@ export default function WorkbenchProjectDetail() {
 
   const activePageFloorPlans = useMemo<ParsedFloorPlan[]>(() => {
     if (!activePageView) return [];
-    const base = activeFileFloorPlansByPage.get(activePageView.page) ?? [];
+    const deleted = getDeletedPlanIds(activeFloorPlanOverrides);
+    const base = (activeFileFloorPlansByPage.get(activePageView.page) ?? []).filter(
+      (fp) => !deleted.has(fp.plan_id),
+    );
     const added = getAddedUnitPlans(activeFloorPlanOverrides, activePageView.page)
+      .filter((e) => !deleted.has(e.plan_id))
       .map(addedUnitPlanToParsed);
     return [...base, ...added];
   }, [activeFileFloorPlansByPage, activePageView, activeFloorPlanOverrides]);
 
   const activeFileAllUnitPlans = useMemo<ParsedFloorPlan[]>(() => {
+    const deleted = getDeletedPlanIds(activeFloorPlanOverrides);
     const out: ParsedFloorPlan[] = [];
     for (const plans of activeFileFloorPlansByPage.values()) {
       for (const p of plans) {
-        if (p.type === "unit_floor_plan") out.push(p);
+        if (p.type === "unit_floor_plan" && !deleted.has(p.plan_id)) out.push(p);
       }
     }
     for (const entry of getAddedUnitPlans(activeFloorPlanOverrides)) {
-      out.push(addedUnitPlanToParsed(entry));
+      if (!deleted.has(entry.plan_id)) out.push(addedUnitPlanToParsed(entry));
     }
     return out;
   }, [activeFileFloorPlansByPage, activeFloorPlanOverrides]);
 
   const activeFileAllLevelPlans = useMemo<ParsedFloorPlan[]>(() => {
+    const deleted = getDeletedPlanIds(activeFloorPlanOverrides);
     const out: ParsedFloorPlan[] = [];
     for (const plans of activeFileFloorPlansByPage.values()) {
       for (const p of plans) {
-        if (p.type === "level_floor_plan") out.push(p);
+        if (p.type === "level_floor_plan" && !deleted.has(p.plan_id)) out.push(p);
       }
     }
     return out;
-  }, [activeFileFloorPlansByPage]);
+  }, [activeFileFloorPlansByPage, activeFloorPlanOverrides]);
+
 
   // className -> planId derived from per-plan `annotations: string[]` overrides.
   const activeAnnotationAssignments = useMemo<Record<string, string>>(() => {
@@ -455,6 +465,50 @@ export default function WorkbenchProjectDetail() {
       });
     }
   };
+
+  // Delete a floor plan entirely. Parsed plans are tombstoned via
+  // __deleted_plan_ids; manually-added unit plans are removed from
+  // __added_unit_plans. Also clears any per-plan override entry.
+  const deleteFloorPlan = async (planId: string) => {
+    if (!activeSheetIdForPage) {
+      toast({
+        variant: "destructive",
+        title: "Cannot delete",
+        description: "No sheet row exists yet for this page.",
+      });
+      return;
+    }
+    const next: Record<string, any> = { ...activeFloorPlanOverrides };
+    // Remove per-plan override (assignments, bbox, name).
+    if (planId in next) delete next[planId];
+    // Remove from added unit plans if it lives there.
+    const added = Array.isArray(next[ADDED_UNIT_PLANS_KEY])
+      ? (next[ADDED_UNIT_PLANS_KEY] as any[]).filter((e) => e?.plan_id !== planId)
+      : [];
+    if (added.length > 0) next[ADDED_UNIT_PLANS_KEY] = added;
+    else delete next[ADDED_UNIT_PLANS_KEY];
+    // Tombstone parsed plans so they vanish from the view.
+    const existingDeleted = Array.isArray(next[DELETED_PLAN_IDS_KEY])
+      ? (next[DELETED_PLAN_IDS_KEY] as any[]).filter((s) => typeof s === "string")
+      : [];
+    if (!existingDeleted.includes(planId)) existingDeleted.push(planId);
+    next[DELETED_PLAN_IDS_KEY] = existingDeleted;
+
+    setActiveFloorPlanOverrides(next);
+    const { error } = await supabase
+      .from("analysis_request_sheets")
+      .update({ floor_plan_overrides: next } as any)
+      .eq("id", activeSheetIdForPage);
+    if (error) {
+      toast({
+        variant: "destructive",
+        title: "Could not delete floor plan",
+        description: getUserFriendlyError(error),
+      });
+    }
+  };
+
+
 
 
   const openFloorEditForPlan = (planId: string, currentFloors: string[]) => {
@@ -3573,7 +3627,9 @@ export default function WorkbenchProjectDetail() {
             riskElementClasses={activeFileRiskClasses}
             annotationAssignments={activeAnnotationAssignments}
             onAssignAnnotation={assignAnnotationToPlan}
+            onDeletePlan={deleteFloorPlan}
           />
+
         )}
 
 
