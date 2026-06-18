@@ -1196,6 +1196,14 @@ const DetectionsPanel = ({
   );
 };
 
+interface EditingPlanShape {
+  planId: string;
+  bbox: [number, number, number, number];
+  name: string;
+  origBbox: [number, number, number, number];
+  origName: string;
+}
+
 interface FloorPlansPanelProps {
   floorPlans: ParsedFloorPlan[];
   allUnitPlans: ParsedFloorPlan[];
@@ -1203,7 +1211,13 @@ interface FloorPlansPanelProps {
   overrides: Record<string, any>;
   onSaveOverride?: (
     planId: string,
-    next: { floors?: string[]; units?: string[]; annotations?: string[] },
+    next: {
+      floors?: string[];
+      units?: string[];
+      annotations?: string[];
+      bbox_pct?: [number, number, number, number] | null;
+      name?: string | null;
+    },
   ) => Promise<void> | void;
   onEditFloors?: (planId: string, currentFloors: string[]) => void;
   onEditLevelUnits?: (plan: ParsedFloorPlan, currentUnits: string[]) => void;
@@ -1215,6 +1229,13 @@ interface FloorPlansPanelProps {
   annotationAssignments: Record<string, string>;
   /** Reassign one annotation (by instance_id) to a plan, or null to unassign. */
   onAssignAnnotation?: (annotationKey: string, planId: string | null) => Promise<void> | void;
+  /** Bbox-edit integration. */
+  editingPlan?: EditingPlanShape | null;
+  onEnterEdit?: (fp: ParsedFloorPlan) => void;
+  onCancelEdit?: () => void;
+  onSaveEdit?: () => void | Promise<void>;
+  onEditingNameChange?: (name: string) => void;
+  onRequestDelete?: (planId: string, label: string) => void;
 }
 
 const FloorPlansPanel = ({
@@ -1227,7 +1248,14 @@ const FloorPlansPanel = ({
   instancesOnPage = [],
   numberByInstanceId,
   instanceLabel,
+  editingPlan,
+  onEnterEdit,
+  onCancelEdit,
+  onSaveEdit,
+  onEditingNameChange,
+  onRequestDelete,
 }: FloorPlansPanelProps) => {
+
   // For a unit floor plan, list the pages of level plans that reference it.
   const findReferencingLevels = (unit: ParsedFloorPlan): string[] => {
     const key = unitPlanRefKey(unit);
