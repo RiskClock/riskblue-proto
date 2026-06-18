@@ -29,7 +29,7 @@ import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
 import { SpaceEditModal } from "@/components/workbench/SpaceEditModal";
 import { ConsolidateRisersModal } from "@/components/workbench/ConsolidateRisersModal";
-import { EditLevelUnitsModal } from "@/components/wizard/EditLevelUnitsModal";
+
 import {
   AlertDialog,
   AlertDialogAction,
