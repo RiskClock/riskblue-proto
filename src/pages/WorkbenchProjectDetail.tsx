@@ -2859,23 +2859,68 @@ export default function WorkbenchProjectDetail() {
                 <Button
                   type="button"
                   variant="outline"
-                  onClick={() => toast({ title: "Spatial Architect", description: "Not wired up yet." })}
+                  onClick={buildSpaceHierarchy}
+                  disabled={!requestId || spaceHierarchyRunning}
+                  title="Normalize Scout's per-page level/unit labels into a canonical space hierarchy."
                 >
-                  Spatial Architect
+                  {spaceHierarchyRunning ? (
+                    <>
+                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                      Architecting…
+                    </>
+                  ) : (
+                    "Spatial Architect"
+                  )}
                 </Button>
                 <Button
                   type="button"
                   variant="outline"
-                  onClick={() => toast({ title: "Unify Riser", description: "Not wired up yet." })}
+                  onClick={() => setConsolidateOpen(true)}
+                  disabled={!requestId || spannableClassesWithAnnotations.length === 0}
+                  title={
+                    spannableClassesWithAnnotations.length === 0
+                      ? "No Risers identified"
+                      : "Group annotations of riser-type classes into multi-space instances before generating the threat report"
+                  }
                 >
                   Unify Riser
                 </Button>
                 <Button
                   type="button"
                   variant="outline"
-                  onClick={() => toast({ title: "Threat Report", description: "Not wired up yet." })}
+                  onClick={() => setInstancesReportOpen(true)}
+                  disabled={!requestId || !spaceHierarchyHasResult}
+                  title={
+                    !spaceHierarchyHasResult
+                      ? "Run Spatial Architect first to generate the threat report."
+                      : "Generate per-space threat report"
+                  }
                 >
                   Threat Report
+                </Button>
+
+                <div className="flex-1" />
+
+                {analysisRequest && totalFiles > 0 && enabledCols.length > 0 && (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => {
+                      setCleanupChecked(new Set());
+                      setCleanupOpen(true);
+                    }}
+                  >
+                    Renumber IDs
+                  </Button>
+                )}
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => setClearOpen(true)}
+                  disabled={!requestId || phaseRunning}
+                >
+                  <Trash2 className="h-4 w-4 mr-2" />
+                  Clear All
                 </Button>
                 <Tooltip>
                   <TooltipTrigger asChild>
@@ -2883,7 +2928,6 @@ export default function WorkbenchProjectDetail() {
                       type="button"
                       variant="outline"
                       size="icon"
-                      className="ml-auto"
                       onClick={() => setScoutDebugOpen(true)}
                       aria-label="Scout debug"
                     >
@@ -2892,6 +2936,7 @@ export default function WorkbenchProjectDetail() {
                   </TooltipTrigger>
                   <TooltipContent side="bottom">Scout debug</TooltipContent>
                 </Tooltip>
+
               </div>
 
               {/* Raw response modal — shown when a file is picked from the Scout debug list. */}
