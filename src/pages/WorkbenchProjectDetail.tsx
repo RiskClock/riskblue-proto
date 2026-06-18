@@ -3105,6 +3105,21 @@ export default function WorkbenchProjectDetail() {
                 >
                   Threat Report
                 </Button>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      className="ml-auto"
+                      onClick={() => setScoutDebugOpen(true)}
+                      aria-label="Scout debug"
+                    >
+                      <Bug className="h-4 w-4" />
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent side="bottom">Scout debug</TooltipContent>
+                </Tooltip>
               </div>
 
 
