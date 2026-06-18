@@ -326,10 +326,6 @@ export default function InternalWorkbench() {
           va = a.total_size_bytes ?? -1;
           vb = b.total_size_bytes ?? -1;
           break;
-        case "status":
-          va = (a.status && statusLabels[a.status]) || a.status || "";
-          vb = (b.status && statusLabels[b.status]) || b.status || "";
-          break;
       }
       if (va < vb) return sortDir === "asc" ? -1 : 1;
       if (va > vb) return sortDir === "asc" ? 1 : -1;
