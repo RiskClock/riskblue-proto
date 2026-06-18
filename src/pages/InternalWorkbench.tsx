@@ -21,13 +21,18 @@ import {
   ArrowDown,
   ArrowUp,
   ArrowUpDown,
-  Eye,
   Filter,
   Loader2,
+  MoreHorizontal,
   ShieldAlert,
   Settings2,
-  Trash2,
 } from "lucide-react";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -616,25 +621,24 @@ export default function InternalWorkbench() {
                       )}
 
                       <TableCell className="text-right" onClick={(e) => e.stopPropagation()}>
-                        <div className="flex items-center justify-end gap-1">
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => handleView(p)}
-                            title="Open project"
-                          >
-                            <Eye className="h-4 w-4" />
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => openDelete(p)}
-                            title="Delete project"
-                            className="text-destructive hover:text-destructive"
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
-                        </div>
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button variant="ghost" size="icon" className="h-8 w-8" aria-label="Project actions">
+                              <MoreHorizontal className="h-4 w-4" />
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end">
+                            <DropdownMenuItem onClick={() => handleView(p)}>
+                              Open project
+                            </DropdownMenuItem>
+                            <DropdownMenuItem
+                              onClick={() => openDelete(p)}
+                              className="text-destructive focus:text-destructive"
+                            >
+                              Delete project
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
                       </TableCell>
                     </TableRow>
                   );
