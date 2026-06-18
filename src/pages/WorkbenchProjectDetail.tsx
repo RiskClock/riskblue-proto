@@ -2573,14 +2573,14 @@ export default function WorkbenchProjectDetail() {
             </div>
 
 
-            <div className="mt-6 space-y-3">
+            <div className="flex-1 flex flex-col overflow-hidden min-h-0 mt-6 space-y-3">
 
               {pageInfoRows.length === 0 ? (
                 <div className="text-sm text-muted-foreground text-center py-6">
                   {pageInfoLoading ? "Loading…" : "No files in this request."}
                 </div>
               ) : (
-                <div className="bg-card rounded-lg border relative [&>div]:overflow-visible">
+                <div className="flex-1 overflow-auto rounded-lg border relative [&>div]:overflow-visible min-h-0 bg-card">
                   <Table>
                     <TableHeader className="bg-card">
                       <TableRow>
