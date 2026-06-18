@@ -305,6 +305,19 @@ export const FileViewerModal = ({
   const viewerApiRef = useRef<any>(null);
   const viewerContainerRef = useRef<HTMLDivElement>(null);
 
+  const effectiveFloorPlanOverrides = useMemo(() => {
+    if (!editingPlan) return floorPlanOverrides ?? {};
+    return {
+      ...(floorPlanOverrides ?? {}),
+      [editingPlan.planId]: {
+        ...((floorPlanOverrides ?? {}) as any)[editingPlan.planId],
+        bbox_pct: editingPlan.bbox,
+        name: editingPlan.name.trim() || null,
+        type: editingPlan.type,
+      },
+    };
+  }, [floorPlanOverrides, editingPlan]);
+
   const isEditingDirty = !!(
     editingPlan &&
     (editingPlan.name !== editingPlan.origName ||
@@ -933,7 +946,7 @@ export const FileViewerModal = ({
                     floorPlans={floorPlans ?? []}
                     allUnitPlans={allUnitPlans ?? []}
                     allLevelPlans={allLevelPlans ?? []}
-                    overrides={floorPlanOverrides ?? {}}
+                    overrides={effectiveFloorPlanOverrides}
                     onSaveOverride={onSaveFloorPlanOverride}
                     onEditFloors={onEditFloors}
                     onEditLevelUnits={onEditLevelUnits}
@@ -975,6 +988,7 @@ export const FileViewerModal = ({
                     pastLen={past.length}
                     futureLen={future.length}
                     floorPlans={floorPlans}
+                    floorPlanOverrides={effectiveFloorPlanOverrides}
                   />
                 </TabsContent>
               </Tabs>
@@ -1125,6 +1139,7 @@ interface DetectionsPanelProps {
   futureLen: number;
   withHeader?: boolean;
   floorPlans?: ParsedFloorPlan[];
+  floorPlanOverrides?: Record<string, any>;
 }
 
 // Find the floor plan whose bbox contains the normalized (0..1) point.
@@ -1133,13 +1148,14 @@ const findContainingPlan = (
   plans: ParsedFloorPlan[],
   nx: number,
   ny: number,
+  overrides: Record<string, any> = {},
 ): ParsedFloorPlan | null => {
   const x = nx * 100;
   const y = ny * 100;
   let best: ParsedFloorPlan | null = null;
   let bestArea = Infinity;
   for (const fp of plans) {
-    const bb = fp.xy_width_height_pct;
+    const bb = getEffectiveBbox(fp, overrides);
     if (!bb) continue;
     const [bx, by, bw, bh] = bb;
     if (x < bx || x > bx + bw || y < by || y > by + bh) continue;
@@ -1170,6 +1186,7 @@ const DetectionsPanel = ({
   futureLen,
   withHeader,
   floorPlans,
+  floorPlanOverrides = {},
 }: DetectionsPanelProps) => {
   const showPlanBadges = (floorPlans?.length ?? 0) > 1;
   return (
@@ -1252,7 +1269,7 @@ const DetectionsPanel = ({
                       .map((i) => {
                         const containingPlan =
                           showPlanBadges && floorPlans
-                            ? findContainingPlan(floorPlans, i.nx, i.ny)
+                            ? findContainingPlan(floorPlans, i.nx, i.ny, floorPlanOverrides)
                             : null;
                         const planLabel = containingPlan
                           ? floorPlanDisplayLabel(containingPlan)
@@ -1396,7 +1413,7 @@ const FloorPlansPanel = ({
   const annotationsByPlan = new Map<string, DrawingInstanceRow[]>();
   const orphaned: DrawingInstanceRow[] = [];
   for (const inst of instancesOnPage) {
-    const containing = findContainingPlan(floorPlans, inst.nx, inst.ny);
+    const containing = findContainingPlan(floorPlans, inst.nx, inst.ny, overrides);
     if (containing) {
       const arr = annotationsByPlan.get(containing.plan_id) ?? [];
       arr.push(inst);
@@ -1572,8 +1589,8 @@ const FloorPlansPanel = ({
               {isLevel && (
                 <div className="space-y-1">
                   <div className="flex items-center justify-between gap-2">
-                    <div className="text-[10px] uppercase tracking-wide text-muted-foreground">
-                      Units ({effUnits.length})
+                    <div className="text-[10px] font-medium text-muted-foreground">
+                      {effUnits.length > 0 ? `Units (${effUnits.length})` : "Units"}
                     </div>
                     {onSaveLevelUnits && (
                       <UnitsAddPopover

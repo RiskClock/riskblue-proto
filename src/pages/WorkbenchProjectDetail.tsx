@@ -8,13 +8,11 @@ import {
   ChevronRight,
   Copy,
   Download,
-  FileText,
   Loader2,
   MoreVertical,
   Settings2,
   ShieldAlert,
   Square,
-  Trash2,
   Upload,
   Bug,
 } from "lucide-react";
@@ -30,16 +28,6 @@ import { Textarea } from "@/components/ui/textarea";
 import { SpaceEditModal } from "@/components/workbench/SpaceEditModal";
 import { ConsolidateRisersModal } from "@/components/workbench/ConsolidateRisersModal";
 
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
 import {
   Dialog,
   DialogContent,
@@ -385,7 +373,8 @@ export default function WorkbenchProjectDetail() {
       }
     }
     for (const entry of getAddedUnitPlans(activeFloorPlanOverrides)) {
-      if (!deleted.has(entry.plan_id)) out.push(addedUnitPlanToParsed(entry));
+      const parsed = addedUnitPlanToParsed(entry);
+      if (parsed.type === "unit_floor_plan" && !deleted.has(parsed.plan_id)) out.push(parsed);
     }
     return out;
   }, [activeFileFloorPlansByPage, activeFloorPlanOverrides]);
@@ -656,14 +645,66 @@ export default function WorkbenchProjectDetail() {
     requestIdRef.current = requestId ?? null;
   }, [requestId]);
 
+  useEffect(() => {
+    if (!projectId || requestId || pageInfoRows.length > 0) return;
+    try {
+      const cached = window.localStorage.getItem(`riskblue:workbench-page-info:project:${projectId}`);
+      const parsed = cached ? JSON.parse(cached) : null;
+      if (Array.isArray(parsed?.rows)) {
+        const cachedRows = parsed.rows
+          .filter((r: any) => r && typeof r.id === "string" && typeof r.name === "string")
+          .map((r: any) => ({
+            id: r.id,
+            name: r.name,
+            source_type: typeof r.source_type === "string" ? r.source_type : "manual_upload",
+            storage_path: typeof r.storage_path === "string" ? r.storage_path : null,
+            mime_type: typeof r.mime_type === "string" ? r.mime_type : null,
+            page_count: Number.isFinite(Number(r.page_count)) ? Number(r.page_count) : null,
+          })) as PageInfoRow[];
+        if (cachedRows.length > 0) setPageInfoRows(cachedRows);
+      }
+    } catch {
+      /* ignore cache */
+    }
+  }, [projectId, requestId, pageInfoRows.length]);
+
   // Load Page Info: list files, fill missing page counts via pdf.js, cache to DB.
   // source_type lives on analysis_requests, not on analysis_request_files.
   const requestSourceType = (analysisRequest as any)?.source_type as string | undefined;
   useEffect(() => {
     if (!requestId || !requestSourceType) { setPageInfoRows([]); return; }
     let cancelled = false;
+    const cacheKey = `riskblue:workbench-page-info:${requestId}`;
+    const projectCacheKey = projectId ? `riskblue:workbench-page-info:project:${projectId}` : null;
+    let hasCachedRows = false;
+    const cachedPageCounts = new Map<string, number>();
+    try {
+      const cached = window.localStorage.getItem(cacheKey);
+      const parsed = cached ? JSON.parse(cached) : null;
+      if (Array.isArray(parsed?.rows)) {
+        const cachedRows = parsed.rows
+          .filter((r: any) => r && typeof r.id === "string" && typeof r.name === "string")
+          .map((r: any) => ({
+            id: r.id,
+            name: r.name,
+            source_type: requestSourceType,
+            storage_path: typeof r.storage_path === "string" ? r.storage_path : null,
+            mime_type: typeof r.mime_type === "string" ? r.mime_type : null,
+            page_count: Number.isFinite(Number(r.page_count)) ? Number(r.page_count) : null,
+          })) as PageInfoRow[];
+        if (cachedRows.length > 0) {
+          hasCachedRows = true;
+          setPageInfoRows(cachedRows);
+          for (const row of cachedRows) {
+            if (row.page_count != null) cachedPageCounts.set(row.id, row.page_count);
+          }
+        }
+      }
+    } catch {
+      /* ignore cache */
+    }
     (async () => {
-      setPageInfoLoading(true);
+      setPageInfoLoading(!hasCachedRows);
       try {
         const { data, error } = await supabase
           .from("analysis_request_files")
@@ -677,10 +718,16 @@ export default function WorkbenchProjectDetail() {
           source_type: requestSourceType,
           storage_path: r.storage_path,
           mime_type: r.mime_type,
-          page_count: r.expected_page_count ?? null,
+          page_count: r.expected_page_count ?? cachedPageCounts.get(r.id) ?? null,
         }));
         if (cancelled) return;
         setPageInfoRows(initial);
+        try {
+          window.localStorage.setItem(cacheKey, JSON.stringify({ rows: initial, updatedAt: Date.now() }));
+          if (projectCacheKey) window.localStorage.setItem(projectCacheKey, JSON.stringify({ rows: initial, updatedAt: Date.now() }));
+        } catch {
+          /* ignore cache */
+        }
 
         const missing = initial.filter(
           (r) => r.page_count == null && r.storage_path && (r.mime_type ?? "application/pdf").includes("pdf"),
@@ -701,7 +748,16 @@ export default function WorkbenchProjectDetail() {
             try { doc.destroy(); } catch { /* ignore */ }
             if (cancelled) return;
             setPageInfoRows((prev) =>
-              prev.map((r) => (r.id === row.id ? { ...r, page_count: count } : r)),
+              {
+                const next = prev.map((r) => (r.id === row.id ? { ...r, page_count: count } : r));
+                try {
+                  window.localStorage.setItem(cacheKey, JSON.stringify({ rows: next, updatedAt: Date.now() }));
+                  if (projectCacheKey) window.localStorage.setItem(projectCacheKey, JSON.stringify({ rows: next, updatedAt: Date.now() }));
+                } catch {
+                  /* ignore cache */
+                }
+                return next;
+              },
             );
             void supabase
               .from("analysis_request_files")
@@ -718,7 +774,7 @@ export default function WorkbenchProjectDetail() {
       }
     })();
     return () => { cancelled = true; };
-  }, [requestId, requestSourceType]);
+  }, [requestId, requestSourceType, projectId]);
 
 
 
@@ -3425,25 +3481,24 @@ export default function WorkbenchProjectDetail() {
         </Dialog>
 
         {/* Clear All confirmation */}
-        <AlertDialog open={clearOpen} onOpenChange={setClearOpen}>
-          <AlertDialogContent>
-            <AlertDialogHeader>
-              <AlertDialogTitle>Clear all results?</AlertDialogTitle>
-              <AlertDialogDescription>
+        <Dialog open={clearOpen} onOpenChange={(open) => !clearing && setClearOpen(open)}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Clear all results?</DialogTitle>
+              <DialogDescription>
                 This removes all annotations, floor-plan bounding boxes, and the
                 relationships between level and unit floor plans for this project,
-                along with extracted text, triage results, analysis results, and
-                Workbench overrides. The uploaded files themselves are not removed.
-              </AlertDialogDescription>
-            </AlertDialogHeader>
-            <AlertDialogFooter>
-              <AlertDialogCancel disabled={clearing}>Cancel</AlertDialogCancel>
-              <AlertDialogAction onClick={clearAll} disabled={clearing}>
+                along with Workbench overrides. The uploaded files themselves are not removed.
+              </DialogDescription>
+            </DialogHeader>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setClearOpen(false)} disabled={clearing}>Cancel</Button>
+              <Button onClick={clearAll} disabled={clearing}>
                 {clearing ? <Loader2 className="h-4 w-4 animate-spin" /> : "Clear All"}
-              </AlertDialogAction>
-            </AlertDialogFooter>
-          </AlertDialogContent>
-        </AlertDialog>
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
 
         <SpaceHierarchyModal
           open={spaceModalOpen}
@@ -4346,10 +4401,6 @@ function InstancesReportModal({
       <DialogContent className="max-w-[95vw] w-[95vw] sm:max-w-[95vw]">
         <DialogHeader>
           <DialogTitle>Threat Report</DialogTitle>
-          <DialogDescription>
-            Annotations expanded into per-space instance IDs. Unit floor-plan detections are expanded once per level the unit applies to (e.g. WS001@L05::UnitA).
-
-          </DialogDescription>
         </DialogHeader>
         <div className="grid grid-cols-[220px_1fr] gap-4 max-h-[70vh]">
           <div className="border rounded-md overflow-auto">
