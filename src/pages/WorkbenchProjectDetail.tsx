@@ -2202,7 +2202,7 @@ export default function WorkbenchProjectDetail() {
             {/* Survey Pages */}
             <div className="space-y-3">
               <div className="flex flex-wrap items-center justify-start gap-2">
-                <span className="text-sm font-medium text-muted-foreground mr-1">Agents:</span>
+                <span className="text-sm font-medium text-muted-foreground mr-1">Risk Agents:</span>
                 <Button
                   type="button"
                   onClick={async () => {
@@ -2405,7 +2405,7 @@ export default function WorkbenchProjectDetail() {
                       Identifying…
                     </>
                   ) : (
-                    "Vulnerability Radar"
+                    "Risk Radar"
                   )}
                 </Button>
                 <Button
@@ -2428,29 +2428,23 @@ export default function WorkbenchProjectDetail() {
                   type="button"
                   variant="outline"
                   onClick={() => setConsolidateOpen(true)}
-                  disabled={!requestId || spannableClassesWithAnnotations.length === 0 || !hasRisersSelected}
+                  disabled={!requestId || !hasRisersSelected}
                   title={
                     !hasRisersSelected
                       ? "Select Electrical Riser or Mechanical Riser columns to enable"
-                      : spannableClassesWithAnnotations.length === 0
-                      ? "No Risers identified"
-                      : "Group annotations of riser-type classes into multi-space instances before generating the threat report"
+                      : "Group riser annotations into multi-space instances"
                   }
                 >
-                  Unify Risers
+                  Riser Unifier
                 </Button>
                 <Button
                   type="button"
                   variant="outline"
                   onClick={() => setInstancesReportOpen(true)}
-                  disabled={!requestId || !spaceHierarchyHasResult}
-                  title={
-                    !spaceHierarchyHasResult
-                      ? "Run Spatial Architect first to generate the threat report."
-                      : "Generate per-space threat report"
-                  }
+                  disabled={!requestId}
+                  title="Generate per-space threat report"
                 >
-                  Threat Report
+                  Threat Compiler
                 </Button>
 
                 <div className="flex-1" />
@@ -2473,7 +2467,6 @@ export default function WorkbenchProjectDetail() {
                   onClick={() => setClearOpen(true)}
                   disabled={!requestId || phaseRunning}
                 >
-                  <Trash2 className="h-4 w-4 mr-2" />
                   Clear All
                 </Button>
                 <Tooltip>
@@ -2483,12 +2476,12 @@ export default function WorkbenchProjectDetail() {
                       variant="outline"
                       size="icon"
                       onClick={() => setScoutDebugOpen(true)}
-                      aria-label="Scout debug"
+                      aria-label="Agent debug"
                     >
                       <Bug className="h-4 w-4" />
                     </Button>
                   </TooltipTrigger>
-                  <TooltipContent side="bottom">Scout debug</TooltipContent>
+                  <TooltipContent side="bottom">Agent debug</TooltipContent>
                 </Tooltip>
 
               </div>
