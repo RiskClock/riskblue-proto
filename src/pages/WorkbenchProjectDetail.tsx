@@ -653,6 +653,7 @@ export default function WorkbenchProjectDetail() {
     let cancelled = false;
     const cacheKey = `riskblue:workbench-page-info:${requestId}`;
     let hasCachedRows = false;
+    const cachedPageCounts = new Map<string, number>();
     try {
       const cached = window.localStorage.getItem(cacheKey);
       const parsed = cached ? JSON.parse(cached) : null;
@@ -670,6 +671,9 @@ export default function WorkbenchProjectDetail() {
         if (cachedRows.length > 0) {
           hasCachedRows = true;
           setPageInfoRows(cachedRows);
+          for (const row of cachedRows) {
+            if (row.page_count != null) cachedPageCounts.set(row.id, row.page_count);
+          }
         }
       }
     } catch {
@@ -690,7 +694,7 @@ export default function WorkbenchProjectDetail() {
           source_type: requestSourceType,
           storage_path: r.storage_path,
           mime_type: r.mime_type,
-          page_count: r.expected_page_count ?? null,
+          page_count: r.expected_page_count ?? cachedPageCounts.get(r.id) ?? null,
         }));
         if (cancelled) return;
         setPageInfoRows(initial);
