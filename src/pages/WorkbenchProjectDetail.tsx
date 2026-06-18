@@ -4805,9 +4805,10 @@ function InstancesReportModal({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-[95vw] w-[95vw] sm:max-w-[95vw]">
         <DialogHeader>
-          <DialogTitle>Risk Instance Report</DialogTitle>
+          <DialogTitle>Threat Report</DialogTitle>
           <DialogDescription>
-            Annotations expanded into per-space instance IDs based on the Space Hierarchy.
+            Annotations expanded into per-space instance IDs. Unit floor-plan detections are expanded once per level the unit applies to (e.g. WS001@L05::UnitA).
+
           </DialogDescription>
         </DialogHeader>
         <div className="grid grid-cols-[220px_1fr] gap-4 max-h-[70vh]">
