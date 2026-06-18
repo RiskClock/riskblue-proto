@@ -2913,7 +2913,7 @@ export default function WorkbenchProjectDetail() {
             </div>
 
             {/* Upload Report - moved below Pages by File table */}
-            <div className="flex items-center justify-end gap-3 mt-4">
+            <div className="flex items-center justify-end gap-3 mt-4 shrink-0">
               <input
                 ref={reportInputRef}
                 type="file"
