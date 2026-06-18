@@ -284,6 +284,9 @@ export default function WorkbenchProjectDetail() {
     Record<string, any>
   >({});
   const [activeFileRiskClasses, setActiveFileRiskClasses] = useState<string[]>([]);
+  // Holds the current request id so async effects declared above the
+  // analysisRequest query can read it without a forward reference.
+  const requestIdRef = useRef<string | null>(null);
 
   useEffect(() => {
     if (!activePageView) {
@@ -649,6 +652,9 @@ export default function WorkbenchProjectDetail() {
   });
 
   const requestId = analysisRequest?.id;
+  useEffect(() => {
+    requestIdRef.current = requestId ?? null;
+  }, [requestId]);
 
   // Load Page Info: list files, fill missing page counts via pdf.js, cache to DB.
   // source_type lives on analysis_requests, not on analysis_request_files.
