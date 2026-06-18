@@ -49,11 +49,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { Input } from "@/components/ui/input";
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from "@/components/ui/popover";
+import * as PopoverPrimitive from "@radix-ui/react-popover";
 import {
   Command,
   CommandEmpty,
@@ -1708,6 +1704,8 @@ const UnitsAddPopover = ({
 }: UnitsAddPopoverProps) => {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
+  const triggerRef = useRef<HTMLButtonElement | null>(null);
+  const [portalContainer, setPortalContainer] = useState<HTMLElement | null>(null);
   const available = existingRefs.filter((r) => !currentUnits.includes(r));
   const filtered = query.trim()
     ? available.filter((r) => r.toLowerCase().includes(query.trim().toLowerCase()))
@@ -1724,16 +1722,23 @@ const UnitsAddPopover = ({
     await onAdd(ref, isNew);
   };
 
+  useEffect(() => {
+    if (!open) return;
+    const dialogEl = triggerRef.current?.closest('[role="dialog"]') as HTMLElement | null;
+    setPortalContainer(dialogEl);
+  }, [open]);
+
   return (
-    <Popover
+    <PopoverPrimitive.Root
       open={open}
       onOpenChange={(o) => {
         setOpen(o);
         if (!o) setQuery("");
       }}
     >
-      <PopoverTrigger asChild>
+      <PopoverPrimitive.Trigger asChild>
         <Button
+          ref={triggerRef}
           type="button"
           size="sm"
           variant="ghost"
@@ -1742,8 +1747,13 @@ const UnitsAddPopover = ({
           <Plus className="h-3 w-3" />
           Add
         </Button>
-      </PopoverTrigger>
-      <PopoverContent align="end" className="w-56 p-0">
+      </PopoverPrimitive.Trigger>
+      <PopoverPrimitive.Portal container={portalContainer ?? undefined}>
+      <PopoverPrimitive.Content
+        align="end"
+        sideOffset={4}
+        className="z-[99999] w-56 rounded-md border bg-popover p-0 text-popover-foreground shadow-md outline-none"
+      >
         <Command shouldFilter={false}>
           <CommandInput
             placeholder="Search or add unit…"
@@ -1751,7 +1761,11 @@ const UnitsAddPopover = ({
             onValueChange={setQuery}
             className="h-8 text-xs"
           />
-          <CommandList className="max-h-56 overflow-y-auto overscroll-contain">
+          <CommandList
+            className="max-h-56 overflow-y-auto overscroll-contain"
+            onWheel={(e) => e.stopPropagation()}
+            onTouchMove={(e) => e.stopPropagation()}
+          >
             {filtered.length === 0 && !showCreate && (
               <CommandEmpty>No units.</CommandEmpty>
             )}
@@ -1783,8 +1797,9 @@ const UnitsAddPopover = ({
             )}
           </CommandList>
         </Command>
-      </PopoverContent>
-    </Popover>
+      </PopoverPrimitive.Content>
+      </PopoverPrimitive.Portal>
+    </PopoverPrimitive.Root>
   );
 };
 
