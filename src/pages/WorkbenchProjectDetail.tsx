@@ -1293,7 +1293,8 @@ export default function WorkbenchProjectDetail() {
   const spaceHierarchyHasResult = !!(spaceHierarchyPayload?.parsed || spaceHierarchyPayload?.raw_text);
   const spaceHierarchyRunning =
     buildingSpace ||
-    (analysisRequest?.space_hierarchy_status === "running" && !!spaceHierarchyResponseId);
+    analysisRequest?.space_hierarchy_status === "running";
+
 
   // Accept either "physical_spaces" (legacy) or "spatial_records" (current prompt schema).
   const extractSpaces = (parsed: any): any[] => {
