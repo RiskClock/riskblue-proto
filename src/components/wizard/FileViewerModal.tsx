@@ -1453,7 +1453,7 @@ const FloorPlansPanel = ({
         {orphaned.length > 0 && (
           <div className="border border-dashed rounded-md p-2 space-y-1 bg-muted/20">
             <div className="text-[11px] font-medium text-muted-foreground">
-              Orphaned annotations ({orphaned.length})
+              Annotations placed outside floor plan ({orphaned.length})
             </div>
             {renderAnnotations(orphaned)}
           </div>
