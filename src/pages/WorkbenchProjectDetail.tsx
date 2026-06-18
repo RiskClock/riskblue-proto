@@ -645,6 +645,29 @@ export default function WorkbenchProjectDetail() {
     requestIdRef.current = requestId ?? null;
   }, [requestId]);
 
+  useEffect(() => {
+    if (!projectId || requestId || pageInfoRows.length > 0) return;
+    try {
+      const cached = window.localStorage.getItem(`riskblue:workbench-page-info:project:${projectId}`);
+      const parsed = cached ? JSON.parse(cached) : null;
+      if (Array.isArray(parsed?.rows)) {
+        const cachedRows = parsed.rows
+          .filter((r: any) => r && typeof r.id === "string" && typeof r.name === "string")
+          .map((r: any) => ({
+            id: r.id,
+            name: r.name,
+            source_type: typeof r.source_type === "string" ? r.source_type : "manual_upload",
+            storage_path: typeof r.storage_path === "string" ? r.storage_path : null,
+            mime_type: typeof r.mime_type === "string" ? r.mime_type : null,
+            page_count: Number.isFinite(Number(r.page_count)) ? Number(r.page_count) : null,
+          })) as PageInfoRow[];
+        if (cachedRows.length > 0) setPageInfoRows(cachedRows);
+      }
+    } catch {
+      /* ignore cache */
+    }
+  }, [projectId, requestId, pageInfoRows.length]);
+
   // Load Page Info: list files, fill missing page counts via pdf.js, cache to DB.
   // source_type lives on analysis_requests, not on analysis_request_files.
   const requestSourceType = (analysisRequest as any)?.source_type as string | undefined;
