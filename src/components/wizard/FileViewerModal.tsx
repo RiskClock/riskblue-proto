@@ -1252,10 +1252,11 @@ const DetectionsPanel = ({
                               const cc = awpClassColor(ct);
                               return (
                                 <span
-                                  className="shrink-0 px-1.5 py-0.5 rounded text-[9px] font-medium max-w-[80px] truncate"
+                                  className="shrink-0 px-1.5 py-0.5 rounded text-[9px] font-medium max-w-[80px] truncate border"
                                   style={{
-                                    backgroundColor: cc,
-                                    color: readableTextOn(cc),
+                                    backgroundColor: softBgFrom(cc),
+                                    color: cc,
+                                    borderColor: cc,
                                   }}
                                   title={`In ${planLabel}`}
                                 >
