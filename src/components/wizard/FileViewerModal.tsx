@@ -1387,16 +1387,23 @@ const FloorPlansPanel = ({
         const effFloors = ovr.floors ?? fp.floors;
         const effUnits: string[] = ovr.units ?? fp.referenced_unit_ids;
         const color = awpClassColor(fp.type || "unknown");
-        const label = floorPlanDisplayLabel({ ...fp, floors: effFloors });
+        const fallbackLabel = getEffectiveLabel(fp, overrides) ||
+          floorPlanDisplayLabel({ ...fp, floors: effFloors });
         const isUnit = fp.type === "unit_floor_plan";
         const isLevel = fp.type === "level_floor_plan";
         const referencedIn = isUnit ? findReferencingLevels(fp) : [];
         const planAnns = annotationsByPlan.get(fp.plan_id) ?? [];
+        const isEditingThis = editingPlan?.planId === fp.plan_id;
+        const anyEditing = !!editingPlan;
+        const disabledRow = anyEditing && !isEditingThis;
+        const displayLabel = isEditingThis ? editingPlan!.name : fallbackLabel;
 
         return (
           <div
             key={fp.plan_id}
-            className="border rounded-md p-2 space-y-2 bg-card"
+            className={`border rounded-md p-2 space-y-2 bg-card ${
+              isEditingThis ? "ring-2 ring-primary/40" : ""
+            } ${disabledRow ? "opacity-50" : ""}`}
             onDragOver={allowDrop}
             onDrop={(e) => handleDropOnPlan(e, fp.plan_id)}
           >
@@ -1405,11 +1412,76 @@ const FloorPlansPanel = ({
                 className="h-2.5 w-2.5 rounded-sm shrink-0"
                 style={{ backgroundColor: color, border: `1px solid ${color}` }}
               />
-              <span className="font-medium text-sm truncate flex-1" title={label}>{label}</span>
+              {isEditingThis ? (
+                <Input
+                  value={editingPlan!.name}
+                  onChange={(e) => onEditingNameChange?.(e.target.value)}
+                  className="h-7 text-sm flex-1 min-w-0"
+                  placeholder="Plan name"
+                  autoFocus
+                />
+              ) : (
+                <span
+                  className="font-medium text-sm truncate flex-1"
+                  title={displayLabel}
+                >
+                  {displayLabel}
+                </span>
+              )}
               <span className="text-[10px] uppercase tracking-wide text-muted-foreground shrink-0">
                 {fp.type.replace(/_/g, " ")}
               </span>
+              {!isEditingThis && onRequestDelete && !anyEditing && (
+                <button
+                  type="button"
+                  onClick={() => onRequestDelete(fp.plan_id, fallbackLabel)}
+                  className="shrink-0 text-muted-foreground hover:text-destructive p-0.5 rounded hover:bg-muted/50"
+                  title="Delete floor plan"
+                  aria-label="Delete floor plan"
+                >
+                  <XIcon className="h-3.5 w-3.5" />
+                </button>
+              )}
             </div>
+
+            {onEnterEdit && (
+              <div className="flex items-center gap-1">
+                {isEditingThis ? (
+                  <>
+                    <Button
+                      type="button"
+                      size="sm"
+                      className="h-6 px-2 text-[11px]"
+                      onClick={() => void onSaveEdit?.()}
+                    >
+                      Done
+                    </Button>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="ghost"
+                      className="h-6 px-2 text-[11px]"
+                      onClick={() => onCancelEdit?.()}
+                    >
+                      Cancel
+                    </Button>
+                  </>
+                ) : (
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    className="h-6 px-2 text-[11px]"
+                    disabled={disabledRow}
+                    onClick={() => onEnterEdit(fp)}
+                  >
+                    Edit Bounding Box
+                  </Button>
+                )}
+              </div>
+            )}
+
+
 
             {isLevel && (
               <div className="space-y-1">
