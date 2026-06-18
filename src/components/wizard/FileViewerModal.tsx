@@ -940,6 +940,7 @@ export const FileViewerModal = ({
                     onSaveOverride={onSaveFloorPlanOverride}
                     onEditFloors={onEditFloors}
                     onEditLevelUnits={onEditLevelUnits}
+                    onSaveLevelUnits={onSaveLevelUnits}
                     instancesOnPage={Array.from(instancesByClassThisFile.values()).flat()}
                     numberByInstanceId={numberByInstanceId}
                     instanceLabel={instanceLabel}
