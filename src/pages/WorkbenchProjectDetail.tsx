@@ -385,7 +385,8 @@ export default function WorkbenchProjectDetail() {
       }
     }
     for (const entry of getAddedUnitPlans(activeFloorPlanOverrides)) {
-      if (!deleted.has(entry.plan_id)) out.push(addedUnitPlanToParsed(entry));
+      const parsed = addedUnitPlanToParsed(entry);
+      if (parsed.type === "unit_floor_plan" && !deleted.has(parsed.plan_id)) out.push(parsed);
     }
     return out;
   }, [activeFileFloorPlansByPage, activeFloorPlanOverrides]);
@@ -662,8 +663,32 @@ export default function WorkbenchProjectDetail() {
   useEffect(() => {
     if (!requestId || !requestSourceType) { setPageInfoRows([]); return; }
     let cancelled = false;
+    const cacheKey = `riskblue:workbench-page-info:${requestId}`;
+    let hasCachedRows = false;
+    try {
+      const cached = window.localStorage.getItem(cacheKey);
+      const parsed = cached ? JSON.parse(cached) : null;
+      if (Array.isArray(parsed?.rows)) {
+        const cachedRows = parsed.rows
+          .filter((r: any) => r && typeof r.id === "string" && typeof r.name === "string")
+          .map((r: any) => ({
+            id: r.id,
+            name: r.name,
+            source_type: requestSourceType,
+            storage_path: typeof r.storage_path === "string" ? r.storage_path : null,
+            mime_type: typeof r.mime_type === "string" ? r.mime_type : null,
+            page_count: Number.isFinite(Number(r.page_count)) ? Number(r.page_count) : null,
+          })) as PageInfoRow[];
+        if (cachedRows.length > 0) {
+          hasCachedRows = true;
+          setPageInfoRows(cachedRows);
+        }
+      }
+    } catch {
+      /* ignore cache */
+    }
     (async () => {
-      setPageInfoLoading(true);
+      setPageInfoLoading(!hasCachedRows);
       try {
         const { data, error } = await supabase
           .from("analysis_request_files")
@@ -681,6 +706,11 @@ export default function WorkbenchProjectDetail() {
         }));
         if (cancelled) return;
         setPageInfoRows(initial);
+        try {
+          window.localStorage.setItem(cacheKey, JSON.stringify({ rows: initial, updatedAt: Date.now() }));
+        } catch {
+          /* ignore cache */
+        }
 
         const missing = initial.filter(
           (r) => r.page_count == null && r.storage_path && (r.mime_type ?? "application/pdf").includes("pdf"),
@@ -701,7 +731,15 @@ export default function WorkbenchProjectDetail() {
             try { doc.destroy(); } catch { /* ignore */ }
             if (cancelled) return;
             setPageInfoRows((prev) =>
-              prev.map((r) => (r.id === row.id ? { ...r, page_count: count } : r)),
+              {
+                const next = prev.map((r) => (r.id === row.id ? { ...r, page_count: count } : r));
+                try {
+                  window.localStorage.setItem(cacheKey, JSON.stringify({ rows: next, updatedAt: Date.now() }));
+                } catch {
+                  /* ignore cache */
+                }
+                return next;
+              },
             );
             void supabase
               .from("analysis_request_files")
