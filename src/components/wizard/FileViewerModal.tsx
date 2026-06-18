@@ -1337,6 +1337,12 @@ interface FloorPlansPanelProps {
   ) => Promise<void> | void;
   onEditFloors?: (planId: string, currentFloors: string[]) => void;
   onEditLevelUnits?: (plan: ParsedFloorPlan, currentUnits: string[]) => void;
+  onSaveLevelUnits?: (
+    plan: ParsedFloorPlan,
+    units: string[],
+    createdRefs?: string[],
+    removedRefs?: string[],
+  ) => Promise<void> | void;
   /** Real markers placed on this page (one row per instance). */
   instancesOnPage?: DrawingInstanceRow[];
   numberByInstanceId?: Map<string, number>;
