@@ -1863,11 +1863,11 @@ export default function WorkbenchProjectDetail() {
     }
   };
 
-  // ---- Build Space Hierarchy ---------------------------------------------
+  // ---- Spatial Architect (replaces Build Space Hierarchy) ---------------
   const buildSpaceHierarchy = async () => {
     if (!requestId) return;
     if (spaceHierarchyHasResult) {
-      if (!window.confirm("Build Space Hierarchy has already run for this project. Re-run and overwrite existing results?")) {
+      if (!window.confirm("Spatial Architect has already run for this project. Re-run and overwrite existing results?")) {
         return;
       }
     }
@@ -1881,27 +1881,28 @@ export default function WorkbenchProjectDetail() {
         .from("analysis_requests")
         .update({
           space_hierarchy_json: null,
-          space_hierarchy_status: null,
+          space_hierarchy_status: "running",
           space_hierarchy_error: null,
-          space_hierarchy_updated_at: null,
+          space_hierarchy_updated_at: new Date().toISOString(),
         } as any)
         .eq("id", requestId);
       queryClient.invalidateQueries({
         queryKey: ["workbench-analysis-request", projectId],
       });
-      const { error } = await supabase.functions.invoke("build-space-hierarchy", {
-        body: { analysisRequestId: requestId, action: "start" },
+      const { data, error } = await supabase.functions.invoke("spatial-architect", {
+        body: { analysisRequestId: requestId },
         headers: { Authorization: `Bearer ${token}` },
       });
       if (error) throw error;
-      toast({ title: "Space hierarchy build started" });
+      if ((data as any)?.error) throw new Error((data as any).error);
+      toast({ title: "Spatial Architect complete" });
       queryClient.invalidateQueries({
         queryKey: ["workbench-analysis-request", projectId],
       });
     } catch (error: any) {
       toast({
         variant: "destructive",
-        title: "Could not build space hierarchy",
+        title: "Spatial Architect failed",
         description: getUserFriendlyError(error),
       });
     } finally {
@@ -1909,31 +1910,7 @@ export default function WorkbenchProjectDetail() {
     }
   };
 
-  useEffect(() => {
-    if (!requestId || !spaceHierarchyRunning || !spaceHierarchyResponseId || !session?.access_token) return;
-    let cancelled = false;
-    const poll = async () => {
-      const { error } = await supabase.functions.invoke("build-space-hierarchy", {
-        body: { analysisRequestId: requestId, action: "poll" },
-        headers: { Authorization: `Bearer ${session.access_token}` },
-      });
-      if (cancelled) return;
-      if (error) {
-        toast({
-          variant: "destructive",
-          title: "Could not check space hierarchy",
-          description: getUserFriendlyError(error),
-        });
-      }
-      await queryClient.invalidateQueries({ queryKey: ["workbench-analysis-request", projectId] });
-    };
-    const id = window.setInterval(poll, 5000);
-    poll();
-    return () => {
-      cancelled = true;
-      window.clearInterval(id);
-    };
-  }, [requestId, spaceHierarchyRunning, spaceHierarchyResponseId, session?.access_token, queryClient, projectId, toast]);
+
 
   // --- Export -----------------------------------------------------------------
   const handleExportResults = async () => {
