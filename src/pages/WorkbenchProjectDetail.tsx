@@ -4228,6 +4228,7 @@ function InstancesReportModal({
   fileGroups,
   optionByName,
   pageSpaceMap,
+  pageSpaceUnitMap,
   spaceHierarchyPayload,
   projectName,
   enabledClassNames,
@@ -4239,6 +4240,7 @@ function InstancesReportModal({
   fileGroups: Array<{ file: FileRow; sheets: SheetRow[] }>;
   optionByName: Map<string, { idPrefix: string | null; category: string }>;
   pageSpaceMap: Map<string, string[]>;
+  pageSpaceUnitMap: Map<string, Array<{ level: string; unit?: string }>>;
   spaceHierarchyPayload: any | null | undefined;
   projectName: string;
   enabledClassNames: string[];
@@ -4322,11 +4324,32 @@ function InstancesReportModal({
     return m;
   }, [consolidations]);
 
+  // Resolve per-page (level, unit?) pairs. Falls back to the legacy level-only
+  // map when spatial_records lacks unit_templates (older projects).
+  const pairsForPage = (fileName: string, pageIndex: number): Array<{ level: string; unit?: string }> => {
+    const key = `${fileName}::${pageIndex}`;
+    const unitAware = pageSpaceUnitMap.get(key);
+    if (unitAware && unitAware.length > 0) return unitAware;
+    const levels = pageSpaceMap.get(key) || [];
+    return levels.map((l) => ({ level: l }));
+  };
+
+  // Encode an (level, unit?) suffix safely. Spaces -> "_". The "::" separator
+  // is reserved between level and unit, so any "::" inside the level/unit
+  // labels themselves is stripped to avoid ambiguity if anything ever splits.
+  const encodeSuffix = (level: string, unit?: string): string => {
+    const lvl = level.replace(/\s+/g, "_").replace(/::/g, "_");
+    if (!unit) return lvl;
+    const u = unit.replace(/\s+/g, "_").replace(/::/g, "_");
+    return `${lvl}::${u}`;
+  };
+
   const expanded = useMemo(() => {
     type Row = {
       annotationBaseId: string;
       instanceId: string;
       spaceName: string | null;
+      unitName: string | null;
       awpClassName: string;
       category: string;
       fileId: string;
@@ -4334,12 +4357,14 @@ function InstancesReportModal({
       nx: number;
       ny: number;
       // Stable key per logical instance — used to de-duplicate the same
-      // consolidated riser appearing across multiple pages.
+      // consolidated riser appearing across multiple pages. For unit-expanded
+      // rows, the (level, unit) pair is folded into the key so each
+      // (level, unit) expansion counts as its own logical instance.
       logicalKey: string;
     };
     const rows: Row[] = [];
 
-    // Bucket consolidated members so we emit one row per (group, space).
+    // Bucket consolidated members so we emit one row per (group, level, unit?).
     const groupedMembers = new Map<string, any[]>();
     for (const inst of instances) {
       if (enabledClassSet.size > 0 && !enabledClassSet.has(inst.awp_class_name)) continue;
@@ -4356,7 +4381,7 @@ function InstancesReportModal({
       const num = inst.instance_number ?? 0;
       const base = `${prefix}${String(num).padStart(3, "0")}`;
       const fileName = fileNameById.get(inst.file_id) || "";
-      const sps = pageSpaceMap.get(`${fileName}::${inst.page_index}`) || [];
+      const pairs = pairsForPage(fileName, inst.page_index);
       const common = {
         annotationBaseId: base,
         awpClassName: inst.awp_class_name,
@@ -4365,48 +4390,62 @@ function InstancesReportModal({
         pageIndex: inst.page_index,
         nx: Number(inst.nx) || 0,
         ny: Number(inst.ny) || 0,
-        logicalKey: `ann::${inst.id}`,
       };
-      if (sps.length === 0) {
-        rows.push({ ...common, instanceId: base, spaceName: null });
+      if (pairs.length === 0) {
+        rows.push({
+          ...common,
+          instanceId: base,
+          spaceName: null,
+          unitName: null,
+          logicalKey: `ann::${inst.id}`,
+        });
       } else {
-        for (const sp of sps) {
-          const spId = sp.replace(/\s+/g, "_");
-          rows.push({ ...common, instanceId: `${base}@${spId}`, spaceName: sp });
+        for (const p of pairs) {
+          rows.push({
+            ...common,
+            instanceId: `${base}@${encodeSuffix(p.level, p.unit)}`,
+            spaceName: p.level,
+            unitName: p.unit ?? null,
+            // Each (level, unit) expansion is its own logical instance, so an
+            // annotation on a unit plan that applies to 16 levels counts 16x.
+            logicalKey: `ann::${inst.id}::${p.level}::${p.unit ?? ""}`,
+          });
         }
       }
     }
 
-    // Emit consolidated groups: one row per (group, space) using ANY member
-    // annotation as the on-drawing anchor for that space.
+    // Emit consolidated groups: one row per (group, level, unit?) using ANY
+    // member annotation as the on-drawing anchor for that pair.
     for (const [groupKey, members] of groupedMembers) {
       if (members.length === 0) continue;
       const first = members[0];
       const opt = optionByName.get(first.awp_class_name);
       const category = opt?.category || "Other";
       const cg = consolidationByAnnId.get(first.id)!;
-      // For each unique space across all members, pick the member that lives there
-      // (so the drawing overlay anchors to that page).
-      const spaceToMember = new Map<string, any>();
+      // For each unique (level, unit?) across all members, pick the member
+      // that lives there (so the drawing overlay anchors to that page).
+      const pairToMember = new Map<string, { member: any; pair: { level: string; unit?: string } }>();
       const unassignedMembers: any[] = [];
       for (const m of members) {
         const fname = fileNameById.get(m.file_id) || "";
-        const sps = pageSpaceMap.get(`${fname}::${m.page_index}`) || [];
-        if (sps.length === 0) {
+        const pairs = pairsForPage(fname, m.page_index);
+        if (pairs.length === 0) {
           unassignedMembers.push(m);
         } else {
-          for (const sp of sps) {
-            if (!spaceToMember.has(sp)) spaceToMember.set(sp, m);
+          for (const p of pairs) {
+            const k = `${p.level}::${p.unit ?? ""}`;
+            if (!pairToMember.has(k)) pairToMember.set(k, { member: m, pair: p });
           }
         }
       }
-      if (spaceToMember.size === 0 && unassignedMembers.length === 0) continue;
-      if (spaceToMember.size === 0) {
+      if (pairToMember.size === 0 && unassignedMembers.length === 0) continue;
+      if (pairToMember.size === 0) {
         const m = unassignedMembers[0];
         rows.push({
           annotationBaseId: cg.label,
           instanceId: cg.label,
           spaceName: null,
+          unitName: null,
           awpClassName: first.awp_class_name,
           category,
           fileId: m.file_id,
@@ -4416,25 +4455,27 @@ function InstancesReportModal({
           logicalKey: `cons::${groupKey}`,
         });
       } else {
-        for (const [sp, m] of spaceToMember) {
+        for (const [k, { member, pair }] of pairToMember) {
           rows.push({
             annotationBaseId: cg.label,
             instanceId: cg.label,
-            spaceName: sp,
+            spaceName: pair.level,
+            unitName: pair.unit ?? null,
             awpClassName: first.awp_class_name,
             category,
-            fileId: m.file_id,
-            pageIndex: m.page_index,
-            nx: Number(m.nx) || 0,
-            ny: Number(m.ny) || 0,
-            logicalKey: `cons::${groupKey}`,
+            fileId: member.file_id,
+            pageIndex: member.page_index,
+            nx: Number(member.nx) || 0,
+            ny: Number(member.ny) || 0,
+            logicalKey: `cons::${groupKey}::${k}`,
           });
         }
       }
     }
 
     return rows;
-  }, [instances, optionByName, fileNameById, pageSpaceMap, enabledClassSet, consolidationByAnnId]);
+  }, [instances, optionByName, fileNameById, pageSpaceMap, pageSpaceUnitMap, enabledClassSet, consolidationByAnnId]);
+
 
   const spaceList = useMemo(() => {
     const set = new Set<string>();
