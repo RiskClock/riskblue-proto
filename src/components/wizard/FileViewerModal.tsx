@@ -49,6 +49,19 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { Input } from "@/components/ui/input";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from "@/components/ui/command";
 
 
 interface SystemDetection {
@@ -136,8 +149,17 @@ interface FileViewerModalProps {
   ) => Promise<void> | void;
   /** Page-level handler that opens SpaceEditModal scoped to a plan. */
   onEditFloors?: (planId: string, currentFloors: string[]) => void;
-  /** Open the units-editor modal for a level plan. */
+  /** @deprecated Replaced by inline popover; kept for API compat. */
   onEditLevelUnits?: (plan: ParsedFloorPlan, currentUnits: string[]) => void;
+  /** Save units for a level plan. createdRefs = newly-typed refs to persist
+   *  as __added_unit_plans entries. removedRefs = previously-saved refs that
+   *  should also be removed from __added_unit_plans (when present there). */
+  onSaveLevelUnits?: (
+    plan: ParsedFloorPlan,
+    units: string[],
+    createdRefs?: string[],
+    removedRefs?: string[],
+  ) => Promise<void> | void;
   /** Delete a floor plan entirely (parsed plans go to `__deleted_plan_ids`,
    *  added unit plans are removed from `__added_unit_plans`). */
   onDeletePlan?: (planId: string) => Promise<void> | void;
@@ -192,6 +214,7 @@ export const FileViewerModal = ({
   onSaveFloorPlanOverride,
   onEditFloors,
   onEditLevelUnits,
+  onSaveLevelUnits,
   onDeletePlan,
   onAddPlan,
   riskElementClasses,
@@ -589,6 +612,7 @@ export const FileViewerModal = ({
     setInstances((prev) => [...prev, row]);
     setPast((p) => [...p, { type: "add", instance: row }]);
     setFuture([]);
+    if (activeTab !== "detections") setActiveTab("detections");
     blurActive();
   };
 
@@ -917,6 +941,7 @@ export const FileViewerModal = ({
                     onSaveOverride={onSaveFloorPlanOverride}
                     onEditFloors={onEditFloors}
                     onEditLevelUnits={onEditLevelUnits}
+                    onSaveLevelUnits={onSaveLevelUnits}
                     instancesOnPage={Array.from(instancesByClassThisFile.values()).flat()}
                     numberByInstanceId={numberByInstanceId}
                     instanceLabel={instanceLabel}
@@ -1313,6 +1338,12 @@ interface FloorPlansPanelProps {
   ) => Promise<void> | void;
   onEditFloors?: (planId: string, currentFloors: string[]) => void;
   onEditLevelUnits?: (plan: ParsedFloorPlan, currentUnits: string[]) => void;
+  onSaveLevelUnits?: (
+    plan: ParsedFloorPlan,
+    units: string[],
+    createdRefs?: string[],
+    removedRefs?: string[],
+  ) => Promise<void> | void;
   /** Real markers placed on this page (one row per instance). */
   instancesOnPage?: DrawingInstanceRow[];
   numberByInstanceId?: Map<string, number>;
@@ -1330,9 +1361,10 @@ interface FloorPlansPanelProps {
 
 const FloorPlansPanel = ({
   floorPlans,
+  allUnitPlans,
   allLevelPlans,
   overrides,
-  onEditLevelUnits,
+  onSaveLevelUnits,
   instancesOnPage = [],
   numberByInstanceId,
   instanceLabel,
@@ -1422,7 +1454,7 @@ const FloorPlansPanel = ({
         {orphaned.length > 0 && (
           <div className="border border-dashed rounded-md p-2 space-y-1 bg-muted/20">
             <div className="text-[11px] font-medium text-muted-foreground">
-              Orphaned annotations ({orphaned.length})
+              Annotations placed outside floor plan ({orphaned.length})
             </div>
             {renderAnnotations(orphaned)}
           </div>
@@ -1547,17 +1579,22 @@ const FloorPlansPanel = ({
                     <div className="text-[10px] uppercase tracking-wide text-muted-foreground">
                       Units ({effUnits.length})
                     </div>
-                    {onEditLevelUnits && (
-                      <Button
-                        type="button"
-                        size="sm"
-                        variant="ghost"
-                        className="h-6 px-1.5 text-[10px] gap-1"
-                        onClick={() => onEditLevelUnits(fp, effUnits)}
-                      >
-                        <Plus className="h-3 w-3" />
-                        Add / edit
-                      </Button>
+                    {onSaveLevelUnits && (
+                      <UnitsAddPopover
+                        existingRefs={Array.from(
+                          new Set(
+                            allUnitPlans.map((p) => unitPlanRefKey(p)).filter(Boolean),
+                          ),
+                        ).sort()}
+                        currentUnits={effUnits}
+                        onAdd={async (ref, isNew) => {
+                          await onSaveLevelUnits(
+                            fp,
+                            [...effUnits, ref],
+                            isNew ? [ref] : [],
+                          );
+                        }}
+                      />
                     )}
                   </div>
                   {effUnits.length === 0 ? (
@@ -1571,7 +1608,7 @@ const FloorPlansPanel = ({
                         return (
                           <span
                             key={u}
-                            className="px-1.5 py-0.5 rounded text-[10px] font-medium border"
+                            className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium border"
                             style={{
                               backgroundColor: softBgFrom(uc),
                               color: uc,
@@ -1579,6 +1616,23 @@ const FloorPlansPanel = ({
                             }}
                           >
                             {u}
+                            {onSaveLevelUnits && (
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  void onSaveLevelUnits(
+                                    fp,
+                                    effUnits.filter((x) => x !== u),
+                                    [],
+                                    [u],
+                                  )
+                                }
+                                className="hover:opacity-70"
+                                aria-label={`Remove ${u}`}
+                              >
+                                <XIcon className="h-2.5 w-2.5" />
+                              </button>
+                            )}
                           </span>
                         );
                       })}
@@ -1640,5 +1694,99 @@ const FloorPlansPanel = ({
     </div>
   );
 };
+
+interface UnitsAddPopoverProps {
+  existingRefs: string[];
+  currentUnits: string[];
+  onAdd: (ref: string, isNew: boolean) => Promise<void> | void;
+}
+
+const UnitsAddPopover = ({
+  existingRefs,
+  currentUnits,
+  onAdd,
+}: UnitsAddPopoverProps) => {
+  const [open, setOpen] = useState(false);
+  const [query, setQuery] = useState("");
+  const available = existingRefs.filter((r) => !currentUnits.includes(r));
+  const filtered = query.trim()
+    ? available.filter((r) => r.toLowerCase().includes(query.trim().toLowerCase()))
+    : available;
+  const q = query.trim();
+  const showCreate =
+    q.length > 0 &&
+    !currentUnits.some((u) => u.toLowerCase() === q.toLowerCase()) &&
+    !existingRefs.some((r) => r.toLowerCase() === q.toLowerCase());
+
+  const handleSelect = async (ref: string, isNew: boolean) => {
+    setOpen(false);
+    setQuery("");
+    await onAdd(ref, isNew);
+  };
+
+  return (
+    <Popover
+      open={open}
+      onOpenChange={(o) => {
+        setOpen(o);
+        if (!o) setQuery("");
+      }}
+    >
+      <PopoverTrigger asChild>
+        <Button
+          type="button"
+          size="sm"
+          variant="ghost"
+          className="h-6 px-1.5 text-[10px] gap-1"
+        >
+          <Plus className="h-3 w-3" />
+          Add
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent align="end" className="w-56 p-0">
+        <Command shouldFilter={false}>
+          <CommandInput
+            placeholder="Search or add unit…"
+            value={query}
+            onValueChange={setQuery}
+            className="h-8 text-xs"
+          />
+          <CommandList className="max-h-56">
+            {filtered.length === 0 && !showCreate && (
+              <CommandEmpty>No units.</CommandEmpty>
+            )}
+            {filtered.length > 0 && (
+              <CommandGroup>
+                {filtered.map((r) => (
+                  <CommandItem
+                    key={r}
+                    value={r}
+                    onSelect={() => void handleSelect(r, false)}
+                    className="text-xs"
+                  >
+                    {r}
+                  </CommandItem>
+                ))}
+              </CommandGroup>
+            )}
+            {showCreate && (
+              <CommandGroup>
+                <CommandItem
+                  value={`__create_${q}`}
+                  onSelect={() => void handleSelect(q, true)}
+                  className="text-xs"
+                >
+                  <Plus className="h-3 w-3 mr-1.5" />
+                  Create "{q}"
+                </CommandItem>
+              </CommandGroup>
+            )}
+          </CommandList>
+        </Command>
+      </PopoverContent>
+    </Popover>
+  );
+};
+
 
 

@@ -29,7 +29,7 @@ import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
 import { SpaceEditModal } from "@/components/workbench/SpaceEditModal";
 import { ConsolidateRisersModal } from "@/components/workbench/ConsolidateRisersModal";
-import { EditLevelUnitsModal } from "@/components/wizard/EditLevelUnitsModal";
+
 import {
   AlertDialog,
   AlertDialogAction,
@@ -237,9 +237,6 @@ export default function WorkbenchProjectDetail() {
       planId?: string;
       sheetId?: string;
     } | null
-  >(null);
-  const [unitsEditTarget, setUnitsEditTarget] = useState<
-    { fileId: string; fileName: string; page: number; plan: ParsedFloorPlan } | null
   >(null);
   const [identifyRunning, setIdentifyRunning] = useState(false);
   const [uploadingReport, setUploadingReport] = useState(false);
@@ -3669,14 +3666,76 @@ export default function WorkbenchProjectDetail() {
             floorPlanOverrides={activeFloorPlanOverrides}
             onSaveFloorPlanOverride={saveFloorPlanOverride}
             onEditFloors={openFloorEditForPlan}
-            onEditLevelUnits={(plan, _currentUnits) =>
-              setUnitsEditTarget({
-                fileId: activePageView.file.id,
-                fileName: activePageView.file.name,
-                page: activePageView.page,
-                plan,
-              })
-            }
+            onSaveLevelUnits={async (plan, units, createdRefs, removedRefs) => {
+              const fileId = activePageView.file.id;
+              const page = activePageView.page;
+              const { data: sheet, error: sheetErr } = await supabase
+                .from("analysis_request_sheets")
+                .select("id, floor_plan_overrides")
+                .eq("parent_file_id", fileId)
+                .eq("page_index", page)
+                .maybeSingle();
+              if (sheetErr || !sheet) {
+                toast({
+                  variant: "destructive",
+                  title: "Cannot save units",
+                  description: sheetErr?.message ?? "No sheet row found for this page.",
+                });
+                return;
+              }
+              const existing =
+                ((sheet as any).floor_plan_overrides as Record<string, any>) ?? {};
+              const merged: Record<string, any> = {
+                ...existing,
+                [plan.plan_id]: { ...(existing[plan.plan_id] ?? {}), units },
+              };
+              // Persist any newly-created refs as user-added unit floor plans.
+              const existingAdded = Array.isArray(existing[ADDED_UNIT_PLANS_KEY])
+                ? (existing[ADDED_UNIT_PLANS_KEY] as any[])
+                : [];
+              let nextAdded = existingAdded;
+              if (createdRefs && createdRefs.length > 0) {
+                const existingRefs = new Set(
+                  existingAdded
+                    .filter((e) => e?.page_number === page)
+                    .map((e) => e?.reference_id),
+                );
+                const toAdd = createdRefs
+                  .filter((r) => !existingRefs.has(r))
+                  .map((r) => ({
+                    plan_id: makeAddedUnitPlanId(r, page),
+                    reference_id: r,
+                    page_number: page,
+                  }));
+                if (toAdd.length > 0) nextAdded = [...nextAdded, ...toAdd];
+              }
+              if (removedRefs && removedRefs.length > 0) {
+                const removeSet = new Set(removedRefs);
+                nextAdded = nextAdded.filter(
+                  (e) =>
+                    !(e?.page_number === page && removeSet.has(e?.reference_id)),
+                );
+              }
+              if (nextAdded !== existingAdded) {
+                merged[ADDED_UNIT_PLANS_KEY] = nextAdded;
+              }
+              const { error } = await supabase
+                .from("analysis_request_sheets")
+                .update({ floor_plan_overrides: merged } as any)
+                .eq("id", (sheet as any).id);
+              if (error) {
+                toast({
+                  variant: "destructive",
+                  title: "Could not save units",
+                  description: getUserFriendlyError(error),
+                });
+                return;
+              }
+              if (activeSheetIdForPage === (sheet as any).id) {
+                setActiveFloorPlanOverrides(merged);
+              }
+              queryClient.invalidateQueries({ queryKey: ["workbench-rows", requestId] });
+            }}
             singlePageOnly
             awpClasses={enabledCols.map((name) => ({
               name,
@@ -3723,85 +3782,7 @@ export default function WorkbenchProjectDetail() {
           />
         )}
 
-        {/* Edit-units modal: shared by drawing modal + workbench page row */}
-        {unitsEditTarget && (
-          <EditLevelUnitsModal
-            isOpen={!!unitsEditTarget}
-            onClose={() => setUnitsEditTarget(null)}
-            levelPlan={unitsEditTarget.plan}
-            currentUnits={unitsEditTarget.plan.referenced_unit_ids}
-            allUnitPlans={
-              (floorPlansByFile.get(unitsEditTarget.fileId)
-                ? Array.from(floorPlansByFile.get(unitsEditTarget.fileId)!.values())
-                    .flat()
-                    .filter((p) => p.type === "unit_floor_plan")
-                : []) as ParsedFloorPlan[]
-            }
-            onSave={async (units, createdRefs) => {
-              // Look up the sheet row for this (file, page) and merge override.
-              const { data: sheet, error: sheetErr } = await supabase
-                .from("analysis_request_sheets")
-                .select("id, floor_plan_overrides")
-                .eq("parent_file_id", unitsEditTarget.fileId)
-                .eq("page_index", unitsEditTarget.page)
-                .maybeSingle();
-              if (sheetErr || !sheet) {
-                toast({
-                  variant: "destructive",
-                  title: "Cannot save units",
-                  description: sheetErr?.message ?? "No sheet row found for this page.",
-                });
-                return;
-              }
-              const existing =
-                ((sheet as any).floor_plan_overrides as Record<string, any>) ?? {};
-              const planId = unitsEditTarget.plan.plan_id;
-              const merged: Record<string, any> = {
-                ...existing,
-                [planId]: { ...(existing[planId] ?? {}), units },
-              };
-              // Persist any newly created refs as user-added unit floor plans
-              // on this page so they show up alongside parsed plans.
-              if (createdRefs && createdRefs.length > 0) {
-                const existingAdded = Array.isArray(existing[ADDED_UNIT_PLANS_KEY])
-                  ? (existing[ADDED_UNIT_PLANS_KEY] as any[])
-                  : [];
-                const existingRefs = new Set(
-                  existingAdded
-                    .filter((e) => e?.page_number === unitsEditTarget.page)
-                    .map((e) => e?.reference_id),
-                );
-                const toAdd = createdRefs
-                  .filter((r) => !existingRefs.has(r))
-                  .map((r) => ({
-                    plan_id: makeAddedUnitPlanId(r, unitsEditTarget.page),
-                    reference_id: r,
-                    page_number: unitsEditTarget.page,
-                  }));
-                if (toAdd.length > 0) {
-                  merged[ADDED_UNIT_PLANS_KEY] = [...existingAdded, ...toAdd];
-                }
-              }
-              const { error } = await supabase
-                .from("analysis_request_sheets")
-                .update({ floor_plan_overrides: merged } as any)
-                .eq("id", (sheet as any).id);
-              if (error) {
-                toast({
-                  variant: "destructive",
-                  title: "Could not save units",
-                  description: getUserFriendlyError(error),
-                });
-                return;
-              }
-              // If we're editing the active sheet via the drawing modal, mirror state.
-              if (activeSheetIdForPage === (sheet as any).id) {
-                setActiveFloorPlanOverrides(merged);
-              }
-              queryClient.invalidateQueries({ queryKey: ["workbench-rows", requestId] });
-            }}
-          />
-        )}
+
 
 
 
