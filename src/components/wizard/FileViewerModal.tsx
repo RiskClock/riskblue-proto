@@ -1400,7 +1400,7 @@ const FloorPlansPanel = ({
   const annotationsByPlan = new Map<string, DrawingInstanceRow[]>();
   const orphaned: DrawingInstanceRow[] = [];
   for (const inst of instancesOnPage) {
-    const containing = findContainingPlan(floorPlans, inst.nx, inst.ny);
+    const containing = findContainingPlan(floorPlans, inst.nx, inst.ny, overrides);
     if (containing) {
       const arr = annotationsByPlan.get(containing.plan_id) ?? [];
       arr.push(inst);
@@ -1576,8 +1576,8 @@ const FloorPlansPanel = ({
               {isLevel && (
                 <div className="space-y-1">
                   <div className="flex items-center justify-between gap-2">
-                    <div className="text-[10px] uppercase tracking-wide text-muted-foreground">
-                      Units ({effUnits.length})
+                    <div className="text-[10px] font-medium text-muted-foreground">
+                      {effUnits.length > 0 ? `Units (${effUnits.length})` : "Units"}
                     </div>
                     {onSaveLevelUnits && (
                       <UnitsAddPopover
