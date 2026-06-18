@@ -879,7 +879,7 @@ export const FileViewerModal = ({
                 <TabsContent
                   value="floor-plans"
                   forceMount
-                  className="flex-1 min-h-0 m-0 mt-0 overflow-hidden data-[state=inactive]:hidden"
+                  className="flex-1 min-h-0 m-0 mt-0 overflow-hidden flex flex-col data-[state=inactive]:hidden"
                 >
                   <FloorPlansPanel
                     floorPlans={floorPlans ?? []}
@@ -1027,8 +1027,8 @@ export const FileViewerModal = ({
             <AlertDialogHeader>
               <AlertDialogTitle>Delete floor plan?</AlertDialogTitle>
               <AlertDialogDescription>
-                This removes "{confirmDelete?.label}" from this page. Annotation
-                assignments tied to it will be lost. This can't be undone.
+                This removes "{confirmDelete?.label}" from this page. Annotations
+                inside its area will become orphaned. This can't be undone.
               </AlertDialogDescription>
             </AlertDialogHeader>
             <AlertDialogFooter>
@@ -1397,7 +1397,13 @@ const FloorPlansPanel = ({
           const effUnits: string[] = ovr.units ?? fp.referenced_unit_ids;
           const effType: string =
             (typeof ovr.type === "string" && ovr.type) ? ovr.type : fp.type;
-          const color = awpClassColor(effType || "unknown");
+          const color = awpClassColor(
+            effType === "unit_floor_plan"
+              ? "Unit Floor Plan"
+              : effType === "level_floor_plan"
+                ? "Level Floor Plan"
+                : effType || "unknown",
+          );
           const fallbackLabel = getEffectiveLabel(fp, overrides) ||
             floorPlanDisplayLabel({ ...fp, floors: effFloors });
           const isUnit = effType === "unit_floor_plan";
@@ -1524,7 +1530,7 @@ const FloorPlansPanel = ({
                   ) : (
                     <div className="flex flex-wrap gap-1">
                       {effUnits.map((u) => {
-                        const uc = awpClassColor("unit_floor_plan");
+                        const uc = awpClassColor("Unit Floor Plan");
                         return (
                           <span
                             key={u}
