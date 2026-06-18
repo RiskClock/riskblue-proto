@@ -25,6 +25,7 @@ import {
   Filter,
   Loader2,
   ShieldAlert,
+  Settings2,
   Trash2,
 } from "lucide-react";
 import {
@@ -130,9 +131,27 @@ type SortKey =
   | "creator"
   | "created_at"
   | "file_count"
-  | "total_size_bytes"
-  | "status";
+  | "total_size_bytes";
 type SortDir = "asc" | "desc";
+
+type WBColumnId = "creator" | "created_at" | "file_count" | "total_size_bytes";
+const WB_ALL_COLUMNS: { id: WBColumnId; label: string }[] = [
+  { id: "creator", label: "Created By" },
+  { id: "created_at", label: "Created On" },
+  { id: "file_count", label: "Files" },
+  { id: "total_size_bytes", label: "Total Size" },
+];
+const WB_COLUMN_PREFS_KEY = "workbench-column-prefs-v1";
+const loadWBColumnPrefs = (): Record<WBColumnId, boolean> => {
+  const defaults: Record<WBColumnId, boolean> = {
+    creator: true, created_at: true, file_count: true, total_size_bytes: true,
+  };
+  try {
+    const raw = localStorage.getItem(WB_COLUMN_PREFS_KEY);
+    if (raw) return { ...defaults, ...JSON.parse(raw) };
+  } catch {}
+  return defaults;
+};
 
 export default function InternalWorkbench() {
   const { user } = useAuth();
@@ -158,6 +177,10 @@ export default function InternalWorkbench() {
   const [sortDir, setSortDir] = useState<SortDir>("desc");
   const [filterCreators, setFilterCreators] = useState<string[]>(saved?.creators ?? []);
   const [filterStatuses, setFilterStatuses] = useState<string[]>(saved?.statuses ?? []);
+  const [columnPrefs, setColumnPrefs] = useState<Record<WBColumnId, boolean>>(() => loadWBColumnPrefs());
+  useEffect(() => {
+    try { localStorage.setItem(WB_COLUMN_PREFS_KEY, JSON.stringify(columnPrefs)); } catch {}
+  }, [columnPrefs]);
 
   const isInternal = user?.email?.toLowerCase().endsWith("@riskclock.com") ?? false;
 
@@ -306,10 +329,6 @@ export default function InternalWorkbench() {
         case "total_size_bytes":
           va = a.total_size_bytes ?? -1;
           vb = b.total_size_bytes ?? -1;
-          break;
-        case "status":
-          va = (a.status && statusLabels[a.status]) || a.status || "";
-          vb = (b.status && statusLabels[b.status]) || b.status || "";
           break;
       }
       if (va < vb) return sortDir === "asc" ? -1 : 1;
@@ -482,17 +501,6 @@ export default function InternalWorkbench() {
                   emptyLabel="No creators"
                 />
               </div>
-              <div>
-                <Label className="text-xs uppercase text-muted-foreground">
-                  Status
-                </Label>
-                <ChecklistGroup
-                  options={statusOptions}
-                  selected={filterStatuses}
-                  onChange={setFilterStatuses}
-                  emptyLabel="No statuses"
-                />
-              </div>
             </PopoverContent>
           </Popover>
         </div>
@@ -514,48 +522,62 @@ export default function InternalWorkbench() {
                   >
                     Project Name <SortIcon k="name" />
                   </TableHead>
-                  <TableHead
-                    className="cursor-pointer select-none"
-                    onClick={() => toggleSort("creator")}
-                  >
-                    Created By <SortIcon k="creator" />
+                  {columnPrefs.creator && (
+                    <TableHead className="cursor-pointer select-none" onClick={() => toggleSort("creator")}>
+                      Created By <SortIcon k="creator" />
+                    </TableHead>
+                  )}
+                  {columnPrefs.created_at && (
+                    <TableHead className="cursor-pointer select-none" onClick={() => toggleSort("created_at")}>
+                      Created On <SortIcon k="created_at" />
+                    </TableHead>
+                  )}
+                  {columnPrefs.file_count && (
+                    <TableHead className="text-right cursor-pointer select-none" onClick={() => toggleSort("file_count")}>
+                      Files <SortIcon k="file_count" />
+                    </TableHead>
+                  )}
+                  {columnPrefs.total_size_bytes && (
+                    <TableHead className="text-right cursor-pointer select-none" onClick={() => toggleSort("total_size_bytes")}>
+                      Total Size <SortIcon k="total_size_bytes" />
+                    </TableHead>
+                  )}
+                  <TableHead className="text-right w-[140px]">
+                    <div className="flex items-center justify-end gap-1">
+                      <Popover>
+                        <PopoverTrigger asChild>
+                          <Button size="icon" variant="ghost" className="h-8 w-8" title="Edit columns">
+                            <Settings2 className="h-4 w-4" />
+                          </Button>
+                        </PopoverTrigger>
+                        <PopoverContent align="end" className="w-56 p-2">
+                          <div className="text-xs font-medium text-muted-foreground px-2 py-1.5">
+                            Show columns
+                          </div>
+                          <div className="space-y-0.5">
+                            {WB_ALL_COLUMNS.map((c) => (
+                              <label
+                                key={c.id}
+                                className="flex items-center gap-2 rounded-md px-2 py-1.5 text-sm hover:bg-accent cursor-pointer"
+                              >
+                                <Checkbox
+                                  checked={columnPrefs[c.id]}
+                                  onCheckedChange={() =>
+                                    setColumnPrefs((prev) => ({ ...prev, [c.id]: !prev[c.id] }))
+                                  }
+                                />
+                                <span className="flex-1">{c.label}</span>
+                              </label>
+                            ))}
+                          </div>
+                        </PopoverContent>
+                      </Popover>
+                    </div>
                   </TableHead>
-                  <TableHead
-                    className="cursor-pointer select-none"
-                    onClick={() => toggleSort("created_at")}
-                  >
-                    Created On <SortIcon k="created_at" />
-                  </TableHead>
-                  <TableHead
-                    className="text-right cursor-pointer select-none"
-                    onClick={() => toggleSort("file_count")}
-                  >
-                    Files <SortIcon k="file_count" />
-                  </TableHead>
-                  <TableHead
-                    className="text-right cursor-pointer select-none"
-                    onClick={() => toggleSort("total_size_bytes")}
-                  >
-                    Total Size <SortIcon k="total_size_bytes" />
-                  </TableHead>
-                  <TableHead
-                    className="cursor-pointer select-none"
-                    onClick={() => toggleSort("status")}
-                  >
-                    Status <SortIcon k="status" />
-                  </TableHead>
-                  <TableHead className="text-right w-[140px]">Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {filteredSorted.map((p) => {
-                  const baseLabel = p.status ? statusLabels[p.status] || p.status : "New";
-                  const label =
-                    p.status === "processing" && p.pipeline_phase && phaseLabels[p.pipeline_phase]
-                      ? phaseLabels[p.pipeline_phase].split(" ")[0] // e.g. "Splitting", "Extracting"
-                      : baseLabel;
-                  const colorClass = p.status ? statusColors[p.status] || "" : "";
-
                   return (
                     <TableRow
                       key={p.id}
@@ -563,108 +585,35 @@ export default function InternalWorkbench() {
                       onClick={() => navigate(`/internal/workbench/project/${p.id}`)}
                     >
                       <TableCell className="font-medium">{p.name}</TableCell>
-                      <TableCell>
-                        <TooltipProvider delayDuration={200}>
-                          <Tooltip>
-                            <TooltipTrigger asChild>
-                              <span className="text-sm cursor-default">{p.creator_name}</span>
-                            </TooltipTrigger>
-                            {p.creator_email && (
-                              <TooltipContent>
-                                <p>{p.creator_email}</p>
-                              </TooltipContent>
-                            )}
-                          </Tooltip>
-                        </TooltipProvider>
-                      </TableCell>
-                      <TableCell className="text-muted-foreground">
-                        {format(new Date(p.created_at), "MMM d, yyyy")}
-                      </TableCell>
-                      <TableCell className="text-right tabular-nums">{p.file_count || 0}</TableCell>
-                      <TableCell className="text-right tabular-nums">
-                        {formatBytes(p.total_size_bytes)}
-                      </TableCell>
-                      <TableCell onClick={(e) => e.stopPropagation()}>
-                        {(p.status === "failed" || p.status === "processing" || p.error_message) ? (
-                          <Popover>
-                            <PopoverTrigger asChild>
-                              <button
-                                type="button"
-                                className="inline-flex items-center gap-1.5 rounded-md border px-2 py-0.5 text-xs hover:opacity-80 transition-opacity"
-                                style={{}}
-                              >
-                                <Badge variant="outline" className={`text-xs ${colorClass} border-0 px-0 py-0`}>
-                                  {label}
-                                </Badge>
-                                <span className="h-1.5 w-1.5 rounded-full bg-current opacity-50" />
-                              </button>
-                            </PopoverTrigger>
-                            <PopoverContent align="start" className="w-80 text-sm">
-                              <div className="space-y-2">
-                                <div className="flex items-center justify-between">
-                                  <span className="font-semibold">Status</span>
-                                  <Badge variant="outline" className={`text-xs ${colorClass}`}>{label}</Badge>
-                                </div>
-                                {p.pipeline_phase && (
-                                  <div className="flex justify-between text-xs">
-                                    <span className="text-muted-foreground">Phase</span>
-                                    <span className="font-medium">{phaseLabels[p.pipeline_phase] || p.pipeline_phase}</span>
-                                  </div>
-                                )}
-                                {p.pipeline_progress_total != null && p.pipeline_progress_total > 0 && (
-                                  <div className="flex justify-between text-xs">
-                                    <span className="text-muted-foreground">Progress</span>
-                                    <span className="font-medium tabular-nums">
-                                      {p.pipeline_progress_done ?? 0} / {p.pipeline_progress_total}
-                                    </span>
-                                  </div>
-                                )}
-                                <div className="flex justify-between text-xs">
-                                  <span className="text-muted-foreground">Last activity</span>
-                                  <span className="font-medium">{formatRelative(p.request_updated_at)}</span>
-                                </div>
-                                {p.error_message && (
-                                  <div className="space-y-1">
-                                    <div className="text-xs text-muted-foreground">Error</div>
-                                    <pre className="text-[11px] whitespace-pre-wrap break-words rounded bg-muted p-2 max-h-40 overflow-auto">
-                                      {p.error_message}
-                                    </pre>
-                                  </div>
-                                )}
-                                <div className="pt-2 border-t space-y-2">
-                                  {p.status === "failed" && p.analysis_request_id && (
-                                    <Button
-                                      size="sm"
-                                      variant="default"
-                                      className="w-full"
-                                      disabled={resumingId === p.analysis_request_id}
-                                      onClick={() => handleResume(p)}
-                                    >
-                                      {resumingId === p.analysis_request_id ? (
-                                        <><Loader2 className="h-3 w-3 mr-1 animate-spin" />Resuming…</>
-                                      ) : (
-                                        "Resume"
-                                      )}
-                                    </Button>
-                                  )}
-                                  <Button
-                                    size="sm"
-                                    variant={p.status === "failed" ? "outline" : "default"}
-                                    className="w-full"
-                                    onClick={() => navigate(`/internal/workbench/project/${p.id}`)}
-                                  >
-                                    Open Project
-                                  </Button>
-                                </div>
-                              </div>
-                            </PopoverContent>
-                          </Popover>
-                        ) : (
-                          <Badge variant="outline" className={`text-xs ${colorClass}`}>
-                            {label}
-                          </Badge>
-                        )}
-                      </TableCell>
+                      {columnPrefs.creator && (
+                        <TableCell>
+                          <TooltipProvider delayDuration={200}>
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <span className="text-sm cursor-default">{p.creator_name}</span>
+                              </TooltipTrigger>
+                              {p.creator_email && (
+                                <TooltipContent>
+                                  <p>{p.creator_email}</p>
+                                </TooltipContent>
+                              )}
+                            </Tooltip>
+                          </TooltipProvider>
+                        </TableCell>
+                      )}
+                      {columnPrefs.created_at && (
+                        <TableCell className="text-muted-foreground">
+                          {format(new Date(p.created_at), "MMM d, yyyy")}
+                        </TableCell>
+                      )}
+                      {columnPrefs.file_count && (
+                        <TableCell className="text-right tabular-nums">{p.file_count || 0}</TableCell>
+                      )}
+                      {columnPrefs.total_size_bytes && (
+                        <TableCell className="text-right tabular-nums">
+                          {formatBytes(p.total_size_bytes)}
+                        </TableCell>
+                      )}
 
                       <TableCell className="text-right" onClick={(e) => e.stopPropagation()}>
                         <div className="flex items-center justify-end gap-1">

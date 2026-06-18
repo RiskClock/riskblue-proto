@@ -183,6 +183,7 @@ export function CreateProjectModal({ open, onOpenChange, onCreated }: CreateProj
           name: projectName,
           status: "draft",
           estimated_units: units,
+          credits_consumed: cost,
           selected_awp_class_names: Array.from(selectedClassNames),
           selected_other_classes: otherList,
         } as any)

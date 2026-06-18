@@ -284,6 +284,9 @@ export default function WorkbenchProjectDetail() {
     Record<string, any>
   >({});
   const [activeFileRiskClasses, setActiveFileRiskClasses] = useState<string[]>([]);
+  // Holds the current request id so async effects declared above the
+  // analysisRequest query can read it without a forward reference.
+  const requestIdRef = useRef<string | null>(null);
 
   useEffect(() => {
     if (!activePageView) {
@@ -320,8 +323,35 @@ export default function WorkbenchProjectDetail() {
           })
         : [];
       setActiveFileRiskClasses(classes);
-      setActiveSheetIdForPage((sheetRes.data as any)?.id ?? null);
-      const overrides = (sheetRes.data as any)?.floor_plan_overrides;
+
+      let sheetId = (sheetRes.data as any)?.id ?? null;
+      let overrides = (sheetRes.data as any)?.floor_plan_overrides;
+      // Lazily create a sheet row so the user can place floor-plan boxes
+      // before Scout runs (Scout upserts on the same (file, page) pair).
+      const reqId = requestIdRef.current;
+      if (!sheetId && reqId) {
+        const fileName = activePageView.file.name || "file";
+        const { data: created, error: createErr } = await supabase
+          .from("analysis_request_sheets")
+          .upsert(
+            {
+              analysis_request_id: reqId,
+              parent_file_id: fileId,
+              page_index: page,
+              name: `${fileName} · page ${page}`,
+              extract_status: "skipped",
+            } as any,
+            { onConflict: "parent_file_id,page_index" },
+          )
+          .select("id, floor_plan_overrides")
+          .maybeSingle();
+        if (cancelled) return;
+        if (!createErr && created) {
+          sheetId = (created as any).id;
+          overrides = (created as any).floor_plan_overrides;
+        }
+      }
+      setActiveSheetIdForPage(sheetId);
       setActiveFloorPlanOverrides(
         overrides && typeof overrides === "object" ? overrides : {},
       );
@@ -622,6 +652,9 @@ export default function WorkbenchProjectDetail() {
   });
 
   const requestId = analysisRequest?.id;
+  useEffect(() => {
+    requestIdRef.current = requestId ?? null;
+  }, [requestId]);
 
   // Load Page Info: list files, fill missing page counts via pdf.js, cache to DB.
   // source_type lives on analysis_requests, not on analysis_request_files.
@@ -1769,8 +1802,18 @@ export default function WorkbenchProjectDetail() {
           .from("workbench_triage_overrides" as any)
           .delete()
           .eq("analysis_request_id", requestId),
+        // User-drawn bounding-box annotations
+        supabase
+          .from("drawing_instances")
+          .delete()
+          .eq("analysis_request_id", requestId),
+        // Riser unifier groupings (level↔unit relationships)
+        supabase
+          .from("annotation_consolidations" as any)
+          .delete()
+          .eq("analysis_request_id", requestId),
       ]);
-      // Clear extracted text on files + sheets
+      // Clear extracted text + floor plan overrides on sheets
       await Promise.all([
         supabase
           .from("analysis_request_files")
@@ -1778,7 +1821,7 @@ export default function WorkbenchProjectDetail() {
           .eq("analysis_request_id", requestId),
         supabase
           .from("analysis_request_sheets")
-          .update({ extracted_text: null, extract_status: "pending" })
+          .update({ extracted_text: null, extract_status: "pending", floor_plan_overrides: {} } as any)
           .eq("analysis_request_id", requestId),
       ]);
       await supabase
@@ -2202,7 +2245,7 @@ export default function WorkbenchProjectDetail() {
             {/* Survey Pages */}
             <div className="space-y-3">
               <div className="flex flex-wrap items-center justify-start gap-2">
-                <span className="text-sm font-medium text-muted-foreground mr-1">Agents:</span>
+                <span className="text-sm font-medium text-muted-foreground mr-1">Risk Agents:</span>
                 <Button
                   type="button"
                   onClick={async () => {
@@ -2405,7 +2448,7 @@ export default function WorkbenchProjectDetail() {
                       Identifying…
                     </>
                   ) : (
-                    "Vulnerability Radar"
+                    "Risk Radar"
                   )}
                 </Button>
                 <Button
@@ -2428,29 +2471,23 @@ export default function WorkbenchProjectDetail() {
                   type="button"
                   variant="outline"
                   onClick={() => setConsolidateOpen(true)}
-                  disabled={!requestId || spannableClassesWithAnnotations.length === 0 || !hasRisersSelected}
+                  disabled={!requestId || !hasRisersSelected}
                   title={
                     !hasRisersSelected
                       ? "Select Electrical Riser or Mechanical Riser columns to enable"
-                      : spannableClassesWithAnnotations.length === 0
-                      ? "No Risers identified"
-                      : "Group annotations of riser-type classes into multi-space instances before generating the threat report"
+                      : "Group riser annotations into multi-space instances"
                   }
                 >
-                  Unify Risers
+                  Riser Unifier
                 </Button>
                 <Button
                   type="button"
                   variant="outline"
                   onClick={() => setInstancesReportOpen(true)}
-                  disabled={!requestId || !spaceHierarchyHasResult}
-                  title={
-                    !spaceHierarchyHasResult
-                      ? "Run Spatial Architect first to generate the threat report."
-                      : "Generate per-space threat report"
-                  }
+                  disabled={!requestId}
+                  title="Generate per-space threat report"
                 >
-                  Threat Report
+                  Threat Compiler
                 </Button>
 
                 <div className="flex-1" />
@@ -2473,7 +2510,6 @@ export default function WorkbenchProjectDetail() {
                   onClick={() => setClearOpen(true)}
                   disabled={!requestId || phaseRunning}
                 >
-                  <Trash2 className="h-4 w-4 mr-2" />
                   Clear All
                 </Button>
                 <Tooltip>
@@ -2483,12 +2519,12 @@ export default function WorkbenchProjectDetail() {
                       variant="outline"
                       size="icon"
                       onClick={() => setScoutDebugOpen(true)}
-                      aria-label="Scout debug"
+                      aria-label="Agent debug"
                     >
                       <Bug className="h-4 w-4" />
                     </Button>
                   </TooltipTrigger>
-                  <TooltipContent side="bottom">Scout debug</TooltipContent>
+                  <TooltipContent side="bottom">Agent debug</TooltipContent>
                 </Tooltip>
 
               </div>
@@ -2516,64 +2552,63 @@ export default function WorkbenchProjectDetail() {
               <Dialog open={scoutDebugOpen} onOpenChange={setScoutDebugOpen}>
                 <DialogContent className="max-w-[640px] w-[640px] max-h-[80vh] flex flex-col">
                   <DialogHeader>
-                    <DialogTitle>Scout responses</DialogTitle>
+                    <DialogTitle>Agent Debug</DialogTitle>
                   </DialogHeader>
-                  {(() => {
-                    const scoutFiles = (rows?.files ?? [])
-                      .filter((f) => (f.survey_raw_response ?? "").trim().length > 0)
-                      .slice()
-                      .sort((a, b) => {
-                        const au = (a as any).survey_raw_updated_at ?? "";
-                        const bu = (b as any).survey_raw_updated_at ?? "";
-                        return bu.localeCompare(au);
-                      });
-                    if (scoutFiles.length === 0) {
-                      return (
-                        <div className="flex-1 flex items-center justify-center py-8 text-sm text-muted-foreground">
-                          No Scout responses yet. Run Scout to populate.
-                        </div>
-                      );
-                    }
-                    return (
-                      <div className="flex-1 min-h-0 flex flex-col gap-2">
-                        <div className="text-xs text-muted-foreground">
-                          Model: google/gemini-2.5-pro · {scoutFiles.length} file{scoutFiles.length === 1 ? "" : "s"} with responses
-                        </div>
-                        <ul className="divide-y border rounded-md overflow-auto flex-1 min-h-0">
-                          {scoutFiles.map((f) => {
-                            const updatedAt = (f as any).survey_raw_updated_at as string | null;
-                            const len = (f.survey_raw_response ?? "").length;
-                            return (
-                              <li
-                                key={f.id}
-                                className="px-3 py-2 flex items-center justify-between gap-3"
-                              >
-                                <div className="min-w-0 flex-1">
-                                  <div className="text-sm font-medium truncate">{f.name}</div>
-                                  <div className="text-[11px] text-muted-foreground">
-                                    {updatedAt ? new Date(updatedAt).toLocaleString() : "—"} · {len.toLocaleString()} chars
-                                  </div>
-                                </div>
-                                <Button
-                                  size="sm"
-                                  variant="outline"
-                                  onClick={() => {
-                                    setScoutDebugOpen(false);
-                                    setSurveyResponseModal({
-                                      fileName: f.name,
-                                      raw: f.survey_raw_response ?? "",
-                                    });
-                                  }}
+                  <div className="flex-1 min-h-0 overflow-auto space-y-4">
+                    <div>
+                      <div className="text-sm font-semibold mb-2">Scout Agent</div>
+                      {(() => {
+                        const allFiles = (rows?.files ?? [])
+                          .slice()
+                          .sort((a, b) => a.name.localeCompare(b.name));
+                        if (allFiles.length === 0) {
+                          return (
+                            <div className="text-xs text-muted-foreground border rounded-md p-4 text-center">
+                              No files uploaded yet.
+                            </div>
+                          );
+                        }
+                        return (
+                          <ul className="divide-y border rounded-md">
+                            {allFiles.map((f) => {
+                              const raw = (f.survey_raw_response ?? "").trim();
+                              const hasResponse = raw.length > 0;
+                              const updatedAt = (f as any).survey_raw_updated_at as string | null;
+                              return (
+                                <li
+                                  key={f.id}
+                                  className="px-3 py-2 flex items-center justify-between gap-3"
                                 >
-                                  View Response
-                                </Button>
-                              </li>
-                            );
-                          })}
-                        </ul>
-                      </div>
-                    );
-                  })()}
+                                  <div className="min-w-0 flex-1">
+                                    <div className="text-sm font-medium truncate">{f.name}</div>
+                                    <div className="text-[11px] text-muted-foreground">
+                                      {hasResponse
+                                        ? `${updatedAt ? new Date(updatedAt).toLocaleString() : "—"} · ${raw.length.toLocaleString()} chars`
+                                        : "No response yet"}
+                                    </div>
+                                  </div>
+                                  <Button
+                                    size="sm"
+                                    variant="outline"
+                                    disabled={!hasResponse}
+                                    onClick={() => {
+                                      setScoutDebugOpen(false);
+                                      setSurveyResponseModal({
+                                        fileName: f.name,
+                                        raw: f.survey_raw_response ?? "",
+                                      });
+                                    }}
+                                  >
+                                    View Response
+                                  </Button>
+                                </li>
+                              );
+                            })}
+                          </ul>
+                        );
+                      })()}
+                    </div>
+                  </div>
                 </DialogContent>
               </Dialog>
             </div>
@@ -3395,9 +3430,10 @@ export default function WorkbenchProjectDetail() {
             <AlertDialogHeader>
               <AlertDialogTitle>Clear all results?</AlertDialogTitle>
               <AlertDialogDescription>
-                This deletes extracted text, triage results, analysis results, and
-                Workbench overrides for this project's latest analysis request. The
-                files themselves are not removed.
+                This removes all annotations, floor-plan bounding boxes, and the
+                relationships between level and unit floor plans for this project,
+                along with extracted text, triage results, analysis results, and
+                Workbench overrides. The uploaded files themselves are not removed.
               </AlertDialogDescription>
             </AlertDialogHeader>
             <AlertDialogFooter>
