@@ -8,13 +8,11 @@ import {
   ChevronRight,
   Copy,
   Download,
-  FileText,
   Loader2,
   MoreVertical,
   Settings2,
   ShieldAlert,
   Square,
-  Trash2,
   Upload,
   Bug,
 } from "lucide-react";
@@ -3464,14 +3462,13 @@ export default function WorkbenchProjectDetail() {
 
         {/* Clear All confirmation */}
         <AlertDialog open={clearOpen} onOpenChange={setClearOpen}>
-          <AlertDialogContent>
+          <AlertDialogContent onInteractOutside={() => !clearing && setClearOpen(false)}>
             <AlertDialogHeader>
               <AlertDialogTitle>Clear all results?</AlertDialogTitle>
               <AlertDialogDescription>
                 This removes all annotations, floor-plan bounding boxes, and the
                 relationships between level and unit floor plans for this project,
-                along with extracted text, triage results, analysis results, and
-                Workbench overrides. The uploaded files themselves are not removed.
+                along with Workbench overrides. The uploaded files themselves are not removed.
               </AlertDialogDescription>
             </AlertDialogHeader>
             <AlertDialogFooter>
@@ -4384,10 +4381,6 @@ function InstancesReportModal({
       <DialogContent className="max-w-[95vw] w-[95vw] sm:max-w-[95vw]">
         <DialogHeader>
           <DialogTitle>Threat Report</DialogTitle>
-          <DialogDescription>
-            Annotations expanded into per-space instance IDs. Unit floor-plan detections are expanded once per level the unit applies to (e.g. WS001@L05::UnitA).
-
-          </DialogDescription>
         </DialogHeader>
         <div className="grid grid-cols-[220px_1fr] gap-4 max-h-[70vh]">
           <div className="border rounded-md overflow-auto">
