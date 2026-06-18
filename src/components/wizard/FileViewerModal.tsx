@@ -268,7 +268,16 @@ export const FileViewerModal = ({
   const [editingPlan, setEditingPlan] = useState<EditingPlanState | null>(null);
   const editingPlanRef = useRef<EditingPlanState | null>(null);
   useEffect(() => { editingPlanRef.current = editingPlan; }, [editingPlan]);
-  const [activeTab, setActiveTab] = useState<"floor-plans" | "detections">("floor-plans");
+  const ACTIVE_TAB_STORAGE_KEY = "fileViewer.activeTab";
+  const [activeTab, setActiveTab] = useState<"floor-plans" | "detections">(() => {
+    if (typeof window === "undefined") return "floor-plans";
+    const stored = window.localStorage.getItem(ACTIVE_TAB_STORAGE_KEY);
+    return stored === "detections" || stored === "floor-plans" ? stored : "floor-plans";
+  });
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    window.localStorage.setItem(ACTIVE_TAB_STORAGE_KEY, activeTab);
+  }, [activeTab]);
   const [confirmExit, setConfirmExit] = useState<null | {
     kind: "tab" | "close";
     next: () => void;
@@ -284,11 +293,11 @@ export const FileViewerModal = ({
       editingPlan.bbox.some((v, i) => v !== editingPlan.origBbox[i]))
   );
 
-  // Reset editor state when modal closes or page changes
+  // Reset editor state when modal closes or page changes. Do NOT reset
+  // activeTab here — we want it preserved across modal opens.
   useEffect(() => {
     if (!isOpen) {
       setEditingPlan(null);
-      setActiveTab("floor-plans");
       setConfirmExit(null);
       setConfirmDelete(null);
     }
