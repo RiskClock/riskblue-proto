@@ -1360,9 +1360,10 @@ interface FloorPlansPanelProps {
 
 const FloorPlansPanel = ({
   floorPlans,
+  allUnitPlans,
   allLevelPlans,
   overrides,
-  onEditLevelUnits,
+  onSaveLevelUnits,
   instancesOnPage = [],
   numberByInstanceId,
   instanceLabel,
