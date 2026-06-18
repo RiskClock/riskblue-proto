@@ -1578,17 +1578,22 @@ const FloorPlansPanel = ({
                     <div className="text-[10px] uppercase tracking-wide text-muted-foreground">
                       Units ({effUnits.length})
                     </div>
-                    {onEditLevelUnits && (
-                      <Button
-                        type="button"
-                        size="sm"
-                        variant="ghost"
-                        className="h-6 px-1.5 text-[10px] gap-1"
-                        onClick={() => onEditLevelUnits(fp, effUnits)}
-                      >
-                        <Plus className="h-3 w-3" />
-                        Add / edit
-                      </Button>
+                    {onSaveLevelUnits && (
+                      <UnitsAddPopover
+                        existingRefs={Array.from(
+                          new Set(
+                            allUnitPlans.map((p) => unitPlanRefKey(p)).filter(Boolean),
+                          ),
+                        ).sort()}
+                        currentUnits={effUnits}
+                        onAdd={async (ref, isNew) => {
+                          await onSaveLevelUnits(
+                            fp,
+                            [...effUnits, ref],
+                            isNew ? [ref] : [],
+                          );
+                        }}
+                      />
                     )}
                   </div>
                   {effUnits.length === 0 ? (
@@ -1602,7 +1607,7 @@ const FloorPlansPanel = ({
                         return (
                           <span
                             key={u}
-                            className="px-1.5 py-0.5 rounded text-[10px] font-medium border"
+                            className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium border"
                             style={{
                               backgroundColor: softBgFrom(uc),
                               color: uc,
@@ -1610,6 +1615,23 @@ const FloorPlansPanel = ({
                             }}
                           >
                             {u}
+                            {onSaveLevelUnits && (
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  void onSaveLevelUnits(
+                                    fp,
+                                    effUnits.filter((x) => x !== u),
+                                    [],
+                                    [u],
+                                  )
+                                }
+                                className="hover:opacity-70"
+                                aria-label={`Remove ${u}`}
+                              >
+                                <XIcon className="h-2.5 w-2.5" />
+                              </button>
+                            )}
                           </span>
                         );
                       })}
