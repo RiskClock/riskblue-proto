@@ -305,6 +305,19 @@ export const FileViewerModal = ({
   const viewerApiRef = useRef<any>(null);
   const viewerContainerRef = useRef<HTMLDivElement>(null);
 
+  const effectiveFloorPlanOverrides = useMemo(() => {
+    if (!editingPlan) return floorPlanOverrides ?? {};
+    return {
+      ...(floorPlanOverrides ?? {}),
+      [editingPlan.planId]: {
+        ...((floorPlanOverrides ?? {}) as any)[editingPlan.planId],
+        bbox_pct: editingPlan.bbox,
+        name: editingPlan.name.trim() || null,
+        type: editingPlan.type,
+      },
+    };
+  }, [floorPlanOverrides, editingPlan]);
+
   const isEditingDirty = !!(
     editingPlan &&
     (editingPlan.name !== editingPlan.origName ||
@@ -933,7 +946,7 @@ export const FileViewerModal = ({
                     floorPlans={floorPlans ?? []}
                     allUnitPlans={allUnitPlans ?? []}
                     allLevelPlans={allLevelPlans ?? []}
-                    overrides={floorPlanOverrides ?? {}}
+                    overrides={effectiveFloorPlanOverrides}
                     onSaveOverride={onSaveFloorPlanOverride}
                     onEditFloors={onEditFloors}
                     onEditLevelUnits={onEditLevelUnits}
@@ -975,7 +988,7 @@ export const FileViewerModal = ({
                     pastLen={past.length}
                     futureLen={future.length}
                     floorPlans={floorPlans}
-                    floorPlanOverrides={floorPlanOverrides ?? {}}
+                    floorPlanOverrides={effectiveFloorPlanOverrides}
                   />
                 </TabsContent>
               </Tabs>
