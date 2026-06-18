@@ -1125,6 +1125,7 @@ interface DetectionsPanelProps {
   futureLen: number;
   withHeader?: boolean;
   floorPlans?: ParsedFloorPlan[];
+  floorPlanOverrides?: Record<string, any>;
 }
 
 // Find the floor plan whose bbox contains the normalized (0..1) point.
@@ -1133,13 +1134,14 @@ const findContainingPlan = (
   plans: ParsedFloorPlan[],
   nx: number,
   ny: number,
+  overrides: Record<string, any> = {},
 ): ParsedFloorPlan | null => {
   const x = nx * 100;
   const y = ny * 100;
   let best: ParsedFloorPlan | null = null;
   let bestArea = Infinity;
   for (const fp of plans) {
-    const bb = fp.xy_width_height_pct;
+    const bb = getEffectiveBbox(fp, overrides);
     if (!bb) continue;
     const [bx, by, bw, bh] = bb;
     if (x < bx || x > bx + bw || y < by || y > by + bh) continue;
