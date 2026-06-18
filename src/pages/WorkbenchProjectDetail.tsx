@@ -4699,6 +4699,7 @@ function InstancesReportModal({
     const pageKeys = Array.from(
       new Set(rows.map((r) => `${r.fileId}::${r.pageIndex}`)),
     );
+    const showUnitCol = rows.some((r) => !!r.unitName);
     return (
       <div className="space-y-4">
         <h3 className="text-sm font-semibold">{label}</h3>
@@ -4707,6 +4708,7 @@ function InstancesReportModal({
             <TableRow className={compactRow}>
               <TableHead className={compactHead}>Instance ID</TableHead>
               <TableHead className={compactHead}>Class</TableHead>
+              {showUnitCol && <TableHead className={compactHead}>Unit</TableHead>}
               <TableHead className={compactHead}>Annotation ID</TableHead>
               <TableHead className={compactHead}>Source</TableHead>
             </TableRow>
@@ -4716,6 +4718,9 @@ function InstancesReportModal({
               <TableRow key={`${r.instanceId}-${i}`} className={compactRow}>
                 <TableCell className={`${compactCell} font-mono`}>{r.instanceId}</TableCell>
                 <TableCell className={compactCell}>{r.awpClassName}</TableCell>
+                {showUnitCol && (
+                  <TableCell className={compactCell}>{r.unitName ?? "—"}</TableCell>
+                )}
                 <TableCell className={`${compactCell} font-mono text-muted-foreground`}>
                   {r.annotationBaseId}
                 </TableCell>
@@ -4726,6 +4731,7 @@ function InstancesReportModal({
             ))}
           </TableBody>
         </Table>
+
         <div className="space-y-6">
           {pageKeys.map((key) => {
             const [fileId, pageIdxStr] = key.split("::");
