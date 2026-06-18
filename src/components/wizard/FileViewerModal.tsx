@@ -28,7 +28,7 @@ import { X as XIcon } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { getUserFriendlyError } from "@/lib/errorHandling";
-import { awpClassColor, readableTextOn } from "@/lib/awpColor";
+import { awpClassColor, readableTextOn, softBgFrom } from "@/lib/awpColor";
 
 
 import {
@@ -1252,10 +1252,11 @@ const DetectionsPanel = ({
                               const cc = awpClassColor(ct);
                               return (
                                 <span
-                                  className="shrink-0 px-1.5 py-0.5 rounded text-[9px] font-medium max-w-[80px] truncate"
+                                  className="shrink-0 px-1.5 py-0.5 rounded text-[9px] font-medium max-w-[80px] truncate border"
                                   style={{
-                                    backgroundColor: cc,
-                                    color: readableTextOn(cc),
+                                    backgroundColor: softBgFrom(cc),
+                                    color: cc,
+                                    borderColor: cc,
                                   }}
                                   title={`In ${planLabel}`}
                                 >
@@ -1400,8 +1401,8 @@ const FloorPlansPanel = ({
               key={inst.id}
               className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium border"
               style={{
-                backgroundColor: c,
-                color: readableTextOn(c),
+                backgroundColor: softBgFrom(c),
+                color: c,
                 borderColor: c,
               }}
               title={label}
@@ -1572,8 +1573,8 @@ const FloorPlansPanel = ({
                             key={u}
                             className="px-1.5 py-0.5 rounded text-[10px] font-medium border"
                             style={{
-                              backgroundColor: uc,
-                              color: readableTextOn(uc),
+                              backgroundColor: softBgFrom(uc),
+                              color: uc,
                               borderColor: uc,
                             }}
                           >
