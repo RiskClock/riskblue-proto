@@ -3175,6 +3175,50 @@ export default function WorkbenchProjectDetail() {
                   />
                 </DialogContent>
               </Dialog>
+
+              {/* Scout debug modal — shows raw + metadata for the latest scout call */}
+              <Dialog open={scoutDebugOpen} onOpenChange={setScoutDebugOpen}>
+                <DialogContent className="max-w-[85vw] w-[85vw] h-[85vh] flex flex-col">
+                  <DialogHeader>
+                    <DialogTitle>Scout responses</DialogTitle>
+                  </DialogHeader>
+                  {(() => {
+                    const scoutFiles = (rows?.files ?? [])
+                      .filter((f) => (f.survey_raw_response ?? "").trim().length > 0)
+                      .slice()
+                      .sort((a, b) => {
+                        const au = (a as any).survey_raw_updated_at ?? "";
+                        const bu = (b as any).survey_raw_updated_at ?? "";
+                        return bu.localeCompare(au);
+                      });
+                    if (scoutFiles.length === 0) {
+                      return (
+                        <div className="flex-1 flex items-center justify-center text-sm text-muted-foreground">
+                          No Scout responses yet. Run Scout to populate.
+                        </div>
+                      );
+                    }
+                    const latest = scoutFiles[0];
+                    const updatedAt = (latest as any).survey_raw_updated_at as string | null;
+                    return (
+                      <div className="flex-1 min-h-0 flex flex-col gap-2">
+                        <div className="text-xs text-muted-foreground grid grid-cols-2 gap-x-4 gap-y-1">
+                          <div><span className="font-medium text-foreground">File:</span> {latest.name}</div>
+                          <div><span className="font-medium text-foreground">Model:</span> google/gemini-2.5-pro</div>
+                          <div><span className="font-medium text-foreground">Updated:</span> {updatedAt ? new Date(updatedAt).toLocaleString() : "—"}</div>
+                          <div><span className="font-medium text-foreground">Length:</span> {(latest.survey_raw_response ?? "").length.toLocaleString()} chars</div>
+                          <div><span className="font-medium text-foreground">Total files with responses:</span> {scoutFiles.length}</div>
+                        </div>
+                        <Textarea
+                          readOnly
+                          value={latest.survey_raw_response ?? ""}
+                          className="font-mono text-xs flex-1 min-h-0 resize-none"
+                        />
+                      </div>
+                    );
+                  })()}
+                </DialogContent>
+              </Dialog>
             </div>
 
             {/* Pages by File — lightweight enumeration (no splitting). */}
