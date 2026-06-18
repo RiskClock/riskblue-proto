@@ -3037,7 +3037,7 @@ export default function WorkbenchProjectDetail() {
                   <TooltipTrigger asChild>
                     <Button
                       type="button"
-                      variant="ghost"
+                      variant="outline"
                       size="icon"
                       className="ml-auto"
                       onClick={() => setScoutDebugOpen(true)}
@@ -3050,42 +3050,7 @@ export default function WorkbenchProjectDetail() {
                 </Tooltip>
               </div>
 
-
-
-              {/* Per-file raw response list. Click "View Response" to open the raw Gemini output in a modal. */}
-              {rows?.files?.some((f) => (f.survey_raw_response ?? "").trim().length > 0) && (
-                <div className="border rounded-md bg-background">
-                  <div className="px-3 py-2 border-b text-xs text-muted-foreground">
-                    Survey responses · one per file
-                  </div>
-                  <ul className="divide-y max-h-[60vh] overflow-auto">
-                    {rows.files
-                      .filter((f) => (f.survey_raw_response ?? "").trim().length > 0)
-                      .sort((a, b) => a.name.localeCompare(b.name))
-                      .map((f) => (
-                        <li
-                          key={f.id}
-                          className="px-3 py-2 flex items-center justify-between gap-2"
-                        >
-                          <span className="text-sm truncate font-medium">{f.name}</span>
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            onClick={() =>
-                              setSurveyResponseModal({
-                                fileName: f.name,
-                                raw: f.survey_raw_response ?? "",
-                              })
-                            }
-                          >
-                            View Response
-                          </Button>
-                        </li>
-                      ))}
-                  </ul>
-                </div>
-              )}
-
+              {/* Raw response modal — shown when a file is picked from the Scout debug list. */}
               <Dialog
                 open={!!surveyResponseModal}
                 onOpenChange={(open) => !open && setSurveyResponseModal(null)}
@@ -3104,9 +3069,9 @@ export default function WorkbenchProjectDetail() {
                 </DialogContent>
               </Dialog>
 
-              {/* Scout debug modal — shows raw + metadata for the latest scout call */}
+              {/* Scout debug modal — lists files with raw responses; pick one to view. */}
               <Dialog open={scoutDebugOpen} onOpenChange={setScoutDebugOpen}>
-                <DialogContent className="max-w-[85vw] w-[85vw] h-[85vh] flex flex-col">
+                <DialogContent className="max-w-[640px] w-[640px] max-h-[80vh] flex flex-col">
                   <DialogHeader>
                     <DialogTitle>Scout responses</DialogTitle>
                   </DialogHeader>
@@ -3121,27 +3086,48 @@ export default function WorkbenchProjectDetail() {
                       });
                     if (scoutFiles.length === 0) {
                       return (
-                        <div className="flex-1 flex items-center justify-center text-sm text-muted-foreground">
+                        <div className="flex-1 flex items-center justify-center py-8 text-sm text-muted-foreground">
                           No Scout responses yet. Run Scout to populate.
                         </div>
                       );
                     }
-                    const latest = scoutFiles[0];
-                    const updatedAt = (latest as any).survey_raw_updated_at as string | null;
                     return (
                       <div className="flex-1 min-h-0 flex flex-col gap-2">
-                        <div className="text-xs text-muted-foreground grid grid-cols-2 gap-x-4 gap-y-1">
-                          <div><span className="font-medium text-foreground">File:</span> {latest.name}</div>
-                          <div><span className="font-medium text-foreground">Model:</span> google/gemini-2.5-pro</div>
-                          <div><span className="font-medium text-foreground">Updated:</span> {updatedAt ? new Date(updatedAt).toLocaleString() : "—"}</div>
-                          <div><span className="font-medium text-foreground">Length:</span> {(latest.survey_raw_response ?? "").length.toLocaleString()} chars</div>
-                          <div><span className="font-medium text-foreground">Total files with responses:</span> {scoutFiles.length}</div>
+                        <div className="text-xs text-muted-foreground">
+                          Model: google/gemini-2.5-pro · {scoutFiles.length} file{scoutFiles.length === 1 ? "" : "s"} with responses
                         </div>
-                        <Textarea
-                          readOnly
-                          value={latest.survey_raw_response ?? ""}
-                          className="font-mono text-xs flex-1 min-h-0 resize-none"
-                        />
+                        <ul className="divide-y border rounded-md overflow-auto flex-1 min-h-0">
+                          {scoutFiles.map((f) => {
+                            const updatedAt = (f as any).survey_raw_updated_at as string | null;
+                            const len = (f.survey_raw_response ?? "").length;
+                            return (
+                              <li
+                                key={f.id}
+                                className="px-3 py-2 flex items-center justify-between gap-3"
+                              >
+                                <div className="min-w-0 flex-1">
+                                  <div className="text-sm font-medium truncate">{f.name}</div>
+                                  <div className="text-[11px] text-muted-foreground">
+                                    {updatedAt ? new Date(updatedAt).toLocaleString() : "—"} · {len.toLocaleString()} chars
+                                  </div>
+                                </div>
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  onClick={() => {
+                                    setScoutDebugOpen(false);
+                                    setSurveyResponseModal({
+                                      fileName: f.name,
+                                      raw: f.survey_raw_response ?? "",
+                                    });
+                                  }}
+                                >
+                                  View Response
+                                </Button>
+                              </li>
+                            );
+                          })}
+                        </ul>
                       </div>
                     );
                   })()}
