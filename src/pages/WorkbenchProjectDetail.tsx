@@ -3033,7 +3033,7 @@ export default function WorkbenchProjectDetail() {
                       Surveying pages…
                     </>
                   ) : (
-                    "Survey Pages"
+                    "Scout"
                   )}
                 </Button>
                 <Button
@@ -3079,29 +3079,29 @@ export default function WorkbenchProjectDetail() {
                       Identifying…
                     </>
                   ) : (
-                    "Identify Risk Elements"
+                    "Vulnerability Radar"
                   )}
                 </Button>
                 <Button
                   type="button"
                   variant="outline"
-                  onClick={() => toast({ title: "Build Space Hierarchy", description: "Not wired up yet." })}
+                  onClick={() => toast({ title: "Spatial Architect", description: "Not wired up yet." })}
                 >
-                  Build Space Hierarchy
+                  Spatial Architect
                 </Button>
                 <Button
                   type="button"
                   variant="outline"
-                  onClick={() => toast({ title: "Consolidate Risers", description: "Not wired up yet." })}
+                  onClick={() => toast({ title: "Unify Riser", description: "Not wired up yet." })}
                 >
-                  Consolidate Risers
+                  Unify Riser
                 </Button>
                 <Button
                   type="button"
                   variant="outline"
-                  onClick={() => toast({ title: "Generate Instance Report", description: "Not wired up yet." })}
+                  onClick={() => toast({ title: "Threat Report", description: "Not wired up yet." })}
                 >
-                  Generate Instance Report
+                  Threat Report
                 </Button>
               </div>
 
