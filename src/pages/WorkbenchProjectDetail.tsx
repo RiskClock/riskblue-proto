@@ -3461,24 +3461,24 @@ export default function WorkbenchProjectDetail() {
         </Dialog>
 
         {/* Clear All confirmation */}
-        <AlertDialog open={clearOpen} onOpenChange={setClearOpen}>
-          <AlertDialogContent onInteractOutside={() => !clearing && setClearOpen(false)}>
-            <AlertDialogHeader>
-              <AlertDialogTitle>Clear all results?</AlertDialogTitle>
-              <AlertDialogDescription>
+        <Dialog open={clearOpen} onOpenChange={(open) => !clearing && setClearOpen(open)}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Clear all results?</DialogTitle>
+              <DialogDescription>
                 This removes all annotations, floor-plan bounding boxes, and the
                 relationships between level and unit floor plans for this project,
                 along with Workbench overrides. The uploaded files themselves are not removed.
-              </AlertDialogDescription>
-            </AlertDialogHeader>
-            <AlertDialogFooter>
-              <AlertDialogCancel disabled={clearing}>Cancel</AlertDialogCancel>
-              <AlertDialogAction onClick={clearAll} disabled={clearing}>
+              </DialogDescription>
+            </DialogHeader>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setClearOpen(false)} disabled={clearing}>Cancel</Button>
+              <Button onClick={clearAll} disabled={clearing}>
                 {clearing ? <Loader2 className="h-4 w-4 animate-spin" /> : "Clear All"}
-              </AlertDialogAction>
-            </AlertDialogFooter>
-          </AlertDialogContent>
-        </AlertDialog>
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
 
         <SpaceHierarchyModal
           open={spaceModalOpen}
