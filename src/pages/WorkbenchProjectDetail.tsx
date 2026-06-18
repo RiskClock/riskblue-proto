@@ -466,6 +466,50 @@ export default function WorkbenchProjectDetail() {
     }
   };
 
+  // Delete a floor plan entirely. Parsed plans are tombstoned via
+  // __deleted_plan_ids; manually-added unit plans are removed from
+  // __added_unit_plans. Also clears any per-plan override entry.
+  const deleteFloorPlan = async (planId: string) => {
+    if (!activeSheetIdForPage) {
+      toast({
+        variant: "destructive",
+        title: "Cannot delete",
+        description: "No sheet row exists yet for this page.",
+      });
+      return;
+    }
+    const next: Record<string, any> = { ...activeFloorPlanOverrides };
+    // Remove per-plan override (assignments, bbox, name).
+    if (planId in next) delete next[planId];
+    // Remove from added unit plans if it lives there.
+    const added = Array.isArray(next[ADDED_UNIT_PLANS_KEY])
+      ? (next[ADDED_UNIT_PLANS_KEY] as any[]).filter((e) => e?.plan_id !== planId)
+      : [];
+    if (added.length > 0) next[ADDED_UNIT_PLANS_KEY] = added;
+    else delete next[ADDED_UNIT_PLANS_KEY];
+    // Tombstone parsed plans so they vanish from the view.
+    const existingDeleted = Array.isArray(next[DELETED_PLAN_IDS_KEY])
+      ? (next[DELETED_PLAN_IDS_KEY] as any[]).filter((s) => typeof s === "string")
+      : [];
+    if (!existingDeleted.includes(planId)) existingDeleted.push(planId);
+    next[DELETED_PLAN_IDS_KEY] = existingDeleted;
+
+    setActiveFloorPlanOverrides(next);
+    const { error } = await supabase
+      .from("analysis_request_sheets")
+      .update({ floor_plan_overrides: next } as any)
+      .eq("id", activeSheetIdForPage);
+    if (error) {
+      toast({
+        variant: "destructive",
+        title: "Could not delete floor plan",
+        description: getUserFriendlyError(error),
+      });
+    }
+  };
+
+
+
 
   const openFloorEditForPlan = (planId: string, currentFloors: string[]) => {
     if (!activePageView || !activeSheetIdForPage) return;
