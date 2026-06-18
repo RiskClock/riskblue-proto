@@ -919,10 +919,88 @@ export const FileViewerModal = ({
             </div>
           ) : null}
         </div>
+
+        {/* Unsaved-changes prompt when leaving edit mode */}
+        <AlertDialog
+          open={!!confirmExit}
+          onOpenChange={(o) => {
+            if (!o) setConfirmExit(null);
+          }}
+        >
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Unsaved bounding box edits</AlertDialogTitle>
+              <AlertDialogDescription>
+                You've made changes to a floor plan's bounding box. Save them
+                before leaving?
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel onClick={() => setConfirmExit(null)}>
+                Cancel
+              </AlertDialogCancel>
+              <Button
+                variant="outline"
+                onClick={() => {
+                  const next = confirmExit?.next;
+                  setConfirmExit(null);
+                  setEditingPlan(null);
+                  next?.();
+                }}
+              >
+                Discard Changes
+              </Button>
+              <AlertDialogAction
+                onClick={async () => {
+                  const next = confirmExit?.next;
+                  setConfirmExit(null);
+                  await savePlanEdit();
+                  next?.();
+                }}
+              >
+                Save Edits
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+
+        {/* Delete plan confirmation */}
+        <AlertDialog
+          open={!!confirmDelete}
+          onOpenChange={(o) => {
+            if (!o) setConfirmDelete(null);
+          }}
+        >
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Delete floor plan?</AlertDialogTitle>
+              <AlertDialogDescription>
+                This removes "{confirmDelete?.label}" from this page. Annotation
+                assignments tied to it will be lost. This can't be undone.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>Cancel</AlertDialogCancel>
+              <AlertDialogAction
+                onClick={async () => {
+                  const planId = confirmDelete?.planId;
+                  setConfirmDelete(null);
+                  if (planId) {
+                    if (editingPlan?.planId === planId) setEditingPlan(null);
+                    await onDeletePlan?.(planId);
+                  }
+                }}
+              >
+                Delete
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
       </DialogContent>
     </Dialog>
   );
 };
+
 
 // ============================================================================
 // Sub-components
