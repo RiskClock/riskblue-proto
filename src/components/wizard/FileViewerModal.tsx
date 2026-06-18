@@ -1717,10 +1717,10 @@ const UnitsAddPopover = ({
     !existingRefs.some((r) => r.toLowerCase() === q.toLowerCase());
 
   const handleSelect = async (ref: string, isNew: boolean) => {
-    setOpen(false);
     setQuery("");
     await onAdd(ref, isNew);
   };
+
 
   useEffect(() => {
     if (!open) return;
