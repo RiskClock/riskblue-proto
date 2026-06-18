@@ -1751,7 +1751,7 @@ const UnitsAddPopover = ({
             onValueChange={setQuery}
             className="h-8 text-xs"
           />
-          <CommandList className="max-h-56">
+          <CommandList className="max-h-56 overflow-y-auto overscroll-contain">
             {filtered.length === 0 && !showCreate && (
               <CommandEmpty>No units.</CommandEmpty>
             )}
