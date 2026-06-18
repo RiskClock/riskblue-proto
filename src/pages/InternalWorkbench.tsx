@@ -177,6 +177,10 @@ export default function InternalWorkbench() {
   const [sortDir, setSortDir] = useState<SortDir>("desc");
   const [filterCreators, setFilterCreators] = useState<string[]>(saved?.creators ?? []);
   const [filterStatuses, setFilterStatuses] = useState<string[]>(saved?.statuses ?? []);
+  const [columnPrefs, setColumnPrefs] = useState<Record<WBColumnId, boolean>>(() => loadWBColumnPrefs());
+  useEffect(() => {
+    try { localStorage.setItem(WB_COLUMN_PREFS_KEY, JSON.stringify(columnPrefs)); } catch {}
+  }, [columnPrefs]);
 
   const isInternal = user?.email?.toLowerCase().endsWith("@riskclock.com") ?? false;
 
@@ -529,37 +533,58 @@ export default function InternalWorkbench() {
                   >
                     Project Name <SortIcon k="name" />
                   </TableHead>
-                  <TableHead
-                    className="cursor-pointer select-none"
-                    onClick={() => toggleSort("creator")}
-                  >
-                    Created By <SortIcon k="creator" />
+                  {columnPrefs.creator && (
+                    <TableHead className="cursor-pointer select-none" onClick={() => toggleSort("creator")}>
+                      Created By <SortIcon k="creator" />
+                    </TableHead>
+                  )}
+                  {columnPrefs.created_at && (
+                    <TableHead className="cursor-pointer select-none" onClick={() => toggleSort("created_at")}>
+                      Created On <SortIcon k="created_at" />
+                    </TableHead>
+                  )}
+                  {columnPrefs.file_count && (
+                    <TableHead className="text-right cursor-pointer select-none" onClick={() => toggleSort("file_count")}>
+                      Files <SortIcon k="file_count" />
+                    </TableHead>
+                  )}
+                  {columnPrefs.total_size_bytes && (
+                    <TableHead className="text-right cursor-pointer select-none" onClick={() => toggleSort("total_size_bytes")}>
+                      Total Size <SortIcon k="total_size_bytes" />
+                    </TableHead>
+                  )}
+                  <TableHead className="text-right w-[140px]">
+                    <div className="flex items-center justify-end gap-1">
+                      <Popover>
+                        <PopoverTrigger asChild>
+                          <Button size="icon" variant="ghost" className="h-8 w-8" title="Edit columns">
+                            <Settings2 className="h-4 w-4" />
+                          </Button>
+                        </PopoverTrigger>
+                        <PopoverContent align="end" className="w-56 p-2">
+                          <div className="text-xs font-medium text-muted-foreground px-2 py-1.5">
+                            Show columns
+                          </div>
+                          <div className="space-y-0.5">
+                            {WB_ALL_COLUMNS.map((c) => (
+                              <label
+                                key={c.id}
+                                className="flex items-center gap-2 rounded-md px-2 py-1.5 text-sm hover:bg-accent cursor-pointer"
+                              >
+                                <Checkbox
+                                  checked={columnPrefs[c.id]}
+                                  onCheckedChange={() =>
+                                    setColumnPrefs((prev) => ({ ...prev, [c.id]: !prev[c.id] }))
+                                  }
+                                />
+                                <span className="flex-1">{c.label}</span>
+                              </label>
+                            ))}
+                          </div>
+                        </PopoverContent>
+                      </Popover>
+                    </div>
                   </TableHead>
-                  <TableHead
-                    className="cursor-pointer select-none"
-                    onClick={() => toggleSort("created_at")}
-                  >
-                    Created On <SortIcon k="created_at" />
-                  </TableHead>
-                  <TableHead
-                    className="text-right cursor-pointer select-none"
-                    onClick={() => toggleSort("file_count")}
-                  >
-                    Files <SortIcon k="file_count" />
-                  </TableHead>
-                  <TableHead
-                    className="text-right cursor-pointer select-none"
-                    onClick={() => toggleSort("total_size_bytes")}
-                  >
-                    Total Size <SortIcon k="total_size_bytes" />
-                  </TableHead>
-                  <TableHead
-                    className="cursor-pointer select-none"
-                    onClick={() => toggleSort("status")}
-                  >
-                    Status <SortIcon k="status" />
-                  </TableHead>
-                  <TableHead className="text-right w-[140px]">Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
