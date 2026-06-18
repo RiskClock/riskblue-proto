@@ -2954,6 +2954,7 @@ export default function WorkbenchProjectDetail() {
                       setSurveyRunning(false);
                     }
                   }}
+                  variant="outline"
                   disabled={!requestId || surveyRunning}
                 >
                   {surveyRunning ? (
