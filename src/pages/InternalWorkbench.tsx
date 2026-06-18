@@ -603,108 +603,35 @@ export default function InternalWorkbench() {
                       onClick={() => navigate(`/internal/workbench/project/${p.id}`)}
                     >
                       <TableCell className="font-medium">{p.name}</TableCell>
-                      <TableCell>
-                        <TooltipProvider delayDuration={200}>
-                          <Tooltip>
-                            <TooltipTrigger asChild>
-                              <span className="text-sm cursor-default">{p.creator_name}</span>
-                            </TooltipTrigger>
-                            {p.creator_email && (
-                              <TooltipContent>
-                                <p>{p.creator_email}</p>
-                              </TooltipContent>
-                            )}
-                          </Tooltip>
-                        </TooltipProvider>
-                      </TableCell>
-                      <TableCell className="text-muted-foreground">
-                        {format(new Date(p.created_at), "MMM d, yyyy")}
-                      </TableCell>
-                      <TableCell className="text-right tabular-nums">{p.file_count || 0}</TableCell>
-                      <TableCell className="text-right tabular-nums">
-                        {formatBytes(p.total_size_bytes)}
-                      </TableCell>
-                      <TableCell onClick={(e) => e.stopPropagation()}>
-                        {(p.status === "failed" || p.status === "processing" || p.error_message) ? (
-                          <Popover>
-                            <PopoverTrigger asChild>
-                              <button
-                                type="button"
-                                className="inline-flex items-center gap-1.5 rounded-md border px-2 py-0.5 text-xs hover:opacity-80 transition-opacity"
-                                style={{}}
-                              >
-                                <Badge variant="outline" className={`text-xs ${colorClass} border-0 px-0 py-0`}>
-                                  {label}
-                                </Badge>
-                                <span className="h-1.5 w-1.5 rounded-full bg-current opacity-50" />
-                              </button>
-                            </PopoverTrigger>
-                            <PopoverContent align="start" className="w-80 text-sm">
-                              <div className="space-y-2">
-                                <div className="flex items-center justify-between">
-                                  <span className="font-semibold">Status</span>
-                                  <Badge variant="outline" className={`text-xs ${colorClass}`}>{label}</Badge>
-                                </div>
-                                {p.pipeline_phase && (
-                                  <div className="flex justify-between text-xs">
-                                    <span className="text-muted-foreground">Phase</span>
-                                    <span className="font-medium">{phaseLabels[p.pipeline_phase] || p.pipeline_phase}</span>
-                                  </div>
-                                )}
-                                {p.pipeline_progress_total != null && p.pipeline_progress_total > 0 && (
-                                  <div className="flex justify-between text-xs">
-                                    <span className="text-muted-foreground">Progress</span>
-                                    <span className="font-medium tabular-nums">
-                                      {p.pipeline_progress_done ?? 0} / {p.pipeline_progress_total}
-                                    </span>
-                                  </div>
-                                )}
-                                <div className="flex justify-between text-xs">
-                                  <span className="text-muted-foreground">Last activity</span>
-                                  <span className="font-medium">{formatRelative(p.request_updated_at)}</span>
-                                </div>
-                                {p.error_message && (
-                                  <div className="space-y-1">
-                                    <div className="text-xs text-muted-foreground">Error</div>
-                                    <pre className="text-[11px] whitespace-pre-wrap break-words rounded bg-muted p-2 max-h-40 overflow-auto">
-                                      {p.error_message}
-                                    </pre>
-                                  </div>
-                                )}
-                                <div className="pt-2 border-t space-y-2">
-                                  {p.status === "failed" && p.analysis_request_id && (
-                                    <Button
-                                      size="sm"
-                                      variant="default"
-                                      className="w-full"
-                                      disabled={resumingId === p.analysis_request_id}
-                                      onClick={() => handleResume(p)}
-                                    >
-                                      {resumingId === p.analysis_request_id ? (
-                                        <><Loader2 className="h-3 w-3 mr-1 animate-spin" />Resuming…</>
-                                      ) : (
-                                        "Resume"
-                                      )}
-                                    </Button>
-                                  )}
-                                  <Button
-                                    size="sm"
-                                    variant={p.status === "failed" ? "outline" : "default"}
-                                    className="w-full"
-                                    onClick={() => navigate(`/internal/workbench/project/${p.id}`)}
-                                  >
-                                    Open Project
-                                  </Button>
-                                </div>
-                              </div>
-                            </PopoverContent>
-                          </Popover>
-                        ) : (
-                          <Badge variant="outline" className={`text-xs ${colorClass}`}>
-                            {label}
-                          </Badge>
-                        )}
-                      </TableCell>
+                      {columnPrefs.creator && (
+                        <TableCell>
+                          <TooltipProvider delayDuration={200}>
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <span className="text-sm cursor-default">{p.creator_name}</span>
+                              </TooltipTrigger>
+                              {p.creator_email && (
+                                <TooltipContent>
+                                  <p>{p.creator_email}</p>
+                                </TooltipContent>
+                              )}
+                            </Tooltip>
+                          </TooltipProvider>
+                        </TableCell>
+                      )}
+                      {columnPrefs.created_at && (
+                        <TableCell className="text-muted-foreground">
+                          {format(new Date(p.created_at), "MMM d, yyyy")}
+                        </TableCell>
+                      )}
+                      {columnPrefs.file_count && (
+                        <TableCell className="text-right tabular-nums">{p.file_count || 0}</TableCell>
+                      )}
+                      {columnPrefs.total_size_bytes && (
+                        <TableCell className="text-right tabular-nums">
+                          {formatBytes(p.total_size_bytes)}
+                        </TableCell>
+                      )}
 
                       <TableCell className="text-right" onClick={(e) => e.stopPropagation()}>
                         <div className="flex items-center justify-end gap-1">
