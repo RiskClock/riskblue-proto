@@ -764,9 +764,16 @@ export const FileViewerModal = ({
         coordSpace: "normalized" as const,
         page: currentPage,
         shape: "rect" as const,
-        color: awpClassColor(
-          ((floorPlanOverrides ?? {})[fp.plan_id] as any)?.type || fp.type || "unknown",
-        ),
+        color: (() => {
+          const t = ((floorPlanOverrides ?? {})[fp.plan_id] as any)?.type || fp.type || "unknown";
+          return awpClassColor(
+            t === "unit_floor_plan"
+              ? "Unit Floor Plan"
+              : t === "level_floor_plan"
+                ? "Level Floor Plan"
+                : t,
+          );
+        })(),
         label: labelBase,
       });
     }
@@ -879,7 +886,7 @@ export const FileViewerModal = ({
                 <TabsContent
                   value="floor-plans"
                   forceMount
-                  className="flex-1 min-h-0 m-0 mt-0 overflow-hidden data-[state=inactive]:hidden"
+                  className="flex-1 min-h-0 m-0 mt-0 overflow-hidden flex flex-col data-[state=inactive]:hidden"
                 >
                   <FloorPlansPanel
                     floorPlans={floorPlans ?? []}
@@ -1027,8 +1034,8 @@ export const FileViewerModal = ({
             <AlertDialogHeader>
               <AlertDialogTitle>Delete floor plan?</AlertDialogTitle>
               <AlertDialogDescription>
-                This removes "{confirmDelete?.label}" from this page. Annotation
-                assignments tied to it will be lost. This can't be undone.
+                This removes "{confirmDelete?.label}" from this page. Annotations
+                inside its area will become orphaned. This can't be undone.
               </AlertDialogDescription>
             </AlertDialogHeader>
             <AlertDialogFooter>
@@ -1215,18 +1222,26 @@ const DetectionsPanel = ({
                               {instanceLabel(i)}
                               {i.page_index !== effectivePage ? ` (p.${i.page_index})` : ""}
                             </span>
-                            {planLabel && (
-                              <span
-                                className="shrink-0 px-1.5 py-0.5 rounded text-[9px] font-medium max-w-[80px] truncate"
-                                style={{
-                                  backgroundColor: awpClassColor(containingPlan!.type || "unknown"),
-                                  color: readableTextOn(awpClassColor(containingPlan!.type || "unknown")),
-                                }}
-                                title={`In ${planLabel}`}
-                              >
-                                {planLabel}
-                              </span>
-                            )}
+                            {planLabel && (() => {
+                              const ct = containingPlan!.type === "unit_floor_plan"
+                                ? "Unit Floor Plan"
+                                : containingPlan!.type === "level_floor_plan"
+                                  ? "Level Floor Plan"
+                                  : containingPlan!.type || "unknown";
+                              const cc = awpClassColor(ct);
+                              return (
+                                <span
+                                  className="shrink-0 px-1.5 py-0.5 rounded text-[9px] font-medium max-w-[80px] truncate"
+                                  style={{
+                                    backgroundColor: cc,
+                                    color: readableTextOn(cc),
+                                  }}
+                                  title={`In ${planLabel}`}
+                                >
+                                  {planLabel}
+                                </span>
+                              );
+                            })()}
                             <button
                               onClick={() => handleDeleteFromList(i.id)}
                               className="shrink-0 text-muted-foreground hover:text-destructive px-1"
@@ -1397,7 +1412,13 @@ const FloorPlansPanel = ({
           const effUnits: string[] = ovr.units ?? fp.referenced_unit_ids;
           const effType: string =
             (typeof ovr.type === "string" && ovr.type) ? ovr.type : fp.type;
-          const color = awpClassColor(effType || "unknown");
+          const color = awpClassColor(
+            effType === "unit_floor_plan"
+              ? "Unit Floor Plan"
+              : effType === "level_floor_plan"
+                ? "Level Floor Plan"
+                : effType || "unknown",
+          );
           const fallbackLabel = getEffectiveLabel(fp, overrides) ||
             floorPlanDisplayLabel({ ...fp, floors: effFloors });
           const isUnit = effType === "unit_floor_plan";
@@ -1524,7 +1545,7 @@ const FloorPlansPanel = ({
                   ) : (
                     <div className="flex flex-wrap gap-1">
                       {effUnits.map((u) => {
-                        const uc = awpClassColor("unit_floor_plan");
+                        const uc = awpClassColor("Unit Floor Plan");
                         return (
                           <span
                             key={u}

@@ -2876,7 +2876,8 @@ export default function WorkbenchProjectDetail() {
 
             {/* Survey Pages */}
             <div className="mt-6 border-t pt-6 space-y-3">
-              <div className="flex justify-center gap-2">
+              <div className="flex flex-wrap items-center justify-start gap-2">
+                <span className="text-sm font-medium text-muted-foreground mr-1">Risk Agents:</span>
                 <Button
                   type="button"
                   onClick={async () => {
@@ -3032,7 +3033,7 @@ export default function WorkbenchProjectDetail() {
                       Surveying pages…
                     </>
                   ) : (
-                    "Survey Pages"
+                    "Scout"
                   )}
                 </Button>
                 <Button
@@ -3078,29 +3079,29 @@ export default function WorkbenchProjectDetail() {
                       Identifying…
                     </>
                   ) : (
-                    "Identify Risk Elements"
+                    "Vulnerability Radar"
                   )}
                 </Button>
                 <Button
                   type="button"
                   variant="outline"
-                  onClick={() => toast({ title: "Build Space Hierarchy", description: "Not wired up yet." })}
+                  onClick={() => toast({ title: "Spatial Architect", description: "Not wired up yet." })}
                 >
-                  Build Space Hierarchy
+                  Spatial Architect
                 </Button>
                 <Button
                   type="button"
                   variant="outline"
-                  onClick={() => toast({ title: "Consolidate Risers", description: "Not wired up yet." })}
+                  onClick={() => toast({ title: "Unify Riser", description: "Not wired up yet." })}
                 >
-                  Consolidate Risers
+                  Unify Riser
                 </Button>
                 <Button
                   type="button"
                   variant="outline"
-                  onClick={() => toast({ title: "Generate Instance Report", description: "Not wired up yet." })}
+                  onClick={() => toast({ title: "Threat Report", description: "Not wired up yet." })}
                 >
-                  Generate Instance Report
+                  Threat Report
                 </Button>
               </div>
 
@@ -3445,7 +3446,7 @@ export default function WorkbenchProjectDetail() {
                                           Page {p}
                                         </span>
                                         {levelPlans.map((lvl) => {
-                                          const c = awpClassColor(lvl.type);
+                                          const c = awpClassColor(lvl.type === "level_floor_plan" ? "Level Floor Plan" : lvl.type === "unit_floor_plan" ? "Unit Floor Plan" : lvl.type);
                                           const lbl = floorPlanDisplayLabel(lvl);
                                           return (
                                             <Badge
@@ -3459,7 +3460,7 @@ export default function WorkbenchProjectDetail() {
                                           );
                                         })}
                                         {unitPlans.length > 0 && (() => {
-                                          const c = awpClassColor("unit_floor_plan");
+                                          const c = awpClassColor("Unit Floor Plan");
                                           return (
                                             <Badge
                                               variant="outline"
