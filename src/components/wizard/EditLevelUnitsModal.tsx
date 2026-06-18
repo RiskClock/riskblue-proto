@@ -52,7 +52,7 @@ export const EditLevelUnitsModal = ({
     setNewRefInput("");
   }, [currentUnits, isOpen]);
 
-  const unitColor = awpClassColor("unit_floor_plan");
+  const unitColor = awpClassColor("Unit Floor Plan");
   const unitTextColor = readableTextOn(unitColor);
 
   const knownRefs = new Set(allUnitPlans.map((u) => unitPlanRefKey(u)));

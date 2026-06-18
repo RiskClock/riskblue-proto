@@ -3445,7 +3445,7 @@ export default function WorkbenchProjectDetail() {
                                           Page {p}
                                         </span>
                                         {levelPlans.map((lvl) => {
-                                          const c = awpClassColor(lvl.type);
+                                          const c = awpClassColor(lvl.type === "level_floor_plan" ? "Level Floor Plan" : lvl.type === "unit_floor_plan" ? "Unit Floor Plan" : lvl.type);
                                           const lbl = floorPlanDisplayLabel(lvl);
                                           return (
                                             <Badge
@@ -3459,7 +3459,7 @@ export default function WorkbenchProjectDetail() {
                                           );
                                         })}
                                         {unitPlans.length > 0 && (() => {
-                                          const c = awpClassColor("unit_floor_plan");
+                                          const c = awpClassColor("Unit Floor Plan");
                                           return (
                                             <Badge
                                               variant="outline"
