@@ -3627,7 +3627,9 @@ export default function WorkbenchProjectDetail() {
             riskElementClasses={activeFileRiskClasses}
             annotationAssignments={activeAnnotationAssignments}
             onAssignAnnotation={assignAnnotationToPlan}
+            onDeletePlan={deleteFloorPlan}
           />
+
         )}
 
 
