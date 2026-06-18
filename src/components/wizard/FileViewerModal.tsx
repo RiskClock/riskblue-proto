@@ -149,8 +149,17 @@ interface FileViewerModalProps {
   ) => Promise<void> | void;
   /** Page-level handler that opens SpaceEditModal scoped to a plan. */
   onEditFloors?: (planId: string, currentFloors: string[]) => void;
-  /** Open the units-editor modal for a level plan. */
+  /** @deprecated Replaced by inline popover; kept for API compat. */
   onEditLevelUnits?: (plan: ParsedFloorPlan, currentUnits: string[]) => void;
+  /** Save units for a level plan. createdRefs = newly-typed refs to persist
+   *  as __added_unit_plans entries. removedRefs = previously-saved refs that
+   *  should also be removed from __added_unit_plans (when present there). */
+  onSaveLevelUnits?: (
+    plan: ParsedFloorPlan,
+    units: string[],
+    createdRefs?: string[],
+    removedRefs?: string[],
+  ) => Promise<void> | void;
   /** Delete a floor plan entirely (parsed plans go to `__deleted_plan_ids`,
    *  added unit plans are removed from `__added_unit_plans`). */
   onDeletePlan?: (planId: string) => Promise<void> | void;
