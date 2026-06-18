@@ -1320,9 +1320,51 @@ export default function WorkbenchProjectDetail() {
     return map;
   }, [spaceHierarchyPayload]);
 
+  // Unit-aware page map: "fileName::pageNumber" -> [{level, unit?}, ...].
+  // Level entries come from spatial_records.matched_sources (one per page);
+  // unit entries come from unit_templates: each page where a unit plan lives
+  // is expanded once per level the unit applies to. Falls back to pageSpaceMap
+  // for projects whose space_hierarchy_json predates unit_templates.
+  const pageSpaceUnitMap = useMemo(() => {
+    const map = new Map<string, Array<{ level: string; unit?: string }>>();
+    const parsed: any = spaceHierarchyPayload?.parsed;
+    const spaces = extractSpaces(parsed);
+    for (const sp of spaces) {
+      const name = sp?.standardized_space_name;
+      if (!name) continue;
+      for (const src of sp?.matched_sources || []) {
+        const key = `${src?.file_name}::${src?.page_number}`;
+        const arr = map.get(key) || [];
+        arr.push({ level: name });
+        map.set(key, arr);
+      }
+    }
+    const units: any[] = Array.isArray(parsed?.unit_templates) ? parsed.unit_templates : [];
+    for (const u of units) {
+      const unitName = typeof u?.unit_name === "string" ? u.unit_name : null;
+      if (!unitName) continue;
+      const levels: string[] = Array.isArray(u?.applies_to_levels) ? u.applies_to_levels.filter((l: any) => typeof l === "string") : [];
+      const sources: any[] = Array.isArray(u?.matched_sources) ? u.matched_sources : [];
+      for (const src of sources) {
+        const key = `${src?.file_name}::${src?.page_number}`;
+        const arr = map.get(key) || [];
+        // When applies_to_levels is empty, still record the unit so the
+        // detection isn't dropped — treat the unit page as its own "space".
+        if (levels.length === 0) {
+          arr.push({ level: unitName, unit: unitName });
+        } else {
+          for (const lvl of levels) arr.push({ level: lvl, unit: unitName });
+        }
+        map.set(key, arr);
+      }
+    }
+    return map;
+  }, [spaceHierarchyPayload]);
+
   const spacesForSheet = (fileName: string, pageIndex: number): string[] => {
     return pageSpaceMap.get(`${fileName}::${pageIndex}`) || [];
   };
+
 
   const hierarchyBuilt = extractSpaces(spaceHierarchyPayload?.parsed).length > 0;
 
