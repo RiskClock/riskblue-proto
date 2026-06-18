@@ -25,6 +25,7 @@ import {
   Filter,
   Loader2,
   ShieldAlert,
+  Settings2,
   Trash2,
 } from "lucide-react";
 import {
@@ -130,9 +131,27 @@ type SortKey =
   | "creator"
   | "created_at"
   | "file_count"
-  | "total_size_bytes"
-  | "status";
+  | "total_size_bytes";
 type SortDir = "asc" | "desc";
+
+type WBColumnId = "creator" | "created_at" | "file_count" | "total_size_bytes";
+const WB_ALL_COLUMNS: { id: WBColumnId; label: string }[] = [
+  { id: "creator", label: "Created By" },
+  { id: "created_at", label: "Created On" },
+  { id: "file_count", label: "Files" },
+  { id: "total_size_bytes", label: "Total Size" },
+];
+const WB_COLUMN_PREFS_KEY = "workbench-column-prefs-v1";
+const loadWBColumnPrefs = (): Record<WBColumnId, boolean> => {
+  const defaults: Record<WBColumnId, boolean> = {
+    creator: true, created_at: true, file_count: true, total_size_bytes: true,
+  };
+  try {
+    const raw = localStorage.getItem(WB_COLUMN_PREFS_KEY);
+    if (raw) return { ...defaults, ...JSON.parse(raw) };
+  } catch {}
+  return defaults;
+};
 
 export default function InternalWorkbench() {
   const { user } = useAuth();
