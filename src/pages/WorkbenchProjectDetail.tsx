@@ -337,34 +337,41 @@ export default function WorkbenchProjectDetail() {
 
   const activePageFloorPlans = useMemo<ParsedFloorPlan[]>(() => {
     if (!activePageView) return [];
-    const base = activeFileFloorPlansByPage.get(activePageView.page) ?? [];
+    const deleted = getDeletedPlanIds(activeFloorPlanOverrides);
+    const base = (activeFileFloorPlansByPage.get(activePageView.page) ?? []).filter(
+      (fp) => !deleted.has(fp.plan_id),
+    );
     const added = getAddedUnitPlans(activeFloorPlanOverrides, activePageView.page)
+      .filter((e) => !deleted.has(e.plan_id))
       .map(addedUnitPlanToParsed);
     return [...base, ...added];
   }, [activeFileFloorPlansByPage, activePageView, activeFloorPlanOverrides]);
 
   const activeFileAllUnitPlans = useMemo<ParsedFloorPlan[]>(() => {
+    const deleted = getDeletedPlanIds(activeFloorPlanOverrides);
     const out: ParsedFloorPlan[] = [];
     for (const plans of activeFileFloorPlansByPage.values()) {
       for (const p of plans) {
-        if (p.type === "unit_floor_plan") out.push(p);
+        if (p.type === "unit_floor_plan" && !deleted.has(p.plan_id)) out.push(p);
       }
     }
     for (const entry of getAddedUnitPlans(activeFloorPlanOverrides)) {
-      out.push(addedUnitPlanToParsed(entry));
+      if (!deleted.has(entry.plan_id)) out.push(addedUnitPlanToParsed(entry));
     }
     return out;
   }, [activeFileFloorPlansByPage, activeFloorPlanOverrides]);
 
   const activeFileAllLevelPlans = useMemo<ParsedFloorPlan[]>(() => {
+    const deleted = getDeletedPlanIds(activeFloorPlanOverrides);
     const out: ParsedFloorPlan[] = [];
     for (const plans of activeFileFloorPlansByPage.values()) {
       for (const p of plans) {
-        if (p.type === "level_floor_plan") out.push(p);
+        if (p.type === "level_floor_plan" && !deleted.has(p.plan_id)) out.push(p);
       }
     }
     return out;
-  }, [activeFileFloorPlansByPage]);
+  }, [activeFileFloorPlansByPage, activeFloorPlanOverrides]);
+
 
   // className -> planId derived from per-plan `annotations: string[]` overrides.
   const activeAnnotationAssignments = useMemo<Record<string, string>>(() => {
