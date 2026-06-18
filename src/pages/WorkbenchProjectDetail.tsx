@@ -2582,8 +2582,8 @@ export default function WorkbenchProjectDetail() {
               ) : (
                 <div className="bg-card rounded-lg border relative [&>div]:overflow-visible">
                   <Table>
-                    <TableHeader className="bg-card">
-                      <TableRow>
+                    <TableHeader className="sticky top-0 z-20 bg-card shadow-sm">
+                      <TableRow className="bg-card">
                         <TableHead className={`${stickyHeadFirst} h-9 py-1`}>
                           <div className="inline-flex items-center gap-1.5">
                             <span>Files ({pageInfoRows.length} file{pageInfoRows.length === 1 ? "" : "s"})</span>
@@ -2614,7 +2614,7 @@ export default function WorkbenchProjectDetail() {
                           return (
                             <TableHead
                               key={name}
-                              className="text-center whitespace-nowrap h-9 py-1"
+                              className="text-center whitespace-nowrap h-9 py-1 bg-card"
                             >
                               <div className="inline-flex items-center gap-1">
                                 <Tooltip>
@@ -2664,7 +2664,7 @@ export default function WorkbenchProjectDetail() {
                             </TableHead>
                           );
                         })}
-                        <TableHead className="text-right w-[1%] whitespace-nowrap h-9 py-1">
+                        <TableHead className="text-right w-[1%] whitespace-nowrap h-9 py-1 bg-card">
                           <Button
                             variant="outline"
                             size="icon"
