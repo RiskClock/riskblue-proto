@@ -764,9 +764,16 @@ export const FileViewerModal = ({
         coordSpace: "normalized" as const,
         page: currentPage,
         shape: "rect" as const,
-        color: awpClassColor(
-          ((floorPlanOverrides ?? {})[fp.plan_id] as any)?.type || fp.type || "unknown",
-        ),
+        color: (() => {
+          const t = ((floorPlanOverrides ?? {})[fp.plan_id] as any)?.type || fp.type || "unknown";
+          return awpClassColor(
+            t === "unit_floor_plan"
+              ? "Unit Floor Plan"
+              : t === "level_floor_plan"
+                ? "Level Floor Plan"
+                : t,
+          );
+        })(),
         label: labelBase,
       });
     }
