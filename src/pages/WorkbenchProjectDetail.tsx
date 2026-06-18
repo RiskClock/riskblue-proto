@@ -4548,7 +4548,15 @@ function InstancesReportModal({
   const instancesForSpace = (space: string) =>
     expanded
       .filter((r) => (space === "__unassigned__" ? r.spaceName === null : r.spaceName === space))
-      .sort((a, b) => a.instanceId.localeCompare(b.instanceId));
+      .sort((a, b) => {
+        // Sort by base instance ID first, then by unit name (numeric-aware).
+        const baseCmp = a.annotationBaseId.localeCompare(b.annotationBaseId, undefined, { numeric: true, sensitivity: "base" });
+        if (baseCmp !== 0) return baseCmp;
+        const ua = a.unitName ?? "";
+        const ub = b.unitName ?? "";
+        return ua.localeCompare(ub, undefined, { numeric: true, sensitivity: "base" });
+      });
+
 
   // Compact table density classes (reduce row heights)
   const compactRow = "h-7";
