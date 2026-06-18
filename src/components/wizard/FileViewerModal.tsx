@@ -915,7 +915,7 @@ export const FileViewerModal = ({
                     onAddPlan={onAddPlan ? handleAddPlan : undefined}
                   />
                 </TabsContent>
-                <TabsContent value="detections" className="flex-1 overflow-hidden m-0 mt-0 flex flex-col min-h-0">
+                <TabsContent value="detections" className="flex-1 overflow-hidden m-0 mt-0 flex flex-col min-h-0 data-[state=inactive]:hidden">
                   <DetectionsPanel
                     awpClasses={awpClasses}
                     selectedClass={selectedClass}
