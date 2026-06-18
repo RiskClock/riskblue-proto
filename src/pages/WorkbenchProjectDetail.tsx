@@ -2428,14 +2428,16 @@ export default function WorkbenchProjectDetail() {
                   type="button"
                   variant="outline"
                   onClick={() => setConsolidateOpen(true)}
-                  disabled={!requestId || spannableClassesWithAnnotations.length === 0}
+                  disabled={!requestId || spannableClassesWithAnnotations.length === 0 || !hasRisersSelected}
                   title={
-                    spannableClassesWithAnnotations.length === 0
+                    !hasRisersSelected
+                      ? "Select Electrical Riser or Mechanical Riser columns to enable"
+                      : spannableClassesWithAnnotations.length === 0
                       ? "No Risers identified"
                       : "Group annotations of riser-type classes into multi-space instances before generating the threat report"
                   }
                 >
-                  Unify Riser
+                  Unify Risers
                 </Button>
                 <Button
                   type="button"
