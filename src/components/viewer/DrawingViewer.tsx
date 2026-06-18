@@ -154,15 +154,23 @@ export const DrawingViewer = forwardRef<DrawingViewerApi, DrawingViewerProps>(
     useLayoutEffect(() => {
       const el = containerRef.current;
       if (!el) return;
+      let frame = 0;
+      const updateSize = () => {
+        const next = { width: el.clientWidth, height: el.clientHeight };
+        setViewportSize((prev) =>
+          prev.width === next.width && prev.height === next.height ? prev : next,
+        );
+      };
       const ro = new ResizeObserver(() => {
-        setViewportSize({
-          width: el.clientWidth,
-          height: el.clientHeight,
-        });
+        cancelAnimationFrame(frame);
+        frame = requestAnimationFrame(updateSize);
       });
       ro.observe(el);
-      setViewportSize({ width: el.clientWidth, height: el.clientHeight });
-      return () => ro.disconnect();
+      updateSize();
+      return () => {
+        cancelAnimationFrame(frame);
+        ro.disconnect();
+      };
     }, []);
 
     // Compute CSS page size: fit to viewport for the active page (single-page mode),
