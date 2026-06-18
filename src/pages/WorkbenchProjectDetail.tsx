@@ -675,6 +675,7 @@ export default function WorkbenchProjectDetail() {
     if (!requestId || !requestSourceType) { setPageInfoRows([]); return; }
     let cancelled = false;
     const cacheKey = `riskblue:workbench-page-info:${requestId}`;
+    const projectCacheKey = projectId ? `riskblue:workbench-page-info:project:${projectId}` : null;
     let hasCachedRows = false;
     const cachedPageCounts = new Map<string, number>();
     try {
@@ -723,6 +724,7 @@ export default function WorkbenchProjectDetail() {
         setPageInfoRows(initial);
         try {
           window.localStorage.setItem(cacheKey, JSON.stringify({ rows: initial, updatedAt: Date.now() }));
+          if (projectCacheKey) window.localStorage.setItem(projectCacheKey, JSON.stringify({ rows: initial, updatedAt: Date.now() }));
         } catch {
           /* ignore cache */
         }
@@ -750,6 +752,7 @@ export default function WorkbenchProjectDetail() {
                 const next = prev.map((r) => (r.id === row.id ? { ...r, page_count: count } : r));
                 try {
                   window.localStorage.setItem(cacheKey, JSON.stringify({ rows: next, updatedAt: Date.now() }));
+                  if (projectCacheKey) window.localStorage.setItem(projectCacheKey, JSON.stringify({ rows: next, updatedAt: Date.now() }));
                 } catch {
                   /* ignore cache */
                 }
@@ -771,7 +774,7 @@ export default function WorkbenchProjectDetail() {
       }
     })();
     return () => { cancelled = true; };
-  }, [requestId, requestSourceType]);
+  }, [requestId, requestSourceType, projectId]);
 
 
 
