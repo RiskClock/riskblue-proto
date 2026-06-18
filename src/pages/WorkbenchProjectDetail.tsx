@@ -2876,7 +2876,8 @@ export default function WorkbenchProjectDetail() {
 
             {/* Survey Pages */}
             <div className="mt-6 border-t pt-6 space-y-3">
-              <div className="flex justify-center gap-2">
+              <div className="flex flex-wrap items-center justify-start gap-2">
+                <span className="text-sm font-medium text-muted-foreground mr-1">Risk Agents:</span>
                 <Button
                   type="button"
                   onClick={async () => {
