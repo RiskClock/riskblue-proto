@@ -1055,7 +1055,7 @@ function CompanyCombobox({
       <PopoverContent className="w-[--radix-popover-trigger-width] p-0" align="start">
         <Command shouldFilter={false}>
           <CommandInput placeholder="Search company..." value={query} onValueChange={setQuery} />
-          <CommandList>
+          <CommandList className="max-h-[240px] overflow-y-auto">
             <CommandEmpty>No companies found.</CommandEmpty>
             {value && (
               <CommandGroup>
