@@ -1293,7 +1293,8 @@ export default function WorkbenchProjectDetail() {
   const spaceHierarchyHasResult = !!(spaceHierarchyPayload?.parsed || spaceHierarchyPayload?.raw_text);
   const spaceHierarchyRunning =
     buildingSpace ||
-    (analysisRequest?.space_hierarchy_status === "running" && !!spaceHierarchyResponseId);
+    analysisRequest?.space_hierarchy_status === "running";
+
 
   // Accept either "physical_spaces" (legacy) or "spatial_records" (current prompt schema).
   const extractSpaces = (parsed: any): any[] => {
@@ -1320,9 +1321,51 @@ export default function WorkbenchProjectDetail() {
     return map;
   }, [spaceHierarchyPayload]);
 
+  // Unit-aware page map: "fileName::pageNumber" -> [{level, unit?}, ...].
+  // Level entries come from spatial_records.matched_sources (one per page);
+  // unit entries come from unit_templates: each page where a unit plan lives
+  // is expanded once per level the unit applies to. Falls back to pageSpaceMap
+  // for projects whose space_hierarchy_json predates unit_templates.
+  const pageSpaceUnitMap = useMemo(() => {
+    const map = new Map<string, Array<{ level: string; unit?: string }>>();
+    const parsed: any = spaceHierarchyPayload?.parsed;
+    const spaces = extractSpaces(parsed);
+    for (const sp of spaces) {
+      const name = sp?.standardized_space_name;
+      if (!name) continue;
+      for (const src of sp?.matched_sources || []) {
+        const key = `${src?.file_name}::${src?.page_number}`;
+        const arr = map.get(key) || [];
+        arr.push({ level: name });
+        map.set(key, arr);
+      }
+    }
+    const units: any[] = Array.isArray(parsed?.unit_templates) ? parsed.unit_templates : [];
+    for (const u of units) {
+      const unitName = typeof u?.unit_name === "string" ? u.unit_name : null;
+      if (!unitName) continue;
+      const levels: string[] = Array.isArray(u?.applies_to_levels) ? u.applies_to_levels.filter((l: any) => typeof l === "string") : [];
+      const sources: any[] = Array.isArray(u?.matched_sources) ? u.matched_sources : [];
+      for (const src of sources) {
+        const key = `${src?.file_name}::${src?.page_number}`;
+        const arr = map.get(key) || [];
+        // When applies_to_levels is empty, still record the unit so the
+        // detection isn't dropped — treat the unit page as its own "space".
+        if (levels.length === 0) {
+          arr.push({ level: unitName, unit: unitName });
+        } else {
+          for (const lvl of levels) arr.push({ level: lvl, unit: unitName });
+        }
+        map.set(key, arr);
+      }
+    }
+    return map;
+  }, [spaceHierarchyPayload]);
+
   const spacesForSheet = (fileName: string, pageIndex: number): string[] => {
     return pageSpaceMap.get(`${fileName}::${pageIndex}`) || [];
   };
+
 
   const hierarchyBuilt = extractSpaces(spaceHierarchyPayload?.parsed).length > 0;
 
@@ -1863,11 +1906,11 @@ export default function WorkbenchProjectDetail() {
     }
   };
 
-  // ---- Build Space Hierarchy ---------------------------------------------
+  // ---- Spatial Architect (replaces Build Space Hierarchy) ---------------
   const buildSpaceHierarchy = async () => {
     if (!requestId) return;
     if (spaceHierarchyHasResult) {
-      if (!window.confirm("Build Space Hierarchy has already run for this project. Re-run and overwrite existing results?")) {
+      if (!window.confirm("Spatial Architect has already run for this project. Re-run and overwrite existing results?")) {
         return;
       }
     }
@@ -1881,27 +1924,28 @@ export default function WorkbenchProjectDetail() {
         .from("analysis_requests")
         .update({
           space_hierarchy_json: null,
-          space_hierarchy_status: null,
+          space_hierarchy_status: "running",
           space_hierarchy_error: null,
-          space_hierarchy_updated_at: null,
+          space_hierarchy_updated_at: new Date().toISOString(),
         } as any)
         .eq("id", requestId);
       queryClient.invalidateQueries({
         queryKey: ["workbench-analysis-request", projectId],
       });
-      const { error } = await supabase.functions.invoke("build-space-hierarchy", {
-        body: { analysisRequestId: requestId, action: "start" },
+      const { data, error } = await supabase.functions.invoke("spatial-architect", {
+        body: { analysisRequestId: requestId },
         headers: { Authorization: `Bearer ${token}` },
       });
       if (error) throw error;
-      toast({ title: "Space hierarchy build started" });
+      if ((data as any)?.error) throw new Error((data as any).error);
+      toast({ title: "Spatial Architect complete" });
       queryClient.invalidateQueries({
         queryKey: ["workbench-analysis-request", projectId],
       });
     } catch (error: any) {
       toast({
         variant: "destructive",
-        title: "Could not build space hierarchy",
+        title: "Spatial Architect failed",
         description: getUserFriendlyError(error),
       });
     } finally {
@@ -1909,31 +1953,7 @@ export default function WorkbenchProjectDetail() {
     }
   };
 
-  useEffect(() => {
-    if (!requestId || !spaceHierarchyRunning || !spaceHierarchyResponseId || !session?.access_token) return;
-    let cancelled = false;
-    const poll = async () => {
-      const { error } = await supabase.functions.invoke("build-space-hierarchy", {
-        body: { analysisRequestId: requestId, action: "poll" },
-        headers: { Authorization: `Bearer ${session.access_token}` },
-      });
-      if (cancelled) return;
-      if (error) {
-        toast({
-          variant: "destructive",
-          title: "Could not check space hierarchy",
-          description: getUserFriendlyError(error),
-        });
-      }
-      await queryClient.invalidateQueries({ queryKey: ["workbench-analysis-request", projectId] });
-    };
-    const id = window.setInterval(poll, 5000);
-    poll();
-    return () => {
-      cancelled = true;
-      window.clearInterval(id);
-    };
-  }, [requestId, spaceHierarchyRunning, spaceHierarchyResponseId, session?.access_token, queryClient, projectId, toast]);
+
 
   // --- Export -----------------------------------------------------------------
   const handleExportResults = async () => {
@@ -2170,140 +2190,10 @@ export default function WorkbenchProjectDetail() {
 
         <main className="flex-1 overflow-auto">
           <div className="container mx-auto px-6 pt-0 pb-6 space-y-4">
-            {/* Action toolbar (sticky to top of scrolling main) */}
-            <div className="sticky top-0 z-40 -mx-6 px-6 py-3 bg-background border-b flex flex-wrap items-center gap-2">
-              <span className="text-sm font-medium text-muted-foreground mr-1">Agents:</span>
-              {activePhase === "extract" ? (
-                <Button size="sm" variant="destructive" onClick={stopPipeline}>
-                  <Square className="h-3.5 w-3.5 mr-1.5" /> Stop Extracting Context
-                </Button>
-              ) : (
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={() => runPipeline("extract")}
-                  disabled={!requestId || phaseRunning || totalFiles === 0}
-                >
-                  Extract Context
-                </Button>
-              )}
-              {activePhase === "triage" ? (
-                <Button size="sm" variant="destructive" onClick={stopPipeline}>
-                  <Square className="h-3.5 w-3.5 mr-1.5" /> Stop Triaging
-                </Button>
-              ) : (
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={() => runPipeline("triage")}
-                  disabled={!requestId || phaseRunning || totalFiles === 0}
-                >
-                  Triage
-                </Button>
-              )}
-              {activePhase === "analyze" ? (
-                <Button size="sm" variant="destructive" onClick={stopPipeline}>
-                  <Square className="h-3.5 w-3.5 mr-1.5" /> Stop Analyzing
-                </Button>
-              ) : (
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={() => runPipeline("analyze")}
-                  disabled={!requestId || phaseRunning || totalFiles === 0}
-                >
-                  Analyze
-                </Button>
-              )}
+            {/* Action toolbar — the Agents row lives further below in the
+                page (Scout · Vulnerability Radar · Spatial Architect · Unify
+                Riser · Threat Report · Clear All · Renumber IDs · 🐛). */}
 
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={buildSpaceHierarchy}
-                disabled={!requestId || !allFilesProcessed || spaceHierarchyRunning || phaseRunning}
-                title={
-                  !allFilesProcessed
-                    ? "All files must finish Extract Context before building the space hierarchy."
-                    : "Send extracted text to OpenAI to compile physical floor levels."
-                }
-              >
-                {spaceHierarchyRunning ? (
-                  <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />
-                ) : null}
-                {spaceHierarchyRunning ? "Building Space Hierarchy" : "Build Space Hierarchy"}
-              </Button>
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={() => setConsolidateOpen(true)}
-                disabled={!requestId || spannableClassesWithAnnotations.length === 0}
-                title={
-                  spannableClassesWithAnnotations.length === 0
-                    ? "No Risers identified"
-                    : "Group annotations of riser-type classes into multi-space instances before generating the report"
-                }
-              >
-                Consolidate Risers
-              </Button>
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={() => setInstancesReportOpen(true)}
-                disabled={!requestId || !spaceHierarchyHasResult}
-                title={
-                  !spaceHierarchyHasResult
-                    ? "Build the space hierarchy first to generate the instances report."
-                    : "Generate per-space instances report"
-                }
-              >
-                Generate Instances Report
-              </Button>
-
-              <span className="text-muted-foreground select-none">|</span>
-
-
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={() => setClearOpen(true)}
-                disabled={!requestId || phaseRunning}
-              >
-                <Trash2 className="h-4 w-4 mr-1.5" />
-                Clear All
-              </Button>
-
-              <div className="flex-1" />
-
-              {analysisRequest && totalFiles > 0 && (
-                <>
-                  {enabledCols.length > 0 && (
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => {
-                        setCleanupChecked(new Set());
-                        setCleanupOpen(true);
-                      }}
-                    >
-                      Renumber IDs
-                    </Button>
-                  )}
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() =>
-                      toast({
-                        title: "Export queued",
-                        description: "You'll receive an email with the results.",
-                      })
-                    }
-                    disabled={!requestId}
-                  >
-                    Export Results
-                  </Button>
-                </>
-              )}
-            </div>
 
             {isLoadingAnalysisRequest || (analysisRequest && isLoading) ? (
               <div className="flex items-center justify-center py-12 text-muted-foreground">
@@ -2803,7 +2693,7 @@ export default function WorkbenchProjectDetail() {
             {/* Survey Pages */}
             <div className="mt-6 border-t pt-6 space-y-3">
               <div className="flex flex-wrap items-center justify-start gap-2">
-                <span className="text-sm font-medium text-muted-foreground mr-1">Risk Agents:</span>
+                <span className="text-sm font-medium text-muted-foreground mr-1">Agents:</span>
                 <Button
                   type="button"
                   onClick={async () => {
@@ -3012,23 +2902,68 @@ export default function WorkbenchProjectDetail() {
                 <Button
                   type="button"
                   variant="outline"
-                  onClick={() => toast({ title: "Spatial Architect", description: "Not wired up yet." })}
+                  onClick={buildSpaceHierarchy}
+                  disabled={!requestId || spaceHierarchyRunning}
+                  title="Normalize Scout's per-page level/unit labels into a canonical space hierarchy."
                 >
-                  Spatial Architect
+                  {spaceHierarchyRunning ? (
+                    <>
+                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                      Architecting…
+                    </>
+                  ) : (
+                    "Spatial Architect"
+                  )}
                 </Button>
                 <Button
                   type="button"
                   variant="outline"
-                  onClick={() => toast({ title: "Unify Riser", description: "Not wired up yet." })}
+                  onClick={() => setConsolidateOpen(true)}
+                  disabled={!requestId || spannableClassesWithAnnotations.length === 0}
+                  title={
+                    spannableClassesWithAnnotations.length === 0
+                      ? "No Risers identified"
+                      : "Group annotations of riser-type classes into multi-space instances before generating the threat report"
+                  }
                 >
                   Unify Riser
                 </Button>
                 <Button
                   type="button"
                   variant="outline"
-                  onClick={() => toast({ title: "Threat Report", description: "Not wired up yet." })}
+                  onClick={() => setInstancesReportOpen(true)}
+                  disabled={!requestId || !spaceHierarchyHasResult}
+                  title={
+                    !spaceHierarchyHasResult
+                      ? "Run Spatial Architect first to generate the threat report."
+                      : "Generate per-space threat report"
+                  }
                 >
                   Threat Report
+                </Button>
+
+                <div className="flex-1" />
+
+                {analysisRequest && totalFiles > 0 && enabledCols.length > 0 && (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => {
+                      setCleanupChecked(new Set());
+                      setCleanupOpen(true);
+                    }}
+                  >
+                    Renumber IDs
+                  </Button>
+                )}
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => setClearOpen(true)}
+                  disabled={!requestId || phaseRunning}
+                >
+                  <Trash2 className="h-4 w-4 mr-2" />
+                  Clear All
                 </Button>
                 <Tooltip>
                   <TooltipTrigger asChild>
@@ -3036,7 +2971,6 @@ export default function WorkbenchProjectDetail() {
                       type="button"
                       variant="outline"
                       size="icon"
-                      className="ml-auto"
                       onClick={() => setScoutDebugOpen(true)}
                       aria-label="Scout debug"
                     >
@@ -3045,6 +2979,7 @@ export default function WorkbenchProjectDetail() {
                   </TooltipTrigger>
                   <TooltipContent side="bottom">Scout debug</TooltipContent>
                 </Tooltip>
+
               </div>
 
               {/* Raw response modal — shown when a file is picked from the Scout debug list. */}
@@ -3984,6 +3919,8 @@ export default function WorkbenchProjectDetail() {
           fileGroups={fileGroups}
           optionByName={optionByName}
           pageSpaceMap={pageSpaceMap}
+          pageSpaceUnitMap={pageSpaceUnitMap}
+
           spaceHierarchyPayload={spaceHierarchyPayload}
           projectName={project?.name || "Project"}
           enabledClassNames={enabledCols}
@@ -4292,6 +4229,7 @@ function InstancesReportModal({
   fileGroups,
   optionByName,
   pageSpaceMap,
+  pageSpaceUnitMap,
   spaceHierarchyPayload,
   projectName,
   enabledClassNames,
@@ -4303,6 +4241,7 @@ function InstancesReportModal({
   fileGroups: Array<{ file: FileRow; sheets: SheetRow[] }>;
   optionByName: Map<string, { idPrefix: string | null; category: string }>;
   pageSpaceMap: Map<string, string[]>;
+  pageSpaceUnitMap: Map<string, Array<{ level: string; unit?: string }>>;
   spaceHierarchyPayload: any | null | undefined;
   projectName: string;
   enabledClassNames: string[];
@@ -4386,11 +4325,32 @@ function InstancesReportModal({
     return m;
   }, [consolidations]);
 
+  // Resolve per-page (level, unit?) pairs. Falls back to the legacy level-only
+  // map when spatial_records lacks unit_templates (older projects).
+  const pairsForPage = (fileName: string, pageIndex: number): Array<{ level: string; unit?: string }> => {
+    const key = `${fileName}::${pageIndex}`;
+    const unitAware = pageSpaceUnitMap.get(key);
+    if (unitAware && unitAware.length > 0) return unitAware;
+    const levels = pageSpaceMap.get(key) || [];
+    return levels.map((l) => ({ level: l }));
+  };
+
+  // Encode an (level, unit?) suffix safely. Spaces -> "_". The "::" separator
+  // is reserved between level and unit, so any "::" inside the level/unit
+  // labels themselves is stripped to avoid ambiguity if anything ever splits.
+  const encodeSuffix = (level: string, unit?: string): string => {
+    const lvl = level.replace(/\s+/g, "_").replace(/::/g, "_");
+    if (!unit) return lvl;
+    const u = unit.replace(/\s+/g, "_").replace(/::/g, "_");
+    return `${lvl}::${u}`;
+  };
+
   const expanded = useMemo(() => {
     type Row = {
       annotationBaseId: string;
       instanceId: string;
       spaceName: string | null;
+      unitName: string | null;
       awpClassName: string;
       category: string;
       fileId: string;
@@ -4398,12 +4358,14 @@ function InstancesReportModal({
       nx: number;
       ny: number;
       // Stable key per logical instance — used to de-duplicate the same
-      // consolidated riser appearing across multiple pages.
+      // consolidated riser appearing across multiple pages. For unit-expanded
+      // rows, the (level, unit) pair is folded into the key so each
+      // (level, unit) expansion counts as its own logical instance.
       logicalKey: string;
     };
     const rows: Row[] = [];
 
-    // Bucket consolidated members so we emit one row per (group, space).
+    // Bucket consolidated members so we emit one row per (group, level, unit?).
     const groupedMembers = new Map<string, any[]>();
     for (const inst of instances) {
       if (enabledClassSet.size > 0 && !enabledClassSet.has(inst.awp_class_name)) continue;
@@ -4420,7 +4382,7 @@ function InstancesReportModal({
       const num = inst.instance_number ?? 0;
       const base = `${prefix}${String(num).padStart(3, "0")}`;
       const fileName = fileNameById.get(inst.file_id) || "";
-      const sps = pageSpaceMap.get(`${fileName}::${inst.page_index}`) || [];
+      const pairs = pairsForPage(fileName, inst.page_index);
       const common = {
         annotationBaseId: base,
         awpClassName: inst.awp_class_name,
@@ -4429,48 +4391,62 @@ function InstancesReportModal({
         pageIndex: inst.page_index,
         nx: Number(inst.nx) || 0,
         ny: Number(inst.ny) || 0,
-        logicalKey: `ann::${inst.id}`,
       };
-      if (sps.length === 0) {
-        rows.push({ ...common, instanceId: base, spaceName: null });
+      if (pairs.length === 0) {
+        rows.push({
+          ...common,
+          instanceId: base,
+          spaceName: null,
+          unitName: null,
+          logicalKey: `ann::${inst.id}`,
+        });
       } else {
-        for (const sp of sps) {
-          const spId = sp.replace(/\s+/g, "_");
-          rows.push({ ...common, instanceId: `${base}@${spId}`, spaceName: sp });
+        for (const p of pairs) {
+          rows.push({
+            ...common,
+            instanceId: `${base}@${encodeSuffix(p.level, p.unit)}`,
+            spaceName: p.level,
+            unitName: p.unit ?? null,
+            // Each (level, unit) expansion is its own logical instance, so an
+            // annotation on a unit plan that applies to 16 levels counts 16x.
+            logicalKey: `ann::${inst.id}::${p.level}::${p.unit ?? ""}`,
+          });
         }
       }
     }
 
-    // Emit consolidated groups: one row per (group, space) using ANY member
-    // annotation as the on-drawing anchor for that space.
+    // Emit consolidated groups: one row per (group, level, unit?) using ANY
+    // member annotation as the on-drawing anchor for that pair.
     for (const [groupKey, members] of groupedMembers) {
       if (members.length === 0) continue;
       const first = members[0];
       const opt = optionByName.get(first.awp_class_name);
       const category = opt?.category || "Other";
       const cg = consolidationByAnnId.get(first.id)!;
-      // For each unique space across all members, pick the member that lives there
-      // (so the drawing overlay anchors to that page).
-      const spaceToMember = new Map<string, any>();
+      // For each unique (level, unit?) across all members, pick the member
+      // that lives there (so the drawing overlay anchors to that page).
+      const pairToMember = new Map<string, { member: any; pair: { level: string; unit?: string } }>();
       const unassignedMembers: any[] = [];
       for (const m of members) {
         const fname = fileNameById.get(m.file_id) || "";
-        const sps = pageSpaceMap.get(`${fname}::${m.page_index}`) || [];
-        if (sps.length === 0) {
+        const pairs = pairsForPage(fname, m.page_index);
+        if (pairs.length === 0) {
           unassignedMembers.push(m);
         } else {
-          for (const sp of sps) {
-            if (!spaceToMember.has(sp)) spaceToMember.set(sp, m);
+          for (const p of pairs) {
+            const k = `${p.level}::${p.unit ?? ""}`;
+            if (!pairToMember.has(k)) pairToMember.set(k, { member: m, pair: p });
           }
         }
       }
-      if (spaceToMember.size === 0 && unassignedMembers.length === 0) continue;
-      if (spaceToMember.size === 0) {
+      if (pairToMember.size === 0 && unassignedMembers.length === 0) continue;
+      if (pairToMember.size === 0) {
         const m = unassignedMembers[0];
         rows.push({
           annotationBaseId: cg.label,
           instanceId: cg.label,
           spaceName: null,
+          unitName: null,
           awpClassName: first.awp_class_name,
           category,
           fileId: m.file_id,
@@ -4480,25 +4456,27 @@ function InstancesReportModal({
           logicalKey: `cons::${groupKey}`,
         });
       } else {
-        for (const [sp, m] of spaceToMember) {
+        for (const [k, { member, pair }] of pairToMember) {
           rows.push({
             annotationBaseId: cg.label,
             instanceId: cg.label,
-            spaceName: sp,
+            spaceName: pair.level,
+            unitName: pair.unit ?? null,
             awpClassName: first.awp_class_name,
             category,
-            fileId: m.file_id,
-            pageIndex: m.page_index,
-            nx: Number(m.nx) || 0,
-            ny: Number(m.ny) || 0,
-            logicalKey: `cons::${groupKey}`,
+            fileId: member.file_id,
+            pageIndex: member.page_index,
+            nx: Number(member.nx) || 0,
+            ny: Number(member.ny) || 0,
+            logicalKey: `cons::${groupKey}::${k}`,
           });
         }
       }
     }
 
     return rows;
-  }, [instances, optionByName, fileNameById, pageSpaceMap, enabledClassSet, consolidationByAnnId]);
+  }, [instances, optionByName, fileNameById, pageSpaceMap, pageSpaceUnitMap, enabledClassSet, consolidationByAnnId]);
+
 
   const spaceList = useMemo(() => {
     const set = new Set<string>();
@@ -4571,7 +4549,15 @@ function InstancesReportModal({
   const instancesForSpace = (space: string) =>
     expanded
       .filter((r) => (space === "__unassigned__" ? r.spaceName === null : r.spaceName === space))
-      .sort((a, b) => a.instanceId.localeCompare(b.instanceId));
+      .sort((a, b) => {
+        // Sort by base instance ID first, then by unit name (numeric-aware).
+        const baseCmp = a.annotationBaseId.localeCompare(b.annotationBaseId, undefined, { numeric: true, sensitivity: "base" });
+        if (baseCmp !== 0) return baseCmp;
+        const ua = a.unitName ?? "";
+        const ub = b.unitName ?? "";
+        return ua.localeCompare(ub, undefined, { numeric: true, sensitivity: "base" });
+      });
+
 
   // Compact table density classes (reduce row heights)
   const compactRow = "h-7";
@@ -4714,6 +4700,7 @@ function InstancesReportModal({
     const pageKeys = Array.from(
       new Set(rows.map((r) => `${r.fileId}::${r.pageIndex}`)),
     );
+    const showUnitCol = rows.some((r) => !!r.unitName);
     return (
       <div className="space-y-4">
         <h3 className="text-sm font-semibold">{label}</h3>
@@ -4722,6 +4709,7 @@ function InstancesReportModal({
             <TableRow className={compactRow}>
               <TableHead className={compactHead}>Instance ID</TableHead>
               <TableHead className={compactHead}>Class</TableHead>
+              {showUnitCol && <TableHead className={compactHead}>Unit</TableHead>}
               <TableHead className={compactHead}>Annotation ID</TableHead>
               <TableHead className={compactHead}>Source</TableHead>
             </TableRow>
@@ -4731,6 +4719,9 @@ function InstancesReportModal({
               <TableRow key={`${r.instanceId}-${i}`} className={compactRow}>
                 <TableCell className={`${compactCell} font-mono`}>{r.instanceId}</TableCell>
                 <TableCell className={compactCell}>{r.awpClassName}</TableCell>
+                {showUnitCol && (
+                  <TableCell className={compactCell}>{r.unitName ?? "—"}</TableCell>
+                )}
                 <TableCell className={`${compactCell} font-mono text-muted-foreground`}>
                   {r.annotationBaseId}
                 </TableCell>
@@ -4741,6 +4732,7 @@ function InstancesReportModal({
             ))}
           </TableBody>
         </Table>
+
         <div className="space-y-6">
           {pageKeys.map((key) => {
             const [fileId, pageIdxStr] = key.split("::");
@@ -4814,9 +4806,10 @@ function InstancesReportModal({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-[95vw] w-[95vw] sm:max-w-[95vw]">
         <DialogHeader>
-          <DialogTitle>Risk Instance Report</DialogTitle>
+          <DialogTitle>Threat Report</DialogTitle>
           <DialogDescription>
-            Annotations expanded into per-space instance IDs based on the Space Hierarchy.
+            Annotations expanded into per-space instance IDs. Unit floor-plan detections are expanded once per level the unit applies to (e.g. WS001@L05::UnitA).
+
           </DialogDescription>
         </DialogHeader>
         <div className="grid grid-cols-[220px_1fr] gap-4 max-h-[70vh]">
