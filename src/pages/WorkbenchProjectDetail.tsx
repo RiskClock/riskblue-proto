@@ -324,14 +324,15 @@ export default function WorkbenchProjectDetail() {
       let sheetId = (sheetRes.data as any)?.id ?? null;
       let overrides = (sheetRes.data as any)?.floor_plan_overrides;
       // Lazily create a sheet row so the user can place floor-plan boxes
-      // before Scout runs (Scout will reuse the row via upsert later).
-      if (!sheetId && requestId) {
+      // before Scout runs (Scout upserts on the same (file, page) pair).
+      const reqId = requestIdRef.current;
+      if (!sheetId && reqId) {
         const fileName = activePageView.file.name || "file";
         const { data: created, error: createErr } = await supabase
           .from("analysis_request_sheets")
           .upsert(
             {
-              analysis_request_id: requestId,
+              analysis_request_id: reqId,
               parent_file_id: fileId,
               page_index: page,
               name: `${fileName} · page ${page}`,
@@ -353,7 +354,7 @@ export default function WorkbenchProjectDetail() {
       );
     })();
     return () => { cancelled = true; };
-  }, [activePageView, requestId]);
+  }, [activePageView]);
 
   const activeFileFloorPlansByPage = useMemo(
     () => parseSurveyFloorPlans(activeFileSurveyRaw),
