@@ -227,12 +227,9 @@ export function CreateAnalysisModal({ open, onOpenChange, onCreated }: CreateAna
           .update({ status: "copied", total_size_bytes: totalBytes })
           .eq("id", requestId);
 
-        // Auto-trigger split phase (bounded — no downstream agents).
-        supabase.functions
-          .invoke("run-analysis-pipeline", {
-            body: { analysisRequestId: requestId, phaseOverride: "split" },
-          })
-          .catch((e) => console.error("[create-analysis] auto-split kickoff failed", e));
+        // Note: auto-split on analysis creation was removed. The user must
+        // trigger splitting explicitly from the workbench.
+
       }
 
       toast({ title: "Analysis Created", description: `Project "${name.trim()}" created successfully.` });

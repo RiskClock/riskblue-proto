@@ -173,12 +173,19 @@ export function findContainingUnitPlan(
 
 // ---- User-added (no-bbox) unit floor plans -------------------------------
 // Stored in analysis_request_sheets.floor_plan_overrides under the reserved
-// key "__added_unit_plans": Array<{ plan_id, reference_id, page_number }>.
+// key "__added_unit_plans". Schema (backwards-compatible):
+//   { plan_id, reference_id, page_number,
+//     type?: "unit_floor_plan" | "level_floor_plan",
+//     bbox_pct?: [x, y, w, h],
+//     name?: string }
 
 export interface AddedUnitPlanEntry {
   plan_id: string;
   reference_id: string;
   page_number: number;
+  type?: FloorPlanType;
+  bbox_pct?: [number, number, number, number] | null;
+  name?: string | null;
 }
 
 export const ADDED_UNIT_PLANS_KEY = "__added_unit_plans";
@@ -204,9 +211,9 @@ export function getAddedUnitPlans(
 export function addedUnitPlanToParsed(entry: AddedUnitPlanEntry): ParsedFloorPlan {
   return {
     plan_id: entry.plan_id,
-    type: "unit_floor_plan",
+    type: entry.type || "unit_floor_plan",
     reference_id: entry.reference_id,
-    xy_width_height_pct: null,
+    xy_width_height_pct: entry.bbox_pct ?? null,
     page_number: entry.page_number,
     floors: [],
     referenced_unit_ids: [],
@@ -250,6 +257,16 @@ export function getEffectiveLabel(
   const name = typeof ovr?.name === "string" && ovr.name.trim() ? ovr.name.trim() : null;
   if (name) return name;
   return floorPlanDisplayLabel(fp);
+}
+
+export function getEffectiveType(
+  fp: ParsedFloorPlan,
+  overrides: Record<string, any> | null | undefined,
+): FloorPlanType {
+  const ovr = overrides?.[fp.plan_id];
+  const t = ovr?.type;
+  if (typeof t === "string" && t) return t;
+  return fp.type;
 }
 
 

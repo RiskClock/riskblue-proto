@@ -266,14 +266,9 @@ const ProjectWizardContent = () => {
         })
         .eq("id", analysisRequest.id);
 
-      // 5. Auto-trigger split phase only if new files were added
-      if (addedCount > 0) {
-        supabase.functions
-          .invoke("run-analysis-pipeline", {
-            body: { analysisRequestId: analysisRequest.id, phaseOverride: "split" },
-          })
-          .catch((e) => console.error("[wizard] auto-split kickoff failed", e));
-      }
+      // Note: auto-split on upload was removed. The user must trigger the
+      // splitting phase explicitly from the workbench.
+
 
       // 6. Log activity
       logActivity("manual_drawings_upload", id, {

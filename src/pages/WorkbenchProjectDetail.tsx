@@ -391,7 +391,7 @@ export default function WorkbenchProjectDetail() {
 
   const saveFloorPlanOverride = async (
     planId: string,
-    next: { floors?: string[]; units?: string[]; annotations?: string[] },
+    next: Record<string, any>,
   ) => {
     if (!activeSheetIdForPage) {
       toast({
@@ -503,6 +503,49 @@ export default function WorkbenchProjectDetail() {
       toast({
         variant: "destructive",
         title: "Could not delete floor plan",
+        description: getUserFriendlyError(error),
+      });
+    }
+  };
+
+  // Add a manually-created floor plan (with bounding box) to the current page.
+  const addFloorPlan = async (args: {
+    type: "level_floor_plan" | "unit_floor_plan";
+    name: string;
+    bbox_pct: [number, number, number, number];
+  }) => {
+    if (!activePageView || !activeSheetIdForPage) {
+      toast({
+        variant: "destructive",
+        title: "Cannot add floor plan",
+        description: "No sheet row exists yet for this page.",
+      });
+      return;
+    }
+    const page = activePageView.page;
+    const planId = makeAddedUnitPlanId(args.name || "plan", page);
+    const next: Record<string, any> = { ...activeFloorPlanOverrides };
+    const existingAdded = Array.isArray(next[ADDED_UNIT_PLANS_KEY])
+      ? (next[ADDED_UNIT_PLANS_KEY] as any[])
+      : [];
+    const entry = {
+      plan_id: planId,
+      reference_id: args.name,
+      page_number: page,
+      type: args.type,
+      bbox_pct: args.bbox_pct,
+      name: args.name,
+    };
+    next[ADDED_UNIT_PLANS_KEY] = [...existingAdded, entry];
+    setActiveFloorPlanOverrides(next);
+    const { error } = await supabase
+      .from("analysis_request_sheets")
+      .update({ floor_plan_overrides: next } as any)
+      .eq("id", activeSheetIdForPage);
+    if (error) {
+      toast({
+        variant: "destructive",
+        title: "Could not add floor plan",
         description: getUserFriendlyError(error),
       });
     }
@@ -803,33 +846,9 @@ export default function WorkbenchProjectDetail() {
     );
   }, [rows]);
 
-  // Auto-trigger split phase if files exist with zero sheets and the
-  // pipeline isn't currently running. Acts as a safety net — uploads
-  // also invoke split immediately, but this catches legacy/imported
-  // projects where split was never run. Stops at split; downstream
-  // phases (extract/triage/analyze) are user-initiated only.
-  const autoSplitInvokedRef = useRef<Set<string>>(new Set());
-  useEffect(() => {
-    if (!requestId || !rows) return;
-    if (rows.files.length === 0) return;
-    if (rows.sheets.length > 0) return;
-    if (analysisRequest?.pipeline_phase) return; // already running
-    if (autoSplitInvokedRef.current.has(requestId)) return;
-    autoSplitInvokedRef.current.add(requestId);
-    supabase.functions
-      .invoke("run-analysis-pipeline", {
-        body: { analysisRequestId: requestId, phaseOverride: "split" },
-      })
-      .then(() => {
-        queryClient.invalidateQueries({ queryKey: ["workbench-rows", requestId] });
-        queryClient.invalidateQueries({
-          queryKey: ["workbench-analysis-request", projectId],
-        });
-      })
-      .catch((e) => {
-        console.error("[workbench] auto-split failed", e);
-      });
-  }, [requestId, rows, analysisRequest?.pipeline_phase, queryClient, projectId]);
+  // Note: auto-split on upload/import was removed. The splitting (and any
+  // downstream phases) must be triggered explicitly by the user.
+
 
   // Prewarm PDFs into the shared cache so opening the viewer is instant.
   useEffect(() => {
@@ -3535,9 +3554,7 @@ export default function WorkbenchProjectDetail() {
               fileGroups.map((g) => [g.file.id, g.file.name]),
             )}
             onInstancesChanged={() => {
-              queryClient.invalidateQueries({
-                queryKey: ["workbench-instances", requestId],
-              });
+              queryClient.refetchQueries({ queryKey: ["workbench-instances", requestId] });
             }}
             persistKey={projectId}
             expandedClasses={sidebarExpandedClasses}
@@ -3571,9 +3588,7 @@ export default function WorkbenchProjectDetail() {
               fileGroups.map((g) => [g.file.id, g.file.name]),
             )}
             onInstancesChanged={() => {
-              queryClient.invalidateQueries({
-                queryKey: ["workbench-instances", requestId],
-              });
+              queryClient.refetchQueries({ queryKey: ["workbench-instances", requestId] });
             }}
             persistKey={projectId}
             expandedClasses={sidebarExpandedClasses}
@@ -3625,9 +3640,11 @@ export default function WorkbenchProjectDetail() {
             expandedClasses={sidebarExpandedClasses}
             onExpandedClassesChange={setSidebarExpandedClasses}
             riskElementClasses={activeFileRiskClasses}
-            annotationAssignments={activeAnnotationAssignments}
-            onAssignAnnotation={assignAnnotationToPlan}
             onDeletePlan={deleteFloorPlan}
+            onAddPlan={addFloorPlan}
+            onInstancesChanged={() => {
+              queryClient.refetchQueries({ queryKey: ["workbench-instances", requestId] });
+            }}
           />
 
         )}

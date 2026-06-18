@@ -251,15 +251,9 @@ export function CreateProjectModal({ open, onOpenChange, onCreated }: CreateProj
             })
             .eq("id", req.id);
 
-          // Auto-trigger split phase so workbench shows "ready" without
-          // requiring the user to open the project. Bounded to split only.
-          if (copied > 0) {
-            supabase.functions
-              .invoke("run-analysis-pipeline", {
-                body: { analysisRequestId: req.id, phaseOverride: "split" },
-              })
-              .catch((e) => console.error("[create-project] auto-split kickoff failed", e));
-          }
+          // Note: auto-split on project creation was removed. The user must
+          // start splitting explicitly from the workbench.
+
         })();
       }
 

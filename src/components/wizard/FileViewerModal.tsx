@@ -131,6 +131,7 @@ interface FileViewerModalProps {
       annotations?: string[];
       bbox_pct?: [number, number, number, number] | null;
       name?: string | null;
+      type?: string | null;
     },
   ) => Promise<void> | void;
   /** Page-level handler that opens SpaceEditModal scoped to a plan. */
@@ -140,11 +141,17 @@ interface FileViewerModalProps {
   /** Delete a floor plan entirely (parsed plans go to `__deleted_plan_ids`,
    *  added unit plans are removed from `__added_unit_plans`). */
   onDeletePlan?: (planId: string) => Promise<void> | void;
+  /** Add a manually-created floor plan with a default bounding box. */
+  onAddPlan?: (args: {
+    type: "level_floor_plan" | "unit_floor_plan";
+    name: string;
+    bbox_pct: [number, number, number, number];
+  }) => Promise<void> | void;
   /** AWP class names that have risk_element_results for this file. */
   riskElementClasses?: string[];
-  /** Map of className -> planId (assignment). Missing => Unassigned. */
+  /** @deprecated — assignments are no longer used. Kept for API compat. */
   annotationAssignments?: Record<string, string>;
-  /** Reassign an annotation (class) to a plan, or to null to unassign. */
+  /** @deprecated — assignments are no longer used. Kept for API compat. */
   onAssignAnnotation?: (className: string, planId: string | null) => Promise<void> | void;
 }
 
@@ -186,6 +193,7 @@ export const FileViewerModal = ({
   onEditFloors,
   onEditLevelUnits,
   onDeletePlan,
+  onAddPlan,
   riskElementClasses,
   annotationAssignments,
   onAssignAnnotation,
@@ -252,10 +260,14 @@ export const FileViewerModal = ({
     planId: string;
     bbox: [number, number, number, number]; // pct 0..100
     name: string;
+    type: string;
     origBbox: [number, number, number, number];
     origName: string;
+    origType: string;
   };
   const [editingPlan, setEditingPlan] = useState<EditingPlanState | null>(null);
+  const editingPlanRef = useRef<EditingPlanState | null>(null);
+  useEffect(() => { editingPlanRef.current = editingPlan; }, [editingPlan]);
   const [activeTab, setActiveTab] = useState<"floor-plans" | "detections">("floor-plans");
   const [confirmExit, setConfirmExit] = useState<null | {
     kind: "tab" | "close";
@@ -268,6 +280,7 @@ export const FileViewerModal = ({
   const isEditingDirty = !!(
     editingPlan &&
     (editingPlan.name !== editingPlan.origName ||
+      editingPlan.type !== editingPlan.origType ||
       editingPlan.bbox.some((v, i) => v !== editingPlan.origBbox[i]))
   );
 
@@ -284,17 +297,44 @@ export const FileViewerModal = ({
     setEditingPlan(null);
   }, [currentPage, fileId]);
 
+  const savePlanEdit = useCallback(async () => {
+    const cur = editingPlanRef.current;
+    if (!cur || !onSaveFloorPlanOverride) return;
+    await onSaveFloorPlanOverride(cur.planId, {
+      bbox_pct: cur.bbox,
+      name: cur.name.trim() || null,
+      type: cur.type,
+    });
+    setEditingPlan(null);
+  }, [onSaveFloorPlanOverride]);
+
   const enterPlanEdit = useCallback(
-    (fp: ParsedFloorPlan) => {
-      if (editingPlan) return; // only one at a time
+    async (fp: ParsedFloorPlan) => {
+      // If another row is being edited, auto-save it first.
+      const prev = editingPlanRef.current;
+      if (prev && prev.planId !== fp.plan_id) {
+        if (
+          prev.name !== prev.origName ||
+          prev.type !== prev.origType ||
+          prev.bbox.some((v, i) => v !== prev.origBbox[i])
+        ) {
+          await savePlanEdit();
+        }
+      } else if (prev && prev.planId === fp.plan_id) {
+        return;
+      }
       const bb = getEffectiveBbox(fp, floorPlanOverrides ?? {}) ?? [25, 25, 50, 50];
       const name = getEffectiveLabel(fp, floorPlanOverrides ?? {});
+      const ovrType = (floorPlanOverrides as any)?.[fp.plan_id]?.type;
+      const type = (typeof ovrType === "string" && ovrType) ? ovrType : fp.type || "level_floor_plan";
       const state: EditingPlanState = {
         planId: fp.plan_id,
         bbox: [bb[0], bb[1], bb[2], bb[3]],
         name,
+        type,
         origBbox: [bb[0], bb[1], bb[2], bb[3]],
         origName: name,
+        origType: type,
       };
       setEditingPlan(state);
       // Conditional auto-scroll: only if the bbox is completely off-screen.
@@ -327,19 +367,30 @@ export const FileViewerModal = ({
         }
       });
     },
-    [editingPlan, floorPlanOverrides],
+    [floorPlanOverrides, savePlanEdit],
   );
 
   const cancelPlanEdit = useCallback(() => setEditingPlan(null), []);
 
-  const savePlanEdit = useCallback(async () => {
-    if (!editingPlan || !onSaveFloorPlanOverride) return;
-    await onSaveFloorPlanOverride(editingPlan.planId, {
-      bbox_pct: editingPlan.bbox,
-      name: editingPlan.name.trim() || null,
+  const handleAddPlan = useCallback(async () => {
+    if (!onAddPlan) return;
+    // Auto-save any in-progress edit first.
+    const prev = editingPlanRef.current;
+    if (prev) {
+      await savePlanEdit();
+    }
+    // Default name: "New Floor Plan N" where N is next index among existing plans.
+    const existingNames = (floorPlans ?? []).map((fp) =>
+      getEffectiveLabel(fp, floorPlanOverrides ?? {}),
+    );
+    let n = 1;
+    while (existingNames.includes(`New Floor Plan ${n}`)) n++;
+    await onAddPlan({
+      type: "level_floor_plan",
+      name: `New Floor Plan ${n}`,
+      bbox_pct: [30, 30, 40, 40],
     });
-    setEditingPlan(null);
-  }, [editingPlan, onSaveFloorPlanOverride]);
+  }, [onAddPlan, floorPlans, floorPlanOverrides, savePlanEdit]);
 
   // Guard tab/close transitions when there are unsaved edits.
   const guardThen = useCallback(
@@ -713,7 +764,9 @@ export const FileViewerModal = ({
         coordSpace: "normalized" as const,
         page: currentPage,
         shape: "rect" as const,
-        color: awpClassColor(fp.type || "unknown"),
+        color: awpClassColor(
+          ((floorPlanOverrides ?? {})[fp.plan_id] as any)?.type || fp.type || "unknown",
+        ),
         label: labelBase,
       });
     }
@@ -828,33 +881,32 @@ export const FileViewerModal = ({
                   forceMount
                   className="flex-1 min-h-0 m-0 mt-0 overflow-hidden data-[state=inactive]:hidden"
                 >
-                  <div className="h-full overflow-y-auto">
-                    <FloorPlansPanel
-                      floorPlans={floorPlans ?? []}
-                      allUnitPlans={allUnitPlans ?? []}
-                      allLevelPlans={allLevelPlans ?? []}
-                      overrides={floorPlanOverrides ?? {}}
-                      onSaveOverride={onSaveFloorPlanOverride}
-                      onEditFloors={onEditFloors}
-                      onEditLevelUnits={onEditLevelUnits}
-                      annotationAssignments={annotationAssignments ?? {}}
-                      onAssignAnnotation={onAssignAnnotation}
-                      instancesOnPage={Array.from(instancesByClassThisFile.values()).flat()}
-                      numberByInstanceId={numberByInstanceId}
-                      instanceLabel={instanceLabel}
-                      editingPlan={editingPlan}
-                      onEnterEdit={enterPlanEdit}
-                      onCancelEdit={cancelPlanEdit}
-                      onSaveEdit={savePlanEdit}
-                      onEditingNameChange={(name) =>
-                        setEditingPlan((p) => (p ? { ...p, name } : p))
-                      }
-                      onRequestDelete={(planId, label) =>
-                        setConfirmDelete({ planId, label })
-                      }
-                    />
-
-                  </div>
+                  <FloorPlansPanel
+                    floorPlans={floorPlans ?? []}
+                    allUnitPlans={allUnitPlans ?? []}
+                    allLevelPlans={allLevelPlans ?? []}
+                    overrides={floorPlanOverrides ?? {}}
+                    onSaveOverride={onSaveFloorPlanOverride}
+                    onEditFloors={onEditFloors}
+                    onEditLevelUnits={onEditLevelUnits}
+                    instancesOnPage={Array.from(instancesByClassThisFile.values()).flat()}
+                    numberByInstanceId={numberByInstanceId}
+                    instanceLabel={instanceLabel}
+                    editingPlan={editingPlan}
+                    onEnterEdit={enterPlanEdit}
+                    onCancelEdit={cancelPlanEdit}
+                    onSaveEdit={savePlanEdit}
+                    onEditingNameChange={(name) =>
+                      setEditingPlan((p) => (p ? { ...p, name } : p))
+                    }
+                    onEditingTypeChange={(t) =>
+                      setEditingPlan((p) => (p ? { ...p, type: t } : p))
+                    }
+                    onRequestDelete={(planId, label) =>
+                      setConfirmDelete({ planId, label })
+                    }
+                    onAddPlan={onAddPlan ? handleAddPlan : undefined}
+                  />
                 </TabsContent>
                 <TabsContent value="detections" className="flex-1 overflow-hidden m-0 mt-0 flex flex-col min-h-0">
                   <DetectionsPanel
@@ -1200,8 +1252,10 @@ interface EditingPlanShape {
   planId: string;
   bbox: [number, number, number, number];
   name: string;
+  type: string;
   origBbox: [number, number, number, number];
   origName: string;
+  origType: string;
 }
 
 interface FloorPlansPanelProps {
@@ -1217,6 +1271,7 @@ interface FloorPlansPanelProps {
       annotations?: string[];
       bbox_pct?: [number, number, number, number] | null;
       name?: string | null;
+      type?: string | null;
     },
   ) => Promise<void> | void;
   onEditFloors?: (planId: string, currentFloors: string[]) => void;
@@ -1225,25 +1280,21 @@ interface FloorPlansPanelProps {
   instancesOnPage?: DrawingInstanceRow[];
   numberByInstanceId?: Map<string, number>;
   instanceLabel?: (i: DrawingInstanceRow) => string;
-  /** Map of instance_id -> planId (explicit assignment). */
-  annotationAssignments: Record<string, string>;
-  /** Reassign one annotation (by instance_id) to a plan, or null to unassign. */
-  onAssignAnnotation?: (annotationKey: string, planId: string | null) => Promise<void> | void;
   /** Bbox-edit integration. */
   editingPlan?: EditingPlanShape | null;
   onEnterEdit?: (fp: ParsedFloorPlan) => void;
   onCancelEdit?: () => void;
   onSaveEdit?: () => void | Promise<void>;
   onEditingNameChange?: (name: string) => void;
+  onEditingTypeChange?: (type: string) => void;
   onRequestDelete?: (planId: string, label: string) => void;
+  onAddPlan?: () => void | Promise<void>;
 }
 
 const FloorPlansPanel = ({
   floorPlans,
   allLevelPlans,
   overrides,
-  annotationAssignments,
-  onAssignAnnotation,
   onEditLevelUnits,
   instancesOnPage = [],
   numberByInstanceId,
@@ -1253,7 +1304,9 @@ const FloorPlansPanel = ({
   onCancelEdit,
   onSaveEdit,
   onEditingNameChange,
+  onEditingTypeChange,
   onRequestDelete,
+  onAddPlan,
 }: FloorPlansPanelProps) => {
 
   // For a unit floor plan, list the pages of level plans that reference it.
@@ -1272,28 +1325,19 @@ const FloorPlansPanel = ({
       .map((p) => `Page ${p}`);
   };
 
-  // Group per-instance annotations by plan. An explicit override (instance_id
-  // present in a plan's `annotations` array) wins; otherwise fall back to
-  // bbox containment of the marker's (nx, ny) on this page.
-  const planIdSet = new Set(floorPlans.map((p) => p.plan_id));
+  // Compute per-plan annotation membership purely by bbox containment of the
+  // marker's center point. There are no manual assignments — the report
+  // generator does the same calculation at output time.
   const annotationsByPlan = new Map<string, DrawingInstanceRow[]>();
-  const unassigned: DrawingInstanceRow[] = [];
-  const resolvedAssignment = (inst: DrawingInstanceRow): string | null => {
-    const explicit = annotationAssignments[inst.id];
-    if (explicit && planIdSet.has(explicit)) return explicit;
-    // Don't auto-place if the user explicitly unassigned (key present but empty)
-    if (explicit === "") return null;
-    const auto = findContainingPlan(floorPlans, inst.nx, inst.ny);
-    return auto ? auto.plan_id : null;
-  };
+  const orphaned: DrawingInstanceRow[] = [];
   for (const inst of instancesOnPage) {
-    const pid = resolvedAssignment(inst);
-    if (pid) {
-      const arr = annotationsByPlan.get(pid) ?? [];
+    const containing = findContainingPlan(floorPlans, inst.nx, inst.ny);
+    if (containing) {
+      const arr = annotationsByPlan.get(containing.plan_id) ?? [];
       arr.push(inst);
-      annotationsByPlan.set(pid, arr);
+      annotationsByPlan.set(containing.plan_id, arr);
     } else {
-      unassigned.push(inst);
+      orphaned.push(inst);
     }
   }
   const sortInstances = (rows: DrawingInstanceRow[]) =>
@@ -1306,35 +1350,8 @@ const FloorPlansPanel = ({
       return na - nb;
     });
 
-  const handleDragStart = (e: React.DragEvent, instanceId: string) => {
-    e.dataTransfer.setData("text/x-annotation-id", instanceId);
-    e.dataTransfer.effectAllowed = "move";
-  };
-  const handleDropOnPlan = (e: React.DragEvent, planId: string | null) => {
-    e.preventDefault();
-    const id = e.dataTransfer.getData("text/x-annotation-id");
-    if (!id || !onAssignAnnotation) return;
-    const current = resolvedAssignment(
-      instancesOnPage.find((i) => i.id === id) as DrawingInstanceRow,
-    );
-    if (current === planId) return;
-    void onAssignAnnotation(id, planId);
-  };
-  const allowDrop = (e: React.DragEvent) => {
-    if (e.dataTransfer.types.includes("text/x-annotation-id")) {
-      e.preventDefault();
-      e.dataTransfer.dropEffect = "move";
-    }
-  };
-
   const renderAnnotations = (rows: DrawingInstanceRow[]) => {
-    if (rows.length === 0) {
-      return (
-        <div className="text-[10px] italic text-muted-foreground px-1 py-0.5">
-          No annotations.
-        </div>
-      );
-    }
+    if (rows.length === 0) return null;
     return (
       <div className="flex flex-wrap gap-1">
         {sortInstances(rows).map((inst) => {
@@ -1345,19 +1362,14 @@ const FloorPlansPanel = ({
           return (
             <div
               key={inst.id}
-              draggable={!!onAssignAnnotation}
-              onDragStart={(e) => handleDragStart(e, inst.id)}
-              className="inline-flex items-center gap-1 pl-1 pr-1.5 py-0.5 rounded text-[10px] font-medium cursor-grab active:cursor-grabbing border"
+              className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium border"
               style={{
                 backgroundColor: c,
                 color: readableTextOn(c),
                 borderColor: c,
               }}
-              title={`Drag to another floor plan to reassign · ${label}`}
+              title={label}
             >
-              {onAssignAnnotation && (
-                <GripVertical className="h-2.5 w-2.5 opacity-70" />
-              )}
               {label}
             </div>
           );
@@ -1367,202 +1379,219 @@ const FloorPlansPanel = ({
   };
 
   return (
-    <div className="p-2 space-y-2">
-      {/* Unassigned bucket */}
-      {instancesOnPage.length > 0 && (
-        <div
-          className="border border-dashed rounded-md p-2 space-y-1 bg-muted/20"
-          onDragOver={allowDrop}
-          onDrop={(e) => handleDropOnPlan(e, null)}
-        >
-          <div className="text-[11px] font-medium text-muted-foreground">
-            Unassigned annotations ({unassigned.length})
-          </div>
-          {renderAnnotations(unassigned)}
-        </div>
-      )}
-
-      {floorPlans.map((fp) => {
-        const ovr = overrides[fp.plan_id] ?? {};
-        const effFloors = ovr.floors ?? fp.floors;
-        const effUnits: string[] = ovr.units ?? fp.referenced_unit_ids;
-        const color = awpClassColor(fp.type || "unknown");
-        const fallbackLabel = getEffectiveLabel(fp, overrides) ||
-          floorPlanDisplayLabel({ ...fp, floors: effFloors });
-        const isUnit = fp.type === "unit_floor_plan";
-        const isLevel = fp.type === "level_floor_plan";
-        const referencedIn = isUnit ? findReferencingLevels(fp) : [];
-        const planAnns = annotationsByPlan.get(fp.plan_id) ?? [];
-        const isEditingThis = editingPlan?.planId === fp.plan_id;
-        const anyEditing = !!editingPlan;
-        const disabledRow = anyEditing && !isEditingThis;
-        const displayLabel = isEditingThis ? editingPlan!.name : fallbackLabel;
-
-        return (
-          <div
-            key={fp.plan_id}
-            className={`border rounded-md p-2 space-y-2 bg-card ${
-              isEditingThis ? "ring-2 ring-primary/40" : ""
-            } ${disabledRow ? "opacity-50" : ""}`}
-            onDragOver={allowDrop}
-            onDrop={(e) => handleDropOnPlan(e, fp.plan_id)}
-          >
-            <div className="flex items-center gap-2 min-w-0">
-              <span
-                className="h-2.5 w-2.5 rounded-sm shrink-0"
-                style={{ backgroundColor: color, border: `1px solid ${color}` }}
-              />
-              {isEditingThis ? (
-                <Input
-                  value={editingPlan!.name}
-                  onChange={(e) => onEditingNameChange?.(e.target.value)}
-                  className="h-7 text-sm flex-1 min-w-0"
-                  placeholder="Plan name"
-                  autoFocus
-                />
-              ) : (
-                <span
-                  className="font-medium text-sm truncate flex-1"
-                  title={displayLabel}
-                >
-                  {displayLabel}
-                </span>
-              )}
-              <span className="text-[10px] uppercase tracking-wide text-muted-foreground shrink-0">
-                {fp.type.replace(/_/g, " ")}
-              </span>
-              {!isEditingThis && onRequestDelete && !anyEditing && (
-                <button
-                  type="button"
-                  onClick={() => onRequestDelete(fp.plan_id, fallbackLabel)}
-                  className="shrink-0 text-muted-foreground hover:text-destructive p-0.5 rounded hover:bg-muted/50"
-                  title="Delete floor plan"
-                  aria-label="Delete floor plan"
-                >
-                  <XIcon className="h-3.5 w-3.5" />
-                </button>
-              )}
+    <div className="h-full flex flex-col min-h-0">
+      <div className="flex-1 min-h-0 overflow-y-auto p-2 space-y-2">
+        {/* Orphaned bucket — markers whose center falls outside every plan bbox. */}
+        {orphaned.length > 0 && (
+          <div className="border border-dashed rounded-md p-2 space-y-1 bg-muted/20">
+            <div className="text-[11px] font-medium text-muted-foreground">
+              Orphaned annotations ({orphaned.length})
             </div>
+            {renderAnnotations(orphaned)}
+          </div>
+        )}
 
-            {onEnterEdit && (
-              <div className="flex items-center gap-1">
+        {floorPlans.map((fp) => {
+          const ovr = overrides[fp.plan_id] ?? {};
+          const effFloors = ovr.floors ?? fp.floors;
+          const effUnits: string[] = ovr.units ?? fp.referenced_unit_ids;
+          const effType: string =
+            (typeof ovr.type === "string" && ovr.type) ? ovr.type : fp.type;
+          const color = awpClassColor(effType || "unknown");
+          const fallbackLabel = getEffectiveLabel(fp, overrides) ||
+            floorPlanDisplayLabel({ ...fp, floors: effFloors });
+          const isUnit = effType === "unit_floor_plan";
+          const isLevel = effType === "level_floor_plan";
+          const referencedIn = isUnit ? findReferencingLevels(fp) : [];
+          const planAnns = annotationsByPlan.get(fp.plan_id) ?? [];
+          const isEditingThis = editingPlan?.planId === fp.plan_id;
+          const displayLabel = isEditingThis ? editingPlan!.name : fallbackLabel;
+          const displayType = isEditingThis ? editingPlan!.type : effType;
+
+          return (
+            <div
+              key={fp.plan_id}
+              className={`border rounded-md p-2 space-y-2 bg-card ${
+                isEditingThis ? "ring-2 ring-primary/40" : ""
+              }`}
+            >
+              <div className="flex items-center gap-2 min-w-0">
+                <span
+                  className="h-2.5 w-2.5 rounded-sm shrink-0"
+                  style={{ backgroundColor: color, border: `1px solid ${color}` }}
+                />
                 {isEditingThis ? (
-                  <>
-                    <Button
-                      type="button"
-                      size="sm"
-                      className="h-6 px-2 text-[11px]"
-                      onClick={() => void onSaveEdit?.()}
-                    >
-                      Done
-                    </Button>
-                    <Button
-                      type="button"
-                      size="sm"
-                      variant="ghost"
-                      className="h-6 px-2 text-[11px]"
-                      onClick={() => onCancelEdit?.()}
-                    >
-                      Cancel
-                    </Button>
-                  </>
+                  <Input
+                    value={editingPlan!.name}
+                    onChange={(e) => onEditingNameChange?.(e.target.value)}
+                    className="h-7 text-sm flex-1 min-w-0"
+                    placeholder="Plan name"
+                  />
                 ) : (
-                  <Button
-                    type="button"
-                    size="sm"
-                    variant="outline"
-                    className="h-6 px-2 text-[11px]"
-                    disabled={disabledRow}
-                    onClick={() => onEnterEdit(fp)}
+                  <span
+                    className="font-medium text-sm truncate flex-1"
+                    title={displayLabel}
                   >
-                    Edit Bounding Box
-                  </Button>
+                    {displayLabel}
+                  </span>
+                )}
+                {isEditingThis ? (
+                  <select
+                    value={displayType}
+                    onChange={(e) => onEditingTypeChange?.(e.target.value)}
+                    className="text-[10px] h-7 border rounded px-1 bg-background shrink-0"
+                  >
+                    <option value="level_floor_plan">Level floor plan</option>
+                    <option value="unit_floor_plan">Unit floor plan</option>
+                  </select>
+                ) : (
+                  <span className="text-[10px] uppercase tracking-wide text-muted-foreground shrink-0">
+                    {(displayType || "").replace(/_/g, " ")}
+                  </span>
+                )}
+                {!isEditingThis && onRequestDelete && (
+                  <button
+                    type="button"
+                    onClick={() => onRequestDelete(fp.plan_id, fallbackLabel)}
+                    className="shrink-0 text-muted-foreground hover:text-destructive p-0.5 rounded hover:bg-muted/50"
+                    title="Delete floor plan"
+                    aria-label="Delete floor plan"
+                  >
+                    <XIcon className="h-3.5 w-3.5" />
+                  </button>
                 )}
               </div>
-            )}
 
-
-
-            {isLevel && (
-              <div className="space-y-1">
-                <div className="flex items-center justify-between gap-2">
-                  <div className="text-[10px] uppercase tracking-wide text-muted-foreground">
-                    Units ({effUnits.length})
-                  </div>
-                  {onEditLevelUnits && (
+              {onEnterEdit && (
+                <div className="flex items-center gap-1">
+                  {isEditingThis ? (
+                    <>
+                      <Button
+                        type="button"
+                        size="sm"
+                        className="h-6 px-2 text-[11px]"
+                        onClick={() => void onSaveEdit?.()}
+                      >
+                        Done
+                      </Button>
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="ghost"
+                        className="h-6 px-2 text-[11px]"
+                        onClick={() => onCancelEdit?.()}
+                      >
+                        Cancel
+                      </Button>
+                    </>
+                  ) : (
                     <Button
                       type="button"
                       size="sm"
-                      variant="ghost"
-                      className="h-6 px-1.5 text-[10px] gap-1"
-                      onClick={() => onEditLevelUnits(fp, effUnits)}
+                      variant="outline"
+                      className="h-6 px-2 text-[11px]"
+                      onClick={() => void onEnterEdit(fp)}
                     >
-                      <Plus className="h-3 w-3" />
-                      Add / edit
+                      Edit Bounding Box
                     </Button>
                   )}
                 </div>
-                {effUnits.length === 0 ? (
-                  <div className="text-[10px] italic text-muted-foreground px-1 py-0.5">
-                    No units assigned.
-                  </div>
-                ) : (
-                  <div className="flex flex-wrap gap-1">
-                    {effUnits.map((u) => {
-                      const uc = awpClassColor("unit_floor_plan");
-                      return (
-                        <span
-                          key={u}
-                          className="px-1.5 py-0.5 rounded text-[10px] font-medium border"
-                          style={{
-                            backgroundColor: uc,
-                            color: readableTextOn(uc),
-                            borderColor: uc,
-                          }}
-                        >
-                          {u}
-                        </span>
-                      );
-                    })}
-                  </div>
-                )}
-              </div>
-            )}
+              )}
 
-            {isUnit && (
-              <div className="flex items-start gap-1 text-[11px] text-muted-foreground">
-                <span className="font-medium shrink-0">Referenced in:</span>
-                {referencedIn.length === 0 ? (
-                  <span className="italic">none</span>
-                ) : (
-                  <div className="flex flex-wrap gap-1">
-                    {referencedIn.map((r) => (
-                      <span
-                        key={r}
-                        className="px-1.5 py-0.5 rounded bg-muted text-foreground text-[10px] font-mono"
+              {isLevel && (
+                <div className="space-y-1">
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="text-[10px] uppercase tracking-wide text-muted-foreground">
+                      Units ({effUnits.length})
+                    </div>
+                    {onEditLevelUnits && (
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="ghost"
+                        className="h-6 px-1.5 text-[10px] gap-1"
+                        onClick={() => onEditLevelUnits(fp, effUnits)}
                       >
-                        {r}
-                      </span>
-                    ))}
+                        <Plus className="h-3 w-3" />
+                        Add / edit
+                      </Button>
+                    )}
                   </div>
-                )}
-              </div>
-            )}
+                  {effUnits.length === 0 ? (
+                    <div className="text-[10px] italic text-muted-foreground px-1 py-0.5">
+                      No units assigned.
+                    </div>
+                  ) : (
+                    <div className="flex flex-wrap gap-1">
+                      {effUnits.map((u) => {
+                        const uc = awpClassColor("unit_floor_plan");
+                        return (
+                          <span
+                            key={u}
+                            className="px-1.5 py-0.5 rounded text-[10px] font-medium border"
+                            style={{
+                              backgroundColor: uc,
+                              color: readableTextOn(uc),
+                              borderColor: uc,
+                            }}
+                          >
+                            {u}
+                          </span>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              )}
 
-            {instancesOnPage.length > 0 && (
+              {isUnit && (
+                <div className="flex items-start gap-1 text-[11px] text-muted-foreground">
+                  <span className="font-medium shrink-0">Referenced in:</span>
+                  {referencedIn.length === 0 ? (
+                    <span className="italic">none</span>
+                  ) : (
+                    <div className="flex flex-wrap gap-1">
+                      {referencedIn.map((r) => (
+                        <span
+                          key={r}
+                          className="px-1.5 py-0.5 rounded bg-muted text-foreground text-[10px] font-mono"
+                        >
+                          {r}
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+
               <div className="space-y-1">
-                <div className="text-[10px] uppercase tracking-wide text-muted-foreground">
+                <div className="text-[10px] font-medium text-muted-foreground">
                   Annotations ({planAnns.length})
                 </div>
                 {renderAnnotations(planAnns)}
               </div>
-            )}
+            </div>
+          );
+        })}
+        {floorPlans.length === 0 && instancesOnPage.length === 0 && (
+          <div className="text-xs text-muted-foreground italic p-2">
+            No floor plan info available.
           </div>
-        );
-      })}
-      {floorPlans.length === 0 && instancesOnPage.length === 0 && (
-        <div className="text-xs text-muted-foreground italic p-2">
-          No floor plan info available.
+        )}
+      </div>
+
+      {onAddPlan && (
+        <div className="border-t p-2 shrink-0 bg-background">
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            className="w-full h-8 text-xs gap-1"
+            onClick={() => void onAddPlan()}
+          >
+            <Plus className="h-3.5 w-3.5" />
+            Add Floor Plan Bounding Box
+          </Button>
         </div>
       )}
     </div>
