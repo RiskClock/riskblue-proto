@@ -975,6 +975,7 @@ export const FileViewerModal = ({
                     pastLen={past.length}
                     futureLen={future.length}
                     floorPlans={floorPlans}
+                    floorPlanOverrides={floorPlanOverrides ?? {}}
                   />
                 </TabsContent>
               </Tabs>
@@ -1172,6 +1173,7 @@ const DetectionsPanel = ({
   futureLen,
   withHeader,
   floorPlans,
+  floorPlanOverrides = {},
 }: DetectionsPanelProps) => {
   const showPlanBadges = (floorPlans?.length ?? 0) > 1;
   return (
@@ -1254,7 +1256,7 @@ const DetectionsPanel = ({
                       .map((i) => {
                         const containingPlan =
                           showPlanBadges && floorPlans
-                            ? findContainingPlan(floorPlans, i.nx, i.ny)
+                            ? findContainingPlan(floorPlans, i.nx, i.ny, floorPlanOverrides)
                             : null;
                         const planLabel = containingPlan
                           ? floorPlanDisplayLabel(containingPlan)
