@@ -1053,9 +1053,13 @@ function CompanyCombobox({
         </Button>
       </PopoverTrigger>
       <PopoverContent className="w-[--radix-popover-trigger-width] p-0" align="start">
-        <Command shouldFilter={false}>
+        <Command shouldFilter={false} className="max-h-[320px]">
           <CommandInput placeholder="Search company..." value={query} onValueChange={setQuery} />
-          <CommandList className="max-h-[240px] overflow-y-auto">
+          <CommandList
+            className="max-h-[240px] overflow-y-auto overscroll-contain"
+            onWheel={(e) => e.stopPropagation()}
+            onTouchMove={(e) => e.stopPropagation()}
+          >
             <CommandEmpty>No companies found.</CommandEmpty>
             {value && (
               <CommandGroup>
