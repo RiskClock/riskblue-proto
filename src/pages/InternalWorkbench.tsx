@@ -501,17 +501,6 @@ export default function InternalWorkbench() {
                   emptyLabel="No creators"
                 />
               </div>
-              <div>
-                <Label className="text-xs uppercase text-muted-foreground">
-                  Status
-                </Label>
-                <ChecklistGroup
-                  options={statusOptions}
-                  selected={filterStatuses}
-                  onChange={setFilterStatuses}
-                  emptyLabel="No statuses"
-                />
-              </div>
             </PopoverContent>
           </Popover>
         </div>
@@ -589,13 +578,6 @@ export default function InternalWorkbench() {
               </TableHeader>
               <TableBody>
                 {filteredSorted.map((p) => {
-                  const baseLabel = p.status ? statusLabels[p.status] || p.status : "New";
-                  const label =
-                    p.status === "processing" && p.pipeline_phase && phaseLabels[p.pipeline_phase]
-                      ? phaseLabels[p.pipeline_phase].split(" ")[0] // e.g. "Splitting", "Extracting"
-                      : baseLabel;
-                  const colorClass = p.status ? statusColors[p.status] || "" : "";
-
                   return (
                     <TableRow
                       key={p.id}
