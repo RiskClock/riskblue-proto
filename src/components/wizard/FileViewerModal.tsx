@@ -1694,4 +1694,98 @@ const FloorPlansPanel = ({
   );
 };
 
+interface UnitsAddPopoverProps {
+  existingRefs: string[];
+  currentUnits: string[];
+  onAdd: (ref: string, isNew: boolean) => Promise<void> | void;
+}
+
+const UnitsAddPopover = ({
+  existingRefs,
+  currentUnits,
+  onAdd,
+}: UnitsAddPopoverProps) => {
+  const [open, setOpen] = useState(false);
+  const [query, setQuery] = useState("");
+  const available = existingRefs.filter((r) => !currentUnits.includes(r));
+  const filtered = query.trim()
+    ? available.filter((r) => r.toLowerCase().includes(query.trim().toLowerCase()))
+    : available;
+  const q = query.trim();
+  const showCreate =
+    q.length > 0 &&
+    !currentUnits.some((u) => u.toLowerCase() === q.toLowerCase()) &&
+    !existingRefs.some((r) => r.toLowerCase() === q.toLowerCase());
+
+  const handleSelect = async (ref: string, isNew: boolean) => {
+    setOpen(false);
+    setQuery("");
+    await onAdd(ref, isNew);
+  };
+
+  return (
+    <Popover
+      open={open}
+      onOpenChange={(o) => {
+        setOpen(o);
+        if (!o) setQuery("");
+      }}
+    >
+      <PopoverTrigger asChild>
+        <Button
+          type="button"
+          size="sm"
+          variant="ghost"
+          className="h-6 px-1.5 text-[10px] gap-1"
+        >
+          <Plus className="h-3 w-3" />
+          Add
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent align="end" className="w-56 p-0">
+        <Command shouldFilter={false}>
+          <CommandInput
+            placeholder="Search or add unit…"
+            value={query}
+            onValueChange={setQuery}
+            className="h-8 text-xs"
+          />
+          <CommandList className="max-h-56">
+            {filtered.length === 0 && !showCreate && (
+              <CommandEmpty>No units.</CommandEmpty>
+            )}
+            {filtered.length > 0 && (
+              <CommandGroup>
+                {filtered.map((r) => (
+                  <CommandItem
+                    key={r}
+                    value={r}
+                    onSelect={() => void handleSelect(r, false)}
+                    className="text-xs"
+                  >
+                    {r}
+                  </CommandItem>
+                ))}
+              </CommandGroup>
+            )}
+            {showCreate && (
+              <CommandGroup>
+                <CommandItem
+                  value={`__create_${q}`}
+                  onSelect={() => void handleSelect(q, true)}
+                  className="text-xs"
+                >
+                  <Plus className="h-3 w-3 mr-1.5" />
+                  Create "{q}"
+                </CommandItem>
+              </CommandGroup>
+            )}
+          </CommandList>
+        </Command>
+      </PopoverContent>
+    </Popover>
+  );
+};
+
+
 
