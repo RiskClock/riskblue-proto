@@ -30,8 +30,19 @@ function hslToHex(h: number, s: number, l: number): string {
   return `#${toHex(f(0))}${toHex(f(8))}${toHex(f(4))}`;
 }
 
+// Fixed overrides for floor-plan badges: the hashed hues for both labels
+// happen to land in similar greens. Pick vivid, visibly distinct hex values
+// so Unit vs Level plans are unambiguous in badges and bbox strokes.
+const COLOR_OVERRIDES: Record<string, string> = {
+  "unit floor plan": "#f92ad5",
+  "level floor plan": "#39b52e",
+};
+
 export function awpClassColor(name: string): string {
-  const hue = hashStr(name.toLowerCase()) % 360;
+  const key = name.trim().toLowerCase();
+  const override = COLOR_OVERRIDES[key];
+  if (override) return override;
+  const hue = hashStr(key) % 360;
   // Lightness at 45% gives vivid, distinguishable colors across hues.
   return hslToHex(hue, 70, 45);
 }

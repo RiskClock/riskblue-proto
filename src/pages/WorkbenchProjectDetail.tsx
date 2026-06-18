@@ -16,6 +16,7 @@ import {
   Square,
   Trash2,
   Upload,
+  Bug,
 } from "lucide-react";
 
 import { supabase } from "@/integrations/supabase/client";
@@ -222,6 +223,7 @@ export default function WorkbenchProjectDetail() {
   const [surveyRawText, setSurveyRawText] = useState<string>("");
   const [surveyRecoveredRun, setSurveyRecoveredRun] = useState(false);
   const [surveyResponseModal, setSurveyResponseModal] = useState<{ fileName: string; raw: string } | null>(null);
+  const [scoutDebugOpen, setScoutDebugOpen] = useState(false);
 
   const [spaceModalOpen, setSpaceModalOpen] = useState(false);
   const [buildingSpace, setBuildingSpace] = useState(false);
@@ -2799,80 +2801,7 @@ export default function WorkbenchProjectDetail() {
 
 
 
-            {/* Upload Report - compact, bottom-right */}
-            <div className="flex items-center justify-end gap-3">
-              <input
-                ref={reportInputRef}
-                type="file"
-                className="hidden"
-                onChange={async (e) => {
-                  const file = e.target.files?.[0];
-                  e.target.value = "";
-                  if (!file || !projectId) return;
-                  setUploadingReport(true);
-                  try {
-                    const safeName = file.name.replace(/[^\w.\-]+/g, "_");
-                    const path = `${projectId}/report-${Date.now()}-${safeName}`;
-                    const { error: upErr } = await supabase.storage
-                      .from("project-reports")
-                      .upload(path, file, { upsert: true, contentType: file.type || undefined });
-                    if (upErr) throw upErr;
-                    const prevPath = (project as any)?.report_file_path as string | null | undefined;
-                    const { error: updErr } = await supabase
-                      .from("projects")
-                      .update({ report_file_path: path, report_file_name: file.name } as any)
-                      .eq("id", projectId);
-                    if (updErr) throw updErr;
-                    if (prevPath && prevPath !== path) {
-                      await supabase.storage.from("project-reports").remove([prevPath]);
-                    }
-                    queryClient.invalidateQueries({ queryKey: ["workbench-project", projectId] });
-                    toast({ title: "Report uploaded", description: file.name });
-                  } catch (err: any) {
-                    toast({ variant: "destructive", title: "Upload failed", description: getUserFriendlyError(err) });
-                  } finally {
-                    setUploadingReport(false);
-                  }
-                }}
-              />
-              {(project as any)?.report_file_name ? (
-                <button
-                  type="button"
-                  className="text-sm text-primary hover:underline truncate text-right max-w-[40ch]"
-                  onClick={async () => {
-                    const path = (project as any)?.report_file_path;
-                    if (!path) return;
-                    const { data, error } = await supabase.storage
-                      .from("project-reports")
-                      .createSignedUrl(path, 60, {
-                        download: (project as any)?.report_file_name || true,
-                      });
-                    if (error || !data?.signedUrl) {
-                      toast({ variant: "destructive", title: "Download failed", description: getUserFriendlyError(error) });
-                      return;
-                    }
-                    window.open(data.signedUrl, "_blank");
-                  }}
-                >
-                  {(project as any).report_file_name}
-                </button>
-              ) : (
-                <span className="text-sm text-muted-foreground">No report uploaded yet.</span>
-              )}
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={() => reportInputRef.current?.click()}
-                disabled={uploadingReport}
-              >
-                {uploadingReport ? (
-                  <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />
-                ) : (
-                  <Upload className="h-3.5 w-3.5 mr-1.5" />
-                )}
-                Upload Report
-              </Button>
-            </div>
+            {/* Upload Report moved below the Pages by File table. */}
 
             {/* Survey Pages */}
             <div className="mt-6 border-t pt-6 space-y-3">
@@ -3103,6 +3032,21 @@ export default function WorkbenchProjectDetail() {
                 >
                   Threat Report
                 </Button>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      className="ml-auto"
+                      onClick={() => setScoutDebugOpen(true)}
+                      aria-label="Scout debug"
+                    >
+                      <Bug className="h-4 w-4" />
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent side="bottom">Scout debug</TooltipContent>
+                </Tooltip>
               </div>
 
 
@@ -3156,6 +3100,50 @@ export default function WorkbenchProjectDetail() {
                     value={surveyResponseModal?.raw ?? ""}
                     className="font-mono text-xs flex-1 min-h-0 resize-none"
                   />
+                </DialogContent>
+              </Dialog>
+
+              {/* Scout debug modal — shows raw + metadata for the latest scout call */}
+              <Dialog open={scoutDebugOpen} onOpenChange={setScoutDebugOpen}>
+                <DialogContent className="max-w-[85vw] w-[85vw] h-[85vh] flex flex-col">
+                  <DialogHeader>
+                    <DialogTitle>Scout responses</DialogTitle>
+                  </DialogHeader>
+                  {(() => {
+                    const scoutFiles = (rows?.files ?? [])
+                      .filter((f) => (f.survey_raw_response ?? "").trim().length > 0)
+                      .slice()
+                      .sort((a, b) => {
+                        const au = (a as any).survey_raw_updated_at ?? "";
+                        const bu = (b as any).survey_raw_updated_at ?? "";
+                        return bu.localeCompare(au);
+                      });
+                    if (scoutFiles.length === 0) {
+                      return (
+                        <div className="flex-1 flex items-center justify-center text-sm text-muted-foreground">
+                          No Scout responses yet. Run Scout to populate.
+                        </div>
+                      );
+                    }
+                    const latest = scoutFiles[0];
+                    const updatedAt = (latest as any).survey_raw_updated_at as string | null;
+                    return (
+                      <div className="flex-1 min-h-0 flex flex-col gap-2">
+                        <div className="text-xs text-muted-foreground grid grid-cols-2 gap-x-4 gap-y-1">
+                          <div><span className="font-medium text-foreground">File:</span> {latest.name}</div>
+                          <div><span className="font-medium text-foreground">Model:</span> google/gemini-2.5-pro</div>
+                          <div><span className="font-medium text-foreground">Updated:</span> {updatedAt ? new Date(updatedAt).toLocaleString() : "—"}</div>
+                          <div><span className="font-medium text-foreground">Length:</span> {(latest.survey_raw_response ?? "").length.toLocaleString()} chars</div>
+                          <div><span className="font-medium text-foreground">Total files with responses:</span> {scoutFiles.length}</div>
+                        </div>
+                        <Textarea
+                          readOnly
+                          value={latest.survey_raw_response ?? ""}
+                          className="font-mono text-xs flex-1 min-h-0 resize-none"
+                        />
+                      </div>
+                    );
+                  })()}
                 </DialogContent>
               </Dialog>
             </div>
@@ -3506,6 +3494,81 @@ export default function WorkbenchProjectDetail() {
                   </Table>
                 </div>
               )}
+            </div>
+
+            {/* Upload Report - moved below Pages by File table */}
+            <div className="flex items-center justify-end gap-3 mt-4">
+              <input
+                ref={reportInputRef}
+                type="file"
+                className="hidden"
+                onChange={async (e) => {
+                  const file = e.target.files?.[0];
+                  e.target.value = "";
+                  if (!file || !projectId) return;
+                  setUploadingReport(true);
+                  try {
+                    const safeName = file.name.replace(/[^\w.\-]+/g, "_");
+                    const path = `${projectId}/report-${Date.now()}-${safeName}`;
+                    const { error: upErr } = await supabase.storage
+                      .from("project-reports")
+                      .upload(path, file, { upsert: true, contentType: file.type || undefined });
+                    if (upErr) throw upErr;
+                    const prevPath = (project as any)?.report_file_path as string | null | undefined;
+                    const { error: updErr } = await supabase
+                      .from("projects")
+                      .update({ report_file_path: path, report_file_name: file.name } as any)
+                      .eq("id", projectId);
+                    if (updErr) throw updErr;
+                    if (prevPath && prevPath !== path) {
+                      await supabase.storage.from("project-reports").remove([prevPath]);
+                    }
+                    queryClient.invalidateQueries({ queryKey: ["workbench-project", projectId] });
+                    toast({ title: "Report uploaded", description: file.name });
+                  } catch (err: any) {
+                    toast({ variant: "destructive", title: "Upload failed", description: getUserFriendlyError(err) });
+                  } finally {
+                    setUploadingReport(false);
+                  }
+                }}
+              />
+              {(project as any)?.report_file_name ? (
+                <button
+                  type="button"
+                  className="text-sm text-primary hover:underline truncate text-right max-w-[40ch]"
+                  onClick={async () => {
+                    const path = (project as any)?.report_file_path;
+                    if (!path) return;
+                    const { data, error } = await supabase.storage
+                      .from("project-reports")
+                      .createSignedUrl(path, 60, {
+                        download: (project as any)?.report_file_name || true,
+                      });
+                    if (error || !data?.signedUrl) {
+                      toast({ variant: "destructive", title: "Download failed", description: getUserFriendlyError(error) });
+                      return;
+                    }
+                    window.open(data.signedUrl, "_blank");
+                  }}
+                >
+                  {(project as any).report_file_name}
+                </button>
+              ) : (
+                <span className="text-sm text-muted-foreground">No report uploaded yet.</span>
+              )}
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => reportInputRef.current?.click()}
+                disabled={uploadingReport}
+              >
+                {uploadingReport ? (
+                  <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />
+                ) : (
+                  <Upload className="h-3.5 w-3.5 mr-1.5" />
+                )}
+                Upload Report
+              </Button>
             </div>
 
 

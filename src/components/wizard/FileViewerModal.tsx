@@ -268,7 +268,16 @@ export const FileViewerModal = ({
   const [editingPlan, setEditingPlan] = useState<EditingPlanState | null>(null);
   const editingPlanRef = useRef<EditingPlanState | null>(null);
   useEffect(() => { editingPlanRef.current = editingPlan; }, [editingPlan]);
-  const [activeTab, setActiveTab] = useState<"floor-plans" | "detections">("floor-plans");
+  const ACTIVE_TAB_STORAGE_KEY = "fileViewer.activeTab";
+  const [activeTab, setActiveTab] = useState<"floor-plans" | "detections">(() => {
+    if (typeof window === "undefined") return "floor-plans";
+    const stored = window.localStorage.getItem(ACTIVE_TAB_STORAGE_KEY);
+    return stored === "detections" || stored === "floor-plans" ? stored : "floor-plans";
+  });
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    window.localStorage.setItem(ACTIVE_TAB_STORAGE_KEY, activeTab);
+  }, [activeTab]);
   const [confirmExit, setConfirmExit] = useState<null | {
     kind: "tab" | "close";
     next: () => void;
@@ -284,11 +293,11 @@ export const FileViewerModal = ({
       editingPlan.bbox.some((v, i) => v !== editingPlan.origBbox[i]))
   );
 
-  // Reset editor state when modal closes or page changes
+  // Reset editor state when modal closes or page changes. Do NOT reset
+  // activeTab here — we want it preserved across modal opens.
   useEffect(() => {
     if (!isOpen) {
       setEditingPlan(null);
-      setActiveTab("floor-plans");
       setConfirmExit(null);
       setConfirmDelete(null);
     }
@@ -557,6 +566,15 @@ export const FileViewerModal = ({
   // full multi-page parent PDF, instances live on whatever page the user is
   // currently on.
   const effectivePage = sheetId ? pageIndex : currentPage;
+  // After mutating annotations, drop focus from the just-clicked overlay/list
+  // button. Otherwise Radix's DismissableLayer treats the first scrim click as
+  // "refocus the previously focused element" and the user has to click a
+  // second time before the dialog closes.
+  const blurActive = () => {
+    if (typeof document === "undefined") return;
+    const el = document.activeElement as HTMLElement | null;
+    if (el && typeof el.blur === "function") el.blur();
+  };
 
   // ---- User-initiated actions ---------------------------------------------
   const handleCanvasClick = async (nx: number, ny: number) => {
@@ -571,6 +589,7 @@ export const FileViewerModal = ({
     setInstances((prev) => [...prev, row]);
     setPast((p) => [...p, { type: "add", instance: row }]);
     setFuture([]);
+    blurActive();
   };
 
   const handleOverlayClick = async (overlayId: string) => {
@@ -583,6 +602,7 @@ export const FileViewerModal = ({
     setInstances((prev) => prev.filter((i) => i.id !== inst.id));
     setPast((p) => [...p, { type: "delete", instance: inst }]);
     setFuture([]);
+    blurActive();
   };
 
   const handleDeleteFromList = async (id: string) => {
@@ -593,6 +613,7 @@ export const FileViewerModal = ({
     setInstances((prev) => prev.filter((i) => i.id !== id));
     setPast((p) => [...p, { type: "delete", instance: inst }]);
     setFuture([]);
+    blurActive();
   };
 
   // ---- Undo / redo --------------------------------------------------------
