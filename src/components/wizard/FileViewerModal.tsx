@@ -612,6 +612,7 @@ export const FileViewerModal = ({
     setInstances((prev) => [...prev, row]);
     setPast((p) => [...p, { type: "add", instance: row }]);
     setFuture([]);
+    if (activeTab !== "detections") setActiveTab("detections");
     blurActive();
   };
 
