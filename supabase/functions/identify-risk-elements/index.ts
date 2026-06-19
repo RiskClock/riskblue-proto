@@ -4,7 +4,7 @@
 // systemInstruction; the cache stays neutral so multiple agents can share it.
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { GoogleGenAI } from "npm:@google/genai@0.21.0";
+import { GoogleGenAI } from "npm:@google/genai@2.8.0";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
