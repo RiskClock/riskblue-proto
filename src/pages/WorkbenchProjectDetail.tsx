@@ -787,7 +787,7 @@ export default function WorkbenchProjectDetail() {
       const [filesRes, sheetsRes] = await Promise.all([
         supabase
           .from("analysis_request_files")
-          .select("id, name, extracted_text, storage_path, mime_type, survey_raw_response, survey_raw_updated_at")
+          .select("id, name, extracted_text, storage_path, mime_type, survey_raw_response, survey_raw_updated_at, risk_element_results")
           .eq("analysis_request_id", requestId!)
           .order("name"),
 
