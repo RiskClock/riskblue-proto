@@ -1610,11 +1610,7 @@ const FloorPlansPanel = ({
                       />
                     )}
                   </div>
-                  {effUnits.length === 0 ? (
-                    <div className="text-[10px] italic text-muted-foreground px-1 py-0.5">
-                      No units assigned.
-                    </div>
-                  ) : (
+                  {effUnits.length > 0 && (
                     <div className="flex flex-wrap gap-1">
                       {effUnits.map((u) => {
                         const uc = awpClassColor("Unit Floor Plan");
