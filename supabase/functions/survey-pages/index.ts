@@ -226,6 +226,7 @@ Deno.serve(async (req) => {
           const genConfig: any = {
             temperature: 0,
             responseMimeType: "application/json",
+            responseSchema: ScoutPipelinePayloadSchema,
           };
           if (cacheName) genConfig.cachedContent = cacheName;
           else genConfig.systemInstruction = systemPrompt;
