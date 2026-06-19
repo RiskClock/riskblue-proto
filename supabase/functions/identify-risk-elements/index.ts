@@ -218,6 +218,23 @@ Deno.serve(async (req) => {
                 ?.map((p: any) => p?.text ?? "")
                 .join("") ??
               "";
+            const usage = (resp as any)?.usageMetadata ?? (resp as any)?.response?.usageMetadata ?? null;
+            const promptTokens = usage?.promptTokenCount ?? null;
+            const cachedTokens = usage?.cachedContentTokenCount ?? 0;
+            const candidatesTokens = usage?.candidatesTokenCount ?? null;
+            const totalTokens = usage?.totalTokenCount ?? null;
+            const cacheHitPct =
+              promptTokens && promptTokens > 0
+                ? Math.round((Number(cachedTokens) / Number(promptTokens)) * 100)
+                : 0;
+            console.log(
+              `[identify-risk-elements][usage] file=${fileName} class=${className} cache=${cacheName ? "PRESENT" : "MISSING"} promptTokens=${promptTokens} cachedContentTokens=${cachedTokens} (${cacheHitPct}% cache hit) candidatesTokens=${candidatesTokens} totalTokens=${totalTokens} rawUsage=${JSON.stringify(usage)}`,
+            );
+            if (!cachedTokens || cachedTokens === 0) {
+              console.warn(
+                `[identify-risk-elements][cache-miss] file=${fileName} class=${className} — cachedContentTokenCount is 0/absent. Verify cachedContent="${cacheName}" was accepted.`,
+              );
+            }
             return { className, ok: true as const, text };
           } catch (err: any) {
             return { className, ok: false as const, error: err?.message ?? String(err) };
