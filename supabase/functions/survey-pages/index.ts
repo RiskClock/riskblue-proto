@@ -214,40 +214,95 @@ Deno.serve(async (req) => {
         // request setting system_instruction"). When the cache is in use, fold
         // the system prompt into the user message instead so the sterile cache
         // remains reusable.
-        const genConfig: any = {};
-        if (cacheName) genConfig.cachedContent = cacheName;
-        else genConfig.systemInstruction = systemPrompt;
+        // Run survey in PARALLEL CHUNKS of 10 pages against the warm cache.
+        // gemini-3.5 rejects systemInstruction alongside cachedContent, so
+        // when the cache is in use we fold the system prompt into the user
+        // message instead. Each chunk asks for a specific page range so the
+        // model never gets fatigued on long documents and schema stays clean.
+        const CHUNK_SIZE = 10;
 
-        const tailText =
-          `File: ${fileName}\nReturn ONLY the strict JSON array requested above. ` +
-          `Every surveyed_pages item MUST include a page_number matching the source PDF page number.`;
+        const runChunk = async (startPage: number, endPage: number) => {
+          const genConfig: any = {};
+          if (cacheName) genConfig.cachedContent = cacheName;
+          else genConfig.systemInstruction = systemPrompt;
 
-        const userParts: any[] = cacheName
-          ? [
-              { text: `Instructions:\n${systemPrompt}` },
-              { text: tailText },
-            ]
-          : [
-              { fileData: { fileUri, mimeType: fileMime } },
-              { text: tailText },
-            ];
+          const tailText =
+            `File: ${fileName}\n` +
+            `Process ONLY pages ${startPage} through ${endPage} of the source PDF (inclusive). ` +
+            `Ignore all other pages. ` +
+            `Return ONLY the strict JSON array requested above. ` +
+            `Every surveyed_pages item MUST include a page_number matching the source PDF page number, ` +
+            `and every page_number MUST fall within ${startPage}..${endPage}.`;
 
-        const genResp = await ai.models.generateContent({
-          model: GEMINI_MODEL,
-          contents: [{ role: "user", parts: userParts }],
-          config: genConfig,
-        });
+          const userParts: any[] = cacheName
+            ? [
+                { text: `Instructions:\n${systemPrompt}` },
+                { text: tailText },
+              ]
+            : [
+                { fileData: { fileUri, mimeType: fileMime } },
+                { text: tailText },
+              ];
 
+          const resp = await ai.models.generateContent({
+            model: GEMINI_MODEL,
+            contents: [{ role: "user", parts: userParts }],
+            config: genConfig,
+          });
 
-        const rawText: string =
-          (genResp as any)?.text ??
-          (genResp as any)?.candidates?.[0]?.content?.parts
-            ?.map((p: any) => p?.text ?? "")
-            .join("") ??
-          "";
+          const text: string =
+            (resp as any)?.text ??
+            (resp as any)?.candidates?.[0]?.content?.parts
+              ?.map((p: any) => p?.text ?? "")
+              .join("") ??
+            "";
+          return { startPage, endPage, text, parsed: extractJsonArray(text) };
+        };
 
-        const parsed = extractJsonArray(rawText);
+        // First chunk runs alone so we can learn total_pages from its response
+        // before fanning out the rest of the document in parallel.
+        const knownMaxSheetPage = sheetRows.reduce(
+          (m, s) => (s.page_index > m ? s.page_index : m),
+          0,
+        );
+        const firstChunk = await runChunk(1, CHUNK_SIZE);
+
+        let discoveredTotal = 0;
+        if (firstChunk.parsed) {
+          for (const it of firstChunk.parsed) {
+            const tp = Number((it as any)?.total_pages);
+            if (Number.isFinite(tp) && tp > discoveredTotal) discoveredTotal = tp;
+          }
+        }
+        const totalForChunking = Math.max(discoveredTotal, knownMaxSheetPage, CHUNK_SIZE);
+
+        const chunkRanges: Array<[number, number]> = [];
+        for (let start = CHUNK_SIZE + 1; start <= totalForChunking; start += CHUNK_SIZE) {
+          chunkRanges.push([start, Math.min(start + CHUNK_SIZE - 1, totalForChunking)]);
+        }
+
+        console.log(
+          `[survey-pages] chunking file=${fileName} total=${totalForChunking} ` +
+            `firstChunk=1-${CHUNK_SIZE} parallelChunks=${chunkRanges.length}`,
+        );
+
+        const restResults = await Promise.all(
+          chunkRanges.map(([s, e]) => runChunk(s, e)),
+        );
+        const allChunks = [firstChunk, ...restResults];
+
+        // Merge per-chunk parsed arrays. Persist concatenated raw text so the
+        // debug modal still reflects exactly what each chunk returned.
+        const mergedItems: any[] = [];
+        const rawTextParts: string[] = [];
+        for (const c of allChunks) {
+          rawTextParts.push(`--- pages ${c.startPage}-${c.endPage} ---\n${c.text}`);
+          if (c.parsed) mergedItems.push(...c.parsed);
+        }
+        const rawText = rawTextParts.join("\n\n");
+        const parsed = mergedItems;
         const pageItems = flattenSurveyPages(parsed);
+
 
         let totalPages = 0;
         if (parsed) {
