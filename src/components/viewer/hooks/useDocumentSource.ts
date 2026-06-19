@@ -125,7 +125,7 @@ export async function prewarmDocumentSource(
     let blob: Blob | null = null;
     let mimeType = (descriptor as any).mimeType ?? "application/octet-stream";
     if (descriptor.kind === "url") {
-      const r = await fetch(descriptor.url);
+      const r = await fetchWithRetry(descriptor.url);
       if (!r.ok) return;
       blob = await r.blob();
       mimeType = descriptor.mimeType ?? blob.type ?? mimeType;
@@ -134,7 +134,7 @@ export async function prewarmDocumentSource(
       const url = isGoogleDoc
         ? `https://www.googleapis.com/drive/v3/files/${descriptor.fileId}/export?mimeType=application/pdf`
         : `https://www.googleapis.com/drive/v3/files/${descriptor.fileId}?alt=media`;
-      const r = await fetch(url, {
+      const r = await fetchWithRetry(url, {
         headers: { Authorization: `Bearer ${descriptor.accessToken}` },
       });
       if (!r.ok) return;
@@ -145,7 +145,7 @@ export async function prewarmDocumentSource(
         .from(descriptor.bucket)
         .createSignedUrl(descriptor.path, 3600);
       if (e || !data?.signedUrl) return;
-      const r = await fetch(data.signedUrl);
+      const r = await fetchWithRetry(data.signedUrl);
       if (!r.ok) return;
       blob = await r.blob();
       mimeType = descriptor.mimeType ?? blob.type ?? mimeType;
@@ -197,7 +197,7 @@ export function useDocumentSource(
             blob = descriptor.blob;
             mimeType = descriptor.mimeType ?? blob.type ?? mimeType;
           } else if (descriptor.kind === "url") {
-            const r = await fetch(descriptor.url);
+            const r = await fetchWithRetry(descriptor.url);
             if (!r.ok) throw new Error(`Failed to load: ${r.status}`);
             blob = await r.blob();
             mimeType = descriptor.mimeType ?? blob.type ?? mimeType;
@@ -208,7 +208,7 @@ export function useDocumentSource(
             const url = isGoogleDoc
               ? `https://www.googleapis.com/drive/v3/files/${descriptor.fileId}/export?mimeType=application/pdf`
               : `https://www.googleapis.com/drive/v3/files/${descriptor.fileId}?alt=media`;
-            const r = await fetch(url, {
+            const r = await fetchWithRetry(url, {
               headers: { Authorization: `Bearer ${descriptor.accessToken}` },
             });
             if (!r.ok) throw new Error(`Drive load failed: ${r.status}`);
@@ -223,7 +223,7 @@ export function useDocumentSource(
             if (e || !data?.signedUrl) {
               throw new Error(e?.message ?? "Failed to sign storage URL");
             }
-            const r = await fetch(data.signedUrl);
+            const r = await fetchWithRetry(data.signedUrl);
             if (!r.ok) throw new Error(`Storage fetch failed: ${r.status}`);
             blob = await r.blob();
             mimeType =
