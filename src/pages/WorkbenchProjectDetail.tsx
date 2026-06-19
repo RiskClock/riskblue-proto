@@ -810,6 +810,7 @@ export default function WorkbenchProjectDetail() {
         mime_type: f.mime_type ?? null,
         survey_raw_response: f.survey_raw_response ?? null,
         survey_raw_updated_at: f.survey_raw_updated_at ?? null,
+        risk_element_results: f.risk_element_results ?? null,
       }));
 
       const fileMap = new Map(files.map((f) => [f.id, f]));
