@@ -199,17 +199,23 @@ Deno.serve(async (req) => {
             };
           }
           const callGemini = async (cacheRef: string) => {
+            // gemini-3.5 rejects systemInstruction alongside cachedContent, so
+            // we fold the per-class prompt into the user message instead.
             return await ai.models.generateContent({
               model: GEMINI_MODEL,
               contents: [
-                { role: "user", parts: [{ text: analyzePrefix }] },
+                {
+                  role: "user",
+                  parts: [
+                    { text: `Instructions:\n${prompt}` },
+                    { text: analyzePrefix },
+                  ],
+                },
               ],
-              config: {
-                cachedContent: cacheRef,
-                systemInstruction: prompt,
-              },
+              config: { cachedContent: cacheRef },
             });
           };
+
           try {
             let resp: any;
             let usedCache = cacheName!;
