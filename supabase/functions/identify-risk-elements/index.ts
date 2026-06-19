@@ -4,7 +4,7 @@
 // systemInstruction; the cache stays neutral so multiple agents can share it.
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { GoogleGenAI } from "npm:@google/genai@0.21.0";
+import { GoogleGenAI } from "npm:@google/genai@2.8.0";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -194,24 +194,45 @@ Deno.serve(async (req) => {
           if (!prompt) {
             return {
               className,
-              ok: false,
+              ok: false as const,
               error: `No prompt_content for class "${className}"`,
             };
           }
-          try {
-            const resp = await ai.models.generateContent({
+          const callGemini = async (cacheRef: string) => {
+            return await ai.models.generateContent({
               model: GEMINI_MODEL,
               contents: [
-                {
-                  role: "user",
-                  parts: [{ text: analyzePrefix }],
-                },
+                { role: "user", parts: [{ text: analyzePrefix }] },
               ],
               config: {
-                cachedContent: cacheName!,
+                cachedContent: cacheRef,
                 systemInstruction: prompt,
               },
             });
+          };
+          try {
+            let resp: any;
+            let usedCache = cacheName!;
+            try {
+              resp = await callGemini(usedCache);
+            } catch (err: any) {
+              const msg = String(err?.message ?? err);
+              // Most common failure here is a model/cache mismatch (cache was
+              // built for a different model, e.g. legacy gemini-2.5-pro caches
+              // when we are now on gemini-3.5-flash). Rebuild and retry once.
+              const looksLikeCacheError =
+                /cache|cached|model|mismatch|not\s*found|invalid/i.test(msg);
+              if (!looksLikeCacheError) throw err;
+              console.warn(
+                `[identify-risk-elements][cache-retry] file=${fileName} class=${className} error=${msg} — rebuilding cache and retrying`,
+              );
+              const rebuilt = await rebuildCache({
+                ai, admin, fileId, fileName, bucket, storagePath,
+              });
+              usedCache = rebuilt.cacheName;
+              cacheName = usedCache;
+              resp = await callGemini(usedCache);
+            }
             const text: string =
               (resp as any)?.text ??
               (resp as any)?.candidates?.[0]?.content?.parts
@@ -228,15 +249,30 @@ Deno.serve(async (req) => {
                 ? Math.round((Number(cachedTokens) / Number(promptTokens)) * 100)
                 : 0;
             console.log(
-              `[identify-risk-elements][usage] file=${fileName} class=${className} cache=${cacheName ? "PRESENT" : "MISSING"} promptTokens=${promptTokens} cachedContentTokens=${cachedTokens} (${cacheHitPct}% cache hit) candidatesTokens=${candidatesTokens} totalTokens=${totalTokens} rawUsage=${JSON.stringify(usage)}`,
+              `[identify-risk-elements][usage] file=${fileName} class=${className} model=${GEMINI_MODEL} cache=${usedCache ? "PRESENT" : "MISSING"} promptTokens=${promptTokens} cachedContentTokens=${cachedTokens} (${cacheHitPct}% cache hit) candidatesTokens=${candidatesTokens} totalTokens=${totalTokens} rawUsage=${JSON.stringify(usage)}`,
             );
             if (!cachedTokens || cachedTokens === 0) {
               console.warn(
-                `[identify-risk-elements][cache-miss] file=${fileName} class=${className} — cachedContentTokenCount is 0/absent. Verify cachedContent="${cacheName}" was accepted.`,
+                `[identify-risk-elements][cache-miss] file=${fileName} class=${className} — cachedContentTokenCount is 0/absent. Verify cachedContent="${usedCache}" was accepted.`,
               );
             }
-            return { className, ok: true as const, text };
+            return {
+              className,
+              ok: true as const,
+              text,
+              tokens: {
+                prompt: promptTokens,
+                cached: cachedTokens,
+                candidates: candidatesTokens,
+                total: totalTokens,
+                cacheHitPct,
+              },
+              model: GEMINI_MODEL,
+            };
           } catch (err: any) {
+            console.error(
+              `[identify-risk-elements][error] file=${fileName} class=${className}: ${err?.message ?? err}`,
+            );
             return { className, ok: false as const, error: err?.message ?? String(err) };
           }
         };
@@ -247,7 +283,13 @@ Deno.serve(async (req) => {
         const merged: Record<string, any> = { ...existingResults };
         for (const r of results) {
           if (r.ok) {
-            merged[r.className] = { result_text: r.text, updated_at: nowIso, error: null };
+            merged[r.className] = {
+              result_text: r.text,
+              updated_at: nowIso,
+              error: null,
+              tokens: r.tokens,
+              model: r.model,
+            };
           } else {
             merged[r.className] = {
               result_text: (existingResults[r.className] as any)?.result_text ?? null,
@@ -256,6 +298,7 @@ Deno.serve(async (req) => {
             };
           }
         }
+
 
         await admin
           .from("analysis_request_files")

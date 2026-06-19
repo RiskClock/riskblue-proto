@@ -5,7 +5,7 @@
 // Elements, etc.) can reuse it.
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { GoogleGenAI } from "npm:@google/genai@0.21.0";
+import { GoogleGenAI } from "npm:@google/genai@2.8.0";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -14,7 +14,7 @@ const corsHeaders = {
   "Access-Control-Allow-Methods": "POST, OPTIONS",
 };
 
-const GEMINI_MODEL = "gemini-2.5-pro";
+const GEMINI_MODEL = "gemini-3.5-flash";
 const CACHE_TTL_SECONDS = 7200; // 2 hours
 
 function json(body: unknown, status = 200) {
