@@ -222,7 +222,10 @@ Deno.serve(async (req) => {
         const CHUNK_SIZE = 10;
 
         const runChunk = async (startPage: number, endPage: number) => {
-          const genConfig: any = {};
+          const genConfig: any = {
+            temperature: 0,
+            responseMimeType: "application/json",
+          };
           if (cacheName) genConfig.cachedContent = cacheName;
           else genConfig.systemInstruction = systemPrompt;
 
