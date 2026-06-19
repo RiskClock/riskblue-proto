@@ -209,28 +209,27 @@ Deno.serve(async (req) => {
           console.warn(`[survey-pages] cache create failed, falling back: ${cacheErr?.message ?? cacheErr}`);
         }
 
-        // Run survey. Pass systemInstruction at execution time so the cache
-        // stays neutral and reusable by downstream agents.
-        const genConfig: any = {
-          systemInstruction: systemPrompt,
-        };
+        // Run survey. gemini-3.5 rejects systemInstruction alongside
+        // cachedContent ("CachedContent can not be used with GenerateContent
+        // request setting system_instruction"). When the cache is in use, fold
+        // the system prompt into the user message instead so the sterile cache
+        // remains reusable.
+        const genConfig: any = {};
         if (cacheName) genConfig.cachedContent = cacheName;
+        else genConfig.systemInstruction = systemPrompt;
+
+        const tailText =
+          `File: ${fileName}\nReturn ONLY the strict JSON array requested above. ` +
+          `Every surveyed_pages item MUST include a page_number matching the source PDF page number.`;
 
         const userParts: any[] = cacheName
           ? [
-              {
-                text:
-                  `File: ${fileName}\nReturn ONLY the strict JSON array requested by the system prompt. ` +
-                  `Every surveyed_pages item MUST include a page_number matching the source PDF page number.`,
-              },
+              { text: `Instructions:\n${systemPrompt}` },
+              { text: tailText },
             ]
           : [
               { fileData: { fileUri, mimeType: fileMime } },
-              {
-                text:
-                  `File: ${fileName}\nReturn ONLY the strict JSON array requested by the system prompt. ` +
-                  `Every surveyed_pages item MUST include a page_number matching the source PDF page number.`,
-              },
+              { text: tailText },
             ];
 
         const genResp = await ai.models.generateContent({
@@ -238,6 +237,7 @@ Deno.serve(async (req) => {
           contents: [{ role: "user", parts: userParts }],
           config: genConfig,
         });
+
 
         const rawText: string =
           (genResp as any)?.text ??
