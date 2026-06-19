@@ -6,6 +6,7 @@
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { GoogleGenAI } from "npm:@google/genai@2.8.0";
+import { ScoutPipelinePayloadSchema } from "./schema.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -225,6 +226,7 @@ Deno.serve(async (req) => {
           const genConfig: any = {
             temperature: 0,
             responseMimeType: "application/json",
+            responseSchema: ScoutPipelinePayloadSchema,
           };
           if (cacheName) genConfig.cachedContent = cacheName;
           else genConfig.systemInstruction = systemPrompt;
