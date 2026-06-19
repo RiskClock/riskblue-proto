@@ -2666,6 +2666,88 @@ export default function WorkbenchProjectDetail() {
                         );
                       })()}
                     </div>
+
+                    {/* Risk Radar Agent section */}
+                    <div>
+                      <div className="text-sm font-semibold mb-2">Risk Radar Agent</div>
+                      {(() => {
+                        const allFiles = (rows?.files ?? [])
+                          .slice()
+                          .sort((a, b) => a.name.localeCompare(b.name));
+                        if (allFiles.length === 0) {
+                          return (
+                            <div className="text-xs text-muted-foreground border rounded-md p-4 text-center">
+                              No files uploaded yet.
+                            </div>
+                          );
+                        }
+                        return (
+                          <div className="border rounded-md divide-y">
+                            {allFiles.map((f) => {
+                              const rer = (f.risk_element_results ?? {}) as Record<string, any>;
+                              const classNames = Object.keys(rer).sort();
+                              return (
+                                <div key={f.id} className="px-3 py-2">
+                                  <div className="text-sm font-medium truncate">{f.name}</div>
+                                  {classNames.length === 0 ? (
+                                    <div className="text-[11px] text-muted-foreground mt-1">
+                                      No Risk Radar runs yet.
+                                    </div>
+                                  ) : (
+                                    <ul className="mt-2 space-y-1">
+                                      {classNames.map((cn) => {
+                                        const entry = rer[cn] ?? {};
+                                        const text = (entry.result_text ?? "").toString();
+                                        const hasResp = text.trim().length > 0;
+                                        const err = entry.error as string | null | undefined;
+                                        const tokens = entry.tokens ?? null;
+                                        const model = entry.model ?? null;
+                                        return (
+                                          <li
+                                            key={cn}
+                                            className="flex items-center justify-between gap-3 text-xs"
+                                          >
+                                            <div className="min-w-0 flex-1">
+                                              <div className="truncate">
+                                                <span className="font-medium">{cn}</span>
+                                                {model ? (
+                                                  <span className="text-muted-foreground ml-1">· {model}</span>
+                                                ) : null}
+                                              </div>
+                                              <div className="text-[10px] text-muted-foreground truncate">
+                                                {err
+                                                  ? <span className="text-destructive">Error: {err}</span>
+                                                  : tokens
+                                                    ? `prompt ${tokens.prompt ?? "?"} · cached ${tokens.cached ?? 0} (${tokens.cacheHitPct ?? 0}%) · out ${tokens.candidates ?? "?"} · total ${tokens.total ?? "?"}`
+                                                    : hasResp ? `${text.length.toLocaleString()} chars` : "No response"}
+                                              </div>
+                                            </div>
+                                            <Button
+                                              size="sm"
+                                              variant="outline"
+                                              disabled={!hasResp}
+                                              onClick={() => {
+                                                setScoutDebugOpen(false);
+                                                setSurveyResponseModal({
+                                                  fileName: `${f.name} · ${cn}`,
+                                                  raw: text,
+                                                });
+                                              }}
+                                            >
+                                              View Response
+                                            </Button>
+                                          </li>
+                                        );
+                                      })}
+                                    </ul>
+                                  )}
+                                </div>
+                              );
+                            })}
+                          </div>
+                        );
+                      })()}
+                    </div>
                   </div>
                 </DialogContent>
               </Dialog>
