@@ -89,6 +89,7 @@ interface FileRow {
   mime_type: string | null;
   survey_raw_response?: string | null;
   survey_raw_updated_at?: string | null;
+  risk_element_results?: Record<string, any> | null;
 }
 
 
