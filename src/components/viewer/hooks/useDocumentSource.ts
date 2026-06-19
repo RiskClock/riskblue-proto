@@ -50,6 +50,37 @@ const BLOB_CACHE_MAX = 10;
 type BlobCacheEntry = { blob: Blob; mime: string; ts: number };
 const blobCache = new Map<string, BlobCacheEntry>();
 
+/**
+ * Fetch with retry + exponential backoff. Retries on network-level failures
+ * ("TypeError: Failed to fetch") and 5xx/429 responses. Large signed-URL
+ * downloads (multi-MB PDFs from Supabase Storage) occasionally fail mid-flight
+ * on flaky connections; a single retry usually rescues the open-modal flow.
+ */
+async function fetchWithRetry(
+  input: RequestInfo | URL,
+  init?: RequestInit,
+  attempts = 3
+): Promise<Response> {
+  let lastErr: unknown;
+  for (let i = 0; i < attempts; i++) {
+    try {
+      const r = await fetch(input, init);
+      if (r.ok) return r;
+      if (r.status >= 500 || r.status === 429) {
+        lastErr = new Error(`HTTP ${r.status}`);
+      } else {
+        return r; // non-retryable
+      }
+    } catch (e) {
+      lastErr = e; // network error
+    }
+    if (i < attempts - 1) {
+      await new Promise((res) => setTimeout(res, 400 * Math.pow(2, i)));
+    }
+  }
+  throw lastErr instanceof Error ? lastErr : new Error("fetch failed");
+}
+
 function descriptorKey(d: DocumentSourceDescriptor): string | null {
   if (d.kind === "supabase-storage") return `ss:${d.bucket}:${d.path}`;
   if (d.kind === "url") return `url:${d.url}`;
