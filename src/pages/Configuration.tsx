@@ -817,18 +817,21 @@ function SurveyPagePromptSection() {
     <div className="mt-8 bg-card rounded-lg border p-4">
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-lg font-semibold">Survey Page Prompt</h2>
+          <h2 className="text-lg font-semibold">Scout Agent Prompt</h2>
           <p className="text-sm text-muted-foreground">
-            System prompt sent to OpenAI when the Survey Pages button runs. The PNG of every page is attached as image input.
+            System prompt sent to Gemini when the Scout agent surveys each page. The PNG of every page is attached as image input.
           </p>
         </div>
-        <Button variant="outline" onClick={openModal}>Edit Prompt</Button>
+        <div className="flex items-center gap-2">
+          <PromptModelPicker settingKey="survey_page_model" defaultModel="gemini-3.5-flash" />
+          <Button variant="outline" onClick={openModal}>Edit Prompt</Button>
+        </div>
       </div>
 
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent className="max-w-4xl max-h-[85vh] flex flex-col">
           <DialogHeader>
-            <DialogTitle>Survey Page Prompt</DialogTitle>
+            <DialogTitle>Scout Agent Prompt</DialogTitle>
             <DialogDescription>
               {updatedAt
                 ? `Last updated ${format(new Date(updatedAt), "MMM d, yyyy 'at' h:mm a")}`
