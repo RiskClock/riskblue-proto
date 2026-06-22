@@ -4319,15 +4319,49 @@ function InstancesReportModal({
     return m;
   }, [consolidations]);
 
-  // Resolve per-page (level, unit?) pairs. Falls back to the legacy level-only
-  // map when spatial_records lacks unit_templates (older projects).
-  const pairsForPage = (fileName: string, pageIndex: number): Array<{ level: string; unit?: string }> => {
+  // Resolve per-annotation (level, unit?) pairs.
+  //
+  // When the annotation's page has unit floor plans, use bbox containment to
+  // attribute the annotation to the SPECIFIC unit it sits inside — never every
+  // unit on the page. A single unit on the page is auto-attributed. If no unit
+  // bbox contains the point, the annotation is dropped (→ Unassigned).
+  //
+  // When the page has no unit plans, fall back to the legacy page-level
+  // (level, unit?) map / level-only map.
+  const pairsForPage = (
+    fileName: string,
+    pageIndex: number,
+    nx?: number,
+    ny?: number,
+  ): Array<{ level: string; unit?: string }> => {
     const key = `${fileName}::${pageIndex}`;
+    const unitPlans = pageUnitPlansMap.get(key) || [];
+    if (unitPlans.length > 0) {
+      let matched: { unitLabel: string; levels: string[]; bbox: [number, number, number, number] | null } | null = null;
+      if (unitPlans.length === 1) {
+        matched = unitPlans[0];
+      } else if (typeof nx === "number" && typeof ny === "number") {
+        for (const up of unitPlans) {
+          const bb = up.bbox;
+          if (!bb) continue;
+          const [x, y, w, h] = bb;
+          const x1 = x / 100, y1 = y / 100, x2 = (x + w) / 100, y2 = (y + h) / 100;
+          if (nx >= x1 && nx <= x2 && ny >= y1 && ny <= y2) {
+            matched = up;
+            break;
+          }
+        }
+      }
+      if (!matched) return [];
+      if (matched.levels.length === 0) return [];
+      return matched.levels.map((l) => ({ level: l, unit: matched!.unitLabel }));
+    }
     const unitAware = pageSpaceUnitMap.get(key);
     if (unitAware && unitAware.length > 0) return unitAware;
     const levels = pageSpaceMap.get(key) || [];
     return levels.map((l) => ({ level: l }));
   };
+
 
   // Encode an (level, unit?) suffix safely. Spaces -> "_". The "::" separator
   // is reserved between level and unit, so any "::" inside the level/unit
