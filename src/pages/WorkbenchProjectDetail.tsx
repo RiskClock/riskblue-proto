@@ -1584,22 +1584,40 @@ export default function WorkbenchProjectDetail() {
     const levelMap = new Map<string, Set<string>>();
     const unitMap = new Map<string, Array<{ level: string; unit?: string }>>();
     const files = rows?.files ?? [];
+    const sheets = rows?.sheets ?? [];
     if (files.length === 0) return { levelMap, unitMap };
 
-    // Pass 1: build unitRef (lowercased) -> Set<level>.
+    // Lookup overrides by (fileId, page) so we can read the user-edited
+    // floor_plan_overrides[planId].{units, floors, type} on each plan.
+    const overridesByFilePage = new Map<string, Record<string, any>>();
+    for (const s of sheets) {
+      overridesByFilePage.set(
+        `${s.parent_file_id}::${s.page_index}`,
+        (s.floor_plan_overrides as Record<string, any>) ?? {},
+      );
+    }
+    const effective = (fp: ParsedFloorPlan, fileId: string) => {
+      const ovr = overridesByFilePage.get(`${fileId}::${fp.page_number}`)?.[fp.plan_id] ?? {};
+      const type: string = typeof ovr.type === "string" && ovr.type ? ovr.type : fp.type;
+      const floors: string[] = Array.isArray(ovr.floors) ? ovr.floors : fp.floors;
+      const units: string[] = Array.isArray(ovr.units) ? ovr.units : fp.referenced_unit_ids;
+      return { type, floors: floors || [], units: units || [] };
+    };
+
+    // Pass 1: build unitRef (lowercased) -> Set<level> using EFFECTIVE units.
     const unitRefToLevels = new Map<string, Set<string>>();
     for (const f of files) {
       const byPage = floorPlansByFile.get(f.id);
       if (!byPage) continue;
       for (const plans of byPage.values()) {
         for (const fp of plans) {
-          if (fp.type !== "level_floor_plan") continue;
-          const floors = fp.floors || [];
-          for (const ref of fp.referenced_unit_ids || []) {
-            const k = ref.trim().toLowerCase();
+          const e = effective(fp, f.id);
+          if (e.type !== "level_floor_plan") continue;
+          for (const ref of e.units) {
+            const k = (ref || "").trim().toLowerCase();
             if (!k) continue;
             const set = unitRefToLevels.get(k) || new Set<string>();
-            for (const lvl of floors) if (lvl) set.add(lvl);
+            for (const lvl of e.floors) if (lvl) set.add(lvl);
             unitRefToLevels.set(k, set);
           }
         }
@@ -1613,18 +1631,18 @@ export default function WorkbenchProjectDetail() {
       for (const [page, plans] of byPage.entries()) {
         const key = `${f.name}::${page}`;
         for (const fp of plans) {
-          if (fp.type === "level_floor_plan") {
-            const floors = fp.floors || [];
+          const e = effective(fp, f.id);
+          if (e.type === "level_floor_plan") {
             const ls = levelMap.get(key) || new Set<string>();
-            for (const lvl of floors) if (lvl) ls.add(lvl);
+            for (const lvl of e.floors) if (lvl) ls.add(lvl);
             levelMap.set(key, ls);
             const pairs = unitMap.get(key) || [];
-            for (const lvl of floors) {
+            for (const lvl of e.floors) {
               if (!lvl) continue;
               if (!pairs.some((p) => p.level === lvl && !p.unit)) pairs.push({ level: lvl });
             }
             unitMap.set(key, pairs);
-          } else if (fp.type === "unit_floor_plan") {
+          } else if (e.type === "unit_floor_plan") {
             const unitLabel = fp.reference_id || floorPlanDisplayLabel(fp);
             const refKey = (fp.reference_id || "").trim().toLowerCase();
             const parentLevels = refKey ? unitRefToLevels.get(refKey) : null;
@@ -1644,7 +1662,7 @@ export default function WorkbenchProjectDetail() {
       }
     }
     return { levelMap, unitMap };
-  }, [rows?.files, floorPlansByFile]);
+  }, [rows?.files, rows?.sheets, floorPlansByFile]);
 
   // Merge survey (primary) with spatial-architect maps (supplemental fallback).
   const mergedPageSpaceMap = useMemo(() => {
