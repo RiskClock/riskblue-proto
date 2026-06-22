@@ -4297,11 +4297,13 @@ function InstancesReportModal({
     const seenConsolidated = new Set<string>();
     for (const r of expanded) {
       if (r.category !== "Asset" && r.category !== "Water System") continue;
-      // Each consolidated logical instance counts once; each plain annotation
-      // counts per row (preserves existing per-space counting behavior).
+      // A consolidated logical instance counts ONCE regardless of how many
+      // spaces it spans (the riser unifier intentionally collapses these).
+      // Plain annotations still count per row (per-space).
       if (r.logicalKey.startsWith("cons::")) {
-        if (seenConsolidated.has(r.logicalKey)) continue;
-        seenConsolidated.add(r.logicalKey);
+        const groupDedupKey = `${r.awpClassName}::${r.annotationBaseId}`;
+        if (seenConsolidated.has(groupDedupKey)) continue;
+        seenConsolidated.add(groupDedupKey);
       }
       m.set(r.awpClassName, (m.get(r.awpClassName) || 0) + 1);
     }
