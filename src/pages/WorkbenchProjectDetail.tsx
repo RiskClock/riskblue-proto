@@ -4387,17 +4387,21 @@ function InstancesReportModal({
     const m = new Map<string, Map<string, number>>();
     for (const r of expanded) {
       if (r.category !== "Asset" && r.category !== "Water System") continue;
-      const space = r.spaceName ?? "__unassigned__";
+      const space = r.spaceName && levelNames.has(r.spaceName) ? r.spaceName : "__unassigned__";
       const inner = m.get(space) || new Map<string, number>();
       inner.set(r.awpClassName, (inner.get(r.awpClassName) || 0) + 1);
       m.set(space, inner);
     }
     return m;
-  }, [expanded]);
+  }, [expanded, levelNames]);
 
   const instancesForSpace = (space: string) =>
     expanded
-      .filter((r) => (space === "__unassigned__" ? r.spaceName === null : r.spaceName === space))
+      .filter((r) =>
+        space === "__unassigned__"
+          ? !r.spaceName || !levelNames.has(r.spaceName)
+          : r.spaceName === space,
+      )
       .sort((a, b) => {
         // Sort by base instance ID first, then by unit name (numeric-aware).
         const baseCmp = a.annotationBaseId.localeCompare(b.annotationBaseId, undefined, { numeric: true, sensitivity: "base" });
@@ -4406,6 +4410,7 @@ function InstancesReportModal({
         const ub = b.unitName ?? "";
         return ua.localeCompare(ub, undefined, { numeric: true, sensitivity: "base" });
       });
+
 
 
   // Compact table density classes (reduce row heights)
