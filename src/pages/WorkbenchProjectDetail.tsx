@@ -2843,6 +2843,63 @@ export default function WorkbenchProjectDetail() {
                         );
                       })()}
                     </div>
+
+                    {/* Spatial Architect Agent section */}
+                    <div>
+                      <div className="text-sm font-semibold mb-2">Spatial Architect Agent</div>
+                      {(() => {
+                        const payload = spaceHierarchyPayload;
+                        const status = analysisRequest?.space_hierarchy_status as string | null | undefined;
+                        const updatedAt = analysisRequest?.space_hierarchy_updated_at as string | null | undefined;
+                        const error = analysisRequest?.space_hierarchy_error as string | null | undefined;
+                        const rawText: string = (payload?.raw_text ?? "").toString();
+                        const parsed = payload?.parsed ?? null;
+                        const hasResp = rawText.trim().length > 0 || !!parsed;
+                        const model = payload?.model ?? null;
+                        const source = payload?.source ?? null;
+                        const parseError = payload?.parse_error ?? null;
+                        const displayText = rawText.trim().length > 0
+                          ? rawText
+                          : parsed ? JSON.stringify(parsed, null, 2) : "";
+
+                        return (
+                          <div className="border rounded-md px-3 py-2">
+                            <div className="flex items-center justify-between gap-3">
+                              <div className="min-w-0 flex-1">
+                                <div className="text-sm font-medium truncate">
+                                  Space Hierarchy
+                                  {source ? <span className="text-muted-foreground ml-1 text-xs">· {source}</span> : null}
+                                  {model ? <span className="text-muted-foreground ml-1 text-xs">· {model}</span> : null}
+                                </div>
+                                <div className="text-[11px] text-muted-foreground">
+                                  {error || parseError ? (
+                                    <span className="text-destructive">Error: {error || parseError}</span>
+                                  ) : hasResp ? (
+                                    `${status ?? "—"} · ${updatedAt ? new Date(updatedAt).toLocaleString() : "—"} · ${displayText.length.toLocaleString()} chars`
+                                  ) : (
+                                    status === "running" ? "Running…" : "No response yet"
+                                  )}
+                                </div>
+                              </div>
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                disabled={!hasResp}
+                                onClick={() => {
+                                  setScoutDebugOpen(false);
+                                  setSurveyResponseModal({
+                                    fileName: "Spatial Architect · Space Hierarchy",
+                                    raw: displayText,
+                                  });
+                                }}
+                              >
+                                View Response
+                              </Button>
+                            </div>
+                          </div>
+                        );
+                      })()}
+                    </div>
                   </div>
                 </DialogContent>
               </Dialog>
