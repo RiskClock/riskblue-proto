@@ -291,7 +291,7 @@ Deno.serve(async (req) => {
             if (Number.isFinite(tp) && tp > discoveredTotal) discoveredTotal = tp;
           }
         }
-        const totalForChunking = Math.max(discoveredTotal, knownMaxSheetPage, CHUNK_SIZE);
+        const totalForChunking = Math.max(discoveredTotal, knownMaxSheetPage, pdfPageCount, CHUNK_SIZE);
 
         const chunkRanges: Array<[number, number]> = [];
         for (let start = CHUNK_SIZE + 1; start <= totalForChunking; start += CHUNK_SIZE) {
