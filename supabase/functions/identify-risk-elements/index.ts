@@ -13,7 +13,7 @@ const corsHeaders = {
   "Access-Control-Allow-Methods": "POST, OPTIONS",
 };
 
-const GEMINI_MODEL = "gemini-3.5-flash";
+const DEFAULT_GEMINI_MODEL = "gemini-3.5-flash";
 const CACHE_TTL_SECONDS = 7200; // 2 hours
 
 function json(body: unknown, status = 200) {
@@ -36,8 +36,9 @@ async function rebuildCache(params: {
   fileName: string;
   bucket: string;
   storagePath: string;
+  model: string;
 }): Promise<{ cacheName: string; expiresAt: string }> {
-  const { ai, admin, fileId, fileName, bucket, storagePath } = params;
+  const { ai, admin, fileId, fileName, bucket, storagePath, model } = params;
 
   const { data: blob, error: dlErr } = await admin.storage
     .from(bucket)
@@ -66,7 +67,7 @@ async function rebuildCache(params: {
   }
 
   const cache = await ai.caches.create({
-    model: GEMINI_MODEL,
+    model,
     config: {
       displayName: `sheet-analysis-${fileId}`,
       contents: [
@@ -172,6 +173,18 @@ Deno.serve(async (req) => {
     const analyzePrefix: string =
       (analyzeRow as any)?.value || "Analyze this drawing according to the instructions provided.";
 
+    // Configurable model.
+    const { data: modelRow } = await admin
+      .from("app_settings")
+      .select("value")
+      .eq("key", "analyze_model")
+      .maybeSingle();
+    const configuredModel = (modelRow as any)?.value;
+    const GEMINI_MODEL = typeof configuredModel === "string" && configuredModel.trim().length > 0
+      ? configuredModel.trim()
+      : DEFAULT_GEMINI_MODEL;
+    console.log(`[identify-risk-elements] model=${GEMINI_MODEL}`);
+
     const work = (async () => {
       try {
         const ai = new GoogleGenAI({ apiKey });
@@ -182,7 +195,7 @@ Deno.serve(async (req) => {
         const expired = expiresAt ? new Date(expiresAt).getTime() < Date.now() + 30_000 : true;
         if (!cacheName || expired) {
           console.log(`[identify-risk-elements] (re)building cache for file=${fileName}`);
-          const rebuilt = await rebuildCache({ ai, admin, fileId, fileName, bucket, storagePath });
+          const rebuilt = await rebuildCache({ ai, admin, fileId, fileName, bucket, storagePath, model: GEMINI_MODEL });
           cacheName = rebuilt.cacheName;
         }
 
@@ -233,7 +246,7 @@ Deno.serve(async (req) => {
                 `[identify-risk-elements][cache-retry] file=${fileName} class=${className} error=${msg} — rebuilding cache and retrying`,
               );
               const rebuilt = await rebuildCache({
-                ai, admin, fileId, fileName, bucket, storagePath,
+                ai, admin, fileId, fileName, bucket, storagePath, model: GEMINI_MODEL,
               });
               usedCache = rebuilt.cacheName;
               cacheName = usedCache;

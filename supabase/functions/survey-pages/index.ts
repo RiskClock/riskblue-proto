@@ -15,7 +15,7 @@ const corsHeaders = {
   "Access-Control-Allow-Methods": "POST, OPTIONS",
 };
 
-const GEMINI_MODEL = "gemini-3.5-flash";
+const DEFAULT_GEMINI_MODEL = "gemini-3.5-flash";
 const CACHE_TTL_SECONDS = 7200; // 2 hours
 
 function json(body: unknown, status = 200) {
@@ -103,6 +103,18 @@ Deno.serve(async (req) => {
     if (!email.endsWith("@riskclock.com")) {
       return json({ error: "Forbidden" }, 403);
     }
+
+    // Load configured model.
+    const { data: modelRow } = await admin
+      .from("app_settings")
+      .select("value")
+      .eq("key", "survey_page_model")
+      .maybeSingle();
+    const configuredModel = (modelRow as any)?.value;
+    const GEMINI_MODEL = typeof configuredModel === "string" && configuredModel.trim().length > 0
+      ? configuredModel.trim()
+      : DEFAULT_GEMINI_MODEL;
+    console.log(`[survey-pages] model=${GEMINI_MODEL}`);
 
     const body = await req.json().catch(() => ({}));
     const analysisRequestId: string | undefined = body?.analysisRequestId;

@@ -9,6 +9,8 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { useEffect } from "react";
 import { Textarea } from "@/components/ui/textarea";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -707,7 +709,63 @@ function AddControlPopover({ awp, controls, currentIds, onAdd }: AddControlPopov
   );
 }
 
-// ---------------- Survey Page Prompt ----------------
+// ---------------- Shared Model Picker (Gemini) ----------------
+const GEMINI_MODEL_OPTIONS: { value: string; label: string }[] = [
+  { value: "gemini-2.5-flash-lite", label: "Gemini 2.5 Flash Lite (fastest/cheapest)" },
+  { value: "gemini-2.5-flash", label: "Gemini 2.5 Flash" },
+  { value: "gemini-2.5-pro", label: "Gemini 2.5 Pro" },
+  { value: "gemini-3-flash-preview", label: "Gemini 3 Flash (preview)" },
+  { value: "gemini-3.5-flash", label: "Gemini 3.5 Flash" },
+];
+
+function PromptModelPicker({ settingKey, defaultModel }: { settingKey: string; defaultModel: string }) {
+  const { toast } = useToast();
+  const [model, setModel] = useState<string>(defaultModel);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const { data } = await supabase
+        .from("app_settings" as any)
+        .select("value")
+        .eq("key", settingKey)
+        .maybeSingle();
+      if (cancelled) return;
+      const stored = (data as any)?.value;
+      if (typeof stored === "string" && stored.length > 0) setModel(stored);
+      setLoading(false);
+    })();
+    return () => { cancelled = true; };
+  }, [settingKey]);
+
+  const onChange = async (value: string) => {
+    setModel(value);
+    const { error } = await supabase
+      .from("app_settings" as any)
+      .upsert({ key: settingKey, value, updated_at: new Date().toISOString() } as any, { onConflict: "key" });
+    if (error) {
+      toast({ title: "Failed to save model", description: (error as any)?.message, variant: "destructive" });
+    } else {
+      toast({ title: "Model updated", description: `Next run will use ${value}.` });
+    }
+  };
+
+  return (
+    <Select value={model} onValueChange={onChange} disabled={loading}>
+      <SelectTrigger className="w-[260px]">
+        <SelectValue placeholder="Select model" />
+      </SelectTrigger>
+      <SelectContent>
+        {GEMINI_MODEL_OPTIONS.map((o) => (
+          <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
+        ))}
+      </SelectContent>
+    </Select>
+  );
+}
+
+// ---------------- Scout Agent Prompt ----------------
 function SurveyPagePromptSection() {
   const { toast } = useToast();
   const [open, setOpen] = useState(false);
@@ -759,18 +817,21 @@ function SurveyPagePromptSection() {
     <div className="mt-8 bg-card rounded-lg border p-4">
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-lg font-semibold">Survey Page Prompt</h2>
+          <h2 className="text-lg font-semibold">Scout Agent Prompt</h2>
           <p className="text-sm text-muted-foreground">
-            System prompt sent to OpenAI when the Survey Pages button runs. The PNG of every page is attached as image input.
+            System prompt sent to Gemini when the Scout agent surveys each page. The PNG of every page is attached as image input.
           </p>
         </div>
-        <Button variant="outline" onClick={openModal}>Edit Prompt</Button>
+        <div className="flex items-center gap-2">
+          <PromptModelPicker settingKey="survey_page_model" defaultModel="gemini-3.5-flash" />
+          <Button variant="outline" onClick={openModal}>Edit Prompt</Button>
+        </div>
       </div>
 
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent className="max-w-4xl max-h-[85vh] flex flex-col">
           <DialogHeader>
-            <DialogTitle>Survey Page Prompt</DialogTitle>
+            <DialogTitle>Scout Agent Prompt</DialogTitle>
             <DialogDescription>
               {updatedAt
                 ? `Last updated ${format(new Date(updatedAt), "MMM d, yyyy 'at' h:mm a")}`
@@ -861,18 +922,21 @@ function AnalyzePromptSection() {
     <div className="mt-8 bg-card rounded-lg border p-4">
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-lg font-semibold">Analyze Prompt</h2>
+          <h2 className="text-lg font-semibold">Risk Radar Agent Prompt</h2>
           <p className="text-sm text-muted-foreground">
-            System prompt used by the Analyze stage (Identify Risk Elements). Sent to Gemini with the cached PDF context.
+            System prompt used by the Risk Radar agent (Identify Risk Elements). Sent to Gemini with the cached PDF context.
           </p>
         </div>
-        <Button variant="outline" onClick={openModal}>Edit Prompt</Button>
+        <div className="flex items-center gap-2">
+          <PromptModelPicker settingKey="analyze_model" defaultModel="gemini-3.5-flash" />
+          <Button variant="outline" onClick={openModal}>Edit Prompt</Button>
+        </div>
       </div>
 
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent className="max-w-4xl max-h-[85vh] flex flex-col">
           <DialogHeader>
-            <DialogTitle>Analyze Prompt</DialogTitle>
+            <DialogTitle>Risk Radar Agent Prompt</DialogTitle>
             <DialogDescription>
               {updatedAt
                 ? `Last updated ${format(new Date(updatedAt), "MMM d, yyyy 'at' h:mm a")}`
@@ -954,18 +1018,21 @@ function SpaceHierarchyPromptSection() {
     <div className="mt-8 bg-card rounded-lg border p-4">
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-lg font-semibold">Space Hierarchy Prompt</h2>
+          <h2 className="text-lg font-semibold">Spatial Architect Agent Prompt</h2>
           <p className="text-sm text-muted-foreground">
-            Prompt sent to the Build Space Hierarchy agent. Extracted drawing text is appended after the prompt.
+            Prompt sent to the Spatial Architect agent. Scout's per-page output is appended after the prompt for normalization.
           </p>
         </div>
-        <Button variant="outline" onClick={openModal}>Edit Prompt</Button>
+        <div className="flex items-center gap-2">
+          <PromptModelPicker settingKey="space_hierarchy_model" defaultModel="gemini-2.5-flash-lite" />
+          <Button variant="outline" onClick={openModal}>Edit Prompt</Button>
+        </div>
       </div>
 
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent className="max-w-4xl max-h-[85vh] flex flex-col">
           <DialogHeader>
-            <DialogTitle>Space Hierarchy Prompt</DialogTitle>
+            <DialogTitle>Spatial Architect Agent Prompt</DialogTitle>
             <DialogDescription>
               {updatedAt
                 ? `Last updated ${format(new Date(updatedAt), "MMM d, yyyy 'at' h:mm a")}`
