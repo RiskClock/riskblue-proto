@@ -1583,12 +1583,16 @@ export default function WorkbenchProjectDetail() {
   const surveyDerivedMaps = useMemo(() => {
     const levelMap = new Map<string, Set<string>>();
     const unitMap = new Map<string, Array<{ level: string; unit?: string }>>();
+    // Per-page unit floor plans (with bbox + parent levels) for per-annotation
+    // bbox-containment attribution in the threat report.
+    const pageUnitPlans = new Map<
+      string,
+      Array<{ unitLabel: string; levels: string[]; bbox: [number, number, number, number] | null }>
+    >();
     const files = rows?.files ?? [];
     const sheets = rows?.sheets ?? [];
-    if (files.length === 0) return { levelMap, unitMap };
+    if (files.length === 0) return { levelMap, unitMap, pageUnitPlans };
 
-    // Lookup overrides by (fileId, page) so we can read the user-edited
-    // floor_plan_overrides[planId].{units, floors, type} on each plan.
     const overridesByFilePage = new Map<string, Record<string, any>>();
     for (const s of sheets) {
       overridesByFilePage.set(
@@ -1601,10 +1605,13 @@ export default function WorkbenchProjectDetail() {
       const type: string = typeof ovr.type === "string" && ovr.type ? ovr.type : fp.type;
       const floors: string[] = Array.isArray(ovr.floors) ? ovr.floors : fp.floors;
       const units: string[] = Array.isArray(ovr.units) ? ovr.units : fp.referenced_unit_ids;
-      return { type, floors: floors || [], units: units || [] };
+      const bbox: [number, number, number, number] | null =
+        Array.isArray(ovr.bbox_pct) && ovr.bbox_pct.length === 4 && ovr.bbox_pct.every((n: any) => Number.isFinite(n))
+          ? [ovr.bbox_pct[0], ovr.bbox_pct[1], ovr.bbox_pct[2], ovr.bbox_pct[3]]
+          : fp.xy_width_height_pct;
+      return { type, floors: floors || [], units: units || [], bbox };
     };
 
-    // Pass 1: build unitRef (lowercased) -> Set<level> using EFFECTIVE units.
     const unitRefToLevels = new Map<string, Set<string>>();
     for (const f of files) {
       const byPage = floorPlansByFile.get(f.id);
@@ -1624,7 +1631,6 @@ export default function WorkbenchProjectDetail() {
       }
     }
 
-    // Pass 2: emit per-page entries.
     for (const f of files) {
       const byPage = floorPlansByFile.get(f.id);
       if (!byPage) continue;
@@ -1645,8 +1651,15 @@ export default function WorkbenchProjectDetail() {
           } else if (e.type === "unit_floor_plan") {
             const unitLabel = fp.reference_id || floorPlanDisplayLabel(fp);
             const refKey = (fp.reference_id || "").trim().toLowerCase();
-            const parentLevels = refKey ? unitRefToLevels.get(refKey) : null;
-            if (!parentLevels || parentLevels.size === 0) continue;
+            const parentLevels = refKey ? Array.from(unitRefToLevels.get(refKey) || []) : [];
+
+            // Index every unit plan on the page (including those without resolved
+            // parent levels) so per-annotation containment can decide attribution.
+            const upArr = pageUnitPlans.get(key) || [];
+            upArr.push({ unitLabel, levels: parentLevels, bbox: e.bbox });
+            pageUnitPlans.set(key, upArr);
+
+            if (parentLevels.length === 0) continue;
             const pairs = unitMap.get(key) || [];
             const ls = levelMap.get(key) || new Set<string>();
             for (const lvl of parentLevels) {
@@ -1661,8 +1674,10 @@ export default function WorkbenchProjectDetail() {
         }
       }
     }
-    return { levelMap, unitMap };
+    return { levelMap, unitMap, pageUnitPlans };
   }, [rows?.files, rows?.sheets, floorPlansByFile]);
+
+  const pageUnitPlansMap = surveyDerivedMaps.pageUnitPlans;
 
   // Merge survey (primary) with spatial-architect maps (supplemental fallback).
   const mergedPageSpaceMap = useMemo(() => {
@@ -3895,6 +3910,8 @@ export default function WorkbenchProjectDetail() {
           optionByName={optionByName}
           pageSpaceMap={mergedPageSpaceMap}
           pageSpaceUnitMap={mergedPageSpaceUnitMap}
+          pageUnitPlansMap={pageUnitPlansMap}
+
 
           spaceHierarchyPayload={spaceHierarchyPayload}
           projectName={project?.name || "Project"}
@@ -4205,6 +4222,7 @@ function InstancesReportModal({
   optionByName,
   pageSpaceMap,
   pageSpaceUnitMap,
+  pageUnitPlansMap,
   spaceHierarchyPayload,
   projectName,
   enabledClassNames,
@@ -4217,6 +4235,7 @@ function InstancesReportModal({
   optionByName: Map<string, { idPrefix: string | null; category: string }>;
   pageSpaceMap: Map<string, string[]>;
   pageSpaceUnitMap: Map<string, Array<{ level: string; unit?: string }>>;
+  pageUnitPlansMap: Map<string, Array<{ unitLabel: string; levels: string[]; bbox: [number, number, number, number] | null }>>;
   spaceHierarchyPayload: any | null | undefined;
   projectName: string;
   enabledClassNames: string[];
@@ -4300,15 +4319,49 @@ function InstancesReportModal({
     return m;
   }, [consolidations]);
 
-  // Resolve per-page (level, unit?) pairs. Falls back to the legacy level-only
-  // map when spatial_records lacks unit_templates (older projects).
-  const pairsForPage = (fileName: string, pageIndex: number): Array<{ level: string; unit?: string }> => {
+  // Resolve per-annotation (level, unit?) pairs.
+  //
+  // When the annotation's page has unit floor plans, use bbox containment to
+  // attribute the annotation to the SPECIFIC unit it sits inside — never every
+  // unit on the page. A single unit on the page is auto-attributed. If no unit
+  // bbox contains the point, the annotation is dropped (→ Unassigned).
+  //
+  // When the page has no unit plans, fall back to the legacy page-level
+  // (level, unit?) map / level-only map.
+  const pairsForPage = (
+    fileName: string,
+    pageIndex: number,
+    nx?: number,
+    ny?: number,
+  ): Array<{ level: string; unit?: string }> => {
     const key = `${fileName}::${pageIndex}`;
+    const unitPlans = pageUnitPlansMap.get(key) || [];
+    if (unitPlans.length > 0) {
+      let matched: { unitLabel: string; levels: string[]; bbox: [number, number, number, number] | null } | null = null;
+      if (unitPlans.length === 1) {
+        matched = unitPlans[0];
+      } else if (typeof nx === "number" && typeof ny === "number") {
+        for (const up of unitPlans) {
+          const bb = up.bbox;
+          if (!bb) continue;
+          const [x, y, w, h] = bb;
+          const x1 = x / 100, y1 = y / 100, x2 = (x + w) / 100, y2 = (y + h) / 100;
+          if (nx >= x1 && nx <= x2 && ny >= y1 && ny <= y2) {
+            matched = up;
+            break;
+          }
+        }
+      }
+      if (!matched) return [];
+      if (matched.levels.length === 0) return [];
+      return matched.levels.map((l) => ({ level: l, unit: matched!.unitLabel }));
+    }
     const unitAware = pageSpaceUnitMap.get(key);
     if (unitAware && unitAware.length > 0) return unitAware;
     const levels = pageSpaceMap.get(key) || [];
     return levels.map((l) => ({ level: l }));
   };
+
 
   // Encode an (level, unit?) suffix safely. Spaces -> "_". The "::" separator
   // is reserved between level and unit, so any "::" inside the level/unit
@@ -4357,7 +4410,7 @@ function InstancesReportModal({
       const num = inst.instance_number ?? 0;
       const base = `${prefix}${String(num).padStart(3, "0")}`;
       const fileName = fileNameById.get(inst.file_id) || "";
-      const pairs = pairsForPage(fileName, inst.page_index);
+      const pairs = pairsForPage(fileName, inst.page_index, Number(inst.nx) || 0, Number(inst.ny) || 0);
       const common = {
         annotationBaseId: base,
         awpClassName: inst.awp_class_name,
@@ -4404,7 +4457,7 @@ function InstancesReportModal({
       const unassignedMembers: any[] = [];
       for (const m of members) {
         const fname = fileNameById.get(m.file_id) || "";
-        const pairs = pairsForPage(fname, m.page_index);
+        const pairs = pairsForPage(fname, m.page_index, Number(m.nx) || 0, Number(m.ny) || 0);
         if (pairs.length === 0) {
           unassignedMembers.push(m);
         } else {
@@ -4450,7 +4503,7 @@ function InstancesReportModal({
     }
 
     return rows;
-  }, [instances, optionByName, fileNameById, pageSpaceMap, pageSpaceUnitMap, enabledClassSet, consolidationByAnnId]);
+  }, [instances, optionByName, fileNameById, pageSpaceMap, pageSpaceUnitMap, pageUnitPlansMap, enabledClassSet, consolidationByAnnId]);
 
 
   const levelNames = useMemo(() => {
