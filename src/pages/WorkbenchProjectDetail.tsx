@@ -4792,34 +4792,36 @@ function InstancesReportModal({
             No objects found in this space.
           </div>
         ) : (
-          <Table>
-            <TableHeader className="sticky top-0 z-10 bg-background shadow-[0_1px_0_0_hsl(var(--border))]">
-              <TableRow className={compactRow}>
-                <TableHead className={compactHead}>Instance ID</TableHead>
-                <TableHead className={compactHead}>Class</TableHead>
-                {showUnitCol && <TableHead className={compactHead}>Unit</TableHead>}
-                <TableHead className={compactHead}>Annotation ID</TableHead>
-                <TableHead className={compactHead}>Source</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {rows.map((r, i) => (
-                <TableRow key={`${r.instanceId}-${i}`} className={compactRow}>
-                  <TableCell className={`${compactCell} font-mono`}>{r.instanceId}</TableCell>
-                  <TableCell className={compactCell}>{r.awpClassName}</TableCell>
-                  {showUnitCol && (
-                    <TableCell className={compactCell}>{r.unitName ?? "—"}</TableCell>
-                  )}
-                  <TableCell className={`${compactCell} font-mono text-muted-foreground`}>
-                    {r.annotationBaseId}
-                  </TableCell>
-                  <TableCell className={`${compactCell} text-muted-foreground`}>
-                    {fileNameById.get(r.fileId)} · Page {r.pageIndex}
-                  </TableCell>
+          <div className="relative w-full">
+            <table className="w-full caption-bottom text-sm border-collapse">
+              <thead className="sticky top-0 z-20 bg-background shadow-[0_1px_0_0_hsl(var(--border))]">
+                <TableRow className={`${compactRow} border-b-0 hover:bg-transparent`}>
+                  <TableHead className={`${compactHead} bg-background font-semibold`}>Instance ID</TableHead>
+                  <TableHead className={`${compactHead} bg-background font-semibold`}>Class</TableHead>
+                  {showUnitCol && <TableHead className={`${compactHead} bg-background font-semibold`}>Unit</TableHead>}
+                  <TableHead className={`${compactHead} bg-background font-semibold`}>Annotation ID</TableHead>
+                  <TableHead className={`${compactHead} bg-background font-semibold`}>Source</TableHead>
                 </TableRow>
-              ))}
-            </TableBody>
-          </Table>
+              </thead>
+              <TableBody>
+                {rows.map((r, i) => (
+                  <TableRow key={`${r.instanceId}-${i}`} className={compactRow}>
+                    <TableCell className={`${compactCell} font-mono`}>{r.instanceId}</TableCell>
+                    <TableCell className={compactCell}>{r.awpClassName}</TableCell>
+                    {showUnitCol && (
+                      <TableCell className={compactCell}>{r.unitName ?? "—"}</TableCell>
+                    )}
+                    <TableCell className={`${compactCell} font-mono text-muted-foreground`}>
+                      {r.annotationBaseId}
+                    </TableCell>
+                    <TableCell className={`${compactCell} text-muted-foreground`}>
+                      {fileNameById.get(r.fileId)} · Page {r.pageIndex}
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </table>
+          </div>
         )}
 
         {unitsList.length > 0 && (
