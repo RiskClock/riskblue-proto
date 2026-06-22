@@ -1577,9 +1577,106 @@ export default function WorkbenchProjectDetail() {
   }, [spaceHierarchyPayload, pageSpaceValidNames]);
 
 
+  // Survey-derived rollup: uses existing per-page floor-plan metadata
+  // (level_floor_plan.floors[] + referenced_unit_ids[]) to map unit floor
+  // plan pages back to their parent level(s). Independent of spatial-architect.
+  const surveyDerivedMaps = useMemo(() => {
+    const levelMap = new Map<string, Set<string>>();
+    const unitMap = new Map<string, Array<{ level: string; unit?: string }>>();
+    const files = rows?.files ?? [];
+    if (files.length === 0) return { levelMap, unitMap };
+
+    // Pass 1: build unitRef (lowercased) -> Set<level>.
+    const unitRefToLevels = new Map<string, Set<string>>();
+    for (const f of files) {
+      const byPage = floorPlansByFile.get(f.id);
+      if (!byPage) continue;
+      for (const plans of byPage.values()) {
+        for (const fp of plans) {
+          if (fp.type !== "level_floor_plan") continue;
+          const floors = fp.floors || [];
+          for (const ref of fp.referenced_unit_ids || []) {
+            const k = ref.trim().toLowerCase();
+            if (!k) continue;
+            const set = unitRefToLevels.get(k) || new Set<string>();
+            for (const lvl of floors) if (lvl) set.add(lvl);
+            unitRefToLevels.set(k, set);
+          }
+        }
+      }
+    }
+
+    // Pass 2: emit per-page entries.
+    for (const f of files) {
+      const byPage = floorPlansByFile.get(f.id);
+      if (!byPage) continue;
+      for (const [page, plans] of byPage.entries()) {
+        const key = `${f.name}::${page}`;
+        for (const fp of plans) {
+          if (fp.type === "level_floor_plan") {
+            const floors = fp.floors || [];
+            const ls = levelMap.get(key) || new Set<string>();
+            for (const lvl of floors) if (lvl) ls.add(lvl);
+            levelMap.set(key, ls);
+            const pairs = unitMap.get(key) || [];
+            for (const lvl of floors) {
+              if (!lvl) continue;
+              if (!pairs.some((p) => p.level === lvl && !p.unit)) pairs.push({ level: lvl });
+            }
+            unitMap.set(key, pairs);
+          } else if (fp.type === "unit_floor_plan") {
+            const unitLabel = fp.reference_id || floorPlanDisplayLabel(fp);
+            const refKey = (fp.reference_id || "").trim().toLowerCase();
+            const parentLevels = refKey ? unitRefToLevels.get(refKey) : null;
+            if (!parentLevels || parentLevels.size === 0) continue;
+            const pairs = unitMap.get(key) || [];
+            const ls = levelMap.get(key) || new Set<string>();
+            for (const lvl of parentLevels) {
+              ls.add(lvl);
+              if (!pairs.some((p) => p.level === lvl && p.unit === unitLabel)) {
+                pairs.push({ level: lvl, unit: unitLabel });
+              }
+            }
+            levelMap.set(key, ls);
+            unitMap.set(key, pairs);
+          }
+        }
+      }
+    }
+    return { levelMap, unitMap };
+  }, [rows?.files, floorPlansByFile]);
+
+  // Merge survey (primary) with spatial-architect maps (supplemental fallback).
+  const mergedPageSpaceMap = useMemo(() => {
+    const out = new Map<string, string[]>();
+    const addAll = (key: string, levels: Iterable<string>) => {
+      const arr = out.get(key) || [];
+      for (const lvl of levels) {
+        if (!isSpaceValidOnPage(key, lvl)) continue;
+        if (!arr.includes(lvl)) arr.push(lvl);
+      }
+      out.set(key, arr);
+    };
+    for (const [key, levels] of surveyDerivedMaps.levelMap.entries()) addAll(key, levels);
+    for (const [key, levels] of pageSpaceMap.entries()) addAll(key, levels);
+    return out;
+  }, [surveyDerivedMaps, pageSpaceMap, pageSpaceValidNames]);
+
+  const mergedPageSpaceUnitMap = useMemo(() => {
+    const out = new Map<string, Array<{ level: string; unit?: string }>>();
+    const push = (key: string, pair: { level: string; unit?: string }) => {
+      if (!isSpaceValidOnPage(key, pair.level)) return;
+      const arr = out.get(key) || [];
+      if (!arr.some((p) => p.level === pair.level && p.unit === pair.unit)) arr.push(pair);
+      out.set(key, arr);
+    };
+    for (const [key, pairs] of surveyDerivedMaps.unitMap.entries()) for (const p of pairs) push(key, p);
+    for (const [key, pairs] of pageSpaceUnitMap.entries()) for (const p of pairs) push(key, p);
+    return out;
+  }, [surveyDerivedMaps, pageSpaceUnitMap, pageSpaceValidNames]);
 
   const spacesForSheet = (fileName: string, pageIndex: number): string[] => {
-    return pageSpaceMap.get(`${fileName}::${pageIndex}`) || [];
+    return mergedPageSpaceMap.get(`${fileName}::${pageIndex}`) || [];
   };
 
 
