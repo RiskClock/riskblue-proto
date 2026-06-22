@@ -27,6 +27,7 @@ import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
 import { SpaceEditModal } from "@/components/workbench/SpaceEditModal";
 import { ConsolidateRisersModal } from "@/components/workbench/ConsolidateRisersModal";
+import { normalizeScoutResponse } from "@/lib/scoutResponseNormalizer";
 
 import {
   Dialog,
@@ -237,7 +238,7 @@ export default function WorkbenchProjectDetail() {
   }>>([]);
   const [surveyRawText, setSurveyRawText] = useState<string>("");
   const [surveyRecoveredRun, setSurveyRecoveredRun] = useState(false);
-  const [surveyResponseModal, setSurveyResponseModal] = useState<{ fileName: string; raw: string } | null>(null);
+  const [surveyResponseModal, setSurveyResponseModal] = useState<{ fileName: string; raw: string; label?: string } | null>(null);
   const [scoutDebugOpen, setScoutDebugOpen] = useState(false);
 
   const [spaceModalOpen, setSpaceModalOpen] = useState(false);
@@ -2690,7 +2691,7 @@ export default function WorkbenchProjectDetail() {
                 <DialogContent className="max-w-[80vw] w-[80vw] h-[80vh] flex flex-col">
                   <DialogHeader>
                     <DialogTitle className="truncate">
-                      Survey response · {surveyResponseModal?.fileName}
+                      {(surveyResponseModal?.label ?? "Scout response")} · {surveyResponseModal?.fileName}
                     </DialogTitle>
                   </DialogHeader>
                   <Textarea
@@ -2748,7 +2749,8 @@ export default function WorkbenchProjectDetail() {
                                       setScoutDebugOpen(false);
                                       setSurveyResponseModal({
                                         fileName: f.name,
-                                        raw: f.survey_raw_response ?? "",
+                                        raw: normalizeScoutResponse(f.survey_raw_response),
+                                        label: "Scout response",
                                       });
                                     }}
                                   >
@@ -2823,10 +2825,11 @@ export default function WorkbenchProjectDetail() {
                                               disabled={!hasResp}
                                               onClick={() => {
                                                 setScoutDebugOpen(false);
-                                                setSurveyResponseModal({
-                                                  fileName: `${f.name} · ${cn}`,
-                                                  raw: text,
-                                                });
+                                                 setSurveyResponseModal({
+                                                   fileName: `${f.name} · ${cn}`,
+                                                   raw: text,
+                                                   label: "Risk Radar response",
+                                                 });
                                               }}
                                             >
                                               View Response
@@ -2888,8 +2891,9 @@ export default function WorkbenchProjectDetail() {
                                 onClick={() => {
                                   setScoutDebugOpen(false);
                                   setSurveyResponseModal({
-                                    fileName: "Spatial Architect · Space Hierarchy",
+                                    fileName: "Space Hierarchy",
                                     raw: displayText,
+                                    label: "Spatial Architect response",
                                   });
                                 }}
                               >
