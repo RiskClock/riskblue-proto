@@ -4318,7 +4318,13 @@ function InstancesReportModal({
     const _p: any = spaceHierarchyPayload?.parsed;
     const hierarchySpaces: any[] = _p?.physical_spaces || _p?.spatial_records || [];
     for (const sp of hierarchySpaces) {
-      if (sp?.standardized_space_name) s.add(sp.standardized_space_name);
+      const name = sp?.standardized_space_name;
+      if (!name) continue;
+      const cat = typeof sp?.space_category === "string" ? sp.space_category.toLowerCase() : "";
+      // Only physical levels (contiguous storeys) qualify as report spaces.
+      // Spatial Templates (unit suites, amenity templates) live within levels.
+      if (cat && cat !== "contiguous storey") continue;
+      s.add(name);
     }
     return s;
   }, [spaceHierarchyPayload]);
