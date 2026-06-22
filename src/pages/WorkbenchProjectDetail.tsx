@@ -4581,25 +4581,94 @@ function InstancesReportModal({
   const renderSpaceDetail = (space: string) => {
     const rows = instancesForSpace(space);
     const label = space === "__unassigned__" ? "Unassigned" : space;
-    // Group rows by file+page so we can render each matched drawing with overlays.
-    let pageKeys = Array.from(
-      new Set(rows.map((r) => `${r.fileId}::${r.pageIndex}`)),
-    );
-    // When the space has no annotations, still surface its floor plan pages
-    // (from the space hierarchy) so users see the level's drawing.
-    if (pageKeys.length === 0 && space !== "__unassigned__") {
-      const fallback = new Set<string>();
+    // Collect (fileId, pageIdx) keys that depict this space — either directly
+    // (level plan) or via a unit/template page assigned to this level.
+    const pageKeySet = new Set<string>();
+    for (const r of rows) pageKeySet.add(`${r.fileId}::${r.pageIndex}`);
+    if (space !== "__unassigned__") {
       for (const [key, spaces] of pageSpaceMap.entries()) {
         if (!spaces.includes(space)) continue;
         const [fileName, pageStr] = key.split("::");
         const lookup = sheetByFilePage.get(`${fileName}::${pageStr}`);
         const fileId = lookup?.file?.id;
         if (!fileId) continue;
-        fallback.add(`${fileId}::${pageStr}`);
+        pageKeySet.add(`${fileId}::${pageStr}`);
       }
-      pageKeys = Array.from(fallback);
     }
+    const pageKeys = Array.from(pageKeySet);
+
+    // Units assigned to this level — derived from pageSpaceUnitMap.
+    const unitMap = new Map<string, Array<{ fileName: string; pageIdx: number }>>();
+    if (space !== "__unassigned__") {
+      for (const [key, pairs] of pageSpaceUnitMap.entries()) {
+        for (const pair of pairs) {
+          if (pair.level !== space || !pair.unit) continue;
+          const [fileName, pageStr] = key.split("::");
+          const arr = unitMap.get(pair.unit) || [];
+          arr.push({ fileName, pageIdx: parseInt(pageStr, 10) });
+          unitMap.set(pair.unit, arr);
+        }
+      }
+    }
+    const unitsList = Array.from(unitMap.entries())
+      .map(([name, pages]) => ({ name, pages }))
+      .sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: "base" }));
+
     const showUnitCol = rows.some((r) => !!r.unitName);
+
+    // Build tab entries (one per file+page).
+    type TabEntry = {
+      key: string;
+      fileId: string;
+      pageIdx: number;
+      fileName: string;
+      shortName: string;
+      bucket: string;
+      parentPath: string | null;
+      overlays: any[];
+    };
+    const tabs: TabEntry[] = pageKeys
+      .map((key) => {
+        const [fileId, pageIdxStr] = key.split("::");
+        const pageIdx = parseInt(pageIdxStr, 10);
+        const fileName = fileNameById.get(fileId) || "";
+        const lookup = sheetByFilePage.get(`${fileName}::${pageIdx}`);
+        if (!lookup) return null;
+        const bucket = bucketForSource(lookup.sheet.file_source_type);
+        // Use the parent PDF + page navigation (same approach as the drawing
+        // modal). No per-page extraction required.
+        const parentPath = lookup.file.storage_path;
+        const overlays = rows
+          .filter((r) => r.fileId === fileId && r.pageIndex === pageIdx)
+          .map((r, i) => ({
+            id: `${r.instanceId}-${i}`,
+            bbox: [r.nx, r.ny, 0, 0] as [number, number, number, number],
+            coordSpace: "normalized" as const,
+            page: pageIdx,
+            color: awpClassColor(r.awpClassName),
+            label: r.instanceId,
+            shape: "circle" as const,
+          }));
+        // Short name without extension, capped for tab labels.
+        const shortName = fileName.replace(/\.[^.]+$/, "");
+        return {
+          key,
+          fileId,
+          pageIdx,
+          fileName,
+          shortName,
+          bucket,
+          parentPath,
+          overlays,
+        };
+      })
+      .filter((t): t is TabEntry => t !== null)
+      .sort((a, b) => {
+        const f = a.fileName.localeCompare(b.fileName);
+        if (f !== 0) return f;
+        return a.pageIdx - b.pageIdx;
+      });
+
     return (
       <div className="space-y-4">
         <h3 className="text-sm font-semibold">{label}</h3>
@@ -4638,51 +4707,31 @@ function InstancesReportModal({
           </Table>
         )}
 
-        <div className="space-y-6">
-          {pageKeys.map((key) => {
-            const [fileId, pageIdxStr] = key.split("::");
-            const pageIdx = parseInt(pageIdxStr, 10);
-            const fileName = fileNameById.get(fileId) || "";
-            const lookup = sheetByFilePage.get(`${fileName}::${pageIdx}`);
-            if (!lookup) {
-              return (
-                <div key={key} className="text-xs text-muted-foreground">
-                  {fileName} · Page {pageIdx} (drawing not available)
+        {unitsList.length > 0 && (
+          <div className="border rounded-md">
+            <div className="px-3 py-2 border-b bg-muted/40 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+              Units on this level ({unitsList.length})
+            </div>
+            <div className="p-3 grid grid-cols-2 md:grid-cols-3 gap-x-4 gap-y-1 text-xs">
+              {unitsList.map((u) => (
+                <div key={u.name} className="flex items-baseline gap-1.5 truncate">
+                  <span className="truncate">{u.name.replace(/^Template\s*-\s*/, "")}</span>
+                  <span className="text-muted-foreground shrink-0">
+                    · {u.pages.map((p) => `p${p.pageIdx}`).join(", ")}
+                  </span>
                 </div>
-              );
-            }
-            const bucket = bucketForSource(lookup.sheet.file_source_type);
-            // Sheet storage_path is a per-page rendered PDF (single page),
-            // so overlays and the viewer must address page 1, not the
-            // original page_index from the source document.
-            const overlays = rows
-              .filter((r) => r.fileId === fileId && r.pageIndex === pageIdx)
-              .map((r, i) => ({
-                id: `${r.instanceId}-${i}`,
-                bbox: [r.nx, r.ny, 0, 0] as [number, number, number, number],
-                coordSpace: "normalized" as const,
-                page: 1,
-                color: awpClassColor(r.awpClassName),
-                label: r.instanceId,
-                shape: "circle" as const,
-              }));
+              ))}
+            </div>
+          </div>
+        )}
 
-            return (
-              <LazyDrawingPageBlock
-                key={key}
-                sheetId={lookup.sheet.id}
-                initialStoragePath={lookup.sheet.storage_path}
-                bucket={bucket}
-                fileName={fileName}
-                pageIdx={pageIdx}
-                overlays={overlays}
-              />
-            );
-          })}
-        </div>
+        {tabs.length > 0 && (
+          <TabbedPagesBlock tabs={tabs} />
+        )}
       </div>
     );
   };
+
 
   const renderRight = () => {
     if (loading) {
