@@ -4503,7 +4503,7 @@ function InstancesReportModal({
     }
 
     return rows;
-  }, [instances, optionByName, fileNameById, pageSpaceMap, pageSpaceUnitMap, enabledClassSet, consolidationByAnnId]);
+  }, [instances, optionByName, fileNameById, pageSpaceMap, pageSpaceUnitMap, pageUnitPlansMap, enabledClassSet, consolidationByAnnId]);
 
 
   const levelNames = useMemo(() => {
