@@ -2691,7 +2691,7 @@ export default function WorkbenchProjectDetail() {
                 <DialogContent className="max-w-[80vw] w-[80vw] h-[80vh] flex flex-col">
                   <DialogHeader>
                     <DialogTitle className="truncate">
-                      Survey response · {surveyResponseModal?.fileName}
+                      {(surveyResponseModal?.label ?? "Scout response")} · {surveyResponseModal?.fileName}
                     </DialogTitle>
                   </DialogHeader>
                   <Textarea
