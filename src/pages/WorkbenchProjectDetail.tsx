@@ -820,7 +820,7 @@ export default function WorkbenchProjectDetail() {
         supabase
           .from("analysis_request_sheets")
           .select(
-            "id, parent_file_id, page_index, sheet_number, sheet_title, storage_path, extract_status, extracted_text, survey_result, survey_updated_at",
+            "id, parent_file_id, page_index, sheet_number, sheet_title, storage_path, extract_status, extracted_text, survey_result, survey_updated_at, floor_plan_overrides",
           )
           .eq("analysis_request_id", requestId!)
           .order("page_index", { ascending: true }),
