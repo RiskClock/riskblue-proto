@@ -36,8 +36,9 @@ async function rebuildCache(params: {
   fileName: string;
   bucket: string;
   storagePath: string;
+  model: string;
 }): Promise<{ cacheName: string; expiresAt: string }> {
-  const { ai, admin, fileId, fileName, bucket, storagePath } = params;
+  const { ai, admin, fileId, fileName, bucket, storagePath, model } = params;
 
   const { data: blob, error: dlErr } = await admin.storage
     .from(bucket)
