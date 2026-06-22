@@ -4751,6 +4751,124 @@ function InstancesReportModal({
 }
 
 // ---------------------------------------------------------------------------
+// LazyDrawingPageBlock — resolves the sheet's per-page PDF on demand. When the
+// sheet already has a storage_path, renders DrawingPageBlock directly. When
+// missing (e.g., the page wasn't analyzed but Scout/Spatial Architect flagged
+// it as a floor plan), invokes the `render-sheet-page` edge function which
+// extracts the page from the parent PDF and stores it.
+// ---------------------------------------------------------------------------
+function LazyDrawingPageBlock({
+  sheetId,
+  initialStoragePath,
+  bucket,
+  fileName,
+  pageIdx,
+  overlays,
+}: {
+  sheetId: string;
+  initialStoragePath: string | null;
+  bucket: string;
+  fileName: string;
+  pageIdx: number;
+  overlays: any[];
+}) {
+  const [path, setPath] = useState<string | null>(initialStoragePath);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const [inView, setInView] = useState(false);
+
+  useEffect(() => {
+    if (path || inView) return;
+    const node = containerRef.current;
+    if (!node) return;
+    const io = new IntersectionObserver(
+      (entries) => {
+        for (const e of entries) {
+          if (e.isIntersecting) {
+            setInView(true);
+            io.disconnect();
+            break;
+          }
+        }
+      },
+      { rootMargin: "400px 0px" },
+    );
+    io.observe(node);
+    return () => io.disconnect();
+  }, [path, inView]);
+
+  useEffect(() => {
+    if (path || !inView || loading) return;
+    let cancelled = false;
+    (async () => {
+      setLoading(true);
+      setError(null);
+      try {
+        const { data, error: invokeErr } = await supabase.functions.invoke(
+          "render-sheet-page",
+          { body: { sheetId } },
+        );
+        if (cancelled) return;
+        if (invokeErr) throw invokeErr;
+        const newPath = (data as any)?.storage_path as string | undefined;
+        if (!newPath) throw new Error("No storage_path returned");
+        setPath(newPath);
+      } catch (e: any) {
+        if (!cancelled) setError(e?.message ?? "Failed to render page");
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [inView, path, loading, sheetId]);
+
+  if (path) {
+    const source: DocumentSourceDescriptor = {
+      kind: "supabase-storage",
+      bucket,
+      path,
+      mimeType: "application/pdf",
+    };
+    return (
+      <DrawingPageBlock
+        fileName={fileName}
+        pageIdx={pageIdx}
+        source={source}
+        overlays={overlays}
+      />
+    );
+  }
+
+  return (
+    <div
+      ref={containerRef}
+      className="border rounded-md p-4 text-xs text-muted-foreground flex items-center gap-2 min-h-[120px]"
+    >
+      {error ? (
+        <span className="text-destructive">
+          {fileName} · Page {pageIdx}: {error}
+        </span>
+      ) : loading ? (
+        <>
+          <Loader2 className="h-3.5 w-3.5 animate-spin" />
+          <span>
+            Preparing {fileName} · Page {pageIdx}…
+          </span>
+        </>
+      ) : (
+        <span>
+          {fileName} · Page {pageIdx} (loading on scroll…)
+        </span>
+      )}
+    </div>
+  );
+}
+
+
+// ---------------------------------------------------------------------------
 // DrawingPageBlock — renders a single drawing page in the Instances Report
 // with a docked header (file name + Download button) and a non-interactive
 // DrawingViewer. The Download button rasterizes the page (including markers)
