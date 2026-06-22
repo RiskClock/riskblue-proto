@@ -4557,9 +4557,23 @@ function InstancesReportModal({
     const rows = instancesForSpace(space);
     const label = space === "__unassigned__" ? "Unassigned" : space;
     // Group rows by file+page so we can render each matched drawing with overlays.
-    const pageKeys = Array.from(
+    let pageKeys = Array.from(
       new Set(rows.map((r) => `${r.fileId}::${r.pageIndex}`)),
     );
+    // When the space has no annotations, still surface its floor plan pages
+    // (from the space hierarchy) so users see the level's drawing.
+    if (pageKeys.length === 0 && space !== "__unassigned__") {
+      const fallback = new Set<string>();
+      for (const [key, spaces] of pageSpaceMap.entries()) {
+        if (!spaces.includes(space)) continue;
+        const [fileName, pageStr] = key.split("::");
+        const lookup = sheetByFilePage.get(`${fileName}::${pageStr}`);
+        const fileId = lookup?.file?.id;
+        if (!fileId) continue;
+        fallback.add(`${fileId}::${pageStr}`);
+      }
+      pageKeys = Array.from(fallback);
+    }
     const showUnitCol = rows.some((r) => !!r.unitName);
     return (
       <div className="space-y-4">
