@@ -246,7 +246,7 @@ Deno.serve(async (req) => {
                 `[identify-risk-elements][cache-retry] file=${fileName} class=${className} error=${msg} — rebuilding cache and retrying`,
               );
               const rebuilt = await rebuildCache({
-                ai, admin, fileId, fileName, bucket, storagePath,
+                ai, admin, fileId, fileName, bucket, storagePath, model: GEMINI_MODEL,
               });
               usedCache = rebuilt.cacheName;
               cacheName = usedCache;
