@@ -237,7 +237,7 @@ export default function WorkbenchProjectDetail() {
   }>>([]);
   const [surveyRawText, setSurveyRawText] = useState<string>("");
   const [surveyRecoveredRun, setSurveyRecoveredRun] = useState(false);
-  const [surveyResponseModal, setSurveyResponseModal] = useState<{ fileName: string; raw: string } | null>(null);
+  const [surveyResponseModal, setSurveyResponseModal] = useState<{ fileName: string; raw: string; label?: string } | null>(null);
   const [scoutDebugOpen, setScoutDebugOpen] = useState(false);
 
   const [spaceModalOpen, setSpaceModalOpen] = useState(false);
