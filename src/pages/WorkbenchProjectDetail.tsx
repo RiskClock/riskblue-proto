@@ -4919,11 +4919,15 @@ function DrawingPageBlock({
   pageIdx,
   source,
   overlays,
+  page,
+  hideHeader,
 }: {
   fileName: string;
   pageIdx: number;
   source: DocumentSourceDescriptor;
   overlays: any[];
+  page?: number;
+  hideHeader?: boolean;
 }) {
   const surfaceRef = useRef<HTMLDivElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
