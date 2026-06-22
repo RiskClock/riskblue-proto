@@ -2749,7 +2749,8 @@ export default function WorkbenchProjectDetail() {
                                       setScoutDebugOpen(false);
                                       setSurveyResponseModal({
                                         fileName: f.name,
-                                        raw: f.survey_raw_response ?? "",
+                                        raw: normalizeScoutResponse(f.survey_raw_response),
+                                        label: "Scout response",
                                       });
                                     }}
                                   >
