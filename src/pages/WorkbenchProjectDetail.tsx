@@ -1491,29 +1491,41 @@ export default function WorkbenchProjectDetail() {
     return !!valid && valid.has(name.toLowerCase());
   };
 
-  // Map "fileName::pageNumber" -> [space names], built from parsed hierarchy.
+  // Map "fileName::pageNumber" -> [level names], built from parsed hierarchy.
+  // Spatial Template records (units/suites/amenities) with applies_to_levels
+  // are expanded into their parent levels so their pages are attributed to
+  // the right physical levels.
   const pageSpaceMap = useMemo(() => {
     const map = new Map<string, string[]>();
     const spaces = extractSpaces(spaceHierarchyPayload?.parsed);
     for (const sp of spaces) {
       const name = sp?.standardized_space_name;
       if (!name) continue;
+      const appliesTo: string[] = Array.isArray(sp?.applies_to_levels)
+        ? sp.applies_to_levels.filter((s: any) => typeof s === "string")
+        : [];
+      const cat = typeof sp?.space_category === "string" ? sp.space_category.toLowerCase() : "";
+      const isTemplate = cat && cat !== "contiguous storey" && cat !== "level";
+      const projectedNames = isTemplate && appliesTo.length > 0 ? appliesTo : [name];
       for (const src of sp?.matched_sources || []) {
         const key = `${src?.file_name}::${src?.page_number}`;
-        if (!isSpaceValidOnPage(key, name)) continue;
-        const arr = map.get(key) || [];
-        if (!arr.includes(name)) arr.push(name);
-        map.set(key, arr);
+        for (const projected of projectedNames) {
+          if (!isSpaceValidOnPage(key, projected)) continue;
+          const arr = map.get(key) || [];
+          if (!arr.includes(projected)) arr.push(projected);
+          map.set(key, arr);
+        }
       }
     }
     return map;
   }, [spaceHierarchyPayload, pageSpaceValidNames]);
 
   // Unit-aware page map: "fileName::pageNumber" -> [{level, unit?}, ...].
-  // Level entries come from spatial_records.matched_sources (one per page);
-  // unit entries come from unit_templates: each page where a unit plan lives
-  // is expanded once per level the unit applies to. Falls back to pageSpaceMap
-  // for projects whose space_hierarchy_json predates unit_templates.
+  // Sources of unit entries:
+  //   - Spatial Template records in spatial_records with applies_to_levels
+  //     (e.g. "Template - Suite 2A" applied to "Level 2").
+  //   - unit_templates entries (legacy/typical-unit-plans).
+  // Sources of level entries: spatial_records with empty applies_to_levels.
   const pageSpaceUnitMap = useMemo(() => {
     const map = new Map<string, Array<{ level: string; unit?: string }>>();
     const parsed: any = spaceHierarchyPayload?.parsed;
@@ -1521,12 +1533,26 @@ export default function WorkbenchProjectDetail() {
     for (const sp of spaces) {
       const name = sp?.standardized_space_name;
       if (!name) continue;
+      const cat = typeof sp?.space_category === "string" ? sp.space_category.toLowerCase() : "";
+      const appliesTo: string[] = Array.isArray(sp?.applies_to_levels)
+        ? sp.applies_to_levels.filter((s: any) => typeof s === "string")
+        : [];
+      const isTemplate = cat && cat !== "contiguous storey" && cat !== "level";
       for (const src of sp?.matched_sources || []) {
         const key = `${src?.file_name}::${src?.page_number}`;
-        if (!isSpaceValidOnPage(key, name)) continue;
-        const arr = map.get(key) || [];
-        arr.push({ level: name });
-        map.set(key, arr);
+        if (isTemplate && appliesTo.length > 0) {
+          for (const lvl of appliesTo) {
+            if (!isSpaceValidOnPage(key, lvl)) continue;
+            const arr = map.get(key) || [];
+            arr.push({ level: lvl, unit: name });
+            map.set(key, arr);
+          }
+        } else {
+          if (!isSpaceValidOnPage(key, name)) continue;
+          const arr = map.get(key) || [];
+          arr.push({ level: name });
+          map.set(key, arr);
+        }
       }
     }
     const units: any[] = Array.isArray(parsed?.unit_templates) ? parsed.unit_templates : [];
@@ -1539,8 +1565,6 @@ export default function WorkbenchProjectDetail() {
         const key = `${src?.file_name}::${src?.page_number}`;
         if (!isSpaceValidOnPage(key, unitName)) continue;
         const arr = map.get(key) || [];
-        // When applies_to_levels is empty, still record the unit so the
-        // detection isn't dropped — treat the unit page as its own "space".
         if (levels.length === 0) {
           arr.push({ level: unitName, unit: unitName });
         } else {
@@ -1551,6 +1575,7 @@ export default function WorkbenchProjectDetail() {
     }
     return map;
   }, [spaceHierarchyPayload, pageSpaceValidNames]);
+
 
 
   const spacesForSheet = (fileName: string, pageIndex: number): string[] => {
