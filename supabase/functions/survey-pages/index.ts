@@ -15,7 +15,7 @@ const corsHeaders = {
   "Access-Control-Allow-Methods": "POST, OPTIONS",
 };
 
-const GEMINI_MODEL = "gemini-3.5-flash";
+const DEFAULT_GEMINI_MODEL = "gemini-3.5-flash";
 const CACHE_TTL_SECONDS = 7200; // 2 hours
 
 function json(body: unknown, status = 200) {
