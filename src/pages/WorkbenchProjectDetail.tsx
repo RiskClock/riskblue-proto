@@ -4313,26 +4313,24 @@ function InstancesReportModal({
   }, [instances, optionByName, fileNameById, pageSpaceMap, pageSpaceUnitMap, enabledClassSet, consolidationByAnnId]);
 
 
+  const levelNames = useMemo(() => {
+    const s = new Set<string>();
+    const _p: any = spaceHierarchyPayload?.parsed;
+    const hierarchySpaces: any[] = _p?.physical_spaces || _p?.spatial_records || [];
+    for (const sp of hierarchySpaces) {
+      if (sp?.standardized_space_name) s.add(sp.standardized_space_name);
+    }
+    return s;
+  }, [spaceHierarchyPayload]);
+
   const spaceList = useMemo(() => {
     const set = new Set<string>();
     // Only physical spaces (levels) from spatial_records belong in the report
     // spaces list. Units (unit_templates) are sub-spaces and should appear in
     // the level detail, not as standalone spaces.
-    const _p: any = spaceHierarchyPayload?.parsed;
-    const hierarchySpaces: any[] = _p?.physical_spaces || _p?.spatial_records || [];
-    const levelNames = new Set<string>();
-    for (const sp of hierarchySpaces) {
-      if (sp?.standardized_space_name) {
-        set.add(sp.standardized_space_name);
-        levelNames.add(sp.standardized_space_name);
-      }
-    }
+    for (const name of levelNames) set.add(name);
     let hasUnassigned = false;
     for (const r of expanded) {
-      // Annotations whose space resolves to a level are kept as-is.
-      // Annotations with no space, or whose space resolves to a unit
-      // (or anything not in the physical-space hierarchy) that can't be
-      // attributed to a level, are rolled into an "Unassigned" entry.
       if (r.spaceName && levelNames.has(r.spaceName)) {
         set.add(r.spaceName);
       } else {
@@ -4349,7 +4347,8 @@ function InstancesReportModal({
     });
     if (hasUnassigned) arr.push("__unassigned__");
     return arr;
-  }, [expanded, spaceIndexMap, spaceHierarchyPayload]);
+  }, [expanded, spaceIndexMap, levelNames]);
+
 
   const classCols = useMemo(() => {
     const map = new Map<string, string>();
