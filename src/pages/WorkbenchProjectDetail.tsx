@@ -2891,8 +2891,9 @@ export default function WorkbenchProjectDetail() {
                                 onClick={() => {
                                   setScoutDebugOpen(false);
                                   setSurveyResponseModal({
-                                    fileName: "Spatial Architect · Space Hierarchy",
+                                    fileName: "Space Hierarchy",
                                     raw: displayText,
+                                    label: "Spatial Architect response",
                                   });
                                 }}
                               >
