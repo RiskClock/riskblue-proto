@@ -1583,12 +1583,16 @@ export default function WorkbenchProjectDetail() {
   const surveyDerivedMaps = useMemo(() => {
     const levelMap = new Map<string, Set<string>>();
     const unitMap = new Map<string, Array<{ level: string; unit?: string }>>();
+    // Per-page unit floor plans (with bbox + parent levels) for per-annotation
+    // bbox-containment attribution in the threat report.
+    const pageUnitPlans = new Map<
+      string,
+      Array<{ unitLabel: string; levels: string[]; bbox: [number, number, number, number] | null }>
+    >();
     const files = rows?.files ?? [];
     const sheets = rows?.sheets ?? [];
-    if (files.length === 0) return { levelMap, unitMap };
+    if (files.length === 0) return { levelMap, unitMap, pageUnitPlans };
 
-    // Lookup overrides by (fileId, page) so we can read the user-edited
-    // floor_plan_overrides[planId].{units, floors, type} on each plan.
     const overridesByFilePage = new Map<string, Record<string, any>>();
     for (const s of sheets) {
       overridesByFilePage.set(
@@ -1601,10 +1605,13 @@ export default function WorkbenchProjectDetail() {
       const type: string = typeof ovr.type === "string" && ovr.type ? ovr.type : fp.type;
       const floors: string[] = Array.isArray(ovr.floors) ? ovr.floors : fp.floors;
       const units: string[] = Array.isArray(ovr.units) ? ovr.units : fp.referenced_unit_ids;
-      return { type, floors: floors || [], units: units || [] };
+      const bbox: [number, number, number, number] | null =
+        Array.isArray(ovr.bbox_pct) && ovr.bbox_pct.length === 4 && ovr.bbox_pct.every((n: any) => Number.isFinite(n))
+          ? [ovr.bbox_pct[0], ovr.bbox_pct[1], ovr.bbox_pct[2], ovr.bbox_pct[3]]
+          : fp.xy_width_height_pct;
+      return { type, floors: floors || [], units: units || [], bbox };
     };
 
-    // Pass 1: build unitRef (lowercased) -> Set<level> using EFFECTIVE units.
     const unitRefToLevels = new Map<string, Set<string>>();
     for (const f of files) {
       const byPage = floorPlansByFile.get(f.id);
@@ -1624,7 +1631,6 @@ export default function WorkbenchProjectDetail() {
       }
     }
 
-    // Pass 2: emit per-page entries.
     for (const f of files) {
       const byPage = floorPlansByFile.get(f.id);
       if (!byPage) continue;
@@ -1645,8 +1651,15 @@ export default function WorkbenchProjectDetail() {
           } else if (e.type === "unit_floor_plan") {
             const unitLabel = fp.reference_id || floorPlanDisplayLabel(fp);
             const refKey = (fp.reference_id || "").trim().toLowerCase();
-            const parentLevels = refKey ? unitRefToLevels.get(refKey) : null;
-            if (!parentLevels || parentLevels.size === 0) continue;
+            const parentLevels = refKey ? Array.from(unitRefToLevels.get(refKey) || []) : [];
+
+            // Index every unit plan on the page (including those without resolved
+            // parent levels) so per-annotation containment can decide attribution.
+            const upArr = pageUnitPlans.get(key) || [];
+            upArr.push({ unitLabel, levels: parentLevels, bbox: e.bbox });
+            pageUnitPlans.set(key, upArr);
+
+            if (parentLevels.length === 0) continue;
             const pairs = unitMap.get(key) || [];
             const ls = levelMap.get(key) || new Set<string>();
             for (const lvl of parentLevels) {
@@ -1661,8 +1674,10 @@ export default function WorkbenchProjectDetail() {
         }
       }
     }
-    return { levelMap, unitMap };
+    return { levelMap, unitMap, pageUnitPlans };
   }, [rows?.files, rows?.sheets, floorPlansByFile]);
+
+  const pageUnitPlansMap = surveyDerivedMaps.pageUnitPlans;
 
   // Merge survey (primary) with spatial-architect maps (supplemental fallback).
   const mergedPageSpaceMap = useMemo(() => {
