@@ -4410,7 +4410,7 @@ function InstancesReportModal({
       const num = inst.instance_number ?? 0;
       const base = `${prefix}${String(num).padStart(3, "0")}`;
       const fileName = fileNameById.get(inst.file_id) || "";
-      const pairs = pairsForPage(fileName, inst.page_index);
+      const pairs = pairsForPage(fileName, inst.page_index, Number(inst.nx) || 0, Number(inst.ny) || 0);
       const common = {
         annotationBaseId: base,
         awpClassName: inst.awp_class_name,
