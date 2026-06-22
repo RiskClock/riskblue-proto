@@ -804,7 +804,7 @@ function SurveyPagePromptSection() {
         .from("app_settings" as any)
         .upsert({ key: "survey_page_prompt", value: content, updated_at: new Date().toISOString() } as any, { onConflict: "key" });
       if (error) throw error;
-      toast({ title: "Prompt saved", description: "Survey Pages will use the updated prompt next run." });
+      toast({ title: "Prompt saved", description: "Scout Agent will use the updated prompt next run." });
       setOpen(false);
     } catch (e: any) {
       toast({ title: "Save failed", description: (e as any)?.message, variant: "destructive" });
