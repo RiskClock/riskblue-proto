@@ -3875,8 +3875,8 @@ export default function WorkbenchProjectDetail() {
           requestId={requestId}
           fileGroups={fileGroups}
           optionByName={optionByName}
-          pageSpaceMap={pageSpaceMap}
-          pageSpaceUnitMap={pageSpaceUnitMap}
+          pageSpaceMap={mergedPageSpaceMap}
+          pageSpaceUnitMap={mergedPageSpaceUnitMap}
 
           spaceHierarchyPayload={spaceHierarchyPayload}
           projectName={project?.name || "Project"}
