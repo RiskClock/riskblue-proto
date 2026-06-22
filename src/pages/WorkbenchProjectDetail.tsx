@@ -4222,6 +4222,7 @@ function InstancesReportModal({
   optionByName,
   pageSpaceMap,
   pageSpaceUnitMap,
+  pageUnitPlansMap,
   spaceHierarchyPayload,
   projectName,
   enabledClassNames,
@@ -4234,6 +4235,7 @@ function InstancesReportModal({
   optionByName: Map<string, { idPrefix: string | null; category: string }>;
   pageSpaceMap: Map<string, string[]>;
   pageSpaceUnitMap: Map<string, Array<{ level: string; unit?: string }>>;
+  pageUnitPlansMap: Map<string, Array<{ unitLabel: string; levels: string[]; bbox: [number, number, number, number] | null }>>;
   spaceHierarchyPayload: any | null | undefined;
   projectName: string;
   enabledClassNames: string[];
