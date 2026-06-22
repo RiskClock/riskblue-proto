@@ -3910,6 +3910,8 @@ export default function WorkbenchProjectDetail() {
           optionByName={optionByName}
           pageSpaceMap={mergedPageSpaceMap}
           pageSpaceUnitMap={mergedPageSpaceUnitMap}
+          pageUnitPlansMap={pageUnitPlansMap}
+
 
           spaceHierarchyPayload={spaceHierarchyPayload}
           projectName={project?.name || "Project"}
