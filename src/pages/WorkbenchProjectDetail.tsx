@@ -2825,10 +2825,11 @@ export default function WorkbenchProjectDetail() {
                                               disabled={!hasResp}
                                               onClick={() => {
                                                 setScoutDebugOpen(false);
-                                                setSurveyResponseModal({
-                                                  fileName: `${f.name} · ${cn}`,
-                                                  raw: text,
-                                                });
+                                                 setSurveyResponseModal({
+                                                   fileName: `${f.name} · ${cn}`,
+                                                   raw: text,
+                                                   label: "Risk Radar response",
+                                                 });
                                               }}
                                             >
                                               View Response
