@@ -857,6 +857,7 @@ export default function WorkbenchProjectDetail() {
             file_source_type: f.source_type,
             survey_result: s.survey_result ?? null,
             survey_updated_at: s.survey_updated_at ?? null,
+            floor_plan_overrides: (s.floor_plan_overrides as Record<string, any> | null) ?? null,
           };
         })
         .filter((s): s is SheetRow => s !== null)
