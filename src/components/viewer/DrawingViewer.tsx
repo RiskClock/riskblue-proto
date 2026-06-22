@@ -178,10 +178,22 @@ export const DrawingViewer = forwardRef<DrawingViewerApi, DrawingViewerProps>(
 
     // Compute CSS page size: fit to viewport for the active page (single-page mode),
     // or natural pdfSize (stacked mode lets pages flow vertically).
-    const activePage =
+    const requestedPage =
       layout === "single-page"
         ? allPages.find((p) => p.pageNum === page) ?? null
-        : allPages[0];
+        : allPages[0] ?? null;
+
+    // Keep the previously-shown page visible while the next page rasterizes,
+    // so switching pages or invalidating the cache doesn't flash a full-screen
+    // "Loading page X…" placeholder over the canvas.
+    const prevActivePageRef = useRef<RasterPage | null>(null);
+    useEffect(() => {
+      if (requestedPage) prevActivePageRef.current = requestedPage;
+    }, [requestedPage]);
+
+    const activePage = requestedPage ?? prevActivePageRef.current;
+    const isStaleRaster =
+      layout === "single-page" && !!activePage && activePage.pageNum !== page;
 
     const pageCssSize = useMemo(() => {
       if (!activePage || viewportSize.width === 0 || viewportSize.height === 0) {
@@ -369,7 +381,7 @@ export const DrawingViewer = forwardRef<DrawingViewerApi, DrawingViewerProps>(
           ref={containerRef}
           className="relative flex-1 min-h-0 overflow-hidden bg-muted/30"
         >
-          {loading ? (
+          {loading && !activePage ? (
             <div className="flex items-center justify-center h-full">
               <div className="text-center space-y-2">
                 <Loader2 className="w-8 h-8 animate-spin text-muted-foreground mx-auto" />
@@ -384,6 +396,13 @@ export const DrawingViewer = forwardRef<DrawingViewerApi, DrawingViewerProps>(
               </div>
             </div>
           ) : activePage && pageCssSize.width > 0 ? (
+            <>
+            {isStaleRaster && (
+              <div className="absolute top-2 right-2 z-20 flex items-center gap-1.5 rounded-md bg-background/90 px-2 py-1 text-xs text-muted-foreground shadow-sm border pointer-events-none">
+                <Loader2 className="w-3 h-3 animate-spin" />
+                Loading page {page}…
+              </div>
+            )}
             <TransformWrapper
               ref={wrapperRef}
               minScale={minScale}
@@ -457,6 +476,7 @@ export const DrawingViewer = forwardRef<DrawingViewerApi, DrawingViewerProps>(
 
               </TransformComponent>
             </TransformWrapper>
+            </>
           ) : (
             <div className="flex items-center justify-center h-full">
               <div className="text-center space-y-2">
