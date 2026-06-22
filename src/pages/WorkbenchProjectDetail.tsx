@@ -1491,29 +1491,41 @@ export default function WorkbenchProjectDetail() {
     return !!valid && valid.has(name.toLowerCase());
   };
 
-  // Map "fileName::pageNumber" -> [space names], built from parsed hierarchy.
+  // Map "fileName::pageNumber" -> [level names], built from parsed hierarchy.
+  // Spatial Template records (units/suites/amenities) with applies_to_levels
+  // are expanded into their parent levels so their pages are attributed to
+  // the right physical levels.
   const pageSpaceMap = useMemo(() => {
     const map = new Map<string, string[]>();
     const spaces = extractSpaces(spaceHierarchyPayload?.parsed);
     for (const sp of spaces) {
       const name = sp?.standardized_space_name;
       if (!name) continue;
+      const appliesTo: string[] = Array.isArray(sp?.applies_to_levels)
+        ? sp.applies_to_levels.filter((s: any) => typeof s === "string")
+        : [];
+      const cat = typeof sp?.space_category === "string" ? sp.space_category.toLowerCase() : "";
+      const isTemplate = cat && cat !== "contiguous storey" && cat !== "level";
+      const projectedNames = isTemplate && appliesTo.length > 0 ? appliesTo : [name];
       for (const src of sp?.matched_sources || []) {
         const key = `${src?.file_name}::${src?.page_number}`;
-        if (!isSpaceValidOnPage(key, name)) continue;
-        const arr = map.get(key) || [];
-        if (!arr.includes(name)) arr.push(name);
-        map.set(key, arr);
+        for (const projected of projectedNames) {
+          if (!isSpaceValidOnPage(key, projected)) continue;
+          const arr = map.get(key) || [];
+          if (!arr.includes(projected)) arr.push(projected);
+          map.set(key, arr);
+        }
       }
     }
     return map;
   }, [spaceHierarchyPayload, pageSpaceValidNames]);
 
   // Unit-aware page map: "fileName::pageNumber" -> [{level, unit?}, ...].
-  // Level entries come from spatial_records.matched_sources (one per page);
-  // unit entries come from unit_templates: each page where a unit plan lives
-  // is expanded once per level the unit applies to. Falls back to pageSpaceMap
-  // for projects whose space_hierarchy_json predates unit_templates.
+  // Sources of unit entries:
+  //   - Spatial Template records in spatial_records with applies_to_levels
+  //     (e.g. "Template - Suite 2A" applied to "Level 2").
+  //   - unit_templates entries (legacy/typical-unit-plans).
+  // Sources of level entries: spatial_records with empty applies_to_levels.
   const pageSpaceUnitMap = useMemo(() => {
     const map = new Map<string, Array<{ level: string; unit?: string }>>();
     const parsed: any = spaceHierarchyPayload?.parsed;
@@ -1521,12 +1533,26 @@ export default function WorkbenchProjectDetail() {
     for (const sp of spaces) {
       const name = sp?.standardized_space_name;
       if (!name) continue;
+      const cat = typeof sp?.space_category === "string" ? sp.space_category.toLowerCase() : "";
+      const appliesTo: string[] = Array.isArray(sp?.applies_to_levels)
+        ? sp.applies_to_levels.filter((s: any) => typeof s === "string")
+        : [];
+      const isTemplate = cat && cat !== "contiguous storey" && cat !== "level";
       for (const src of sp?.matched_sources || []) {
         const key = `${src?.file_name}::${src?.page_number}`;
-        if (!isSpaceValidOnPage(key, name)) continue;
-        const arr = map.get(key) || [];
-        arr.push({ level: name });
-        map.set(key, arr);
+        if (isTemplate && appliesTo.length > 0) {
+          for (const lvl of appliesTo) {
+            if (!isSpaceValidOnPage(key, lvl)) continue;
+            const arr = map.get(key) || [];
+            arr.push({ level: lvl, unit: name });
+            map.set(key, arr);
+          }
+        } else {
+          if (!isSpaceValidOnPage(key, name)) continue;
+          const arr = map.get(key) || [];
+          arr.push({ level: name });
+          map.set(key, arr);
+        }
       }
     }
     const units: any[] = Array.isArray(parsed?.unit_templates) ? parsed.unit_templates : [];
@@ -1539,8 +1565,6 @@ export default function WorkbenchProjectDetail() {
         const key = `${src?.file_name}::${src?.page_number}`;
         if (!isSpaceValidOnPage(key, unitName)) continue;
         const arr = map.get(key) || [];
-        // When applies_to_levels is empty, still record the unit so the
-        // detection isn't dropped — treat the unit page as its own "space".
         if (levels.length === 0) {
           arr.push({ level: unitName, unit: unitName });
         } else {
@@ -1551,6 +1575,7 @@ export default function WorkbenchProjectDetail() {
     }
     return map;
   }, [spaceHierarchyPayload, pageSpaceValidNames]);
+
 
 
   const spacesForSheet = (fileName: string, pageIndex: number): string[] => {
@@ -4556,25 +4581,94 @@ function InstancesReportModal({
   const renderSpaceDetail = (space: string) => {
     const rows = instancesForSpace(space);
     const label = space === "__unassigned__" ? "Unassigned" : space;
-    // Group rows by file+page so we can render each matched drawing with overlays.
-    let pageKeys = Array.from(
-      new Set(rows.map((r) => `${r.fileId}::${r.pageIndex}`)),
-    );
-    // When the space has no annotations, still surface its floor plan pages
-    // (from the space hierarchy) so users see the level's drawing.
-    if (pageKeys.length === 0 && space !== "__unassigned__") {
-      const fallback = new Set<string>();
+    // Collect (fileId, pageIdx) keys that depict this space — either directly
+    // (level plan) or via a unit/template page assigned to this level.
+    const pageKeySet = new Set<string>();
+    for (const r of rows) pageKeySet.add(`${r.fileId}::${r.pageIndex}`);
+    if (space !== "__unassigned__") {
       for (const [key, spaces] of pageSpaceMap.entries()) {
         if (!spaces.includes(space)) continue;
         const [fileName, pageStr] = key.split("::");
         const lookup = sheetByFilePage.get(`${fileName}::${pageStr}`);
         const fileId = lookup?.file?.id;
         if (!fileId) continue;
-        fallback.add(`${fileId}::${pageStr}`);
+        pageKeySet.add(`${fileId}::${pageStr}`);
       }
-      pageKeys = Array.from(fallback);
     }
+    const pageKeys = Array.from(pageKeySet);
+
+    // Units assigned to this level — derived from pageSpaceUnitMap.
+    const unitMap = new Map<string, Array<{ fileName: string; pageIdx: number }>>();
+    if (space !== "__unassigned__") {
+      for (const [key, pairs] of pageSpaceUnitMap.entries()) {
+        for (const pair of pairs) {
+          if (pair.level !== space || !pair.unit) continue;
+          const [fileName, pageStr] = key.split("::");
+          const arr = unitMap.get(pair.unit) || [];
+          arr.push({ fileName, pageIdx: parseInt(pageStr, 10) });
+          unitMap.set(pair.unit, arr);
+        }
+      }
+    }
+    const unitsList = Array.from(unitMap.entries())
+      .map(([name, pages]) => ({ name, pages }))
+      .sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: "base" }));
+
     const showUnitCol = rows.some((r) => !!r.unitName);
+
+    // Build tab entries (one per file+page).
+    type TabEntry = {
+      key: string;
+      fileId: string;
+      pageIdx: number;
+      fileName: string;
+      shortName: string;
+      bucket: string;
+      parentPath: string | null;
+      overlays: any[];
+    };
+    const tabs: TabEntry[] = pageKeys
+      .map((key) => {
+        const [fileId, pageIdxStr] = key.split("::");
+        const pageIdx = parseInt(pageIdxStr, 10);
+        const fileName = fileNameById.get(fileId) || "";
+        const lookup = sheetByFilePage.get(`${fileName}::${pageIdx}`);
+        if (!lookup) return null;
+        const bucket = bucketForSource(lookup.sheet.file_source_type);
+        // Use the parent PDF + page navigation (same approach as the drawing
+        // modal). No per-page extraction required.
+        const parentPath = lookup.file.storage_path;
+        const overlays = rows
+          .filter((r) => r.fileId === fileId && r.pageIndex === pageIdx)
+          .map((r, i) => ({
+            id: `${r.instanceId}-${i}`,
+            bbox: [r.nx, r.ny, 0, 0] as [number, number, number, number],
+            coordSpace: "normalized" as const,
+            page: pageIdx,
+            color: awpClassColor(r.awpClassName),
+            label: r.instanceId,
+            shape: "circle" as const,
+          }));
+        // Short name without extension, capped for tab labels.
+        const shortName = fileName.replace(/\.[^.]+$/, "");
+        return {
+          key,
+          fileId,
+          pageIdx,
+          fileName,
+          shortName,
+          bucket,
+          parentPath,
+          overlays,
+        };
+      })
+      .filter((t): t is TabEntry => t !== null)
+      .sort((a, b) => {
+        const f = a.fileName.localeCompare(b.fileName);
+        if (f !== 0) return f;
+        return a.pageIdx - b.pageIdx;
+      });
+
     return (
       <div className="space-y-4">
         <h3 className="text-sm font-semibold">{label}</h3>
@@ -4613,51 +4707,31 @@ function InstancesReportModal({
           </Table>
         )}
 
-        <div className="space-y-6">
-          {pageKeys.map((key) => {
-            const [fileId, pageIdxStr] = key.split("::");
-            const pageIdx = parseInt(pageIdxStr, 10);
-            const fileName = fileNameById.get(fileId) || "";
-            const lookup = sheetByFilePage.get(`${fileName}::${pageIdx}`);
-            if (!lookup) {
-              return (
-                <div key={key} className="text-xs text-muted-foreground">
-                  {fileName} · Page {pageIdx} (drawing not available)
+        {unitsList.length > 0 && (
+          <div className="border rounded-md">
+            <div className="px-3 py-2 border-b bg-muted/40 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+              Units on this level ({unitsList.length})
+            </div>
+            <div className="p-3 grid grid-cols-2 md:grid-cols-3 gap-x-4 gap-y-1 text-xs">
+              {unitsList.map((u) => (
+                <div key={u.name} className="flex items-baseline gap-1.5 truncate">
+                  <span className="truncate">{u.name.replace(/^Template\s*-\s*/, "")}</span>
+                  <span className="text-muted-foreground shrink-0">
+                    · {u.pages.map((p) => `p${p.pageIdx}`).join(", ")}
+                  </span>
                 </div>
-              );
-            }
-            const bucket = bucketForSource(lookup.sheet.file_source_type);
-            // Sheet storage_path is a per-page rendered PDF (single page),
-            // so overlays and the viewer must address page 1, not the
-            // original page_index from the source document.
-            const overlays = rows
-              .filter((r) => r.fileId === fileId && r.pageIndex === pageIdx)
-              .map((r, i) => ({
-                id: `${r.instanceId}-${i}`,
-                bbox: [r.nx, r.ny, 0, 0] as [number, number, number, number],
-                coordSpace: "normalized" as const,
-                page: 1,
-                color: awpClassColor(r.awpClassName),
-                label: r.instanceId,
-                shape: "circle" as const,
-              }));
+              ))}
+            </div>
+          </div>
+        )}
 
-            return (
-              <LazyDrawingPageBlock
-                key={key}
-                sheetId={lookup.sheet.id}
-                initialStoragePath={lookup.sheet.storage_path}
-                bucket={bucket}
-                fileName={fileName}
-                pageIdx={pageIdx}
-                overlays={overlays}
-              />
-            );
-          })}
-        </div>
+        {tabs.length > 0 && (
+          <TabbedPagesBlock tabs={tabs} />
+        )}
       </div>
     );
   };
+
 
   const renderRight = () => {
     if (loading) {
@@ -4751,121 +4825,87 @@ function InstancesReportModal({
 }
 
 // ---------------------------------------------------------------------------
-// LazyDrawingPageBlock — resolves the sheet's per-page PDF on demand. When the
-// sheet already has a storage_path, renders DrawingPageBlock directly. When
-// missing (e.g., the page wasn't analyzed but Scout/Spatial Architect flagged
-// it as a floor plan), invokes the `render-sheet-page` edge function which
-// extracts the page from the parent PDF and stores it.
+// TabbedPagesBlock — renders multiple (file, page) sources as tabs over a
+// single DrawingPageBlock. The parent PDF is downloaded once per file and
+// page navigation happens inside DrawingViewer (same approach as the drawing
+// modal), so switching between pages of the same file is instant.
 // ---------------------------------------------------------------------------
-function LazyDrawingPageBlock({
-  sheetId,
-  initialStoragePath,
-  bucket,
-  fileName,
-  pageIdx,
-  overlays,
+function TabbedPagesBlock({
+  tabs,
 }: {
-  sheetId: string;
-  initialStoragePath: string | null;
-  bucket: string;
-  fileName: string;
-  pageIdx: number;
-  overlays: any[];
+  tabs: Array<{
+    key: string;
+    fileName: string;
+    shortName: string;
+    pageIdx: number;
+    bucket: string;
+    parentPath: string | null;
+    overlays: any[];
+  }>;
 }) {
-  const [path, setPath] = useState<string | null>(initialStoragePath);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const containerRef = useRef<HTMLDivElement>(null);
-  const [inView, setInView] = useState(false);
-
+  const [activeKey, setActiveKey] = useState<string>(tabs[0]?.key ?? "");
+  // If the tabs list changes (e.g. user switched space), reset selection.
   useEffect(() => {
-    if (path || inView) return;
-    const node = containerRef.current;
-    if (!node) return;
-    const io = new IntersectionObserver(
-      (entries) => {
-        for (const e of entries) {
-          if (e.isIntersecting) {
-            setInView(true);
-            io.disconnect();
-            break;
-          }
-        }
-      },
-      { rootMargin: "400px 0px" },
-    );
-    io.observe(node);
-    return () => io.disconnect();
-  }, [path, inView]);
-
-  useEffect(() => {
-    if (path || !inView || loading) return;
-    let cancelled = false;
-    (async () => {
-      setLoading(true);
-      setError(null);
-      try {
-        const { data, error: invokeErr } = await supabase.functions.invoke(
-          "render-sheet-page",
-          { body: { sheetId } },
-        );
-        if (cancelled) return;
-        if (invokeErr) throw invokeErr;
-        const newPath = (data as any)?.storage_path as string | undefined;
-        if (!newPath) throw new Error("No storage_path returned");
-        setPath(newPath);
-      } catch (e: any) {
-        if (!cancelled) setError(e?.message ?? "Failed to render page");
-      } finally {
-        if (!cancelled) setLoading(false);
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [inView, path, loading, sheetId]);
-
-  if (path) {
-    const source: DocumentSourceDescriptor = {
-      kind: "supabase-storage",
-      bucket,
-      path,
-      mimeType: "application/pdf",
-    };
-    return (
-      <DrawingPageBlock
-        fileName={fileName}
-        pageIdx={pageIdx}
-        source={source}
-        overlays={overlays}
-      />
-    );
-  }
+    if (!tabs.find((t) => t.key === activeKey)) {
+      setActiveKey(tabs[0]?.key ?? "");
+    }
+  }, [tabs, activeKey]);
+  const active = tabs.find((t) => t.key === activeKey) ?? tabs[0];
+  if (!active) return null;
 
   return (
-    <div
-      ref={containerRef}
-      className="border rounded-md p-4 text-xs text-muted-foreground flex items-center gap-2 min-h-[120px]"
-    >
-      {error ? (
-        <span className="text-destructive">
-          {fileName} · Page {pageIdx}: {error}
-        </span>
-      ) : loading ? (
-        <>
-          <Loader2 className="h-3.5 w-3.5 animate-spin" />
-          <span>
-            Preparing {fileName} · Page {pageIdx}…
-          </span>
-        </>
-      ) : (
-        <span>
-          {fileName} · Page {pageIdx} (loading on scroll…)
-        </span>
+    <div className="border rounded-md overflow-hidden">
+      {tabs.length > 1 && (
+        <div className="flex flex-wrap gap-1 px-2 pt-2 pb-1 border-b bg-muted/20">
+          {tabs.map((t) => {
+            const isActive = t.key === active.key;
+            return (
+              <button
+                key={t.key}
+                type="button"
+                onClick={() => setActiveKey(t.key)}
+                className={`px-2.5 py-1 text-xs rounded-md border transition-colors ${
+                  isActive
+                    ? "bg-background border-border font-medium"
+                    : "bg-transparent border-transparent text-muted-foreground hover:bg-muted/50"
+                }`}
+                title={`${t.fileName} · Page ${t.pageIdx}`}
+              >
+                <span className="truncate max-w-[180px] inline-block align-bottom">
+                  {t.shortName}
+                </span>
+                <span className="ml-1 text-muted-foreground">· p{t.pageIdx}</span>
+              </button>
+            );
+          })}
+        </div>
       )}
+      <div>
+        {active.parentPath ? (
+          <DrawingPageBlock
+            key={active.key}
+            fileName={active.fileName}
+            pageIdx={active.pageIdx}
+            source={{
+              kind: "supabase-storage",
+              bucket: active.bucket,
+              path: active.parentPath,
+              mimeType: "application/pdf",
+            }}
+            overlays={active.overlays}
+            page={active.pageIdx}
+            hideHeader={tabs.length > 1}
+          />
+        ) : (
+          <div className="p-4 text-xs text-muted-foreground">
+            {active.fileName} · Page {active.pageIdx} (drawing not available)
+          </div>
+        )}
+      </div>
     </div>
   );
 }
+
 
 
 // ---------------------------------------------------------------------------
@@ -4879,11 +4919,15 @@ function DrawingPageBlock({
   pageIdx,
   source,
   overlays,
+  page,
+  hideHeader,
 }: {
   fileName: string;
   pageIdx: number;
   source: DocumentSourceDescriptor;
   overlays: any[];
+  page?: number;
+  hideHeader?: boolean;
 }) {
   const surfaceRef = useRef<HTMLDivElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -5080,25 +5124,39 @@ function DrawingPageBlock({
   };
 
   return (
-    <div ref={containerRef} className="border rounded-md overflow-hidden">
-      <div className="flex items-center justify-between px-3 py-2 bg-muted/40 border-b">
-        <div className="text-sm font-semibold truncate">
-          {fileName} · Page {pageIdx}
+    <div ref={containerRef} className={hideHeader ? "" : "border rounded-md overflow-hidden"}>
+      {!hideHeader && (
+        <div className="flex items-center justify-between px-3 py-2 bg-muted/40 border-b">
+          <div className="text-sm font-semibold truncate">
+            {fileName} · Page {pageIdx}
+          </div>
+          <Button size="sm" variant="outline" onClick={handleDownload} disabled={downloading || !inView}>
+            {downloading ? (
+              <Loader2 className="h-3.5 w-3.5 animate-spin mr-1.5" />
+            ) : (
+              <Download className="h-3.5 w-3.5 mr-1.5" />
+            )}
+            Download
+          </Button>
         </div>
-        <Button size="sm" variant="outline" onClick={handleDownload} disabled={downloading || !inView}>
-          {downloading ? (
-            <Loader2 className="h-3.5 w-3.5 animate-spin mr-1.5" />
-          ) : (
-            <Download className="h-3.5 w-3.5 mr-1.5" />
-          )}
-          Download
-        </Button>
-      </div>
+      )}
+      {hideHeader && (
+        <div className="flex items-center justify-end px-2 py-1 bg-muted/20 border-b">
+          <Button size="sm" variant="ghost" onClick={handleDownload} disabled={downloading || !inView}>
+            {downloading ? (
+              <Loader2 className="h-3.5 w-3.5 animate-spin mr-1.5" />
+            ) : (
+              <Download className="h-3.5 w-3.5 mr-1.5" />
+            )}
+            Download
+          </Button>
+        </div>
+      )}
       <div ref={surfaceRef} className="w-full aspect-[3/2] bg-white">
         {inView ? (
           <DrawingViewer
             source={source}
-            page={1}
+            page={page ?? 1}
             overlays={overlays}
             showToolbar={false}
             interactive={false}
