@@ -1005,7 +1005,7 @@ function SpaceHierarchyPromptSection() {
         .from("app_settings" as any)
         .upsert({ key: "space_hierarchy_prompt", value: content, updated_at: new Date().toISOString() } as any, { onConflict: "key" });
       if (error) throw error;
-      toast({ title: "Prompt saved", description: "Build Space Hierarchy will use the updated prompt next run." });
+      toast({ title: "Prompt saved", description: "Spatial Architect Agent will use the updated prompt next run." });
       setOpen(false);
     } catch (e: any) {
       toast({ title: "Save failed", description: e.message, variant: "destructive" });
