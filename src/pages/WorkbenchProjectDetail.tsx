@@ -4814,12 +4814,12 @@ function DrawingPageBlock({
   };
 
   return (
-    <div className="border rounded-md overflow-hidden">
+    <div ref={containerRef} className="border rounded-md overflow-hidden">
       <div className="flex items-center justify-between px-3 py-2 bg-muted/40 border-b">
         <div className="text-sm font-semibold truncate">
           {fileName} · Page {pageIdx}
         </div>
-        <Button size="sm" variant="outline" onClick={handleDownload} disabled={downloading}>
+        <Button size="sm" variant="outline" onClick={handleDownload} disabled={downloading || !inView}>
           {downloading ? (
             <Loader2 className="h-3.5 w-3.5 animate-spin mr-1.5" />
           ) : (
@@ -4829,13 +4829,19 @@ function DrawingPageBlock({
         </Button>
       </div>
       <div ref={surfaceRef} className="w-full aspect-[3/2] bg-white">
-        <DrawingViewer
-          source={source}
-          page={1}
-          overlays={overlays}
-          showToolbar={false}
-          interactive={false}
-        />
+        {inView ? (
+          <DrawingViewer
+            source={source}
+            page={1}
+            overlays={overlays}
+            showToolbar={false}
+            interactive={false}
+          />
+        ) : (
+          <div className="flex items-center justify-center h-full">
+            <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+          </div>
+        )}
       </div>
     </div>
   );
