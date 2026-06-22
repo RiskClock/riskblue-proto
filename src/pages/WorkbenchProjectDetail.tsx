@@ -4620,8 +4620,31 @@ function DrawingPageBlock({
   overlays: any[];
 }) {
   const surfaceRef = useRef<HTMLDivElement>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
   const { toast } = useToast();
   const [downloading, setDownloading] = useState(false);
+  // Lazy-mount the DrawingViewer only when this block scrolls near the
+  // viewport. Renders dozens of pages in the Threat Report at once would
+  // otherwise hammer the main thread with simultaneous pdf.js rasterization.
+  const [inView, setInView] = useState(false);
+  useEffect(() => {
+    const node = containerRef.current;
+    if (!node || inView) return;
+    const io = new IntersectionObserver(
+      (entries) => {
+        for (const e of entries) {
+          if (e.isIntersecting) {
+            setInView(true);
+            io.disconnect();
+            break;
+          }
+        }
+      },
+      { rootMargin: "400px 0px" },
+    );
+    io.observe(node);
+    return () => io.disconnect();
+  }, [inView]);
 
   const handleDownload = async () => {
     const el = surfaceRef.current;
