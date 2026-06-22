@@ -195,7 +195,7 @@ Deno.serve(async (req) => {
         const expired = expiresAt ? new Date(expiresAt).getTime() < Date.now() + 30_000 : true;
         if (!cacheName || expired) {
           console.log(`[identify-risk-elements] (re)building cache for file=${fileName}`);
-          const rebuilt = await rebuildCache({ ai, admin, fileId, fileName, bucket, storagePath });
+          const rebuilt = await rebuildCache({ ai, admin, fileId, fileName, bucket, storagePath, model: GEMINI_MODEL });
           cacheName = rebuilt.cacheName;
         }
 
