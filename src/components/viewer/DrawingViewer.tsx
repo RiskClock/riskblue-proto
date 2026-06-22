@@ -381,7 +381,7 @@ export const DrawingViewer = forwardRef<DrawingViewerApi, DrawingViewerProps>(
           ref={containerRef}
           className="relative flex-1 min-h-0 overflow-hidden bg-muted/30"
         >
-          {loading ? (
+          {loading && !activePage ? (
             <div className="flex items-center justify-center h-full">
               <div className="text-center space-y-2">
                 <Loader2 className="w-8 h-8 animate-spin text-muted-foreground mx-auto" />
@@ -396,6 +396,13 @@ export const DrawingViewer = forwardRef<DrawingViewerApi, DrawingViewerProps>(
               </div>
             </div>
           ) : activePage && pageCssSize.width > 0 ? (
+            <>
+            {isStaleRaster && (
+              <div className="absolute top-2 right-2 z-20 flex items-center gap-1.5 rounded-md bg-background/90 px-2 py-1 text-xs text-muted-foreground shadow-sm border pointer-events-none">
+                <Loader2 className="w-3 h-3 animate-spin" />
+                Loading page {page}…
+              </div>
+            )}
             <TransformWrapper
               ref={wrapperRef}
               minScale={minScale}
