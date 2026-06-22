@@ -781,9 +781,13 @@ export const FileViewerModal = ({
   //  - sheetId (and !singlePageOnly) = per-sheet single-page raster → always 1
   //  - otherwise (full multi-page navigation) → instance's page_index
   const instanceOverlays: OverlayInput[] = useMemo(() => {
+    const allowed = awpClasses ? new Set(awpClasses.map((c) => c.name)) : null;
     return instances
       .filter(
-        (i) => i.file_id === parentFileId && i.page_index === effectivePage,
+        (i) =>
+          i.file_id === parentFileId &&
+          i.page_index === effectivePage &&
+          (!allowed || allowed.has(i.awp_class_name)),
       )
       .map((i) => ({
         id: `inst-${i.id}`,
@@ -794,7 +798,7 @@ export const FileViewerModal = ({
         color: awpClassColor(i.awp_class_name),
         label: instanceLabel(i),
       }));
-  }, [instances, effectivePage, sheetId, singlePageOnly, currentPage, parentFileId, numberByInstanceId, prefixByClass]);
+  }, [instances, effectivePage, sheetId, singlePageOnly, currentPage, parentFileId, numberByInstanceId, prefixByClass, awpClasses]);
 
   // Floor-plan bbox overlays. Survey agent returns `xy_width_height_pct` as
   // [left, top, width, height] percentages (0..100) of the visible page.
