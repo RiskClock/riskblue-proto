@@ -106,6 +106,7 @@ interface SheetRow {
   file_source_type: string;
   survey_result?: unknown;
   survey_updated_at?: string | null;
+  floor_plan_overrides?: Record<string, any> | null;
 }
 
 const SURVEY_PROGRESS_KEY_PREFIX = "riskblue:survey-progress";
