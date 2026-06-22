@@ -38,14 +38,14 @@ export interface PdfRasterOptions {
 }
 
 const DEFAULTS: Required<Omit<PdfRasterOptions, "activePage">> = {
-  baseScale: 1,
+  baseScale: 1.5,
   maxDpr: 3,
-  maxPixelsPerPage: 16_000_000, // 16 Mpx
-  settleMs: 250,
-  rerasterAboveScale: 2.5,
+  maxPixelsPerPage: 24_000_000, // 24 Mpx — room for sharper rerasters
+  settleMs: 200,
+  rerasterAboveScale: 1.1, // any meaningful zoom triggers a sharp rerender
   bufferPages: 1,
   eager: false,
-  jpegQuality: 0.85,
+  jpegQuality: 0.95,
 };
 
 // Module-level cache for the parsed PDFDocumentProxy, keyed by Blob identity.
