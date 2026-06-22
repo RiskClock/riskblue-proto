@@ -173,6 +173,18 @@ Deno.serve(async (req) => {
     const analyzePrefix: string =
       (analyzeRow as any)?.value || "Analyze this drawing according to the instructions provided.";
 
+    // Configurable model.
+    const { data: modelRow } = await admin
+      .from("app_settings")
+      .select("value")
+      .eq("key", "analyze_model")
+      .maybeSingle();
+    const configuredModel = (modelRow as any)?.value;
+    const GEMINI_MODEL = typeof configuredModel === "string" && configuredModel.trim().length > 0
+      ? configuredModel.trim()
+      : DEFAULT_GEMINI_MODEL;
+    console.log(`[identify-risk-elements] model=${GEMINI_MODEL}`);
+
     const work = (async () => {
       try {
         const ai = new GoogleGenAI({ apiKey });
