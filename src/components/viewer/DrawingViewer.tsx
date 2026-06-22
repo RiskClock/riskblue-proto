@@ -476,6 +476,7 @@ export const DrawingViewer = forwardRef<DrawingViewerApi, DrawingViewerProps>(
 
               </TransformComponent>
             </TransformWrapper>
+            </>
           ) : (
             <div className="flex items-center justify-center h-full">
               <div className="text-center space-y-2">
