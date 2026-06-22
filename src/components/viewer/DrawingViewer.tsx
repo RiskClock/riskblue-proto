@@ -178,10 +178,22 @@ export const DrawingViewer = forwardRef<DrawingViewerApi, DrawingViewerProps>(
 
     // Compute CSS page size: fit to viewport for the active page (single-page mode),
     // or natural pdfSize (stacked mode lets pages flow vertically).
-    const activePage =
+    const requestedPage =
       layout === "single-page"
         ? allPages.find((p) => p.pageNum === page) ?? null
-        : allPages[0];
+        : allPages[0] ?? null;
+
+    // Keep the previously-shown page visible while the next page rasterizes,
+    // so switching pages or invalidating the cache doesn't flash a full-screen
+    // "Loading page X…" placeholder over the canvas.
+    const prevActivePageRef = useRef<RasterPage | null>(null);
+    useEffect(() => {
+      if (requestedPage) prevActivePageRef.current = requestedPage;
+    }, [requestedPage]);
+
+    const activePage = requestedPage ?? prevActivePageRef.current;
+    const isStaleRaster =
+      layout === "single-page" && !!activePage && activePage.pageNum !== page;
 
     const pageCssSize = useMemo(() => {
       if (!activePage || viewportSize.width === 0 || viewportSize.height === 0) {
