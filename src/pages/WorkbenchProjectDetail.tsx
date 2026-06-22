@@ -1442,6 +1442,54 @@ export default function WorkbenchProjectDetail() {
     return [];
   };
 
+  // Per-page validity filter for space badges: when a sheet's floor plans
+  // have been edited (deletions or manual additions), only space names whose
+  // backing floor plan still exists should appear in the page→spaces map.
+  // Pages without overrides are untouched (legacy behavior).
+  const pageSpaceValidNames = useMemo(() => {
+    const validByKey = new Map<string, Set<string>>();
+    const overridden = new Set<string>();
+    if (!rows) return { validByKey, overridden };
+    const sheetsByFile = new Map<string, typeof rows.sheets>();
+    for (const s of rows.sheets) {
+      const arr = sheetsByFile.get(s.parent_file_id) || [];
+      arr.push(s);
+      sheetsByFile.set(s.parent_file_id, arr);
+    }
+    for (const f of rows.files) {
+      const raw = (f as any).survey_raw_response as string | null | undefined;
+      const parsed = raw ? parseSurveyFloorPlans(raw) : new Map<number, ParsedFloorPlan[]>();
+      const sheets = sheetsByFile.get(f.id) || [];
+      for (const sheet of sheets) {
+        const ovr = sheet.floor_plan_overrides;
+        if (!ovr) continue;
+        const deleted = getDeletedPlanIds(ovr);
+        const added = getAddedUnitPlans(ovr, sheet.page_index).map(addedUnitPlanToParsed);
+        if (deleted.size === 0 && added.length === 0) continue;
+        const base = parsed.get(sheet.page_index) || [];
+        const kept = [...base.filter((p) => !deleted.has(p.plan_id)), ...added];
+        const key = `${f.name}::${sheet.page_index}`;
+        overridden.add(key);
+        const valid = new Set<string>();
+        for (const p of kept) {
+          if (p.type === "level_floor_plan") {
+            for (const fl of p.floors) valid.add(fl.toLowerCase());
+          } else if (p.type === "unit_floor_plan" && p.reference_id) {
+            valid.add(p.reference_id.toLowerCase());
+          }
+        }
+        validByKey.set(key, valid);
+      }
+    }
+    return { validByKey, overridden };
+  }, [rows]);
+
+  const isSpaceValidOnPage = (key: string, name: string): boolean => {
+    if (!pageSpaceValidNames.overridden.has(key)) return true;
+    const valid = pageSpaceValidNames.validByKey.get(key);
+    return !!valid && valid.has(name.toLowerCase());
+  };
+
   // Map "fileName::pageNumber" -> [space names], built from parsed hierarchy.
   const pageSpaceMap = useMemo(() => {
     const map = new Map<string, string[]>();
@@ -1451,13 +1499,14 @@ export default function WorkbenchProjectDetail() {
       if (!name) continue;
       for (const src of sp?.matched_sources || []) {
         const key = `${src?.file_name}::${src?.page_number}`;
+        if (!isSpaceValidOnPage(key, name)) continue;
         const arr = map.get(key) || [];
         if (!arr.includes(name)) arr.push(name);
         map.set(key, arr);
       }
     }
     return map;
-  }, [spaceHierarchyPayload]);
+  }, [spaceHierarchyPayload, pageSpaceValidNames]);
 
   // Unit-aware page map: "fileName::pageNumber" -> [{level, unit?}, ...].
   // Level entries come from spatial_records.matched_sources (one per page);
@@ -1473,6 +1522,7 @@ export default function WorkbenchProjectDetail() {
       if (!name) continue;
       for (const src of sp?.matched_sources || []) {
         const key = `${src?.file_name}::${src?.page_number}`;
+        if (!isSpaceValidOnPage(key, name)) continue;
         const arr = map.get(key) || [];
         arr.push({ level: name });
         map.set(key, arr);
@@ -1486,6 +1536,7 @@ export default function WorkbenchProjectDetail() {
       const sources: any[] = Array.isArray(u?.matched_sources) ? u.matched_sources : [];
       for (const src of sources) {
         const key = `${src?.file_name}::${src?.page_number}`;
+        if (!isSpaceValidOnPage(key, unitName)) continue;
         const arr = map.get(key) || [];
         // When applies_to_levels is empty, still record the unit so the
         // detection isn't dropped — treat the unit page as its own "space".
@@ -1498,7 +1549,8 @@ export default function WorkbenchProjectDetail() {
       }
     }
     return map;
-  }, [spaceHierarchyPayload]);
+  }, [spaceHierarchyPayload, pageSpaceValidNames]);
+
 
   const spacesForSheet = (fileName: string, pageIndex: number): string[] => {
     return pageSpaceMap.get(`${fileName}::${pageIndex}`) || [];
