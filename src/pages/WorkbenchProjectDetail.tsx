@@ -4457,7 +4457,7 @@ function InstancesReportModal({
       const unassignedMembers: any[] = [];
       for (const m of members) {
         const fname = fileNameById.get(m.file_id) || "";
-        const pairs = pairsForPage(fname, m.page_index);
+        const pairs = pairsForPage(fname, m.page_index, Number(m.nx) || 0, Number(m.ny) || 0);
         if (pairs.length === 0) {
           unassignedMembers.push(m);
         } else {
