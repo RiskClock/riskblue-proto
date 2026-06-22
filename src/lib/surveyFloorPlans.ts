@@ -30,7 +30,6 @@ function tryParse(text: string): any {
   try {
     return JSON.parse(stripped);
   } catch {
-    // try to find an array
     const s = stripped.indexOf("[");
     const e = stripped.lastIndexOf("]");
     if (s >= 0 && e > s) {
@@ -39,6 +38,25 @@ function tryParse(text: string): any {
     return null;
   }
 }
+
+/**
+ * Older scout responses persisted Gemini chunks separated by
+ * `--- pages X-Y ---` markers. Parse each chunk separately and concatenate
+ * into a single array so legacy data still produces floor-plan badges.
+ */
+function parseChunkedSurvey(text: string): any[] | null {
+  if (!/---\s*pages\s+\d+\s*[-–]\s*\d+\s*---/i.test(text)) return null;
+  const parts = text.split(/---\s*pages\s+\d+\s*[-–]\s*\d+\s*---/i);
+  const combined: any[] = [];
+  for (const p of parts) {
+    if (!p.trim()) continue;
+    const parsed = tryParse(p);
+    if (Array.isArray(parsed)) combined.push(...parsed);
+    else if (parsed) combined.push(parsed);
+  }
+  return combined.length > 0 ? combined : null;
+}
+
 
 function asStringArr(v: any): string[] {
   if (!Array.isArray(v)) return [];
@@ -79,7 +97,7 @@ export function parseSurveyFloorPlans(
   if (!rawText || typeof rawText !== "string") return out;
   if (rawText.startsWith("ERROR:")) return out;
 
-  const parsed = tryParse(rawText);
+  const parsed = parseChunkedSurvey(rawText) ?? tryParse(rawText);
   const pages = flattenPages(parsed);
   for (const p of pages) {
     const pageNum = Number(p?.page_number ?? p?.page ?? p?.pageNumber);
