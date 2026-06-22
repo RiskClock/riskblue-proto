@@ -97,7 +97,7 @@ export function parseSurveyFloorPlans(
   if (!rawText || typeof rawText !== "string") return out;
   if (rawText.startsWith("ERROR:")) return out;
 
-  const parsed = tryParse(rawText);
+  const parsed = parseChunkedSurvey(rawText) ?? tryParse(rawText);
   const pages = flattenPages(parsed);
   for (const p of pages) {
     const pageNum = Number(p?.page_number ?? p?.page ?? p?.pageNumber);
