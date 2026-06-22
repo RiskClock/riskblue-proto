@@ -67,7 +67,7 @@ async function rebuildCache(params: {
   }
 
   const cache = await ai.caches.create({
-    model: GEMINI_MODEL,
+    model,
     config: {
       displayName: `sheet-analysis-${fileId}`,
       contents: [
