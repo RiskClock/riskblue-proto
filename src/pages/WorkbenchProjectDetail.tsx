@@ -144,24 +144,47 @@ function bucketForSource(sourceType: string) {
   return sourceType === "manual_upload" ? "uploaded-drawings" : "drive-analysis-files";
 }
 
-/** Format a set of space names for a multi-level badge.
- * Contiguous numeric "Level N" runs collapse to "Level X-Y".
- * Non-contiguous "Level N" sets render as "Level X & Y".
- * Mixed/non-numeric falls back to joining with " & ". */
-function formatSpaceBadge(spaces: string[]): string {
-  if (spaces.length === 0) return "";
-  if (spaces.length === 1) return spaces[0];
-  const parsed = spaces.map((s) => {
+/** Group a set of space names into compact chips.
+ * Numeric "Level N" entries are sorted, contiguous runs collapse to "Level X-Y",
+ * remaining singles combine into "Level A, B, C". Non-numeric names pass through. */
+function groupSpaceLabels(spaces: string[]): string[] {
+  if (spaces.length === 0) return [];
+  const nums: number[] = [];
+  const others: string[] = [];
+  for (const s of spaces) {
     const m = /^Level\s+(-?\d+)$/.exec(s);
-    return m ? parseInt(m[1], 10) : null;
-  });
-  if (parsed.every((n) => n !== null)) {
-    const nums = (parsed as number[]).slice().sort((a, b) => a - b);
-    const contiguous = nums.every((n, i) => i === 0 || n === nums[i - 1] + 1);
-    if (contiguous) return `Level ${nums[0]}-${nums[nums.length - 1]}`;
-    return `Level ${nums.join(" & ")}`;
+    if (m) nums.push(parseInt(m[1], 10));
+    else others.push(s);
   }
-  return spaces.join(" & ");
+  const chunks: string[] = [];
+  if (nums.length) {
+    const sorted = Array.from(new Set(nums)).sort((a, b) => a - b);
+    const runs: Array<[number, number]> = [];
+    let start = sorted[0];
+    let prev = sorted[0];
+    for (let i = 1; i < sorted.length; i++) {
+      if (sorted[i] === prev + 1) {
+        prev = sorted[i];
+        continue;
+      }
+      runs.push([start, prev]);
+      start = prev = sorted[i];
+    }
+    runs.push([start, prev]);
+    const singles: number[] = [];
+    for (const [a, b] of runs) {
+      if (a === b) singles.push(a);
+      else chunks.push(`Level ${a}-${b}`);
+    }
+    if (singles.length) chunks.unshift(`Level ${singles.join(", ")}`);
+  }
+  for (const o of others) chunks.push(o);
+  return chunks;
+}
+
+/** Single-string formatter for places that need one label (e.g. sheet-level badge). */
+function formatSpaceBadge(spaces: string[]): string {
+  return groupSpaceLabels(spaces).join(" & ");
 }
 
 export default function WorkbenchProjectDetail() {
@@ -2920,11 +2943,6 @@ export default function WorkbenchProjectDetail() {
                                       ? "hover:bg-muted/40"
                                       : ""
                               }`}
-                              style={
-                                hasScore && override !== "exclude" && override !== "include"
-                                  ? { backgroundColor: `rgba(16, 185, 129, ${opacity * 0.55})` }
-                                  : undefined
-                              }
                               onClick={(e) => {
                                 if (!clickable) return;
                                 e.stopPropagation();
@@ -3030,20 +3048,23 @@ export default function WorkbenchProjectDetail() {
                                         <span className="text-muted-foreground shrink-0">
                                           Page {p}
                                         </span>
-                                        {levelPlans.map((lvl) => {
-                                          const c = awpClassColor(lvl.type === "level_floor_plan" ? "Level Floor Plan" : lvl.type === "unit_floor_plan" ? "Unit Floor Plan" : lvl.type);
-                                          const lbl = floorPlanDisplayLabel(lvl);
-                                          return (
+                                        {(() => {
+                                          if (levelPlans.length === 0) return null;
+                                          const c = awpClassColor("Level Floor Plan");
+                                          const chunks = groupSpaceLabels(
+                                            levelPlans.map((lvl) => floorPlanDisplayLabel(lvl)),
+                                          );
+                                          return chunks.map((chunk, i) => (
                                             <Badge
-                                              key={`lvl-${lvl.plan_id}`}
+                                              key={`lvl-${i}-${chunk}`}
                                               variant="outline"
                                               className="h-5 px-1.5 text-[10px]"
                                               style={{ backgroundColor: softBgFrom(c), color: c, borderColor: softBgFrom(c, 0.5) }}
                                             >
-                                              {lbl}
+                                              {chunk}
                                             </Badge>
-                                          );
-                                        })}
+                                          ));
+                                        })()}
                                         {unitPlans.length > 0 && (() => {
                                           const c = awpClassColor("Unit Floor Plan");
                                           return (
