@@ -4825,121 +4825,87 @@ function InstancesReportModal({
 }
 
 // ---------------------------------------------------------------------------
-// LazyDrawingPageBlock — resolves the sheet's per-page PDF on demand. When the
-// sheet already has a storage_path, renders DrawingPageBlock directly. When
-// missing (e.g., the page wasn't analyzed but Scout/Spatial Architect flagged
-// it as a floor plan), invokes the `render-sheet-page` edge function which
-// extracts the page from the parent PDF and stores it.
+// TabbedPagesBlock — renders multiple (file, page) sources as tabs over a
+// single DrawingPageBlock. The parent PDF is downloaded once per file and
+// page navigation happens inside DrawingViewer (same approach as the drawing
+// modal), so switching between pages of the same file is instant.
 // ---------------------------------------------------------------------------
-function LazyDrawingPageBlock({
-  sheetId,
-  initialStoragePath,
-  bucket,
-  fileName,
-  pageIdx,
-  overlays,
+function TabbedPagesBlock({
+  tabs,
 }: {
-  sheetId: string;
-  initialStoragePath: string | null;
-  bucket: string;
-  fileName: string;
-  pageIdx: number;
-  overlays: any[];
+  tabs: Array<{
+    key: string;
+    fileName: string;
+    shortName: string;
+    pageIdx: number;
+    bucket: string;
+    parentPath: string | null;
+    overlays: any[];
+  }>;
 }) {
-  const [path, setPath] = useState<string | null>(initialStoragePath);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const containerRef = useRef<HTMLDivElement>(null);
-  const [inView, setInView] = useState(false);
-
+  const [activeKey, setActiveKey] = useState<string>(tabs[0]?.key ?? "");
+  // If the tabs list changes (e.g. user switched space), reset selection.
   useEffect(() => {
-    if (path || inView) return;
-    const node = containerRef.current;
-    if (!node) return;
-    const io = new IntersectionObserver(
-      (entries) => {
-        for (const e of entries) {
-          if (e.isIntersecting) {
-            setInView(true);
-            io.disconnect();
-            break;
-          }
-        }
-      },
-      { rootMargin: "400px 0px" },
-    );
-    io.observe(node);
-    return () => io.disconnect();
-  }, [path, inView]);
-
-  useEffect(() => {
-    if (path || !inView || loading) return;
-    let cancelled = false;
-    (async () => {
-      setLoading(true);
-      setError(null);
-      try {
-        const { data, error: invokeErr } = await supabase.functions.invoke(
-          "render-sheet-page",
-          { body: { sheetId } },
-        );
-        if (cancelled) return;
-        if (invokeErr) throw invokeErr;
-        const newPath = (data as any)?.storage_path as string | undefined;
-        if (!newPath) throw new Error("No storage_path returned");
-        setPath(newPath);
-      } catch (e: any) {
-        if (!cancelled) setError(e?.message ?? "Failed to render page");
-      } finally {
-        if (!cancelled) setLoading(false);
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [inView, path, loading, sheetId]);
-
-  if (path) {
-    const source: DocumentSourceDescriptor = {
-      kind: "supabase-storage",
-      bucket,
-      path,
-      mimeType: "application/pdf",
-    };
-    return (
-      <DrawingPageBlock
-        fileName={fileName}
-        pageIdx={pageIdx}
-        source={source}
-        overlays={overlays}
-      />
-    );
-  }
+    if (!tabs.find((t) => t.key === activeKey)) {
+      setActiveKey(tabs[0]?.key ?? "");
+    }
+  }, [tabs, activeKey]);
+  const active = tabs.find((t) => t.key === activeKey) ?? tabs[0];
+  if (!active) return null;
 
   return (
-    <div
-      ref={containerRef}
-      className="border rounded-md p-4 text-xs text-muted-foreground flex items-center gap-2 min-h-[120px]"
-    >
-      {error ? (
-        <span className="text-destructive">
-          {fileName} · Page {pageIdx}: {error}
-        </span>
-      ) : loading ? (
-        <>
-          <Loader2 className="h-3.5 w-3.5 animate-spin" />
-          <span>
-            Preparing {fileName} · Page {pageIdx}…
-          </span>
-        </>
-      ) : (
-        <span>
-          {fileName} · Page {pageIdx} (loading on scroll…)
-        </span>
+    <div className="border rounded-md overflow-hidden">
+      {tabs.length > 1 && (
+        <div className="flex flex-wrap gap-1 px-2 pt-2 pb-1 border-b bg-muted/20">
+          {tabs.map((t) => {
+            const isActive = t.key === active.key;
+            return (
+              <button
+                key={t.key}
+                type="button"
+                onClick={() => setActiveKey(t.key)}
+                className={`px-2.5 py-1 text-xs rounded-md border transition-colors ${
+                  isActive
+                    ? "bg-background border-border font-medium"
+                    : "bg-transparent border-transparent text-muted-foreground hover:bg-muted/50"
+                }`}
+                title={`${t.fileName} · Page ${t.pageIdx}`}
+              >
+                <span className="truncate max-w-[180px] inline-block align-bottom">
+                  {t.shortName}
+                </span>
+                <span className="ml-1 text-muted-foreground">· p{t.pageIdx}</span>
+              </button>
+            );
+          })}
+        </div>
       )}
+      <div>
+        {active.parentPath ? (
+          <DrawingPageBlock
+            key={active.key}
+            fileName={active.fileName}
+            pageIdx={active.pageIdx}
+            source={{
+              kind: "supabase-storage",
+              bucket: active.bucket,
+              path: active.parentPath,
+              mimeType: "application/pdf",
+            }}
+            overlays={active.overlays}
+            page={active.pageIdx}
+            hideHeader={tabs.length > 1}
+          />
+        ) : (
+          <div className="p-4 text-xs text-muted-foreground">
+            {active.fileName} · Page {active.pageIdx} (drawing not available)
+          </div>
+        )}
+      </div>
     </div>
   );
 }
+
 
 
 // ---------------------------------------------------------------------------
