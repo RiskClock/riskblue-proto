@@ -875,13 +875,29 @@ export default function WorkbenchProjectDetail() {
   // hitting the network.
   const floorPlansByFile = useMemo(() => {
     const m = new Map<string, Map<number, ParsedFloorPlan[]>>();
+    // Index sheets by (fileId, page) so we can apply per-page overrides.
+    const sheetByFilePage = new Map<string, SheetRow>();
+    for (const s of rows?.sheets ?? []) {
+      sheetByFilePage.set(`${s.parent_file_id}::${s.page_index}`, s);
+    }
     for (const f of rows?.files ?? []) {
       const raw = (f as any).survey_raw_response as string | null | undefined;
-      if (!raw) continue;
-      m.set(f.id, parseSurveyFloorPlans(raw));
+      const parsed = raw ? parseSurveyFloorPlans(raw) : new Map<number, ParsedFloorPlan[]>();
+      const filtered = new Map<number, ParsedFloorPlan[]>();
+      for (const [page, plans] of parsed.entries()) {
+        const sheet = sheetByFilePage.get(`${f.id}::${page}`);
+        const overrides = sheet?.floor_plan_overrides ?? null;
+        const deleted = getDeletedPlanIds(overrides);
+        const kept = plans.filter((p) => !deleted.has(p.plan_id));
+        const added = getAddedUnitPlans(overrides, page).map(addedUnitPlanToParsed);
+        if (kept.length > 0 || added.length > 0) {
+          filtered.set(page, [...kept, ...added]);
+        }
+      }
+      m.set(f.id, filtered);
     }
     return m;
-  }, [rows?.files]);
+  }, [rows?.files, rows?.sheets]);
 
   // Rehydrate survey results from DB after refresh.
   useEffect(() => {
