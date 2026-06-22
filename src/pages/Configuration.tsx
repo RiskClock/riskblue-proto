@@ -909,7 +909,7 @@ function AnalyzePromptSection() {
         .from("app_settings" as any)
         .upsert({ key: "analyze_prompt", value: content, updated_at: new Date().toISOString() } as any, { onConflict: "key" });
       if (error) throw error;
-      toast({ title: "Prompt saved", description: "Analyze (Identify Risk Elements) will use the updated prompt next run." });
+      toast({ title: "Prompt saved", description: "Risk Radar Agent will use the updated prompt next run." });
       setOpen(false);
     } catch (e: any) {
       toast({ title: "Save failed", description: (e as any)?.message, variant: "destructive" });
