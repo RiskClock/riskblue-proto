@@ -4651,13 +4651,6 @@ function InstancesReportModal({
       );
     }
     if (selected === "__overview__") return renderOverview();
-    if (expanded.length === 0) {
-      return (
-        <div className="text-sm text-muted-foreground p-4">
-          No annotations found. Place annotations on drawings first.
-        </div>
-      );
-    }
     if (selected === "__summary__") return renderSummary();
     return renderSpaceDetail(selected);
   };
