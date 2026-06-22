@@ -1,14 +1,14 @@
 // spatial-architect — thin normalizer over Scout's per-page output.
 // Reads each file's survey_raw_response (Scout JSON) plus optional per-sheet
-// survey_result, asks Gemini (via Lovable AI Gateway) to deduplicate level
-// names, assign numeric space_index, and surface unit floor-plan templates
-// with the levels each template applies to. Result is stored on
+// survey_result, asks Gemini (native @google/genai SDK with GEMINI_API_KEY —
+// same key used by Scout and Risk Radar) to deduplicate level names, assign
+// numeric space_index, and surface unit floor-plan templates with the levels
+// each template applies to. Result is stored on
 // analysis_requests.space_hierarchy_json in a shape that is a backward-
 // compatible superset of the previous build-space-hierarchy output.
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.0";
-import { createOpenAICompatible } from "npm:@ai-sdk/openai-compatible@0.2.16";
-import { generateText, Output } from "npm:ai@4.3.16";
+import { GoogleGenAI } from "npm:@google/genai@2.8.0";
 import { z } from "npm:zod@3.23.8";
 
 const corsHeaders = {
@@ -78,8 +78,8 @@ Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
   try {
-    const lovableKey = Deno.env.get("LOVABLE_API_KEY");
-    if (!lovableKey) return json({ error: "LOVABLE_API_KEY not configured" }, 500);
+    const apiKey = Deno.env.get("GEMINI_API_KEY");
+    if (!apiKey) return json({ error: "GEMINI_API_KEY not configured" }, 500);
 
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
@@ -192,15 +192,6 @@ Deno.serve(async (req) => {
       } pages=${totalPages} chars=${userPrompt.length}`,
     );
 
-    const provider = createOpenAICompatible({
-      name: "lovable",
-      baseURL: "https://ai.gateway.lovable.dev/v1",
-      headers: {
-        "Lovable-API-Key": lovableKey,
-        "X-Lovable-AIG-SDK": "vercel-ai-sdk",
-      },
-    });
-
     let parsed: z.infer<typeof SpatialSchema> | null = null;
     let parseError: string | null = null;
     let rawText = "";
@@ -214,8 +205,8 @@ Deno.serve(async (req) => {
       .maybeSingle();
     const configuredModel = (modelRow as any)?.value;
     const modelId = typeof configuredModel === "string" && configuredModel.trim().length > 0
-      ? `google/${configuredModel.trim()}`
-      : "google/gemini-2.5-flash-lite";
+      ? configuredModel.trim()
+      : "gemini-2.5-flash-lite";
 
     const { data: promptRow } = await admin
       .from("app_settings")
@@ -230,20 +221,43 @@ Deno.serve(async (req) => {
     console.log(`[spatial-architect] model=${modelId} promptSource=${configuredPrompt ? "app_settings" : "default"}`);
 
     try {
-      const { experimental_output, text, usage: u } = await generateText({
-        model: provider(modelId),
-        system: systemPrompt,
-        prompt: userPrompt,
-        experimental_output: Output.object({ schema: SpatialSchema }),
+      const ai = new GoogleGenAI({ apiKey });
+      // Fold the system prompt into the user message — matches the pattern used
+      // by Scout and Risk Radar (gemini-3.5 rejects systemInstruction in some
+      // configurations; keeping it in the user content is uniformly safe).
+      const resp: any = await ai.models.generateContent({
+        model: modelId,
+        contents: [
+          {
+            role: "user",
+            parts: [
+              { text: `Instructions:\n${systemPrompt}` },
+              { text: userPrompt },
+            ],
+          },
+        ],
+        config: {
+          responseMimeType: "application/json",
+        },
       });
-      parsed = experimental_output as z.infer<typeof SpatialSchema>;
-      rawText = text ?? "";
-      usage = u ?? null;
+      rawText =
+        resp?.text ??
+        resp?.candidates?.[0]?.content?.parts?.map((p: any) => p?.text ?? "").join("") ??
+        "";
+      usage = resp?.usageMetadata ?? null;
+
+      const cleaned = rawText
+        .trim()
+        .replace(/^```(?:json)?\s*/i, "")
+        .replace(/\s*```$/, "");
+      const raw = JSON.parse(cleaned);
+      parsed = SpatialSchema.parse(raw);
       if (!parsed.project_name) parsed.project_name = projectName;
     } catch (err) {
       parseError = err instanceof Error ? err.message : String(err);
       console.error("[spatial-architect] generation failed:", parseError);
     }
+
 
     const result = {
       project_name: parsed?.project_name ?? projectName,
