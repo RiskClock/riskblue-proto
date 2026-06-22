@@ -4329,11 +4329,12 @@ function InstancesReportModal({
     }
     let hasUnassigned = false;
     for (const r of expanded) {
-      // Skip annotations whose space resolves to a unit (or anything not in
-      // the physical-space hierarchy) — those are surfaced inside the level's
-      // detail page, not as a top-level space entry.
-      if (r.spaceName) {
-        if (levelNames.has(r.spaceName)) set.add(r.spaceName);
+      // Annotations whose space resolves to a level are kept as-is.
+      // Annotations with no space, or whose space resolves to a unit
+      // (or anything not in the physical-space hierarchy) that can't be
+      // attributed to a level, are rolled into an "Unassigned" entry.
+      if (r.spaceName && levelNames.has(r.spaceName)) {
+        set.add(r.spaceName);
       } else {
         hasUnassigned = true;
       }
