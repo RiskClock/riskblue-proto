@@ -1,103 +1,61 @@
-## 1 — Badge colors + label format
+## Goal
 
-**File:** `src/pages/WorkbenchProjectDetail.tsx` (per-page sub-row in second table)
+Restore both spatial badge surfaces on the **55-75 Brownlow Phase One** analysis request (`13502949-c6ad-4e36-bf8e-1f28cf9c217c`) by synthesizing a Scout-shaped `survey_raw_response` for each file from the existing legacy `space_hierarchy_json.parsed.spatial_records`.
 
-Rebuild page-row badges so each badge matches its source plan's bounding-box color and uses the same label format level/unit plans use elsewhere:
+No schema changes, no UI changes. One-off data backfill via `supabase--insert`.
 
-- For each plan on the page render a single badge:
-  - `label = floorPlanDisplayLabel(plan)` (reference_id → floors → plan_id)
-  - background/border = `awpClassColor(plan.type)` (same color the bbox uses)
-  - text color = `readableTextOn(color)`
-- Drop the separate floor / reference_id badge tracks.
-- Append a small secondary `{N} units` pill after each **level** plan badge when `referenced_unit_ids.length > 0` (clickable — see #3).
+## Why this works
 
-## 2 — Remove "Floors" section in the drawing-modal floor-plan card
+- **Sheet-level "Level …" badges** (`renderSpaceBadge`) read `space_hierarchy_json.parsed.spatial_records[*].matched_sources`. Brownlow's legacy data already matches this shape — these badges should render as soon as the page is loaded; if they don't, this backfill also rewrites the JSON in place which forces a fresh fetch.
+- **Per-page floor-plan badges** (`floorPlansByFile` → `parseSurveyFloorPlans`) need each file's `survey_raw_response` to be a JSON string that the parser flattens into `floor_plans[]` per page. Brownlow has none, so we build one.
 
-**File:** `src/components/wizard/FileViewerModal.tsx` → `FloorPlansPanel`
+## What gets written
 
-Delete the `isLevel && (… Floors …)` block. Leave bbox label, type, Referenced-in (units) and Units (levels) sections intact.
+For each file under `analysis_request_id = 13502949…`, write `analysis_request_files.survey_raw_response` to a JSON string of the form the parser expects:
 
-## 3 — Units → count + edit modal
+```json
+{
+  "file_name": "Combined Mech - Brownlow.pdf",
+  "total_pages": <max page_number seen for this file>,
+  "surveyed_pages": [
+    {
+      "page_number": 24,
+      "floor_plans": [
+        {
+          "plan_id": "legacy_p24_1",
+          "type": "level_floor_plan",
+          "reference_id": "Ground Level",
+          "xy_width_height_pct": [0, 0, 100, 100],
+          "spatial_connection": { "floors": ["Ground Level"] },
+          "relationships": { "referenced_unit_ids": [] }
+        }
+      ]
+    }
+  ]
+}
+```
 
-**Where:**
-- `FloorPlansPanel` (drawing modal): replace the per-unit Badge list with `Badge: "{N} units"` + pencil button.
-- `WorkbenchProjectDetail` page-row: the new `{N} units` pill after each level badge from #1.
+Rules:
+- One `floor_plans` entry per `(file_name, page_number)` row inside `spatial_records[*].matched_sources`.
+- `reference_id` and `spatial_connection.floors[0]` = `standardized_space_name`.
+- `xy_width_height_pct` = `[0, 0, 100, 100]` (full-page bbox, per chosen option).
+- `type` = `"level_floor_plan"` (Brownlow has no unit templates in the legacy data; the loop will treat any `unit_templates` entry as `unit_floor_plan` if present, but inspection shows none).
+- Also set `survey_raw_updated_at = now()` so the workbench rehydration effect picks it up.
+- Leave `analysis_request_sheets.survey_result` alone (NULL is fine — `floorPlansByFile` keys off file-level raw, and the page-level survey_result hydration just no-ops).
+- Leave `space_hierarchy_json` untouched (already correct).
 
-Both buttons open a new `EditLevelUnitsModal` (added to `src/components/wizard/`):
-- Props: `levelPlan`, `allUnitPlans`, current units, `onSave(units)`.
-- UI: list of current unit refs with `X` remove + an "Add unit" combobox sourced from `allUnitPlans` filtered to those not already added.
-- Persistence: reuses existing `onSaveFloorPlanOverride(planId, { floors, units })` writing to `floor_plan_overrides` JSONB on `analysis_request_sheets`.
+## Technical steps
 
-The workbench page-row needs an `onEditLevelUnits(plan, page)` callback wired up; it already has `floorPlansByFile` and a `saveFloorPlanOverride` helper.
+1. Single `supabase--insert` call that runs a PL/pgSQL `DO` block:
+   - Reads `space_hierarchy_json->'parsed'->'spatial_records'` for the Brownlow request.
+   - Groups `matched_sources` by `file_name`, then by `page_number`.
+   - Builds the JSON envelope above with `jsonb_build_object` / `jsonb_agg`.
+   - `UPDATE analysis_request_files SET survey_raw_response = <json>::text, survey_raw_updated_at = now() WHERE analysis_request_id = '13502949…' AND name = <file_name>`.
+2. Verification query: `SELECT name, length(survey_raw_response) FROM analysis_request_files WHERE analysis_request_id = '13502949…'`.
+3. Ask the user to refresh the Brownlow workbench page; confirm both the sheet-level "Level …" badges and the per-page floor-plan badges render.
 
-## 4 — Gemini explicit context cache + Identify Risk Elements
+## Out of scope
 
-### 4a. Schema migration
-
-Add two columns to `analysis_request_files`:
-- `gemini_cache_id text`
-- `gemini_cache_expires_at timestamptz`
-
-No RLS changes — table already has policies.
-
-### 4b. `supabase/functions/survey-pages/index.ts`
-
-Switch to `npm:@google/genai`. After uploading the PDF to the Files API:
-
-1. **Create a sterile, multi-purpose cache** — pass only the PDF blob. **Do not** put the survey prompt or any agent instructions inside the cache so downstream agents (Risk Elements, Kitchen, etc.) can reuse the same cache id without contamination.
-
-   ```ts
-   const cache = await ai.caches.create({
-     model: 'gemini-3.5-flash',
-     config: {
-       displayName: `sheet-analysis-${fileId}`,
-       contents: [{ role: 'user', parts: [{ fileData: { fileUri: uri, mimeType } }] }],
-       ttl: '7200s',   // 2 hours
-     },
-   });
-   ```
-
-2. **Run the survey call** passing the survey system prompt at *execution* time via `config.systemInstruction`, and reference the sterile cache via `config.cachedContent`:
-
-   ```ts
-   await ai.models.generateContent({
-     model: 'gemini-3.5-flash',
-     contents: [{ role: 'user', parts: [{ text: 'Process this file layout structure.' }] }],
-     config: {
-       cachedContent: cache.name,
-       systemInstruction: SURVEY_PAGES_PROMPT,
-     },
-   });
-   ```
-
-3. Persist `{ gemini_cache_id: cache.name, gemini_cache_expires_at: now + 2h }` on the `analysis_request_files` row alongside the existing `survey_raw_response` update.
-
-If `caches.create` fails (Gemini requires the cached prefix to exceed its minimum token count for the model), fall back to a direct non-cached call and leave the cache columns null.
-
-### 4c. New edge function `supabase/functions/identify-risk-elements/index.ts`
-
-Input: `{ analysisRequestId, fileId, awpClassNames: string[] }` — the classes currently enabled in the workbench column toggles.
-
-Per invocation:
-1. Load file row → read `gemini_cache_id`, `gemini_cache_expires_at`.
-2. If missing/expired, rebuild the sterile cache using the same helper as 4b (re-download PDF, re-upload to Files API, `caches.create` with only the PDF blob, update row).
-3. Load `awp_class_prompts.prompt_text` for each requested class.
-4. Fan out in parallel — one `ai.models.generateContent` per class, passing the class prompt as `config.systemInstruction` and the sterile cache id as `config.cachedContent`. User part is a short generic kicker like `"Identify all risk elements per the system instruction."`.
-5. Persist raw text per class into `analysis_results` keyed by `(analysis_request_id, file_id, awp_class_name, kind='risk_elements')`.
-
-Return `202 { started: true }` and use `EdgeRuntime.waitUntil` like survey-pages.
-
-### 4d. Client wiring
-
-`src/pages/WorkbenchProjectDetail.tsx`:
-- Existing "Identify Risk Elements" button → loop uploaded files, invoke `identify-risk-elements` for each with the currently enabled `enabledCols` class list. Toast on dispatch; do not block UI.
-
-## Technical notes
-
-- `@google/genai` works in Deno via `npm:@google/genai`: `import { GoogleGenAI } from 'npm:@google/genai'; const ai = new GoogleGenAI({ apiKey: Deno.env.get('GEMINI_API_KEY')! });`
-- Model id stays `gemini-3.5-flash` everywhere — `caches.create` and `generateContent` must use the same model id.
-- `gemini_cache_expires_at` is informational only; the SDK call relies on the cache name still being valid server-side.
-
-## Out of scope (this turn)
-
-- Where per-class risk-element results render in the UI — we just persist them. Confirm afterwards if you want a column/row treatment.
+- No changes to `survey-pages`, `spatial-architect`, or `schema.ts`.
+- No re-run of Scout — credits preserved.
+- Other legacy projects untouched.
