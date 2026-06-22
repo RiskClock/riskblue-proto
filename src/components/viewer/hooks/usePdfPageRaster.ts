@@ -38,14 +38,14 @@ export interface PdfRasterOptions {
 }
 
 const DEFAULTS: Required<Omit<PdfRasterOptions, "activePage">> = {
-  baseScale: 1,
+  baseScale: 1.5,
   maxDpr: 3,
-  maxPixelsPerPage: 16_000_000, // 16 Mpx
-  settleMs: 250,
-  rerasterAboveScale: 2.5,
+  maxPixelsPerPage: 24_000_000, // 24 Mpx — room for sharper rerasters
+  settleMs: 200,
+  rerasterAboveScale: 1.1, // any meaningful zoom triggers a sharp rerender
   bufferPages: 1,
   eager: false,
-  jpegQuality: 0.85,
+  jpegQuality: 0.95,
 };
 
 // Module-level cache for the parsed PDFDocumentProxy, keyed by Blob identity.
@@ -285,13 +285,22 @@ export function usePdfPageRaster(
       const timer = setTimeout(async () => {
         try {
           const dpr = Math.min(window.devicePixelRatio || 1, opts.maxDpr);
-          const targetScale =
-            Math.min(opts.baseScale * cssScale, opts.baseScale * opts.maxDpr) *
-            (dpr / (window.devicePixelRatio || 1));
+          // Target a raster density that matches what's actually on screen:
+          // baseScale * cssScale * DPR. Clamp by maxDpr-derived ceiling AND
+          // the pixel budget so we always produce a sharper raster instead of
+          // bailing out at high zoom.
           const page = await pdf.getPage(pageNum);
+          const baseViewport = page.getViewport({ scale: 1 });
+          const idealScale = opts.baseScale * cssScale * dpr;
+          const scaleCeiling = opts.baseScale * opts.maxDpr * 2;
+          let targetScale = Math.min(idealScale, scaleCeiling);
+          const idealPx =
+            baseViewport.width * baseViewport.height * targetScale * targetScale;
+          if (idealPx > opts.maxPixelsPerPage) {
+            const shrink = Math.sqrt(opts.maxPixelsPerPage / idealPx);
+            targetScale *= shrink;
+          }
           const viewport = page.getViewport({ scale: targetScale });
-          const totalPx = viewport.width * viewport.height;
-          if (totalPx > opts.maxPixelsPerPage) return;
 
           const canvas = document.createElement("canvas");
           canvas.width = viewport.width;
