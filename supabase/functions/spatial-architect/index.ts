@@ -206,10 +206,33 @@ Deno.serve(async (req) => {
     let rawText = "";
     let usage: unknown = null;
 
+    // Load configurable model + system prompt from app_settings.
+    const { data: modelRow } = await admin
+      .from("app_settings")
+      .select("value")
+      .eq("key", "space_hierarchy_model")
+      .maybeSingle();
+    const configuredModel = (modelRow as any)?.value;
+    const modelId = typeof configuredModel === "string" && configuredModel.trim().length > 0
+      ? `google/${configuredModel.trim()}`
+      : "google/gemini-2.5-flash-lite";
+
+    const { data: promptRow } = await admin
+      .from("app_settings")
+      .select("value")
+      .eq("key", "space_hierarchy_prompt")
+      .maybeSingle();
+    const configuredPrompt = (promptRow as any)?.value;
+    const systemPrompt = typeof configuredPrompt === "string" && configuredPrompt.trim().length > 0
+      ? configuredPrompt
+      : SYSTEM_PROMPT;
+
+    console.log(`[spatial-architect] model=${modelId} promptSource=${configuredPrompt ? "app_settings" : "default"}`);
+
     try {
       const { experimental_output, text, usage: u } = await generateText({
-        model: provider("google/gemini-3-flash-preview"),
-        system: SYSTEM_PROMPT,
+        model: provider(modelId),
+        system: systemPrompt,
         prompt: userPrompt,
         experimental_output: Output.object({ schema: SpatialSchema }),
       });
