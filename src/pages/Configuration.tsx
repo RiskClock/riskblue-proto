@@ -1018,18 +1018,21 @@ function SpaceHierarchyPromptSection() {
     <div className="mt-8 bg-card rounded-lg border p-4">
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-lg font-semibold">Space Hierarchy Prompt</h2>
+          <h2 className="text-lg font-semibold">Spatial Architect Agent Prompt</h2>
           <p className="text-sm text-muted-foreground">
-            Prompt sent to the Build Space Hierarchy agent. Extracted drawing text is appended after the prompt.
+            Prompt sent to the Spatial Architect agent. Scout's per-page output is appended after the prompt for normalization.
           </p>
         </div>
-        <Button variant="outline" onClick={openModal}>Edit Prompt</Button>
+        <div className="flex items-center gap-2">
+          <PromptModelPicker settingKey="space_hierarchy_model" defaultModel="gemini-2.5-flash-lite" />
+          <Button variant="outline" onClick={openModal}>Edit Prompt</Button>
+        </div>
       </div>
 
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent className="max-w-4xl max-h-[85vh] flex flex-col">
           <DialogHeader>
-            <DialogTitle>Space Hierarchy Prompt</DialogTitle>
+            <DialogTitle>Spatial Architect Agent Prompt</DialogTitle>
             <DialogDescription>
               {updatedAt
                 ? `Last updated ${format(new Date(updatedAt), "MMM d, yyyy 'at' h:mm a")}`
