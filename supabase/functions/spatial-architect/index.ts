@@ -192,15 +192,6 @@ Deno.serve(async (req) => {
       } pages=${totalPages} chars=${userPrompt.length}`,
     );
 
-    const provider = createOpenAICompatible({
-      name: "lovable",
-      baseURL: "https://ai.gateway.lovable.dev/v1",
-      headers: {
-        "Lovable-API-Key": lovableKey,
-        "X-Lovable-AIG-SDK": "vercel-ai-sdk",
-      },
-    });
-
     let parsed: z.infer<typeof SpatialSchema> | null = null;
     let parseError: string | null = null;
     let rawText = "";
@@ -214,8 +205,8 @@ Deno.serve(async (req) => {
       .maybeSingle();
     const configuredModel = (modelRow as any)?.value;
     const modelId = typeof configuredModel === "string" && configuredModel.trim().length > 0
-      ? `google/${configuredModel.trim()}`
-      : "google/gemini-2.5-flash-lite";
+      ? configuredModel.trim()
+      : "gemini-2.5-flash-lite";
 
     const { data: promptRow } = await admin
       .from("app_settings")
@@ -230,20 +221,43 @@ Deno.serve(async (req) => {
     console.log(`[spatial-architect] model=${modelId} promptSource=${configuredPrompt ? "app_settings" : "default"}`);
 
     try {
-      const { experimental_output, text, usage: u } = await generateText({
-        model: provider(modelId),
-        system: systemPrompt,
-        prompt: userPrompt,
-        experimental_output: Output.object({ schema: SpatialSchema }),
+      const ai = new GoogleGenAI({ apiKey });
+      // Fold the system prompt into the user message — matches the pattern used
+      // by Scout and Risk Radar (gemini-3.5 rejects systemInstruction in some
+      // configurations; keeping it in the user content is uniformly safe).
+      const resp: any = await ai.models.generateContent({
+        model: modelId,
+        contents: [
+          {
+            role: "user",
+            parts: [
+              { text: `Instructions:\n${systemPrompt}` },
+              { text: userPrompt },
+            ],
+          },
+        ],
+        config: {
+          responseMimeType: "application/json",
+        },
       });
-      parsed = experimental_output as z.infer<typeof SpatialSchema>;
-      rawText = text ?? "";
-      usage = u ?? null;
+      rawText =
+        resp?.text ??
+        resp?.candidates?.[0]?.content?.parts?.map((p: any) => p?.text ?? "").join("") ??
+        "";
+      usage = resp?.usageMetadata ?? null;
+
+      const cleaned = rawText
+        .trim()
+        .replace(/^```(?:json)?\s*/i, "")
+        .replace(/\s*```$/, "");
+      const raw = JSON.parse(cleaned);
+      parsed = SpatialSchema.parse(raw);
       if (!parsed.project_name) parsed.project_name = projectName;
     } catch (err) {
       parseError = err instanceof Error ? err.message : String(err);
       console.error("[spatial-architect] generation failed:", parseError);
     }
+
 
     const result = {
       project_name: parsed?.project_name ?? projectName,
