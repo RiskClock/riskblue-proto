@@ -4619,19 +4619,14 @@ function InstancesReportModal({
             const pageIdx = parseInt(pageIdxStr, 10);
             const fileName = fileNameById.get(fileId) || "";
             const lookup = sheetByFilePage.get(`${fileName}::${pageIdx}`);
-            if (!lookup || !lookup.sheet.storage_path) {
+            if (!lookup) {
               return (
                 <div key={key} className="text-xs text-muted-foreground">
                   {fileName} · Page {pageIdx} (drawing not available)
                 </div>
               );
             }
-            const source: DocumentSourceDescriptor = {
-              kind: "supabase-storage",
-              bucket: bucketForSource(lookup.sheet.file_source_type),
-              path: lookup.sheet.storage_path,
-              mimeType: "application/pdf",
-            };
+            const bucket = bucketForSource(lookup.sheet.file_source_type);
             // Sheet storage_path is a per-page rendered PDF (single page),
             // so overlays and the viewer must address page 1, not the
             // original page_index from the source document.
@@ -4648,11 +4643,13 @@ function InstancesReportModal({
               }));
 
             return (
-              <DrawingPageBlock
+              <LazyDrawingPageBlock
                 key={key}
+                sheetId={lookup.sheet.id}
+                initialStoragePath={lookup.sheet.storage_path}
+                bucket={bucket}
                 fileName={fileName}
                 pageIdx={pageIdx}
-                source={source}
                 overlays={overlays}
               />
             );
