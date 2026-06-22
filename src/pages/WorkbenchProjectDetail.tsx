@@ -4318,7 +4318,13 @@ function InstancesReportModal({
     const _p: any = spaceHierarchyPayload?.parsed;
     const hierarchySpaces: any[] = _p?.physical_spaces || _p?.spatial_records || [];
     for (const sp of hierarchySpaces) {
-      if (sp?.standardized_space_name) s.add(sp.standardized_space_name);
+      const name = sp?.standardized_space_name;
+      if (!name) continue;
+      const cat = typeof sp?.space_category === "string" ? sp.space_category.toLowerCase() : "";
+      // Only physical levels (contiguous storeys) qualify as report spaces.
+      // Spatial Templates (unit suites, amenity templates) live within levels.
+      if (cat && cat !== "contiguous storey") continue;
+      s.add(name);
     }
     return s;
   }, [spaceHierarchyPayload]);
@@ -4551,41 +4557,61 @@ function InstancesReportModal({
     const rows = instancesForSpace(space);
     const label = space === "__unassigned__" ? "Unassigned" : space;
     // Group rows by file+page so we can render each matched drawing with overlays.
-    const pageKeys = Array.from(
+    let pageKeys = Array.from(
       new Set(rows.map((r) => `${r.fileId}::${r.pageIndex}`)),
     );
+    // When the space has no annotations, still surface its floor plan pages
+    // (from the space hierarchy) so users see the level's drawing.
+    if (pageKeys.length === 0 && space !== "__unassigned__") {
+      const fallback = new Set<string>();
+      for (const [key, spaces] of pageSpaceMap.entries()) {
+        if (!spaces.includes(space)) continue;
+        const [fileName, pageStr] = key.split("::");
+        const lookup = sheetByFilePage.get(`${fileName}::${pageStr}`);
+        const fileId = lookup?.file?.id;
+        if (!fileId) continue;
+        fallback.add(`${fileId}::${pageStr}`);
+      }
+      pageKeys = Array.from(fallback);
+    }
     const showUnitCol = rows.some((r) => !!r.unitName);
     return (
       <div className="space-y-4">
         <h3 className="text-sm font-semibold">{label}</h3>
-        <Table>
-          <TableHeader className="sticky top-0 z-10 bg-background shadow-[0_1px_0_0_hsl(var(--border))]">
-            <TableRow className={compactRow}>
-              <TableHead className={compactHead}>Instance ID</TableHead>
-              <TableHead className={compactHead}>Class</TableHead>
-              {showUnitCol && <TableHead className={compactHead}>Unit</TableHead>}
-              <TableHead className={compactHead}>Annotation ID</TableHead>
-              <TableHead className={compactHead}>Source</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {rows.map((r, i) => (
-              <TableRow key={`${r.instanceId}-${i}`} className={compactRow}>
-                <TableCell className={`${compactCell} font-mono`}>{r.instanceId}</TableCell>
-                <TableCell className={compactCell}>{r.awpClassName}</TableCell>
-                {showUnitCol && (
-                  <TableCell className={compactCell}>{r.unitName ?? "—"}</TableCell>
-                )}
-                <TableCell className={`${compactCell} font-mono text-muted-foreground`}>
-                  {r.annotationBaseId}
-                </TableCell>
-                <TableCell className={`${compactCell} text-muted-foreground`}>
-                  {fileNameById.get(r.fileId)} · Page {r.pageIndex}
-                </TableCell>
+        {rows.length === 0 ? (
+          <div className="text-sm text-muted-foreground">
+            No objects found in this space.
+          </div>
+        ) : (
+          <Table>
+            <TableHeader className="sticky top-0 z-10 bg-background shadow-[0_1px_0_0_hsl(var(--border))]">
+              <TableRow className={compactRow}>
+                <TableHead className={compactHead}>Instance ID</TableHead>
+                <TableHead className={compactHead}>Class</TableHead>
+                {showUnitCol && <TableHead className={compactHead}>Unit</TableHead>}
+                <TableHead className={compactHead}>Annotation ID</TableHead>
+                <TableHead className={compactHead}>Source</TableHead>
               </TableRow>
-            ))}
-          </TableBody>
-        </Table>
+            </TableHeader>
+            <TableBody>
+              {rows.map((r, i) => (
+                <TableRow key={`${r.instanceId}-${i}`} className={compactRow}>
+                  <TableCell className={`${compactCell} font-mono`}>{r.instanceId}</TableCell>
+                  <TableCell className={compactCell}>{r.awpClassName}</TableCell>
+                  {showUnitCol && (
+                    <TableCell className={compactCell}>{r.unitName ?? "—"}</TableCell>
+                  )}
+                  <TableCell className={`${compactCell} font-mono text-muted-foreground`}>
+                    {r.annotationBaseId}
+                  </TableCell>
+                  <TableCell className={`${compactCell} text-muted-foreground`}>
+                    {fileNameById.get(r.fileId)} · Page {r.pageIndex}
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        )}
 
         <div className="space-y-6">
           {pageKeys.map((key) => {
@@ -4645,13 +4671,6 @@ function InstancesReportModal({
       );
     }
     if (selected === "__overview__") return renderOverview();
-    if (expanded.length === 0) {
-      return (
-        <div className="text-sm text-muted-foreground p-4">
-          No annotations found. Place annotations on drawings first.
-        </div>
-      );
-    }
     if (selected === "__summary__") return renderSummary();
     return renderSpaceDetail(selected);
   };
