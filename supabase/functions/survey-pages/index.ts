@@ -160,7 +160,19 @@ Deno.serve(async (req) => {
         if (dlErr || !blob) throw new Error(`Could not download ${fileName}: ${dlErr?.message ?? "unknown"}`);
         const bytes = new Uint8Array(await blob.arrayBuffer());
 
-        console.log(`[survey-pages] req=${analysisRequestId} file=${fileName} bytes=${bytes.byteLength}`);
+        // Determine real PDF page count up-front so chunking covers the whole
+        // document even when the model omits total_pages and the sheets table
+        // hasn't been pre-populated.
+        let pdfPageCount = 0;
+        try {
+          const { PDFDocument } = await import("https://esm.sh/pdf-lib@1.17.1");
+          const doc = await PDFDocument.load(bytes, { updateMetadata: false });
+          pdfPageCount = doc.getPageCount();
+        } catch (e: any) {
+          console.warn(`[survey-pages] could not read pdf page count: ${e?.message ?? e}`);
+        }
+
+        console.log(`[survey-pages] req=${analysisRequestId} file=${fileName} bytes=${bytes.byteLength} pdfPages=${pdfPageCount}`);
 
         const ai = new GoogleGenAI({ apiKey });
 
@@ -279,7 +291,7 @@ Deno.serve(async (req) => {
             if (Number.isFinite(tp) && tp > discoveredTotal) discoveredTotal = tp;
           }
         }
-        const totalForChunking = Math.max(discoveredTotal, knownMaxSheetPage, CHUNK_SIZE);
+        const totalForChunking = Math.max(discoveredTotal, knownMaxSheetPage, pdfPageCount, CHUNK_SIZE);
 
         const chunkRanges: Array<[number, number]> = [];
         for (let start = CHUNK_SIZE + 1; start <= totalForChunking; start += CHUNK_SIZE) {
