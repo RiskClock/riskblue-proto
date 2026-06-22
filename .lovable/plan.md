@@ -1,61 +1,31 @@
-## Goal
+## Changes to `src/pages/WorkbenchProjectDetail.tsx`
 
-Restore both spatial badge surfaces on the **55-75 Brownlow Phase One** analysis request (`13502949-c6ad-4e36-bf8e-1f28cf9c217c`) by synthesizing a Scout-shaped `survey_raw_response` for each file from the existing legacy `space_hierarchy_json.parsed.spatial_records`.
+### 1. Collapse per-page Level badges
 
-No schema changes, no UI changes. One-off data backfill via `supabase--insert`.
+In the per-page sub-row renderer (around line 3033), `levelPlans.map(...)` currently emits one badge per `level_floor_plan`. Replace with grouped rendering:
 
-## Why this works
+- Build a list of level names from `levelPlans` (use `floorPlanDisplayLabel(lvl)` for each).
+- Pass through the existing `formatSpaceBadge(names)` helper (lines 147-165) which already handles:
+  - Contiguous numeric runs → `Level 13-17`
+  - Non-contiguous numeric sets → `Level 4 & 5 & 12`
+  - Mixed/non-numeric → joined with `&`
+- Extend `formatSpaceBadge` so it produces **multiple chips** when there are both contiguous runs and stragglers (e.g. `Level 4, 5, 12-17`) instead of one long ampersand string. Return `string[]` and render one badge per chunk.
+- Each resulting chip is **non-interactive** (plain `<Badge>`, no `onClick`, no cursor-pointer). The underlying page row click still navigates to the page view.
+- Keep the existing color (`awpClassColor("Level Floor Plan")`) and styling.
+- Unit-plan badge logic (`unitPlans.length` count) is unchanged.
 
-- **Sheet-level "Level …" badges** (`renderSpaceBadge`) read `space_hierarchy_json.parsed.spatial_records[*].matched_sources`. Brownlow's legacy data already matches this shape — these badges should render as soon as the page is loaded; if they don't, this backfill also rewrites the JSON in place which forces a fresh fetch.
-- **Per-page floor-plan badges** (`floorPlansByFile` → `parseSurveyFloorPlans`) need each file's `survey_raw_response` to be a JSON string that the parser flattens into `floor_plans[]` per page. Brownlow has none, so we build one.
+### 2. Remove triage-score green shading
 
-## What gets written
+In `renderTriageCell` (lines 2877+):
 
-For each file under `analysis_request_id = 13502949…`, write `analysis_request_files.survey_raw_response` to a JSON string of the form the parser expects:
+- Drop the inline `style={{ backgroundColor: rgba(16,185,129, ...) }}` block (lines 2923-2927).
+- Keep the override-driven backgrounds (`bg-emerald-500/20` for explicit include, `bg-muted/60` for exclude, hover for clickable). The score still drives the tooltip/title text — only the visual fill is removed.
 
-```json
-{
-  "file_name": "Combined Mech - Brownlow.pdf",
-  "total_pages": <max page_number seen for this file>,
-  "surveyed_pages": [
-    {
-      "page_number": 24,
-      "floor_plans": [
-        {
-          "plan_id": "legacy_p24_1",
-          "type": "level_floor_plan",
-          "reference_id": "Ground Level",
-          "xy_width_height_pct": [0, 0, 100, 100],
-          "spatial_connection": { "floors": ["Ground Level"] },
-          "relationships": { "referenced_unit_ids": [] }
-        }
-      ]
-    }
-  ]
-}
-```
+### 3. No backend/schema/data changes
 
-Rules:
-- One `floor_plans` entry per `(file_name, page_number)` row inside `spatial_records[*].matched_sources`.
-- `reference_id` and `spatial_connection.floors[0]` = `standardized_space_name`.
-- `xy_width_height_pct` = `[0, 0, 100, 100]` (full-page bbox, per chosen option).
-- `type` = `"level_floor_plan"` (Brownlow has no unit templates in the legacy data; the loop will treat any `unit_templates` entry as `unit_floor_plan` if present, but inspection shows none).
-- Also set `survey_raw_updated_at = now()` so the workbench rehydration effect picks it up.
-- Leave `analysis_request_sheets.survey_result` alone (NULL is fine — `floorPlansByFile` keys off file-level raw, and the page-level survey_result hydration just no-ops).
-- Leave `space_hierarchy_json` untouched (already correct).
+Existing `space_hierarchy_json` and Scout `survey_raw_response` payloads already provide the level names. This is purely presentation.
 
-## Technical steps
+### Out of scope
 
-1. Single `supabase--insert` call that runs a PL/pgSQL `DO` block:
-   - Reads `space_hierarchy_json->'parsed'->'spatial_records'` for the Brownlow request.
-   - Groups `matched_sources` by `file_name`, then by `page_number`.
-   - Builds the JSON envelope above with `jsonb_build_object` / `jsonb_agg`.
-   - `UPDATE analysis_request_files SET survey_raw_response = <json>::text, survey_raw_updated_at = now() WHERE analysis_request_id = '13502949…' AND name = <file_name>`.
-2. Verification query: `SELECT name, length(survey_raw_response) FROM analysis_request_files WHERE analysis_request_id = '13502949…'`.
-3. Ask the user to refresh the Brownlow workbench page; confirm both the sheet-level "Level …" badges and the per-page floor-plan badges render.
-
-## Out of scope
-
-- No changes to `survey-pages`, `spatial-architect`, or `schema.ts`.
-- No re-run of Scout — credits preserved.
-- Other legacy projects untouched.
+- Sheet-level `renderSpaceBadge` (already uses `formatSpaceBadge`) — no change needed.
+- Triage scoring logic, override toggling, column management — untouched.
