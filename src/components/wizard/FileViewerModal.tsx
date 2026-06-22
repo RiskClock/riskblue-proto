@@ -839,16 +839,20 @@ export const FileViewerModal = ({
 
   // For the sidebar: instances for THIS file, on the current page, grouped by class.
   const instancesByClassThisFile = useMemo(() => {
+    const allowed = awpClasses
+      ? new Set(awpClasses.map((c) => c.name))
+      : null;
     const m = new Map<string, DrawingInstanceRow[]>();
     for (const i of instances) {
       if (i.file_id !== parentFileId) continue;
       if (i.page_index !== effectivePage) continue;
+      if (allowed && !allowed.has(i.awp_class_name)) continue;
       const arr = m.get(i.awp_class_name) || [];
       arr.push(i);
       m.set(i.awp_class_name, arr);
     }
     return m;
-  }, [instances, parentFileId, effectivePage]);
+  }, [instances, parentFileId, effectivePage, awpClasses]);
 
   return (
     <Dialog
