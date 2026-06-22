@@ -118,7 +118,10 @@ export const DrawingViewer = forwardRef<DrawingViewerApi, DrawingViewerProps>(
 
     const isPdf = resolved?.kind === "pdf";
     const { pages, totalPages: pdfTotalPages, loading: pdfLoading, error: pdfError, scheduleReraster } =
-      usePdfPageRaster(isPdf ? resolved!.pdfBlob! : null);
+      usePdfPageRaster(isPdf ? resolved!.pdfBlob! : null, {
+        activePage: page,
+        eager: layout === "stacked-pages",
+      });
 
     // Image source synthesizes a single "page" so the same render path works.
     const [imagePage, setImagePage] = useState<RasterPage | null>(null);
