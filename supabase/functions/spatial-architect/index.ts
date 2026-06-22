@@ -33,6 +33,10 @@ const SpatialSchema = z.object({
         standardized_space_name: z.string(),
         space_category: z.string().default("Level"),
         space_index: z.number().nullable().default(null),
+        // For non-storey records (Spatial Template / Unit / amenity), list the
+        // canonical Level names this template physically belongs to. Levels
+        // themselves leave this empty.
+        applies_to_levels: z.array(z.string()).default([]),
         matched_sources: z
           .array(
             z.object({
@@ -62,15 +66,16 @@ const SpatialSchema = z.object({
     .default([]),
 });
 
-const SYSTEM_PROMPT = `You are a construction-drawing space normalizer. You receive per-page summaries from a survey agent ("Scout") that has already classified each page of one or more construction PDFs. Your job is to produce a clean, canonical list of physical levels/spaces and unit-floor-plan templates for the project.
+const SYSTEM_PROMPT = `You are a construction-drawing space normalizer. You receive per-page summaries from a survey agent ("Scout") that has already classified each page of one or more construction PDFs. Your job is to produce a clean, canonical list of physical levels/spaces and unit/template floor plans for the project.
 
 Rules:
 1. Deduplicate level names: "Level 2", "L2", "2nd Floor", "Second Floor" all collapse to ONE canonical name. Prefer short labels like "L02", "L05", "P1", "P2", "Ground", "Roof", "Mezzanine".
 2. Assign a numeric space_index: parking/sub-grade levels are NEGATIVE (P3=-3, P2=-2, P1=-1), ground=0, L1=1, L2=2, etc. Roof/penthouse get the highest numbers.
-3. For each canonical level, list every (file_name, page_number) that depicts that level (level plans, RCPs, etc.).
-4. A "unit floor plan" is a typical-unit drawing that applies to multiple residential levels. If Scout identifies one (or you can infer it from the summary, e.g. "Typical Unit A — applies to L05-L20"), emit a unit_templates entry with the unit_name, the full applies_to_levels list (use the canonical level names from step 1), and the matched_sources page(s) where the unit plan itself lives.
-5. Do NOT invent levels or units that Scout did not surface. If applies_to_levels is unclear from the input, leave it as an empty array.
-6. space_category should be "Level" for floors, "Unit" for unit templates listed inside spatial_records (rare — units belong in unit_templates), or a short descriptor.
+3. For each canonical level, list every (file_name, page_number) that depicts that level (level plans, RCPs, etc.) in matched_sources.
+4. CRITICAL — applies_to_levels: every spatial_records entry whose space_category is NOT a physical storey (anything other than "Contiguous Storey" / "Level" — including "Spatial Template", "Unit", "Template", amenity rooms, suites, townhouse units) MUST populate applies_to_levels with the canonical level names where that template/unit physically exists. If a suite is named "Suite 2A" or "Template - Suite 2A", it belongs to "Level 2". If a townhouse plan is "Suite TH2A (GF)" / "Suite TH2A (2F)", they belong to "Ground Level" and "Level 2" respectively. Amenities like "2nd Floor Amenity" belong to "Level 2". Physical levels (Contiguous Storey) leave applies_to_levels empty.
+5. You may ALSO emit unit_templates entries for typical-unit plans that repeat across many residential levels (e.g. "Typical Unit A — applies to L05-L20"). Populate applies_to_levels there too.
+6. Do NOT invent levels or units that Scout did not surface.
+7. space_category values: use "Contiguous Storey" for floors, "Spatial Template" for suites/amenities/units that live within a level.
 
 Return ONLY structured JSON matching the schema. No prose.`;
 
