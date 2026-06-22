@@ -3890,7 +3890,7 @@ export default function WorkbenchProjectDetail() {
           requestId={requestId}
           spannableClasses={spannableClassesWithAnnotations}
           fileNameById={new Map(fileGroups.map((g) => [g.file.id, g.file.name]))}
-          pageSpaceMap={pageSpaceMap}
+          pageSpaceMap={mergedPageSpaceMap}
           onSaved={() => {
             queryClient.invalidateQueries({ queryKey: ["workbench-consolidations", requestId] });
           }}
