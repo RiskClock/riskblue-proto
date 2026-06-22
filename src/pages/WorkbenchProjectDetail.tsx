@@ -2640,7 +2640,7 @@ export default function WorkbenchProjectDetail() {
                   disabled={!requestId}
                   title="Generate per-space threat report"
                 >
-                  Threat Compiler
+                  Threat Report
                 </Button>
 
                 <div className="flex-1" />
