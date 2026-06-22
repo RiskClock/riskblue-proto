@@ -709,7 +709,63 @@ function AddControlPopover({ awp, controls, currentIds, onAdd }: AddControlPopov
   );
 }
 
-// ---------------- Survey Page Prompt ----------------
+// ---------------- Shared Model Picker (Gemini) ----------------
+const GEMINI_MODEL_OPTIONS: { value: string; label: string }[] = [
+  { value: "gemini-2.5-flash-lite", label: "Gemini 2.5 Flash Lite (fastest/cheapest)" },
+  { value: "gemini-2.5-flash", label: "Gemini 2.5 Flash" },
+  { value: "gemini-2.5-pro", label: "Gemini 2.5 Pro" },
+  { value: "gemini-3-flash-preview", label: "Gemini 3 Flash (preview)" },
+  { value: "gemini-3.5-flash", label: "Gemini 3.5 Flash" },
+];
+
+function PromptModelPicker({ settingKey, defaultModel }: { settingKey: string; defaultModel: string }) {
+  const { toast } = useToast();
+  const [model, setModel] = useState<string>(defaultModel);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const { data } = await supabase
+        .from("app_settings" as any)
+        .select("value")
+        .eq("key", settingKey)
+        .maybeSingle();
+      if (cancelled) return;
+      const stored = (data as any)?.value;
+      if (typeof stored === "string" && stored.length > 0) setModel(stored);
+      setLoading(false);
+    })();
+    return () => { cancelled = true; };
+  }, [settingKey]);
+
+  const onChange = async (value: string) => {
+    setModel(value);
+    const { error } = await supabase
+      .from("app_settings" as any)
+      .upsert({ key: settingKey, value, updated_at: new Date().toISOString() } as any, { onConflict: "key" });
+    if (error) {
+      toast({ title: "Failed to save model", description: (error as any)?.message, variant: "destructive" });
+    } else {
+      toast({ title: "Model updated", description: `Next run will use ${value}.` });
+    }
+  };
+
+  return (
+    <Select value={model} onValueChange={onChange} disabled={loading}>
+      <SelectTrigger className="w-[260px]">
+        <SelectValue placeholder="Select model" />
+      </SelectTrigger>
+      <SelectContent>
+        {GEMINI_MODEL_OPTIONS.map((o) => (
+          <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
+        ))}
+      </SelectContent>
+    </Select>
+  );
+}
+
+// ---------------- Scout Agent Prompt ----------------
 function SurveyPagePromptSection() {
   const { toast } = useToast();
   const [open, setOpen] = useState(false);
