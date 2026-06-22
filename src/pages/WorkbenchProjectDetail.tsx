@@ -4315,16 +4315,28 @@ function InstancesReportModal({
 
   const spaceList = useMemo(() => {
     const set = new Set<string>();
-    // Start from the full hierarchy so spaces with 0 detections still appear.
+    // Only physical spaces (levels) from spatial_records belong in the report
+    // spaces list. Units (unit_templates) are sub-spaces and should appear in
+    // the level detail, not as standalone spaces.
     const _p: any = spaceHierarchyPayload?.parsed;
     const hierarchySpaces: any[] = _p?.physical_spaces || _p?.spatial_records || [];
+    const levelNames = new Set<string>();
     for (const sp of hierarchySpaces) {
-      if (sp?.standardized_space_name) set.add(sp.standardized_space_name);
+      if (sp?.standardized_space_name) {
+        set.add(sp.standardized_space_name);
+        levelNames.add(sp.standardized_space_name);
+      }
     }
     let hasUnassigned = false;
     for (const r of expanded) {
-      if (r.spaceName) set.add(r.spaceName);
-      else hasUnassigned = true;
+      // Skip annotations whose space resolves to a unit (or anything not in
+      // the physical-space hierarchy) — those are surfaced inside the level's
+      // detail page, not as a top-level space entry.
+      if (r.spaceName) {
+        if (levelNames.has(r.spaceName)) set.add(r.spaceName);
+      } else {
+        hasUnassigned = true;
+      }
     }
     const arr = Array.from(set).sort((a, b) => {
       const ia = spaceIndexMap.get(a);
