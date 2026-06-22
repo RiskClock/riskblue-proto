@@ -320,49 +320,15 @@ Deno.serve(async (req) => {
         );
         const allChunks = [firstChunk, ...restResults];
 
-        // Merge per-chunk parsed arrays into a single normalized JSON array
-        // grouped by file_name with concatenated surveyed_pages, so the
-        // frontend (floor badges, bbox modals, spatial-architect) sees one
-        // clean document instead of chunk artifacts like "--- pages 1-10 ---".
-        const mergedItems: any[] = [];
+        // Simple concatenation: append each chunk's parsed JSON array into
+        // one combined array. No merging by file_name, no dedupe, no
+        // sorting — downstream consumers can do that if needed.
+        const combined: any[] = [];
         for (const c of allChunks) {
-          if (c.parsed) mergedItems.push(...c.parsed);
+          if (c.parsed) combined.push(...c.parsed);
         }
-
-        const byFile = new Map<string, { file_name: string; total_pages: number; surveyed_pages: any[] }>();
-        const fileOrder: string[] = [];
-        const seenPagesByFile = new Map<string, Set<number>>();
-        for (const item of mergedItems) {
-          const fname = String((item as any)?.file_name ?? fileName);
-          if (!byFile.has(fname)) {
-            byFile.set(fname, { file_name: fname, total_pages: 0, surveyed_pages: [] });
-            seenPagesByFile.set(fname, new Set());
-            fileOrder.push(fname);
-          }
-          const bucket = byFile.get(fname)!;
-          const tp = Number((item as any)?.total_pages);
-          if (Number.isFinite(tp) && tp > bucket.total_pages) bucket.total_pages = tp;
-          const pages = Array.isArray((item as any)?.surveyed_pages) ? (item as any).surveyed_pages : [];
-          const seen = seenPagesByFile.get(fname)!;
-          for (const p of pages) {
-            const pn = Number((p as any)?.page_number);
-            if (Number.isFinite(pn)) {
-              if (seen.has(pn)) continue;
-              seen.add(pn);
-            }
-            bucket.surveyed_pages.push(p);
-          }
-        }
-        for (const bucket of byFile.values()) {
-          bucket.surveyed_pages.sort((a: any, b: any) => {
-            const pa = Number(a?.page_number); const pb = Number(b?.page_number);
-            if (!Number.isFinite(pa) || !Number.isFinite(pb)) return 0;
-            return pa - pb;
-          });
-        }
-        const mergedArray = fileOrder.map((n) => byFile.get(n)!);
-        const rawText = JSON.stringify(mergedArray, null, 2);
-        const parsed = mergedArray;
+        const rawText = JSON.stringify(combined, null, 2);
+        const parsed = combined;
         const pageItems = flattenSurveyPages(parsed);
 
 
