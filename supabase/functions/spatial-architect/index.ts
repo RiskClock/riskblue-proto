@@ -1,14 +1,14 @@
 // spatial-architect — thin normalizer over Scout's per-page output.
 // Reads each file's survey_raw_response (Scout JSON) plus optional per-sheet
-// survey_result, asks Gemini (via Lovable AI Gateway) to deduplicate level
-// names, assign numeric space_index, and surface unit floor-plan templates
-// with the levels each template applies to. Result is stored on
+// survey_result, asks Gemini (native @google/genai SDK with GEMINI_API_KEY —
+// same key used by Scout and Risk Radar) to deduplicate level names, assign
+// numeric space_index, and surface unit floor-plan templates with the levels
+// each template applies to. Result is stored on
 // analysis_requests.space_hierarchy_json in a shape that is a backward-
 // compatible superset of the previous build-space-hierarchy output.
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.0";
-import { createOpenAICompatible } from "npm:@ai-sdk/openai-compatible@0.2.16";
-import { generateText, Output } from "npm:ai@4.3.16";
+import { GoogleGenAI } from "npm:@google/genai@2.8.0";
 import { z } from "npm:zod@3.23.8";
 
 const corsHeaders = {
