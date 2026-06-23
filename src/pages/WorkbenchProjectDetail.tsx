@@ -4893,11 +4893,17 @@ function InstancesReportModal({
                   >
                     {label}
                   </TableCell>
-                  {classCols.map((c) => (
-                    <TableCell key={c.name} className={`${compactCell} text-center tabular-nums`}>
-                      {inner?.get(c.name) || 0}
-                    </TableCell>
-                  ))}
+                  {classCols.map((c) => {
+                    const val = inner?.get(c.name) || 0;
+                    return (
+                      <TableCell
+                        key={c.name}
+                        className={`${compactCell} text-center tabular-nums ${val === 0 ? "opacity-50" : ""}`}
+                      >
+                        {val}
+                      </TableCell>
+                    );
+                  })}
                 </TableRow>
               );
             })}
@@ -5016,19 +5022,20 @@ function InstancesReportModal({
         const unitPlans = pageUnitPlansMap.get(pageKey) || [];
         let tier = 2;
         let qualifier: string | null = null;
-        if (
-          space !== "__unassigned__" &&
-          levelPlans.some((lp) => lp.levels.includes(space))
-        ) {
+        if (levelPlans.length > 0) {
           tier = 0;
-          qualifier = space;
-        } else if (
-          space !== "__unassigned__" &&
-          unitPlans.some((up) => up.levels.includes(space))
-        ) {
+          if (space !== "__unassigned__") {
+            const matchingLp = levelPlans.find((lp) => lp.levels.includes(space));
+            qualifier = matchingLp ? space : levelPlans[0].levels[0];
+          } else {
+            qualifier = levelPlans[0].levels[0];
+          }
+        } else if (unitPlans.length > 0) {
           tier = 1;
-          const matchingUnit = unitPlans.find((up) => up.levels.includes(space));
-          qualifier = matchingUnit?.unitLabel ?? null;
+          const matchingUnit = space !== "__unassigned__"
+            ? unitPlans.find((up) => up.levels.includes(space))
+            : null;
+          qualifier = matchingUnit?.unitLabel ?? unitPlans[0].unitLabel;
         }
         const corePart = qualifier ? `p${pageIdx} · ${qualifier}` : `p${pageIdx}`;
         const tabLabel = showFileInTab ? `${shortName} · ${corePart}` : corePart;
@@ -5242,22 +5249,6 @@ function TabbedPagesBlock({
 
   return (
     <div className="border rounded-md overflow-hidden">
-      {tabs.length > 1 && (
-        <div className="px-2 pt-2 pb-1 border-b bg-muted/20">
-          <Select value={active.key} onValueChange={setActiveKey}>
-            <SelectTrigger className="h-8 text-xs w-auto min-w-[220px] max-w-full">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {tabs.map((t) => (
-                <SelectItem key={t.key} value={t.key} className="text-xs">
-                  {t.tabLabel ?? `${t.shortName} · p${t.pageIdx}`}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-      )}
       <div>
         {active.parentPath ? (
           <DrawingPageBlock
@@ -5272,7 +5263,25 @@ function TabbedPagesBlock({
             }}
             overlays={active.overlays}
             page={active.pageIdx}
-            hideHeader={tabs.length > 1}
+            customSelector={
+              tabs.length > 1 ? (
+                <div className="flex items-center gap-2">
+                  <span className="text-xs font-semibold text-muted-foreground whitespace-nowrap">Drawing:</span>
+                  <Select value={activeKey} onValueChange={setActiveKey}>
+                    <SelectTrigger className="h-8 text-xs w-auto min-w-[220px] max-w-full bg-background border-muted-foreground/30">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {tabs.map((t) => (
+                        <SelectItem key={t.key} value={t.key} className="text-xs">
+                          {t.tabLabel ?? `${t.shortName} · p${t.pageIdx}`}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              ) : null
+            }
           />
         ) : (
           <div className="p-4 text-xs text-muted-foreground">
@@ -5298,14 +5307,14 @@ function DrawingPageBlock({
   source,
   overlays,
   page,
-  hideHeader,
+  customSelector,
 }: {
   fileName: string;
   pageIdx: number;
   source: DocumentSourceDescriptor;
   overlays: any[];
   page?: number;
-  hideHeader?: boolean;
+  customSelector?: React.ReactNode;
 }) {
   const surfaceRef = useRef<HTMLDivElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -5502,34 +5511,24 @@ function DrawingPageBlock({
   };
 
   return (
-    <div ref={containerRef} className={hideHeader ? "" : "border rounded-md overflow-hidden"}>
-      {!hideHeader && (
-        <div className="flex items-center justify-between px-3 py-2 bg-muted/40 border-b">
+    <div ref={containerRef} className="border rounded-md overflow-hidden">
+      <div className="flex items-center justify-between px-3 py-2 bg-muted/40 border-b">
+        {customSelector ? (
+          customSelector
+        ) : (
           <div className="text-sm font-semibold truncate">
             {fileName} · Page {pageIdx}
           </div>
-          <Button size="sm" variant="outline" onClick={handleDownload} disabled={downloading || !inView}>
-            {downloading ? (
-              <Loader2 className="h-3.5 w-3.5 animate-spin mr-1.5" />
-            ) : (
-              <Download className="h-3.5 w-3.5 mr-1.5" />
-            )}
-            Download
-          </Button>
-        </div>
-      )}
-      {hideHeader && (
-        <div className="flex items-center justify-end px-2 py-1 bg-muted/20 border-b">
-          <Button size="sm" variant="ghost" onClick={handleDownload} disabled={downloading || !inView}>
-            {downloading ? (
-              <Loader2 className="h-3.5 w-3.5 animate-spin mr-1.5" />
-            ) : (
-              <Download className="h-3.5 w-3.5 mr-1.5" />
-            )}
-            Download
-          </Button>
-        </div>
-      )}
+        )}
+        <Button size="sm" variant="outline" onClick={handleDownload} disabled={downloading || !inView}>
+          {downloading ? (
+            <Loader2 className="h-3.5 w-3.5 animate-spin mr-1.5" />
+          ) : (
+            <Download className="h-3.5 w-3.5 mr-1.5" />
+          )}
+          Download
+        </Button>
+      </div>
       <div ref={surfaceRef} className="w-full aspect-[3/2] bg-white">
         {inView ? (
           <DrawingViewer
