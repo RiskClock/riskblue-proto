@@ -4380,7 +4380,14 @@ function InstancesReportModal({
     const key = `${fileName}::${pageIndex}`;
     const unitPlans = pageUnitPlansMap.get(key) || [];
     if (unitPlans.length > 0) {
-      let matched: { unitLabel: string; levels: string[]; bbox: [number, number, number, number] | null } | null = null;
+      let matched:
+        | {
+            unitLabel: string;
+            levels: string[];
+            levelsWithCounts: Array<{ level: string; count: number }>;
+            bbox: [number, number, number, number] | null;
+          }
+        | null = null;
       if (unitPlans.length === 1) {
         matched = unitPlans[0];
       } else if (typeof nx === "number" && typeof ny === "number") {
@@ -4396,8 +4403,20 @@ function InstancesReportModal({
         }
       }
       if (!matched) return [];
-      if (matched.levels.length === 0) return [];
-      return matched.levels.map((l) => ({ level: l, unit: matched!.unitLabel }));
+      const lwc =
+        matched.levelsWithCounts && matched.levelsWithCounts.length > 0
+          ? matched.levelsWithCounts
+          : matched.levels.map((l) => ({ level: l, count: 1 }));
+      if (lwc.length === 0) return [];
+      const out: Array<{ level: string; unit?: string }> = [];
+      for (const { level, count } of lwc) {
+        const n = Math.max(1, count | 0);
+        for (let i = 0; i < n; i++) {
+          const unit = i === 0 ? matched.unitLabel : `${matched.unitLabel} (${i + 1})`;
+          out.push({ level, unit });
+        }
+      }
+      return out;
     }
     const unitAware = pageSpaceUnitMap.get(key);
     if (unitAware && unitAware.length > 0) return unitAware;
