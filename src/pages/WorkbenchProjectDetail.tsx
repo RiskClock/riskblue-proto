@@ -1576,6 +1576,44 @@ export default function WorkbenchProjectDetail() {
     return map;
   }, [spaceHierarchyPayload, pageSpaceValidNames]);
 
+  // Canonical level names + normalization. Level floor plans store raw `floors`
+  // text ("2nd Floor") which often doesn't match the canonical SPACES name
+  // ("Level 2") shown in the threat report sidebar. We normalize raw → canonical
+  // so attribution lands in the right space instead of leaking to Unassigned.
+  const canonicalLevelNames = useMemo<string[]>(() => {
+    return extractSpaces(spaceHierarchyPayload?.parsed)
+      .filter((sp) => {
+        const cat = typeof sp?.space_category === "string" ? sp.space_category.toLowerCase() : "";
+        return !cat || cat === "level" || cat === "contiguous storey";
+      })
+      .map((sp) => sp?.standardized_space_name)
+      .filter((x): x is string => typeof x === "string" && !!x);
+  }, [spaceHierarchyPayload]);
+
+  const normalizeLevelToken = (s: string): string => {
+    return (s || "")
+      .toLowerCase()
+      .replace(/\b(level|floor|plan|layout|plumbing|mechanical|electrical|story|storey)\b/g, " ")
+      .replace(/(\d+)\s*(st|nd|rd|th)\b/g, "$1")
+      .replace(/[^a-z0-9]+/g, " ")
+      .trim();
+  };
+
+  const canonicalizeLevel = (raw: string): string => {
+    if (!raw) return raw;
+    const target = normalizeLevelToken(raw);
+    if (!target) return raw;
+    for (const p of canonicalLevelNames) {
+      if (normalizeLevelToken(p) === target) return p;
+    }
+    for (const p of canonicalLevelNames) {
+      const pn = normalizeLevelToken(p);
+      if (pn && (pn === target || pn.split(" ").includes(target) || target.split(" ").includes(pn))) {
+        return p;
+      }
+    }
+    return raw;
+  };
 
   // Survey-derived rollup: uses existing per-page floor-plan metadata
   // (level_floor_plan.floors[] + referenced_unit_ids[]) to map unit floor
@@ -1595,9 +1633,18 @@ export default function WorkbenchProjectDetail() {
         bbox: [number, number, number, number] | null;
       }>
     >();
+    // Per-page level floor plans (with bbox + canonical level names) for
+    // bbox-containment attribution when a page has multiple level plans.
+    const pageLevelPlans = new Map<
+      string,
+      Array<{
+        levels: string[]; // canonical names
+        bbox: [number, number, number, number] | null;
+      }>
+    >();
     const files = rows?.files ?? [];
     const sheets = rows?.sheets ?? [];
-    if (files.length === 0) return { levelMap, unitMap, pageUnitPlans };
+    if (files.length === 0) return { levelMap, unitMap, pageUnitPlans, pageLevelPlans };
 
     const overridesByFilePage = new Map<string, Record<string, any>>();
     for (const s of sheets) {
@@ -1618,7 +1665,7 @@ export default function WorkbenchProjectDetail() {
       return { type, floors: floors || [], units: units || [], bbox };
     };
 
-    // unit ref (lowercased) -> level -> occurrence count.
+    // unit ref (lowercased) -> canonical level -> occurrence count.
     const unitRefToLevelCounts = new Map<string, Map<string, number>>();
     for (const f of files) {
       const byPage = floorPlansByFile.get(f.id);
@@ -1633,7 +1680,8 @@ export default function WorkbenchProjectDetail() {
             const inner = unitRefToLevelCounts.get(k) || new Map<string, number>();
             for (const lvl of e.floors) {
               if (!lvl) continue;
-              inner.set(lvl, (inner.get(lvl) || 0) + 1);
+              const canonical = canonicalizeLevel(lvl);
+              inner.set(canonical, (inner.get(canonical) || 0) + 1);
             }
             unitRefToLevelCounts.set(k, inner);
           }
@@ -1649,11 +1697,16 @@ export default function WorkbenchProjectDetail() {
         for (const fp of plans) {
           const e = effective(fp, f.id);
           if (e.type === "level_floor_plan") {
+            const canonicalLevels = e.floors.map((l) => canonicalizeLevel(l)).filter(Boolean);
+            const lpArr = pageLevelPlans.get(key) || [];
+            lpArr.push({ levels: canonicalLevels, bbox: e.bbox });
+            pageLevelPlans.set(key, lpArr);
+
             const ls = levelMap.get(key) || new Set<string>();
-            for (const lvl of e.floors) if (lvl) ls.add(lvl);
+            for (const lvl of canonicalLevels) if (lvl) ls.add(lvl);
             levelMap.set(key, ls);
             const pairs = unitMap.get(key) || [];
-            for (const lvl of e.floors) {
+            for (const lvl of canonicalLevels) {
               if (!lvl) continue;
               if (!pairs.some((p) => p.level === lvl && !p.unit)) pairs.push({ level: lvl });
             }
@@ -1686,10 +1739,11 @@ export default function WorkbenchProjectDetail() {
         }
       }
     }
-    return { levelMap, unitMap, pageUnitPlans };
-  }, [rows?.files, rows?.sheets, floorPlansByFile]);
+    return { levelMap, unitMap, pageUnitPlans, pageLevelPlans };
+  }, [rows?.files, rows?.sheets, floorPlansByFile, canonicalLevelNames]);
 
   const pageUnitPlansMap = surveyDerivedMaps.pageUnitPlans;
+  const pageLevelPlansMap = surveyDerivedMaps.pageLevelPlans;
 
   // Merge survey (primary) with spatial-architect maps (supplemental fallback).
   const mergedPageSpaceMap = useMemo(() => {
