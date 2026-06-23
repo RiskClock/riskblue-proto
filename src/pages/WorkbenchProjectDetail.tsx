@@ -4893,11 +4893,17 @@ function InstancesReportModal({
                   >
                     {label}
                   </TableCell>
-                  {classCols.map((c) => (
-                    <TableCell key={c.name} className={`${compactCell} text-center tabular-nums`}>
-                      {inner?.get(c.name) || 0}
-                    </TableCell>
-                  ))}
+                  {classCols.map((c) => {
+                    const val = inner?.get(c.name) || 0;
+                    return (
+                      <TableCell
+                        key={c.name}
+                        className={`${compactCell} text-center tabular-nums ${val === 0 ? "opacity-50" : ""}`}
+                      >
+                        {val}
+                      </TableCell>
+                    );
+                  })}
                 </TableRow>
               );
             })}
