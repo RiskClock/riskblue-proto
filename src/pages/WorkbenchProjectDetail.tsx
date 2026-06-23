@@ -4646,7 +4646,7 @@ function InstancesReportModal({
     }
 
     return rows;
-  }, [instances, optionByName, fileNameById, pageSpaceMap, pageSpaceUnitMap, pageUnitPlansMap, enabledClassSet, consolidationByAnnId]);
+  }, [instances, optionByName, fileNameById, pageSpaceMap, pageSpaceUnitMap, pageUnitPlansMap, pageLevelPlansMap, enabledClassSet, consolidationByAnnId]);
 
 
   const levelNames = useMemo(() => {
