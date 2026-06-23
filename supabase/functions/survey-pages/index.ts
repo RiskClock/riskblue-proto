@@ -285,7 +285,8 @@ Deno.serve(async (req) => {
               ?.map((p: any) => p?.text ?? "")
               .join("") ??
             "";
-          return { startPage, endPage, text, parsed: extractJsonArray(text) };
+          const usage = (resp as any)?.usageMetadata ?? (resp as any)?.response?.usageMetadata ?? null;
+          return { startPage, endPage, text, parsed: extractJsonArray(text), usage };
         };
 
         // First chunk runs alone so we can learn total_pages from its response
@@ -408,6 +409,29 @@ Deno.serve(async (req) => {
           ),
         );
 
+        // Aggregate token usage across all chunks
+        let promptSum = 0, cachedSum = 0, candidatesSum = 0, totalSum = 0;
+        let hasUsage = false;
+        for (const c of allChunks) {
+          const u = (c as any).usage;
+          if (!u) continue;
+          hasUsage = true;
+          promptSum += Number(u.promptTokenCount ?? 0);
+          cachedSum += Number(u.cachedContentTokenCount ?? 0);
+          candidatesSum += Number(u.candidatesTokenCount ?? 0);
+          totalSum += Number(u.totalTokenCount ?? 0);
+        }
+        const tokensAgg = hasUsage
+          ? {
+              prompt: promptSum,
+              cached: cachedSum,
+              candidates: candidatesSum,
+              total: totalSum,
+              cacheHitPct: promptSum > 0 ? Math.round((cachedSum / promptSum) * 100) : 0,
+              chunks: allChunks.length,
+            }
+          : null;
+
         await admin
           .from("analysis_request_files")
           .update({
@@ -415,6 +439,8 @@ Deno.serve(async (req) => {
             survey_raw_updated_at: new Date().toISOString(),
             gemini_cache_id: cacheName,
             gemini_cache_expires_at: cacheExpiresAt,
+            survey_tokens: tokensAgg,
+            survey_model: GEMINI_MODEL,
           } as any)
           .eq("id", fileId);
       } catch (err: any) {

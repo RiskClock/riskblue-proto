@@ -271,6 +271,7 @@ Deno.serve(async (req) => {
       parse_error: parseError,
       raw_text: rawText,
       usage,
+      model: modelId,
       source: "spatial-architect",
     };
 
