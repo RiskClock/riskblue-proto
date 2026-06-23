@@ -2889,18 +2889,29 @@ export default function WorkbenchProjectDetail() {
                               const raw = (f.survey_raw_response ?? "").trim();
                               const hasResponse = raw.length > 0;
                               const updatedAt = (f as any).survey_raw_updated_at as string | null;
+                              const tokens = (f as any).survey_tokens as any;
+                              const model = (f as any).survey_model as string | null;
                               return (
                                 <li
                                   key={f.id}
                                   className="px-3 py-2 flex items-center justify-between gap-3"
                                 >
                                   <div className="min-w-0 flex-1">
-                                    <div className="text-sm font-medium truncate">{f.name}</div>
+                                    <div className="text-sm font-medium truncate">
+                                      {f.name}
+                                      {model ? <span className="text-muted-foreground ml-1 text-xs">· {model}</span> : null}
+                                    </div>
                                     <div className="text-[11px] text-muted-foreground">
                                       {hasResponse
                                         ? `${updatedAt ? new Date(updatedAt).toLocaleString() : "—"} · ${raw.length.toLocaleString()} chars`
                                         : "No response yet"}
                                     </div>
+                                    {tokens ? (
+                                      <div className="text-[10px] text-muted-foreground">
+                                        in {Number(tokens.prompt ?? 0).toLocaleString()} · cached {Number(tokens.cached ?? 0).toLocaleString()} ({tokens.cacheHitPct ?? 0}%) · out {Number(tokens.candidates ?? 0).toLocaleString()} · total {Number(tokens.total ?? 0).toLocaleString()}
+                                        {tokens.chunks ? ` · ${tokens.chunks} chunk${tokens.chunks === 1 ? "" : "s"}` : ""}
+                                      </div>
+                                    ) : null}
                                   </div>
                                   <Button
                                     size="sm"
@@ -2976,7 +2987,7 @@ export default function WorkbenchProjectDetail() {
                                                 {err
                                                   ? <span className="text-destructive">Error: {err}</span>
                                                   : tokens
-                                                    ? `prompt ${tokens.prompt ?? "?"} · cached ${tokens.cached ?? 0} (${tokens.cacheHitPct ?? 0}%) · out ${tokens.candidates ?? "?"} · total ${tokens.total ?? "?"}`
+                                                    ? `in ${Number(tokens.prompt ?? 0).toLocaleString()} · cached ${Number(tokens.cached ?? 0).toLocaleString()} (${tokens.cacheHitPct ?? 0}%) · out ${Number(tokens.candidates ?? 0).toLocaleString()} · total ${Number(tokens.total ?? 0).toLocaleString()}`
                                                     : hasResp ? `${text.length.toLocaleString()} chars` : "No response"}
                                               </div>
                                             </div>
@@ -3044,6 +3055,20 @@ export default function WorkbenchProjectDetail() {
                                     status === "running" ? "Running…" : "No response yet"
                                   )}
                                 </div>
+                                {(() => {
+                                  const usage = (payload as any)?.usage;
+                                  if (!usage) return null;
+                                  const prompt = Number(usage.promptTokenCount ?? 0);
+                                  const cached = Number(usage.cachedContentTokenCount ?? 0);
+                                  const cand = Number(usage.candidatesTokenCount ?? 0);
+                                  const total = Number(usage.totalTokenCount ?? 0);
+                                  const pct = prompt > 0 ? Math.round((cached / prompt) * 100) : 0;
+                                  return (
+                                    <div className="text-[10px] text-muted-foreground">
+                                      in {prompt.toLocaleString()} · cached {cached.toLocaleString()} ({pct}%) · out {cand.toLocaleString()} · total {total.toLocaleString()}
+                                    </div>
+                                  );
+                                })()}
                               </div>
                               <Button
                                 size="sm"
