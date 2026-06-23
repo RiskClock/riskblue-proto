@@ -1595,67 +1595,12 @@ const FloorPlansPanel = ({
               )}
 
               {isLevel && (
-                <div className="space-y-1">
-                  <div className="flex items-center justify-between gap-2">
-                    <div className="text-[10px] font-medium text-muted-foreground">
-                      {effUnits.length > 0 ? `Units (${effUnits.length})` : "Units"}
-                    </div>
-                    {onSaveLevelUnits && (
-                      <UnitsAddPopover
-                        existingRefs={Array.from(
-                          new Set(
-                            allUnitPlans.map((p) => unitPlanRefKey(p)).filter(Boolean),
-                          ),
-                        ).sort()}
-                        currentUnits={effUnits}
-                        onAdd={async (ref, isNew) => {
-                          await onSaveLevelUnits(
-                            fp,
-                            [...effUnits, ref],
-                            isNew ? [ref] : [],
-                          );
-                        }}
-                      />
-                    )}
-                  </div>
-                  {effUnits.length > 0 && (
-                    <div className="flex flex-wrap gap-1">
-                      {effUnits.map((u) => {
-                        const uc = awpClassColor("Unit Floor Plan");
-                        return (
-                          <span
-                            key={u}
-                            className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium border"
-                            style={{
-                              backgroundColor: softBgFrom(uc),
-                              color: uc,
-                              borderColor: uc,
-                            }}
-                          >
-                            {u}
-                            {onSaveLevelUnits && (
-                              <button
-                                type="button"
-                                onClick={() =>
-                                  void onSaveLevelUnits(
-                                    fp,
-                                    effUnits.filter((x) => x !== u),
-                                    [],
-                                    [u],
-                                  )
-                                }
-                                className="hover:opacity-70"
-                                aria-label={`Remove ${u}`}
-                              >
-                                <XIcon className="h-2.5 w-2.5" />
-                              </button>
-                            )}
-                          </span>
-                        );
-                      })}
-                    </div>
-                  )}
-                </div>
+                <LevelUnitsSection
+                  fp={fp}
+                  effUnits={effUnits}
+                  allUnitPlans={allUnitPlans}
+                  onSaveLevelUnits={onSaveLevelUnits}
+                />
               )}
 
               {isUnit && (
