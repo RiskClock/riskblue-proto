@@ -4951,17 +4951,40 @@ function InstancesReportModal({
         // Use the parent PDF + page navigation (same approach as the drawing
         // modal). No per-page extraction required.
         const parentPath = lookup.file.storage_path;
-        const overlays = rows
-          .filter((r) => r.fileId === fileId && r.pageIndex === pageIdx)
-          .map((r, i) => ({
+        const rawOverlays = rows
+          .filter((r) => r.fileId === fileId && r.pageIndex === pageIdx);
+        // Jitter markers that share the exact same (nx, ny) so labels don't
+        // stack on top of each other. Fan duplicates diagonally outward.
+        const posIndex = new Map<string, number>();
+        const posTotal = new Map<string, number>();
+        for (const r of rawOverlays) {
+          const k = `${(r.nx ?? 0).toFixed(4)}::${(r.ny ?? 0).toFixed(4)}`;
+          posTotal.set(k, (posTotal.get(k) ?? 0) + 1);
+        }
+        const overlays = rawOverlays.map((r, i) => {
+          const k = `${(r.nx ?? 0).toFixed(4)}::${(r.ny ?? 0).toFixed(4)}`;
+          const total = posTotal.get(k) ?? 1;
+          const idx = posIndex.get(k) ?? 0;
+          posIndex.set(k, idx + 1);
+          let nx = r.nx;
+          let ny = r.ny;
+          if (total > 1) {
+            // ~0.6% normalized jitter per duplicate, alternating directions.
+            const step = 0.006;
+            const offset = (idx - (total - 1) / 2) * step;
+            nx = Math.max(0.005, Math.min(0.995, nx + offset));
+            ny = Math.max(0.005, Math.min(0.995, ny + offset));
+          }
+          return {
             id: `${r.instanceId}-${i}`,
-            bbox: [r.nx, r.ny, 0, 0] as [number, number, number, number],
+            bbox: [nx, ny, 0, 0] as [number, number, number, number],
             coordSpace: "normalized" as const,
             page: pageIdx,
             color: awpClassColor(r.awpClassName),
             label: r.instanceId,
             shape: "circle" as const,
-          }));
+          };
+        });
         // Short name without extension, capped for tab labels.
         const shortName = fileName.replace(/\.[^.]+$/, "");
         return {
