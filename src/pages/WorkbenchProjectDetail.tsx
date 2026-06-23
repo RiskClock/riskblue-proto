@@ -4008,6 +4008,7 @@ export default function WorkbenchProjectDetail() {
           pageSpaceMap={mergedPageSpaceMap}
           pageSpaceUnitMap={mergedPageSpaceUnitMap}
           pageUnitPlansMap={pageUnitPlansMap}
+          pageLevelPlansMap={pageLevelPlansMap}
 
 
           spaceHierarchyPayload={spaceHierarchyPayload}
