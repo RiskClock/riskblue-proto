@@ -18,11 +18,10 @@ Deno.serve(async (req) => {
     Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
   );
 
-  // Restrict to internal users
-  const token = req.headers.get("Authorization")?.replace("Bearer ", "");
-  if (!token) return json({ error: "Unauthorized" }, 401);
-  const { data: { user } } = await supabase.auth.getUser(token);
-  if (!user?.email?.endsWith("@riskclock.com")) return json({ error: "Forbidden" }, 403);
+  // Shared-secret gate (worker secret)
+  const provided = req.headers.get("x-worker-secret");
+  const expected = Deno.env.get("ANALYSIS_WORKER_SECRET");
+  if (!expected || provided !== expected) return json({ error: "Forbidden" }, 403);
 
   // 1. Load all existing request IDs
   const { data: reqs, error: reqErr } = await supabase
