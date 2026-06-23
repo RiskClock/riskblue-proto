@@ -58,6 +58,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { FileViewerModal } from "@/components/wizard/FileViewerModal";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
   parseSurveyFloorPlans,
   floorPlanDisplayLabel,
