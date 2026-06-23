@@ -4703,9 +4703,17 @@ function InstancesReportModal({
 
   const classCols = useMemo(() => {
     const map = new Map<string, string>();
+    // Include every enabled class (Asset/Water System) so zero-count rows
+    // still appear in Overview/Summary — 0 is meaningful information.
+    for (const name of enabledClassNames || []) {
+      const cat = optionByName.get(name)?.category;
+      if (cat === "Asset" || cat === "Water System") map.set(name, cat);
+    }
+    // Also include any class present in the data even if not in enabled list
+    // (defensive: matches prior behavior for classes outside the toggle set).
     for (const r of expanded) {
       if (r.category === "Asset" || r.category === "Water System") {
-        map.set(r.awpClassName, r.category);
+        if (!map.has(r.awpClassName)) map.set(r.awpClassName, r.category);
       }
     }
     return Array.from(map.entries())
@@ -4714,7 +4722,7 @@ function InstancesReportModal({
         return a[0].localeCompare(b[0]);
       })
       .map(([name, category]) => ({ name, category }));
-  }, [expanded]);
+  }, [expanded, enabledClassNames, optionByName]);
 
   const overviewTotals = useMemo(() => {
     const m = new Map<string, number>();
