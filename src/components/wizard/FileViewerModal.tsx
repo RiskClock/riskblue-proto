@@ -1880,60 +1880,6 @@ const LevelUnitsSection = ({
     </div>
   );
 };
-      <PopoverPrimitive.Portal container={portalContainer ?? undefined}>
-      <PopoverPrimitive.Content
-        align="end"
-        sideOffset={4}
-        className="z-[99999] w-56 rounded-md border bg-popover p-0 text-popover-foreground shadow-md outline-none"
-      >
-        <Command shouldFilter={false}>
-          <CommandInput
-            placeholder="Search or add unit…"
-            value={query}
-            onValueChange={setQuery}
-            className="h-8 text-xs"
-          />
-          <CommandList
-            className="max-h-56 overflow-y-auto overscroll-contain"
-            onWheel={(e) => e.stopPropagation()}
-            onTouchMove={(e) => e.stopPropagation()}
-          >
-            {filtered.length === 0 && !showCreate && (
-              <CommandEmpty>No units.</CommandEmpty>
-            )}
-            {filtered.length > 0 && (
-              <CommandGroup>
-                {filtered.map((r) => (
-                  <CommandItem
-                    key={r}
-                    value={r}
-                    onSelect={() => void handleSelect(r, false)}
-                    className="text-xs"
-                  >
-                    {r}
-                  </CommandItem>
-                ))}
-              </CommandGroup>
-            )}
-            {showCreate && (
-              <CommandGroup>
-                <CommandItem
-                  value={`__create_${q}`}
-                  onSelect={() => void handleSelect(q, true)}
-                  className="text-xs"
-                >
-                  <Plus className="h-3 w-3 mr-1.5" />
-                  Create "{q}"
-                </CommandItem>
-              </CommandGroup>
-            )}
-          </CommandList>
-        </Command>
-      </PopoverPrimitive.Content>
-      </PopoverPrimitive.Portal>
-    </PopoverPrimitive.Root>
-  );
-};
 
 
 
