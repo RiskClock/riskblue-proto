@@ -10,7 +10,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { LogOut, Settings, FileText, BarChart3, Shield, Coins, Users, KeyRound, UserCog, LayoutGrid } from "lucide-react";
+import { LogOut, Settings, BarChart3, Shield, Coins, Users, KeyRound, UserCog, LayoutGrid } from "lucide-react";
 import riskBlueLogo from "@/assets/logo-riskblue.png";
 
 import { useCredits } from "@/hooks/useCredits";
@@ -80,10 +80,6 @@ export const AppHeader = ({ leftContent }: AppHeaderProps) => {
                   <DropdownMenuItem onClick={() => navigate("/configuration")} className="cursor-pointer">
                     <Settings className="h-4 w-4 mr-2" />
                     App Configuration
-                  </DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => navigate("/internal/analysis-queue")} className="cursor-pointer">
-                    <FileText className="h-4 w-4 mr-2" />
-                    Analysis Queue
                   </DropdownMenuItem>
                   <DropdownMenuItem onClick={() => navigate("/internal/workbench")} className="cursor-pointer">
                     <LayoutGrid className="h-4 w-4 mr-2" />
