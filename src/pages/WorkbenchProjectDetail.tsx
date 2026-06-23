@@ -1591,12 +1591,19 @@ export default function WorkbenchProjectDetail() {
   }, [spaceHierarchyPayload]);
 
   const normalizeLevelToken = (s: string): string => {
-    return (s || "")
+    const wordToDigit: Record<string, string> = {
+      first: "1", second: "2", third: "3", fourth: "4", fifth: "5",
+      sixth: "6", seventh: "7", eighth: "8", ninth: "9", tenth: "10",
+      eleventh: "11", twelfth: "12",
+    };
+    let t = (s || "")
       .toLowerCase()
       .replace(/\b(level|floor|plan|layout|plumbing|mechanical|electrical|story|storey)\b/g, " ")
       .replace(/(\d+)\s*(st|nd|rd|th)\b/g, "$1")
       .replace(/[^a-z0-9]+/g, " ")
       .trim();
+    t = t.split(/\s+/).map((w) => wordToDigit[w] ?? w).join(" ").trim();
+    return t;
   };
 
   const canonicalizeLevel = (raw: string): string => {
