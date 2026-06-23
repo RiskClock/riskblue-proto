@@ -4475,6 +4475,30 @@ function InstancesReportModal({
       }
       return out;
     }
+    // No unit plans on this page — try level plan bbox containment next.
+    // If multiple level plans share a page (e.g. 2nd Floor + 3rd Floor),
+    // attribute to the one whose bbox contains the point. If none contains
+    // it, drop to Unassigned. Single-level page auto-attributes.
+    const levelPlans = pageLevelPlansMap.get(key) || [];
+    if (levelPlans.length > 0) {
+      let matchedLp: { levels: string[]; bbox: [number, number, number, number] | null } | null = null;
+      if (levelPlans.length === 1) {
+        matchedLp = levelPlans[0];
+      } else if (typeof nx === "number" && typeof ny === "number") {
+        for (const lp of levelPlans) {
+          const bb = lp.bbox;
+          if (!bb) continue;
+          const [x, y, w, h] = bb;
+          const x1 = x / 100, y1 = y / 100, x2 = (x + w) / 100, y2 = (y + h) / 100;
+          if (nx >= x1 && nx <= x2 && ny >= y1 && ny <= y2) {
+            matchedLp = lp;
+            break;
+          }
+        }
+      }
+      if (!matchedLp) return [];
+      return matchedLp.levels.filter(Boolean).map((l) => ({ level: l }));
+    }
     const unitAware = pageSpaceUnitMap.get(key);
     if (unitAware && unitAware.length > 0) return unitAware;
     const levels = pageSpaceMap.get(key) || [];
