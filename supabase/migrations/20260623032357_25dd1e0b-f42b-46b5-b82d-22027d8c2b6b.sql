@@ -1,0 +1,1 @@
+ALTER TABLE public.analysis_request_files ADD COLUMN IF NOT EXISTS survey_tokens jsonb; ALTER TABLE public.analysis_request_files ADD COLUMN IF NOT EXISTS survey_model text;
