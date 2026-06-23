@@ -5022,19 +5022,20 @@ function InstancesReportModal({
         const unitPlans = pageUnitPlansMap.get(pageKey) || [];
         let tier = 2;
         let qualifier: string | null = null;
-        if (
-          space !== "__unassigned__" &&
-          levelPlans.some((lp) => lp.levels.includes(space))
-        ) {
+        if (levelPlans.length > 0) {
           tier = 0;
-          qualifier = space;
-        } else if (
-          space !== "__unassigned__" &&
-          unitPlans.some((up) => up.levels.includes(space))
-        ) {
+          if (space !== "__unassigned__") {
+            const matchingLp = levelPlans.find((lp) => lp.levels.includes(space));
+            qualifier = matchingLp ? space : levelPlans[0].levels[0];
+          } else {
+            qualifier = levelPlans[0].levels[0];
+          }
+        } else if (unitPlans.length > 0) {
           tier = 1;
-          const matchingUnit = unitPlans.find((up) => up.levels.includes(space));
-          qualifier = matchingUnit?.unitLabel ?? null;
+          const matchingUnit = space !== "__unassigned__"
+            ? unitPlans.find((up) => up.levels.includes(space))
+            : null;
+          qualifier = matchingUnit?.unitLabel ?? unitPlans[0].unitLabel;
         }
         const corePart = qualifier ? `p${pageIdx} · ${qualifier}` : `p${pageIdx}`;
         const tabLabel = showFileInTab ? `${shortName} · ${corePart}` : corePart;
