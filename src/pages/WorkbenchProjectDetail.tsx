@@ -2776,19 +2776,25 @@ export default function WorkbenchProjectDetail() {
                     "Spatial Architect"
                   )}
                 </Button>
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={() => setConsolidateOpen(true)}
-                  disabled={!requestId || !hasRisersSelected}
-                  title={
-                    !hasRisersSelected
-                      ? "Select Electrical Riser or Mechanical Riser columns to enable"
-                      : "Group riser annotations into multi-space instances"
-                  }
-                >
-                  Riser Unifier
-                </Button>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <span tabIndex={0}>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        onClick={() => setConsolidateOpen(true)}
+                        disabled={!requestId || !hasRisersSelected}
+                      >
+                        Riser Unifier
+                      </Button>
+                    </span>
+                  </TooltipTrigger>
+                  <TooltipContent side="bottom">
+                    {!hasRisersSelected
+                      ? "No riser selected for risk identification"
+                      : "Group riser annotations into multi-space instances"}
+                  </TooltipContent>
+                </Tooltip>
                 <Button
                   type="button"
                   variant="outline"
