@@ -4321,6 +4321,7 @@ function InstancesReportModal({
   pageSpaceMap,
   pageSpaceUnitMap,
   pageUnitPlansMap,
+  pageLevelPlansMap,
   spaceHierarchyPayload,
   projectName,
   enabledClassNames,
@@ -4334,6 +4335,7 @@ function InstancesReportModal({
   pageSpaceMap: Map<string, string[]>;
   pageSpaceUnitMap: Map<string, Array<{ level: string; unit?: string }>>;
   pageUnitPlansMap: Map<string, Array<{ unitLabel: string; levels: string[]; levelsWithCounts: Array<{ level: string; count: number }>; bbox: [number, number, number, number] | null }>>;
+  pageLevelPlansMap: Map<string, Array<{ levels: string[]; bbox: [number, number, number, number] | null }>>;
   spaceHierarchyPayload: any | null | undefined;
   projectName: string;
   enabledClassNames: string[];
