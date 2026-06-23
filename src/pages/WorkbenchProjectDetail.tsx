@@ -5228,10 +5228,10 @@ function TabbedPagesBlock({
     bucket: string;
     parentPath: string | null;
     overlays: any[];
+    tabLabel?: string;
   }>;
 }) {
   const [activeKey, setActiveKey] = useState<string>(tabs[0]?.key ?? "");
-  // If the tabs list changes (e.g. user switched space), reset selection.
   useEffect(() => {
     if (!tabs.find((t) => t.key === activeKey)) {
       setActiveKey(tabs[0]?.key ?? "");
@@ -5243,28 +5243,19 @@ function TabbedPagesBlock({
   return (
     <div className="border rounded-md overflow-hidden">
       {tabs.length > 1 && (
-        <div className="flex flex-wrap gap-1 px-2 pt-2 pb-1 border-b bg-muted/20">
-          {tabs.map((t) => {
-            const isActive = t.key === active.key;
-            return (
-              <button
-                key={t.key}
-                type="button"
-                onClick={() => setActiveKey(t.key)}
-                className={`px-2.5 py-1 text-xs rounded-md border transition-colors ${
-                  isActive
-                    ? "bg-background border-border font-medium"
-                    : "bg-transparent border-transparent text-muted-foreground hover:bg-muted/50"
-                }`}
-                title={`${t.fileName} · Page ${t.pageIdx}`}
-              >
-                <span className="truncate max-w-[180px] inline-block align-bottom">
-                  {t.shortName}
-                </span>
-                <span className="ml-1 text-muted-foreground">· p{t.pageIdx}</span>
-              </button>
-            );
-          })}
+        <div className="px-2 pt-2 pb-1 border-b bg-muted/20">
+          <Select value={active.key} onValueChange={setActiveKey}>
+            <SelectTrigger className="h-8 text-xs w-auto min-w-[220px] max-w-full">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {tabs.map((t) => (
+                <SelectItem key={t.key} value={t.key} className="text-xs">
+                  {t.tabLabel ?? `${t.shortName} · p${t.pageIdx}`}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </div>
       )}
       <div>
