@@ -5249,22 +5249,6 @@ function TabbedPagesBlock({
 
   return (
     <div className="border rounded-md overflow-hidden">
-      {tabs.length > 1 && (
-        <div className="px-2 pt-2 pb-1 border-b bg-muted/20">
-          <Select value={active.key} onValueChange={setActiveKey}>
-            <SelectTrigger className="h-8 text-xs w-auto min-w-[220px] max-w-full">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {tabs.map((t) => (
-                <SelectItem key={t.key} value={t.key} className="text-xs">
-                  {t.tabLabel ?? `${t.shortName} · p${t.pageIdx}`}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-      )}
       <div>
         {active.parentPath ? (
           <DrawingPageBlock
@@ -5279,7 +5263,25 @@ function TabbedPagesBlock({
             }}
             overlays={active.overlays}
             page={active.pageIdx}
-            hideHeader={tabs.length > 1}
+            customSelector={
+              tabs.length > 1 ? (
+                <div className="flex items-center gap-2">
+                  <span className="text-xs font-semibold text-muted-foreground whitespace-nowrap">Drawing:</span>
+                  <Select value={activeKey} onValueChange={setActiveKey}>
+                    <SelectTrigger className="h-8 text-xs w-auto min-w-[220px] max-w-full bg-background border-muted-foreground/30">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {tabs.map((t) => (
+                        <SelectItem key={t.key} value={t.key} className="text-xs">
+                          {t.tabLabel ?? `${t.shortName} · p${t.pageIdx}`}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              ) : null
+            }
           />
         ) : (
           <div className="p-4 text-xs text-muted-foreground">
@@ -5305,14 +5307,14 @@ function DrawingPageBlock({
   source,
   overlays,
   page,
-  hideHeader,
+  customSelector,
 }: {
   fileName: string;
   pageIdx: number;
   source: DocumentSourceDescriptor;
   overlays: any[];
   page?: number;
-  hideHeader?: boolean;
+  customSelector?: React.ReactNode;
 }) {
   const surfaceRef = useRef<HTMLDivElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
