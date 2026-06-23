@@ -4954,8 +4954,17 @@ function InstancesReportModal({
       bucket: string;
       parentPath: string | null;
       overlays: any[];
+      // 0 = level plan for this space, 1 = unit plan rolling up to this space,
+      // 2 = other (annotations attributed here without a matching plan).
+      tier: number;
+      tabLabel: string;
     };
-    const tabs: TabEntry[] = pageKeys
+    // Multi-file determination drives whether tab labels include the file name.
+    const uniqueFileNames = new Set(
+      pageKeys.map((k) => fileNameById.get(k.split("::")[0]) || ""),
+    );
+    const showFileInTab = uniqueFileNames.size > 1;
+    const tabsUnsorted: TabEntry[] = pageKeys
       .map((key) => {
         const [fileId, pageIdxStr] = key.split("::");
         const pageIdx = parseInt(pageIdxStr, 10);
@@ -4963,8 +4972,6 @@ function InstancesReportModal({
         const lookup = sheetByFilePage.get(`${fileName}::${pageIdx}`);
         if (!lookup) return null;
         const bucket = bucketForSource(lookup.sheet.file_source_type);
-        // Use the parent PDF + page navigation (same approach as the drawing
-        // modal). No per-page extraction required.
         const parentPath = lookup.file.storage_path;
         const rawOverlays = rows
           .filter((r) => r.fileId === fileId && r.pageIndex === pageIdx);
@@ -4984,7 +4991,6 @@ function InstancesReportModal({
           let nx = r.nx;
           let ny = r.ny;
           if (total > 1) {
-            // ~0.6% normalized jitter per duplicate, alternating directions.
             const step = 0.006;
             const offset = (idx - (total - 1) / 2) * step;
             nx = Math.max(0.005, Math.min(0.995, nx + offset));
@@ -5000,8 +5006,32 @@ function InstancesReportModal({
             shape: "circle" as const,
           };
         });
-        // Short name without extension, capped for tab labels.
         const shortName = fileName.replace(/\.[^.]+$/, "");
+
+        // Classify this page for the current space. Level plan takes priority
+        // over unit plan even if both exist on the same page.
+        const pageKey = `${fileName}::${pageIdx}`;
+        const levelPlans = pageLevelPlansMap.get(pageKey) || [];
+        const unitPlans = pageUnitPlansMap.get(pageKey) || [];
+        let tier = 2;
+        let qualifier: string | null = null;
+        if (
+          space !== "__unassigned__" &&
+          levelPlans.some((lp) => lp.levels.includes(space))
+        ) {
+          tier = 0;
+          qualifier = space;
+        } else if (
+          space !== "__unassigned__" &&
+          unitPlans.some((up) => up.levels.includes(space))
+        ) {
+          tier = 1;
+          const matchingUnit = unitPlans.find((up) => up.levels.includes(space));
+          qualifier = matchingUnit?.unitLabel ?? null;
+        }
+        const corePart = qualifier ? `p${pageIdx} · ${qualifier}` : `p${pageIdx}`;
+        const tabLabel = showFileInTab ? `${shortName} · ${corePart}` : corePart;
+
         return {
           key,
           fileId,
@@ -5011,14 +5041,17 @@ function InstancesReportModal({
           bucket,
           parentPath,
           overlays,
+          tier,
+          tabLabel,
         };
       })
-      .filter((t): t is TabEntry => t !== null)
-      .sort((a, b) => {
-        const f = a.fileName.localeCompare(b.fileName);
-        if (f !== 0) return f;
-        return a.pageIdx - b.pageIdx;
-      });
+      .filter((t): t is TabEntry => t !== null);
+    const tabs = tabsUnsorted.sort((a, b) => {
+      if (a.tier !== b.tier) return a.tier - b.tier;
+      const f = a.fileName.localeCompare(b.fileName);
+      if (f !== 0) return f;
+      return a.pageIdx - b.pageIdx;
+    });
 
     return (
       <div className="space-y-4">
