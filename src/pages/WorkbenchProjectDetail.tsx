@@ -1591,12 +1591,19 @@ export default function WorkbenchProjectDetail() {
   }, [spaceHierarchyPayload]);
 
   const normalizeLevelToken = (s: string): string => {
-    return (s || "")
+    const wordToDigit: Record<string, string> = {
+      first: "1", second: "2", third: "3", fourth: "4", fifth: "5",
+      sixth: "6", seventh: "7", eighth: "8", ninth: "9", tenth: "10",
+      eleventh: "11", twelfth: "12",
+    };
+    let t = (s || "")
       .toLowerCase()
       .replace(/\b(level|floor|plan|layout|plumbing|mechanical|electrical|story|storey)\b/g, " ")
       .replace(/(\d+)\s*(st|nd|rd|th)\b/g, "$1")
       .replace(/[^a-z0-9]+/g, " ")
       .trim();
+    t = t.split(/\s+/).map((w) => wordToDigit[w] ?? w).join(" ").trim();
+    return t;
   };
 
   const canonicalizeLevel = (raw: string): string => {
@@ -4469,7 +4476,9 @@ function InstancesReportModal({
       for (const { level, count } of lwc) {
         const n = Math.max(1, count | 0);
         for (let i = 0; i < n; i++) {
-          const unit = i === 0 ? matched.unitLabel : `${matched.unitLabel} (${i + 1})`;
+          // When a unit appears N>1 times on a level, suffix every instance
+          // (including the first) so the IDs read as "1H (1)", "1H (2)", ...
+          const unit = n <= 1 ? matched.unitLabel : `${matched.unitLabel} (${i + 1})`;
           out.push({ level, unit });
         }
       }
@@ -4949,17 +4958,40 @@ function InstancesReportModal({
         // Use the parent PDF + page navigation (same approach as the drawing
         // modal). No per-page extraction required.
         const parentPath = lookup.file.storage_path;
-        const overlays = rows
-          .filter((r) => r.fileId === fileId && r.pageIndex === pageIdx)
-          .map((r, i) => ({
+        const rawOverlays = rows
+          .filter((r) => r.fileId === fileId && r.pageIndex === pageIdx);
+        // Jitter markers that share the exact same (nx, ny) so labels don't
+        // stack on top of each other. Fan duplicates diagonally outward.
+        const posIndex = new Map<string, number>();
+        const posTotal = new Map<string, number>();
+        for (const r of rawOverlays) {
+          const k = `${(r.nx ?? 0).toFixed(4)}::${(r.ny ?? 0).toFixed(4)}`;
+          posTotal.set(k, (posTotal.get(k) ?? 0) + 1);
+        }
+        const overlays = rawOverlays.map((r, i) => {
+          const k = `${(r.nx ?? 0).toFixed(4)}::${(r.ny ?? 0).toFixed(4)}`;
+          const total = posTotal.get(k) ?? 1;
+          const idx = posIndex.get(k) ?? 0;
+          posIndex.set(k, idx + 1);
+          let nx = r.nx;
+          let ny = r.ny;
+          if (total > 1) {
+            // ~0.6% normalized jitter per duplicate, alternating directions.
+            const step = 0.006;
+            const offset = (idx - (total - 1) / 2) * step;
+            nx = Math.max(0.005, Math.min(0.995, nx + offset));
+            ny = Math.max(0.005, Math.min(0.995, ny + offset));
+          }
+          return {
             id: `${r.instanceId}-${i}`,
-            bbox: [r.nx, r.ny, 0, 0] as [number, number, number, number],
+            bbox: [nx, ny, 0, 0] as [number, number, number, number],
             coordSpace: "normalized" as const,
             page: pageIdx,
             color: awpClassColor(r.awpClassName),
             label: r.instanceId,
             shape: "circle" as const,
-          }));
+          };
+        });
         // Short name without extension, capped for tab labels.
         const shortName = fileName.replace(/\.[^.]+$/, "");
         return {
