@@ -49,15 +49,6 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { Input } from "@/components/ui/input";
-import * as PopoverPrimitive from "@radix-ui/react-popover";
-import {
-  Command,
-  CommandEmpty,
-  CommandGroup,
-  CommandInput,
-  CommandItem,
-  CommandList,
-} from "@/components/ui/command";
 
 
 interface SystemDetection {
@@ -1595,67 +1586,12 @@ const FloorPlansPanel = ({
               )}
 
               {isLevel && (
-                <div className="space-y-1">
-                  <div className="flex items-center justify-between gap-2">
-                    <div className="text-[10px] font-medium text-muted-foreground">
-                      {effUnits.length > 0 ? `Units (${effUnits.length})` : "Units"}
-                    </div>
-                    {onSaveLevelUnits && (
-                      <UnitsAddPopover
-                        existingRefs={Array.from(
-                          new Set(
-                            allUnitPlans.map((p) => unitPlanRefKey(p)).filter(Boolean),
-                          ),
-                        ).sort()}
-                        currentUnits={effUnits}
-                        onAdd={async (ref, isNew) => {
-                          await onSaveLevelUnits(
-                            fp,
-                            [...effUnits, ref],
-                            isNew ? [ref] : [],
-                          );
-                        }}
-                      />
-                    )}
-                  </div>
-                  {effUnits.length > 0 && (
-                    <div className="flex flex-wrap gap-1">
-                      {effUnits.map((u) => {
-                        const uc = awpClassColor("Unit Floor Plan");
-                        return (
-                          <span
-                            key={u}
-                            className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium border"
-                            style={{
-                              backgroundColor: softBgFrom(uc),
-                              color: uc,
-                              borderColor: uc,
-                            }}
-                          >
-                            {u}
-                            {onSaveLevelUnits && (
-                              <button
-                                type="button"
-                                onClick={() =>
-                                  void onSaveLevelUnits(
-                                    fp,
-                                    effUnits.filter((x) => x !== u),
-                                    [],
-                                    [u],
-                                  )
-                                }
-                                className="hover:opacity-70"
-                                aria-label={`Remove ${u}`}
-                              >
-                                <XIcon className="h-2.5 w-2.5" />
-                              </button>
-                            )}
-                          </span>
-                        );
-                      })}
-                    </div>
-                  )}
-                </div>
+                <LevelUnitsSection
+                  fp={fp}
+                  effUnits={effUnits}
+                  allUnitPlans={allUnitPlans}
+                  onSaveLevelUnits={onSaveLevelUnits}
+                />
               )}
 
               {isUnit && (
@@ -1712,115 +1648,227 @@ const FloorPlansPanel = ({
   );
 };
 
-interface UnitsAddPopoverProps {
-  existingRefs: string[];
-  currentUnits: string[];
-  onAdd: (ref: string, isNew: boolean) => Promise<void> | void;
+interface LevelUnitsSectionProps {
+  fp: ParsedFloorPlan;
+  effUnits: string[];
+  allUnitPlans: ParsedFloorPlan[];
+  onSaveLevelUnits?: (
+    plan: ParsedFloorPlan,
+    units: string[],
+    createdRefs?: string[],
+    removedRefs?: string[],
+  ) => Promise<void> | void;
 }
 
-const UnitsAddPopover = ({
-  existingRefs,
-  currentUnits,
-  onAdd,
-}: UnitsAddPopoverProps) => {
+const LevelUnitsSection = ({
+  fp,
+  effUnits,
+  allUnitPlans,
+  onSaveLevelUnits,
+}: LevelUnitsSectionProps) => {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
-  const triggerRef = useRef<HTMLButtonElement | null>(null);
-  const [portalContainer, setPortalContainer] = useState<HTMLElement | null>(null);
-  const available = existingRefs.filter((r) => !currentUnits.includes(r));
-  const filtered = query.trim()
-    ? available.filter((r) => r.toLowerCase().includes(query.trim().toLowerCase()))
-    : available;
+
+  const uc = awpClassColor("Unit Floor Plan");
+
+  // Counts per unique ref in current units.
+  const counts = useMemo(() => {
+    const m = new Map<string, number>();
+    for (const u of effUnits) m.set(u, (m.get(u) || 0) + 1);
+    return m;
+  }, [effUnits]);
+
+  // All known refs (existing on page + currently selected, even if not parsed).
+  const allRefs = useMemo(() => {
+    const s = new Set<string>();
+    for (const p of allUnitPlans) {
+      const k = unitPlanRefKey(p);
+      if (k) s.add(k);
+    }
+    for (const u of effUnits) s.add(u);
+    return Array.from(s).sort();
+  }, [allUnitPlans, effUnits]);
+
+  const knownSet = useMemo(
+    () => new Set(allUnitPlans.map((p) => unitPlanRefKey(p)).filter(Boolean)),
+    [allUnitPlans],
+  );
+
+  const filtered = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    if (!q) return allRefs;
+    return allRefs.filter((r) => r.toLowerCase().includes(q));
+  }, [allRefs, query]);
+
   const q = query.trim();
   const showCreate =
-    q.length > 0 &&
-    !currentUnits.some((u) => u.toLowerCase() === q.toLowerCase()) &&
-    !existingRefs.some((r) => r.toLowerCase() === q.toLowerCase());
+    q.length > 0 && !allRefs.some((r) => r.toLowerCase() === q.toLowerCase());
 
-  const handleSelect = async (ref: string, isNew: boolean) => {
-    setQuery("");
-    await onAdd(ref, isNew);
+  const increment = async (ref: string) => {
+    if (!onSaveLevelUnits) return;
+    const isNew = !knownSet.has(ref) && !effUnits.includes(ref);
+    await onSaveLevelUnits(fp, [...effUnits, ref], isNew ? [ref] : []);
   };
 
+  const decrement = async (ref: string) => {
+    if (!onSaveLevelUnits) return;
+    // Remove the last occurrence of ref.
+    const next = effUnits.slice();
+    for (let i = next.length - 1; i >= 0; i--) {
+      if (next[i] === ref) {
+        next.splice(i, 1);
+        break;
+      }
+    }
+    const willBeAbsent = !next.includes(ref);
+    await onSaveLevelUnits(fp, next, [], willBeAbsent ? [ref] : []);
+  };
 
-  useEffect(() => {
-    if (!open) return;
-    const dialogEl = triggerRef.current?.closest('[role="dialog"]') as HTMLElement | null;
-    setPortalContainer(dialogEl);
-  }, [open]);
+  const removeOneAt = async (index: number) => {
+    if (!onSaveLevelUnits) return;
+    const next = effUnits.slice();
+    const [removed] = next.splice(index, 1);
+    const willBeAbsent = !next.includes(removed);
+    await onSaveLevelUnits(fp, next, [], willBeAbsent ? [removed] : []);
+  };
 
   return (
-    <PopoverPrimitive.Root
-      open={open}
-      onOpenChange={(o) => {
-        setOpen(o);
-        if (!o) setQuery("");
-      }}
-    >
-      <PopoverPrimitive.Trigger asChild>
-        <Button
-          ref={triggerRef}
-          type="button"
-          size="sm"
-          variant="ghost"
-          className="h-6 px-1.5 text-[10px] gap-1"
-        >
-          <Plus className="h-3 w-3" />
-          Add
-        </Button>
-      </PopoverPrimitive.Trigger>
-      <PopoverPrimitive.Portal container={portalContainer ?? undefined}>
-      <PopoverPrimitive.Content
-        align="end"
-        sideOffset={4}
-        className="z-[99999] w-56 rounded-md border bg-popover p-0 text-popover-foreground shadow-md outline-none"
-      >
-        <Command shouldFilter={false}>
-          <CommandInput
-            placeholder="Search or add unit…"
-            value={query}
-            onValueChange={setQuery}
-            className="h-8 text-xs"
-          />
-          <CommandList
-            className="max-h-56 overflow-y-auto overscroll-contain"
+    <div className="space-y-1">
+      <div className="flex items-center justify-between gap-2">
+        <div className="text-[10px] font-medium text-muted-foreground">
+          {effUnits.length > 0 ? `Units (${effUnits.length})` : "Units"}
+        </div>
+        {onSaveLevelUnits && (
+          <Button
+            type="button"
+            size="sm"
+            variant="ghost"
+            className="h-6 px-1.5 text-[10px] gap-1"
+            onClick={() => setOpen((v) => !v)}
+          >
+            {open ? (
+              <>
+                <XIcon className="h-3 w-3" />
+                Close
+              </>
+            ) : (
+              <>
+                <Plus className="h-3 w-3" />
+                Add
+              </>
+            )}
+          </Button>
+        )}
+      </div>
+
+      {open && onSaveLevelUnits && (
+        <div className="rounded-md border bg-popover">
+          <div className="p-1.5 border-b">
+            <Input
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="Search or create unit…"
+              className="h-7 text-xs"
+            />
+          </div>
+          <div
+            className="max-h-48 overflow-y-auto overscroll-contain"
             onWheel={(e) => e.stopPropagation()}
-            onTouchMove={(e) => e.stopPropagation()}
           >
             {filtered.length === 0 && !showCreate && (
-              <CommandEmpty>No units.</CommandEmpty>
+              <div className="text-[11px] italic text-muted-foreground px-2 py-2">
+                No units.
+              </div>
             )}
-            {filtered.length > 0 && (
-              <CommandGroup>
-                {filtered.map((r) => (
-                  <CommandItem
-                    key={r}
-                    value={r}
-                    onSelect={() => void handleSelect(r, false)}
-                    className="text-xs"
-                  >
-                    {r}
-                  </CommandItem>
-                ))}
-              </CommandGroup>
-            )}
-            {showCreate && (
-              <CommandGroup>
-                <CommandItem
-                  value={`__create_${q}`}
-                  onSelect={() => void handleSelect(q, true)}
-                  className="text-xs"
+            {filtered.map((ref) => {
+              const count = counts.get(ref) || 0;
+              return (
+                <div
+                  key={ref}
+                  className="flex items-center gap-2 px-2 py-1 text-xs hover:bg-muted/50"
                 >
-                  <Plus className="h-3 w-3 mr-1.5" />
+                  <span className="flex-1 min-w-0 truncate" title={ref}>
+                    {ref}
+                  </span>
+                  <div className="flex items-center gap-1 shrink-0">
+                    {count > 0 && (
+                      <>
+                        <button
+                          type="button"
+                          onClick={() => void decrement(ref)}
+                          className="h-5 w-5 inline-flex items-center justify-center rounded border hover:bg-muted"
+                          aria-label={`Remove one ${ref}`}
+                        >
+                          <span className="text-xs leading-none">−</span>
+                        </button>
+                        <span className="min-w-[1rem] text-center text-[11px] font-medium tabular-nums">
+                          {count}
+                        </span>
+                      </>
+                    )}
+                    <button
+                      type="button"
+                      onClick={() => void increment(ref)}
+                      className="h-5 w-5 inline-flex items-center justify-center rounded border hover:bg-muted"
+                      aria-label={`Add ${ref}`}
+                    >
+                      <Plus className="h-3 w-3" />
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
+            {showCreate && (
+              <div className="flex items-center gap-2 px-2 py-1 text-xs hover:bg-muted/50 border-t">
+                <span className="flex-1 min-w-0 truncate italic text-muted-foreground">
                   Create "{q}"
-                </CommandItem>
-              </CommandGroup>
+                </span>
+                <button
+                  type="button"
+                  onClick={async () => {
+                    const name = q;
+                    setQuery("");
+                    await increment(name);
+                  }}
+                  className="h-5 w-5 inline-flex items-center justify-center rounded border hover:bg-muted shrink-0"
+                  aria-label={`Create and add ${q}`}
+                >
+                  <Plus className="h-3 w-3" />
+                </button>
+              </div>
             )}
-          </CommandList>
-        </Command>
-      </PopoverPrimitive.Content>
-      </PopoverPrimitive.Portal>
-    </PopoverPrimitive.Root>
+          </div>
+        </div>
+      )}
+
+      {effUnits.length > 0 && (
+        <div className="flex flex-wrap gap-1">
+          {effUnits.map((u, idx) => (
+            <span
+              key={`${u}::${idx}`}
+              className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium border"
+              style={{
+                backgroundColor: softBgFrom(uc),
+                color: uc,
+                borderColor: uc,
+              }}
+            >
+              {u}
+              {onSaveLevelUnits && (
+                <button
+                  type="button"
+                  onClick={() => void removeOneAt(idx)}
+                  className="hover:opacity-70"
+                  aria-label={`Remove ${u}`}
+                >
+                  <XIcon className="h-2.5 w-2.5" />
+                </button>
+              )}
+            </span>
+          ))}
+        </div>
+      )}
+    </div>
   );
 };
 

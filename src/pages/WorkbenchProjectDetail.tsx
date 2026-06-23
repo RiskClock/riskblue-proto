@@ -1583,11 +1583,17 @@ export default function WorkbenchProjectDetail() {
   const surveyDerivedMaps = useMemo(() => {
     const levelMap = new Map<string, Set<string>>();
     const unitMap = new Map<string, Array<{ level: string; unit?: string }>>();
-    // Per-page unit floor plans (with bbox + parent levels) for per-annotation
-    // bbox-containment attribution in the threat report.
+    // Per-page unit floor plans (with bbox + parent levels + per-level counts)
+    // for per-annotation bbox-containment attribution in the threat report.
+    // A unit listed N times under a level expands to N pairs in the rollup.
     const pageUnitPlans = new Map<
       string,
-      Array<{ unitLabel: string; levels: string[]; bbox: [number, number, number, number] | null }>
+      Array<{
+        unitLabel: string;
+        levels: string[];
+        levelsWithCounts: Array<{ level: string; count: number }>;
+        bbox: [number, number, number, number] | null;
+      }>
     >();
     const files = rows?.files ?? [];
     const sheets = rows?.sheets ?? [];
@@ -1612,7 +1618,8 @@ export default function WorkbenchProjectDetail() {
       return { type, floors: floors || [], units: units || [], bbox };
     };
 
-    const unitRefToLevels = new Map<string, Set<string>>();
+    // unit ref (lowercased) -> level -> occurrence count.
+    const unitRefToLevelCounts = new Map<string, Map<string, number>>();
     for (const f of files) {
       const byPage = floorPlansByFile.get(f.id);
       if (!byPage) continue;
@@ -1623,9 +1630,12 @@ export default function WorkbenchProjectDetail() {
           for (const ref of e.units) {
             const k = (ref || "").trim().toLowerCase();
             if (!k) continue;
-            const set = unitRefToLevels.get(k) || new Set<string>();
-            for (const lvl of e.floors) if (lvl) set.add(lvl);
-            unitRefToLevels.set(k, set);
+            const inner = unitRefToLevelCounts.get(k) || new Map<string, number>();
+            for (const lvl of e.floors) {
+              if (!lvl) continue;
+              inner.set(lvl, (inner.get(lvl) || 0) + 1);
+            }
+            unitRefToLevelCounts.set(k, inner);
           }
         }
       }
@@ -1651,12 +1661,14 @@ export default function WorkbenchProjectDetail() {
           } else if (e.type === "unit_floor_plan") {
             const unitLabel = fp.reference_id || floorPlanDisplayLabel(fp);
             const refKey = (fp.reference_id || "").trim().toLowerCase();
-            const parentLevels = refKey ? Array.from(unitRefToLevels.get(refKey) || []) : [];
+            const counts = refKey ? unitRefToLevelCounts.get(refKey) : null;
+            const levelsWithCounts: Array<{ level: string; count: number }> = counts
+              ? Array.from(counts.entries()).map(([level, count]) => ({ level, count }))
+              : [];
+            const parentLevels = levelsWithCounts.map((x) => x.level);
 
-            // Index every unit plan on the page (including those without resolved
-            // parent levels) so per-annotation containment can decide attribution.
             const upArr = pageUnitPlans.get(key) || [];
-            upArr.push({ unitLabel, levels: parentLevels, bbox: e.bbox });
+            upArr.push({ unitLabel, levels: parentLevels, levelsWithCounts, bbox: e.bbox });
             pageUnitPlans.set(key, upArr);
 
             if (parentLevels.length === 0) continue;
@@ -4266,7 +4278,7 @@ function InstancesReportModal({
   optionByName: Map<string, { idPrefix: string | null; category: string }>;
   pageSpaceMap: Map<string, string[]>;
   pageSpaceUnitMap: Map<string, Array<{ level: string; unit?: string }>>;
-  pageUnitPlansMap: Map<string, Array<{ unitLabel: string; levels: string[]; bbox: [number, number, number, number] | null }>>;
+  pageUnitPlansMap: Map<string, Array<{ unitLabel: string; levels: string[]; levelsWithCounts: Array<{ level: string; count: number }>; bbox: [number, number, number, number] | null }>>;
   spaceHierarchyPayload: any | null | undefined;
   projectName: string;
   enabledClassNames: string[];
@@ -4368,7 +4380,14 @@ function InstancesReportModal({
     const key = `${fileName}::${pageIndex}`;
     const unitPlans = pageUnitPlansMap.get(key) || [];
     if (unitPlans.length > 0) {
-      let matched: { unitLabel: string; levels: string[]; bbox: [number, number, number, number] | null } | null = null;
+      let matched:
+        | {
+            unitLabel: string;
+            levels: string[];
+            levelsWithCounts: Array<{ level: string; count: number }>;
+            bbox: [number, number, number, number] | null;
+          }
+        | null = null;
       if (unitPlans.length === 1) {
         matched = unitPlans[0];
       } else if (typeof nx === "number" && typeof ny === "number") {
@@ -4384,8 +4403,20 @@ function InstancesReportModal({
         }
       }
       if (!matched) return [];
-      if (matched.levels.length === 0) return [];
-      return matched.levels.map((l) => ({ level: l, unit: matched!.unitLabel }));
+      const lwc =
+        matched.levelsWithCounts && matched.levelsWithCounts.length > 0
+          ? matched.levelsWithCounts
+          : matched.levels.map((l) => ({ level: l, count: 1 }));
+      if (lwc.length === 0) return [];
+      const out: Array<{ level: string; unit?: string }> = [];
+      for (const { level, count } of lwc) {
+        const n = Math.max(1, count | 0);
+        for (let i = 0; i < n; i++) {
+          const unit = i === 0 ? matched.unitLabel : `${matched.unitLabel} (${i + 1})`;
+          out.push({ level, unit });
+        }
+      }
+      return out;
     }
     const unitAware = pageSpaceUnitMap.get(key);
     if (unitAware && unitAware.length > 0) return unitAware;
