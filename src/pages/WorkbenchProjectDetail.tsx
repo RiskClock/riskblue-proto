@@ -4469,7 +4469,9 @@ function InstancesReportModal({
       for (const { level, count } of lwc) {
         const n = Math.max(1, count | 0);
         for (let i = 0; i < n; i++) {
-          const unit = i === 0 ? matched.unitLabel : `${matched.unitLabel} (${i + 1})`;
+          // When a unit appears N>1 times on a level, suffix every instance
+          // (including the first) so the IDs read as "1H (1)", "1H (2)", ...
+          const unit = n <= 1 ? matched.unitLabel : `${matched.unitLabel} (${i + 1})`;
           out.push({ level, unit });
         }
       }
