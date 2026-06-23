@@ -5511,34 +5511,24 @@ function DrawingPageBlock({
   };
 
   return (
-    <div ref={containerRef} className={hideHeader ? "" : "border rounded-md overflow-hidden"}>
-      {!hideHeader && (
-        <div className="flex items-center justify-between px-3 py-2 bg-muted/40 border-b">
+    <div ref={containerRef} className="border rounded-md overflow-hidden">
+      <div className="flex items-center justify-between px-3 py-2 bg-muted/40 border-b">
+        {customSelector ? (
+          customSelector
+        ) : (
           <div className="text-sm font-semibold truncate">
             {fileName} · Page {pageIdx}
           </div>
-          <Button size="sm" variant="outline" onClick={handleDownload} disabled={downloading || !inView}>
-            {downloading ? (
-              <Loader2 className="h-3.5 w-3.5 animate-spin mr-1.5" />
-            ) : (
-              <Download className="h-3.5 w-3.5 mr-1.5" />
-            )}
-            Download
-          </Button>
-        </div>
-      )}
-      {hideHeader && (
-        <div className="flex items-center justify-end px-2 py-1 bg-muted/20 border-b">
-          <Button size="sm" variant="ghost" onClick={handleDownload} disabled={downloading || !inView}>
-            {downloading ? (
-              <Loader2 className="h-3.5 w-3.5 animate-spin mr-1.5" />
-            ) : (
-              <Download className="h-3.5 w-3.5 mr-1.5" />
-            )}
-            Download
-          </Button>
-        </div>
-      )}
+        )}
+        <Button size="sm" variant="outline" onClick={handleDownload} disabled={downloading || !inView}>
+          {downloading ? (
+            <Loader2 className="h-3.5 w-3.5 animate-spin mr-1.5" />
+          ) : (
+            <Download className="h-3.5 w-3.5 mr-1.5" />
+          )}
+          Download
+        </Button>
+      </div>
       <div ref={surfaceRef} className="w-full aspect-[3/2] bg-white">
         {inView ? (
           <DrawingViewer
