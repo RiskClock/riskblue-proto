@@ -270,8 +270,10 @@ export function useDocumentSource(
           setResolved({ kind: "image", imageUrl: directUrl, mimeType });
         }
       } catch (e) {
-        if (!cancelled)
-          setError(e instanceof Error ? e.message : "Failed to load source");
+        if (!cancelled) {
+          const raw = e instanceof Error ? e.message : "Failed to load source";
+          setError(isMissingObjectError(raw) ? MISSING_SOURCE_ERROR : raw);
+        }
       } finally {
         if (!cancelled) setLoading(false);
       }
