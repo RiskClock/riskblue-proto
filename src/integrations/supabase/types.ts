@@ -2748,6 +2748,14 @@ export type Database = {
         }
         Returns: Json
       }
+      find_orphaned_uploaded_drawings: {
+        Args: never
+        Returns: {
+          created_at: string
+          name: string
+          size: number
+        }[]
+      }
       get_control_vendor_offerings: {
         Args: never
         Returns: {
