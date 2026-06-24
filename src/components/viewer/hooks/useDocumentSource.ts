@@ -24,6 +24,23 @@ export type DocumentSourceDescriptor =
     }
   | { kind: "supabase-storage"; bucket: string; path: string; mimeType?: string };
 
+/** Marker prepended to error messages when the source blob is missing from storage. */
+export const MISSING_SOURCE_ERROR = "__SOURCE_MISSING__";
+
+function isMissingObjectError(msg: string | undefined): boolean {
+  if (!msg) return false;
+  const m = msg.toLowerCase();
+  return (
+    m.includes("object not found") ||
+    m.includes("not_found") ||
+    m.includes("notfound") ||
+    m.includes("http 400") ||
+    m.includes("http 404") ||
+    m.includes("storage fetch failed: 400") ||
+    m.includes("storage fetch failed: 404")
+  );
+}
+
 export interface ResolvedSource {
   kind: "pdf" | "image";
   /** Present for PDFs; consumers feed it to usePdfPageRaster. */
