@@ -389,11 +389,21 @@ export const DrawingViewer = forwardRef<DrawingViewerApi, DrawingViewerProps>(
               </div>
             </div>
           ) : error ? (
-            <div className="flex items-center justify-center h-full">
-              <div className="text-center space-y-2">
-                <AlertCircle className="w-8 h-8 text-destructive mx-auto" />
-                <p className="text-sm text-destructive">{error}</p>
-              </div>
+            <div className="flex items-center justify-center h-full p-6">
+              {error === MISSING_SOURCE_ERROR ? (
+                <div className="text-center space-y-2 max-w-sm">
+                  <AlertCircle className="w-8 h-8 text-muted-foreground mx-auto" />
+                  <p className="text-sm font-medium">Source file no longer available</p>
+                  <p className="text-xs text-muted-foreground">
+                    The original drawing file has been removed from storage. Re-upload the source PDF to restore this view.
+                  </p>
+                </div>
+              ) : (
+                <div className="text-center space-y-2">
+                  <AlertCircle className="w-8 h-8 text-destructive mx-auto" />
+                  <p className="text-sm text-destructive">{error}</p>
+                </div>
+              )}
             </div>
           ) : activePage && pageCssSize.width > 0 ? (
             <>
