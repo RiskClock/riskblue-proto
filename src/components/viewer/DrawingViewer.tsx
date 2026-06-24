@@ -15,7 +15,7 @@ import {
 import { Loader2, AlertCircle } from "lucide-react";
 import { DocumentSurface } from "./DocumentSurface";
 import { ViewerToolbar } from "./ViewerToolbar";
-import { useDocumentSource, type DocumentSourceDescriptor } from "./hooks/useDocumentSource";
+import { useDocumentSource, MISSING_SOURCE_ERROR, type DocumentSourceDescriptor } from "./hooks/useDocumentSource";
 import { usePdfPageRaster, type RasterPage } from "./hooks/usePdfPageRaster";
 import { useFitToSelection } from "./hooks/useFitToSelection";
 import {
