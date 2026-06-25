@@ -762,9 +762,44 @@ export default function WorkbenchProjectDetail() {
           (r) => r.page_count == null && r.storage_path && (r.mime_type ?? "application/pdf").includes("pdf"),
         );
         if (missing.length === 0) return;
+
+        // Verify objects exist before signing to avoid 400 spam for orphans.
+        const existsByRow = new Map<string, boolean>();
+        const dirGroups = new Map<string, { bucket: string; dir: string; rows: typeof missing }>();
+        for (const r of missing) {
+          const bucket = bucketForSource(r.source_type);
+          const path = r.storage_path!;
+          const lastSlash = path.lastIndexOf("/");
+          const dir = lastSlash >= 0 ? path.slice(0, lastSlash) : "";
+          const key = `${bucket}::${dir}`;
+          let g = dirGroups.get(key);
+          if (!g) {
+            g = { bucket, dir, rows: [] };
+            dirGroups.set(key, g);
+          }
+          g.rows.push(r);
+        }
+        await Promise.all(
+          Array.from(dirGroups.values()).map(async ({ bucket, dir, rows: grpRows }) => {
+            try {
+              const { data, error: listErr } = await supabase.storage
+                .from(bucket)
+                .list(dir, { limit: 1000 });
+              if (listErr || !data) return;
+              const names = new Set(data.map((d) => d.name));
+              for (const r of grpRows) {
+                const fname = r.storage_path!.slice(r.storage_path!.lastIndexOf("/") + 1);
+                if (names.has(fname)) existsByRow.set(r.id, true);
+              }
+            } catch {
+              /* ignore */
+            }
+          }),
+        );
         const pdfjsLib = await import("pdfjs-dist");
         for (const row of missing) {
           if (cancelled) return;
+          if (!existsByRow.get(row.id)) continue;
           try {
             const { data: signed, error: signErr } = await supabase.storage
               .from(bucketForSource(row.source_type))
@@ -986,26 +1021,67 @@ export default function WorkbenchProjectDetail() {
 
 
   // Prewarm PDFs into the shared cache so opening the viewer is instant.
+  // First verify each object exists (via a per-directory storage.list) so we
+  // avoid hammering Supabase with createSignedUrl 400s for orphaned rows.
   useEffect(() => {
     if (!rows?.sheets?.length) return;
     let cancelled = false;
-    const queue = rows.sheets
-      .filter((s) => s.storage_path)
-      .map<DocumentSourceDescriptor>((s) => ({
-        kind: "supabase-storage",
-        bucket: bucketForSource(s.file_source_type),
-        path: s.storage_path!,
-        mimeType: "application/pdf",
-      }));
-    const CONCURRENCY = 8;
-    let idx = 0;
-    const worker = async () => {
-      while (!cancelled && idx < queue.length) {
-        const d = queue[idx++];
-        await prewarmDocumentSource(d);
+    (async () => {
+      const candidates = rows.sheets.filter((s) => s.storage_path);
+      if (candidates.length === 0) return;
+
+      // Group by (bucket, directory) so we list each folder only once.
+      const dirGroups = new Map<string, { bucket: string; dir: string; sheets: typeof candidates }>();
+      for (const s of candidates) {
+        const bucket = bucketForSource(s.file_source_type);
+        const path = s.storage_path!;
+        const lastSlash = path.lastIndexOf("/");
+        const dir = lastSlash >= 0 ? path.slice(0, lastSlash) : "";
+        const key = `${bucket}::${dir}`;
+        let g = dirGroups.get(key);
+        if (!g) {
+          g = { bucket, dir, sheets: [] };
+          dirGroups.set(key, g);
+        }
+        g.sheets.push(s);
       }
-    };
-    Promise.all(Array.from({ length: CONCURRENCY }, worker)).catch(() => {});
+
+      const existingPaths = new Set<string>();
+      await Promise.all(
+        Array.from(dirGroups.values()).map(async ({ bucket, dir }) => {
+          try {
+            const { data, error } = await supabase.storage
+              .from(bucket)
+              .list(dir, { limit: 1000 });
+            if (error || !data) return;
+            for (const item of data) {
+              existingPaths.add(dir ? `${dir}/${item.name}` : item.name);
+            }
+          } catch {
+            // ignore — fall back to skipping prewarm for this directory
+          }
+        }),
+      );
+      if (cancelled) return;
+
+      const queue = candidates
+        .filter((s) => existingPaths.has(s.storage_path!))
+        .map<DocumentSourceDescriptor>((s) => ({
+          kind: "supabase-storage",
+          bucket: bucketForSource(s.file_source_type),
+          path: s.storage_path!,
+          mimeType: "application/pdf",
+        }));
+      const CONCURRENCY = 8;
+      let idx = 0;
+      const worker = async () => {
+        while (!cancelled && idx < queue.length) {
+          const d = queue[idx++];
+          await prewarmDocumentSource(d);
+        }
+      };
+      await Promise.all(Array.from({ length: CONCURRENCY }, worker));
+    })().catch(() => {});
     return () => {
       cancelled = true;
     };
