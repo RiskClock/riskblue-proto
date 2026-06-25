@@ -986,26 +986,67 @@ export default function WorkbenchProjectDetail() {
 
 
   // Prewarm PDFs into the shared cache so opening the viewer is instant.
+  // First verify each object exists (via a per-directory storage.list) so we
+  // avoid hammering Supabase with createSignedUrl 400s for orphaned rows.
   useEffect(() => {
     if (!rows?.sheets?.length) return;
     let cancelled = false;
-    const queue = rows.sheets
-      .filter((s) => s.storage_path)
-      .map<DocumentSourceDescriptor>((s) => ({
-        kind: "supabase-storage",
-        bucket: bucketForSource(s.file_source_type),
-        path: s.storage_path!,
-        mimeType: "application/pdf",
-      }));
-    const CONCURRENCY = 8;
-    let idx = 0;
-    const worker = async () => {
-      while (!cancelled && idx < queue.length) {
-        const d = queue[idx++];
-        await prewarmDocumentSource(d);
+    (async () => {
+      const candidates = rows.sheets.filter((s) => s.storage_path);
+      if (candidates.length === 0) return;
+
+      // Group by (bucket, directory) so we list each folder only once.
+      const dirGroups = new Map<string, { bucket: string; dir: string; sheets: typeof candidates }>();
+      for (const s of candidates) {
+        const bucket = bucketForSource(s.file_source_type);
+        const path = s.storage_path!;
+        const lastSlash = path.lastIndexOf("/");
+        const dir = lastSlash >= 0 ? path.slice(0, lastSlash) : "";
+        const key = `${bucket}::${dir}`;
+        let g = dirGroups.get(key);
+        if (!g) {
+          g = { bucket, dir, sheets: [] };
+          dirGroups.set(key, g);
+        }
+        g.sheets.push(s);
       }
-    };
-    Promise.all(Array.from({ length: CONCURRENCY }, worker)).catch(() => {});
+
+      const existingPaths = new Set<string>();
+      await Promise.all(
+        Array.from(dirGroups.values()).map(async ({ bucket, dir }) => {
+          try {
+            const { data, error } = await supabase.storage
+              .from(bucket)
+              .list(dir, { limit: 1000 });
+            if (error || !data) return;
+            for (const item of data) {
+              existingPaths.add(dir ? `${dir}/${item.name}` : item.name);
+            }
+          } catch {
+            // ignore — fall back to skipping prewarm for this directory
+          }
+        }),
+      );
+      if (cancelled) return;
+
+      const queue = candidates
+        .filter((s) => existingPaths.has(s.storage_path!))
+        .map<DocumentSourceDescriptor>((s) => ({
+          kind: "supabase-storage",
+          bucket: bucketForSource(s.file_source_type),
+          path: s.storage_path!,
+          mimeType: "application/pdf",
+        }));
+      const CONCURRENCY = 8;
+      let idx = 0;
+      const worker = async () => {
+        while (!cancelled && idx < queue.length) {
+          const d = queue[idx++];
+          await prewarmDocumentSource(d);
+        }
+      };
+      await Promise.all(Array.from({ length: CONCURRENCY }, worker));
+    })().catch(() => {});
     return () => {
       cancelled = true;
     };
