@@ -799,6 +799,7 @@ export default function WorkbenchProjectDetail() {
         const pdfjsLib = await import("pdfjs-dist");
         for (const row of missing) {
           if (cancelled) return;
+          if (!existsByRow.get(row.id)) continue;
           try {
             const { data: signed, error: signErr } = await supabase.storage
               .from(bucketForSource(row.source_type))
