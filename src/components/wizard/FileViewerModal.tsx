@@ -1337,6 +1337,10 @@ interface FloorPlansPanelProps {
   allUnitPlans: ParsedFloorPlan[];
   allLevelPlans: ParsedFloorPlan[];
   overrides: Record<string, any>;
+  /** File-wide overrides keyed by plan_id, used to look up level-plan unit
+   *  assignments saved on other pages (needed for "Referenced in"). */
+  allLevelPlanOverrides?: Record<string, { units?: string[] }>;
+
   onSaveOverride?: (
     planId: string,
     next: {
