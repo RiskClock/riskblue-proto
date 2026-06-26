@@ -419,6 +419,11 @@ export default function WorkbenchProjectDetail() {
     return out;
   }, [activeFileFloorPlansByPage, activeFloorPlanOverrides]);
 
+  // File-wide level-plan overrides (units arrays) are computed after the
+  // `rows` query is declared below — see `activeFileAllLevelPlanOverrides`.
+
+
+
 
   // className -> planId derived from per-plan `annotations: string[]` overrides.
   const activeAnnotationAssignments = useMemo<Record<string, string>>(() => {
@@ -935,6 +940,26 @@ export default function WorkbenchProjectDetail() {
     }
     return m;
   }, [rows?.files, rows?.sheets]);
+
+  // File-wide level-plan overrides (units arrays) merged across every sheet
+  // in the active file. Used to compute "Referenced in" for unit plans on
+  // pages other than the one currently loaded in `activeFloorPlanOverrides`.
+  const activeFileAllLevelPlanOverrides = useMemo<Record<string, { units?: string[] }>>(() => {
+    const out: Record<string, { units?: string[] }> = {};
+    const fileId = activePageView?.file.id;
+    if (!fileId) return out;
+    for (const s of rows?.sheets ?? []) {
+      if (s.parent_file_id !== fileId) continue;
+      const ovr = s.floor_plan_overrides as Record<string, any> | null;
+      if (!ovr) continue;
+      for (const [planId, v] of Object.entries(ovr)) {
+        if (planId.startsWith("__")) continue;
+        const units = (v as any)?.units;
+        if (Array.isArray(units)) out[planId] = { units };
+      }
+    }
+    return out;
+  }, [rows?.sheets, activePageView?.file.id]);
 
   // Rehydrate survey results from DB after refresh.
   useEffect(() => {
@@ -3769,6 +3794,7 @@ export default function WorkbenchProjectDetail() {
             floorPlans={activePageFloorPlans}
             allUnitPlans={activeFileAllUnitPlans}
             allLevelPlans={activeFileAllLevelPlans}
+            allLevelPlanOverrides={activeFileAllLevelPlanOverrides}
             floorPlanOverrides={activeFloorPlanOverrides}
             onSaveFloorPlanOverride={saveFloorPlanOverride}
             onEditFloors={openFloorEditForPlan}

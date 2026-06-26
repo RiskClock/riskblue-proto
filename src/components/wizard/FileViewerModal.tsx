@@ -122,6 +122,10 @@ interface FileViewerModalProps {
   allLevelPlans?: ParsedFloorPlan[];
   /** Per-plan user overrides keyed by plan_id. */
   floorPlanOverrides?: Record<string, { floors?: string[]; units?: string[] }>;
+  /** File-wide level-plan overrides (across all pages) used to compute the
+   *  "Referenced in" hint for unit floor plans on the active page. */
+  allLevelPlanOverrides?: Record<string, { units?: string[] }>;
+
   /** Persist a single plan override. */
   onSaveFloorPlanOverride?: (
     planId: string,
@@ -198,9 +202,11 @@ export const FileViewerModal = ({
   allUnitPlans,
   allLevelPlans,
   floorPlanOverrides,
+  allLevelPlanOverrides,
   onSaveFloorPlanOverride,
   onEditFloors,
   onEditLevelUnits,
+
   onSaveLevelUnits,
   onDeletePlan,
   onAddPlan,
@@ -945,7 +951,9 @@ export const FileViewerModal = ({
                     floorPlans={floorPlans ?? []}
                     allUnitPlans={allUnitPlans ?? []}
                     allLevelPlans={allLevelPlans ?? []}
+                    allLevelPlanOverrides={allLevelPlanOverrides}
                     overrides={effectiveFloorPlanOverrides}
+
                     onSaveOverride={onSaveFloorPlanOverride}
                     onEditFloors={onEditFloors}
                     onEditLevelUnits={onEditLevelUnits}
@@ -1337,6 +1345,10 @@ interface FloorPlansPanelProps {
   allUnitPlans: ParsedFloorPlan[];
   allLevelPlans: ParsedFloorPlan[];
   overrides: Record<string, any>;
+  /** File-wide overrides keyed by plan_id, used to look up level-plan unit
+   *  assignments saved on other pages (needed for "Referenced in"). */
+  allLevelPlanOverrides?: Record<string, { units?: string[] }>;
+
   onSaveOverride?: (
     planId: string,
     next: {
@@ -1376,6 +1388,7 @@ const FloorPlansPanel = ({
   allUnitPlans,
   allLevelPlans,
   overrides,
+  allLevelPlanOverrides,
   onSaveLevelUnits,
   instancesOnPage = [],
   numberByInstanceId,
@@ -1395,8 +1408,10 @@ const FloorPlansPanel = ({
     const key = unitPlanRefKey(unit);
     const pages = new Set<number>();
     for (const lvl of allLevelPlans) {
-      const ovr = overrides[lvl.plan_id];
-      const effUnits = ovr?.units ?? lvl.referenced_unit_ids;
+      const localOvr = overrides[lvl.plan_id];
+      const fileOvr = allLevelPlanOverrides?.[lvl.plan_id];
+      const effUnits =
+        localOvr?.units ?? fileOvr?.units ?? lvl.referenced_unit_ids;
       if (effUnits.includes(key)) {
         pages.add(lvl.page_number);
       }
@@ -1405,6 +1420,7 @@ const FloorPlansPanel = ({
       .sort((a, b) => a - b)
       .map((p) => `Page ${p}`);
   };
+
 
   // Compute per-plan annotation membership purely by bbox containment of the
   // marker's center point. There are no manual assignments — the report
