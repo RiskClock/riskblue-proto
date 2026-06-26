@@ -1,67 +1,122 @@
-## Diagnosis
+# Threat Report → DOCX Export (background job + email)
 
-The previous migration walked `space_hierarchy_json.parsed.spatial_records` and wrote **one `floor_plan` entry per (physical level, page)** into `analysis_request_files.survey_raw_response`. So a page that depicts a typical plan spanning Levels 13 - 57 ended up with ~45 separate single-floor `floor_plan` records, each with its own bbox, producing one badge per physical level.
+Replace the placeholder "Export Report" toast in the Threat Report modal with a real pipeline that produces a Word document and emails the requester a permanent (re-signed) download link.
 
-The downstream Threat Compiler reads `floors[]` from each `floor_plan`, so the correct shape is **one `floor_plan` per page**, with `floors[]` listing every physical level that page represents, and a single shared bbox `[0, 0, 100, 100]`.
+## End-to-end flow
 
-Yes — we need to re-migrate. Source data (`spatial_records[].matched_sources`) is intact and sufficient; no user-supplied mapping needed.
+1. **User clicks Export Report.** A "Preparing your report…" modal opens (replaces the Threat Report modal contents or sits on top — see UI section). It is *not* dismissible while work is in progress.
+2. **Client-side prep** (`src/lib/threatReportExport.ts`):
+   - Build a serializable manifest of the report: project info, overview, summary, per-space sections (level table + units sub-sections + drawing tabs), and the list of unique `(file, page)` pairs to embed.
+   - Rasterize each unique page via `pdfjs-dist`, draw the same colored markers + ID labels the UI shows.
+   - Upload each PNG and the manifest JSON to `project-reports/{projectId}/threat-reports/{exportId}/`.
+   - Insert a `report_exports` row (`status = 'pending'`).
+   - Fire-and-forget invoke `generate-threat-report-docx` with `{ exportId }`.
+   - Close the preparing modal, show success toast: *"Report is being finalized — we'll email you when it's ready."*
+3. **`generate-threat-report-docx` edge function:**
+   - Reads manifest + downloads PNGs from storage.
+   - Assembles DOCX (`npm:docx`): cover page, TOC, Overview, Summary, per-space sections (level table + units as sub-sections + drawing images).
+   - Uploads `threat-report.docx` to the same folder.
+   - **Cleanup**: deletes the manifest JSON and all intermediate PNGs (keeps only the final `threat-report.docx`).
+   - Updates `report_exports` row: `status = 'ready'`, `storage_path`, `file_size`, `page_count`, `expires_at` (now + 30 days, for future retention policy — not enforced yet).
+   - Emails the requester via Resend with a link to the **frontend** route, not the edge function.
+4. **Email link → frontend route → edge function (auth boundary):**
+   - Email points to `${APP_URL}/projects/{projectId}/export/{exportId}`.
+   - Frontend route (`src/pages/ThreatReportDownload.tsx`):
+     - If user isn't signed in → redirect to `/auth?redirect=...` and return here after login.
+     - Once signed in, calls `download-threat-report` edge function **with the user's bearer token**.
+     - Edge function verifies auth + project access via `has_project_access(projectId)`, then returns a fresh 5-minute signed URL JSON `{ url }`.
+     - Frontend triggers download (`<a href={url} download>` programmatic click).
+     - Page shows "Downloading…" / "Download again" / "Access denied" / "Expired" states.
 
-## Step 1 — Re-migrate `survey_raw_response` (Brownlow only)
+## Refinements applied
 
-Scope: `analysis_request_id = 13502949-c6ad-4e36-bf8e-1f28cf9c217c`, file `Combined Mech - Brownlow.pdf`.
+### 1. Email links route through the frontend (auth fix)
+- Email body links to a frontend page; the page calls the edge function with a JWT. The edge function never relies on a magic token in the URL — it requires a logged-in session and project membership. This avoids leaking signed URLs in email and prevents shoulder-surfing access by non-members.
 
-Algorithm (one-off Node/TS script run via shell, against Supabase REST with service role):
+### 2. "Preparing…" modal during client-side processing
+- New `PreparingReportModal` (in `src/pages/WorkbenchProjectDetail.tsx` near `ThreatReportModal`) shows a progress bar, current step label (`Rendering page X of N`, `Uploading images…`, `Submitting job…`) and disables close.
+- Rasterization runs through a small concurrency limiter (max 2 in flight) and yields between pages with `await new Promise(r => setTimeout(r, 0))` after each so the UI stays responsive.
+- All progress callbacks come from `runThreatReportExport({ onProgress })`.
 
-1. Read `space_hierarchy_json.parsed.spatial_records` and `unit_templates`.
-2. Build `pageToLevels: Map<pageNumber, string[]>` by iterating every record's `matched_sources` and appending `standardized_space_name` to the page's bucket. Preserve insertion order; dedupe.
-3. For each page bucket, emit **exactly one** `floor_plan`:
-   ```json
-   {
-     "type": "level_floor_plan",
-     "plan_id": "legacy_p{page}_1",
-     "reference_id": "<formatted label of the level set>",
-     "relationships": { "referenced_unit_ids": [] },
-     "spatial_connection": {
-       "type": "single_floor",  // or "multi_floor" when floors.length > 1
-       "floors": [ ...levelNames ]
-     },
-     "xy_width_height_pct": [0, 0, 100, 100]
-   }
-   ```
-4. `unit_templates` → emit one `unit_floor_plan` per `matched_sources` page, with `floors = applies_to_levels`, `reference_id = unit_name`, bbox `[0, 0, 100, 100]`. (None exist in current data — no-op safe.)
-5. Wrap as `{ file_name, total_pages: 47, surveyed_pages: [...] }`, JSON-stringify, write back to `analysis_request_files.survey_raw_response`. `total_pages` preserved from existing payload.
+### 3. Edge-function cleanup of intermediates
+- After `threat-report.docx` is uploaded successfully, `generate-threat-report-docx` lists `images/` and removes the manifest + every PNG in one `storage.remove([...])` call. On any earlier failure, intermediates stay so we can diagnose; cleanup is best-effort and never blocks marking the row `ready`.
 
-Pages not referenced by any `spatial_records` entry are omitted (matches Scout convention).
+### 4. Resilient client uploads
+- `uploadWithRetry(path, blob)` helper: up to 3 attempts, exponential backoff (250ms / 750ms / 2s), retries only on network/5xx, never on 4xx.
+- Image uploads run through `Promise.allSettled`; failed images are recorded in the manifest as `{ skipped: true, reason }` so the DOCX builder substitutes a "Drawing unavailable" placeholder block instead of failing the whole export. Manifest upload itself is not optional — retried up to 5 times and surfaces a hard error if all attempts fail.
 
-Idempotent: re-running with the same input produces the same output.
+### 5. `report_exports` schema additions
+- `expires_at timestamptz` — populated to `now() + interval '30 days'` on completion. Not enforced yet; reserved for a future retention cron.
+- `file_size bigint` — DOCX size in bytes, captured after upload.
+- `page_count integer` — number of unique drawing pages embedded, captured during client prep and stored when the row is created.
 
-## Step 2 — Badge label formatter
+## Files
 
-In `src/pages/WorkbenchProjectDetail.tsx`, update `groupSpaceLabels` (and any path that produces a level-set chip from a `floors[]` array on a single plan):
+**New:**
+- DB migration: `report_exports` table.
+- `supabase/functions/generate-threat-report-docx/index.ts` — DOCX builder, uploader, cleanup, email send.
+- `supabase/functions/download-threat-report/index.ts` — JWT-auth re-sign endpoint, returns `{ url }`.
+- `src/lib/threatReportExport.ts` — manifest build, page rasterization with markers, concurrency-limited uploads with retry, job dispatch.
+- `src/pages/ThreatReportDownload.tsx` — frontend route that fetches the signed URL and triggers download.
 
-- Detect numeric Level entries (`/^Level\s+(\d+)/i` or `/^L(\d+)/i`); sort, then split into contiguous runs and stragglers.
-- Render exactly **one chip per plan** (not one per chunk) — concatenate as:
-  - Single level → `"Level 13"` (unchanged singular)
-  - Pure range → `"Levels 13 - 57"` (plural, spaces around `-`)
-  - Mixed runs/singles → `"Levels 4, 5, 12 - 17"` (plural, comma-separated, spaces around `-` inside ranges)
-  - Non-numeric names (e.g. "Ground Level", "Mezzanine Level") → joined with `, ` and prefixed `"Levels "` only when more than one
-- Per-plan rendering site (`levelPlans.map(...)`) reverts to **one `<Badge>` per plan** (no more per-chunk badges), using the new formatter against `plan.floors`.
+**Edited:**
+- `src/pages/WorkbenchProjectDetail.tsx`: Export Report button → opens `PreparingReportModal` and calls `runThreatReportExport`. Extract structured report data (overview/summary/per-space) into a serializable shape passed to the exporter.
+- `src/App.tsx`: register `/projects/:projectId/export/:exportId` route.
 
-Non-interactive chip; existing color (`awpClassColor("Level Floor Plan")`) preserved. No change to triage-cell green-removal already shipped.
+## Database
 
-## Step 3 — Verification
+```sql
+CREATE TABLE public.report_exports (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  project_id uuid NOT NULL REFERENCES public.projects(id) ON DELETE CASCADE,
+  analysis_request_id uuid REFERENCES public.analysis_requests(id) ON DELETE SET NULL,
+  user_id uuid NOT NULL, -- requester
+  status text NOT NULL DEFAULT 'pending', -- pending | processing | ready | failed
+  storage_path text,        -- final DOCX path inside project-reports
+  manifest_path text,       -- transient; nulled after cleanup
+  page_count integer,
+  file_size bigint,
+  error_message text,
+  expires_at timestamptz,
+  created_at timestamptz NOT NULL DEFAULT now(),
+  updated_at timestamptz NOT NULL DEFAULT now()
+);
 
-- `psql` check: confirm each page in `survey_raw_response` has `floor_plans.length === 1` (except pages with both a level plan and a unit plan, which keep both as separate entries).
-- Reload `/internal/workbench/project/86ab9e72-…`: each page row shows exactly one Levels badge with the correct combined label.
+GRANT SELECT, INSERT ON public.report_exports TO authenticated;
+GRANT ALL ON public.report_exports TO service_role;
 
-## Out of scope
+ALTER TABLE public.report_exports ENABLE ROW LEVEL SECURITY;
 
-- `space_hierarchy_json` itself — leave intact; it's the source of truth we migrated *from*.
-- Other projects — Brownlow only.
-- Threat Compiler agent — it already consumes `floors[]`, so once each plan carries the full list, badges and compiler agree.
+-- Requester or any project member can read their export row.
+CREATE POLICY "members read export rows"
+  ON public.report_exports FOR SELECT TO authenticated
+  USING (user_id = auth.uid() OR public.has_project_access(project_id));
+
+-- Only the requester can create their own row (status/path columns
+-- get rewritten by the service role inside the edge function).
+CREATE POLICY "requester inserts own export"
+  ON public.report_exports FOR INSERT TO authenticated
+  WITH CHECK (user_id = auth.uid());
+
+CREATE TRIGGER trg_report_exports_updated
+  BEFORE UPDATE ON public.report_exports
+  FOR EACH ROW EXECUTE FUNCTION public.update_updated_at_column();
+```
+
+## Storage layout
+
+```
+project-reports/
+  {projectId}/threat-reports/{exportId}/
+    manifest.json          ← deleted after success
+    images/page-*.png      ← deleted after success
+    threat-report.docx     ← kept
+```
 
 ## Technical notes
 
-- Script lives under `/tmp/` (one-off, not committed).
-- Uses `SUPABASE_SERVICE_ROLE_KEY` via REST (psql is read/insert-only and this is an UPDATE of a JSON column on an existing row — handled via PostgREST PATCH).
-- `groupSpaceLabels` returns `string` (single label) instead of `string[]`; callers updated accordingly.
+- Concurrency limiter is a tiny inline pool, no new dependency.
+- Marker colors and label rules reused from the existing `DrawingPageBlock` so embedded images match the UI exactly.
+- Email uses the existing Resend setup and `_shared/email-template.ts`; no new email infra.
+- `download-threat-report` validates with `supabase.auth.getClaims(jwt)` and `has_project_access(project_id)`; signed URLs are minted with the service role and expire in 5 min.
+- `expires_at` is informational for now; a later cron can delete `project-reports` folders where `expires_at < now()`.
