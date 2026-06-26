@@ -35,7 +35,6 @@ import {
   type ThreatReportPageRef,
   type ThreatReportSpace,
 } from "@/lib/threatReportExport";
-import { awpClassColor } from "@/lib/awpColor";
 
 import {
   Dialog,
