@@ -5239,6 +5239,195 @@ function InstancesReportModal({
   };
 
 
+  // ── Threat Report export ─────────────────────────────────────────────────
+  const [exporting, setExporting] = useState(false);
+  const [exportProgress, setExportProgress] = useState<ExportProgress | null>(null);
+
+  function computeSpaceExportData(space: string): ThreatReportSpace {
+    const rowsForSpace = instancesForSpace(space);
+    const pageKeySet = new Set<string>();
+    for (const r of rowsForSpace) pageKeySet.add(`${r.fileId}::${r.pageIndex}`);
+    if (space !== "__unassigned__") {
+      for (const [key, spaces] of pageSpaceMap.entries()) {
+        if (!spaces.includes(space)) continue;
+        const [fileName, pageStr] = key.split("::");
+        const lookup = sheetByFilePage.get(`${fileName}::${pageStr}`);
+        const fileId = lookup?.file?.id;
+        if (!fileId) continue;
+        pageKeySet.add(`${fileId}::${pageStr}`);
+      }
+    }
+
+    const unitMap = new Map<string, number[]>();
+    if (space !== "__unassigned__") {
+      for (const [key, pairs] of pageSpaceUnitMap.entries()) {
+        for (const pair of pairs) {
+          if (pair.level !== space || !pair.unit) continue;
+          const [, pageStr] = key.split("::");
+          const arr = unitMap.get(pair.unit) || [];
+          arr.push(parseInt(pageStr, 10));
+          unitMap.set(pair.unit, arr);
+        }
+      }
+    }
+    const units = Array.from(unitMap.entries())
+      .map(([name, pageIdxs]) => ({ name, pageIdxs: Array.from(new Set(pageIdxs)).sort((a, b) => a - b) }))
+      .sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: "base" }));
+
+    const uniqueFileNames = new Set(
+      Array.from(pageKeySet).map((k) => fileNameById.get(k.split("::")[0]) || ""),
+    );
+    const showFileInTab = uniqueFileNames.size > 1;
+
+    const pages: ThreatReportPageRef[] = [];
+    for (const key of pageKeySet) {
+      const [fileId, pageIdxStr] = key.split("::");
+      const pageIdx = parseInt(pageIdxStr, 10);
+      const fileName = fileNameById.get(fileId) || "";
+      const lookup = sheetByFilePage.get(`${fileName}::${pageIdx}`);
+      if (!lookup) continue;
+      const bucket = bucketForSource(lookup.sheet.file_source_type);
+      const parentPath = lookup.file.storage_path;
+
+      const rawOverlays = rowsForSpace.filter(
+        (r) => r.fileId === fileId && r.pageIndex === pageIdx,
+      );
+      const posIndex = new Map<string, number>();
+      const posTotal = new Map<string, number>();
+      for (const r of rawOverlays) {
+        const k = `${(r.nx ?? 0).toFixed(4)}::${(r.ny ?? 0).toFixed(4)}`;
+        posTotal.set(k, (posTotal.get(k) ?? 0) + 1);
+      }
+      const overlays = rawOverlays.map((r, i) => {
+        const k = `${(r.nx ?? 0).toFixed(4)}::${(r.ny ?? 0).toFixed(4)}`;
+        const total = posTotal.get(k) ?? 1;
+        const idx = posIndex.get(k) ?? 0;
+        posIndex.set(k, idx + 1);
+        let nx = r.nx ?? 0;
+        let ny = r.ny ?? 0;
+        if (total > 1) {
+          const step = 0.006;
+          const offset = (idx - (total - 1) / 2) * step;
+          nx = Math.max(0.005, Math.min(0.995, nx + offset));
+          ny = Math.max(0.005, Math.min(0.995, ny + offset));
+        }
+        return {
+          id: `${r.instanceId}-${i}`,
+          nx,
+          ny,
+          color: awpClassColor(r.awpClassName),
+          label: r.instanceId,
+        };
+      });
+
+      const shortName = fileName.replace(/\.[^.]+$/, "");
+      const pageKey = `${fileName}::${pageIdx}`;
+      const levelPlans = pageLevelPlansMap.get(pageKey) || [];
+      const unitPlans = pageUnitPlansMap.get(pageKey) || [];
+      let qualifier: string | null = null;
+      if (levelPlans.length > 0) {
+        if (space !== "__unassigned__") {
+          const matchingLp = levelPlans.find((lp) => lp.levels.includes(space));
+          qualifier = matchingLp ? space : levelPlans[0].levels[0];
+        } else {
+          qualifier = levelPlans[0].levels[0];
+        }
+      } else if (unitPlans.length > 0) {
+        const matchingUnit = space !== "__unassigned__"
+          ? unitPlans.find((up) => up.levels.includes(space))
+          : null;
+        qualifier = matchingUnit?.unitLabel ?? unitPlans[0].unitLabel;
+      }
+      const corePart = qualifier ? `p${pageIdx} · ${qualifier}` : `p${pageIdx}`;
+      const tabLabel = showFileInTab ? `${shortName} · ${corePart}` : corePart;
+
+      pages.push({
+        fileName,
+        shortName,
+        pageIdx,
+        bucket,
+        parentPath,
+        overlays,
+        tabLabel,
+      });
+    }
+
+    return {
+      name: space,
+      rows: rowsForSpace.map((r) => ({
+        instanceId: r.instanceId,
+        awpClassName: r.awpClassName,
+        unitName: r.unitName ?? null,
+        annotationBaseId: r.annotationBaseId,
+        fileName: fileNameById.get(r.fileId) || "",
+        pageIndex: r.pageIndex,
+      })),
+      units,
+      pages,
+    };
+  }
+
+  async function handleExportClick() {
+    if (exporting) return;
+    setExporting(true);
+    setExportProgress({ phase: "init", message: "Preparing report..." });
+    try {
+      const sourceDrawings = Array.from(
+        new Set(fileGroups.map((g) => g.file.name)),
+      );
+      const overviewClasses = classCols.map((c) => ({
+        name: c.name,
+        idPrefix: optionByName.get(c.name)?.idPrefix || "",
+        count: overviewTotals.get(c.name) || 0,
+      }));
+      const summary = {
+        spaces: spaceList,
+        classes: classCols.map((c) => ({
+          name: c.name,
+          idPrefix: optionByName.get(c.name)?.idPrefix || "",
+        })),
+        matrix: Object.fromEntries(
+          spaceList.map((s) => [
+            s,
+            Object.fromEntries(
+              classCols.map((c) => [c.name, summaryMatrix.get(s)?.get(c.name) || 0]),
+            ),
+          ]),
+        ),
+      };
+      const spacesData = spaceList.map((s) => computeSpaceExportData(s));
+      const payload: ThreatReportPayload = {
+        projectId,
+        analysisRequestId: requestId ?? null,
+        projectName,
+        reportDate: new Date().toLocaleDateString(undefined, {
+          year: "numeric",
+          month: "long",
+          day: "numeric",
+        }),
+        sourceDrawings,
+        overviewClasses,
+        summary,
+        spaces: spacesData,
+      };
+      await runThreatReportExport(payload, (p) => setExportProgress(p));
+      toast({
+        title: "Report ready",
+        description: "We've emailed you a link to download the report.",
+      });
+    } catch (err: any) {
+      console.error("[threat-report-export]", err);
+      toast({
+        title: "Export failed",
+        description: err?.message || "Could not generate the report.",
+        variant: "destructive",
+      });
+    } finally {
+      setExporting(false);
+      setExportProgress(null);
+    }
+  }
+
   const renderRight = () => {
     if (loading) {
       return (
