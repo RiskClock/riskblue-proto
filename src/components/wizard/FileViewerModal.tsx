@@ -951,7 +951,9 @@ export const FileViewerModal = ({
                     floorPlans={floorPlans ?? []}
                     allUnitPlans={allUnitPlans ?? []}
                     allLevelPlans={allLevelPlans ?? []}
+                    allLevelPlanOverrides={allLevelPlanOverrides}
                     overrides={effectiveFloorPlanOverrides}
+
                     onSaveOverride={onSaveFloorPlanOverride}
                     onEditFloors={onEditFloors}
                     onEditLevelUnits={onEditLevelUnits}
