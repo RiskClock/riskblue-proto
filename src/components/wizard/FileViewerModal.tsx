@@ -202,9 +202,11 @@ export const FileViewerModal = ({
   allUnitPlans,
   allLevelPlans,
   floorPlanOverrides,
+  allLevelPlanOverrides,
   onSaveFloorPlanOverride,
   onEditFloors,
   onEditLevelUnits,
+
   onSaveLevelUnits,
   onDeletePlan,
   onAddPlan,
