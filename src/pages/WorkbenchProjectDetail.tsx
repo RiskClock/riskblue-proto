@@ -5524,6 +5524,59 @@ function InstancesReportModal({
 }
 
 // ---------------------------------------------------------------------------
+// PreparingReportModal — shown while threat report export is generating.
+// ---------------------------------------------------------------------------
+function PreparingReportModal({
+  open,
+  progress,
+}: {
+  open: boolean;
+  progress: ExportProgress | null;
+}) {
+  const pct =
+    progress?.total && progress.total > 0
+      ? Math.round(((progress.current ?? 0) / progress.total) * 100)
+      : null;
+  return (
+    <Dialog open={open}>
+      <DialogContent
+        className="max-w-md"
+        onPointerDownOutside={(e) => e.preventDefault()}
+        onEscapeKeyDown={(e) => e.preventDefault()}
+      >
+        <DialogHeader>
+          <DialogTitle>Preparing report</DialogTitle>
+          <DialogDescription>
+            Hang tight — we're rendering each drawing page with its markers and
+            assembling your Word document. This usually takes 30–90 seconds.
+          </DialogDescription>
+        </DialogHeader>
+        <div className="flex items-center gap-3 py-2">
+          <Loader2 className="h-5 w-5 animate-spin text-primary" />
+          <div className="flex-1">
+            <div className="text-sm">
+              {progress?.message || "Working..."}
+            </div>
+            {pct !== null && (
+              <div className="mt-2 h-1.5 w-full rounded bg-muted overflow-hidden">
+                <div
+                  className="h-full bg-primary transition-all"
+                  style={{ width: `${pct}%` }}
+                />
+              </div>
+            )}
+          </div>
+        </div>
+        <p className="text-xs text-muted-foreground">
+          Please keep this tab open until the upload finishes. You'll receive an
+          email with a download link as soon as the report is ready.
+        </p>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+// ---------------------------------------------------------------------------
 // TabbedPagesBlock — renders multiple (file, page) sources as tabs over a
 // single DrawingPageBlock. The parent PDF is downloaded once per file and
 // page navigation happens inside DrawingViewer (same approach as the drawing
