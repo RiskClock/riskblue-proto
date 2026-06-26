@@ -3794,6 +3794,7 @@ export default function WorkbenchProjectDetail() {
             floorPlans={activePageFloorPlans}
             allUnitPlans={activeFileAllUnitPlans}
             allLevelPlans={activeFileAllLevelPlans}
+            allLevelPlanOverrides={activeFileAllLevelPlanOverrides}
             floorPlanOverrides={activeFloorPlanOverrides}
             onSaveFloorPlanOverride={saveFloorPlanOverride}
             onEditFloors={openFloorEditForPlan}
