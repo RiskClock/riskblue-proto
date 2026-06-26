@@ -4427,6 +4427,7 @@ function InstancesReportModal({
   open,
   onOpenChange,
   requestId,
+  projectId,
   fileGroups,
   optionByName,
   pageSpaceMap,
@@ -4441,6 +4442,7 @@ function InstancesReportModal({
   open: boolean;
   onOpenChange: (v: boolean) => void;
   requestId: string | undefined;
+  projectId: string;
   fileGroups: Array<{ file: FileRow; sheets: SheetRow[] }>;
   optionByName: Map<string, { idPrefix: string | null; category: string }>;
   pageSpaceMap: Map<string, string[]>;
