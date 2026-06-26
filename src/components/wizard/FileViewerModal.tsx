@@ -122,6 +122,10 @@ interface FileViewerModalProps {
   allLevelPlans?: ParsedFloorPlan[];
   /** Per-plan user overrides keyed by plan_id. */
   floorPlanOverrides?: Record<string, { floors?: string[]; units?: string[] }>;
+  /** File-wide level-plan overrides (across all pages) used to compute the
+   *  "Referenced in" hint for unit floor plans on the active page. */
+  allLevelPlanOverrides?: Record<string, { units?: string[] }>;
+
   /** Persist a single plan override. */
   onSaveFloorPlanOverride?: (
     planId: string,
