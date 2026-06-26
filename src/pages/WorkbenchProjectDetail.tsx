@@ -4113,6 +4113,7 @@ export default function WorkbenchProjectDetail() {
           open={instancesReportOpen}
           onOpenChange={setInstancesReportOpen}
           requestId={requestId}
+          projectId={projectId!}
           fileGroups={fileGroups}
           optionByName={optionByName}
           pageSpaceMap={mergedPageSpaceMap}
