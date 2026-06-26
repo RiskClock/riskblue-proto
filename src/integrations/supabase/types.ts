@@ -2094,6 +2094,69 @@ export type Database = {
           },
         ]
       }
+      report_exports: {
+        Row: {
+          analysis_request_id: string | null
+          created_at: string
+          error_message: string | null
+          expires_at: string | null
+          file_size: number | null
+          id: string
+          manifest_path: string | null
+          page_count: number | null
+          project_id: string
+          status: string
+          storage_path: string | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          analysis_request_id?: string | null
+          created_at?: string
+          error_message?: string | null
+          expires_at?: string | null
+          file_size?: number | null
+          id?: string
+          manifest_path?: string | null
+          page_count?: number | null
+          project_id: string
+          status?: string
+          storage_path?: string | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          analysis_request_id?: string | null
+          created_at?: string
+          error_message?: string | null
+          expires_at?: string | null
+          file_size?: number | null
+          id?: string
+          manifest_path?: string | null
+          page_count?: number | null
+          project_id?: string
+          status?: string
+          storage_path?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "report_exports_analysis_request_id_fkey"
+            columns: ["analysis_request_id"]
+            isOneToOne: false
+            referencedRelation: "analysis_requests"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "report_exports_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       riskred_analysis_items: {
         Row: {
           area_name: string | null

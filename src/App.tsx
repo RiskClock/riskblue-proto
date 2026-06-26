@@ -25,6 +25,7 @@ import Controls from "./pages/Controls";
 
 import InternalViewerTest from "./pages/InternalViewerTest";
 import CheckoutReturn from "./pages/CheckoutReturn";
+import ThreatReportDownload from "./pages/ThreatReportDownload";
 import NotFound from "./pages/NotFound";
 import { Loader2 } from "lucide-react";
 import { ExportProvider } from "./contexts/ExportContext";
@@ -84,6 +85,7 @@ const App = () => (
             <Route path="/reset-password" element={<ResetPassword />} />
             <Route path="/setup-account" element={<SetupAccount />} />
             <Route path="/credits/return" element={<CheckoutReturn />} />
+            <Route path="/projects/:projectId/export/:exportId" element={<ThreatReportDownload />} />
             <Route path="/" element={<Navigate to="/projects" />} />
             <Route path="*" element={<NotFound />} />
             </Routes>
