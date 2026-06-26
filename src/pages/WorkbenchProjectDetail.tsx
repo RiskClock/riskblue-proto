@@ -5303,13 +5303,14 @@ function InstancesReportModal({
           <div className="flex gap-2">
             <Button
               variant="outline"
-              onClick={() =>
-                toast({
-                  title: "Export queued",
-                  description: "You'll receive an email with the results.",
-                })
-              }
+              onClick={handleExportClick}
+              disabled={exporting}
             >
+              {exporting ? (
+                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+              ) : (
+                <Download className="h-4 w-4 mr-2" />
+              )}
               Export Report
             </Button>
             <Button
@@ -5327,6 +5328,8 @@ function InstancesReportModal({
         </DialogFooter>
       </DialogContent>
     </Dialog>
+    <PreparingReportModal open={exporting} progress={exportProgress} />
+    </>
   );
 }
 
