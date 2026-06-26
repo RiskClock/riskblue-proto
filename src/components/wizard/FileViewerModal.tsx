@@ -1380,6 +1380,7 @@ const FloorPlansPanel = ({
   allUnitPlans,
   allLevelPlans,
   overrides,
+  allLevelPlanOverrides,
   onSaveLevelUnits,
   instancesOnPage = [],
   numberByInstanceId,
@@ -1399,8 +1400,10 @@ const FloorPlansPanel = ({
     const key = unitPlanRefKey(unit);
     const pages = new Set<number>();
     for (const lvl of allLevelPlans) {
-      const ovr = overrides[lvl.plan_id];
-      const effUnits = ovr?.units ?? lvl.referenced_unit_ids;
+      const localOvr = overrides[lvl.plan_id];
+      const fileOvr = allLevelPlanOverrides?.[lvl.plan_id];
+      const effUnits =
+        localOvr?.units ?? fileOvr?.units ?? lvl.referenced_unit_ids;
       if (effUnits.includes(key)) {
         pages.add(lvl.page_number);
       }
@@ -1409,6 +1412,7 @@ const FloorPlansPanel = ({
       .sort((a, b) => a - b)
       .map((p) => `Page ${p}`);
   };
+
 
   // Compute per-plan annotation membership purely by bbox containment of the
   // marker's center point. There are no manual assignments — the report
