@@ -28,6 +28,14 @@ import { Textarea } from "@/components/ui/textarea";
 import { SpaceEditModal } from "@/components/workbench/SpaceEditModal";
 import { ConsolidateRisersModal } from "@/components/workbench/ConsolidateRisersModal";
 import { normalizeScoutResponse } from "@/lib/scoutResponseNormalizer";
+import {
+  runThreatReportExport,
+  type ExportProgress,
+  type ThreatReportPayload,
+  type ThreatReportPageRef,
+  type ThreatReportSpace,
+} from "@/lib/threatReportExport";
+import { awpClassColor } from "@/lib/awpColor";
 
 import {
   Dialog,
