@@ -7,8 +7,9 @@ import { supabase } from "@/integrations/supabase/client";
 
 type State =
   | { kind: "loading" }
-  | { kind: "ready"; url: string }
+  | { kind: "ready"; url: string; filename: string }
   | { kind: "error"; message: string };
+
 
 export default function ThreatReportDownload() {
   const { projectId, exportId } = useParams<{ projectId: string; exportId: string }>();
