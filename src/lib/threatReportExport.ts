@@ -309,7 +309,7 @@ export async function runThreatReportExport(
   for (const pr of pageRefs) {
     onProgress({
       phase: "rendering",
-      message: `Rendering drawing ${done + 1} of ${pageRefs.length}`,
+      message: `Preparing item ${done + 1} of ${pageRefs.length}...`,
       current: done,
       total: pageRefs.length,
     });
