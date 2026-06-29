@@ -48,21 +48,23 @@ export default function ThreatReportDownload() {
           return;
         }
         const url = (data as any)?.url;
+        const filename = (data as any)?.filename || "threat-report.docx";
         if (!url) {
           setState({ kind: "error", message: "Report URL missing from response." });
           return;
         }
-        setState({ kind: "ready", url });
+        setState({ kind: "ready", url, filename });
         // Auto-trigger download once.
         if (!downloaded) {
           setDownloaded(true);
           const a = document.createElement("a");
           a.href = url;
-          a.download = "threat-report.docx";
+          a.download = filename;
           document.body.appendChild(a);
           a.click();
           document.body.removeChild(a);
         }
+
       } catch (e: any) {
         if (cancelled) return;
         setState({
