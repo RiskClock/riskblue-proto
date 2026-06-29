@@ -5413,8 +5413,9 @@ function InstancesReportModal({
       await runThreatReportExport(payload, (p) => setExportProgress(p));
       toast({
         title: "Report ready",
-        description: "We've emailed you a link to download the report.",
+        description: "Sent an email with a link to download the report.",
       });
+
     } catch (err: any) {
       console.error("[threat-report-export]", err);
       toast({
@@ -5547,10 +5548,10 @@ function PreparingReportModal({
         <DialogHeader>
           <DialogTitle>Preparing report</DialogTitle>
           <DialogDescription>
-            Hang tight — we're rendering each drawing page with its markers and
-            assembling your Word document. This usually takes 30–90 seconds.
+            We're getting your report ready to go. It should be finished in just a moment.
           </DialogDescription>
         </DialogHeader>
+
         <div className="flex items-center gap-3 py-2">
           <Loader2 className="h-5 w-5 animate-spin text-primary" />
           <div className="flex-1">

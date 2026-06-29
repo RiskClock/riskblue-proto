@@ -7,8 +7,9 @@ import { supabase } from "@/integrations/supabase/client";
 
 type State =
   | { kind: "loading" }
-  | { kind: "ready"; url: string }
+  | { kind: "ready"; url: string; filename: string }
   | { kind: "error"; message: string };
+
 
 export default function ThreatReportDownload() {
   const { projectId, exportId } = useParams<{ projectId: string; exportId: string }>();
@@ -47,21 +48,23 @@ export default function ThreatReportDownload() {
           return;
         }
         const url = (data as any)?.url;
+        const filename = (data as any)?.filename || "threat-report.docx";
         if (!url) {
           setState({ kind: "error", message: "Report URL missing from response." });
           return;
         }
-        setState({ kind: "ready", url });
+        setState({ kind: "ready", url, filename });
         // Auto-trigger download once.
         if (!downloaded) {
           setDownloaded(true);
           const a = document.createElement("a");
           a.href = url;
-          a.download = "threat-report.docx";
+          a.download = filename;
           document.body.appendChild(a);
           a.click();
           document.body.removeChild(a);
         }
+
       } catch (e: any) {
         if (cancelled) return;
         setState({
@@ -96,11 +99,12 @@ export default function ThreatReportDownload() {
             </p>
             <div className="flex flex-col gap-2">
               <Button asChild>
-                <a href={state.url} download="threat-report.docx">
+                <a href={state.url} download={state.filename}>
                   <Download className="h-4 w-4 mr-2" />
                   Download again
                 </a>
               </Button>
+
               <Button variant="outline" onClick={() => navigate(`/internal/workbench/project/${projectId}`)}>
                 Open project
               </Button>
