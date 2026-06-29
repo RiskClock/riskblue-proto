@@ -5413,8 +5413,9 @@ function InstancesReportModal({
       await runThreatReportExport(payload, (p) => setExportProgress(p));
       toast({
         title: "Report ready",
-        description: "We've emailed you a link to download the report.",
+        description: "Sent an email with a link to download the report.",
       });
+
     } catch (err: any) {
       console.error("[threat-report-export]", err);
       toast({
