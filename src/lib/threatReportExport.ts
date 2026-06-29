@@ -410,25 +410,75 @@ export async function runThreatReportExport(
   const docChildren: any[] = [];
 
   // ── Cover page ─────────────────────────────────────────────────────────
+  // Fetch the RiskBlue logo as PNG bytes for ImageRun.
+  let logoBytes: ArrayBuffer | null = null;
+  try {
+    const res = await fetch(riskblueLogoUrl);
+    if (res.ok) logoBytes = await res.arrayBuffer();
+  } catch {
+    logoBytes = null;
+  }
+
+  // Project title: "{Project} Project" — omit "Project" suffix if the name
+  // already ends with the word "project" (case-insensitive).
+  const trimmedName = (payload.projectName || "").trim();
+  const endsWithProject = /\bproject\s*$/i.test(trimmedName);
+  const projectTitleLine = endsWithProject ? trimmedName : `${trimmedName} Project`;
+  // Exported date: "MMM dd, yyyy"
+  const coverDate = new Date().toLocaleDateString("en-US", {
+    year: "numeric",
+    month: "short",
+    day: "2-digit",
+  });
+
   docChildren.push(
     para([], { spacing: { before: 3000 } }),
-    para([text("THREAT REPORT", { bold: true, size: 56, color: HEAD_FILL })], {
-      alignment: AlignmentType.CENTER,
-    }),
-    para([text(payload.projectName, { bold: true, size: 36 })], {
+  );
+  if (logoBytes) {
+    // Logo is 1487x439 (~3.39:1). Render at ~240x71 px on cover.
+    docChildren.push(
+      para(
+        [
+          new ImageRun({
+            type: "png",
+            data: logoBytes,
+            transformation: { width: 240, height: 71 },
+            altText: {
+              title: "RiskBlue",
+              description: "RiskBlue logo",
+              name: "riskblue-logo",
+            },
+          }),
+        ],
+        { alignment: AlignmentType.CENTER, spacing: { after: 400 } },
+      ),
+    );
+  }
+  docChildren.push(
+    para([text("RiskBlue Drawing Analysis", { bold: true, size: 48, color: HEAD_FILL })], {
       alignment: AlignmentType.CENTER,
       spacing: { before: 200 },
     }),
-    para([text(payload.reportDate, { size: 24, color: "6B7280" })], {
+    para([text(projectTitleLine, { bold: true, size: 40 })], {
       alignment: AlignmentType.CENTER,
-      spacing: { before: 200 },
+      spacing: { before: 160 },
     }),
-    para([text("Prepared by RiskBlue", { size: 22, italics: true, color: "6B7280" })], {
+    para([text("Workbench Drawing Analysis Report", { size: 24, color: "374151" })], {
       alignment: AlignmentType.CENTER,
-      spacing: { before: 6000 },
+      spacing: { before: 400 },
     }),
+    para(
+      [
+        text(`Prepared by RiskBlue | ${coverDate} | Version 1`, {
+          size: 20,
+          color: "6B7280",
+        }),
+      ],
+      { alignment: AlignmentType.CENTER, spacing: { before: 200 } },
+    ),
     para([new PageBreak()]),
   );
+
 
   // ── Table of contents ──────────────────────────────────────────────────
   docChildren.push(
