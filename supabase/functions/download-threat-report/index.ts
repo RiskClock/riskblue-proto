@@ -53,7 +53,7 @@ serve(async (req) => {
     const admin = createClient(supabaseUrl, serviceKey);
     const { data: exportRow, error: exportErr } = await admin
       .from("report_exports")
-      .select("id, project_id, user_id, status, storage_path, file_size")
+      .select("id, project_id, user_id, status, storage_path, file_size, created_at")
       .eq("id", exportId)
       .single();
     if (exportErr || !exportRow) {
@@ -83,10 +83,29 @@ serve(async (req) => {
       );
     }
 
+    // Build the spec'd filename:
+    // RiskBlue_ThreatReport_{ProjectNameNoSpaces}_{yyyyMMddHHmmss}.docx
+    const { data: project } = await admin
+      .from("projects")
+      .select("name")
+      .eq("id", exportRow.project_id)
+      .single();
+    const cleanName = String(project?.name ?? "Project").replace(/\s+/g, "");
+    const d = new Date(exportRow.created_at as string);
+    const pad = (n: number) => String(n).padStart(2, "0");
+    const ts =
+      d.getUTCFullYear().toString() +
+      pad(d.getUTCMonth() + 1) +
+      pad(d.getUTCDate()) +
+      pad(d.getUTCHours()) +
+      pad(d.getUTCMinutes()) +
+      pad(d.getUTCSeconds());
+    const filename = `RiskBlue_ThreatReport_${cleanName}_${ts}.docx`;
+
     const { data: signed, error: signErr } = await admin.storage
       .from("project-reports")
       .createSignedUrl(exportRow.storage_path, SIGNED_URL_TTL, {
-        download: "threat-report.docx",
+        download: filename,
       });
     if (signErr || !signed?.signedUrl) {
       return new Response(
@@ -100,9 +119,11 @@ serve(async (req) => {
         url: signed.signedUrl,
         fileSize: exportRow.file_size,
         expiresInSeconds: SIGNED_URL_TTL,
+        filename,
       }),
       { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } },
     );
+
   } catch (e) {
     console.error("[download-threat-report] fatal", e);
     return new Response(
