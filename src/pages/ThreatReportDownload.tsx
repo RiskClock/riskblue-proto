@@ -99,11 +99,12 @@ export default function ThreatReportDownload() {
             </p>
             <div className="flex flex-col gap-2">
               <Button asChild>
-                <a href={state.url} download="threat-report.docx">
+                <a href={state.url} download={state.filename}>
                   <Download className="h-4 w-4 mr-2" />
                   Download again
                 </a>
               </Button>
+
               <Button variant="outline" onClick={() => navigate(`/internal/workbench/project/${projectId}`)}>
                 Open project
               </Button>
