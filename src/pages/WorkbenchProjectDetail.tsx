@@ -1715,20 +1715,38 @@ export default function WorkbenchProjectDetail() {
     return t;
   };
 
-  const canonicalizeLevel = (raw: string): string => {
-    if (!raw) return raw;
+  // Returns one or more canonical level names for a raw floors string.
+  // Returns multiple names when the raw text refers to a shared physical
+  // space (e.g. "Parking Garage" maps to both Level P1 and Level P2 Sub-Slab
+  // when both exist in the project's canonical level list).
+  const canonicalizeLevels = (raw: string): string[] => {
+    if (!raw) return [];
     const target = normalizeLevelToken(raw);
-    if (!target) return raw;
+    if (!target) return [raw];
+
+    // Parking / garage expansion: a generic parking page applies to every
+    // canonical parking level (P1, P2 Sub-Slab, etc.) unless the raw text
+    // already names a specific level number.
+    const looksLikeParking =
+      /(parking|garage|underground|sub\s*slab)/i.test(raw) &&
+      !/\b(p\s*\d|level\s*\d|floor\s*\d|\d(st|nd|rd|th)?)\b/i.test(raw);
+    if (looksLikeParking) {
+      const parkingMatches = canonicalLevelNames.filter((p) =>
+        /(p\d|parking|garage|sub\s*slab|underground)/i.test(p),
+      );
+      if (parkingMatches.length > 0) return parkingMatches;
+    }
+
     for (const p of canonicalLevelNames) {
-      if (normalizeLevelToken(p) === target) return p;
+      if (normalizeLevelToken(p) === target) return [p];
     }
     for (const p of canonicalLevelNames) {
       const pn = normalizeLevelToken(p);
       if (pn && (pn === target || pn.split(" ").includes(target) || target.split(" ").includes(pn))) {
-        return p;
+        return [p];
       }
     }
-    return raw;
+    return [raw];
   };
 
   // Survey-derived rollup: uses existing per-page floor-plan metadata
