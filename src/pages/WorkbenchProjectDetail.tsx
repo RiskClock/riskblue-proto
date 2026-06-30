@@ -27,6 +27,7 @@ import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
 import { SpaceEditModal } from "@/components/workbench/SpaceEditModal";
 import { ConsolidateRisersModal } from "@/components/workbench/ConsolidateRisersModal";
+import { SpatialArchitectModal } from "@/components/workbench/SpatialArchitectModal";
 import { normalizeScoutResponse } from "@/lib/scoutResponseNormalizer";
 import {
   runThreatReportExport,
