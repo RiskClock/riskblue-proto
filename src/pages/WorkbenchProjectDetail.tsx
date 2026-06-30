@@ -1637,6 +1637,14 @@ export default function WorkbenchProjectDetail() {
   //     (e.g. "Template - Suite 2A" applied to "Level 2").
   //   - unit_templates entries (legacy/typical-unit-plans).
   // Sources of level entries: spatial_records with empty applies_to_levels.
+  // Spatial-architect derived page→level entries.
+  // NOTE: We intentionally do NOT emit unit attributions from spatial-architect
+  // templates' `applies_to_levels` here. That fan-out caused every templated
+  // unit/suite to appear on every level it _could_ apply to (e.g. Suite 1H
+  // showing on Levels 2-6 instead of just where the user actually placed a
+  // unit-floor-plan bbox). Unit attribution comes exclusively from survey-
+  // derived assignments (user-placed bounding boxes). Only level-category
+  // records contribute here, so unit lists are anchored to explicit drawings.
   const pageSpaceUnitMap = useMemo(() => {
     const map = new Map<string, Array<{ level: string; unit?: string }>>();
     const parsed: any = spaceHierarchyPayload?.parsed;
@@ -1645,42 +1653,13 @@ export default function WorkbenchProjectDetail() {
       const name = sp?.standardized_space_name;
       if (!name) continue;
       const cat = typeof sp?.space_category === "string" ? sp.space_category.toLowerCase() : "";
-      const appliesTo: string[] = Array.isArray(sp?.applies_to_levels)
-        ? sp.applies_to_levels.filter((s: any) => typeof s === "string")
-        : [];
-      const isTemplate = cat && cat !== "contiguous storey" && cat !== "level";
+      const isLevel = !cat || cat === "contiguous storey" || cat === "level";
+      if (!isLevel) continue;
       for (const src of sp?.matched_sources || []) {
         const key = `${src?.file_name}::${src?.page_number}`;
-        if (isTemplate && appliesTo.length > 0) {
-          for (const lvl of appliesTo) {
-            if (!isSpaceValidOnPage(key, lvl)) continue;
-            const arr = map.get(key) || [];
-            arr.push({ level: lvl, unit: name });
-            map.set(key, arr);
-          }
-        } else {
-          if (!isSpaceValidOnPage(key, name)) continue;
-          const arr = map.get(key) || [];
-          arr.push({ level: name });
-          map.set(key, arr);
-        }
-      }
-    }
-    const units: any[] = Array.isArray(parsed?.unit_templates) ? parsed.unit_templates : [];
-    for (const u of units) {
-      const unitName = typeof u?.unit_name === "string" ? u.unit_name : null;
-      if (!unitName) continue;
-      const levels: string[] = Array.isArray(u?.applies_to_levels) ? u.applies_to_levels.filter((l: any) => typeof l === "string") : [];
-      const sources: any[] = Array.isArray(u?.matched_sources) ? u.matched_sources : [];
-      for (const src of sources) {
-        const key = `${src?.file_name}::${src?.page_number}`;
-        if (!isSpaceValidOnPage(key, unitName)) continue;
+        if (!isSpaceValidOnPage(key, name)) continue;
         const arr = map.get(key) || [];
-        if (levels.length === 0) {
-          arr.push({ level: unitName, unit: unitName });
-        } else {
-          for (const lvl of levels) arr.push({ level: lvl, unit: unitName });
-        }
+        arr.push({ level: name });
         map.set(key, arr);
       }
     }
