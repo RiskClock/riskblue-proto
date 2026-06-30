@@ -5059,23 +5059,7 @@ function InstancesReportModal({
   const renderSpaceDetail = (space: string) => {
     const rows = instancesForSpace(space);
     const label = space === "__unassigned__" ? "Unassigned" : space;
-    // Collect (fileId, pageIdx) keys that depict this space — either directly
-    // (level plan) or via a unit/template page assigned to this level.
-    const pageKeySet = new Set<string>();
-    for (const r of rows) pageKeySet.add(`${r.fileId}::${r.pageIndex}`);
-    if (space !== "__unassigned__") {
-      for (const [key, spaces] of pageSpaceMap.entries()) {
-        if (!spaces.includes(space)) continue;
-        const [fileName, pageStr] = key.split("::");
-        const lookup = sheetByFilePage.get(`${fileName}::${pageStr}`);
-        const fileId = lookup?.file?.id;
-        if (!fileId) continue;
-        pageKeySet.add(`${fileId}::${pageStr}`);
-      }
-    }
-    const pageKeys = Array.from(pageKeySet);
-
-    // Units assigned to this level — derived from pageSpaceUnitMap.
+    // Units assigned to this level — derived from pageSpaceUnitMap (survey-rolled).
     const unitMap = new Map<string, Array<{ fileName: string; pageIdx: number }>>();
     if (space !== "__unassigned__") {
       for (const [key, pairs] of pageSpaceUnitMap.entries()) {
@@ -5091,6 +5075,38 @@ function InstancesReportModal({
     const unitsList = Array.from(unitMap.entries())
       .map(([name, pages]) => ({ name, pages }))
       .sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: "base" }));
+    const unitNamesForLevel = new Set(unitsList.map((u) => u.name));
+
+    // Drawings to display for this space:
+    //   (a) pages with annotations attributed to this space,
+    //   (b) level floor plan pages whose canonical level matches this space,
+    //   (c) unit floor plan pages whose unit is connected to this level
+    //       (via user-assigned bboxes / referenced_unit_ids on the level plan).
+    // Spatial-architect template fan-outs are intentionally excluded so the
+    // dropdown only lists the level + its connected units.
+    const pageKeySet = new Set<string>();
+    for (const r of rows) pageKeySet.add(`${r.fileId}::${r.pageIndex}`);
+    const addByFileNamePage = (fileName: string, pageStr: string) => {
+      const lookup = sheetByFilePage.get(`${fileName}::${pageStr}`);
+      const fileId = lookup?.file?.id;
+      if (!fileId) return;
+      pageKeySet.add(`${fileId}::${pageStr}`);
+    };
+    if (space !== "__unassigned__") {
+      for (const [key, lps] of pageLevelPlansMap.entries()) {
+        if (!lps.some((lp) => lp.levels.includes(space))) continue;
+        const [fileName, pageStr] = key.split("::");
+        addByFileNamePage(fileName, pageStr);
+      }
+      if (unitNamesForLevel.size > 0) {
+        for (const [key, ups] of pageUnitPlansMap.entries()) {
+          if (!ups.some((up) => unitNamesForLevel.has(up.unitLabel))) continue;
+          const [fileName, pageStr] = key.split("::");
+          addByFileNamePage(fileName, pageStr);
+        }
+      }
+    }
+    const pageKeys = Array.from(pageKeySet);
 
     const showUnitCol = rows.some((r) => !!r.unitName);
 
