@@ -5976,3 +5976,150 @@ function DrawingPageBlock({
     </div>
   );
 }
+
+// ---------------------------------------------------------------------------
+// AssignPagesToLevelModal — Option C manual override. Lets the user pick which
+// drawing pages should appear under a given level in the threat report when
+// the survey/spatial-architect pipeline didn't auto-detect the mapping.
+// Persists a string[] of canonical level names at
+//   analysis_request_sheets.floor_plan_overrides.__manual_levels__
+// which the rollup logic reads as a synthetic level_floor_plan entry.
+// ---------------------------------------------------------------------------
+function AssignPagesToLevelModal({
+  open,
+  level,
+  fileGroups,
+  onClose,
+}: {
+  open: boolean;
+  level: string | null;
+  fileGroups: Array<{ file: FileRow; sheets: SheetRow[] }>;
+  onClose: () => void;
+}) {
+  const { toast } = useToast();
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [saving, setSaving] = useState(false);
+
+  // Initial selection: every sheet whose __manual_levels__ already contains
+  // this level.
+  useEffect(() => {
+    if (!open || !level) return;
+    const s = new Set<string>();
+    for (const g of fileGroups) {
+      for (const sh of g.sheets) {
+        const m = (sh.floor_plan_overrides as any)?.__manual_levels__;
+        if (Array.isArray(m) && m.includes(level)) s.add(sh.id);
+      }
+    }
+    setSelected(s);
+  }, [open, level, fileGroups]);
+
+  const toggle = (id: string) => {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const handleSave = async () => {
+    if (!level) return;
+    setSaving(true);
+    try {
+      const updates: Array<Promise<any>> = [];
+      for (const g of fileGroups) {
+        for (const sh of g.sheets) {
+          const ovr = (sh.floor_plan_overrides as Record<string, any> | null) ?? {};
+          const current: string[] = Array.isArray(ovr.__manual_levels__)
+            ? ovr.__manual_levels__.filter((x: any) => typeof x === "string")
+            : [];
+          const hasNow = current.includes(level);
+          const wantNow = selected.has(sh.id);
+          if (hasNow === wantNow) continue;
+          const nextList = wantNow
+            ? Array.from(new Set([...current, level]))
+            : current.filter((x) => x !== level);
+          const merged = { ...ovr, __manual_levels__: nextList };
+          updates.push(
+            supabase
+              .from("analysis_request_sheets")
+              .update({ floor_plan_overrides: merged } as any)
+              .eq("id", sh.id),
+          );
+        }
+      }
+      const results = await Promise.all(updates);
+      const firstErr = results.find((r: any) => r?.error);
+      if (firstErr?.error) throw firstErr.error;
+      toast({ title: "Assignments saved", description: `${updates.length} page(s) updated for ${level}.` });
+      onClose();
+    } catch (e: any) {
+      toast({
+        variant: "destructive",
+        title: "Could not save assignments",
+        description: getUserFriendlyError(e),
+      });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={(o) => !o && !saving && onClose()}>
+      <DialogContent className="max-w-2xl max-h-[80vh] flex flex-col">
+        <DialogHeader>
+          <DialogTitle>Assign drawings to {level ?? ""}</DialogTitle>
+          <DialogDescription>
+            Tick the pages that should appear under this level. Existing
+            auto-detected pages from the survey aren't affected.
+          </DialogDescription>
+        </DialogHeader>
+        <div className="flex-1 overflow-auto border rounded-md divide-y">
+          {fileGroups.map((g) => (
+            <div key={g.file.id} className="py-2">
+              <div className="px-3 text-xs font-semibold text-muted-foreground truncate">
+                {g.file.name}
+              </div>
+              <div className="mt-1">
+                {g.sheets.map((sh) => {
+                  const checked = selected.has(sh.id);
+                  return (
+                    <label
+                      key={sh.id}
+                      className="flex items-center gap-2 px-3 py-1 text-xs cursor-pointer hover:bg-muted/50"
+                    >
+                      <input
+                        type="checkbox"
+                        checked={checked}
+                        onChange={() => toggle(sh.id)}
+                      />
+                      <span className="font-mono text-muted-foreground w-12 shrink-0">
+                        p{sh.page_index}
+                      </span>
+                      <span className="truncate">
+                        {sh.sheet_number ? `${sh.sheet_number} · ` : ""}
+                        {sh.sheet_title ?? "(untitled)"}
+                      </span>
+                    </label>
+                  );
+                })}
+              </div>
+            </div>
+          ))}
+          {fileGroups.length === 0 && (
+            <div className="p-4 text-sm text-muted-foreground text-center">
+              No drawings available.
+            </div>
+          )}
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={onClose} disabled={saving}>Cancel</Button>
+          <Button onClick={handleSave} disabled={saving}>
+            {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : "Save"}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
