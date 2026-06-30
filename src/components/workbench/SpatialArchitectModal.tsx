@@ -110,25 +110,53 @@ export function SpatialArchitectModal({
         : [];
     const lvl: LevelDraft[] = [];
     const others: NonLevelRecord[] = [];
+    const levelByKey = new Map<string, LevelDraft>();
     let uid = 0;
     for (const r of records) {
       if (isLevelCategory(r?.space_category)) {
         const ms: Array<{ file_name: string; page_number: number }> = [];
+        const seenPages = new Set<string>();
         for (const m of Array.isArray(r?.matched_sources) ? r.matched_sources : []) {
           const fn = typeof m?.file_name === "string" ? m.file_name : null;
           const pn = Number(m?.page_number);
-          if (fn && Number.isFinite(pn)) ms.push({ file_name: fn, page_number: pn });
+          if (!fn || !Number.isFinite(pn)) continue;
+          const key = `${fn}\u0000${pn}`;
+          if (seenPages.has(key)) continue;
+          seenPages.add(key);
+          ms.push({ file_name: fn, page_number: pn });
         }
         const { standardized_space_name, space_category, space_index, matched_sources, ...extra } =
           r || {};
-        lvl.push({
-          uid: `lvl-${uid++}`,
-          name: typeof standardized_space_name === "string" ? standardized_space_name : "",
-          space_index:
-            typeof space_index === "number" && Number.isFinite(space_index) ? space_index : null,
-          matched_sources: ms,
-          extra,
-        });
+        const name = typeof standardized_space_name === "string" ? standardized_space_name : "";
+        const mergeKey = name.trim().toLowerCase();
+        const existing = mergeKey ? levelByKey.get(mergeKey) : undefined;
+        if (existing) {
+          // Merge matched_sources into the existing level (dedup).
+          const existingKeys = new Set(
+            existing.matched_sources.map((m) => `${m.file_name}\u0000${m.page_number}`),
+          );
+          for (const m of ms) {
+            const k = `${m.file_name}\u0000${m.page_number}`;
+            if (!existingKeys.has(k)) {
+              existing.matched_sources.push(m);
+              existingKeys.add(k);
+            }
+          }
+          if (existing.space_index === null && typeof space_index === "number") {
+            existing.space_index = space_index;
+          }
+        } else {
+          const draft: LevelDraft = {
+            uid: `lvl-${uid++}`,
+            name,
+            space_index:
+              typeof space_index === "number" && Number.isFinite(space_index) ? space_index : null,
+            matched_sources: ms,
+            extra,
+          };
+          lvl.push(draft);
+          if (mergeKey) levelByKey.set(mergeKey, draft);
+        }
       } else {
         others.push({ raw: r });
       }
