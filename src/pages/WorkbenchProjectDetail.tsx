@@ -5199,16 +5199,6 @@ function InstancesReportModal({
       <div className="space-y-4">
         <div className="flex items-center justify-between gap-3">
           <h3 className="text-sm font-semibold">{label}</h3>
-          {space !== "__unassigned__" && (
-            <Button
-              size="sm"
-              variant="outline"
-              className="h-7 text-xs"
-              onClick={() => setAssignLevelTarget(space)}
-            >
-              Assign drawings…
-            </Button>
-          )}
         </div>
         {rows.length === 0 ? (
           <div className="text-sm text-muted-foreground">
