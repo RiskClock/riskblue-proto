@@ -3093,6 +3093,7 @@ export default function WorkbenchProjectDetail() {
                                       <div className="text-[10px] text-muted-foreground">
                                         in {Number(tokens.prompt ?? 0).toLocaleString()} · cached {Number(tokens.cached ?? 0).toLocaleString()} ({tokens.cacheHitPct ?? 0}%) · out {Number(tokens.candidates ?? 0).toLocaleString()} · total {Number(tokens.total ?? 0).toLocaleString()}
                                         {tokens.chunks ? ` · ${tokens.chunks} chunk${tokens.chunks === 1 ? "" : "s"}` : ""}
+                                        {tokens.durationMs ? ` · ${formatDuration(tokens.durationMs)}` : ""}
                                       </div>
                                     ) : null}
                                   </div>
