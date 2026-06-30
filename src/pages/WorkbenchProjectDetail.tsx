@@ -5196,6 +5196,39 @@ function InstancesReportModal({
             : null;
           qualifier = matchingUnit?.unitLabel ?? unitPlans[0].unitLabel;
         }
+
+        // Bbox overlays — outline level + connected unit floor plans on the page.
+        const bboxOverlays: any[] = [];
+        if (space !== "__unassigned__") {
+          for (const lp of levelPlans) {
+            if (!lp.levels.includes(space) || !lp.bbox) continue;
+            const [bx, by, bw, bh] = lp.bbox;
+            bboxOverlays.push({
+              id: `lvl-bbox-${pageKey}`,
+              bbox: [bx / 100, by / 100, bw / 100, bh / 100] as [number, number, number, number],
+              coordSpace: "normalized" as const,
+              page: pageIdx,
+              color: "#2563eb",
+              label: space,
+              shape: "rect" as const,
+            });
+          }
+          for (const up of unitPlans) {
+            if (!unitNamesForLevel.has(up.unitLabel) || !up.bbox) continue;
+            const [bx, by, bw, bh] = up.bbox;
+            bboxOverlays.push({
+              id: `unit-bbox-${pageKey}-${up.unitLabel}`,
+              bbox: [bx / 100, by / 100, bw / 100, bh / 100] as [number, number, number, number],
+              coordSpace: "normalized" as const,
+              page: pageIdx,
+              color: "#ea580c",
+              label: up.unitLabel,
+              shape: "rect" as const,
+            });
+          }
+        }
+        const overlaysAll = [...bboxOverlays, ...overlays];
+
         const corePart = qualifier ? `p${pageIdx} · ${qualifier}` : `p${pageIdx}`;
         const tabLabel = showFileInTab ? `${shortName} · ${corePart}` : corePart;
 
