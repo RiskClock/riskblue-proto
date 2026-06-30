@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Loader2, Plus, X, ChevronUp, ChevronDown, Trash2 } from "lucide-react";
 import {
   Dialog,
@@ -53,6 +53,21 @@ function isLevelCategory(cat: unknown): boolean {
   return !c || c === "level" || c === "contiguous storey";
 }
 
+function serializeLevels(levels: LevelDraft[]): string {
+  return JSON.stringify(
+    levels.map((l) => ({
+      name: l.name.trim(),
+      idx: l.space_index,
+      ms: l.matched_sources
+        .slice()
+        .sort((a, b) =>
+          a.file_name.localeCompare(b.file_name) ||
+          a.page_number - b.page_number,
+        ),
+    })),
+  );
+}
+
 export function SpatialArchitectModal({
   open,
   onOpenChange,
@@ -82,6 +97,7 @@ export function SpatialArchitectModal({
   const [levels, setLevels] = useState<LevelDraft[]>([]);
   const [nonLevels, setNonLevels] = useState<NonLevelRecord[]>([]);
   const [saving, setSaving] = useState(false);
+  const initialSerialized = useRef<string>("");
 
   // Load editable state from payload whenever it changes / modal opens.
   useEffect(() => {
@@ -125,7 +141,13 @@ export function SpatialArchitectModal({
     });
     setLevels(lvl);
     setNonLevels(others);
+    initialSerialized.current = serializeLevels(lvl);
   }, [open, payload]);
+
+  const isDirty = useMemo(
+    () => serializeLevels(levels) !== initialSerialized.current,
+    [levels],
+  );
 
   const allPages = useMemo(() => {
     const out: Array<{
@@ -212,6 +234,19 @@ export function SpatialArchitectModal({
     );
   };
 
+  const confirmDiscardIfDirty = (): boolean => {
+    if (!isDirty) return true;
+    return window.confirm(
+      "You have unsaved changes. Discard them and close this window?",
+    );
+  };
+
+  const handleClose = () => {
+    if (saving) return;
+    if (!confirmDiscardIfDirty()) return;
+    onOpenChange(false);
+  };
+
   const handleSave = async () => {
     if (!requestId) return;
     // Validate: every level needs a name.
@@ -250,6 +285,7 @@ export function SpatialArchitectModal({
         .update({ space_hierarchy_json: nextPayload } as any)
         .eq("id", requestId);
       if (upErr) throw upErr;
+      initialSerialized.current = serializeLevels(levels);
       toast({ title: "Spatial hierarchy saved" });
       onSaved();
     } catch (e: any) {
@@ -267,7 +303,7 @@ export function SpatialArchitectModal({
     if (levels.length > 0) {
       if (
         !window.confirm(
-          "Build Spatial Model will overwrite the existing levels. Continue?",
+          "Build Spatial Model will replace the current list of levels with a fresh analysis of the drawings. Any edits you've made (names, ordering, drawing assignments) will be overwritten. Continue?",
         )
       ) {
         return;
@@ -277,8 +313,25 @@ export function SpatialArchitectModal({
   };
 
   return (
-    <Dialog open={open} onOpenChange={(o) => !o && !saving && onOpenChange(false)}>
-      <DialogContent className="max-w-3xl max-h-[85vh] flex flex-col">
+    <Dialog
+      open={open}
+      onOpenChange={(o) => {
+        if (o) return;
+        handleClose();
+      }}
+    >
+      <DialogContent
+        className="max-w-4xl max-h-[85vh] flex flex-col"
+        onEscapeKeyDown={(e) => {
+          if (isDirty && !confirmDiscardIfDirty()) e.preventDefault();
+        }}
+        onPointerDownOutside={(e) => {
+          if (isDirty && !confirmDiscardIfDirty()) e.preventDefault();
+        }}
+        onInteractOutside={(e) => {
+          if (isDirty && !confirmDiscardIfDirty()) e.preventDefault();
+        }}
+      >
         <DialogHeader>
           <DialogTitle>Spatial Architect</DialogTitle>
           <DialogDescription>
@@ -298,7 +351,7 @@ export function SpatialArchitectModal({
               </span>
             ) : status === "failed" ? (
               <span className="text-destructive truncate" title={error ?? undefined}>
-                Failed — {error ?? "unknown error"}
+                Failed — {error ?? "unknown error"} (previous results preserved)
               </span>
             ) : status === "complete" ? (
               <span className="text-muted-foreground">
@@ -328,21 +381,32 @@ export function SpatialArchitectModal({
         </div>
 
         {/* Levels list */}
-        <div className="flex-1 overflow-auto border rounded-md divide-y">
-          {levels.length === 0 ? (
-            <div className="p-6 text-sm text-muted-foreground text-center">
-              No levels yet. Click <strong>Build Spatial Model</strong> to
-              analyze the drawings, or add a level manually.
-            </div>
-          ) : (
-            levels.map((l, i) => (
-              <div key={l.uid} className="p-3 space-y-2">
-                <div className="flex items-center gap-2">
+        <div className="flex-1 min-h-0 flex flex-col border rounded-md overflow-hidden">
+          {/* Header */}
+          <div className="grid grid-cols-[minmax(0,1fr)_70px_minmax(0,1.6fr)_96px] items-center gap-2 px-3 py-2 bg-muted/40 border-b text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+            <div>Level name</div>
+            <div className="text-center">Index</div>
+            <div>Drawings</div>
+            <div className="text-right">Actions</div>
+          </div>
+
+          <div className="flex-1 overflow-auto divide-y">
+            {levels.length === 0 ? (
+              <div className="p-6 text-sm text-muted-foreground text-center">
+                No levels yet. Click <strong>Build Spatial Model</strong> to
+                analyze the drawings, or add a level manually.
+              </div>
+            ) : (
+              levels.map((l, i) => (
+                <div
+                  key={l.uid}
+                  className="grid grid-cols-[minmax(0,1fr)_70px_minmax(0,1.6fr)_96px] items-start gap-2 px-3 py-2"
+                >
                   <Input
                     value={l.name}
                     onChange={(e) => updateLevel(l.uid, { name: e.target.value })}
-                    placeholder="Level name (e.g. Level 2, Ground, P1)"
-                    className="h-8 text-sm flex-1"
+                    placeholder="e.g. Level 2, Ground, P1"
+                    className="h-8 text-sm"
                   />
                   <Input
                     type="number"
@@ -352,74 +416,75 @@ export function SpatialArchitectModal({
                         space_index: e.target.value === "" ? null : Number(e.target.value),
                       })
                     }
-                    placeholder="idx"
-                    className="h-8 text-sm w-20"
+                    className="h-8 text-sm text-center"
                     title="Numeric index (P1=-1, Ground=0, L1=1…)"
                   />
-                  <Button
-                    type="button"
-                    size="icon"
-                    variant="ghost"
-                    className="h-8 w-8"
-                    onClick={() => move(l.uid, -1)}
-                    disabled={i === 0}
-                  >
-                    <ChevronUp className="h-4 w-4" />
-                  </Button>
-                  <Button
-                    type="button"
-                    size="icon"
-                    variant="ghost"
-                    className="h-8 w-8"
-                    onClick={() => move(l.uid, 1)}
-                    disabled={i === levels.length - 1}
-                  >
-                    <ChevronDown className="h-4 w-4" />
-                  </Button>
-                  <Button
-                    type="button"
-                    size="icon"
-                    variant="ghost"
-                    className="h-8 w-8 text-destructive"
-                    onClick={() => remove(l.uid)}
-                  >
-                    <Trash2 className="h-4 w-4" />
-                  </Button>
-                </div>
-                <div className="flex flex-wrap items-center gap-1.5 pl-1">
-                  {l.matched_sources.length === 0 && (
-                    <span className="text-xs text-muted-foreground italic">
-                      No drawings assigned
-                    </span>
-                  )}
-                  {l.matched_sources.map((m, idx) => (
-                    <Badge
-                      key={`${m.file_name}-${m.page_number}-${idx}`}
-                      variant="secondary"
-                      className="gap-1 font-normal"
-                    >
-                      <span className="truncate max-w-[280px]">
-                        {m.file_name} · p{m.page_number}
+                  <div className="flex flex-wrap items-center gap-1 min-w-0">
+                    {l.matched_sources.length === 0 && (
+                      <span className="text-xs text-muted-foreground italic">
+                        None
                       </span>
-                      <button
-                        type="button"
-                        className="ml-0.5 rounded hover:bg-muted-foreground/20 p-0.5"
-                        onClick={() => removePage(l.uid, idx)}
-                        aria-label="Remove page"
+                    )}
+                    {l.matched_sources.map((m, idx) => (
+                      <Badge
+                        key={`${m.file_name}-${m.page_number}-${idx}`}
+                        variant="secondary"
+                        className="gap-1 font-normal max-w-full"
                       >
-                        <X className="h-3 w-3" />
-                      </button>
-                    </Badge>
-                  ))}
-                  <AddPagePopover
-                    pages={allPages}
-                    existing={l.matched_sources}
-                    onAdd={(p) => addPage(l.uid, p)}
-                  />
+                        <span className="truncate max-w-[220px]" title={`${m.file_name} · p${m.page_number}`}>
+                          {m.file_name} · p{m.page_number}
+                        </span>
+                        <button
+                          type="button"
+                          className="ml-0.5 rounded hover:bg-muted-foreground/20 p-0.5 shrink-0"
+                          onClick={() => removePage(l.uid, idx)}
+                          aria-label="Remove page"
+                        >
+                          <X className="h-3 w-3" />
+                        </button>
+                      </Badge>
+                    ))}
+                    <AddPagePopover
+                      pages={allPages}
+                      existing={l.matched_sources}
+                      onAdd={(p) => addPage(l.uid, p)}
+                    />
+                  </div>
+                  <div className="flex items-center justify-end gap-0.5">
+                    <Button
+                      type="button"
+                      size="icon"
+                      variant="ghost"
+                      className="h-7 w-7"
+                      onClick={() => move(l.uid, -1)}
+                      disabled={i === 0}
+                    >
+                      <ChevronUp className="h-4 w-4" />
+                    </Button>
+                    <Button
+                      type="button"
+                      size="icon"
+                      variant="ghost"
+                      className="h-7 w-7"
+                      onClick={() => move(l.uid, 1)}
+                      disabled={i === levels.length - 1}
+                    >
+                      <ChevronDown className="h-4 w-4" />
+                    </Button>
+                    <Button
+                      type="button"
+                      size="icon"
+                      variant="ghost"
+                      className="h-7 w-7 text-destructive"
+                      onClick={() => remove(l.uid)}
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  </div>
                 </div>
-              </div>
-            ))
-          )}
+              ))
+            )}
+          </div>
         </div>
 
         <div className="flex items-center justify-between">
@@ -431,18 +496,19 @@ export function SpatialArchitectModal({
             {nonLevels.length > 0
               ? ` · ${nonLevels.length} unit/template record(s) preserved`
               : ""}
+            {isDirty ? " · unsaved changes" : ""}
           </div>
         </div>
 
         <DialogFooter>
           <Button
             variant="outline"
-            onClick={() => onOpenChange(false)}
+            onClick={handleClose}
             disabled={saving}
           >
             Cancel
           </Button>
-          <Button onClick={handleSave} disabled={saving || !requestId}>
+          <Button onClick={handleSave} disabled={saving || !requestId || !isDirty}>
             {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : "Save"}
           </Button>
         </DialogFooter>
