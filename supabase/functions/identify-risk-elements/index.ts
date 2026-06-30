@@ -230,6 +230,7 @@ Deno.serve(async (req) => {
           };
 
           try {
+            const runStartedAt = Date.now();
             let resp: any;
             let usedCache = cacheName!;
             try {
