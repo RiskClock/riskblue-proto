@@ -1832,7 +1832,7 @@ export default function WorkbenchProjectDetail() {
         for (const fp of plans) {
           const e = effective(fp, f.id);
           if (e.type === "level_floor_plan") {
-            const canonicalLevels = e.floors.map((l) => canonicalizeLevel(l)).filter(Boolean);
+            const canonicalLevels = e.floors.flatMap((l) => canonicalizeLevels(l)).filter(Boolean);
             const lpArr = pageLevelPlans.get(key) || [];
             lpArr.push({ levels: canonicalLevels, bbox: e.bbox });
             pageLevelPlans.set(key, lpArr);
