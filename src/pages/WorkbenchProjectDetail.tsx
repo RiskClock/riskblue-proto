@@ -1814,8 +1814,9 @@ export default function WorkbenchProjectDetail() {
             const inner = unitRefToLevelCounts.get(k) || new Map<string, number>();
             for (const lvl of e.floors) {
               if (!lvl) continue;
-              const canonical = canonicalizeLevel(lvl);
-              inner.set(canonical, (inner.get(canonical) || 0) + 1);
+              for (const canonical of canonicalizeLevels(lvl)) {
+                inner.set(canonical, (inner.get(canonical) || 0) + 1);
+              }
             }
             unitRefToLevelCounts.set(k, inner);
           }
