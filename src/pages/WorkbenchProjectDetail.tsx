@@ -5065,7 +5065,7 @@ function InstancesReportModal({
     // Units assigned to this level — derived from pageSpaceUnitMap.
     const unitMap = new Map<string, Array<{ fileName: string; pageIdx: number }>>();
     if (space !== "__unassigned__") {
-      for (const [key, pairs] of mergedPageSpaceUnitMap.entries()) {
+      for (const [key, pairs] of pageSpaceUnitMap.entries()) {
         for (const pair of pairs) {
           if (pair.level !== space || !pair.unit) continue;
           const [fileName, pageStr] = key.split("::");
