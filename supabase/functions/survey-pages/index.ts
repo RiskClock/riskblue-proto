@@ -165,6 +165,7 @@ Deno.serve(async (req) => {
     for (const s of sheetRows) sheetByPage.set(s.page_index, { id: s.id, sheet_number: s.sheet_number });
 
     const work = (async () => {
+      const runStartedAt = Date.now();
       try {
         const { data: blob, error: dlErr } = await admin.storage
           .from(bucket)
