@@ -430,8 +430,9 @@ Deno.serve(async (req) => {
               total: totalSum,
               cacheHitPct: promptSum > 0 ? Math.round((cachedSum / promptSum) * 100) : 0,
               chunks: allChunks.length,
+              durationMs: Date.now() - runStartedAt,
             }
-          : null;
+          : { durationMs: Date.now() - runStartedAt, chunks: allChunks.length };
 
         await admin
           .from("analysis_request_files")
