@@ -5240,7 +5240,7 @@ function InstancesReportModal({
           shortName,
           bucket,
           parentPath,
-          overlays,
+          overlays: overlaysAll,
           tier,
           tabLabel,
         };
