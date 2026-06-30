@@ -6042,10 +6042,10 @@ function AssignPagesToLevelModal({
             : current.filter((x) => x !== level);
           const merged = { ...ovr, __manual_levels__: nextList };
           updates.push(
-            supabase
+            (async () => supabase
               .from("analysis_request_sheets")
               .update({ floor_plan_overrides: merged } as any)
-              .eq("id", sh.id),
+              .eq("id", sh.id))(),
           );
         }
       }
