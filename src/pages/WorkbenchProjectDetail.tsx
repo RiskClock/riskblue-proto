@@ -4157,6 +4157,22 @@ export default function WorkbenchProjectDetail() {
           consolidations={consolidations || []}
         />
 
+        <SpatialArchitectModal
+          open={spatialArchitectOpen}
+          onOpenChange={setSpatialArchitectOpen}
+          requestId={requestId}
+          payload={spaceHierarchyPayload}
+          status={analysisRequest?.space_hierarchy_status as any}
+          error={analysisRequest?.space_hierarchy_error as any}
+          updatedAt={analysisRequest?.space_hierarchy_updated_at as any}
+          running={spaceHierarchyRunning}
+          fileGroups={fileGroups}
+          onBuild={buildSpaceHierarchy}
+          onSaved={() => {
+            queryClient.invalidateQueries({ queryKey: ["workbench-analysis-request", projectId] });
+          }}
+        />
+
         <ConsolidateRisersModal
           open={consolidateOpen}
           onOpenChange={setConsolidateOpen}
