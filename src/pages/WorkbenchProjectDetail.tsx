@@ -2492,10 +2492,31 @@ export default function WorkbenchProjectDetail() {
         queryKey: ["workbench-analysis-request", projectId],
       });
     } catch (error: any) {
+      const message = getUserFriendlyError(error);
+      // Reconcile the DB row — if the edge function crashed or timed out before
+      // it could mark itself failed, the row would stay `running` forever and
+      // the modal would keep spinning. Force it to `failed` here so the UI
+      // matches the toast the user just saw.
+      try {
+        await supabase
+          .from("analysis_requests")
+          .update({
+            space_hierarchy_status: "failed",
+            space_hierarchy_error: message || "Spatial Architect request failed.",
+            space_hierarchy_updated_at: new Date().toISOString(),
+          } as any)
+          .eq("id", requestId)
+          .eq("space_hierarchy_status", "running");
+      } catch (_) {
+        /* best-effort reconcile */
+      }
+      queryClient.invalidateQueries({
+        queryKey: ["workbench-analysis-request", projectId],
+      });
       toast({
         variant: "destructive",
         title: "Spatial Architect failed",
-        description: getUserFriendlyError(error),
+        description: message,
       });
     } finally {
       setBuildingSpace(false);
