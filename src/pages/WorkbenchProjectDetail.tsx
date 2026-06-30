@@ -200,6 +200,16 @@ function formatSpaceBadge(spaces: string[]): string {
   return formatLevelSetLabel(spaces);
 }
 
+function formatDuration(ms: number): string {
+  if (!Number.isFinite(ms) || ms <= 0) return "—";
+  if (ms < 1000) return `${Math.round(ms)}ms`;
+  const s = ms / 1000;
+  if (s < 60) return `${s.toFixed(s < 10 ? 1 : 0)}s`;
+  const m = Math.floor(s / 60);
+  const rs = Math.round(s - m * 60);
+  return `${m}m${rs.toString().padStart(2, "0")}s`;
+}
+
 export default function WorkbenchProjectDetail() {
   const { projectId } = useParams<{ projectId: string }>();
   const { user, session } = useAuth();
