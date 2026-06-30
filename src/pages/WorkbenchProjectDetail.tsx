@@ -200,6 +200,16 @@ function formatSpaceBadge(spaces: string[]): string {
   return formatLevelSetLabel(spaces);
 }
 
+function formatDuration(ms: number): string {
+  if (!Number.isFinite(ms) || ms <= 0) return "—";
+  if (ms < 1000) return `${Math.round(ms)}ms`;
+  const s = ms / 1000;
+  if (s < 60) return `${s.toFixed(s < 10 ? 1 : 0)}s`;
+  const m = Math.floor(s / 60);
+  const rs = Math.round(s - m * 60);
+  return `${m}m${rs.toString().padStart(2, "0")}s`;
+}
+
 export default function WorkbenchProjectDetail() {
   const { projectId } = useParams<{ projectId: string }>();
   const { user, session } = useAuth();
@@ -1637,6 +1647,14 @@ export default function WorkbenchProjectDetail() {
   //     (e.g. "Template - Suite 2A" applied to "Level 2").
   //   - unit_templates entries (legacy/typical-unit-plans).
   // Sources of level entries: spatial_records with empty applies_to_levels.
+  // Spatial-architect derived page→level entries.
+  // NOTE: We intentionally do NOT emit unit attributions from spatial-architect
+  // templates' `applies_to_levels` here. That fan-out caused every templated
+  // unit/suite to appear on every level it _could_ apply to (e.g. Suite 1H
+  // showing on Levels 2-6 instead of just where the user actually placed a
+  // unit-floor-plan bbox). Unit attribution comes exclusively from survey-
+  // derived assignments (user-placed bounding boxes). Only level-category
+  // records contribute here, so unit lists are anchored to explicit drawings.
   const pageSpaceUnitMap = useMemo(() => {
     const map = new Map<string, Array<{ level: string; unit?: string }>>();
     const parsed: any = spaceHierarchyPayload?.parsed;
@@ -1645,42 +1663,13 @@ export default function WorkbenchProjectDetail() {
       const name = sp?.standardized_space_name;
       if (!name) continue;
       const cat = typeof sp?.space_category === "string" ? sp.space_category.toLowerCase() : "";
-      const appliesTo: string[] = Array.isArray(sp?.applies_to_levels)
-        ? sp.applies_to_levels.filter((s: any) => typeof s === "string")
-        : [];
-      const isTemplate = cat && cat !== "contiguous storey" && cat !== "level";
+      const isLevel = !cat || cat === "contiguous storey" || cat === "level";
+      if (!isLevel) continue;
       for (const src of sp?.matched_sources || []) {
         const key = `${src?.file_name}::${src?.page_number}`;
-        if (isTemplate && appliesTo.length > 0) {
-          for (const lvl of appliesTo) {
-            if (!isSpaceValidOnPage(key, lvl)) continue;
-            const arr = map.get(key) || [];
-            arr.push({ level: lvl, unit: name });
-            map.set(key, arr);
-          }
-        } else {
-          if (!isSpaceValidOnPage(key, name)) continue;
-          const arr = map.get(key) || [];
-          arr.push({ level: name });
-          map.set(key, arr);
-        }
-      }
-    }
-    const units: any[] = Array.isArray(parsed?.unit_templates) ? parsed.unit_templates : [];
-    for (const u of units) {
-      const unitName = typeof u?.unit_name === "string" ? u.unit_name : null;
-      if (!unitName) continue;
-      const levels: string[] = Array.isArray(u?.applies_to_levels) ? u.applies_to_levels.filter((l: any) => typeof l === "string") : [];
-      const sources: any[] = Array.isArray(u?.matched_sources) ? u.matched_sources : [];
-      for (const src of sources) {
-        const key = `${src?.file_name}::${src?.page_number}`;
-        if (!isSpaceValidOnPage(key, unitName)) continue;
+        if (!isSpaceValidOnPage(key, name)) continue;
         const arr = map.get(key) || [];
-        if (levels.length === 0) {
-          arr.push({ level: unitName, unit: unitName });
-        } else {
-          for (const lvl of levels) arr.push({ level: lvl, unit: unitName });
-        }
+        arr.push({ level: name });
         map.set(key, arr);
       }
     }
@@ -3114,6 +3103,7 @@ export default function WorkbenchProjectDetail() {
                                       <div className="text-[10px] text-muted-foreground">
                                         in {Number(tokens.prompt ?? 0).toLocaleString()} · cached {Number(tokens.cached ?? 0).toLocaleString()} ({tokens.cacheHitPct ?? 0}%) · out {Number(tokens.candidates ?? 0).toLocaleString()} · total {Number(tokens.total ?? 0).toLocaleString()}
                                         {tokens.chunks ? ` · ${tokens.chunks} chunk${tokens.chunks === 1 ? "" : "s"}` : ""}
+                                        {tokens.durationMs ? ` · ${formatDuration(tokens.durationMs)}` : ""}
                                       </div>
                                     ) : null}
                                   </div>
@@ -3190,9 +3180,9 @@ export default function WorkbenchProjectDetail() {
                                               <div className="text-[10px] text-muted-foreground truncate">
                                                 {err
                                                   ? <span className="text-destructive">Error: {err}</span>
-                                                  : tokens
-                                                    ? `in ${Number(tokens.prompt ?? 0).toLocaleString()} · cached ${Number(tokens.cached ?? 0).toLocaleString()} (${tokens.cacheHitPct ?? 0}%) · out ${Number(tokens.candidates ?? 0).toLocaleString()} · total ${Number(tokens.total ?? 0).toLocaleString()}`
-                                                    : hasResp ? `${text.length.toLocaleString()} chars` : "No response"}
+                                                    : tokens
+                                                      ? `in ${Number(tokens.prompt ?? 0).toLocaleString()} · cached ${Number(tokens.cached ?? 0).toLocaleString()} (${tokens.cacheHitPct ?? 0}%) · out ${Number(tokens.candidates ?? 0).toLocaleString()} · total ${Number(tokens.total ?? 0).toLocaleString()}${tokens.durationMs ? ` · ${formatDuration(tokens.durationMs)}` : ""}`
+                                                      : hasResp ? `${text.length.toLocaleString()} chars` : "No response"}
                                               </div>
                                             </div>
                                             <Button
@@ -3261,15 +3251,17 @@ export default function WorkbenchProjectDetail() {
                                 </div>
                                 {(() => {
                                   const usage = (payload as any)?.usage;
-                                  if (!usage) return null;
-                                  const prompt = Number(usage.promptTokenCount ?? 0);
-                                  const cached = Number(usage.cachedContentTokenCount ?? 0);
-                                  const cand = Number(usage.candidatesTokenCount ?? 0);
-                                  const total = Number(usage.totalTokenCount ?? 0);
+                                  const durationMs = Number((payload as any)?.duration_ms ?? 0);
+                                  if (!usage && !durationMs) return null;
+                                  const prompt = Number(usage?.promptTokenCount ?? 0);
+                                  const cached = Number(usage?.cachedContentTokenCount ?? 0);
+                                  const cand = Number(usage?.candidatesTokenCount ?? 0);
+                                  const total = Number(usage?.totalTokenCount ?? 0);
                                   const pct = prompt > 0 ? Math.round((cached / prompt) * 100) : 0;
                                   return (
                                     <div className="text-[10px] text-muted-foreground">
-                                      in {prompt.toLocaleString()} · cached {cached.toLocaleString()} ({pct}%) · out {cand.toLocaleString()} · total {total.toLocaleString()}
+                                      {usage ? `in ${prompt.toLocaleString()} · cached ${cached.toLocaleString()} (${pct}%) · out ${cand.toLocaleString()} · total ${total.toLocaleString()}` : ""}
+                                      {durationMs ? `${usage ? " · " : ""}${formatDuration(durationMs)}` : ""}
                                     </div>
                                   );
                                 })()}

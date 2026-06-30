@@ -165,6 +165,7 @@ Deno.serve(async (req) => {
     for (const s of sheetRows) sheetByPage.set(s.page_index, { id: s.id, sheet_number: s.sheet_number });
 
     const work = (async () => {
+      const runStartedAt = Date.now();
       try {
         const { data: blob, error: dlErr } = await admin.storage
           .from(bucket)
@@ -429,8 +430,9 @@ Deno.serve(async (req) => {
               total: totalSum,
               cacheHitPct: promptSum > 0 ? Math.round((cachedSum / promptSum) * 100) : 0,
               chunks: allChunks.length,
+              durationMs: Date.now() - runStartedAt,
             }
-          : null;
+          : { durationMs: Date.now() - runStartedAt, chunks: allChunks.length };
 
         await admin
           .from("analysis_request_files")

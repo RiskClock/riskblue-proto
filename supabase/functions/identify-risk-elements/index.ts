@@ -230,6 +230,7 @@ Deno.serve(async (req) => {
           };
 
           try {
+            const runStartedAt = Date.now();
             let resp: any;
             let usedCache = cacheName!;
             try {
@@ -285,6 +286,7 @@ Deno.serve(async (req) => {
                 candidates: candidatesTokens,
                 total: totalTokens,
                 cacheHitPct,
+                durationMs: Date.now() - runStartedAt,
               },
               model: GEMINI_MODEL,
             };

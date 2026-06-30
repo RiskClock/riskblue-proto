@@ -105,6 +105,9 @@ Deno.serve(async (req) => {
     const analysisRequestId = body.analysisRequestId;
     if (!analysisRequestId) return json({ error: "Missing analysisRequestId" }, 400);
 
+    const runStartedAt = Date.now();
+
+
     // Mark running.
     await admin
       .from("analysis_requests")
@@ -273,17 +276,32 @@ Deno.serve(async (req) => {
       usage,
       model: modelId,
       source: "spatial-architect",
+      duration_ms: Date.now() - runStartedAt,
     };
 
-    await admin
-      .from("analysis_requests")
-      .update({
-        space_hierarchy_json: result,
-        space_hierarchy_status: parsed ? "complete" : "failed",
-        space_hierarchy_error: parseError,
-        space_hierarchy_updated_at: new Date().toISOString(),
-      } as any)
-      .eq("id", analysisRequestId);
+    // Only overwrite space_hierarchy_json when the run succeeded. On failure
+    // (parse error, 503, etc.), preserve the previously-saved hierarchy so the
+    // user's level list doesn't disappear — just surface the status/error.
+    if (parsed) {
+      await admin
+        .from("analysis_requests")
+        .update({
+          space_hierarchy_json: result,
+          space_hierarchy_status: "complete",
+          space_hierarchy_error: null,
+          space_hierarchy_updated_at: new Date().toISOString(),
+        } as any)
+        .eq("id", analysisRequestId);
+    } else {
+      await admin
+        .from("analysis_requests")
+        .update({
+          space_hierarchy_status: "failed",
+          space_hierarchy_error: parseError,
+          space_hierarchy_updated_at: new Date().toISOString(),
+        } as any)
+        .eq("id", analysisRequestId);
+    }
 
     return json({ status: parsed ? "complete" : "failed", result });
   } catch (e) {
