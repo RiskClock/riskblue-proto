@@ -5317,12 +5317,15 @@ function InstancesReportModal({
         {unitsList.length > 0 && (
           <div className="border rounded-md">
             <div className="px-3 py-2 border-b bg-muted/40 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-              Units on this level ({unitsList.length})
+              Units on this level ({totalUnitCount} {totalUnitCount === 1 ? "unit" : "units"})
             </div>
             <div className="p-3 grid grid-cols-2 md:grid-cols-3 gap-x-4 gap-y-1 text-xs">
               {unitsList.map((u) => (
                 <div key={u.name} className="flex items-baseline gap-1.5 truncate">
-                  <span className="truncate">{u.name.replace(/^Template\s*-\s*/, "")}</span>
+                  <span className="truncate">
+                    {u.name.replace(/^Template\s*-\s*/, "")}
+                    {u.count > 1 ? ` (×${u.count})` : ""}
+                  </span>
                   <span className="text-muted-foreground shrink-0">
                     · {u.pages.map((p) => `p${p.pageIdx}`).join(", ")}
                   </span>
