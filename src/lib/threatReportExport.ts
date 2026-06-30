@@ -37,6 +37,11 @@ export interface ThreatReportPageRef {
     ny: number;
     color: string;
     label: string;
+    /** Defaults to "circle" when omitted. */
+    shape?: "circle" | "rect";
+    /** Rect width/height in normalized 0..1 of the page (rect shape only). */
+    nw?: number;
+    nh?: number;
   }>;
   tabLabel: string;
 }
@@ -166,12 +171,41 @@ async function renderPageWithMarkers(
   ctx.fillRect(0, 0, canvas.width, canvas.height);
   await page.render({ canvasContext: ctx, viewport: vp, canvas }).promise;
 
-  // Draw overlays.
+  // Draw rect overlays first (level/unit floor plan bboxes) so circles render on top.
+  for (const o of overlays) {
+    if (o.shape !== "rect") continue;
+    const x = Math.round(o.nx * canvas.width);
+    const y = Math.round(o.ny * canvas.height);
+    const w = Math.max(2, Math.round((o.nw ?? 0) * canvas.width));
+    const h = Math.max(2, Math.round((o.nh ?? 0) * canvas.height));
+    // Translucent outline rect
+    ctx.lineWidth = Math.max(2, Math.round(canvas.width * 0.0015));
+    ctx.strokeStyle = o.color;
+    ctx.strokeRect(x, y, w, h);
+    // Label pill anchored at top-left, outside the rect.
+    const text = o.label;
+    const labelH = Math.max(16, Math.round(canvas.width * 0.014));
+    ctx.font = `bold ${Math.round(labelH * 0.7)}px ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif`;
+    const padX = Math.round(labelH * 0.35);
+    const tw = Math.ceil(ctx.measureText(text).width) + padX * 2;
+    const lx = Math.max(2, x);
+    const ly = Math.max(2, y - labelH - 2);
+    ctx.fillStyle = o.color;
+    roundRect(ctx, lx, ly, tw, labelH, 3);
+    ctx.fill();
+    ctx.fillStyle = "#ffffff";
+    ctx.textBaseline = "middle";
+    ctx.textAlign = "left";
+    ctx.fillText(text, lx + padX, ly + labelH / 2 + 1);
+  }
+
+  // Draw circle annotation overlays.
   const labelFont = `bold ${Math.max(11, Math.round(canvas.width * 0.011))}px ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif`;
   ctx.font = labelFont;
   const radius = Math.max(7, Math.round(canvas.width * 0.008));
 
   for (const o of overlays) {
+    if (o.shape === "rect") continue;
     const cx = Math.round(o.nx * canvas.width);
     const cy = Math.round(o.ny * canvas.height);
     // Translucent fill
@@ -193,6 +227,7 @@ async function renderPageWithMarkers(
     ctx.stroke();
 
     // Label bubble offset down-right from marker.
+    ctx.font = labelFont;
     const text = o.label;
     const metrics = ctx.measureText(text);
     const padX = 6;

@@ -5059,23 +5059,7 @@ function InstancesReportModal({
   const renderSpaceDetail = (space: string) => {
     const rows = instancesForSpace(space);
     const label = space === "__unassigned__" ? "Unassigned" : space;
-    // Collect (fileId, pageIdx) keys that depict this space — either directly
-    // (level plan) or via a unit/template page assigned to this level.
-    const pageKeySet = new Set<string>();
-    for (const r of rows) pageKeySet.add(`${r.fileId}::${r.pageIndex}`);
-    if (space !== "__unassigned__") {
-      for (const [key, spaces] of pageSpaceMap.entries()) {
-        if (!spaces.includes(space)) continue;
-        const [fileName, pageStr] = key.split("::");
-        const lookup = sheetByFilePage.get(`${fileName}::${pageStr}`);
-        const fileId = lookup?.file?.id;
-        if (!fileId) continue;
-        pageKeySet.add(`${fileId}::${pageStr}`);
-      }
-    }
-    const pageKeys = Array.from(pageKeySet);
-
-    // Units assigned to this level — derived from pageSpaceUnitMap.
+    // Units assigned to this level — derived from pageSpaceUnitMap (survey-rolled).
     const unitMap = new Map<string, Array<{ fileName: string; pageIdx: number }>>();
     if (space !== "__unassigned__") {
       for (const [key, pairs] of pageSpaceUnitMap.entries()) {
@@ -5091,6 +5075,38 @@ function InstancesReportModal({
     const unitsList = Array.from(unitMap.entries())
       .map(([name, pages]) => ({ name, pages }))
       .sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: "base" }));
+    const unitNamesForLevel = new Set(unitsList.map((u) => u.name));
+
+    // Drawings to display for this space:
+    //   (a) pages with annotations attributed to this space,
+    //   (b) level floor plan pages whose canonical level matches this space,
+    //   (c) unit floor plan pages whose unit is connected to this level
+    //       (via user-assigned bboxes / referenced_unit_ids on the level plan).
+    // Spatial-architect template fan-outs are intentionally excluded so the
+    // dropdown only lists the level + its connected units.
+    const pageKeySet = new Set<string>();
+    for (const r of rows) pageKeySet.add(`${r.fileId}::${r.pageIndex}`);
+    const addByFileNamePage = (fileName: string, pageStr: string) => {
+      const lookup = sheetByFilePage.get(`${fileName}::${pageStr}`);
+      const fileId = lookup?.file?.id;
+      if (!fileId) return;
+      pageKeySet.add(`${fileId}::${pageStr}`);
+    };
+    if (space !== "__unassigned__") {
+      for (const [key, lps] of pageLevelPlansMap.entries()) {
+        if (!lps.some((lp) => lp.levels.includes(space))) continue;
+        const [fileName, pageStr] = key.split("::");
+        addByFileNamePage(fileName, pageStr);
+      }
+      if (unitNamesForLevel.size > 0) {
+        for (const [key, ups] of pageUnitPlansMap.entries()) {
+          if (!ups.some((up) => unitNamesForLevel.has(up.unitLabel))) continue;
+          const [fileName, pageStr] = key.split("::");
+          addByFileNamePage(fileName, pageStr);
+        }
+      }
+    }
+    const pageKeys = Array.from(pageKeySet);
 
     const showUnitCol = rows.some((r) => !!r.unitName);
 
@@ -5180,6 +5196,39 @@ function InstancesReportModal({
             : null;
           qualifier = matchingUnit?.unitLabel ?? unitPlans[0].unitLabel;
         }
+
+        // Bbox overlays — outline level + connected unit floor plans on the page.
+        const bboxOverlays: any[] = [];
+        if (space !== "__unassigned__") {
+          for (const lp of levelPlans) {
+            if (!lp.levels.includes(space) || !lp.bbox) continue;
+            const [bx, by, bw, bh] = lp.bbox;
+            bboxOverlays.push({
+              id: `lvl-bbox-${pageKey}`,
+              bbox: [bx / 100, by / 100, bw / 100, bh / 100] as [number, number, number, number],
+              coordSpace: "normalized" as const,
+              page: pageIdx,
+              color: "#2563eb",
+              label: space,
+              shape: "rect" as const,
+            });
+          }
+          for (const up of unitPlans) {
+            if (!unitNamesForLevel.has(up.unitLabel) || !up.bbox) continue;
+            const [bx, by, bw, bh] = up.bbox;
+            bboxOverlays.push({
+              id: `unit-bbox-${pageKey}-${up.unitLabel}`,
+              bbox: [bx / 100, by / 100, bw / 100, bh / 100] as [number, number, number, number],
+              coordSpace: "normalized" as const,
+              page: pageIdx,
+              color: "#ea580c",
+              label: up.unitLabel,
+              shape: "rect" as const,
+            });
+          }
+        }
+        const overlaysAll = [...bboxOverlays, ...overlays];
+
         const corePart = qualifier ? `p${pageIdx} · ${qualifier}` : `p${pageIdx}`;
         const tabLabel = showFileInTab ? `${shortName} · ${corePart}` : corePart;
 
@@ -5191,7 +5240,7 @@ function InstancesReportModal({
           shortName,
           bucket,
           parentPath,
-          overlays,
+          overlays: overlaysAll,
           tier,
           tabLabel,
         };
@@ -5278,18 +5327,6 @@ function InstancesReportModal({
 
   function computeSpaceExportData(space: string): ThreatReportSpace {
     const rowsForSpace = instancesForSpace(space);
-    const pageKeySet = new Set<string>();
-    for (const r of rowsForSpace) pageKeySet.add(`${r.fileId}::${r.pageIndex}`);
-    if (space !== "__unassigned__") {
-      for (const [key, spaces] of pageSpaceMap.entries()) {
-        if (!spaces.includes(space)) continue;
-        const [fileName, pageStr] = key.split("::");
-        const lookup = sheetByFilePage.get(`${fileName}::${pageStr}`);
-        const fileId = lookup?.file?.id;
-        if (!fileId) continue;
-        pageKeySet.add(`${fileId}::${pageStr}`);
-      }
-    }
 
     const unitMap = new Map<string, number[]>();
     if (space !== "__unassigned__") {
@@ -5306,6 +5343,32 @@ function InstancesReportModal({
     const units = Array.from(unitMap.entries())
       .map(([name, pageIdxs]) => ({ name, pageIdxs: Array.from(new Set(pageIdxs)).sort((a, b) => a - b) }))
       .sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: "base" }));
+    const unitNamesForLevel = new Set(units.map((u) => u.name));
+
+    // Drawings: (a) annotation source pages, (b) level floor plan pages for
+    // this space, (c) unit floor plan pages whose unit is connected here.
+    const pageKeySet = new Set<string>();
+    for (const r of rowsForSpace) pageKeySet.add(`${r.fileId}::${r.pageIndex}`);
+    const addByFileNamePage = (fileName: string, pageStr: string) => {
+      const lookup = sheetByFilePage.get(`${fileName}::${pageStr}`);
+      const fileId = lookup?.file?.id;
+      if (!fileId) return;
+      pageKeySet.add(`${fileId}::${pageStr}`);
+    };
+    if (space !== "__unassigned__") {
+      for (const [key, lps] of pageLevelPlansMap.entries()) {
+        if (!lps.some((lp) => lp.levels.includes(space))) continue;
+        const [fileName, pageStr] = key.split("::");
+        addByFileNamePage(fileName, pageStr);
+      }
+      if (unitNamesForLevel.size > 0) {
+        for (const [key, ups] of pageUnitPlansMap.entries()) {
+          if (!ups.some((up) => unitNamesForLevel.has(up.unitLabel))) continue;
+          const [fileName, pageStr] = key.split("::");
+          addByFileNamePage(fileName, pageStr);
+        }
+      }
+    }
 
     const uniqueFileNames = new Set(
       Array.from(pageKeySet).map((k) => fileNameById.get(k.split("::")[0]) || ""),
@@ -5331,7 +5394,7 @@ function InstancesReportModal({
         const k = `${(r.nx ?? 0).toFixed(4)}::${(r.ny ?? 0).toFixed(4)}`;
         posTotal.set(k, (posTotal.get(k) ?? 0) + 1);
       }
-      const overlays = rawOverlays.map((r, i) => {
+      const annOverlays = rawOverlays.map((r, i) => {
         const k = `${(r.nx ?? 0).toFixed(4)}::${(r.ny ?? 0).toFixed(4)}`;
         const total = posTotal.get(k) ?? 1;
         const idx = posIndex.get(k) ?? 0;
@@ -5350,6 +5413,7 @@ function InstancesReportModal({
           ny,
           color: awpClassColor(r.awpClassName),
           label: r.instanceId,
+          shape: "circle" as const,
         };
       });
 
@@ -5357,6 +5421,40 @@ function InstancesReportModal({
       const pageKey = `${fileName}::${pageIdx}`;
       const levelPlans = pageLevelPlansMap.get(pageKey) || [];
       const unitPlans = pageUnitPlansMap.get(pageKey) || [];
+
+      // Bbox outlines for level and connected unit floor plans on this page.
+      const bboxOverlays: any[] = [];
+      if (space !== "__unassigned__") {
+        for (const lp of levelPlans) {
+          if (!lp.levels.includes(space) || !lp.bbox) continue;
+          const [bx, by, bw, bh] = lp.bbox;
+          bboxOverlays.push({
+            id: `lvl-bbox-${pageKey}`,
+            nx: bx / 100,
+            ny: by / 100,
+            nw: bw / 100,
+            nh: bh / 100,
+            color: "#2563eb",
+            label: space,
+            shape: "rect" as const,
+          });
+        }
+        for (const up of unitPlans) {
+          if (!unitNamesForLevel.has(up.unitLabel) || !up.bbox) continue;
+          const [bx, by, bw, bh] = up.bbox;
+          bboxOverlays.push({
+            id: `unit-bbox-${pageKey}-${up.unitLabel}`,
+            nx: bx / 100,
+            ny: by / 100,
+            nw: bw / 100,
+            nh: bh / 100,
+            color: "#ea580c",
+            label: up.unitLabel,
+            shape: "rect" as const,
+          });
+        }
+      }
+
       let qualifier: string | null = null;
       if (levelPlans.length > 0) {
         if (space !== "__unassigned__") {
@@ -5380,7 +5478,7 @@ function InstancesReportModal({
         pageIdx,
         bucket,
         parentPath,
-        overlays,
+        overlays: [...bboxOverlays, ...annOverlays],
         tabLabel,
       });
     }
