@@ -194,10 +194,17 @@ Deno.serve(async (req) => {
       files?.length ?? 0
     }, pages with Scout output: ${totalPages}\n\n${chunks.join("\n\n").slice(0, 400_000)}`;
 
+    const fileSizeSummary = (files ?? [])
+      .map((f: any) => {
+        const sheetCount = (sheetsByFile.get(f.id) || []).length;
+        const rawLen = ((f.survey_raw_response || "").toString()).length;
+        return `${f.name}(sheets=${sheetCount},rawChars=${rawLen})`;
+      })
+      .join("; ");
     console.log(
       `[spatial-architect] req=${analysisRequestId} files=${
         files?.length ?? 0
-      } pages=${totalPages} chars=${userPrompt.length}`,
+      } pages=${totalPages} chars=${userPrompt.length} breakdown=${fileSizeSummary}`,
     );
 
     let parsed: z.infer<typeof SpatialSchema> | null = null;
@@ -226,13 +233,41 @@ Deno.serve(async (req) => {
       ? configuredPrompt
       : SYSTEM_PROMPT;
 
-    console.log(`[spatial-architect] model=${modelId} promptSource=${configuredPrompt ? "app_settings" : "default"}`);
+    console.log(
+      `[spatial-architect] model=${modelId} promptSource=${
+        configuredPrompt ? "app_settings" : "default"
+      } systemPromptChars=${systemPrompt.length}`,
+    );
 
+    // Watchdog — if the model call hangs and the edge runtime is about to be
+    // killed (~150s wall on Supabase), mark the row failed FIRST so the UI
+    // doesn't stay stuck on "Running…" forever.
+    const WATCHDOG_MS = 120_000;
+    let watchdogFired = false;
+    const watchdog = setTimeout(async () => {
+      watchdogFired = true;
+      console.error(
+        `[spatial-architect] watchdog firing at ${WATCHDOG_MS}ms — marking request failed`,
+      );
+      try {
+        await admin
+          .from("analysis_requests")
+          .update({
+            space_hierarchy_status: "failed",
+            space_hierarchy_error: `Spatial Architect timed out after ${
+              Math.round(WATCHDOG_MS / 1000)
+            }s while waiting on model ${modelId}. Try a faster model or fewer pages.`,
+            space_hierarchy_updated_at: new Date().toISOString(),
+          } as any)
+          .eq("id", analysisRequestId);
+      } catch (e) {
+        console.error("[spatial-architect] watchdog DB update failed:", e);
+      }
+    }, WATCHDOG_MS);
+
+    const generateStartedAt = Date.now();
     try {
       const ai = new GoogleGenAI({ apiKey });
-      // Fold the system prompt into the user message — matches the pattern used
-      // by Scout and Risk Radar (gemini-3.5 rejects systemInstruction in some
-      // configurations; keeping it in the user content is uniformly safe).
       const resp: any = await ai.models.generateContent({
         model: modelId,
         contents: [
@@ -248,11 +283,17 @@ Deno.serve(async (req) => {
           responseMimeType: "application/json",
         },
       });
+      const generateMs = Date.now() - generateStartedAt;
       rawText =
         resp?.text ??
         resp?.candidates?.[0]?.content?.parts?.map((p: any) => p?.text ?? "").join("") ??
         "";
       usage = resp?.usageMetadata ?? null;
+      console.log(
+        `[spatial-architect] gemini OK in ${generateMs}ms rawChars=${rawText.length} usage=${
+          JSON.stringify(usage)
+        }`,
+      );
 
       const cleaned = rawText
         .trim()
@@ -262,8 +303,21 @@ Deno.serve(async (req) => {
       parsed = SpatialSchema.parse(raw);
       if (!parsed.project_name) parsed.project_name = projectName;
     } catch (err) {
+      const generateMs = Date.now() - generateStartedAt;
       parseError = err instanceof Error ? err.message : String(err);
-      console.error("[spatial-architect] generation failed:", parseError);
+      console.error(
+        `[spatial-architect] generation failed after ${generateMs}ms:`,
+        parseError,
+        "rawTextPreview=",
+        rawText.slice(0, 400),
+      );
+    } finally {
+      clearTimeout(watchdog);
+    }
+
+    // If watchdog already wrote `failed`, skip overwriting with stale data.
+    if (watchdogFired) {
+      return json({ status: "failed", error: "watchdog_timeout" }, 504);
     }
 
 
@@ -306,6 +360,26 @@ Deno.serve(async (req) => {
     return json({ status: parsed ? "complete" : "failed", result });
   } catch (e) {
     console.error("[spatial-architect] Handler error:", e);
+    // Best-effort: try to mark the row failed so the UI doesn't stay running.
+    try {
+      const supabaseUrl = Deno.env.get("SUPABASE_URL");
+      const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+      const body = await req.clone().json().catch(() => ({} as any));
+      const reqId = (body as any)?.analysisRequestId;
+      if (supabaseUrl && serviceKey && reqId) {
+        const admin = createClient(supabaseUrl, serviceKey);
+        await admin
+          .from("analysis_requests")
+          .update({
+            space_hierarchy_status: "failed",
+            space_hierarchy_error: e instanceof Error ? e.message : String(e),
+            space_hierarchy_updated_at: new Date().toISOString(),
+          } as any)
+          .eq("id", reqId);
+      }
+    } catch (_) {
+      /* ignore */
+    }
     return json({ error: e instanceof Error ? e.message : String(e) }, 500);
   }
 });
