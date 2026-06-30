@@ -105,6 +105,9 @@ Deno.serve(async (req) => {
     const analysisRequestId = body.analysisRequestId;
     if (!analysisRequestId) return json({ error: "Missing analysisRequestId" }, 400);
 
+    const runStartedAt = Date.now();
+
+
     // Mark running.
     await admin
       .from("analysis_requests")
