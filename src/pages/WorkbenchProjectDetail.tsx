@@ -1715,20 +1715,38 @@ export default function WorkbenchProjectDetail() {
     return t;
   };
 
-  const canonicalizeLevel = (raw: string): string => {
-    if (!raw) return raw;
+  // Returns one or more canonical level names for a raw floors string.
+  // Returns multiple names when the raw text refers to a shared physical
+  // space (e.g. "Parking Garage" maps to both Level P1 and Level P2 Sub-Slab
+  // when both exist in the project's canonical level list).
+  const canonicalizeLevels = (raw: string): string[] => {
+    if (!raw) return [];
     const target = normalizeLevelToken(raw);
-    if (!target) return raw;
+    if (!target) return [raw];
+
+    // Parking / garage expansion: a generic parking page applies to every
+    // canonical parking level (P1, P2 Sub-Slab, etc.) unless the raw text
+    // already names a specific level number.
+    const looksLikeParking =
+      /(parking|garage|underground|sub\s*slab)/i.test(raw) &&
+      !/\b(p\s*\d|level\s*\d|floor\s*\d|\d(st|nd|rd|th)?)\b/i.test(raw);
+    if (looksLikeParking) {
+      const parkingMatches = canonicalLevelNames.filter((p) =>
+        /(p\d|parking|garage|sub\s*slab|underground)/i.test(p),
+      );
+      if (parkingMatches.length > 0) return parkingMatches;
+    }
+
     for (const p of canonicalLevelNames) {
-      if (normalizeLevelToken(p) === target) return p;
+      if (normalizeLevelToken(p) === target) return [p];
     }
     for (const p of canonicalLevelNames) {
       const pn = normalizeLevelToken(p);
       if (pn && (pn === target || pn.split(" ").includes(target) || target.split(" ").includes(pn))) {
-        return p;
+        return [p];
       }
     }
-    return raw;
+    return [raw];
   };
 
   // Survey-derived rollup: uses existing per-page floor-plan metadata
@@ -1796,8 +1814,9 @@ export default function WorkbenchProjectDetail() {
             const inner = unitRefToLevelCounts.get(k) || new Map<string, number>();
             for (const lvl of e.floors) {
               if (!lvl) continue;
-              const canonical = canonicalizeLevel(lvl);
-              inner.set(canonical, (inner.get(canonical) || 0) + 1);
+              for (const canonical of canonicalizeLevels(lvl)) {
+                inner.set(canonical, (inner.get(canonical) || 0) + 1);
+              }
             }
             unitRefToLevelCounts.set(k, inner);
           }
@@ -1813,7 +1832,7 @@ export default function WorkbenchProjectDetail() {
         for (const fp of plans) {
           const e = effective(fp, f.id);
           if (e.type === "level_floor_plan") {
-            const canonicalLevels = e.floors.map((l) => canonicalizeLevel(l)).filter(Boolean);
+            const canonicalLevels = e.floors.flatMap((l) => canonicalizeLevels(l)).filter(Boolean);
             const lpArr = pageLevelPlans.get(key) || [];
             lpArr.push({ levels: canonicalLevels, bbox: e.bbox });
             pageLevelPlans.set(key, lpArr);
@@ -1855,6 +1874,38 @@ export default function WorkbenchProjectDetail() {
         }
       }
     }
+
+    // Manual page → level assignments (Option C override).
+    // Stored on the sheet under floor_plan_overrides.__manual_levels__ as a
+    // string[] of canonical level names. These are merged in as synthetic
+    // level-plan entries so the page shows up under those level details.
+    const fileById = new Map(files.map((f) => [f.id, f]));
+    for (const s of sheets) {
+      const ovr = (s.floor_plan_overrides as Record<string, any> | null) ?? null;
+      const manual = ovr?.["__manual_levels__"];
+      if (!Array.isArray(manual) || manual.length === 0) continue;
+      const file = fileById.get(s.parent_file_id);
+      if (!file) continue;
+      const key = `${file.name}::${s.page_index}`;
+      const canon: string[] = [];
+      for (const raw of manual) {
+        if (typeof raw !== "string") continue;
+        if (canonicalLevelNames.includes(raw)) canon.push(raw);
+      }
+      if (canon.length === 0) continue;
+      const lpArr = pageLevelPlans.get(key) || [];
+      lpArr.push({ levels: canon, bbox: null });
+      pageLevelPlans.set(key, lpArr);
+      const ls = levelMap.get(key) || new Set<string>();
+      const pairs = unitMap.get(key) || [];
+      for (const lvl of canon) {
+        ls.add(lvl);
+        if (!pairs.some((p) => p.level === lvl && !p.unit)) pairs.push({ level: lvl });
+      }
+      levelMap.set(key, ls);
+      unitMap.set(key, pairs);
+    }
+
     return { levelMap, unitMap, pageUnitPlans, pageLevelPlans };
   }, [rows?.files, rows?.sheets, floorPlansByFile, canonicalLevelNames]);
 
@@ -4475,6 +4526,7 @@ function InstancesReportModal({
   const [loading, setLoading] = useState(false);
   const [instances, setInstances] = useState<any[]>([]);
   const [selected, setSelected] = useState<string>("__overview__");
+  const [assignLevelTarget, setAssignLevelTarget] = useState<string | null>(null);
 
   useEffect(() => {
     if (!open || !requestId) return;
@@ -5175,7 +5227,19 @@ function InstancesReportModal({
 
     return (
       <div className="space-y-4">
-        <h3 className="text-sm font-semibold">{label}</h3>
+        <div className="flex items-center justify-between gap-3">
+          <h3 className="text-sm font-semibold">{label}</h3>
+          {space !== "__unassigned__" && (
+            <Button
+              size="sm"
+              variant="outline"
+              className="h-7 text-xs"
+              onClick={() => setAssignLevelTarget(space)}
+            >
+              Assign drawings…
+            </Button>
+          )}
+        </div>
         {rows.length === 0 ? (
           <div className="text-sm text-muted-foreground">
             No objects found in this space.
@@ -5520,6 +5584,12 @@ function InstancesReportModal({
       </DialogContent>
     </Dialog>
     <PreparingReportModal open={exporting} progress={exportProgress} />
+    <AssignPagesToLevelModal
+      open={!!assignLevelTarget}
+      level={assignLevelTarget}
+      fileGroups={fileGroups}
+      onClose={() => setAssignLevelTarget(null)}
+    />
     </>
   );
 }
@@ -5904,5 +5974,152 @@ function DrawingPageBlock({
         )}
       </div>
     </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// AssignPagesToLevelModal — Option C manual override. Lets the user pick which
+// drawing pages should appear under a given level in the threat report when
+// the survey/spatial-architect pipeline didn't auto-detect the mapping.
+// Persists a string[] of canonical level names at
+//   analysis_request_sheets.floor_plan_overrides.__manual_levels__
+// which the rollup logic reads as a synthetic level_floor_plan entry.
+// ---------------------------------------------------------------------------
+function AssignPagesToLevelModal({
+  open,
+  level,
+  fileGroups,
+  onClose,
+}: {
+  open: boolean;
+  level: string | null;
+  fileGroups: Array<{ file: FileRow; sheets: SheetRow[] }>;
+  onClose: () => void;
+}) {
+  const { toast } = useToast();
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [saving, setSaving] = useState(false);
+
+  // Initial selection: every sheet whose __manual_levels__ already contains
+  // this level.
+  useEffect(() => {
+    if (!open || !level) return;
+    const s = new Set<string>();
+    for (const g of fileGroups) {
+      for (const sh of g.sheets) {
+        const m = (sh.floor_plan_overrides as any)?.__manual_levels__;
+        if (Array.isArray(m) && m.includes(level)) s.add(sh.id);
+      }
+    }
+    setSelected(s);
+  }, [open, level, fileGroups]);
+
+  const toggle = (id: string) => {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const handleSave = async () => {
+    if (!level) return;
+    setSaving(true);
+    try {
+      const updates: Array<Promise<any>> = [];
+      for (const g of fileGroups) {
+        for (const sh of g.sheets) {
+          const ovr = (sh.floor_plan_overrides as Record<string, any> | null) ?? {};
+          const current: string[] = Array.isArray(ovr.__manual_levels__)
+            ? ovr.__manual_levels__.filter((x: any) => typeof x === "string")
+            : [];
+          const hasNow = current.includes(level);
+          const wantNow = selected.has(sh.id);
+          if (hasNow === wantNow) continue;
+          const nextList = wantNow
+            ? Array.from(new Set([...current, level]))
+            : current.filter((x) => x !== level);
+          const merged = { ...ovr, __manual_levels__: nextList };
+          updates.push(
+            (async () => supabase
+              .from("analysis_request_sheets")
+              .update({ floor_plan_overrides: merged } as any)
+              .eq("id", sh.id))(),
+          );
+        }
+      }
+      const results = await Promise.all(updates);
+      const firstErr = results.find((r: any) => r?.error);
+      if (firstErr?.error) throw firstErr.error;
+      toast({ title: "Assignments saved", description: `${updates.length} page(s) updated for ${level}.` });
+      onClose();
+    } catch (e: any) {
+      toast({
+        variant: "destructive",
+        title: "Could not save assignments",
+        description: getUserFriendlyError(e),
+      });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={(o) => !o && !saving && onClose()}>
+      <DialogContent className="max-w-2xl max-h-[80vh] flex flex-col">
+        <DialogHeader>
+          <DialogTitle>Assign drawings to {level ?? ""}</DialogTitle>
+          <DialogDescription>
+            Tick the pages that should appear under this level. Existing
+            auto-detected pages from the survey aren't affected.
+          </DialogDescription>
+        </DialogHeader>
+        <div className="flex-1 overflow-auto border rounded-md divide-y">
+          {fileGroups.map((g) => (
+            <div key={g.file.id} className="py-2">
+              <div className="px-3 text-xs font-semibold text-muted-foreground truncate">
+                {g.file.name}
+              </div>
+              <div className="mt-1">
+                {g.sheets.map((sh) => {
+                  const checked = selected.has(sh.id);
+                  return (
+                    <label
+                      key={sh.id}
+                      className="flex items-center gap-2 px-3 py-1 text-xs cursor-pointer hover:bg-muted/50"
+                    >
+                      <input
+                        type="checkbox"
+                        checked={checked}
+                        onChange={() => toggle(sh.id)}
+                      />
+                      <span className="font-mono text-muted-foreground w-12 shrink-0">
+                        p{sh.page_index}
+                      </span>
+                      <span className="truncate">
+                        {sh.sheet_number ? `${sh.sheet_number} · ` : ""}
+                        {sh.sheet_title ?? "(untitled)"}
+                      </span>
+                    </label>
+                  );
+                })}
+              </div>
+            </div>
+          ))}
+          {fileGroups.length === 0 && (
+            <div className="p-4 text-sm text-muted-foreground text-center">
+              No drawings available.
+            </div>
+          )}
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={onClose} disabled={saving}>Cancel</Button>
+          <Button onClick={handleSave} disabled={saving}>
+            {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : "Save"}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }
