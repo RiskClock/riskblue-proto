@@ -3251,15 +3251,17 @@ export default function WorkbenchProjectDetail() {
                                 </div>
                                 {(() => {
                                   const usage = (payload as any)?.usage;
-                                  if (!usage) return null;
-                                  const prompt = Number(usage.promptTokenCount ?? 0);
-                                  const cached = Number(usage.cachedContentTokenCount ?? 0);
-                                  const cand = Number(usage.candidatesTokenCount ?? 0);
-                                  const total = Number(usage.totalTokenCount ?? 0);
+                                  const durationMs = Number((payload as any)?.duration_ms ?? 0);
+                                  if (!usage && !durationMs) return null;
+                                  const prompt = Number(usage?.promptTokenCount ?? 0);
+                                  const cached = Number(usage?.cachedContentTokenCount ?? 0);
+                                  const cand = Number(usage?.candidatesTokenCount ?? 0);
+                                  const total = Number(usage?.totalTokenCount ?? 0);
                                   const pct = prompt > 0 ? Math.round((cached / prompt) * 100) : 0;
                                   return (
                                     <div className="text-[10px] text-muted-foreground">
-                                      in {prompt.toLocaleString()} · cached {cached.toLocaleString()} ({pct}%) · out {cand.toLocaleString()} · total {total.toLocaleString()}
+                                      {usage ? `in ${prompt.toLocaleString()} · cached ${cached.toLocaleString()} (${pct}%) · out ${cand.toLocaleString()} · total ${total.toLocaleString()}` : ""}
+                                      {durationMs ? `${usage ? " · " : ""}${formatDuration(durationMs)}` : ""}
                                     </div>
                                   );
                                 })()}
