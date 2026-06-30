@@ -56,7 +56,7 @@ export interface ThreatReportSpace {
     fileName: string;
     pageIndex: number;
   }>;
-  units: Array<{ name: string; pageIdxs: number[] }>;
+  units: Array<{ name: string; pageIdxs: number[]; count?: number }>;
   pages: ThreatReportPageRef[];
 }
 
@@ -200,7 +200,8 @@ async function renderPageWithMarkers(
   }
 
   // Draw circle annotation overlays.
-  const labelFont = `bold ${Math.max(11, Math.round(canvas.width * 0.011))}px ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif`;
+  const labelSize = Math.max(11, Math.round(canvas.width * 0.011));
+  const labelFont = `bold ${labelSize}px ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif`;
   ctx.font = labelFont;
   const radius = Math.max(7, Math.round(canvas.width * 0.008));
 
@@ -233,9 +234,9 @@ async function renderPageWithMarkers(
     const padX = 6;
     const padY = 3;
     const w = Math.ceil(metrics.width) + padX * 2;
-    const h = Math.ceil(parseInt(labelFont, 10)) + padY * 2;
-    const lx = Math.min(canvas.width - w - 2, cx + radius + 4);
-    const ly = Math.min(canvas.height - h - 2, cy + radius + 4);
+    const h = labelSize + padY * 2;
+    const lx = Math.max(2, Math.min(canvas.width - w - 2, cx + radius + 4));
+    const ly = Math.max(2, Math.min(canvas.height - h - 2, cy + radius + 4));
     // bubble
     ctx.fillStyle = o.color;
     roundRect(ctx, lx, ly, w, h, 4);
@@ -670,19 +671,20 @@ export async function runThreatReportExport(
       );
     } else {
       const showUnit = sp.rows.some((r) => !!r.unitName);
+      // Hug Class / Unit / Annotation ID; give Instance ID + Source the slack.
       const cols = showUnit
         ? [
-            ["Instance ID", 1500],
-            ["Class", 2400],
-            ["Unit", 1500],
-            ["Annotation ID", 1700],
-            ["Source", 2260],
+            ["Instance ID", 2700],
+            ["Class", 1300],
+            ["Unit", 900],
+            ["Annotation ID", 1200],
+            ["Source", 3260],
           ]
         : [
-            ["Instance ID", 1700],
-            ["Class", 2800],
-            ["Annotation ID", 2000],
-            ["Source", 2860],
+            ["Instance ID", 2900],
+            ["Class", 1500],
+            ["Annotation ID", 1400],
+            ["Source", 3560],
           ];
       const widths = cols.map(([, w]) => w as number);
       docChildren.push(
@@ -697,17 +699,17 @@ export async function runThreatReportExport(
             ...sp.rows.map((r) => {
               const cells = showUnit
                 ? [
-                    tableBodyCell(r.instanceId, 1500, { mono: true }),
-                    tableBodyCell(r.awpClassName, 2400),
-                    tableBodyCell(r.unitName ?? "—", 1500),
-                    tableBodyCell(r.annotationBaseId, 1700, { mono: true, muted: true }),
-                    tableBodyCell(`${r.fileName} · Page ${r.pageIndex}`, 2260, { muted: true }),
+                    tableBodyCell(r.instanceId, 2700, { mono: true }),
+                    tableBodyCell(r.awpClassName, 1300),
+                    tableBodyCell(r.unitName ?? "—", 900),
+                    tableBodyCell(r.annotationBaseId, 1200, { mono: true, muted: true }),
+                    tableBodyCell(`${r.fileName} · Page ${r.pageIndex}`, 3260, { muted: true }),
                   ]
                 : [
-                    tableBodyCell(r.instanceId, 1700, { mono: true }),
-                    tableBodyCell(r.awpClassName, 2800),
-                    tableBodyCell(r.annotationBaseId, 2000, { mono: true, muted: true }),
-                    tableBodyCell(`${r.fileName} · Page ${r.pageIndex}`, 2860, { muted: true }),
+                    tableBodyCell(r.instanceId, 2900, { mono: true }),
+                    tableBodyCell(r.awpClassName, 1500),
+                    tableBodyCell(r.annotationBaseId, 1400, { mono: true, muted: true }),
+                    tableBodyCell(`${r.fileName} · Page ${r.pageIndex}`, 3560, { muted: true }),
                   ];
               return new TableRow({ children: cells });
             }),
@@ -717,16 +719,24 @@ export async function runThreatReportExport(
     }
 
     if (sp.units.length > 0) {
+      const totalUnits = sp.units.reduce((acc, u) => acc + Math.max(1, u.count ?? 1), 0);
       docChildren.push(
-        para([text(`Units on this level (${sp.units.length})`, { bold: true, size: 20 })], {
-          spacing: { before: 240, after: 120 },
-        }),
+        para(
+          [
+            text(
+              `Units on this level (${totalUnits} ${totalUnits === 1 ? "unit" : "units"})`,
+              { bold: true, size: 20 },
+            ),
+          ],
+          { spacing: { before: 240, after: 120 } },
+        ),
       );
       for (const u of sp.units) {
         const cleaned = u.name.replace(/^Template\s*-\s*/, "");
+        const mult = (u.count ?? 1) > 1 ? ` (×${u.count})` : "";
         docChildren.push(
           para([
-            text(cleaned),
+            text(`${cleaned}${mult}`),
             text(`  ·  ${u.pageIdxs.map((p) => `p${p}`).join(", ")}`, { color: "6B7280" }),
           ]),
         );
