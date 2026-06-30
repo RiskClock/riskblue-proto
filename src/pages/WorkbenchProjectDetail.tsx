@@ -1876,37 +1876,6 @@ export default function WorkbenchProjectDetail() {
       }
     }
 
-    // Manual page → level assignments (Option C override).
-    // Stored on the sheet under floor_plan_overrides.__manual_levels__ as a
-    // string[] of canonical level names. These are merged in as synthetic
-    // level-plan entries so the page shows up under those level details.
-    const fileById = new Map(files.map((f) => [f.id, f]));
-    for (const s of sheets) {
-      const ovr = (s.floor_plan_overrides as Record<string, any> | null) ?? null;
-      const manual = ovr?.["__manual_levels__"];
-      if (!Array.isArray(manual) || manual.length === 0) continue;
-      const file = fileById.get(s.parent_file_id);
-      if (!file) continue;
-      const key = `${file.name}::${s.page_index}`;
-      const canon: string[] = [];
-      for (const raw of manual) {
-        if (typeof raw !== "string") continue;
-        if (canonicalLevelNames.includes(raw)) canon.push(raw);
-      }
-      if (canon.length === 0) continue;
-      const lpArr = pageLevelPlans.get(key) || [];
-      lpArr.push({ levels: canon, bbox: null });
-      pageLevelPlans.set(key, lpArr);
-      const ls = levelMap.get(key) || new Set<string>();
-      const pairs = unitMap.get(key) || [];
-      for (const lvl of canon) {
-        ls.add(lvl);
-        if (!pairs.some((p) => p.level === lvl && !p.unit)) pairs.push({ level: lvl });
-      }
-      levelMap.set(key, ls);
-      unitMap.set(key, pairs);
-    }
-
     return { levelMap, unitMap, pageUnitPlans, pageLevelPlans };
   }, [rows?.files, rows?.sheets, floorPlansByFile, canonicalLevelNames]);
 
