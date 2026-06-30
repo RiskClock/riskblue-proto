@@ -4526,6 +4526,7 @@ function InstancesReportModal({
   const [loading, setLoading] = useState(false);
   const [instances, setInstances] = useState<any[]>([]);
   const [selected, setSelected] = useState<string>("__overview__");
+  const [assignLevelTarget, setAssignLevelTarget] = useState<string | null>(null);
 
   useEffect(() => {
     if (!open || !requestId) return;
