@@ -671,19 +671,20 @@ export async function runThreatReportExport(
       );
     } else {
       const showUnit = sp.rows.some((r) => !!r.unitName);
+      // Hug Class / Unit / Annotation ID; give Instance ID + Source the slack.
       const cols = showUnit
         ? [
-            ["Instance ID", 1500],
-            ["Class", 2400],
-            ["Unit", 1500],
-            ["Annotation ID", 1700],
-            ["Source", 2260],
+            ["Instance ID", 2700],
+            ["Class", 1300],
+            ["Unit", 900],
+            ["Annotation ID", 1200],
+            ["Source", 3260],
           ]
         : [
-            ["Instance ID", 1700],
-            ["Class", 2800],
-            ["Annotation ID", 2000],
-            ["Source", 2860],
+            ["Instance ID", 2900],
+            ["Class", 1500],
+            ["Annotation ID", 1400],
+            ["Source", 3560],
           ];
       const widths = cols.map(([, w]) => w as number);
       docChildren.push(
@@ -698,17 +699,17 @@ export async function runThreatReportExport(
             ...sp.rows.map((r) => {
               const cells = showUnit
                 ? [
-                    tableBodyCell(r.instanceId, 1500, { mono: true }),
-                    tableBodyCell(r.awpClassName, 2400),
-                    tableBodyCell(r.unitName ?? "—", 1500),
-                    tableBodyCell(r.annotationBaseId, 1700, { mono: true, muted: true }),
-                    tableBodyCell(`${r.fileName} · Page ${r.pageIndex}`, 2260, { muted: true }),
+                    tableBodyCell(r.instanceId, 2700, { mono: true }),
+                    tableBodyCell(r.awpClassName, 1300),
+                    tableBodyCell(r.unitName ?? "—", 900),
+                    tableBodyCell(r.annotationBaseId, 1200, { mono: true, muted: true }),
+                    tableBodyCell(`${r.fileName} · Page ${r.pageIndex}`, 3260, { muted: true }),
                   ]
                 : [
-                    tableBodyCell(r.instanceId, 1700, { mono: true }),
-                    tableBodyCell(r.awpClassName, 2800),
-                    tableBodyCell(r.annotationBaseId, 2000, { mono: true, muted: true }),
-                    tableBodyCell(`${r.fileName} · Page ${r.pageIndex}`, 2860, { muted: true }),
+                    tableBodyCell(r.instanceId, 2900, { mono: true }),
+                    tableBodyCell(r.awpClassName, 1500),
+                    tableBodyCell(r.annotationBaseId, 1400, { mono: true, muted: true }),
+                    tableBodyCell(`${r.fileName} · Page ${r.pageIndex}`, 3560, { muted: true }),
                   ];
               return new TableRow({ children: cells });
             }),
@@ -718,16 +719,24 @@ export async function runThreatReportExport(
     }
 
     if (sp.units.length > 0) {
+      const totalUnits = sp.units.reduce((acc, u) => acc + Math.max(1, u.count ?? 1), 0);
       docChildren.push(
-        para([text(`Units on this level (${sp.units.length})`, { bold: true, size: 20 })], {
-          spacing: { before: 240, after: 120 },
-        }),
+        para(
+          [
+            text(
+              `Units on this level (${totalUnits} ${totalUnits === 1 ? "unit" : "units"})`,
+              { bold: true, size: 20 },
+            ),
+          ],
+          { spacing: { before: 240, after: 120 } },
+        ),
       );
       for (const u of sp.units) {
         const cleaned = u.name.replace(/^Template\s*-\s*/, "");
+        const mult = (u.count ?? 1) > 1 ? ` (×${u.count})` : "";
         docChildren.push(
           para([
-            text(cleaned),
+            text(`${cleaned}${mult}`),
             text(`  ·  ${u.pageIdxs.map((p) => `p${p}`).join(", ")}`, { color: "6B7280" }),
           ]),
         );
