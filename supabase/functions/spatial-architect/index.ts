@@ -360,6 +360,26 @@ Deno.serve(async (req) => {
     return json({ status: parsed ? "complete" : "failed", result });
   } catch (e) {
     console.error("[spatial-architect] Handler error:", e);
+    // Best-effort: try to mark the row failed so the UI doesn't stay running.
+    try {
+      const supabaseUrl = Deno.env.get("SUPABASE_URL");
+      const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+      const body = await req.clone().json().catch(() => ({} as any));
+      const reqId = (body as any)?.analysisRequestId;
+      if (supabaseUrl && serviceKey && reqId) {
+        const admin = createClient(supabaseUrl, serviceKey);
+        await admin
+          .from("analysis_requests")
+          .update({
+            space_hierarchy_status: "failed",
+            space_hierarchy_error: e instanceof Error ? e.message : String(e),
+            space_hierarchy_updated_at: new Date().toISOString(),
+          } as any)
+          .eq("id", reqId);
+      }
+    } catch (_) {
+      /* ignore */
+    }
     return json({ error: e instanceof Error ? e.message : String(e) }, 500);
   }
 });
