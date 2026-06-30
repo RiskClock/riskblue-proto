@@ -5059,22 +5059,41 @@ function InstancesReportModal({
   const renderSpaceDetail = (space: string) => {
     const rows = instancesForSpace(space);
     const label = space === "__unassigned__" ? "Unassigned" : space;
-    // Units assigned to this level — derived from pageSpaceUnitMap (survey-rolled).
-    const unitMap = new Map<string, Array<{ fileName: string; pageIdx: number }>>();
+    // Units assigned to this level — derived from pageUnitPlansMap so we can
+    // honor the +/- picker count (a unit added twice → count = 2).
+    const unitInfo = new Map<string, { count: number; pageIdxs: Set<number> }>();
     if (space !== "__unassigned__") {
+      for (const [key, ups] of pageUnitPlansMap.entries()) {
+        const [, pageStr] = key.split("::");
+        const pageIdx = parseInt(pageStr, 10);
+        for (const up of ups) {
+          const lc = up.levelsWithCounts.find((x) => x.level === space);
+          if (!lc || lc.count <= 0) continue;
+          const cur = unitInfo.get(up.unitLabel) || { count: 0, pageIdxs: new Set<number>() };
+          cur.count += lc.count;
+          cur.pageIdxs.add(pageIdx);
+          unitInfo.set(up.unitLabel, cur);
+        }
+      }
+      // Fallback: include any (level, unit) pairs we know about but had no
+      // matching unit_floor_plan page (e.g. spatial-architect supplied).
       for (const [key, pairs] of pageSpaceUnitMap.entries()) {
         for (const pair of pairs) {
           if (pair.level !== space || !pair.unit) continue;
-          const [fileName, pageStr] = key.split("::");
-          const arr = unitMap.get(pair.unit) || [];
-          arr.push({ fileName, pageIdx: parseInt(pageStr, 10) });
-          unitMap.set(pair.unit, arr);
+          if (unitInfo.has(pair.unit)) continue;
+          const [, pageStr] = key.split("::");
+          unitInfo.set(pair.unit, { count: 1, pageIdxs: new Set([parseInt(pageStr, 10)]) });
         }
       }
     }
-    const unitsList = Array.from(unitMap.entries())
-      .map(([name, pages]) => ({ name, pages }))
+    const unitsList = Array.from(unitInfo.entries())
+      .map(([name, info]) => ({
+        name,
+        count: info.count,
+        pages: Array.from(info.pageIdxs).sort((a, b) => a - b).map((pageIdx) => ({ pageIdx })),
+      }))
       .sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: "base" }));
+    const totalUnitCount = unitsList.reduce((acc, u) => acc + Math.max(1, u.count), 0);
     const unitNamesForLevel = new Set(unitsList.map((u) => u.name));
 
     // Drawings to display for this space:
