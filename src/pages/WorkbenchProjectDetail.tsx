@@ -3180,9 +3180,9 @@ export default function WorkbenchProjectDetail() {
                                               <div className="text-[10px] text-muted-foreground truncate">
                                                 {err
                                                   ? <span className="text-destructive">Error: {err}</span>
-                                                  : tokens
-                                                    ? `in ${Number(tokens.prompt ?? 0).toLocaleString()} · cached ${Number(tokens.cached ?? 0).toLocaleString()} (${tokens.cacheHitPct ?? 0}%) · out ${Number(tokens.candidates ?? 0).toLocaleString()} · total ${Number(tokens.total ?? 0).toLocaleString()}`
-                                                    : hasResp ? `${text.length.toLocaleString()} chars` : "No response"}
+                                                    : tokens
+                                                      ? `in ${Number(tokens.prompt ?? 0).toLocaleString()} · cached ${Number(tokens.cached ?? 0).toLocaleString()} (${tokens.cacheHitPct ?? 0}%) · out ${Number(tokens.candidates ?? 0).toLocaleString()} · total ${Number(tokens.total ?? 0).toLocaleString()}${tokens.durationMs ? ` · ${formatDuration(tokens.durationMs)}` : ""}`
+                                                      : hasResp ? `${text.length.toLocaleString()} chars` : "No response"}
                                               </div>
                                             </div>
                                             <Button
