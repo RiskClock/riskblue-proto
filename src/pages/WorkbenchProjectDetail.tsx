@@ -5584,6 +5584,12 @@ function InstancesReportModal({
       </DialogContent>
     </Dialog>
     <PreparingReportModal open={exporting} progress={exportProgress} />
+    <AssignPagesToLevelModal
+      open={!!assignLevelTarget}
+      level={assignLevelTarget}
+      fileGroups={fileGroups}
+      onClose={() => setAssignLevelTarget(null)}
+    />
     </>
   );
 }
