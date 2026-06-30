@@ -2966,14 +2966,14 @@ export default function WorkbenchProjectDetail() {
                 <Button
                   type="button"
                   variant="outline"
-                  onClick={buildSpaceHierarchy}
-                  disabled={!requestId || spaceHierarchyRunning}
-                  title="Normalize Scout's per-page level/unit labels into a canonical space hierarchy."
+                  onClick={() => setSpatialArchitectOpen(true)}
+                  disabled={!requestId}
+                  title="View and edit canonical levels; run the Spatial Architect agent."
                 >
                   {spaceHierarchyRunning ? (
                     <>
                       <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                      Analyzing Spaces…
+                      Spatial Architect…
                     </>
                   ) : (
                     "Spatial Architect"
