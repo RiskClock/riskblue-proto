@@ -37,6 +37,11 @@ export interface ThreatReportPageRef {
     ny: number;
     color: string;
     label: string;
+    /** Defaults to "circle" when omitted. */
+    shape?: "circle" | "rect";
+    /** Rect width/height in normalized 0..1 of the page (rect shape only). */
+    nw?: number;
+    nh?: number;
   }>;
   tabLabel: string;
 }
