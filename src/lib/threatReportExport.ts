@@ -200,7 +200,8 @@ async function renderPageWithMarkers(
   }
 
   // Draw circle annotation overlays.
-  const labelFont = `bold ${Math.max(11, Math.round(canvas.width * 0.011))}px ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif`;
+  const labelSize = Math.max(11, Math.round(canvas.width * 0.011));
+  const labelFont = `bold ${labelSize}px ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif`;
   ctx.font = labelFont;
   const radius = Math.max(7, Math.round(canvas.width * 0.008));
 
@@ -233,9 +234,9 @@ async function renderPageWithMarkers(
     const padX = 6;
     const padY = 3;
     const w = Math.ceil(metrics.width) + padX * 2;
-    const h = Math.ceil(parseInt(labelFont, 10)) + padY * 2;
-    const lx = Math.min(canvas.width - w - 2, cx + radius + 4);
-    const ly = Math.min(canvas.height - h - 2, cy + radius + 4);
+    const h = labelSize + padY * 2;
+    const lx = Math.max(2, Math.min(canvas.width - w - 2, cx + radius + 4));
+    const ly = Math.max(2, Math.min(canvas.height - h - 2, cy + radius + 4));
     // bubble
     ctx.fillStyle = o.color;
     roundRect(ctx, lx, ly, w, h, 4);
