@@ -286,6 +286,7 @@ Deno.serve(async (req) => {
                 candidates: candidatesTokens,
                 total: totalTokens,
                 cacheHitPct,
+                durationMs: Date.now() - runStartedAt,
               },
               model: GEMINI_MODEL,
             };
