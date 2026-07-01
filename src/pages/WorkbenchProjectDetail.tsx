@@ -1845,8 +1845,8 @@ export default function WorkbenchProjectDetail() {
             }
             unitMap.set(key, pairs);
           } else if (e.type === "unit_floor_plan") {
-            const unitLabel = fp.reference_id || floorPlanDisplayLabel(fp);
-            const refKey = (fp.reference_id || "").trim().toLowerCase();
+            const unitLabel = e.name;
+            const refKey = e.name.trim().toLowerCase();
             const counts = refKey ? unitRefToLevelCounts.get(refKey) : null;
             const levelsWithCounts: Array<{ level: string; count: number }> = counts
               ? Array.from(counts.entries()).map(([level, count]) => ({ level, count }))
