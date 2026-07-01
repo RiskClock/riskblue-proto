@@ -1787,7 +1787,14 @@ export default function WorkbenchProjectDetail() {
         Array.isArray(ovr.bbox_pct) && ovr.bbox_pct.length === 4 && ovr.bbox_pct.every((n: any) => Number.isFinite(n))
           ? [ovr.bbox_pct[0], ovr.bbox_pct[1], ovr.bbox_pct[2], ovr.bbox_pct[3]]
           : fp.xy_width_height_pct;
-      return { type, floors: floors || [], units: units || [], bbox };
+      // Effective name: user-typed override.name wins over Scout's reference_id.
+      // Level plans reference units by this human-readable name, so unit plans
+      // must expose the same string as their identifier.
+      const name: string =
+        typeof ovr.name === "string" && ovr.name.trim()
+          ? ovr.name.trim()
+          : (fp.reference_id || floorPlanDisplayLabel(fp));
+      return { type, floors: floors || [], units: units || [], bbox, name };
     };
 
     // unit ref (lowercased) -> canonical level -> occurrence count.
@@ -1838,8 +1845,8 @@ export default function WorkbenchProjectDetail() {
             }
             unitMap.set(key, pairs);
           } else if (e.type === "unit_floor_plan") {
-            const unitLabel = fp.reference_id || floorPlanDisplayLabel(fp);
-            const refKey = (fp.reference_id || "").trim().toLowerCase();
+            const unitLabel = e.name;
+            const refKey = e.name.trim().toLowerCase();
             const counts = refKey ? unitRefToLevelCounts.get(refKey) : null;
             const levelsWithCounts: Array<{ level: string; count: number }> = counts
               ? Array.from(counts.entries()).map(([level, count]) => ({ level, count }))
