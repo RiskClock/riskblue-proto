@@ -183,7 +183,7 @@ export const DocumentSurface = ({
     const height = editorBbox.nh * pageSize.height;
     const handleSize = 10;
     const half = handleSize / 2;
-    const edgeColor = "hsl(var(--primary))";
+    const edgeColor = editorColor || "hsl(var(--primary))";
     const handles: { id: HandleId; left: number; top: number; w: number; h: number }[] = [
       // edges (thin strips)
       { id: "n", left: 0, top: -half, w: width, h: handleSize },
