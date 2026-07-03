@@ -450,13 +450,26 @@ export default function WorkbenchProjectDetail() {
   const activePageFloorPlans = useMemo<ParsedFloorPlan[]>(() => {
     if (!activePageView) return [];
     const deleted = getDeletedPlanIds(activeFloorPlanOverrides);
-    const base = (activeFileFloorPlansByPage.get(activePageView.page) ?? []).filter(
+    const baseRaw = (activeFileFloorPlansByPage.get(activePageView.page) ?? []).filter(
       (fp) => !deleted.has(fp.plan_id),
     );
-    const added = getAddedUnitPlans(activeFloorPlanOverrides, activePageView.page)
-      .filter((e) => !deleted.has(e.plan_id))
-      .map(addedUnitPlanToParsed);
-    return [...base, ...added];
+    const addedRaw = getAddedUnitPlans(activeFloorPlanOverrides, activePageView.page)
+      .filter((e) => !deleted.has(e.plan_id));
+    const knownIds = new Set<string>([
+      ...baseRaw.map((fp) => fp.plan_id),
+      ...addedRaw.map((fp) => fp.plan_id),
+    ]);
+    const base = baseRaw.map((fp) => materializeFloorPlan(fp, activeFloorPlanOverrides));
+    const added = addedRaw
+      .map(addedUnitPlanToParsed)
+      .map((fp) => materializeFloorPlan(fp, activeFloorPlanOverrides));
+    const overrideOnly = overrideOnlyFloorPlans(
+      activeFloorPlanOverrides,
+      activePageView.page,
+      knownIds,
+      deleted,
+    );
+    return [...base, ...added, ...overrideOnly];
   }, [activeFileFloorPlansByPage, activePageView, activeFloorPlanOverrides]);
 
   // NOTE: `activeFileAllUnitPlans` is declared later (after `rows`) so it can
@@ -986,11 +999,40 @@ export default function WorkbenchProjectDetail() {
         const sheet = sheetByFilePage.get(`${f.id}::${page}`);
         const overrides = sheet?.floor_plan_overrides ?? null;
         const deleted = getDeletedPlanIds(overrides);
-        const kept = plans.filter((p) => !deleted.has(p.plan_id));
-        const added = getAddedUnitPlans(overrides, page).map(addedUnitPlanToParsed);
+        const keptRaw = plans.filter((p) => !deleted.has(p.plan_id));
+        const addedRaw = getAddedUnitPlans(overrides, page).filter(
+          (p) => !deleted.has(p.plan_id),
+        );
+        const knownIds = new Set<string>([
+          ...keptRaw.map((p) => p.plan_id),
+          ...addedRaw.map((p) => p.plan_id),
+        ]);
+        const kept = keptRaw.map((p) => materializeFloorPlan(p, overrides));
+        const added = addedRaw
+          .map(addedUnitPlanToParsed)
+          .map((p) => materializeFloorPlan(p, overrides));
+        const manual = overrideOnlyFloorPlans(overrides, page, knownIds, deleted);
         if (kept.length > 0 || added.length > 0) {
-          filtered.set(page, [...kept, ...added]);
+          filtered.set(page, [...kept, ...added, ...manual]);
         }
+      }
+      for (const s of rows?.sheets ?? []) {
+        if (s.parent_file_id !== f.id || filtered.has(s.page_index)) continue;
+        const overrides = s.floor_plan_overrides ?? null;
+        const deleted = getDeletedPlanIds(overrides);
+        const addedRaw = getAddedUnitPlans(overrides, s.page_index).filter(
+          (p) => !deleted.has(p.plan_id),
+        );
+        const added = addedRaw
+          .map(addedUnitPlanToParsed)
+          .map((p) => materializeFloorPlan(p, overrides));
+        const manual = overrideOnlyFloorPlans(
+          overrides,
+          s.page_index,
+          new Set(addedRaw.map((p) => p.plan_id)),
+          deleted,
+        );
+        if (added.length > 0 || manual.length > 0) filtered.set(s.page_index, [...added, ...manual]);
       }
       m.set(f.id, filtered);
     }
