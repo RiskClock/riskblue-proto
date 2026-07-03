@@ -337,6 +337,14 @@ export const FileViewerModal = ({
     instanceId: string;
     anchor: { x: number; y: number };
   }>(null);
+  // When the metadata popover dismisses via an outside mousedown, the same
+  // pointerup then fires on the document surface and would create a new
+  // marker. Skip canvas clicks for a short window after any popover close.
+  const suppressCanvasClickUntilRef = useRef(0);
+  const closeMetadataDialog = useCallback(() => {
+    suppressCanvasClickUntilRef.current = Date.now() + 350;
+    setMetadataDialog(null);
+  }, []);
 
   const effectiveFloorPlanOverrides = useMemo(() => {
     if (!editingPlan) return floorPlanOverrides ?? {};
