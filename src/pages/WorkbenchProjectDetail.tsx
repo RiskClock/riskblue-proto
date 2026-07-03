@@ -412,20 +412,10 @@ export default function WorkbenchProjectDetail() {
     return [...base, ...added];
   }, [activeFileFloorPlansByPage, activePageView, activeFloorPlanOverrides]);
 
-  const activeFileAllUnitPlans = useMemo<ParsedFloorPlan[]>(() => {
-    const deleted = getDeletedPlanIds(activeFloorPlanOverrides);
-    const out: ParsedFloorPlan[] = [];
-    for (const plans of activeFileFloorPlansByPage.values()) {
-      for (const p of plans) {
-        if (p.type === "unit_floor_plan" && !deleted.has(p.plan_id)) out.push(p);
-      }
-    }
-    for (const entry of getAddedUnitPlans(activeFloorPlanOverrides)) {
-      const parsed = addedUnitPlanToParsed(entry);
-      if (parsed.type === "unit_floor_plan" && !deleted.has(parsed.plan_id)) out.push(parsed);
-    }
-    return out;
-  }, [activeFileFloorPlansByPage, activeFloorPlanOverrides]);
+  // NOTE: `activeFileAllUnitPlans` is declared later (after `rows`) so it can
+  // merge added-unit-plan entries persisted in other sheets of the same file.
+
+
 
   const activeFileAllLevelPlans = useMemo<ParsedFloorPlan[]>(() => {
     const deleted = getDeletedPlanIds(activeFloorPlanOverrides);
@@ -979,6 +969,49 @@ export default function WorkbenchProjectDetail() {
     }
     return out;
   }, [rows?.sheets, activePageView?.file.id]);
+
+  // File-wide unit floor plans (both survey-parsed and user-added on any page
+  // of the active file). Merging across sheets is required because a level
+  // plan on page N can reference a Detail added on page M — each sheet stores
+  // its own __added_unit_plans array.
+  const activeFileAllUnitPlans = useMemo<ParsedFloorPlan[]>(() => {
+    const deleted = getDeletedPlanIds(activeFloorPlanOverrides);
+    const out: ParsedFloorPlan[] = [];
+    for (const plans of activeFileFloorPlansByPage.values()) {
+      for (const p of plans) {
+        if (p.type === "unit_floor_plan" && !deleted.has(p.plan_id)) out.push(p);
+      }
+    }
+    const activeFileId = activePageView?.file.id;
+    const seen = new Set(out.map((p) => p.plan_id));
+    for (const entry of getAddedUnitPlans(activeFloorPlanOverrides)) {
+      const parsed = addedUnitPlanToParsed(entry);
+      if (parsed.type !== "unit_floor_plan") continue;
+      if (deleted.has(parsed.plan_id) || seen.has(parsed.plan_id)) continue;
+      seen.add(parsed.plan_id);
+      out.push(parsed);
+    }
+    for (const s of rows?.sheets ?? []) {
+      if (!activeFileId || s.parent_file_id !== activeFileId) continue;
+      const ovr = s.floor_plan_overrides as Record<string, any> | null;
+      if (!ovr) continue;
+      const sheetDeleted = getDeletedPlanIds(ovr);
+      for (const entry of getAddedUnitPlans(ovr)) {
+        const parsed = addedUnitPlanToParsed(entry);
+        if (parsed.type !== "unit_floor_plan") continue;
+        if (sheetDeleted.has(parsed.plan_id) || deleted.has(parsed.plan_id)) continue;
+        if (seen.has(parsed.plan_id)) continue;
+        seen.add(parsed.plan_id);
+        out.push(parsed);
+      }
+    }
+    return out;
+  }, [
+    activeFileFloorPlansByPage,
+    activeFloorPlanOverrides,
+    activePageView?.file.id,
+    rows?.sheets,
+  ]);
 
   // Rehydrate survey results from DB after refresh.
   useEffect(() => {

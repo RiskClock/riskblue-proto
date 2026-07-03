@@ -73,6 +73,8 @@ export interface DrawingViewerProps {
   editorBbox?: EditorBbox | null;
   /** Live updates while the user drags the editor. */
   onEditorBboxChange?: (next: EditorBbox) => void;
+  /** Border/handle color for the editor bbox. */
+  editorColor?: string;
 }
 
 
@@ -105,6 +107,7 @@ export const DrawingViewer = forwardRef<DrawingViewerApi, DrawingViewerProps>(
       interactive = true,
       editorBbox,
       onEditorBboxChange,
+      editorColor,
     },
 
     ref
@@ -476,6 +479,7 @@ export const DrawingViewer = forwardRef<DrawingViewerApi, DrawingViewerProps>(
                     onRenderedSizeChange={onActivePageRenderedSizeChange}
                     editorBbox={editorBbox ?? null}
                     onEditorBboxChange={onEditorBboxChange}
+                    editorColor={editorColor}
                   />
                 ) : (
                   <div className="flex flex-col gap-4">

@@ -27,6 +27,8 @@ interface DocumentSurfaceProps {
   editorBbox?: EditorBbox | null;
   /** Live change while dragging. */
   onEditorBboxChange?: (next: EditorBbox) => void;
+  /** Border / corner-handle color for the editor bbox. Defaults to primary. */
+  editorColor?: string;
 }
 
 const CLICK_MOVE_THRESHOLD = 4;
@@ -65,6 +67,7 @@ export const DocumentSurface = ({
   onRenderedSizeChange,
   editorBbox,
   onEditorBboxChange,
+  editorColor,
 }: DocumentSurfaceProps) => {
   const downRef = useRef<{ x: number; y: number } | null>(null);
   const imgRef = useRef<HTMLImageElement>(null);
@@ -180,7 +183,7 @@ export const DocumentSurface = ({
     const height = editorBbox.nh * pageSize.height;
     const handleSize = 10;
     const half = handleSize / 2;
-    const edgeColor = "hsl(var(--primary))";
+    const edgeColor = editorColor || "hsl(var(--primary))";
     const handles: { id: HandleId; left: number; top: number; w: number; h: number }[] = [
       // edges (thin strips)
       { id: "n", left: 0, top: -half, w: width, h: handleSize },

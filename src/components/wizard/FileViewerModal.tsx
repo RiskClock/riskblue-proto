@@ -337,6 +337,14 @@ export const FileViewerModal = ({
     instanceId: string;
     anchor: { x: number; y: number };
   }>(null);
+  // When the metadata popover dismisses via an outside mousedown, the same
+  // pointerup then fires on the document surface and would create a new
+  // marker. Skip canvas clicks for a short window after any popover close.
+  const suppressCanvasClickUntilRef = useRef(0);
+  const closeMetadataDialog = useCallback(() => {
+    suppressCanvasClickUntilRef.current = Date.now() + 350;
+    setMetadataDialog(null);
+  }, []);
 
   const effectiveFloorPlanOverrides = useMemo(() => {
     if (!editingPlan) return floorPlanOverrides ?? {};
@@ -449,26 +457,8 @@ export const FileViewerModal = ({
 
   const cancelPlanEdit = useCallback(() => setEditingPlan(null), []);
 
-  const handleAddPlan = useCallback(async () => {
-    if (!onAddPlan) return;
-    // Auto-save any in-progress edit first so its bbox/name/type persist
-    // before we hand editing off to the newly-added plan.
-    const prev = editingPlanRef.current;
-    if (prev) {
-      await savePlanEdit();
-    }
-    // Default name: "New Floor Plan N" where N is next index among existing.
-    const existingNames = (floorPlans ?? []).map((fp) =>
-      getEffectiveLabel(fp, floorPlanOverrides ?? {}),
-    );
-    let n = 1;
-    while (existingNames.includes(`New Floor Plan ${n}`)) n++;
-    const name = `New Floor Plan ${n}`;
-    const type = lastPlanTypeRef.current;
-
-    // Size bbox = 50% of the currently-visible viewport, centered on the
-    // current pan/zoom center. Clamp inside 0-100% and cap at ~90% so the
-    // resize handles stay visible when the user is zoomed out to fit page.
+  // 50%-of-viewport bbox centered on the current pan/zoom, clamped to page.
+  const computeCenteredBboxPct = useCallback((): [number, number, number, number] => {
     const visible = viewerApiRef.current?.getVisibleRect?.() as
       | { nx: number; ny: number; nw: number; nh: number }
       | null
@@ -485,10 +475,45 @@ export const FileViewerModal = ({
       y = Math.max(0, Math.min(1 - h, y));
       bbox_pct = [x * 100, y * 100, w * 100, h * 100];
     }
+    return bbox_pct;
+  }, []);
 
+  const handleAddPlan = useCallback(async () => {
+    if (!onAddPlan) return;
+    // Auto-save any in-progress edit first so its bbox/name/type persist
+    // before we hand editing off to the newly-added plan.
+    const prev = editingPlanRef.current;
+    if (prev) {
+      await savePlanEdit();
+    }
+    // Default name: "New Floor Plan N" where N is next index among existing.
+    const existingNames = (floorPlans ?? []).map((fp) =>
+      getEffectiveLabel(fp, floorPlanOverrides ?? {}),
+    );
+    let n = 1;
+    while (existingNames.includes(`New Floor Plan ${n}`)) n++;
+    const name = `New Floor Plan ${n}`;
+    const type = lastPlanTypeRef.current;
+    const bbox_pct = computeCenteredBboxPct();
     pendingNewPlanRef.current = { name, type };
     await onAddPlan({ type, name, bbox_pct });
-  }, [onAddPlan, floorPlans, floorPlanOverrides, savePlanEdit]);
+  }, [onAddPlan, floorPlans, floorPlanOverrides, savePlanEdit, computeCenteredBboxPct]);
+
+  // "Place Unit Floor Plan BBox" — creates a new unit_floor_plan on the current
+  // page keyed to an existing unit reference (typically a Detail from another
+  // page of the same file). The user is dropped into edit mode so they can
+  // resize/reposition the bbox over the unit region shown on the level plan.
+  const handlePlaceUnitBbox = useCallback(
+    async (refId: string) => {
+      if (!onAddPlan) return;
+      const prev = editingPlanRef.current;
+      if (prev) await savePlanEdit();
+      const bbox_pct = computeCenteredBboxPct();
+      pendingNewPlanRef.current = { name: refId, type: "unit_floor_plan" };
+      await onAddPlan({ type: "unit_floor_plan", name: refId, bbox_pct });
+    },
+    [onAddPlan, savePlanEdit, computeCenteredBboxPct],
+  );
 
   // Once the parent has committed the new plan, floorPlans will contain it.
   // Find it by name+type match, enter edit mode, and flag the row for the
@@ -717,6 +742,7 @@ export const FileViewerModal = ({
 
   // ---- User-initiated actions ---------------------------------------------
   const handleCanvasClick = async (nx: number, ny: number) => {
+    if (Date.now() < suppressCanvasClickUntilRef.current) return;
     if (!sidebarEnabled || !selectedClass) return;
     const row = await dbInsert({
       awp_class_name: selectedClass,
@@ -1054,6 +1080,15 @@ export const FileViewerModal = ({
                     : prev,
                 )
               }
+              editorColor={
+                editingPlan
+                  ? awpClassColor(
+                      editingPlan.type === "unit_floor_plan"
+                        ? "Unit Floor Plan"
+                        : "Level Floor Plan",
+                    )
+                  : undefined
+              }
             />
           </div>
 
@@ -1089,6 +1124,7 @@ export const FileViewerModal = ({
                     onEditFloors={onEditFloors}
                     onEditLevelUnits={onEditLevelUnits}
                     onSaveLevelUnits={onSaveLevelUnits}
+                    onPlaceUnitBbox={onAddPlan ? handlePlaceUnitBbox : undefined}
                     instancesOnPage={Array.from(instancesByClassThisFile.values()).flat()}
                     numberByInstanceId={numberByInstanceId}
                     instanceLabel={instanceLabel}
@@ -1288,7 +1324,7 @@ export const FileViewerModal = ({
               title={`${marker} · pipe diameter`}
               currentValue={current}
               suggestions={suggestions}
-              onClose={() => setMetadataDialog(null)}
+              onClose={closeMetadataDialog}
               onCommit={async (next) => {
                 const buildMeta = (base: Record<string, any> | null) => {
                   if (next) return { ...(base || {}), pipe_diameter: next };
@@ -1566,6 +1602,9 @@ interface FloorPlansPanelProps {
     createdRefs?: string[],
     removedRefs?: string[],
   ) => Promise<void> | void;
+  /** Optional: place a new unit-floor-plan bbox on the current page linked
+   *  to an existing unit reference (e.g. "Detail 6"). */
+  onPlaceUnitBbox?: (refId: string) => Promise<void> | void;
   /** Real markers placed on this page (one row per instance). */
   instancesOnPage?: DrawingInstanceRow[];
   numberByInstanceId?: Map<string, number>;
@@ -1592,6 +1631,7 @@ const FloorPlansPanel = ({
   overrides,
   allLevelPlanOverrides,
   onSaveLevelUnits,
+  onPlaceUnitBbox,
   instancesOnPage = [],
   numberByInstanceId,
   instanceLabel,
@@ -1838,6 +1878,7 @@ const FloorPlansPanel = ({
                   effUnits={effUnits}
                   allUnitPlans={allUnitPlans}
                   onSaveLevelUnits={onSaveLevelUnits}
+                  onPlaceUnitBbox={onPlaceUnitBbox}
                 />
               )}
 
@@ -1905,6 +1946,7 @@ interface LevelUnitsSectionProps {
     createdRefs?: string[],
     removedRefs?: string[],
   ) => Promise<void> | void;
+  onPlaceUnitBbox?: (refId: string) => Promise<void> | void;
 }
 
 const LevelUnitsSection = ({
@@ -1912,6 +1954,7 @@ const LevelUnitsSection = ({
   effUnits,
   allUnitPlans,
   onSaveLevelUnits,
+  onPlaceUnitBbox,
 }: LevelUnitsSectionProps) => {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
@@ -2114,6 +2157,67 @@ const LevelUnitsSection = ({
             </span>
           ))}
         </div>
+      )}
+
+      {onPlaceUnitBbox && effUnits.length > 0 && (
+        <PlaceUnitBboxControl
+          units={Array.from(new Set(effUnits))}
+          onPlace={(ref) => void onPlaceUnitBbox(ref)}
+        />
+      )}
+    </div>
+  );
+};
+
+interface PlaceUnitBboxControlProps {
+  units: string[];
+  onPlace: (refId: string) => void;
+}
+
+const PlaceUnitBboxControl = ({ units, onPlace }: PlaceUnitBboxControlProps) => {
+  const [open, setOpen] = useState(false);
+  return (
+    <div className="pt-1">
+      {open ? (
+        <div className="rounded-md border bg-popover">
+          <div className="px-2 py-1 text-[10px] font-medium text-muted-foreground border-b flex items-center justify-between">
+            <span>Pick a unit ref</span>
+            <button
+              type="button"
+              onClick={() => setOpen(false)}
+              className="hover:text-foreground"
+              aria-label="Cancel"
+            >
+              <XIcon className="h-3 w-3" />
+            </button>
+          </div>
+          <div className="max-h-40 overflow-y-auto overscroll-contain">
+            {units.map((u) => (
+              <button
+                key={u}
+                type="button"
+                onClick={() => {
+                  setOpen(false);
+                  onPlace(u);
+                }}
+                className="w-full text-left px-2 py-1 text-xs hover:bg-muted/50"
+              >
+                {u}
+              </button>
+            ))}
+          </div>
+        </div>
+      ) : (
+        <Button
+          type="button"
+          size="sm"
+          variant="outline"
+          className="h-6 px-2 text-[11px] gap-1"
+          onClick={() => setOpen(true)}
+        >
+          <Plus className="h-3 w-3" />
+          Place Unit Floor Plan BBox
+        </Button>
       )}
     </div>
   );

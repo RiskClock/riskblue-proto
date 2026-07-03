@@ -8,7 +8,7 @@ import {
   CommandList,
 } from "@/components/ui/command";
 import { Button } from "@/components/ui/button";
-import { Plus, Trash2, X as XIcon } from "lucide-react";
+import { Check, Plus, Trash2, X as XIcon } from "lucide-react";
 
 export interface AnnotationMetadataPopoverProps {
   open: boolean;
@@ -45,12 +45,14 @@ export function AnnotationMetadataPopover({
   onDelete,
   onClose,
 }: AnnotationMetadataPopoverProps) {
-  const [query, setQuery] = useState<string>(currentValue ?? "");
+  const [query, setQuery] = useState<string>("");
   const rootRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
+    // Always open with an empty text field so typing filters/creates without
+    // the user first clearing the pre-populated current value.
     if (!open) return;
-    setQuery(currentValue ?? "");
+    setQuery("");
   }, [open, currentValue]);
 
   useEffect(() => {
@@ -181,11 +183,21 @@ export function AnnotationMetadataPopover({
                 Clear value
               </CommandItem>
             )}
-            {filtered.map((s) => (
-              <CommandItem key={s} onSelect={() => commit(s)}>
-                {s}
-              </CommandItem>
-            ))}
+            {filtered.map((s) => {
+              const isCurrent =
+                !!currentValue && s.toLowerCase() === currentValue.toLowerCase();
+              return (
+                <CommandItem key={s} onSelect={() => commit(s)}>
+                  <span className="flex-1 truncate">{s}</span>
+                  {isCurrent && (
+                    <Check
+                      className="h-3.5 w-3.5 text-primary shrink-0"
+                      aria-label="Current value"
+                    />
+                  )}
+                </CommandItem>
+              );
+            })}
             {showCreate && (
               <CommandItem onSelect={() => commit(query)}>
                 <Plus className="h-3 w-3 mr-2" />
