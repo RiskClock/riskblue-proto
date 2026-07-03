@@ -420,12 +420,41 @@ export default function WorkbenchProjectDetail() {
         if (p.type === "unit_floor_plan" && !deleted.has(p.plan_id)) out.push(p);
       }
     }
+    // Added-unit-plan entries live per-sheet (page). Merge across every sheet
+    // of the active file so a level plan on page N can reference a Detail
+    // manually added on page M.
+    const activeFileId = activePageView?.file.id;
+    const seen = new Set(out.map((p) => p.plan_id));
+    // Current page's overrides first (freshest in memory).
     for (const entry of getAddedUnitPlans(activeFloorPlanOverrides)) {
       const parsed = addedUnitPlanToParsed(entry);
-      if (parsed.type === "unit_floor_plan" && !deleted.has(parsed.plan_id)) out.push(parsed);
+      if (parsed.type !== "unit_floor_plan") continue;
+      if (deleted.has(parsed.plan_id) || seen.has(parsed.plan_id)) continue;
+      seen.add(parsed.plan_id);
+      out.push(parsed);
+    }
+    // Then every other sheet's persisted overrides for this file.
+    for (const s of rows?.sheets ?? []) {
+      if (!activeFileId || s.parent_file_id !== activeFileId) continue;
+      const ovr = s.floor_plan_overrides as Record<string, any> | null;
+      if (!ovr) continue;
+      const sheetDeleted = getDeletedPlanIds(ovr);
+      for (const entry of getAddedUnitPlans(ovr)) {
+        const parsed = addedUnitPlanToParsed(entry);
+        if (parsed.type !== "unit_floor_plan") continue;
+        if (sheetDeleted.has(parsed.plan_id) || deleted.has(parsed.plan_id)) continue;
+        if (seen.has(parsed.plan_id)) continue;
+        seen.add(parsed.plan_id);
+        out.push(parsed);
+      }
     }
     return out;
-  }, [activeFileFloorPlansByPage, activeFloorPlanOverrides]);
+  }, [
+    activeFileFloorPlansByPage,
+    activeFloorPlanOverrides,
+    activePageView?.file.id,
+    rows?.sheets,
+  ]);
 
   const activeFileAllLevelPlans = useMemo<ParsedFloorPlan[]>(() => {
     const deleted = getDeletedPlanIds(activeFloorPlanOverrides);
