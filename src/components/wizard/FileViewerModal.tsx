@@ -37,7 +37,9 @@ import {
   unitPlanRefKey,
   getEffectiveBbox,
   getEffectiveLabel,
+  getEffectiveType,
 } from "@/lib/surveyFloorPlans";
+import { AnnotationMetadataPopover } from "@/components/wizard/AnnotationMetadataPopover";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -75,7 +77,19 @@ interface DrawingInstanceRow {
   file_id: string;
   created_at: string;
   instance_number: number | null;
+  metadata: Record<string, any> | null;
 }
+
+// Classes that support the pipe-diameter metadata popover.
+// Matched as a case-insensitive substring against the class name.
+const DIAMETER_ENABLED_MATCHERS = [
+  "domestic cold water",
+  "fire suppression",
+];
+const isDiameterEnabledClass = (name: string): boolean => {
+  const n = (name || "").toLowerCase();
+  return DIAMETER_ENABLED_MATCHERS.some((m) => n.includes(m));
+};
 
 interface FileViewerModalProps {
   isOpen: boolean;
@@ -301,6 +315,28 @@ export const FileViewerModal = ({
   const [confirmDelete, setConfirmDelete] = useState<null | { planId: string; label: string }>(null);
   const viewerApiRef = useRef<any>(null);
   const viewerContainerRef = useRef<HTMLDivElement>(null);
+  // Type most recently applied to a plan in this session; new plans default
+  // to it so users don't have to reset the toggle between adds.
+  const lastPlanTypeRef = useRef<"level_floor_plan" | "unit_floor_plan">(
+    "level_floor_plan",
+  );
+  // When a user just added a plan, we remember its (name, type) here so the
+  // effect below can find the resulting plan_id once the parent re-renders
+  // with the new floorPlans array — then automatically enter edit mode +
+  // focus/select the name input.
+  const pendingNewPlanRef = useRef<
+    | {
+        name: string;
+        type: "level_floor_plan" | "unit_floor_plan";
+      }
+    | null
+  >(null);
+  const [focusNamePlanId, setFocusNamePlanId] = useState<string | null>(null);
+  // Metadata popover for DCW / Fire Suppression annotations (pipe diameter).
+  const [metadataDialog, setMetadataDialog] = useState<null | {
+    instanceId: string;
+    anchor: { x: number; y: number };
+  }>(null);
 
   const effectiveFloorPlanOverrides = useMemo(() => {
     if (!editingPlan) return floorPlanOverrides ?? {};
@@ -338,6 +374,9 @@ export const FileViewerModal = ({
   const savePlanEdit = useCallback(async () => {
     const cur = editingPlanRef.current;
     if (!cur || !onSaveFloorPlanOverride) return;
+    if (cur.type === "level_floor_plan" || cur.type === "unit_floor_plan") {
+      lastPlanTypeRef.current = cur.type;
+    }
     await onSaveFloorPlanOverride(cur.planId, {
       bbox_pct: cur.bbox,
       name: cur.name.trim() || null,
@@ -412,23 +451,60 @@ export const FileViewerModal = ({
 
   const handleAddPlan = useCallback(async () => {
     if (!onAddPlan) return;
-    // Auto-save any in-progress edit first.
+    // Auto-save any in-progress edit first so its bbox/name/type persist
+    // before we hand editing off to the newly-added plan.
     const prev = editingPlanRef.current;
     if (prev) {
       await savePlanEdit();
     }
-    // Default name: "New Floor Plan N" where N is next index among existing plans.
+    // Default name: "New Floor Plan N" where N is next index among existing.
     const existingNames = (floorPlans ?? []).map((fp) =>
       getEffectiveLabel(fp, floorPlanOverrides ?? {}),
     );
     let n = 1;
     while (existingNames.includes(`New Floor Plan ${n}`)) n++;
-    await onAddPlan({
-      type: "level_floor_plan",
-      name: `New Floor Plan ${n}`,
-      bbox_pct: [30, 30, 40, 40],
-    });
+    const name = `New Floor Plan ${n}`;
+    const type = lastPlanTypeRef.current;
+
+    // Size bbox = 50% of the currently-visible viewport, centered on the
+    // current pan/zoom center. Clamp inside 0-100% and cap at ~90% so the
+    // resize handles stay visible when the user is zoomed out to fit page.
+    const visible = viewerApiRef.current?.getVisibleRect?.() as
+      | { nx: number; ny: number; nw: number; nh: number }
+      | null
+      | undefined;
+    let bbox_pct: [number, number, number, number] = [30, 30, 40, 40];
+    if (visible && Number.isFinite(visible.nw) && Number.isFinite(visible.nh)) {
+      const cx = visible.nx + visible.nw / 2;
+      const cy = visible.ny + visible.nh / 2;
+      const w = Math.max(0.05, Math.min(0.9, visible.nw * 0.5));
+      const h = Math.max(0.05, Math.min(0.9, visible.nh * 0.5));
+      let x = cx - w / 2;
+      let y = cy - h / 2;
+      x = Math.max(0, Math.min(1 - w, x));
+      y = Math.max(0, Math.min(1 - h, y));
+      bbox_pct = [x * 100, y * 100, w * 100, h * 100];
+    }
+
+    pendingNewPlanRef.current = { name, type };
+    await onAddPlan({ type, name, bbox_pct });
   }, [onAddPlan, floorPlans, floorPlanOverrides, savePlanEdit]);
+
+  // Once the parent has committed the new plan, floorPlans will contain it.
+  // Find it by name+type match, enter edit mode, and flag the row for the
+  // input to autofocus + select all.
+  useEffect(() => {
+    const pending = pendingNewPlanRef.current;
+    if (!pending || !floorPlans || floorPlans.length === 0) return;
+    const match = floorPlans.find((fp) => {
+      const label = getEffectiveLabel(fp, floorPlanOverrides ?? {});
+      return label === pending.name;
+    });
+    if (!match) return;
+    pendingNewPlanRef.current = null;
+    setFocusNamePlanId(match.plan_id);
+    void enterPlanEdit(match);
+  }, [floorPlans, floorPlanOverrides, enterPlanEdit]);
 
   // Guard tab/close transitions when there are unsaved edits.
   const guardThen = useCallback(
@@ -512,7 +588,7 @@ export const FileViewerModal = ({
       setLoadingInstances(true);
       const { data, error } = await supabase
         .from("drawing_instances" as any)
-        .select("id, awp_class_name, nx, ny, page_index, file_id, created_at, instance_number")
+        .select("id, awp_class_name, nx, ny, page_index, file_id, created_at, instance_number, metadata")
         .eq("analysis_request_id", analysisRequestId!)
         .order("created_at", { ascending: true });
       if (!cancelled) {
@@ -553,7 +629,7 @@ export const FileViewerModal = ({
           instance_number: nextNum,
           ...args,
         } as any)
-        .select("id, awp_class_name, nx, ny, page_index, file_id, created_at, instance_number")
+        .select("id, awp_class_name, nx, ny, page_index, file_id, created_at, instance_number, metadata")
         .single();
       if (error) {
         toast({
@@ -589,6 +665,26 @@ export const FileViewerModal = ({
     [toast, onInstancesChanged],
   );
 
+  const dbUpdateMetadata = useCallback(
+    async (id: string, metadata: Record<string, any> | null): Promise<boolean> => {
+      const { error } = await supabase
+        .from("drawing_instances" as any)
+        .update({ metadata } as any)
+        .eq("id", id);
+      if (error) {
+        toast({
+          variant: "destructive",
+          title: "Could not save details",
+          description: getUserFriendlyError(error),
+        });
+        return false;
+      }
+      onInstancesChanged?.();
+      return true;
+    },
+    [toast, onInstancesChanged],
+  );
+
   // When viewing a per-sheet PDF (sheetId provided), the rendered PDF only
   // has a single page (currentPage === 1) but instances are persisted under
   // their original `pageIndex` from the source document. When viewing the
@@ -603,6 +699,20 @@ export const FileViewerModal = ({
     if (typeof document === "undefined") return;
     const el = document.activeElement as HTMLElement | null;
     if (el && typeof el.blur === "function") el.blur();
+  };
+
+  // Compute a viewport-space anchor point for a marker at normalized doc
+  // coords (nx, ny). Uses the rendered surface DOM to survive pan/zoom.
+  const anchorForNormalizedPoint = (
+    nx: number,
+    ny: number,
+  ): { x: number; y: number } | null => {
+    const surface = document.querySelector(
+      "[data-doc-surface]",
+    ) as HTMLElement | null;
+    if (!surface) return null;
+    const r = surface.getBoundingClientRect();
+    return { x: r.left + nx * r.width, y: r.top + ny * r.height };
   };
 
   // ---- User-initiated actions ---------------------------------------------
@@ -620,6 +730,12 @@ export const FileViewerModal = ({
     setFuture([]);
     if (activeTab !== "detections") setActiveTab("detections");
     blurActive();
+    // For DCW / FS annotations, immediately prompt for pipe diameter so the
+    // user can tag the marker without a second click.
+    if (isDiameterEnabledClass(row.awp_class_name)) {
+      const anchor = anchorForNormalizedPoint(row.nx, row.ny);
+      if (anchor) setMetadataDialog({ instanceId: row.id, anchor });
+    }
   };
 
   const handleOverlayClick = async (overlayId: string) => {
@@ -627,6 +743,14 @@ export const FileViewerModal = ({
     const instId = overlayId.startsWith("inst-") ? overlayId.slice(5) : overlayId;
     const inst = instances.find((i) => i.id === instId);
     if (!inst) return;
+    // DCW / FS: clicking an existing marker opens the metadata popover so the
+    // user can adjust diameter (or delete via the trash button).
+    if (isDiameterEnabledClass(inst.awp_class_name)) {
+      const anchor = anchorForNormalizedPoint(inst.nx, inst.ny);
+      if (anchor) setMetadataDialog({ instanceId: inst.id, anchor });
+      return;
+    }
+    // Other classes: keep legacy click-to-delete behavior.
     const ok = await dbDelete(inst.id);
     if (!ok) return;
     setInstances((prev) => prev.filter((i) => i.id !== inst.id));
@@ -752,7 +876,14 @@ export const FileViewerModal = ({
   const instanceLabel = (inst: DrawingInstanceRow) => {
     const n = numberByInstanceId.get(inst.id) ?? 0;
     const prefix = prefixByClass.get(inst.awp_class_name) || "AWP";
-    return `${prefix}-${String(n).padStart(3, "0")}`;
+    const base = `${prefix}-${String(n).padStart(3, "0")}`;
+    const diameter =
+      inst.metadata &&
+      typeof inst.metadata === "object" &&
+      typeof (inst.metadata as any).pipe_diameter === "string"
+        ? ((inst.metadata as any).pipe_diameter as string).trim()
+        : "";
+    return diameter ? `${base} · ${diameter}` : base;
   };
 
   // ---- Overlays ----------------------------------------------------------
@@ -968,13 +1099,18 @@ export const FileViewerModal = ({
                     onEditingNameChange={(name) =>
                       setEditingPlan((p) => (p ? { ...p, name } : p))
                     }
-                    onEditingTypeChange={(t) =>
-                      setEditingPlan((p) => (p ? { ...p, type: t } : p))
-                    }
+                    onEditingTypeChange={(t) => {
+                      if (t === "level_floor_plan" || t === "unit_floor_plan") {
+                        lastPlanTypeRef.current = t;
+                      }
+                      setEditingPlan((p) => (p ? { ...p, type: t } : p));
+                    }}
                     onRequestDelete={(planId, label) =>
                       setConfirmDelete({ planId, label })
                     }
                     onAddPlan={onAddPlan ? handleAddPlan : undefined}
+                    focusNamePlanId={focusNamePlanId}
+                    onFocusHandled={() => setFocusNamePlanId(null)}
                   />
                 </TabsContent>
                 <TabsContent value="detections" className="flex-1 overflow-hidden m-0 mt-0 flex flex-col min-h-0 data-[state=inactive]:hidden">
@@ -1118,6 +1254,67 @@ export const FileViewerModal = ({
             </AlertDialogFooter>
           </AlertDialogContent>
         </AlertDialog>
+        {(() => {
+          if (!metadataDialog) return null;
+          const inst = instances.find((i) => i.id === metadataDialog.instanceId);
+          if (!inst) return null;
+          const current =
+            inst.metadata &&
+            typeof inst.metadata === "object" &&
+            typeof (inst.metadata as any).pipe_diameter === "string"
+              ? ((inst.metadata as any).pipe_diameter as string).trim() || null
+              : null;
+          // Suggestions scoped per annotation type (per user preference).
+          const suggestions = Array.from(
+            new Set(
+              instances
+                .filter((i) => i.awp_class_name === inst.awp_class_name)
+                .map((i) => {
+                  const m = i.metadata as any;
+                  return m && typeof m.pipe_diameter === "string"
+                    ? m.pipe_diameter.trim()
+                    : "";
+                })
+                .filter(Boolean),
+            ),
+          );
+          const n = numberByInstanceId.get(inst.id) ?? 0;
+          const prefix = prefixByClass.get(inst.awp_class_name) || "AWP";
+          const marker = `${prefix}-${String(n).padStart(3, "0")}`;
+          return (
+            <AnnotationMetadataPopover
+              open
+              anchor={metadataDialog.anchor}
+              title={`${marker} · pipe diameter`}
+              currentValue={current}
+              suggestions={suggestions}
+              onClose={() => setMetadataDialog(null)}
+              onCommit={async (next) => {
+                const buildMeta = (base: Record<string, any> | null) => {
+                  if (next) return { ...(base || {}), pipe_diameter: next };
+                  const rest = { ...(base || {}) };
+                  delete (rest as any).pipe_diameter;
+                  return Object.keys(rest).length ? rest : null;
+                };
+                const nextMeta = buildMeta(inst.metadata);
+                const ok = await dbUpdateMetadata(inst.id, nextMeta);
+                if (!ok) return;
+                setInstances((prev) =>
+                  prev.map((i) =>
+                    i.id === inst.id ? { ...i, metadata: nextMeta } : i,
+                  ),
+                );
+              }}
+              onDelete={async () => {
+                const ok = await dbDelete(inst.id);
+                if (!ok) return;
+                setInstances((prev) => prev.filter((i) => i.id !== inst.id));
+                setPast((p) => [...p, { type: "delete", instance: inst }]);
+                setFuture([]);
+              }}
+            />
+          );
+        })()}
       </DialogContent>
     </Dialog>
   );
@@ -1279,7 +1476,7 @@ const DetectionsPanel = ({
                             ? findContainingPlan(floorPlans, i.nx, i.ny, floorPlanOverrides)
                             : null;
                         const planLabel = containingPlan
-                          ? floorPlanDisplayLabel(containingPlan)
+                          ? getEffectiveLabel(containingPlan, floorPlanOverrides)
                           : null;
                         return (
                           <div key={i.id} className="flex items-center gap-2 text-[11px]">
@@ -1289,11 +1486,12 @@ const DetectionsPanel = ({
                               {i.page_index !== effectivePage ? ` (p.${i.page_index})` : ""}
                             </span>
                             {planLabel && (() => {
-                              const ct = containingPlan!.type === "unit_floor_plan"
+                              const effT = getEffectiveType(containingPlan!, floorPlanOverrides);
+                              const ct = effT === "unit_floor_plan"
                                 ? "Unit Floor Plan"
-                                : containingPlan!.type === "level_floor_plan"
+                                : effT === "level_floor_plan"
                                   ? "Level Floor Plan"
-                                  : containingPlan!.type || "unknown";
+                                  : effT || "unknown";
                               const cc = awpClassColor(ct);
                               return (
                                 <span
@@ -1381,6 +1579,10 @@ interface FloorPlansPanelProps {
   onEditingTypeChange?: (type: string) => void;
   onRequestDelete?: (planId: string, label: string) => void;
   onAddPlan?: () => void | Promise<void>;
+  /** When set, that row's name <Input> should autoFocus + select() on mount
+   *  and the row should scroll into view. Parent clears via onFocusHandled. */
+  focusNamePlanId?: string | null;
+  onFocusHandled?: () => void;
 }
 
 const FloorPlansPanel = ({
@@ -1401,6 +1603,8 @@ const FloorPlansPanel = ({
   onEditingTypeChange,
   onRequestDelete,
   onAddPlan,
+  focusNamePlanId,
+  onFocusHandled,
 }: FloorPlansPanelProps) => {
 
   // For a unit floor plan, list the pages of level plans that reference it.
@@ -1511,9 +1715,20 @@ const FloorPlansPanel = ({
           const displayLabel = isEditingThis ? editingPlan!.name : fallbackLabel;
           const displayType = isEditingThis ? editingPlan!.type : effType;
 
+          const shouldFocusName =
+            !!focusNamePlanId && focusNamePlanId === fp.plan_id;
           return (
             <div
               key={fp.plan_id}
+              ref={(el) => {
+                if (!el || !shouldFocusName) return;
+                // Bring the new row into view once it mounts.
+                try {
+                  el.scrollIntoView({ block: "nearest", behavior: "smooth" });
+                } catch {
+                  el.scrollIntoView();
+                }
+              }}
               className={`border rounded-md p-2 space-y-2 bg-card ${
                 isEditingThis ? "ring-2 ring-primary/40" : ""
               }`}
@@ -1529,6 +1744,22 @@ const FloorPlansPanel = ({
                     onChange={(e) => onEditingNameChange?.(e.target.value)}
                     className="h-7 text-sm flex-1 min-w-0"
                     placeholder="Plan name"
+                    autoFocus={shouldFocusName}
+                    ref={(el) => {
+                      if (!el || !shouldFocusName) return;
+                      // Give focus and highlight the placeholder name so the
+                      // user can immediately type over it.
+                      const t = window.setTimeout(() => {
+                        try {
+                          el.focus();
+                          el.select();
+                        } catch {
+                          /* noop */
+                        }
+                        onFocusHandled?.();
+                      }, 0);
+                      return () => window.clearTimeout(t);
+                    }}
                   />
                 ) : (
                   <span
