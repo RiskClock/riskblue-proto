@@ -1297,7 +1297,7 @@ export const FileViewerModal = ({
               title={`${marker} · pipe diameter`}
               currentValue={current}
               suggestions={suggestions}
-              onClose={() => setMetadataDialog(null)}
+              onClose={closeMetadataDialog}
               onCommit={async (next) => {
                 const buildMeta = (base: Record<string, any> | null) => {
                   if (next) return { ...(base || {}), pipe_diameter: next };
