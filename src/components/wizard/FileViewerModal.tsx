@@ -1878,6 +1878,7 @@ const FloorPlansPanel = ({
                   effUnits={effUnits}
                   allUnitPlans={allUnitPlans}
                   onSaveLevelUnits={onSaveLevelUnits}
+                  onPlaceUnitBbox={onPlaceUnitBbox}
                 />
               )}
 
