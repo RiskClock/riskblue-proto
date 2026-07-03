@@ -1124,6 +1124,7 @@ export const FileViewerModal = ({
                     onEditFloors={onEditFloors}
                     onEditLevelUnits={onEditLevelUnits}
                     onSaveLevelUnits={onSaveLevelUnits}
+                    onPlaceUnitBbox={onAddPlan ? handlePlaceUnitBbox : undefined}
                     instancesOnPage={Array.from(instancesByClassThisFile.values()).flat()}
                     numberByInstanceId={numberByInstanceId}
                     instanceLabel={instanceLabel}
