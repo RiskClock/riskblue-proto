@@ -8,7 +8,7 @@ import {
   CommandList,
 } from "@/components/ui/command";
 import { Button } from "@/components/ui/button";
-import { Plus, Trash2, X as XIcon } from "lucide-react";
+import { Check, Plus, Trash2, X as XIcon } from "lucide-react";
 
 export interface AnnotationMetadataPopoverProps {
   open: boolean;
