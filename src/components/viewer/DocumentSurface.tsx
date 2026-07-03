@@ -67,6 +67,7 @@ export const DocumentSurface = ({
   onRenderedSizeChange,
   editorBbox,
   onEditorBboxChange,
+  editorColor,
 }: DocumentSurfaceProps) => {
   const downRef = useRef<{ x: number; y: number } | null>(null);
   const imgRef = useRef<HTMLImageElement>(null);
