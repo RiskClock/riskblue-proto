@@ -27,6 +27,8 @@ interface DocumentSurfaceProps {
   editorBbox?: EditorBbox | null;
   /** Live change while dragging. */
   onEditorBboxChange?: (next: EditorBbox) => void;
+  /** Border / corner-handle color for the editor bbox. Defaults to primary. */
+  editorColor?: string;
 }
 
 const CLICK_MOVE_THRESHOLD = 4;
