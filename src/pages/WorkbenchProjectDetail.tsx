@@ -1012,7 +1012,7 @@ export default function WorkbenchProjectDetail() {
           .map(addedUnitPlanToParsed)
           .map((p) => materializeFloorPlan(p, overrides));
         const manual = overrideOnlyFloorPlans(overrides, page, knownIds, deleted);
-        if (kept.length > 0 || added.length > 0) {
+        if (kept.length > 0 || added.length > 0 || manual.length > 0) {
           filtered.set(page, [...kept, ...added, ...manual]);
         }
       }
