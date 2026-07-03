@@ -1,0 +1,1 @@
+ALTER TABLE public.drawing_instances ADD COLUMN IF NOT EXISTS metadata jsonb;

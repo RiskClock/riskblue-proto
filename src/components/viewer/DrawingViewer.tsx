@@ -35,6 +35,9 @@ export interface DrawingViewerApi {
   fitPage: () => void;
   fitToOverlay: (overlayId: string, opts?: { paddingRatio?: number; maxScale?: number; animate?: boolean }) => void;
   fitToRect: (rect: { nx: number; ny: number; nw: number; nh: number }, opts?: { paddingRatio?: number; maxScale?: number; animate?: boolean }) => void;
+  /** Return the currently-visible page region in normalized 0..1 doc coords,
+   *  or null if the viewer hasn't laid out yet. */
+  getVisibleRect: () => { nx: number; ny: number; nw: number; nh: number } | null;
 }
 
 
@@ -330,6 +333,25 @@ export const DrawingViewer = forwardRef<DrawingViewerApi, DrawingViewerProps>(
             maxScale: opts?.maxScale ?? Math.min(maxScale, 4),
             animate: opts?.animate,
           });
+        },
+        getVisibleRect: () => {
+          const w = wrapperRef.current;
+          if (
+            !w ||
+            pageCssSize.width === 0 ||
+            pageCssSize.height === 0 ||
+            viewportSize.width === 0 ||
+            viewportSize.height === 0
+          ) {
+            return null;
+          }
+          const st = w.state;
+          const s = st.scale || 1;
+          const nx = -st.positionX / (s * pageCssSize.width);
+          const ny = -st.positionY / (s * pageCssSize.height);
+          const nw = viewportSize.width / (s * pageCssSize.width);
+          const nh = viewportSize.height / (s * pageCssSize.height);
+          return { nx, ny, nw, nh };
         },
       }),
       // eslint-disable-next-line react-hooks/exhaustive-deps

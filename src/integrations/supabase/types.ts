@@ -1402,6 +1402,7 @@ export type Database = {
           file_id: string
           id: string
           instance_number: number | null
+          metadata: Json | null
           nx: number
           ny: number
           page_index: number
@@ -1415,6 +1416,7 @@ export type Database = {
           file_id: string
           id?: string
           instance_number?: number | null
+          metadata?: Json | null
           nx: number
           ny: number
           page_index?: number
@@ -1428,6 +1430,7 @@ export type Database = {
           file_id?: string
           id?: string
           instance_number?: number | null
+          metadata?: Json | null
           nx?: number
           ny?: number
           page_index?: number

@@ -30,12 +30,41 @@ function hslToHex(h: number, s: number, l: number): string {
   return `#${toHex(f(0))}${toHex(f(8))}${toHex(f(4))}`;
 }
 
-// Fixed overrides for floor-plan badges: the hashed hues for both labels
-// happen to land in similar greens. Pick vivid, visibly distinct hex values
-// so Unit vs Level plans are unambiguous in badges and bbox strokes.
+// Fixed overrides for floor-plan badges and common water/MEP system classes.
+// The unbiased hash occasionally lands similarly-named classes on nearly
+// identical hues (e.g. "Domestic Cold Water" and "Fire Suppression System"
+// both hashed to magenta, making DCW and FS markers indistinguishable).
+// Pin each canonical class to a visibly distinct hex so annotations remain
+// unambiguous.
 const COLOR_OVERRIDES: Record<string, string> = {
+  // Floor-plan badges
   "unit floor plan": "#f92ad5",
   "level floor plan": "#39b52e",
+  // Domestic water
+  "domestic cold water": "#1d68f0", // blue
+  "dcw": "#1d68f0",
+  "domestic hot water": "#e0491a", // orange
+  "dhw": "#e0491a",
+  "domestic hot water return": "#b53315",
+  "dhwr": "#b53315",
+  // Fire suppression / life safety
+  "fire suppression system": "#dc2626", // red
+  "fire suppression": "#dc2626",
+  "fs": "#dc2626",
+  "sprinkler": "#dc2626",
+  // Drainage
+  "sanitary": "#7a5230", // brown
+  "sanitary drain": "#7a5230",
+  "storm": "#0e8f76", // teal
+  "storm drain": "#0e8f76",
+  "vent": "#8b5cf6", // violet
+  // Gas / other MEP
+  "natural gas": "#eab308", // yellow
+  "gas": "#eab308",
+  "compressed air": "#0891b2", // cyan
+  "chilled water": "#22d3ee",
+  "condenser water": "#0d9488",
+  "steam": "#f472b6",
 };
 
 export function awpClassColor(name: string): string {
