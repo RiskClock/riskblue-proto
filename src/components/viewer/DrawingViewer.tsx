@@ -479,6 +479,7 @@ export const DrawingViewer = forwardRef<DrawingViewerApi, DrawingViewerProps>(
                     onRenderedSizeChange={onActivePageRenderedSizeChange}
                     editorBbox={editorBbox ?? null}
                     onEditorBboxChange={onEditorBboxChange}
+                    editorColor={editorColor}
                   />
                 ) : (
                   <div className="flex flex-col gap-4">
