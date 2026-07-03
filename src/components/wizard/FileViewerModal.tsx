@@ -1602,6 +1602,9 @@ interface FloorPlansPanelProps {
     createdRefs?: string[],
     removedRefs?: string[],
   ) => Promise<void> | void;
+  /** Optional: place a new unit-floor-plan bbox on the current page linked
+   *  to an existing unit reference (e.g. "Detail 6"). */
+  onPlaceUnitBbox?: (refId: string) => Promise<void> | void;
   /** Real markers placed on this page (one row per instance). */
   instancesOnPage?: DrawingInstanceRow[];
   numberByInstanceId?: Map<string, number>;
