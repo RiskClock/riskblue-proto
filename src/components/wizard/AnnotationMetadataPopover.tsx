@@ -45,12 +45,14 @@ export function AnnotationMetadataPopover({
   onDelete,
   onClose,
 }: AnnotationMetadataPopoverProps) {
-  const [query, setQuery] = useState<string>(currentValue ?? "");
+  const [query, setQuery] = useState<string>("");
   const rootRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
+    // Always open with an empty text field so typing filters/creates without
+    // the user first clearing the pre-populated current value.
     if (!open) return;
-    setQuery(currentValue ?? "");
+    setQuery("");
   }, [open, currentValue]);
 
   useEffect(() => {
