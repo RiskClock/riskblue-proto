@@ -76,6 +76,9 @@ import {
   ADDED_UNIT_PLANS_KEY,
   DELETED_PLAN_IDS_KEY,
   getDeletedPlanIds,
+  getEffectiveBbox,
+  getEffectiveLabel,
+  getEffectiveType,
   type ParsedFloorPlan,
 } from "@/lib/surveyFloorPlans";
 
@@ -117,6 +120,50 @@ interface SheetRow {
   survey_result?: unknown;
   survey_updated_at?: string | null;
   floor_plan_overrides?: Record<string, any> | null;
+}
+
+function isValidPctBbox(v: unknown): v is [number, number, number, number] {
+  return Array.isArray(v) && v.length === 4 && v.every((n) => Number.isFinite(n));
+}
+
+function materializeFloorPlan(
+  plan: ParsedFloorPlan,
+  overrides: Record<string, any> | null | undefined,
+): ParsedFloorPlan {
+  return {
+    ...plan,
+    type: getEffectiveType(plan, overrides),
+    reference_id: getEffectiveLabel(plan, overrides) || plan.reference_id,
+    xy_width_height_pct: getEffectiveBbox(plan, overrides),
+  };
+}
+
+function overrideOnlyFloorPlans(
+  overrides: Record<string, any> | null | undefined,
+  page: number,
+  knownIds: Set<string>,
+  deletedIds: Set<string>,
+): ParsedFloorPlan[] {
+  if (!overrides) return [];
+  const out: ParsedFloorPlan[] = [];
+  for (const [planId, raw] of Object.entries(overrides)) {
+    if (planId.startsWith("__") || knownIds.has(planId) || deletedIds.has(planId)) continue;
+    const ovr = raw as any;
+    const type = typeof ovr?.type === "string" && ovr.type ? ovr.type : null;
+    const name = typeof ovr?.name === "string" && ovr.name.trim() ? ovr.name.trim() : null;
+    const bbox = isValidPctBbox(ovr?.bbox_pct) ? ovr.bbox_pct : null;
+    if (!type && !name && !bbox) continue;
+    out.push({
+      plan_id: planId,
+      type: type || "level_floor_plan",
+      reference_id: name || planId,
+      xy_width_height_pct: bbox,
+      page_number: page,
+      floors: [],
+      referenced_unit_ids: [],
+    });
+  }
+  return out;
 }
 
 const SURVEY_PROGRESS_KEY_PREFIX = "riskblue:survey-progress";
