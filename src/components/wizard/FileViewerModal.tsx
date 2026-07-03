@@ -1946,6 +1946,7 @@ interface LevelUnitsSectionProps {
     createdRefs?: string[],
     removedRefs?: string[],
   ) => Promise<void> | void;
+  onPlaceUnitBbox?: (refId: string) => Promise<void> | void;
 }
 
 const LevelUnitsSection = ({
@@ -1953,6 +1954,7 @@ const LevelUnitsSection = ({
   effUnits,
   allUnitPlans,
   onSaveLevelUnits,
+  onPlaceUnitBbox,
 }: LevelUnitsSectionProps) => {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
