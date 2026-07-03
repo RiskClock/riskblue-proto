@@ -79,6 +79,7 @@ import {
   getEffectiveBbox,
   getEffectiveLabel,
   getEffectiveType,
+  unitPlanRefKey,
   type ParsedFloorPlan,
 } from "@/lib/surveyFloorPlans";
 
