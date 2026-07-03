@@ -73,6 +73,8 @@ export interface DrawingViewerProps {
   editorBbox?: EditorBbox | null;
   /** Live updates while the user drags the editor. */
   onEditorBboxChange?: (next: EditorBbox) => void;
+  /** Border/handle color for the editor bbox. */
+  editorColor?: string;
 }
 
 
