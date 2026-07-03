@@ -1941,7 +1941,15 @@ export default function WorkbenchProjectDetail() {
         typeof ovr.name === "string" && ovr.name.trim()
           ? ovr.name.trim()
           : (fp.reference_id || floorPlanDisplayLabel(fp));
-      return { type, floors: floors || [], units: units || [], bbox, name };
+      // Level plans that were manually added (or where the survey didn't
+      // capture a floors[] value) still carry the human level identifier
+      // in `name` (e.g. "L9"). Treat that as the level label so downstream
+      // attribution can canonicalize it into the physical space and roll
+      // annotations under the right level instead of Unassigned.
+      const effFloors = (floors && floors.length > 0)
+        ? floors
+        : (type === "level_floor_plan" && name ? [name] : []);
+      return { type, floors: effFloors, units: units || [], bbox, name };
     };
 
     // unit ref (lowercased) -> canonical level -> occurrence count.
