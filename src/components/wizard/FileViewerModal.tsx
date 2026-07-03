@@ -725,6 +725,7 @@ export const FileViewerModal = ({
 
   // ---- User-initiated actions ---------------------------------------------
   const handleCanvasClick = async (nx: number, ny: number) => {
+    if (Date.now() < suppressCanvasClickUntilRef.current) return;
     if (!sidebarEnabled || !selectedClass) return;
     const row = await dbInsert({
       awp_class_name: selectedClass,
