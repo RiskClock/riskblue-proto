@@ -1631,6 +1631,7 @@ const FloorPlansPanel = ({
   overrides,
   allLevelPlanOverrides,
   onSaveLevelUnits,
+  onPlaceUnitBbox,
   instancesOnPage = [],
   numberByInstanceId,
   instanceLabel,
