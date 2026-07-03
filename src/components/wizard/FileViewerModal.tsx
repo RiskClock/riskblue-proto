@@ -2158,6 +2158,67 @@ const LevelUnitsSection = ({
           ))}
         </div>
       )}
+
+      {onPlaceUnitBbox && effUnits.length > 0 && (
+        <PlaceUnitBboxControl
+          units={Array.from(new Set(effUnits))}
+          onPlace={(ref) => void onPlaceUnitBbox(ref)}
+        />
+      )}
+    </div>
+  );
+};
+
+interface PlaceUnitBboxControlProps {
+  units: string[];
+  onPlace: (refId: string) => void;
+}
+
+const PlaceUnitBboxControl = ({ units, onPlace }: PlaceUnitBboxControlProps) => {
+  const [open, setOpen] = useState(false);
+  return (
+    <div className="pt-1">
+      {open ? (
+        <div className="rounded-md border bg-popover">
+          <div className="px-2 py-1 text-[10px] font-medium text-muted-foreground border-b flex items-center justify-between">
+            <span>Pick a unit ref</span>
+            <button
+              type="button"
+              onClick={() => setOpen(false)}
+              className="hover:text-foreground"
+              aria-label="Cancel"
+            >
+              <XIcon className="h-3 w-3" />
+            </button>
+          </div>
+          <div className="max-h-40 overflow-y-auto overscroll-contain">
+            {units.map((u) => (
+              <button
+                key={u}
+                type="button"
+                onClick={() => {
+                  setOpen(false);
+                  onPlace(u);
+                }}
+                className="w-full text-left px-2 py-1 text-xs hover:bg-muted/50"
+              >
+                {u}
+              </button>
+            ))}
+          </div>
+        </div>
+      ) : (
+        <Button
+          type="button"
+          size="sm"
+          variant="outline"
+          className="h-6 px-2 text-[11px] gap-1"
+          onClick={() => setOpen(true)}
+        >
+          <Plus className="h-3 w-3" />
+          Place Unit Floor Plan BBox
+        </Button>
+      )}
     </div>
   );
 };
