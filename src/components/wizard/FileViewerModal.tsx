@@ -457,26 +457,8 @@ export const FileViewerModal = ({
 
   const cancelPlanEdit = useCallback(() => setEditingPlan(null), []);
 
-  const handleAddPlan = useCallback(async () => {
-    if (!onAddPlan) return;
-    // Auto-save any in-progress edit first so its bbox/name/type persist
-    // before we hand editing off to the newly-added plan.
-    const prev = editingPlanRef.current;
-    if (prev) {
-      await savePlanEdit();
-    }
-    // Default name: "New Floor Plan N" where N is next index among existing.
-    const existingNames = (floorPlans ?? []).map((fp) =>
-      getEffectiveLabel(fp, floorPlanOverrides ?? {}),
-    );
-    let n = 1;
-    while (existingNames.includes(`New Floor Plan ${n}`)) n++;
-    const name = `New Floor Plan ${n}`;
-    const type = lastPlanTypeRef.current;
-
-    // Size bbox = 50% of the currently-visible viewport, centered on the
-    // current pan/zoom center. Clamp inside 0-100% and cap at ~90% so the
-    // resize handles stay visible when the user is zoomed out to fit page.
+  // 50%-of-viewport bbox centered on the current pan/zoom, clamped to page.
+  const computeCenteredBboxPct = useCallback((): [number, number, number, number] => {
     const visible = viewerApiRef.current?.getVisibleRect?.() as
       | { nx: number; ny: number; nw: number; nh: number }
       | null
@@ -493,10 +475,45 @@ export const FileViewerModal = ({
       y = Math.max(0, Math.min(1 - h, y));
       bbox_pct = [x * 100, y * 100, w * 100, h * 100];
     }
+    return bbox_pct;
+  }, []);
 
+  const handleAddPlan = useCallback(async () => {
+    if (!onAddPlan) return;
+    // Auto-save any in-progress edit first so its bbox/name/type persist
+    // before we hand editing off to the newly-added plan.
+    const prev = editingPlanRef.current;
+    if (prev) {
+      await savePlanEdit();
+    }
+    // Default name: "New Floor Plan N" where N is next index among existing.
+    const existingNames = (floorPlans ?? []).map((fp) =>
+      getEffectiveLabel(fp, floorPlanOverrides ?? {}),
+    );
+    let n = 1;
+    while (existingNames.includes(`New Floor Plan ${n}`)) n++;
+    const name = `New Floor Plan ${n}`;
+    const type = lastPlanTypeRef.current;
+    const bbox_pct = computeCenteredBboxPct();
     pendingNewPlanRef.current = { name, type };
     await onAddPlan({ type, name, bbox_pct });
-  }, [onAddPlan, floorPlans, floorPlanOverrides, savePlanEdit]);
+  }, [onAddPlan, floorPlans, floorPlanOverrides, savePlanEdit, computeCenteredBboxPct]);
+
+  // "Place Unit Floor Plan BBox" — creates a new unit_floor_plan on the current
+  // page keyed to an existing unit reference (typically a Detail from another
+  // page of the same file). The user is dropped into edit mode so they can
+  // resize/reposition the bbox over the unit region shown on the level plan.
+  const handlePlaceUnitBbox = useCallback(
+    async (refId: string) => {
+      if (!onAddPlan) return;
+      const prev = editingPlanRef.current;
+      if (prev) await savePlanEdit();
+      const bbox_pct = computeCenteredBboxPct();
+      pendingNewPlanRef.current = { name: refId, type: "unit_floor_plan" };
+      await onAddPlan({ type: "unit_floor_plan", name: refId, bbox_pct });
+    },
+    [onAddPlan, savePlanEdit, computeCenteredBboxPct],
+  );
 
   // Once the parent has committed the new plan, floorPlans will contain it.
   // Find it by name+type match, enter edit mode, and flag the row for the
