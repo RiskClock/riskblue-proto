@@ -482,7 +482,10 @@ export default function WorkbenchProjectDetail() {
     const out: ParsedFloorPlan[] = [];
     for (const plans of activeFileFloorPlansByPage.values()) {
       for (const p of plans) {
-        if (p.type === "level_floor_plan" && !deleted.has(p.plan_id)) out.push(p);
+        const materialized = materializeFloorPlan(p, activeFloorPlanOverrides);
+        if (materialized.type === "level_floor_plan" && !deleted.has(p.plan_id)) {
+          out.push(materialized);
+        }
       }
     }
     return out;
@@ -1068,16 +1071,24 @@ export default function WorkbenchProjectDetail() {
     const out: ParsedFloorPlan[] = [];
     for (const plans of activeFileFloorPlansByPage.values()) {
       for (const p of plans) {
-        if (p.type === "unit_floor_plan" && !deleted.has(p.plan_id)) out.push(p);
+        const materialized = materializeFloorPlan(p, activeFloorPlanOverrides);
+        if (materialized.type === "unit_floor_plan" && !deleted.has(p.plan_id)) {
+          out.push(materialized);
+        }
       }
     }
     const activeFileId = activePageView?.file.id;
     const seen = new Set(out.map((p) => p.plan_id));
+    const refSeen = new Set(out.map((p) => unitPlanRefKey(p).toLowerCase()));
     for (const entry of getAddedUnitPlans(activeFloorPlanOverrides)) {
-      const parsed = addedUnitPlanToParsed(entry);
+      const parsed = materializeFloorPlan(
+        addedUnitPlanToParsed(entry),
+        activeFloorPlanOverrides,
+      );
       if (parsed.type !== "unit_floor_plan") continue;
       if (deleted.has(parsed.plan_id) || seen.has(parsed.plan_id)) continue;
       seen.add(parsed.plan_id);
+      refSeen.add(unitPlanRefKey(parsed).toLowerCase());
       out.push(parsed);
     }
     for (const s of rows?.sheets ?? []) {
@@ -1085,12 +1096,25 @@ export default function WorkbenchProjectDetail() {
       const ovr = s.floor_plan_overrides as Record<string, any> | null;
       if (!ovr) continue;
       const sheetDeleted = getDeletedPlanIds(ovr);
+      const sheetKnownIds = new Set<string>();
       for (const entry of getAddedUnitPlans(ovr)) {
-        const parsed = addedUnitPlanToParsed(entry);
+        sheetKnownIds.add(entry.plan_id);
+        const parsed = materializeFloorPlan(addedUnitPlanToParsed(entry), ovr);
         if (parsed.type !== "unit_floor_plan") continue;
         if (sheetDeleted.has(parsed.plan_id) || deleted.has(parsed.plan_id)) continue;
-        if (seen.has(parsed.plan_id)) continue;
+        const refKey = unitPlanRefKey(parsed).toLowerCase();
+        if (seen.has(parsed.plan_id) || refSeen.has(refKey)) continue;
         seen.add(parsed.plan_id);
+        refSeen.add(refKey);
+        out.push(parsed);
+      }
+      for (const parsed of overrideOnlyFloorPlans(ovr, s.page_index, sheetKnownIds, sheetDeleted)) {
+        if (parsed.type !== "unit_floor_plan") continue;
+        if (deleted.has(parsed.plan_id)) continue;
+        const refKey = unitPlanRefKey(parsed).toLowerCase();
+        if (seen.has(parsed.plan_id) || refSeen.has(refKey)) continue;
+        seen.add(parsed.plan_id);
+        refSeen.add(refKey);
         out.push(parsed);
       }
     }
