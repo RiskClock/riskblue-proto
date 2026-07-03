@@ -1063,6 +1063,15 @@ export const FileViewerModal = ({
                     : prev,
                 )
               }
+              editorColor={
+                editingPlan
+                  ? awpClassColor(
+                      editingPlan.type === "unit_floor_plan"
+                        ? "Unit Floor Plan"
+                        : "Level Floor Plan",
+                    )
+                  : undefined
+              }
             />
           </div>
 
