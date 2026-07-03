@@ -1254,79 +1254,68 @@ export const FileViewerModal = ({
             </AlertDialogFooter>
           </AlertDialogContent>
         </AlertDialog>
-      </DialogContent>
-      {(() => {
-        if (!metadataDialog) return null;
-        const inst = instances.find((i) => i.id === metadataDialog.instanceId);
-        if (!inst) return null;
-        const current =
-          inst.metadata &&
-          typeof inst.metadata === "object" &&
-          typeof (inst.metadata as any).pipe_diameter === "string"
-            ? ((inst.metadata as any).pipe_diameter as string).trim() || null
-            : null;
-        // Suggestions scoped per annotation type (per user preference).
-        const suggestions = Array.from(
-          new Set(
-            instances
-              .filter((i) => i.awp_class_name === inst.awp_class_name)
-              .map((i) => {
-                const m = i.metadata as any;
-                return m && typeof m.pipe_diameter === "string"
-                  ? m.pipe_diameter.trim()
-                  : "";
-              })
-              .filter(Boolean),
-          ),
-        );
-        const n = numberByInstanceId.get(inst.id) ?? 0;
-        const prefix = prefixByClass.get(inst.awp_class_name) || "AWP";
-        const marker = `${prefix}-${String(n).padStart(3, "0")}`;
-        return (
-          <AnnotationMetadataPopover
-            open
-            anchor={metadataDialog.anchor}
-            title={`${marker} · pipe diameter`}
-            currentValue={current}
-            suggestions={suggestions}
-            onClose={() => setMetadataDialog(null)}
-            onCommit={async (next) => {
-              const ok = await dbUpdateMetadata(
-                inst.id,
-                next ? { ...(inst.metadata || {}), pipe_diameter: next } : (() => {
-                  const rest = { ...(inst.metadata || {}) };
+        {(() => {
+          if (!metadataDialog) return null;
+          const inst = instances.find((i) => i.id === metadataDialog.instanceId);
+          if (!inst) return null;
+          const current =
+            inst.metadata &&
+            typeof inst.metadata === "object" &&
+            typeof (inst.metadata as any).pipe_diameter === "string"
+              ? ((inst.metadata as any).pipe_diameter as string).trim() || null
+              : null;
+          // Suggestions scoped per annotation type (per user preference).
+          const suggestions = Array.from(
+            new Set(
+              instances
+                .filter((i) => i.awp_class_name === inst.awp_class_name)
+                .map((i) => {
+                  const m = i.metadata as any;
+                  return m && typeof m.pipe_diameter === "string"
+                    ? m.pipe_diameter.trim()
+                    : "";
+                })
+                .filter(Boolean),
+            ),
+          );
+          const n = numberByInstanceId.get(inst.id) ?? 0;
+          const prefix = prefixByClass.get(inst.awp_class_name) || "AWP";
+          const marker = `${prefix}-${String(n).padStart(3, "0")}`;
+          return (
+            <AnnotationMetadataPopover
+              open
+              anchor={metadataDialog.anchor}
+              title={`${marker} · pipe diameter`}
+              currentValue={current}
+              suggestions={suggestions}
+              onClose={() => setMetadataDialog(null)}
+              onCommit={async (next) => {
+                const buildMeta = (base: Record<string, any> | null) => {
+                  if (next) return { ...(base || {}), pipe_diameter: next };
+                  const rest = { ...(base || {}) };
                   delete (rest as any).pipe_diameter;
                   return Object.keys(rest).length ? rest : null;
-                })(),
-              );
-              if (!ok) return;
-              setInstances((prev) =>
-                prev.map((i) =>
-                  i.id === inst.id
-                    ? {
-                        ...i,
-                        metadata: next
-                          ? { ...(i.metadata || {}), pipe_diameter: next }
-                          : (() => {
-                              const rest = { ...(i.metadata || {}) };
-                              delete (rest as any).pipe_diameter;
-                              return Object.keys(rest).length ? rest : null;
-                            })(),
-                      }
-                    : i,
-                ),
-              );
-            }}
-            onDelete={async () => {
-              const ok = await dbDelete(inst.id);
-              if (!ok) return;
-              setInstances((prev) => prev.filter((i) => i.id !== inst.id));
-              setPast((p) => [...p, { type: "delete", instance: inst }]);
-              setFuture([]);
-            }}
-          />
-        );
-      })()}
+                };
+                const nextMeta = buildMeta(inst.metadata);
+                const ok = await dbUpdateMetadata(inst.id, nextMeta);
+                if (!ok) return;
+                setInstances((prev) =>
+                  prev.map((i) =>
+                    i.id === inst.id ? { ...i, metadata: nextMeta } : i,
+                  ),
+                );
+              }}
+              onDelete={async () => {
+                const ok = await dbDelete(inst.id);
+                if (!ok) return;
+                setInstances((prev) => prev.filter((i) => i.id !== inst.id));
+                setPast((p) => [...p, { type: "delete", instance: inst }]);
+                setFuture([]);
+              }}
+            />
+          );
+        })()}
+      </DialogContent>
     </Dialog>
   );
 };
