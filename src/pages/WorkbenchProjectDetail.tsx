@@ -2600,6 +2600,7 @@ export default function WorkbenchProjectDetail() {
           space_hierarchy_json: null,
           space_hierarchy_status: null,
           space_hierarchy_error: null,
+          space_hierarchy_updated_at: null,
         } as any)
         .eq("id", requestId);
 
