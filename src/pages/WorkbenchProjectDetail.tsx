@@ -5034,6 +5034,7 @@ function InstancesReportModal({
   projectName,
   enabledClassNames,
   consolidations,
+  aliasMap,
 }: {
   open: boolean;
   onOpenChange: (v: boolean) => void;
@@ -5055,7 +5056,12 @@ function InstancesReportModal({
     instance_number: number | null;
     member_annotation_ids: string[];
   }>;
+  aliasMap: Record<string, string>;
 }) {
+  const displayClassName = useCallback(
+    (name: string) => aliasMap[name] || name,
+    [aliasMap],
+  );
   const enabledClassSet = useMemo(
     () => new Set(enabledClassNames || []),
     [enabledClassNames],
