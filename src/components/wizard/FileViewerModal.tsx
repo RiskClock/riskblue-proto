@@ -796,6 +796,28 @@ export const FileViewerModal = ({
 
   const handleOverlayDrag = useCallback(
     async (overlayId: string, nx: number, ny: number) => {
+      // Annotation circles (DCW / FS etc.) — free-position drag, no clamp.
+      if (overlayId.startsWith("inst-")) {
+        const id = overlayId.slice(5);
+        const inst = instances.find((i) => i.id === id);
+        if (!inst) return;
+        const clampedNx = Math.max(0, Math.min(1, nx));
+        const clampedNy = Math.max(0, Math.min(1, ny));
+        setInstances((prev) =>
+          prev.map((i) =>
+            i.id === id ? { ...i, nx: clampedNx, ny: clampedNy } : i,
+          ),
+        );
+        const ok = await dbUpdatePosition(id, clampedNx, clampedNy);
+        if (!ok) {
+          setInstances((prev) =>
+            prev.map((i) =>
+              i.id === id ? { ...i, nx: inst.nx, ny: inst.ny } : i,
+            ),
+          );
+        }
+        return;
+      }
       if (!overlayId.startsWith("um-")) return;
       const id = overlayId.slice(3);
       const inst = instances.find((i) => i.id === id);
