@@ -36,6 +36,7 @@ export const calculateWaterSystemDuration = (
     let endDate: Date | null = null;
 
     switch (systemName) {
+      case "Cold Water":
       case "Domestic Cold Water":
         if (mep_start_date) {
           startDate = addDays(parseISO(mep_start_date), 120);
