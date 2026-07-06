@@ -321,7 +321,7 @@ export const calculateSystemOrAssetDates = (
       }
     }
     // Water Systems
-    else if (name === "Domestic Cold Water") {
+    else if (name === "Cold Water" || name === "Domestic Cold Water") {
       if (mep_start_date) {
         startDate = addDays(parseISO(mep_start_date), 120);
         endDate = parseISO(construction_end_date);
