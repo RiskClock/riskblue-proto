@@ -5489,6 +5489,9 @@ function InstancesReportModal({
                   <TableHead className={`${compactHead} bg-background font-semibold`}>Instance ID</TableHead>
                   <TableHead className={`${compactHead} bg-background font-semibold`}>Class</TableHead>
                   {showUnitCol && <TableHead className={`${compactHead} bg-background font-semibold`}>Unit</TableHead>}
+                  {showDiameterCol && (
+                    <TableHead className={`${compactHead} bg-background font-semibold`}>Pipe Diameter</TableHead>
+                  )}
                   <TableHead className={`${compactHead} bg-background font-semibold`}>Annotation ID</TableHead>
                   <TableHead className={`${compactHead} bg-background font-semibold`}>Source</TableHead>
                 </TableRow>
@@ -5500,6 +5503,11 @@ function InstancesReportModal({
                     <TableCell className={compactCell}>{r.awpClassName}</TableCell>
                     {showUnitCol && (
                       <TableCell className={compactCell}>{r.unitName ?? "—"}</TableCell>
+                    )}
+                    {showDiameterCol && (
+                      <TableCell className={compactCell}>
+                        {isDcwOrFsName(r.awpClassName) ? (r.pipeDiameter ?? "—") : "—"}
+                      </TableCell>
                     )}
                     <TableCell className={`${compactCell} font-mono text-muted-foreground`}>
                       {r.annotationBaseId}
