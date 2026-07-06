@@ -137,7 +137,10 @@ const Auth = () => {
 
       const { error } = await signIn(email, password);
       if (error) throw error;
-      navigate("/projects");
+      const params = new URLSearchParams(window.location.search);
+      const next = params.get("next");
+      const safe = next && next.startsWith("/") && !next.startsWith("//") ? next : "/projects";
+      navigate(safe);
     } catch (error: unknown) {
       toast({
         title: "Error",
