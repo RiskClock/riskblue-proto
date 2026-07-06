@@ -337,9 +337,12 @@ export const OverlayLayer = ({
           o.rect.nh * pageSize.height,
         );
         const isDot = o.variant === "dot";
+        // Detection annotation circles are intentionally small (30% of the
+        // previous size) so they don't obscure the drawing. Unit-marker dots
+        // keep their original size.
         const diameter = isDot
           ? Math.max(10, MIN_CIRCLE_DIAMETER_CSS * 0.55)
-          : Math.max(MIN_CIRCLE_DIAMETER_CSS, bboxSidePx * 1.5);
+          : Math.max(MIN_CIRCLE_DIAMETER_CSS, bboxSidePx * 1.5) * 0.3;
 
         return {
           id: o.id,
