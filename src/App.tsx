@@ -27,6 +27,7 @@ import InternalViewerTest from "./pages/InternalViewerTest";
 import CheckoutReturn from "./pages/CheckoutReturn";
 import ThreatReportDownload from "./pages/ThreatReportDownload";
 import NotFound from "./pages/NotFound";
+import OAuthConsent from "./pages/OAuthConsent";
 import { Loader2 } from "lucide-react";
 import { ExportProvider } from "./contexts/ExportContext";
 import { ExportProgressPanel } from "./components/export/ExportProgressPanel";
