@@ -489,7 +489,10 @@ export const OverlayLayer = ({
 
       {circles.map((c) => {
         const clickable = !!onOverlayClick;
-        const draggable = c.isDot && !!onOverlayDrag;
+        // Any circle overlay is draggable when a drag handler is wired up —
+        // annotation circles as well as dots. Click still fires when the
+        // pointer barely moves (< DRAG_THRESHOLD).
+        const draggable = !!onOverlayDrag;
         const isDragging = drag?.id === c.id;
         const dotBaseAlpha = draggable ? 0.5 : (c.hovered ? 0.85 : 0.7);
         const style: CSSProperties = c.isDot
@@ -514,8 +517,8 @@ export const OverlayLayer = ({
             }
           : {
               position: "absolute",
-              left: c.cx - c.r,
-              top: c.cy - c.r,
+              left: c.cx - c.r + (isDragging ? drag!.dx : 0),
+              top: c.cy - c.r + (isDragging ? drag!.dy : 0),
               width: c.r * 2,
               height: c.r * 2,
               borderRadius: "9999px",
@@ -524,8 +527,15 @@ export const OverlayLayer = ({
               borderStyle: "solid",
               backgroundColor: withAlpha(c.color, c.hovered ? 0.35 : 0.2),
               boxSizing: "border-box",
-              pointerEvents: clickable ? "auto" : "none",
-              cursor: clickable ? "pointer" : undefined,
+              pointerEvents: clickable || draggable ? "auto" : "none",
+              cursor: draggable
+                ? isDragging
+                  ? "grabbing"
+                  : "grab"
+                : clickable
+                  ? "pointer"
+                  : undefined,
+              touchAction: draggable ? "none" : undefined,
             };
 
         const stop = (e: { stopPropagation: () => void }) => e.stopPropagation();
