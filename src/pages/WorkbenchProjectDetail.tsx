@@ -298,6 +298,9 @@ export default function WorkbenchProjectDetail() {
   const [scoutConfirmOpen, setScoutConfirmOpen] = useState(false);
   const [scoutConfirmText, setScoutConfirmText] = useState("");
   const scoutRerunAfterConfirmRef = useRef<null | (() => void)>(null);
+  // One-shot bypass flag set by the confirm dialog so the re-click doesn't
+  // re-open the same dialog. Consumed on the next Scout onClick.
+  const scoutBypassConfirmRef = useRef(false);
   const [running, setRunning] = useState<"extract" | "triage" | "analyze" | null>(null);
   const [promptClass, setPromptClass] = useState<string | null>(null);
   const [expandedFiles, setExpandedFiles] = useState<Set<string>>(new Set());
