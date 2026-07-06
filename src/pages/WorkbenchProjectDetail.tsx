@@ -6197,7 +6197,7 @@ function InstancesReportModal({
           else combos.set(key, { attributes: attrs, count: 1 });
         }
         return {
-          name: c.name,
+          name: displayClassName(c.name),
           idPrefix: optionByName.get(c.name)?.idPrefix || "",
           count: overviewTotals.get(c.name) || 0,
           breakdown: Array.from(combos.values()).sort((a, b) => b.count - a.count),
@@ -6206,19 +6206,31 @@ function InstancesReportModal({
       const summary = {
         spaces: spaceList,
         classes: classCols.map((c) => ({
-          name: c.name,
+          name: displayClassName(c.name),
           idPrefix: optionByName.get(c.name)?.idPrefix || "",
         })),
         matrix: Object.fromEntries(
           spaceList.map((s) => [
             s,
             Object.fromEntries(
-              classCols.map((c) => [c.name, summaryMatrix.get(s)?.get(c.name) || 0]),
+              classCols.map((c) => [
+                displayClassName(c.name),
+                summaryMatrix.get(s)?.get(c.name) || 0,
+              ]),
             ),
           ]),
         ),
       };
-      const spacesData = spaceList.map((s) => computeSpaceExportData(s));
+      const spacesData = spaceList.map((s) => {
+        const sp = computeSpaceExportData(s);
+        return {
+          ...sp,
+          rows: sp.rows.map((r) => ({
+            ...r,
+            awpClassName: displayClassName(r.awpClassName),
+          })),
+        };
+      });
       const payload: ThreatReportPayload = {
         projectId,
         analysisRequestId: requestId ?? null,
