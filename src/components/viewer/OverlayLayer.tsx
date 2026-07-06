@@ -237,10 +237,24 @@ export const OverlayLayer = ({
   viewScale = 1,
   defaultColor = "hsl(var(--destructive))",
   onOverlayClick,
+  onOverlayDrag,
 }: OverlayLayerProps) => {
-  // viewScale is no longer used to size markers/labels — they scale with the
-  // page transform naturally. Kept in the signature for backward compatibility.
-  void viewScale;
+  // viewScale IS used below to translate raw client-px pointer deltas into
+  // page-CSS units when dragging draggable dot overlays.
+  // (Sizes/labels themselves scale naturally with the page transform.)
+
+  // Local drag state for the currently dragged dot. When null, no drag active.
+  // `dx`/`dy` are cumulative deltas in page-CSS px since pointerdown.
+  const [drag, setDrag] = useState<null | {
+    id: string;
+    startClientX: number;
+    startClientY: number;
+    dx: number;
+    dy: number;
+    moved: boolean;
+  }>(null);
+  const dragRef = useRef(drag);
+  dragRef.current = drag;
 
   const circles: CircleInfo[] = useMemo(() => {
     return overlays
