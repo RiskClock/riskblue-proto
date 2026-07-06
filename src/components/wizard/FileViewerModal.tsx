@@ -1096,13 +1096,17 @@ export const FileViewerModal = ({
     const n = numberByInstanceId.get(inst.id) ?? 0;
     const prefix = prefixByClass.get(inst.awp_class_name) || "AWP";
     const base = `${prefix}-${String(n).padStart(3, "0")}`;
+    const meta = (inst.metadata && typeof inst.metadata === "object"
+      ? (inst.metadata as any)
+      : {}) as Record<string, any>;
+    const parts: string[] = [];
     const diameter =
-      inst.metadata &&
-      typeof inst.metadata === "object" &&
-      typeof (inst.metadata as any).pipe_diameter === "string"
-        ? ((inst.metadata as any).pipe_diameter as string).trim()
-        : "";
-    return diameter ? `${base} (${diameter})` : base;
+      typeof meta.pipe_diameter === "string" ? meta.pipe_diameter.trim() : "";
+    if (diameter) parts.push(diameter);
+    const pipeType =
+      typeof meta.pipe_type === "string" ? meta.pipe_type.trim() : "";
+    if (pipeType) parts.push(pipeType);
+    return parts.length > 0 ? `${base} (${parts.join(", ")})` : base;
   };
 
   // ---- Overlays ----------------------------------------------------------
