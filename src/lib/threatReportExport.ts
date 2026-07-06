@@ -55,6 +55,7 @@ export interface ThreatReportSpace {
     annotationBaseId: string;
     fileName: string;
     pageIndex: number;
+    pipeDiameter?: string | null;
   }>;
   units: Array<{ name: string; pageIdxs: number[]; count?: number }>;
   pages: ThreatReportPageRef[];
