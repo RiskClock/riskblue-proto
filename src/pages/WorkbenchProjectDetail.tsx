@@ -3741,7 +3741,9 @@ export default function WorkbenchProjectDetail() {
                         </TableHead>
                         {enabledCols.map((name) => {
                           const opt = optionByName.get(name);
-                          const label = opt?.idPrefix || name;
+                          const alias = aliasMap[name];
+                          const label = alias || opt?.idPrefix || name;
+                          const tooltipName = alias ? `${alias} (${name})` : name;
                           const classHasTriage = (triage || []).some(
                             (t) => t.awp_class_name === name,
                           );
@@ -3761,7 +3763,7 @@ export default function WorkbenchProjectDetail() {
                                       {label}
                                     </button>
                                   </TooltipTrigger>
-                                  <TooltipContent side="bottom">{name} — click to view prompt</TooltipContent>
+                                  <TooltipContent side="bottom">{tooltipName} — click to view prompt</TooltipContent>
                                 </Tooltip>
                                 <DropdownMenu>
                                   <DropdownMenuTrigger asChild>
@@ -3787,6 +3789,11 @@ export default function WorkbenchProjectDetail() {
                                       Analyze
                                     </DropdownMenuItem>
                                     <DropdownMenuItem
+                                      onClick={() => setAliasEditingClass(name)}
+                                    >
+                                      Alias…
+                                    </DropdownMenuItem>
+                                    <DropdownMenuItem
                                       disabled={phaseRunning}
                                       onClick={() => clearClassResults(name)}
                                     >
@@ -3794,6 +3801,10 @@ export default function WorkbenchProjectDetail() {
                                     </DropdownMenuItem>
                                   </DropdownMenuContent>
                                 </DropdownMenu>
+                              </div>
+                            </TableHead>
+                          );
+                        })}
                               </div>
                             </TableHead>
                           );
