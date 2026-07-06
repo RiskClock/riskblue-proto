@@ -6081,11 +6081,36 @@ function InstancesReportModal({
       const sourceDrawings = Array.from(
         new Set(fileGroups.map((g) => g.file.name)),
       );
-      const overviewClasses = classCols.map((c) => ({
-        name: c.name,
-        idPrefix: optionByName.get(c.name)?.idPrefix || "",
-        count: overviewTotals.get(c.name) || 0,
-      }));
+      const overviewClasses = classCols.map((c) => {
+        // Per-attribute breakdown: unique (pipe_diameter, pipe_type) combos
+        // with detection counts. Zero-attribute classes produce an empty list
+        // and render as a plain single-row entry.
+        const combos = new Map<string, { attributes: Record<string, string>; count: number }>();
+        const seenCons = new Set<string>();
+        for (const r of expanded) {
+          if (r.awpClassName !== c.name) continue;
+          if (r.category !== "Asset" && r.category !== "Water System") continue;
+          if (r.logicalKey.startsWith("cons::")) {
+            const dedup = `${r.awpClassName}::${r.annotationBaseId}`;
+            if (seenCons.has(dedup)) continue;
+            seenCons.add(dedup);
+          }
+          const attrs: Record<string, string> = {};
+          if (r.pipeDiameter) attrs["Pipe size"] = r.pipeDiameter;
+          if (r.pipeType) attrs["Type"] = r.pipeType;
+          if (Object.keys(attrs).length === 0) continue;
+          const key = JSON.stringify(attrs);
+          const cur = combos.get(key);
+          if (cur) cur.count += 1;
+          else combos.set(key, { attributes: attrs, count: 1 });
+        }
+        return {
+          name: c.name,
+          idPrefix: optionByName.get(c.name)?.idPrefix || "",
+          count: overviewTotals.get(c.name) || 0,
+          breakdown: Array.from(combos.values()).sort((a, b) => b.count - a.count),
+        };
+      });
       const summary = {
         spaces: spaceList,
         classes: classCols.map((c) => ({
