@@ -511,63 +511,18 @@ export const FileViewerModal = ({
     await onAddPlan({ type, name, bbox_pct });
   }, [onAddPlan, floorPlans, floorPlanOverrides, savePlanEdit, computeCenteredBboxPct]);
 
-  // "Place Unit Floor Plan Marker" — each click on the button drops one new
-  // unit-plan indicator dot at the center of the given level bbox (nudged
-  // when that spot is already taken). Users can then drag the dot to its
-  // desired position or click it to delete. No placement mode.
+  // Handler is defined further below, after `dbInsert` and `effectivePage`
+  // are in scope. We forward-declare via a mutable ref so the sidebar can
+  // invoke it without running into TDZ ordering issues.
+  const handleStartUnitMarkerPlacementRef = useRef<
+    ((planId: string) => Promise<void>) | null
+  >(null);
   const handleStartUnitMarkerPlacement = useCallback(
     async (planId: string) => {
-      const prev = editingPlanRef.current;
-      if (prev) await savePlanEdit();
-      const plan = (floorPlans ?? []).find((p) => p.plan_id === planId);
-      const bb = plan
-        ? getEffectiveBbox(plan, effectiveFloorPlanOverrides)
-        : null;
-      if (!bb) return;
-      const [bx, by, bw, bh] = bb;
-      // Center of the level bbox, in normalized 0..1.
-      let nx = (bx + bw / 2) / 100;
-      let ny = (by + bh / 2) / 100;
-      // Nudge if there's already a unit marker at (or very near) this spot,
-      // so repeated clicks don't stack all dots on top of each other.
-      const existing = instances.filter(
-        (i) =>
-          i.awp_class_name === UNIT_MARKER_CLASS &&
-          i.file_id === parentFileId &&
-          i.page_index === effectivePage,
-      );
-      const tooClose = (a: number, b: number) => Math.abs(a - b) < 0.006;
-      let attempts = 0;
-      while (
-        attempts < 32 &&
-        existing.some((i) => tooClose(i.nx, nx) && tooClose(i.ny, ny))
-      ) {
-        // Spiral outward in small steps, but clamp inside the level bbox.
-        const step = 0.012;
-        const angle = attempts * (Math.PI / 4);
-        nx = Math.max(bx / 100, Math.min((bx + bw) / 100, nx + Math.cos(angle) * step));
-        ny = Math.max(by / 100, Math.min((by + bh) / 100, ny + Math.sin(angle) * step));
-        attempts++;
-      }
-      const row = await dbInsert({
-        awp_class_name: UNIT_MARKER_CLASS,
-        nx,
-        ny,
-        page_index: effectivePage,
-      });
-      if (!row) return;
-      setInstances((prev) => [...prev, row]);
-      blurActive();
+      const fn = handleStartUnitMarkerPlacementRef.current;
+      if (fn) await fn(planId);
     },
-    [
-      savePlanEdit,
-      floorPlans,
-      effectiveFloorPlanOverrides,
-      instances,
-      parentFileId,
-      effectivePage,
-      dbInsert,
-    ],
+    [],
   );
 
   // Once the parent has committed the new plan, floorPlans will contain it.
