@@ -4864,6 +4864,7 @@ function InstancesReportModal({
       pageIndex: number;
       nx: number;
       ny: number;
+      pipeDiameter: string | null;
       // Stable key per logical instance — used to de-duplicate the same
       // consolidated riser appearing across multiple pages. For unit-expanded
       // rows, the (level, unit) pair is folded into the key so each
@@ -4890,6 +4891,11 @@ function InstancesReportModal({
       const base = `${prefix}${String(num).padStart(3, "0")}`;
       const fileName = fileNameById.get(inst.file_id) || "";
       const pairs = pairsForPage(fileName, inst.page_index, Number(inst.nx) || 0, Number(inst.ny) || 0);
+      const diameter =
+        inst.metadata && typeof inst.metadata === "object" &&
+        typeof (inst.metadata as any).pipe_diameter === "string"
+          ? ((inst.metadata as any).pipe_diameter as string).trim() || null
+          : null;
       const common = {
         annotationBaseId: base,
         awpClassName: inst.awp_class_name,
@@ -4898,6 +4904,7 @@ function InstancesReportModal({
         pageIndex: inst.page_index,
         nx: Number(inst.nx) || 0,
         ny: Number(inst.ny) || 0,
+        pipeDiameter: diameter,
       };
       if (pairs.length === 0) {
         rows.push({
