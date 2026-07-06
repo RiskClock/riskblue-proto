@@ -270,6 +270,7 @@ export const DocumentSurface = ({
           hoveredId={hoveredOverlayId}
           viewScale={viewScale}
           onOverlayClick={onOverlayClick}
+          onOverlayDrag={onOverlayDrag}
         />
       )}
       {renderEditor()}
