@@ -60,7 +60,8 @@ const LEGACY_CLASS_TO_PREFIX_MAP: Record<string, string> = {
   Suite: "STE",
   Suites: "STE",
   // Water Systems
-  "Domestic Cold Water": "DCW",
+  "Cold Water": "CW",
+  "Domestic Cold Water": "CW",
   "Domestic Hot Water": "DHW",
   "Sump Pits, Storm Drains and Drainages": "SPSDD",
   "Fire Suppression System": "FS",
