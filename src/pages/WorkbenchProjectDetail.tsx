@@ -766,7 +766,12 @@ export default function WorkbenchProjectDetail() {
             source_type: typeof r.source_type === "string" ? r.source_type : "manual_upload",
             storage_path: typeof r.storage_path === "string" ? r.storage_path : null,
             mime_type: typeof r.mime_type === "string" ? r.mime_type : null,
-            page_count: Number.isFinite(Number(r.page_count)) ? Number(r.page_count) : null,
+            // Only accept positive integers. `Number(null)` is 0 and `isFinite(0)` is true,
+            // which used to poison the cache with `page_count: 0` and hide the expand icon.
+            page_count:
+              typeof r.page_count === "number" && Number.isFinite(r.page_count) && r.page_count > 0
+                ? r.page_count
+                : null,
           })) as PageInfoRow[];
         if (cachedRows.length > 0) setPageInfoRows(cachedRows);
       }
