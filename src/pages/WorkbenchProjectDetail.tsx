@@ -5664,12 +5664,15 @@ function InstancesReportModal({
           nx = Math.max(0.005, Math.min(0.995, nx + offset));
           ny = Math.max(0.005, Math.min(0.995, ny + offset));
         }
+        const label = r.pipeDiameter
+          ? `${r.instanceId} (${r.pipeDiameter})`
+          : r.instanceId;
         return {
           id: `${r.instanceId}-${i}`,
           nx,
           ny,
           color: awpClassColor(r.awpClassName),
-          label: r.instanceId,
+          label,
           shape: "circle" as const,
         };
       });
