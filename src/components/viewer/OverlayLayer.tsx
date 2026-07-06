@@ -74,15 +74,16 @@ interface LabelCandidate {
   y: number;
   w: number;
   h: number;
-  ax: number; // anchor x on circle edge
-  ay: number; // anchor y on circle edge
-  leader: number; // base leader length
+  ax: number; // anchor x on target edge (for leader — circles only)
+  ay: number; // anchor y on target edge
+  leader: number; // base leader length (0 for rects → no leader)
 }
 
 interface PlacedLabel extends LabelCandidate {
   id: string;
   color: string;
   text: string;
+  kind: "circle" | "rect";
 }
 
 function rectsOverlap(
@@ -110,10 +111,9 @@ function rectIntersectsCircle(
 }
 
 /**
- * Generate candidate label positions around a circle: 16 directions × 3 rings,
- * with the label rect aligned so the nearest edge faces the circle (not centered).
+ * Generate candidate label positions around a circle: 24 directions × 4 rings.
  */
-function generateCandidates(
+function generateCircleCandidates(
   c: CircleInfo,
   labelW: number,
   labelH: number,
@@ -129,17 +129,14 @@ function generateCandidates(
       const angle = -Math.PI / 2 + (i * 2 * Math.PI) / directions;
       const cos = Math.cos(angle);
       const sin = Math.sin(angle);
-      // Place label center at distance, then offset so nearest edge points at circle
       const labelCx = c.cx + cos * dist;
       const labelCy = c.cy + sin * dist;
       let lx = labelCx - labelW / 2;
       let ly = labelCy - labelH / 2;
-      // Clamp inside page
       lx = Math.max(2, Math.min(bounds.width - labelW - 2, lx));
       ly = Math.max(2, Math.min(bounds.height - labelH - 2, ly));
       const ax = c.cx + cos * c.r;
       const ay = c.cy + sin * c.r;
-      // Anchor leader end: nearest point on rect to circle center
       const ex = Math.max(lx, Math.min(c.cx, lx + labelW));
       const ey = Math.max(ly, Math.min(c.cy, ly + labelH));
       const leader = Math.hypot(ex - ax, ey - ay);
@@ -147,6 +144,86 @@ function generateCandidates(
     }
   }
   return out;
+}
+
+/**
+ * Generate candidate positions around a rectangle (floor-plan bbox).
+ * Positions: outside each edge (above/below/left/right) at 3 alignments
+ * (start / center / end), plus 3 gap rings. No leader is drawn for rects.
+ */
+function generateRectCandidates(
+  r: { x: number; y: number; w: number; h: number },
+  labelW: number,
+  labelH: number,
+  gap: number,
+  bounds: { width: number; height: number },
+): LabelCandidate[] {
+  const out: LabelCandidate[] = [];
+  const rings = 3;
+  const ax = r.x; // anchor unused for rects (leader=0)
+  const ay = r.y;
+  for (let ring = 0; ring < rings; ring++) {
+    const off = gap + 2 + ring * 6;
+    // Above the rect (preferred)
+    for (const align of ["start", "center", "end"] as const) {
+      const lx =
+        align === "start"
+          ? r.x
+          : align === "center"
+            ? r.x + r.w / 2 - labelW / 2
+            : r.x + r.w - labelW;
+      const ly = r.y - labelH - off;
+      out.push(clampCand(lx, ly, labelW, labelH, ax, ay, bounds));
+    }
+    // Left of the rect (preferred)
+    for (const align of ["start", "center", "end"] as const) {
+      const lx = r.x - labelW - off;
+      const ly =
+        align === "start"
+          ? r.y
+          : align === "center"
+            ? r.y + r.h / 2 - labelH / 2
+            : r.y + r.h - labelH;
+      out.push(clampCand(lx, ly, labelW, labelH, ax, ay, bounds));
+    }
+    // Right of the rect
+    for (const align of ["start", "center", "end"] as const) {
+      const lx = r.x + r.w + off;
+      const ly =
+        align === "start"
+          ? r.y
+          : align === "center"
+            ? r.y + r.h / 2 - labelH / 2
+            : r.y + r.h - labelH;
+      out.push(clampCand(lx, ly, labelW, labelH, ax, ay, bounds));
+    }
+    // Below the rect
+    for (const align of ["start", "center", "end"] as const) {
+      const lx =
+        align === "start"
+          ? r.x
+          : align === "center"
+            ? r.x + r.w / 2 - labelW / 2
+            : r.x + r.w - labelW;
+      const ly = r.y + r.h + off;
+      out.push(clampCand(lx, ly, labelW, labelH, ax, ay, bounds));
+    }
+  }
+  return out;
+}
+
+function clampCand(
+  lx: number,
+  ly: number,
+  w: number,
+  h: number,
+  ax: number,
+  ay: number,
+  bounds: { width: number; height: number },
+): LabelCandidate {
+  const cx = Math.max(2, Math.min(bounds.width - w - 2, lx));
+  const cy = Math.max(2, Math.min(bounds.height - h - 2, ly));
+  return { x: cx, y: cy, w, h, ax, ay, leader: 0 };
 }
 
 const OVERLAP_PENALTY = 100_000;
@@ -160,24 +237,28 @@ interface RectInfo {
   h: number;
 }
 
+interface Anchor {
+  cx: number;
+  cy: number;
+}
+
 function candidateCost(
   cand: LabelCandidate,
   selfIdx: number,
   positions: LabelCandidate[],
   circles: CircleInfo[],
   rects: RectInfo[],
+  anchors: Anchor[],
 ): number {
-  // Prefer labels horizontally centered with the annotation circle.
-  const self = circles[selfIdx];
+  const self = anchors[selfIdx];
   const labelCx = cand.x + cand.w / 2;
   const labelCy = cand.y + cand.h / 2;
   const horizontalOffset = self ? Math.abs(labelCx - self.cx) : 0;
-  // Direction bias: prefer above and left over below and right.
-  // dy > 0 → label below the circle (penalize); dx > 0 → to the right (penalize lightly).
+  // Bias: prefer above and left of the anchor.
   const dy = self ? labelCy - self.cy : 0;
   const dx = self ? labelCx - self.cx : 0;
-  const belowPenalty = Math.max(0, dy) * 1.5; // strong: prefer above
-  const rightPenalty = Math.max(0, dx) * 0.75; // mild: prefer left
+  const belowPenalty = Math.max(0, dy) * 1.5;
+  const rightPenalty = Math.max(0, dx) * 0.75;
   let cost = cand.leader + horizontalOffset * 0.5 + belowPenalty + rightPenalty;
   for (let j = 0; j < positions.length; j++) {
     if (j === selfIdx) continue;
@@ -186,24 +267,18 @@ function candidateCost(
   for (const c of circles) {
     if (rectIntersectsCircle(cand, c)) cost += CIRCLE_PENALTY;
   }
-  // Avoid overlapping bbox rectangles (floor-plan bounding boxes etc.)
   for (const r of rects) {
     if (rectsOverlap(cand, r)) cost += RECT_PENALTY;
   }
   return cost;
 }
 
-/**
- * Iterative global optimization: each label picks the candidate minimizing
- * total cost (leader length + overlap penalties) given the others' current
- * positions. Repeats until no improvement.
- */
 function optimizePlacements(
   candidatesPerLabel: LabelCandidate[][],
   circles: CircleInfo[],
   rects: RectInfo[],
+  anchors: Anchor[],
 ): LabelCandidate[] {
-  // Initialize with shortest-leader candidate
   const positions: LabelCandidate[] = candidatesPerLabel.map(
     (cands) => cands.reduce((best, c) => (c.leader < best.leader ? c : best), cands[0]),
   );
@@ -212,9 +287,9 @@ function optimizePlacements(
     let improved = false;
     for (let i = 0; i < positions.length; i++) {
       let bestCand = positions[i];
-      let bestCost = candidateCost(bestCand, i, positions, circles, rects);
+      let bestCost = candidateCost(bestCand, i, positions, circles, rects, anchors);
       for (const cand of candidatesPerLabel[i]) {
-        const cost = candidateCost(cand, i, positions, circles, rects);
+        const cost = candidateCost(cand, i, positions, circles, rects, anchors);
         if (cost < bestCost - 0.01) {
           bestCost = cost;
           bestCand = cand;
@@ -239,12 +314,6 @@ export const OverlayLayer = ({
   onOverlayClick,
   onOverlayDrag,
 }: OverlayLayerProps) => {
-  // viewScale IS used below to translate raw client-px pointer deltas into
-  // page-CSS units when dragging draggable dot overlays.
-  // (Sizes/labels themselves scale naturally with the page transform.)
-
-  // Local drag state for the currently dragged dot. When null, no drag active.
-  // `dx`/`dy` are cumulative deltas in page-CSS px since pointerdown.
   const [drag, setDrag] = useState<null | {
     id: string;
     startClientX: number;
@@ -267,7 +336,6 @@ export const OverlayLayer = ({
           o.rect.nw * pageSize.width,
           o.rect.nh * pageSize.height,
         );
-        // Dot variant: fixed small filled disc, no border, no label.
         const isDot = o.variant === "dot";
         const diameter = isDot
           ? Math.max(10, MIN_CIRCLE_DIAMETER_CSS * 0.55)
@@ -286,7 +354,6 @@ export const OverlayLayer = ({
       });
   }, [overlays, pageSize.width, pageSize.height, defaultColor, hoveredId]);
 
-  // Rectangle overlays (outline only, no fill) — used for floor-plan bboxes.
   const rects = useMemo(() => {
     return overlays
       .filter((o) => o.shape === "rect")
@@ -302,53 +369,91 @@ export const OverlayLayer = ({
       }));
   }, [overlays, pageSize.width, pageSize.height, defaultColor, hoveredId]);
 
-  // Rect footprints in page-CSS space, used for label placement avoidance.
   const rectFootprints: RectInfo[] = useMemo(
     () => rects.map((r) => ({ x: r.x, y: r.y, w: r.w, h: r.h })),
     [rects],
   );
 
-  // Label sizing in unscaled page CSS px (constant in document space).
   const fontPx = LABEL_FONT_PX;
   const padX = LABEL_PAD_X;
   const labelH = LABEL_H;
   const gap = LABEL_GAP;
-  const charPx = fontPx * 0.62; // bold sans-serif avg
+  const charPx = fontPx * 0.62;
 
   const placedLabels: PlacedLabel[] = useMemo(() => {
-    const labeled = circles.filter((c) => !!c.label);
-    if (labeled.length === 0) return [];
-    const widths = labeled.map((c) =>
-      Math.ceil(c.label!.length * charPx) + padX * 2,
+    const labeledCircles = circles.filter((c) => !!c.label);
+    const labeledRects = rects.filter((r) => !!r.label);
+    if (labeledCircles.length === 0 && labeledRects.length === 0) return [];
+
+    const items: {
+      id: string;
+      color: string;
+      text: string;
+      kind: "circle" | "rect";
+      anchor: Anchor;
+      width: number;
+    }[] = [];
+    for (const c of labeledCircles) {
+      items.push({
+        id: c.id,
+        color: c.color,
+        text: c.label!,
+        kind: "circle",
+        anchor: { cx: c.cx, cy: c.cy },
+        width: Math.ceil(c.label!.length * charPx) + padX * 2,
+      });
+    }
+    for (const r of labeledRects) {
+      items.push({
+        id: r.id,
+        color: r.color,
+        text: r.label!,
+        kind: "rect",
+        // Anchor near top-left so the above/left bias attracts labels there.
+        anchor: { cx: r.x, cy: r.y },
+        width: Math.ceil(r.label!.length * charPx) + padX * 2,
+      });
+    }
+
+    const candidatesPerLabel: LabelCandidate[][] = items.map((it, i) => {
+      if (it.kind === "circle") {
+        const c = labeledCircles[i];
+        return generateCircleCandidates(c, it.width, labelH, gap, pageSize);
+      }
+      const r = labeledRects[i - labeledCircles.length];
+      return generateRectCandidates(r, it.width, labelH, gap, pageSize);
+    });
+
+    const anchors = items.map((it) => it.anchor);
+    const positions = optimizePlacements(
+      candidatesPerLabel,
+      circles,
+      rectFootprints,
+      anchors,
     );
-    const candidatesPerLabel = labeled.map((c, i) =>
-      generateCandidates(c, widths[i], labelH, gap, pageSize),
-    );
-    const positions = optimizePlacements(candidatesPerLabel, circles, rectFootprints);
     return positions.map((p, i) => ({
       ...p,
-      id: labeled[i].id,
-      color: labeled[i].color,
-      text: labeled[i].label!,
+      id: items[i].id,
+      color: items[i].color,
+      text: items[i].text,
+      kind: items[i].kind,
     }));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [circles, rectFootprints, pageSize.width, pageSize.height, fontPx, padX, labelH, gap, charPx]);
+  }, [circles, rects, rectFootprints, pageSize.width, pageSize.height, fontPx, padX, labelH, gap, charPx]);
 
   return (
     <div
       className="pointer-events-none absolute inset-0"
       style={{ width: pageSize.width, height: pageSize.height }}
     >
-      {/* Leader lines (SVG, behind circles) */}
+      {/* Leader lines (SVG, behind circles). Rect labels get no leader. */}
       <svg
         className="absolute inset-0 pointer-events-none"
         width={pageSize.width}
         height={pageSize.height}
         style={{ overflow: "visible" }}
       >
-        {placedLabels.map((p, idx) => {
-          // Endpoint at nearest point on label rect to anchor, then push 1px
-          // inside the rect to guarantee no visible gap.
+        {placedLabels.filter((p) => p.kind === "circle").map((p, idx) => {
           const labelCx = p.x + p.w / 2;
           const labelCy = p.y + p.h / 2;
           const dx = labelCx - p.ax;
@@ -356,12 +461,10 @@ export const OverlayLayer = ({
           const len = Math.hypot(dx, dy) || 1;
           const ux = dx / len;
           const uy = dy / len;
-          // Start: just inside the circle border so the stroke overlaps it.
           const c = circles.find((c) => c.id === p.id);
           const startInset = c ? 1 : 0;
           const x1 = p.ax - ux * startInset;
           const y1 = p.ay - uy * startInset;
-          // End: nearest point on label rect, pushed 1px inside.
           const ex = Math.max(p.x, Math.min(labelCx, p.x + p.w));
           const ey = Math.max(p.y, Math.min(labelCy, p.y + p.h));
           const x2 = ex + ux * 1;
@@ -388,8 +491,6 @@ export const OverlayLayer = ({
         const clickable = !!onOverlayClick;
         const draggable = c.isDot && !!onOverlayDrag;
         const isDragging = drag?.id === c.id;
-        // Draggable dots: no white halo, 50% fill opacity (per spec).
-        // Non-draggable dots keep the legacy halo + stronger fill.
         const dotBaseAlpha = draggable ? 0.5 : (c.hovered ? 0.85 : 0.7);
         const style: CSSProperties = c.isDot
           ? {
@@ -400,9 +501,6 @@ export const OverlayLayer = ({
               height: c.r * 2,
               borderRadius: "9999px",
               backgroundColor: withAlpha(c.color, dotBaseAlpha),
-              boxShadow: draggable
-                ? undefined
-                : `0 0 0 1px rgba(255,255,255,0.85)`,
               boxSizing: "border-box",
               pointerEvents: clickable || draggable ? "auto" : "none",
               cursor: draggable
@@ -425,7 +523,6 @@ export const OverlayLayer = ({
               borderWidth: c.hovered ? 3.5 : 2.5,
               borderStyle: "solid",
               backgroundColor: withAlpha(c.color, c.hovered ? 0.35 : 0.2),
-              boxShadow: `0 0 0 1px rgba(255,255,255,0.85)`,
               boxSizing: "border-box",
               pointerEvents: clickable ? "auto" : "none",
               cursor: clickable ? "pointer" : undefined,
@@ -433,7 +530,7 @@ export const OverlayLayer = ({
 
         const stop = (e: { stopPropagation: () => void }) => e.stopPropagation();
 
-        const DRAG_THRESHOLD = 4; // CSS px, in client space
+        const DRAG_THRESHOLD = 4;
         const onPointerDown = (e: ReactPointerEvent<HTMLDivElement>) => {
           e.stopPropagation();
           if (!draggable) return;
@@ -453,7 +550,6 @@ export const OverlayLayer = ({
           if (!cur || cur.id !== c.id) return;
           const rawDx = e.clientX - cur.startClientX;
           const rawDy = e.clientY - cur.startClientY;
-          // Translate client-px delta into page-CSS px (accounting for zoom).
           const s = viewScale || 1;
           const dx = rawDx / s;
           const dy = rawDy / s;
@@ -512,52 +608,26 @@ export const OverlayLayer = ({
       })}
 
 
-      {/* Rectangle overlays — outline only, label pinned top-left. */}
-      {rects.map((r) => {
-        const labelFs = LABEL_FONT_PX;
-        return (
-          <div key={r.id} style={{ position: "absolute", left: r.x, top: r.y }}>
-            <div
-              style={{
-                width: r.w,
-                height: r.h,
-                borderColor: withAlpha(r.color, 0.5),
-                borderWidth: r.hovered ? 3 : 2,
-                borderStyle: "solid",
-                backgroundColor: "transparent",
-                boxSizing: "border-box",
-                pointerEvents: "none",
-                boxShadow: `0 0 0 1px rgba(255,255,255,0.6)`,
-              }}
-            />
-
-            {r.label ? (
-              <div
-                className="absolute font-bold whitespace-nowrap pointer-events-none"
-                style={{
-                  left: 0,
-                  top: -(LABEL_H + 2),
-                  height: LABEL_H,
-                  lineHeight: `${LABEL_H}px`,
-                  fontSize: labelFs,
-                  paddingLeft: LABEL_PAD_X,
-                  paddingRight: LABEL_PAD_X,
-                  borderRadius: 3,
-                  backgroundColor: r.color,
-                  color: readableTextOn(r.color),
-                  boxShadow: `0 0 0 1px rgba(255,255,255,0.9)`,
-                  opacity: LABEL_OPACITY,
-                }}
-              >
-                {r.label}
-              </div>
-            ) : null}
-          </div>
-        );
-      })}
+      {/* Rectangle overlays — outline only. Labels are placed by the optimizer below. */}
+      {rects.map((r) => (
+        <div key={r.id} style={{ position: "absolute", left: r.x, top: r.y }}>
+          <div
+            style={{
+              width: r.w,
+              height: r.h,
+              borderColor: withAlpha(r.color, 0.5),
+              borderWidth: r.hovered ? 3 : 2,
+              borderStyle: "solid",
+              backgroundColor: "transparent",
+              boxSizing: "border-box",
+              pointerEvents: "none",
+            }}
+          />
+        </div>
+      ))}
 
 
-      {/* Labels (above circles). Intrinsic width hugs the text. */}
+      {/* Labels (above circles & rects). Positions chosen by the optimizer. */}
       {placedLabels.map((p) => (
         <div
           key={`label-${p.id}`}
@@ -584,7 +654,6 @@ export const OverlayLayer = ({
             borderRadius: 3,
             backgroundColor: p.color,
             color: readableTextOn(p.color),
-            boxShadow: `0 0 0 1px rgba(255,255,255,0.9)`,
             opacity: LABEL_OPACITY,
           }}
         >
