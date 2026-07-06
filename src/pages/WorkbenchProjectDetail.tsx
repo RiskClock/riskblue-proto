@@ -4437,6 +4437,63 @@ export default function WorkbenchProjectDetail() {
           </DialogContent>
         </Dialog>
 
+        {/* Scout re-run confirmation — protects existing survey_raw_response
+            from silent overwrite. */}
+        <Dialog
+          open={scoutConfirmOpen}
+          onOpenChange={(open) => {
+            if (!open) {
+              scoutRerunAfterConfirmRef.current = null;
+              setScoutConfirmText("");
+            }
+            setScoutConfirmOpen(open);
+          }}
+        >
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Re-run Scout on files with existing data?</DialogTitle>
+              <DialogDescription>
+                Scout has already run on one or more files in this project.
+                Re-running will overwrite the existing Scout output
+                (<span className="font-mono">survey_raw_response</span>) which drives
+                all floor-plan bounding boxes, level/unit lists, spaces, and the
+                Threat Report. Manual annotations placed by hand are kept, but
+                any automated results from the previous Scout run are lost.
+              </DialogDescription>
+            </DialogHeader>
+            <div className="space-y-2">
+              <label className="text-sm font-medium text-destructive">
+                Type <span className="font-mono">delete</span> to confirm.
+              </label>
+              <Input
+                value={scoutConfirmText}
+                onChange={(e) => setScoutConfirmText(e.target.value)}
+                placeholder="delete"
+                autoFocus
+              />
+            </div>
+            <DialogFooter>
+              <Button
+                variant="outline"
+                onClick={() => {
+                  scoutRerunAfterConfirmRef.current = null;
+                  setScoutConfirmText("");
+                  setScoutConfirmOpen(false);
+                }}
+              >
+                Cancel
+              </Button>
+              <Button
+                variant="destructive"
+                disabled={scoutConfirmText.trim().toLowerCase() !== "delete"}
+                onClick={() => scoutRerunAfterConfirmRef.current?.()}
+              >
+                Overwrite and re-run Scout
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
         {/* Clear All confirmation */}
         <Dialog open={clearOpen} onOpenChange={(open) => !clearing && setClearOpen(open)}>
           <DialogContent>
