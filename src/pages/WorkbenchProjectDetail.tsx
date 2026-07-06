@@ -3048,6 +3048,43 @@ export default function WorkbenchProjectDetail() {
                   type="button"
                   onClick={async () => {
                     if (!requestId) return;
+                    // Safeguard: if Scout has already run on any file in this
+                    // request, require typed confirmation before overwriting.
+                    // Re-running Scout replaces survey_raw_response, which the
+                    // whole Workbench UI (floor plans, spaces, threat report)
+                    // reads from — an accidental re-run silently destroys work.
+                    const filesWithSurvey = (rows?.files ?? []).filter(
+                      (f) => (f as any).survey_raw_response && String((f as any).survey_raw_response).trim().length > 0,
+                    );
+                    if (filesWithSurvey.length > 0 && !scoutRerunAfterConfirmRef.current) {
+                      // Defer the original run until the user types "delete".
+                      // Capture the click target so we can re-dispatch it once
+                      // confirmed (avoids duplicating the ~100-line runner).
+                      const btn = (typeof window !== "undefined" ? document.activeElement : null) as HTMLButtonElement | null;
+                      scoutRerunAfterConfirmRef.current = () => {
+                        scoutRerunAfterConfirmRef.current = null;
+                        setScoutConfirmOpen(false);
+                        setScoutConfirmText("");
+                        // Re-click the original button; the ref-guard is now
+                        // cleared so the check below passes.
+                        setTimeout(() => btn?.click(), 0);
+                      };
+                      void logActivity("workbench_scout_rerun", projectId ?? undefined, {
+                        analysis_request_id: requestId,
+                        files_with_existing_survey: filesWithSurvey.length,
+                        prompted_for_confirmation: true,
+                      });
+                      setScoutConfirmOpen(true);
+                      return;
+                    }
+                    // Passed the gate (either no prior survey, or the user
+                    // just typed "delete"). Log the actual run.
+                    if (filesWithSurvey.length > 0) {
+                      void logActivity("workbench_scout_rerun_confirmed_overwrite", projectId ?? undefined, {
+                        analysis_request_id: requestId,
+                        files_with_existing_survey: filesWithSurvey.length,
+                      });
+                    }
                     // Collect original PDFs attached to this request.
                     const { data: filesData, error: filesErr } = await supabase
                       .from("analysis_request_files")
