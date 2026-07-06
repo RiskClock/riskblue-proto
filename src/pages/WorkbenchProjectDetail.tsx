@@ -4134,6 +4134,17 @@ export default function WorkbenchProjectDetail() {
           </div>
         </main>
 
+        <ClassAliasModal
+          open={!!aliasEditingClass}
+          awpClassName={aliasEditingClass ?? ""}
+          currentAlias={aliasEditingClass ? aliasMap[aliasEditingClass] ?? null : null}
+          onClose={() => setAliasEditingClass(null)}
+          onSave={async (alias) => {
+            if (!aliasEditingClass) return;
+            await saveClassAlias(aliasEditingClass, alias);
+          }}
+        />
+
 
 
 
