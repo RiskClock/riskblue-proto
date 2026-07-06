@@ -2476,9 +2476,85 @@ export default function WorkbenchProjectDetail() {
     }
   };
 
+  // Fetch counts of destructive items before opening the Clear All dialog.
+  // Used to decide whether to require typed confirmation and to show the user
+  // exactly what they are about to lose (safeguard against silent data wipes).
+  const openClearAllDialog = async () => {
+    if (!requestId) return;
+    setClearConfirmText("");
+    setClearCounts({
+      drawing_instances: 0,
+      annotation_consolidations: 0,
+      manual_floor_plans: 0,
+      surveyed_files: 0,
+      loading: true,
+    });
+    setClearOpen(true);
+    try {
+      const [instRes, consRes] = await Promise.all([
+        supabase
+          .from("drawing_instances")
+          .select("id", { count: "exact", head: true })
+          .eq("analysis_request_id", requestId),
+        supabase
+          .from("annotation_consolidations" as any)
+          .select("id", { count: "exact", head: true })
+          .eq("analysis_request_id", requestId),
+      ]);
+      // Count manual floor-plan overrides across the sheets already in `rows`
+      // (both per-plan overrides and __added_unit_plans entries).
+      let manualFloorPlans = 0;
+      for (const s of rows?.sheets ?? []) {
+        const ovr = (s.floor_plan_overrides ?? {}) as Record<string, any>;
+        for (const [k, v] of Object.entries(ovr)) {
+          if (k === "__added_unit_plans") {
+            if (Array.isArray(v)) manualFloorPlans += v.length;
+          } else if (!k.startsWith("__")) {
+            // per-plan override (name/bbox/units)
+            if (v && typeof v === "object") manualFloorPlans += 1;
+          }
+        }
+      }
+      const surveyedFiles = (rows?.files ?? []).filter(
+        (f) => (f as any).survey_raw_response && String((f as any).survey_raw_response).trim().length > 0,
+      ).length;
+      setClearCounts({
+        drawing_instances: instRes.count ?? 0,
+        annotation_consolidations: consRes.count ?? 0,
+        manual_floor_plans: manualFloorPlans,
+        surveyed_files: surveyedFiles,
+        loading: false,
+      });
+    } catch (e) {
+      setClearCounts((prev) => (prev ? { ...prev, loading: false } : prev));
+    }
+  };
+
+  // True when Clear All will destroy user-authored data. In that case we
+  // require the user to type "delete" before the button becomes enabled.
+  const clearRequiresConfirmation = !!clearCounts && !clearCounts.loading && (
+    clearCounts.drawing_instances > 0 ||
+    clearCounts.annotation_consolidations > 0 ||
+    clearCounts.manual_floor_plans > 0 ||
+    clearCounts.surveyed_files > 0
+  );
+  const clearConfirmed =
+    !clearRequiresConfirmation || clearConfirmText.trim().toLowerCase() === "delete";
+
   const clearAll = async () => {
     if (!requestId) return;
+    if (!clearConfirmed) return;
     setClearing(true);
+    // Snapshot the counts we're about to destroy so the audit log records
+    // exactly what was lost even if the fetch races the delete.
+    const audit = clearCounts
+      ? {
+          drawing_instances: clearCounts.drawing_instances,
+          annotation_consolidations: clearCounts.annotation_consolidations,
+          manual_floor_plans: clearCounts.manual_floor_plans,
+          surveyed_files: clearCounts.surveyed_files,
+        }
+      : null;
     try {
       await Promise.all([
         supabase
@@ -2524,9 +2600,15 @@ export default function WorkbenchProjectDetail() {
           space_hierarchy_json: null,
           space_hierarchy_status: null,
           space_hierarchy_error: null,
-          space_hierarchy_updated_at: null,
         } as any)
         .eq("id", requestId);
+
+      // Audit trail — always logged (safeguard against silent data loss).
+      void logActivity("workbench_clear_all", projectId ?? undefined, {
+        analysis_request_id: requestId,
+        destroyed: audit,
+        required_typed_confirmation: clearRequiresConfirmation,
+      });
 
       queryClient.invalidateQueries({ queryKey: ["workbench-rows", requestId] });
       queryClient.invalidateQueries({ queryKey: ["workbench-triage", requestId] });
@@ -2536,6 +2618,8 @@ export default function WorkbenchProjectDetail() {
       });
       toast({ title: "All results cleared" });
       setClearOpen(false);
+      setClearConfirmText("");
+      setClearCounts(null);
     } catch (error: any) {
       toast({
         variant: "destructive",
@@ -2546,6 +2630,7 @@ export default function WorkbenchProjectDetail() {
       setClearing(false);
     }
   };
+
 
   // Clear triage + analyze results (and related overrides) for a single class
   // across the current request. Leaves user-placed drawing instances intact.
