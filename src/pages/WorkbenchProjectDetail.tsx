@@ -25,6 +25,8 @@ import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
+import { Input } from "@/components/ui/input";
+import { useActivityLogger } from "@/hooks/useActivityLogger";
 import { SpaceEditModal } from "@/components/workbench/SpaceEditModal";
 import { ConsolidateRisersModal } from "@/components/workbench/ConsolidateRisersModal";
 import { SpatialArchitectModal } from "@/components/workbench/SpatialArchitectModal";
@@ -264,6 +266,7 @@ export default function WorkbenchProjectDetail() {
   const navigate = useNavigate();
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const { logActivity } = useActivityLogger();
   const isInternal = user?.email?.toLowerCase().endsWith("@riskclock.com") ?? false;
 
   const [activeSheet, setActiveSheet] = useState<SheetRow | null>(null);
@@ -281,6 +284,23 @@ export default function WorkbenchProjectDetail() {
   const [textSheet, setTextSheet] = useState<{ id: string; label: string } | null>(null);
   const [clearOpen, setClearOpen] = useState(false);
   const [clearing, setClearing] = useState(false);
+  // Typed-confirmation state for destructive Clear All when manual data exists.
+  const [clearConfirmText, setClearConfirmText] = useState("");
+  // Pre-flight counts of what Clear All will destroy, fetched when the dialog opens.
+  const [clearCounts, setClearCounts] = useState<{
+    drawing_instances: number;
+    annotation_consolidations: number;
+    manual_floor_plans: number;
+    surveyed_files: number;
+    loading: boolean;
+  } | null>(null);
+  // Typed-confirmation state for Scout re-run over existing survey data.
+  const [scoutConfirmOpen, setScoutConfirmOpen] = useState(false);
+  const [scoutConfirmText, setScoutConfirmText] = useState("");
+  const scoutRerunAfterConfirmRef = useRef<null | (() => void)>(null);
+  // One-shot bypass flag set by the confirm dialog so the re-click doesn't
+  // re-open the same dialog. Consumed on the next Scout onClick.
+  const scoutBypassConfirmRef = useRef(false);
   const [running, setRunning] = useState<"extract" | "triage" | "analyze" | null>(null);
   const [promptClass, setPromptClass] = useState<string | null>(null);
   const [expandedFiles, setExpandedFiles] = useState<Set<string>>(new Set());
@@ -766,7 +786,12 @@ export default function WorkbenchProjectDetail() {
             source_type: typeof r.source_type === "string" ? r.source_type : "manual_upload",
             storage_path: typeof r.storage_path === "string" ? r.storage_path : null,
             mime_type: typeof r.mime_type === "string" ? r.mime_type : null,
-            page_count: Number.isFinite(Number(r.page_count)) ? Number(r.page_count) : null,
+            // Only accept positive integers. `Number(null)` is 0 and `isFinite(0)` is true,
+            // which used to poison the cache with `page_count: 0` and hide the expand icon.
+            page_count:
+              typeof r.page_count === "number" && Number.isFinite(r.page_count) && r.page_count > 0
+                ? r.page_count
+                : null,
           })) as PageInfoRow[];
         if (cachedRows.length > 0) setPageInfoRows(cachedRows);
       }
@@ -797,7 +822,12 @@ export default function WorkbenchProjectDetail() {
             source_type: requestSourceType,
             storage_path: typeof r.storage_path === "string" ? r.storage_path : null,
             mime_type: typeof r.mime_type === "string" ? r.mime_type : null,
-            page_count: Number.isFinite(Number(r.page_count)) ? Number(r.page_count) : null,
+            // Same null-cache guard as the project-level cache above — only trust
+            // positive integers so a half-written cache entry can't stick as `0`.
+            page_count:
+              typeof r.page_count === "number" && Number.isFinite(r.page_count) && r.page_count > 0
+                ? r.page_count
+                : null,
           })) as PageInfoRow[];
         if (cachedRows.length > 0) {
           hasCachedRows = true;
@@ -2449,9 +2479,85 @@ export default function WorkbenchProjectDetail() {
     }
   };
 
+  // Fetch counts of destructive items before opening the Clear All dialog.
+  // Used to decide whether to require typed confirmation and to show the user
+  // exactly what they are about to lose (safeguard against silent data wipes).
+  const openClearAllDialog = async () => {
+    if (!requestId) return;
+    setClearConfirmText("");
+    setClearCounts({
+      drawing_instances: 0,
+      annotation_consolidations: 0,
+      manual_floor_plans: 0,
+      surveyed_files: 0,
+      loading: true,
+    });
+    setClearOpen(true);
+    try {
+      const [instRes, consRes] = await Promise.all([
+        supabase
+          .from("drawing_instances")
+          .select("id", { count: "exact", head: true })
+          .eq("analysis_request_id", requestId),
+        supabase
+          .from("annotation_consolidations" as any)
+          .select("id", { count: "exact", head: true })
+          .eq("analysis_request_id", requestId),
+      ]);
+      // Count manual floor-plan overrides across the sheets already in `rows`
+      // (both per-plan overrides and __added_unit_plans entries).
+      let manualFloorPlans = 0;
+      for (const s of rows?.sheets ?? []) {
+        const ovr = (s.floor_plan_overrides ?? {}) as Record<string, any>;
+        for (const [k, v] of Object.entries(ovr)) {
+          if (k === "__added_unit_plans") {
+            if (Array.isArray(v)) manualFloorPlans += v.length;
+          } else if (!k.startsWith("__")) {
+            // per-plan override (name/bbox/units)
+            if (v && typeof v === "object") manualFloorPlans += 1;
+          }
+        }
+      }
+      const surveyedFiles = (rows?.files ?? []).filter(
+        (f) => (f as any).survey_raw_response && String((f as any).survey_raw_response).trim().length > 0,
+      ).length;
+      setClearCounts({
+        drawing_instances: instRes.count ?? 0,
+        annotation_consolidations: consRes.count ?? 0,
+        manual_floor_plans: manualFloorPlans,
+        surveyed_files: surveyedFiles,
+        loading: false,
+      });
+    } catch (e) {
+      setClearCounts((prev) => (prev ? { ...prev, loading: false } : prev));
+    }
+  };
+
+  // True when Clear All will destroy user-authored data. In that case we
+  // require the user to type "delete" before the button becomes enabled.
+  const clearRequiresConfirmation = !!clearCounts && !clearCounts.loading && (
+    clearCounts.drawing_instances > 0 ||
+    clearCounts.annotation_consolidations > 0 ||
+    clearCounts.manual_floor_plans > 0 ||
+    clearCounts.surveyed_files > 0
+  );
+  const clearConfirmed =
+    !clearRequiresConfirmation || clearConfirmText.trim().toLowerCase() === "delete";
+
   const clearAll = async () => {
     if (!requestId) return;
+    if (!clearConfirmed) return;
     setClearing(true);
+    // Snapshot the counts we're about to destroy so the audit log records
+    // exactly what was lost even if the fetch races the delete.
+    const audit = clearCounts
+      ? {
+          drawing_instances: clearCounts.drawing_instances,
+          annotation_consolidations: clearCounts.annotation_consolidations,
+          manual_floor_plans: clearCounts.manual_floor_plans,
+          surveyed_files: clearCounts.surveyed_files,
+        }
+      : null;
     try {
       await Promise.all([
         supabase
@@ -2501,6 +2607,13 @@ export default function WorkbenchProjectDetail() {
         } as any)
         .eq("id", requestId);
 
+      // Audit trail — always logged (safeguard against silent data loss).
+      void logActivity("workbench_clear_all", projectId ?? undefined, {
+        analysis_request_id: requestId,
+        destroyed: audit,
+        required_typed_confirmation: clearRequiresConfirmation,
+      });
+
       queryClient.invalidateQueries({ queryKey: ["workbench-rows", requestId] });
       queryClient.invalidateQueries({ queryKey: ["workbench-triage", requestId] });
       queryClient.invalidateQueries({ queryKey: ["workbench-overrides", requestId] });
@@ -2509,6 +2622,8 @@ export default function WorkbenchProjectDetail() {
       });
       toast({ title: "All results cleared" });
       setClearOpen(false);
+      setClearConfirmText("");
+      setClearCounts(null);
     } catch (error: any) {
       toast({
         variant: "destructive",
@@ -2519,6 +2634,7 @@ export default function WorkbenchProjectDetail() {
       setClearing(false);
     }
   };
+
 
   // Clear triage + analyze results (and related overrides) for a single class
   // across the current request. Leaves user-placed drawing instances intact.
@@ -2935,6 +3051,48 @@ export default function WorkbenchProjectDetail() {
                   type="button"
                   onClick={async () => {
                     if (!requestId) return;
+                    // Safeguard: if Scout has already run on any file in this
+                    // request, require typed confirmation before overwriting.
+                    // Re-running Scout replaces survey_raw_response, which the
+                    // whole Workbench UI (floor plans, spaces, threat report)
+                    // reads from — an accidental re-run silently destroys work.
+                    const filesWithSurvey = (rows?.files ?? []).filter(
+                      (f) => (f as any).survey_raw_response && String((f as any).survey_raw_response).trim().length > 0,
+                    );
+                    // Consume the one-shot bypass first so a confirmed re-run
+                    // doesn't loop back into the same dialog.
+                    const bypass = scoutBypassConfirmRef.current;
+                    scoutBypassConfirmRef.current = false;
+                    if (filesWithSurvey.length > 0 && !bypass) {
+                      // Defer the original run until the user types "delete".
+                      // Capture the click target so we can re-dispatch it once
+                      // confirmed (avoids duplicating the ~100-line runner).
+                      const btn = (typeof window !== "undefined" ? document.activeElement : null) as HTMLButtonElement | null;
+                      scoutRerunAfterConfirmRef.current = () => {
+                        scoutRerunAfterConfirmRef.current = null;
+                        scoutBypassConfirmRef.current = true;
+                        setScoutConfirmOpen(false);
+                        setScoutConfirmText("");
+                        // Re-click the original button; the bypass ref is now
+                        // set so the guard above will skip the confirmation.
+                        setTimeout(() => btn?.click(), 0);
+                      };
+                      void logActivity("workbench_scout_rerun", projectId ?? undefined, {
+                        analysis_request_id: requestId,
+                        files_with_existing_survey: filesWithSurvey.length,
+                        prompted_for_confirmation: true,
+                      });
+                      setScoutConfirmOpen(true);
+                      return;
+                    }
+                    // Passed the gate (either no prior survey, or the user
+                    // just typed "delete"). Log the actual run.
+                    if (filesWithSurvey.length > 0) {
+                      void logActivity("workbench_scout_rerun_confirmed_overwrite", projectId ?? undefined, {
+                        analysis_request_id: requestId,
+                        files_with_existing_survey: filesWithSurvey.length,
+                      });
+                    }
                     // Collect original PDFs attached to this request.
                     const { data: filesData, error: filesErr } = await supabase
                       .from("analysis_request_files")
@@ -3198,7 +3356,7 @@ export default function WorkbenchProjectDetail() {
                 <Button
                   type="button"
                   variant="outline"
-                  onClick={() => setClearOpen(true)}
+                  onClick={openClearAllDialog}
                   disabled={!requestId || phaseRunning}
                 >
                   Clear All
@@ -4287,25 +4445,150 @@ export default function WorkbenchProjectDetail() {
           </DialogContent>
         </Dialog>
 
+        {/* Scout re-run confirmation — protects existing survey_raw_response
+            from silent overwrite. */}
+        <Dialog
+          open={scoutConfirmOpen}
+          onOpenChange={(open) => {
+            if (!open) {
+              scoutRerunAfterConfirmRef.current = null;
+              setScoutConfirmText("");
+            }
+            setScoutConfirmOpen(open);
+          }}
+        >
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Re-run Scout on files with existing data?</DialogTitle>
+              <DialogDescription>
+                Scout has already run on one or more files in this project.
+                Re-running will overwrite the existing Scout output
+                (<span className="font-mono">survey_raw_response</span>) which drives
+                all floor-plan bounding boxes, level/unit lists, spaces, and the
+                Threat Report. Manual annotations placed by hand are kept, but
+                any automated results from the previous Scout run are lost.
+              </DialogDescription>
+            </DialogHeader>
+            <div className="space-y-2">
+              <label className="text-sm font-medium text-destructive">
+                Type <span className="font-mono">delete</span> to confirm.
+              </label>
+              <Input
+                value={scoutConfirmText}
+                onChange={(e) => setScoutConfirmText(e.target.value)}
+                placeholder="delete"
+                autoFocus
+              />
+            </div>
+            <DialogFooter>
+              <Button
+                variant="outline"
+                onClick={() => {
+                  scoutRerunAfterConfirmRef.current = null;
+                  setScoutConfirmText("");
+                  setScoutConfirmOpen(false);
+                }}
+              >
+                Cancel
+              </Button>
+              <Button
+                variant="destructive"
+                disabled={scoutConfirmText.trim().toLowerCase() !== "delete"}
+                onClick={() => scoutRerunAfterConfirmRef.current?.()}
+              >
+                Overwrite and re-run Scout
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
         {/* Clear All confirmation */}
         <Dialog open={clearOpen} onOpenChange={(open) => !clearing && setClearOpen(open)}>
           <DialogContent>
             <DialogHeader>
               <DialogTitle>Clear all results?</DialogTitle>
               <DialogDescription>
-                This removes all annotations, floor-plan bounding boxes, and the
-                relationships between level and unit floor plans for this project,
-                along with Workbench overrides. The uploaded files themselves are not removed.
+                This removes annotations, floor-plan bounding boxes, level↔unit
+                relationships, extracted text, and Workbench overrides for this
+                project. The uploaded files themselves are not removed.
               </DialogDescription>
             </DialogHeader>
+            {clearCounts?.loading ? (
+              <div className="flex items-center gap-2 text-sm text-muted-foreground py-2">
+                <Loader2 className="h-4 w-4 animate-spin" />
+                Counting items that will be deleted…
+              </div>
+            ) : clearCounts ? (
+              <div className="space-y-3">
+                <div className="rounded-md border bg-muted/40 px-3 py-2 text-sm space-y-1">
+                  <div className="font-medium">This will permanently delete:</div>
+                  <ul className="list-disc pl-5 text-muted-foreground">
+                    <li>
+                      <span className="tabular-nums font-medium text-foreground">
+                        {clearCounts.drawing_instances}
+                      </span>{" "}
+                      annotation{clearCounts.drawing_instances === 1 ? "" : "s"} (DCW / FS / etc.)
+                    </li>
+                    <li>
+                      <span className="tabular-nums font-medium text-foreground">
+                        {clearCounts.manual_floor_plans}
+                      </span>{" "}
+                      manually-placed floor-plan bounding box
+                      {clearCounts.manual_floor_plans === 1 ? "" : "es"}
+                    </li>
+                    <li>
+                      <span className="tabular-nums font-medium text-foreground">
+                        {clearCounts.annotation_consolidations}
+                      </span>{" "}
+                      level↔unit relationship
+                      {clearCounts.annotation_consolidations === 1 ? "" : "s"}
+                    </li>
+                    <li>
+                      Scout survey output on{" "}
+                      <span className="tabular-nums font-medium text-foreground">
+                        {clearCounts.surveyed_files}
+                      </span>{" "}
+                      file{clearCounts.surveyed_files === 1 ? "" : "s"}{" "}
+                      <span className="text-xs">
+                        (extracted text cleared; raw Scout JSON is preserved on the file
+                        row and can only be overwritten by re-running Scout)
+                      </span>
+                    </li>
+                  </ul>
+                </div>
+                {clearRequiresConfirmation ? (
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium text-destructive">
+                      Type <span className="font-mono">delete</span> to confirm.
+                    </label>
+                    <Input
+                      value={clearConfirmText}
+                      onChange={(e) => setClearConfirmText(e.target.value)}
+                      placeholder="delete"
+                      autoFocus
+                      disabled={clearing}
+                    />
+                  </div>
+                ) : (
+                  <div className="text-sm text-muted-foreground">
+                    No manual annotations or floor plans present — safe to clear.
+                  </div>
+                )}
+              </div>
+            ) : null}
             <DialogFooter>
               <Button variant="outline" onClick={() => setClearOpen(false)} disabled={clearing}>Cancel</Button>
-              <Button onClick={clearAll} disabled={clearing}>
+              <Button
+                onClick={clearAll}
+                disabled={clearing || (clearCounts?.loading ?? true) || !clearConfirmed}
+                variant={clearRequiresConfirmation ? "destructive" : "default"}
+              >
                 {clearing ? <Loader2 className="h-4 w-4 animate-spin" /> : "Clear All"}
               </Button>
             </DialogFooter>
           </DialogContent>
         </Dialog>
+
 
         <SpaceHierarchyModal
           open={spaceModalOpen}

@@ -12,7 +12,12 @@ type ActivityAction =
   | "google_drive_analysis_request"
   | "manual_drawings_upload"
   | "credits_purchase_initiated"
-  | "credits_purchased";
+  | "credits_purchased"
+  // Destructive / audit-critical actions. Always logged (including for
+  // internal @riskclock.com users) so we can trace data loss after the fact.
+  | "workbench_clear_all"
+  | "workbench_scout_rerun"
+  | "workbench_scout_rerun_confirmed_overwrite";
 
 export const useActivityLogger = () => {
   const logActivity = useCallback(async (
