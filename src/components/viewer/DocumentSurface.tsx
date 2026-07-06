@@ -65,6 +65,7 @@ export const DocumentSurface = ({
   viewScale,
   onCanvasClick,
   onOverlayClick,
+  onOverlayDrag,
   onRenderedSizeChange,
   editorBbox,
   onEditorBboxChange,
