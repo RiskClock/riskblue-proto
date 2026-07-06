@@ -337,6 +337,12 @@ export const FileViewerModal = ({
     | null
   >(null);
   const [focusNamePlanId, setFocusNamePlanId] = useState<string | null>(null);
+  // When set, canvas clicks add unit-plan indicator dots inside the given
+  // level plan's bbox instead of creating detection markers. Cleared via a
+  // "Done" button or by dismissing the mode.
+  const [placingMarkerPlanId, setPlacingMarkerPlanId] = useState<string | null>(
+    null,
+  );
   // Metadata popover for DCW / Fire Suppression annotations (pipe diameter).
   const [metadataDialog, setMetadataDialog] = useState<null | {
     instanceId: string;
