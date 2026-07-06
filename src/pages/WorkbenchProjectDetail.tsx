@@ -4406,19 +4406,87 @@ export default function WorkbenchProjectDetail() {
             <DialogHeader>
               <DialogTitle>Clear all results?</DialogTitle>
               <DialogDescription>
-                This removes all annotations, floor-plan bounding boxes, and the
-                relationships between level and unit floor plans for this project,
-                along with Workbench overrides. The uploaded files themselves are not removed.
+                This removes annotations, floor-plan bounding boxes, level↔unit
+                relationships, extracted text, and Workbench overrides for this
+                project. The uploaded files themselves are not removed.
               </DialogDescription>
             </DialogHeader>
+            {clearCounts?.loading ? (
+              <div className="flex items-center gap-2 text-sm text-muted-foreground py-2">
+                <Loader2 className="h-4 w-4 animate-spin" />
+                Counting items that will be deleted…
+              </div>
+            ) : clearCounts ? (
+              <div className="space-y-3">
+                <div className="rounded-md border bg-muted/40 px-3 py-2 text-sm space-y-1">
+                  <div className="font-medium">This will permanently delete:</div>
+                  <ul className="list-disc pl-5 text-muted-foreground">
+                    <li>
+                      <span className="tabular-nums font-medium text-foreground">
+                        {clearCounts.drawing_instances}
+                      </span>{" "}
+                      annotation{clearCounts.drawing_instances === 1 ? "" : "s"} (DCW / FS / etc.)
+                    </li>
+                    <li>
+                      <span className="tabular-nums font-medium text-foreground">
+                        {clearCounts.manual_floor_plans}
+                      </span>{" "}
+                      manually-placed floor-plan bounding box
+                      {clearCounts.manual_floor_plans === 1 ? "" : "es"}
+                    </li>
+                    <li>
+                      <span className="tabular-nums font-medium text-foreground">
+                        {clearCounts.annotation_consolidations}
+                      </span>{" "}
+                      level↔unit relationship
+                      {clearCounts.annotation_consolidations === 1 ? "" : "s"}
+                    </li>
+                    <li>
+                      Scout survey output on{" "}
+                      <span className="tabular-nums font-medium text-foreground">
+                        {clearCounts.surveyed_files}
+                      </span>{" "}
+                      file{clearCounts.surveyed_files === 1 ? "" : "s"}{" "}
+                      <span className="text-xs">
+                        (extracted text cleared; raw Scout JSON is preserved on the file
+                        row and can only be overwritten by re-running Scout)
+                      </span>
+                    </li>
+                  </ul>
+                </div>
+                {clearRequiresConfirmation ? (
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium text-destructive">
+                      Type <span className="font-mono">delete</span> to confirm.
+                    </label>
+                    <Input
+                      value={clearConfirmText}
+                      onChange={(e) => setClearConfirmText(e.target.value)}
+                      placeholder="delete"
+                      autoFocus
+                      disabled={clearing}
+                    />
+                  </div>
+                ) : (
+                  <div className="text-sm text-muted-foreground">
+                    No manual annotations or floor plans present — safe to clear.
+                  </div>
+                )}
+              </div>
+            ) : null}
             <DialogFooter>
               <Button variant="outline" onClick={() => setClearOpen(false)} disabled={clearing}>Cancel</Button>
-              <Button onClick={clearAll} disabled={clearing}>
+              <Button
+                onClick={clearAll}
+                disabled={clearing || (clearCounts?.loading ?? true) || !clearConfirmed}
+                variant={clearRequiresConfirmation ? "destructive" : "default"}
+              >
                 {clearing ? <Loader2 className="h-4 w-4 animate-spin" /> : "Clear All"}
               </Button>
             </DialogFooter>
           </DialogContent>
         </Dialog>
+
 
         <SpaceHierarchyModal
           open={spaceModalOpen}
