@@ -5259,7 +5259,7 @@ function InstancesReportModal({
           pageIndex: m.page_index,
           nx: Number(m.nx) || 0,
           ny: Number(m.ny) || 0,
-          pipeDiameter: null,
+          pipeDiameter: null, pipeType: null,
           logicalKey: `cons::${groupKey}`,
         });
       } else {
@@ -5275,7 +5275,7 @@ function InstancesReportModal({
             pageIndex: member.page_index,
             nx: Number(member.nx) || 0,
             ny: Number(member.ny) || 0,
-            pipeDiameter: null,
+            pipeDiameter: null, pipeType: null,
             logicalKey: `cons::${groupKey}::${k}`,
           });
         }
