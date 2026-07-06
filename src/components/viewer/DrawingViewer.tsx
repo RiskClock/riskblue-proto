@@ -64,6 +64,8 @@ export interface DrawingViewerProps {
   onCanvasClick?: (nx: number, ny: number, pageNum: number) => void;
   /** Called when user clicks on an overlay element; receives its id. */
   onOverlayClick?: (overlayId: string) => void;
+  /** Called when a draggable overlay is released after being moved. */
+  onOverlayDrag?: (overlayId: string, nx: number, ny: number) => void;
   /** Reports the active rendered page element size in CSS pixels. */
   onActivePageRenderedSizeChange?: (size: { width: number; height: number }) => void;
   className?: string;
