@@ -266,6 +266,7 @@ export default function WorkbenchProjectDetail() {
   const navigate = useNavigate();
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const { logActivity } = useActivityLogger();
   const isInternal = user?.email?.toLowerCase().endsWith("@riskclock.com") ?? false;
 
   const [activeSheet, setActiveSheet] = useState<SheetRow | null>(null);
