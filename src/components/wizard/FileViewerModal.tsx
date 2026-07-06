@@ -381,7 +381,7 @@ export const FileViewerModal = ({
       setEditingPlan(null);
       setConfirmExit(null);
       setConfirmDelete(null);
-      setPlacingMarkerPlanId(null);
+      
     }
   }, [isOpen]);
   useEffect(() => {
