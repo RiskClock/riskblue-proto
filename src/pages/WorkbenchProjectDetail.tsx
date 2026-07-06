@@ -3059,17 +3059,22 @@ export default function WorkbenchProjectDetail() {
                     const filesWithSurvey = (rows?.files ?? []).filter(
                       (f) => (f as any).survey_raw_response && String((f as any).survey_raw_response).trim().length > 0,
                     );
-                    if (filesWithSurvey.length > 0 && !scoutRerunAfterConfirmRef.current) {
+                    // Consume the one-shot bypass first so a confirmed re-run
+                    // doesn't loop back into the same dialog.
+                    const bypass = scoutBypassConfirmRef.current;
+                    scoutBypassConfirmRef.current = false;
+                    if (filesWithSurvey.length > 0 && !bypass) {
                       // Defer the original run until the user types "delete".
                       // Capture the click target so we can re-dispatch it once
                       // confirmed (avoids duplicating the ~100-line runner).
                       const btn = (typeof window !== "undefined" ? document.activeElement : null) as HTMLButtonElement | null;
                       scoutRerunAfterConfirmRef.current = () => {
                         scoutRerunAfterConfirmRef.current = null;
+                        scoutBypassConfirmRef.current = true;
                         setScoutConfirmOpen(false);
                         setScoutConfirmText("");
-                        // Re-click the original button; the ref-guard is now
-                        // cleared so the check below passes.
+                        // Re-click the original button; the bypass ref is now
+                        // set so the guard above will skip the confirmation.
                         setTimeout(() => btn?.click(), 0);
                       };
                       void logActivity("workbench_scout_rerun", projectId ?? undefined, {
