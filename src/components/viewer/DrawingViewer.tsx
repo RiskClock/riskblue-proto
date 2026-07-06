@@ -104,6 +104,7 @@ export const DrawingViewer = forwardRef<DrawingViewerApi, DrawingViewerProps>(
       onTotalPagesChange,
       onCanvasClick,
       onOverlayClick,
+      onOverlayDrag,
       onActivePageRenderedSizeChange,
       className,
       interactive = true,
