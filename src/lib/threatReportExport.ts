@@ -615,7 +615,7 @@ export async function runThreatReportExport(
               return new TableRow({
                 children: [
                   tableBodyCell("", 2000),
-                  tableBodyCell(`    ↳ ${label}`, 5360, { italics: true }),
+                  tableBodyCell(`    ↳ ${label}`, 5360, { muted: true }),
                   tableBodyCell(String(b.count), 2000),
                 ],
               });
