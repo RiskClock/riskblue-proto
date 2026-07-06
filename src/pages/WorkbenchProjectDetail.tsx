@@ -3805,10 +3805,6 @@ export default function WorkbenchProjectDetail() {
                             </TableHead>
                           );
                         })}
-                              </div>
-                            </TableHead>
-                          );
-                        })}
                         <TableHead className="text-right w-[1%] whitespace-nowrap h-9 py-1 bg-card">
                           <Button
                             variant="outline"
