@@ -67,7 +67,13 @@ export interface ThreatReportPayload {
   projectName: string;
   reportDate: string;
   sourceDrawings: string[];
-  overviewClasses: Array<{ name: string; idPrefix: string; count: number }>;
+  overviewClasses: Array<{
+    name: string;
+    idPrefix: string;
+    count: number;
+    /** Optional per-attribute breakdown (e.g. by pipe size + type). */
+    breakdown?: Array<{ attributes: Record<string, string>; count: number }>;
+  }>;
   summary: {
     spaces: string[]; // includes "__unassigned__" possibly
     classes: Array<{ name: string; idPrefix: string }>;
