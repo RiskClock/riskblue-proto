@@ -5772,6 +5772,7 @@ function InstancesReportModal({
         annotationBaseId: r.annotationBaseId,
         fileName: fileNameById.get(r.fileId) || "",
         pageIndex: r.pageIndex,
+        pipeDiameter: r.pipeDiameter ?? null,
       })),
       units,
       pages,
