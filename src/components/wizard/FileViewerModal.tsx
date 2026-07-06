@@ -83,12 +83,43 @@ interface DrawingInstanceRow {
 // Classes that support the pipe-diameter metadata popover.
 // Matched as a case-insensitive substring against the class name.
 const DIAMETER_ENABLED_MATCHERS = [
-  "domestic cold water",
+  "cold water",
   "fire suppression",
 ];
 const isDiameterEnabledClass = (name: string): boolean => {
   const n = (name || "").toLowerCase();
   return DIAMETER_ENABLED_MATCHERS.some((m) => n.includes(m));
+};
+
+// Cold Water carries an extra free-text "Type" attribute alongside pipe size.
+const isTypeEnabledClass = (name: string): boolean => {
+  return (name || "").toLowerCase().includes("cold water");
+};
+
+// Metadata field descriptors surfaced in the annotation popover, keyed by
+// class. Each entry lists the metadata keys to render as separate inputs.
+interface MetaFieldDef {
+  key: string;
+  label: string;
+  placeholder: string;
+}
+const metaFieldsForClass = (name: string): MetaFieldDef[] => {
+  const out: MetaFieldDef[] = [];
+  if (isDiameterEnabledClass(name)) {
+    out.push({
+      key: "pipe_diameter",
+      label: "Pipe size",
+      placeholder: 'Diameter (e.g. 50mm, 3/4")',
+    });
+  }
+  if (isTypeEnabledClass(name)) {
+    out.push({
+      key: "pipe_type",
+      label: "Type",
+      placeholder: "Type (e.g. PEX, Copper)",
+    });
+  }
+  return out;
 };
 
 // Sentinel awp_class_name used for lightweight "unit floor plan" indicator
