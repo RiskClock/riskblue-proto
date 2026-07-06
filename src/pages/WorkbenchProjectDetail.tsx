@@ -773,6 +773,79 @@ export default function WorkbenchProjectDetail() {
     requestIdRef.current = requestId ?? null;
   }, [requestId]);
 
+  // Per-project AWP class display aliases. Alias replaces the canonical
+  // class name in headers, tooltips, and the Threat Report.
+  const [aliasMap, setAliasMap] = useState<Record<string, string>>({});
+  const [aliasEditingClass, setAliasEditingClass] = useState<string | null>(null);
+  useEffect(() => {
+    if (!projectId) return;
+    let cancelled = false;
+    (async () => {
+      const { data, error } = await supabase
+        .from("project_class_aliases" as any)
+        .select("awp_class_name, alias")
+        .eq("project_id", projectId);
+      if (cancelled || error || !data) return;
+      const map: Record<string, string> = {};
+      for (const r of data as any[]) {
+        if (r?.alias) map[r.awp_class_name] = r.alias as string;
+      }
+      setAliasMap(map);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [projectId]);
+
+  const displayClassName = useCallback(
+    (name: string) => aliasMap[name] || name,
+    [aliasMap],
+  );
+
+  const saveClassAlias = useCallback(
+    async (awpClassName: string, alias: string) => {
+      if (!projectId) return;
+      if (!alias) {
+        const { error } = await supabase
+          .from("project_class_aliases" as any)
+          .delete()
+          .eq("project_id", projectId)
+          .eq("awp_class_name", awpClassName);
+        if (error) {
+          toast({
+            variant: "destructive",
+            title: "Could not remove alias",
+            description: getUserFriendlyError(error),
+          });
+          return;
+        }
+        setAliasMap((prev) => {
+          const next = { ...prev };
+          delete next[awpClassName];
+          return next;
+        });
+        return;
+      }
+      const { error } = await supabase
+        .from("project_class_aliases" as any)
+        .upsert(
+          { project_id: projectId, awp_class_name: awpClassName, alias },
+          { onConflict: "project_id,awp_class_name" },
+        );
+      if (error) {
+        toast({
+          variant: "destructive",
+          title: "Could not save alias",
+          description: getUserFriendlyError(error),
+        });
+        return;
+      }
+      setAliasMap((prev) => ({ ...prev, [awpClassName]: alias }));
+    },
+    [projectId, toast],
+  );
+
+
   useEffect(() => {
     if (!projectId || requestId || pageInfoRows.length > 0) return;
     try {
