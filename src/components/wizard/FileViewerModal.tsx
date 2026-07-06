@@ -754,39 +754,6 @@ export const FileViewerModal = ({
   const handleCanvasClick = async (nx: number, ny: number) => {
     if (Date.now() < suppressCanvasClickUntilRef.current) return;
     if (!sidebarEnabled) return;
-    // Unit-marker placement mode: insert a lightweight dot inside the
-    // selected level bbox instead of a normal detection.
-    if (placingMarkerPlanId) {
-      const plan = (floorPlans ?? []).find(
-        (p) => p.plan_id === placingMarkerPlanId,
-      );
-      const bb = plan
-        ? getEffectiveBbox(plan, effectiveFloorPlanOverrides)
-        : null;
-      if (!bb) return;
-      const [bx, by, bw, bh] = bb;
-      const nxPct = nx * 100;
-      const nyPct = ny * 100;
-      // Enforce placement inside the level bbox.
-      if (
-        nxPct < bx ||
-        nxPct > bx + bw ||
-        nyPct < by ||
-        nyPct > by + bh
-      ) {
-        return;
-      }
-      const row = await dbInsert({
-        awp_class_name: UNIT_MARKER_CLASS,
-        nx,
-        ny,
-        page_index: effectivePage,
-      });
-      if (!row) return;
-      setInstances((prev) => [...prev, row]);
-      blurActive();
-      return;
-    }
     if (!selectedClass) return;
     const row = await dbInsert({
       awp_class_name: selectedClass,
@@ -807,6 +774,125 @@ export const FileViewerModal = ({
       if (anchor) setMetadataDialog({ instanceId: row.id, anchor });
     }
   };
+
+  // Persist the new position of a unit-plan indicator dot after a drag,
+  // clamped to remain inside its owning level bbox.
+  const dbUpdatePosition = useCallback(
+    async (id: string, nx: number, ny: number): Promise<boolean> => {
+      const { error } = await supabase
+        .from("drawing_instances" as any)
+        .update({ nx, ny } as any)
+        .eq("id", id);
+      if (error) {
+        toast({
+          variant: "destructive",
+          title: "Could not move marker",
+          description: getUserFriendlyError(error),
+        });
+        return false;
+      }
+      onInstancesChanged?.();
+      return true;
+    },
+    [toast, onInstancesChanged],
+  );
+
+  const handleOverlayDrag = useCallback(
+    async (overlayId: string, nx: number, ny: number) => {
+      if (!overlayId.startsWith("um-")) return;
+      const id = overlayId.slice(3);
+      const inst = instances.find((i) => i.id === id);
+      if (!inst) return;
+      // Find the level plan whose bbox originally contained the marker so we
+      // can clamp the new drag position back inside it. Fall back to any
+      // level plan on this page if the original one can't be identified.
+      const levelPlans = (floorPlans ?? []).filter((p) => {
+        const eff = (effectiveFloorPlanOverrides as any)[p.plan_id];
+        const type = eff?.type ?? p.type;
+        return type === "level_floor_plan";
+      });
+      const containingPlan =
+        levelPlans.find((p) => {
+          const bb = getEffectiveBbox(p, effectiveFloorPlanOverrides);
+          if (!bb) return false;
+          const [bx, by, bw, bh] = bb;
+          const px = inst.nx * 100;
+          const py = inst.ny * 100;
+          return px >= bx && px <= bx + bw && py >= by && py <= by + bh;
+        }) || levelPlans[0];
+      let clampedNx = nx;
+      let clampedNy = ny;
+      if (containingPlan) {
+        const bb = getEffectiveBbox(containingPlan, effectiveFloorPlanOverrides);
+        if (bb) {
+          const [bx, by, bw, bh] = bb;
+          clampedNx = Math.max(bx / 100, Math.min((bx + bw) / 100, nx));
+          clampedNy = Math.max(by / 100, Math.min((by + bh) / 100, ny));
+        }
+      }
+      // Optimistic local update.
+      setInstances((prev) =>
+        prev.map((i) =>
+          i.id === id ? { ...i, nx: clampedNx, ny: clampedNy } : i,
+        ),
+      );
+      const ok = await dbUpdatePosition(id, clampedNx, clampedNy);
+      if (!ok) {
+        // Roll back on failure.
+        setInstances((prev) =>
+          prev.map((i) =>
+            i.id === id ? { ...i, nx: inst.nx, ny: inst.ny } : i,
+          ),
+        );
+      }
+    },
+    [instances, floorPlans, effectiveFloorPlanOverrides, dbUpdatePosition],
+  );
+
+  // Now that dbInsert + effectivePage are in scope, install the actual
+  // "Place Unit Floor Plan Marker" implementation into the forward-ref.
+  handleStartUnitMarkerPlacementRef.current = async (planId: string) => {
+    const prev = editingPlanRef.current;
+    if (prev) await savePlanEdit();
+    const plan = (floorPlans ?? []).find((p) => p.plan_id === planId);
+    const bb = plan
+      ? getEffectiveBbox(plan, effectiveFloorPlanOverrides)
+      : null;
+    if (!bb) return;
+    const [bx, by, bw, bh] = bb;
+    // Start at the center of the level bbox, nudge if that spot is taken.
+    let nx = (bx + bw / 2) / 100;
+    let ny = (by + bh / 2) / 100;
+    const existing = instances.filter(
+      (i) =>
+        i.awp_class_name === UNIT_MARKER_CLASS &&
+        i.file_id === parentFileId &&
+        i.page_index === effectivePage,
+    );
+    const tooClose = (a: number, b: number) => Math.abs(a - b) < 0.006;
+    let attempts = 0;
+    while (
+      attempts < 32 &&
+      existing.some((i) => tooClose(i.nx, nx) && tooClose(i.ny, ny))
+    ) {
+      const step = 0.012;
+      const angle = attempts * (Math.PI / 4);
+      nx = Math.max(bx / 100, Math.min((bx + bw) / 100, nx + Math.cos(angle) * step));
+      ny = Math.max(by / 100, Math.min((by + bh) / 100, ny + Math.sin(angle) * step));
+      attempts++;
+    }
+    const row = await dbInsert({
+      awp_class_name: UNIT_MARKER_CLASS,
+      nx,
+      ny,
+      page_index: effectivePage,
+    });
+    if (!row) return;
+    setInstances((prev) => [...prev, row]);
+    blurActive();
+  };
+
+
 
   const handleOverlayClick = async (overlayId: string) => {
     if (!sidebarEnabled) return;
