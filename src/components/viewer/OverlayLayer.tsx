@@ -434,7 +434,7 @@ export const OverlayLayer = ({
         const stop = (e: { stopPropagation: () => void }) => e.stopPropagation();
 
         const DRAG_THRESHOLD = 4; // CSS px, in client space
-        const onPointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
+        const onPointerDown = (e: ReactPointerEvent<HTMLDivElement>) => {
           e.stopPropagation();
           if (!draggable) return;
           (e.currentTarget as HTMLDivElement).setPointerCapture(e.pointerId);
@@ -447,7 +447,7 @@ export const OverlayLayer = ({
             moved: false,
           });
         };
-        const onPointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
+        const onPointerMove = (e: ReactPointerEvent<HTMLDivElement>) => {
           if (!draggable) return;
           const cur = dragRef.current;
           if (!cur || cur.id !== c.id) return;
@@ -462,7 +462,7 @@ export const OverlayLayer = ({
             Math.hypot(rawDx, rawDy) > DRAG_THRESHOLD;
           setDrag({ ...cur, dx, dy, moved });
         };
-        const onPointerUp = (e: React.PointerEvent<HTMLDivElement>) => {
+        const onPointerUp = (e: ReactPointerEvent<HTMLDivElement>) => {
           e.stopPropagation();
           const cur = dragRef.current;
           if (draggable && cur && cur.id === c.id) {
