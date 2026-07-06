@@ -5148,6 +5148,7 @@ function InstancesReportModal({
       nx: number;
       ny: number;
       pipeDiameter: string | null;
+      pipeType: string | null;
       // Stable key per logical instance — used to de-duplicate the same
       // consolidated riser appearing across multiple pages. For unit-expanded
       // rows, the (level, unit) pair is folded into the key so each
@@ -5174,10 +5175,17 @@ function InstancesReportModal({
       const base = `${prefix}${String(num).padStart(3, "0")}`;
       const fileName = fileNameById.get(inst.file_id) || "";
       const pairs = pairsForPage(fileName, inst.page_index, Number(inst.nx) || 0, Number(inst.ny) || 0);
+      const md =
+        inst.metadata && typeof inst.metadata === "object"
+          ? (inst.metadata as Record<string, any>)
+          : {};
       const diameter =
-        inst.metadata && typeof inst.metadata === "object" &&
-        typeof (inst.metadata as any).pipe_diameter === "string"
-          ? ((inst.metadata as any).pipe_diameter as string).trim() || null
+        typeof md.pipe_diameter === "string"
+          ? (md.pipe_diameter as string).trim() || null
+          : null;
+      const pipeType =
+        typeof md.pipe_type === "string"
+          ? (md.pipe_type as string).trim() || null
           : null;
       const common = {
         annotationBaseId: base,
@@ -5188,6 +5196,7 @@ function InstancesReportModal({
         nx: Number(inst.nx) || 0,
         ny: Number(inst.ny) || 0,
         pipeDiameter: diameter,
+        pipeType,
       };
       if (pairs.length === 0) {
         rows.push({
@@ -5250,7 +5259,7 @@ function InstancesReportModal({
           pageIndex: m.page_index,
           nx: Number(m.nx) || 0,
           ny: Number(m.ny) || 0,
-          pipeDiameter: null,
+          pipeDiameter: null, pipeType: null,
           logicalKey: `cons::${groupKey}`,
         });
       } else {
@@ -5266,7 +5275,7 @@ function InstancesReportModal({
             pageIndex: member.page_index,
             nx: Number(member.nx) || 0,
             ny: Number(member.ny) || 0,
-            pipeDiameter: null,
+            pipeDiameter: null, pipeType: null,
             logicalKey: `cons::${groupKey}::${k}`,
           });
         }
@@ -6072,11 +6081,36 @@ function InstancesReportModal({
       const sourceDrawings = Array.from(
         new Set(fileGroups.map((g) => g.file.name)),
       );
-      const overviewClasses = classCols.map((c) => ({
-        name: c.name,
-        idPrefix: optionByName.get(c.name)?.idPrefix || "",
-        count: overviewTotals.get(c.name) || 0,
-      }));
+      const overviewClasses = classCols.map((c) => {
+        // Per-attribute breakdown: unique (pipe_diameter, pipe_type) combos
+        // with detection counts. Zero-attribute classes produce an empty list
+        // and render as a plain single-row entry.
+        const combos = new Map<string, { attributes: Record<string, string>; count: number }>();
+        const seenCons = new Set<string>();
+        for (const r of expanded) {
+          if (r.awpClassName !== c.name) continue;
+          if (r.category !== "Asset" && r.category !== "Water System") continue;
+          if (r.logicalKey.startsWith("cons::")) {
+            const dedup = `${r.awpClassName}::${r.annotationBaseId}`;
+            if (seenCons.has(dedup)) continue;
+            seenCons.add(dedup);
+          }
+          const attrs: Record<string, string> = {};
+          if (r.pipeDiameter) attrs["Pipe size"] = r.pipeDiameter;
+          if (r.pipeType) attrs["Type"] = r.pipeType;
+          if (Object.keys(attrs).length === 0) continue;
+          const key = JSON.stringify(attrs);
+          const cur = combos.get(key);
+          if (cur) cur.count += 1;
+          else combos.set(key, { attributes: attrs, count: 1 });
+        }
+        return {
+          name: c.name,
+          idPrefix: optionByName.get(c.name)?.idPrefix || "",
+          count: overviewTotals.get(c.name) || 0,
+          breakdown: Array.from(combos.values()).sort((a, b) => b.count - a.count),
+        };
+      });
       const summary = {
         spaces: spaceList,
         classes: classCols.map((c) => ({

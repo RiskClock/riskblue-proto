@@ -83,12 +83,43 @@ interface DrawingInstanceRow {
 // Classes that support the pipe-diameter metadata popover.
 // Matched as a case-insensitive substring against the class name.
 const DIAMETER_ENABLED_MATCHERS = [
-  "domestic cold water",
+  "cold water",
   "fire suppression",
 ];
 const isDiameterEnabledClass = (name: string): boolean => {
   const n = (name || "").toLowerCase();
   return DIAMETER_ENABLED_MATCHERS.some((m) => n.includes(m));
+};
+
+// Cold Water carries an extra free-text "Type" attribute alongside pipe size.
+const isTypeEnabledClass = (name: string): boolean => {
+  return (name || "").toLowerCase().includes("cold water");
+};
+
+// Metadata field descriptors surfaced in the annotation popover, keyed by
+// class. Each entry lists the metadata keys to render as separate inputs.
+interface MetaFieldDef {
+  key: string;
+  label: string;
+  placeholder: string;
+}
+const metaFieldsForClass = (name: string): MetaFieldDef[] => {
+  const out: MetaFieldDef[] = [];
+  if (isDiameterEnabledClass(name)) {
+    out.push({
+      key: "pipe_diameter",
+      label: "Pipe size",
+      placeholder: 'Diameter (e.g. 50mm, 3/4")',
+    });
+  }
+  if (isTypeEnabledClass(name)) {
+    out.push({
+      key: "pipe_type",
+      label: "Type",
+      placeholder: "Type (e.g. PEX, Copper)",
+    });
+  }
+  return out;
 };
 
 // Sentinel awp_class_name used for lightweight "unit floor plan" indicator
@@ -1065,13 +1096,17 @@ export const FileViewerModal = ({
     const n = numberByInstanceId.get(inst.id) ?? 0;
     const prefix = prefixByClass.get(inst.awp_class_name) || "AWP";
     const base = `${prefix}-${String(n).padStart(3, "0")}`;
+    const meta = (inst.metadata && typeof inst.metadata === "object"
+      ? (inst.metadata as any)
+      : {}) as Record<string, any>;
+    const parts: string[] = [];
     const diameter =
-      inst.metadata &&
-      typeof inst.metadata === "object" &&
-      typeof (inst.metadata as any).pipe_diameter === "string"
-        ? ((inst.metadata as any).pipe_diameter as string).trim()
-        : "";
-    return diameter ? `${base} (${diameter})` : base;
+      typeof meta.pipe_diameter === "string" ? meta.pipe_diameter.trim() : "";
+    if (diameter) parts.push(diameter);
+    const pipeType =
+      typeof meta.pipe_type === "string" ? meta.pipe_type.trim() : "";
+    if (pipeType) parts.push(pipeType);
+    return parts.length > 0 ? `${base} (${parts.join(", ")})` : base;
   };
 
   // ---- Overlays ----------------------------------------------------------
@@ -1483,42 +1518,57 @@ export const FileViewerModal = ({
           if (!metadataDialog) return null;
           const inst = instances.find((i) => i.id === metadataDialog.instanceId);
           if (!inst) return null;
-          const current =
-            inst.metadata &&
-            typeof inst.metadata === "object" &&
-            typeof (inst.metadata as any).pipe_diameter === "string"
-              ? ((inst.metadata as any).pipe_diameter as string).trim() || null
-              : null;
-          // Suggestions scoped per annotation type (per user preference).
-          const suggestions = Array.from(
-            new Set(
-              instances
-                .filter((i) => i.awp_class_name === inst.awp_class_name)
-                .map((i) => {
-                  const m = i.metadata as any;
-                  return m && typeof m.pipe_diameter === "string"
-                    ? m.pipe_diameter.trim()
-                    : "";
-                })
-                .filter(Boolean),
-            ),
+          const defs = metaFieldsForClass(inst.awp_class_name);
+          if (defs.length === 0) return null;
+          const meta =
+            inst.metadata && typeof inst.metadata === "object"
+              ? (inst.metadata as Record<string, any>)
+              : {};
+          const sameClass = instances.filter(
+            (i) => i.awp_class_name === inst.awp_class_name,
           );
+          const fields = defs.map((d) => {
+            const cur =
+              typeof meta[d.key] === "string" ? (meta[d.key] as string).trim() : "";
+            const suggestions = Array.from(
+              new Set(
+                sameClass
+                  .map((i) => {
+                    const m = (i.metadata as any) || {};
+                    return typeof m[d.key] === "string"
+                      ? (m[d.key] as string).trim()
+                      : "";
+                  })
+                  .filter(Boolean),
+              ),
+            );
+            return {
+              key: d.key,
+              label: d.label,
+              placeholder: d.placeholder,
+              currentValue: cur || null,
+              suggestions,
+            };
+          });
           const n = numberByInstanceId.get(inst.id) ?? 0;
           const prefix = prefixByClass.get(inst.awp_class_name) || "AWP";
           const marker = `${prefix}-${String(n).padStart(3, "0")}`;
+          const titleSuffix = defs.length > 1 ? "attributes" : defs[0].label.toLowerCase();
           return (
             <AnnotationMetadataPopover
               open
               anchor={metadataDialog.anchor}
-              title={`${marker} · pipe diameter`}
-              currentValue={current}
-              suggestions={suggestions}
+              title={`${marker} · ${titleSuffix}`}
+              fields={fields}
               onClose={closeMetadataDialog}
-              onCommit={async (next) => {
+              onCommit={async (key, next) => {
                 const buildMeta = (base: Record<string, any> | null) => {
-                  if (next) return { ...(base || {}), pipe_diameter: next };
                   const rest = { ...(base || {}) };
-                  delete (rest as any).pipe_diameter;
+                  if (next) {
+                    rest[key] = next;
+                  } else {
+                    delete rest[key];
+                  }
                   return Object.keys(rest).length ? rest : null;
                 };
                 const nextMeta = buildMeta(inst.metadata);

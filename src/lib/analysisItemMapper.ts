@@ -80,21 +80,22 @@ const WATER_SYSTEM_NAME_MAP: Record<string, string> = {
   "Hot Domestic Water": "Domestic Hot Water",
   "Hot Water Return": "Domestic Hot Water",
   
-  // Domestic Cold Water (consolidated)
-  "Domestic Cold Water": "Domestic Cold Water",
-  "Cold Domestic Water": "Domestic Cold Water",
-  "Domestic Cold Water: Main City Entry": "Domestic Cold Water",
-  "Domestic Cold Water: Main Entry": "Domestic Cold Water",
-  "Domestic Cold Water: Zone Entry": "Domestic Cold Water",
-  "Domestic Cold Water: Suite Riser Entry": "Domestic Cold Water",
-  "Domestic Cold Water: Suite Entry": "Domestic Cold Water",
-  "Cold Domestic Water: Main City Entry": "Domestic Cold Water",
-  "Cold Domestic Water: Main Entry": "Domestic Cold Water",
-  "Cold Domestic Water: Zone Entry": "Domestic Cold Water",
-  "Cold Domestic Water: Suite Riser Entry": "Domestic Cold Water",
-  "Cold Domestic Water: Suite Entry": "Domestic Cold Water",
-  "Main City Water Supply": "Domestic Cold Water",
-  "Main Water Entry": "Domestic Cold Water",
+  // Cold Water (consolidated; renamed from "Domestic Cold Water")
+  "Cold Water": "Cold Water",
+  "Domestic Cold Water": "Cold Water",
+  "Cold Domestic Water": "Cold Water",
+  "Domestic Cold Water: Main City Entry": "Cold Water",
+  "Domestic Cold Water: Main Entry": "Cold Water",
+  "Domestic Cold Water: Zone Entry": "Cold Water",
+  "Domestic Cold Water: Suite Riser Entry": "Cold Water",
+  "Domestic Cold Water: Suite Entry": "Cold Water",
+  "Cold Domestic Water: Main City Entry": "Cold Water",
+  "Cold Domestic Water: Main Entry": "Cold Water",
+  "Cold Domestic Water: Zone Entry": "Cold Water",
+  "Cold Domestic Water: Suite Riser Entry": "Cold Water",
+  "Cold Domestic Water: Suite Entry": "Cold Water",
+  "Main City Water Supply": "Cold Water",
+  "Main Water Entry": "Cold Water",
 };
 
 // Map TMU analysis names to database process names
@@ -147,7 +148,7 @@ export function mapToWaterSystemName(analysisName: string): string | null {
   
   // Cold water (all variants consolidated to single entry)
   if (lowerName.includes("cold") && (lowerName.includes("domestic") || lowerName.includes("water"))) {
-    return "Domestic Cold Water";
+    return "Cold Water";
   }
   
   // Hot water

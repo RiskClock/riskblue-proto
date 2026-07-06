@@ -10,55 +10,51 @@ import {
 import { Button } from "@/components/ui/button";
 import { Check, Plus, Trash2, X as XIcon } from "lucide-react";
 
+export interface AnnotationMetadataField {
+  key: string;
+  label: string;
+  placeholder?: string;
+  currentValue: string | null;
+  suggestions: string[];
+}
+
 export interface AnnotationMetadataPopoverProps {
   open: boolean;
   /** Anchor point in viewport (client) coordinates. */
   anchor: { x: number; y: number } | null;
-  /** Small header label, e.g. "DCW-001 diameter". */
+  /** Small header label, e.g. "DCW-001 attributes". */
   title: string;
-  /** Currently-stored metadata value (or null when unset). */
-  currentValue: string | null;
-  /** Distinct previously-used values for the same annotation type. */
-  suggestions: string[];
-  /** Field placeholder / display term (e.g. "pipe diameter"). */
-  placeholder?: string;
-  onCommit: (next: string | null) => void;
+  /** One entry per metadata attribute (e.g. pipe size, type). */
+  fields: AnnotationMetadataField[];
+  onCommit: (key: string, next: string | null) => void | Promise<void>;
   onDelete: () => void;
   onClose: () => void;
 }
 
 /**
- * Lightweight floating popover for capturing per-annotation metadata
- * (currently pipe diameter for DCW / Fire Suppression markers).
- *
- * Positioned absolutely at `anchor` in viewport coords; not tied to a
- * React parent. Dismisses on outside click / Escape.
+ * Lightweight floating popover for capturing per-annotation metadata.
+ * Supports one or more free-text attributes (e.g. pipe size, type) with
+ * suggestion lists sourced from previously-used values.
  */
 export function AnnotationMetadataPopover({
   open,
   anchor,
   title,
-  currentValue,
-  suggestions,
-  placeholder = "Diameter (e.g. 50mm, 3/4\")",
+  fields,
   onCommit,
   onDelete,
   onClose,
 }: AnnotationMetadataPopoverProps) {
-  const [query, setQuery] = useState<string>("");
+  const [activeKey, setActiveKey] = useState<string>(fields[0]?.key ?? "");
   const rootRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    // Always open with an empty text field so typing filters/creates without
-    // the user first clearing the pre-populated current value.
     if (!open) return;
-    setQuery("");
-  }, [open, currentValue]);
+    setActiveKey(fields[0]?.key ?? "");
+  }, [open, fields]);
 
   useEffect(() => {
     if (!open) return;
-    // Defer registration so the click that opened the popover doesn't
-    // immediately dismiss it.
     const timer = window.setTimeout(() => {
       const onDown = (e: MouseEvent) => {
         if (!rootRef.current) return;
@@ -81,48 +77,13 @@ export function AnnotationMetadataPopover({
     };
   }, [open, onClose]);
 
-  const uniqueSuggestions = useMemo(() => {
-    const seen = new Set<string>();
-    const out: string[] = [];
-    for (const s of suggestions) {
-      const v = (s || "").trim();
-      if (!v) continue;
-      const k = v.toLowerCase();
-      if (seen.has(k)) continue;
-      seen.add(k);
-      out.push(v);
-    }
-    return out;
-  }, [suggestions]);
-
-  const filtered = useMemo(() => {
-    const q = query.trim().toLowerCase();
-    return uniqueSuggestions
-      .filter((s) => !q || s.toLowerCase().includes(q))
-      .slice(0, 30);
-  }, [uniqueSuggestions, query]);
-
-  const showCreate =
-    query.trim().length > 0 &&
-    !uniqueSuggestions.some(
-      (s) => s.toLowerCase() === query.trim().toLowerCase(),
-    );
-
-  if (!open || !anchor) return null;
-
-  const commit = (v: string) => {
-    const trimmed = v.trim();
-    onCommit(trimmed ? trimmed : null);
-    onClose();
-  };
+  if (!open || !anchor || fields.length === 0) return null;
 
   const POPOVER_WIDTH = 280;
-  const POPOVER_MAX_HEIGHT = 340;
+  const POPOVER_MAX_HEIGHT = 380;
   const pad = 10;
-  const vw =
-    typeof window === "undefined" ? 1280 : window.innerWidth;
-  const vh =
-    typeof window === "undefined" ? 1024 : window.innerHeight;
+  const vw = typeof window === "undefined" ? 1280 : window.innerWidth;
+  const vh = typeof window === "undefined" ? 1024 : window.innerHeight;
   const left = Math.max(
     pad,
     Math.min(anchor.x + pad, vw - POPOVER_WIDTH - pad),
@@ -131,6 +92,9 @@ export function AnnotationMetadataPopover({
     pad,
     Math.min(anchor.y + pad, vh - POPOVER_MAX_HEIGHT - pad),
   );
+
+  const activeField =
+    fields.find((f) => f.key === activeKey) ?? fields[0];
 
   return (
     <div
@@ -157,56 +121,37 @@ export function AnnotationMetadataPopover({
           <XIcon className="h-3 w-3" />
         </button>
       </div>
-      <Command shouldFilter={false}>
-        <CommandInput
-          autoFocus
-          placeholder={placeholder}
-          value={query}
-          onValueChange={setQuery}
-          onKeyDown={(e) => {
-            if (e.key === "Enter") {
-              e.preventDefault();
-              commit(query);
-            }
-          }}
-        />
-        <CommandList className="max-h-52">
-          {filtered.length === 0 && !showCreate && !currentValue && (
-            <CommandEmpty>No previous values.</CommandEmpty>
-          )}
-          <CommandGroup>
-            {currentValue && (
-              <CommandItem
-                onSelect={() => commit("")}
-                className="text-xs text-muted-foreground"
+      {fields.length > 1 && (
+        <div className="flex border-b">
+          {fields.map((f) => {
+            const isActive = f.key === activeField.key;
+            const hasValue = !!(f.currentValue && f.currentValue.trim());
+            return (
+              <button
+                key={f.key}
+                type="button"
+                onClick={() => setActiveKey(f.key)}
+                className={
+                  "flex-1 px-2 py-1.5 text-[11px] font-medium border-r last:border-r-0 transition-colors " +
+                  (isActive
+                    ? "bg-muted text-foreground"
+                    : "text-muted-foreground hover:bg-muted/50")
+                }
               >
-                Clear value
-              </CommandItem>
-            )}
-            {filtered.map((s) => {
-              const isCurrent =
-                !!currentValue && s.toLowerCase() === currentValue.toLowerCase();
-              return (
-                <CommandItem key={s} onSelect={() => commit(s)}>
-                  <span className="flex-1 truncate">{s}</span>
-                  {isCurrent && (
-                    <Check
-                      className="h-3.5 w-3.5 text-primary shrink-0"
-                      aria-label="Current value"
-                    />
-                  )}
-                </CommandItem>
-              );
-            })}
-            {showCreate && (
-              <CommandItem onSelect={() => commit(query)}>
-                <Plus className="h-3 w-3 mr-2" />
-                Use &quot;{query.trim()}&quot;
-              </CommandItem>
-            )}
-          </CommandGroup>
-        </CommandList>
-      </Command>
+                <span className="truncate">{f.label}</span>
+                {hasValue && (
+                  <span className="ml-1 text-primary" aria-hidden>•</span>
+                )}
+              </button>
+            );
+          })}
+        </div>
+      )}
+      <FieldSection
+        key={activeField.key}
+        field={activeField}
+        onCommit={(next) => onCommit(activeField.key, next)}
+      />
       <div className="border-t p-1.5 flex justify-end">
         <Button
           type="button"
@@ -222,5 +167,103 @@ export function AnnotationMetadataPopover({
         </Button>
       </div>
     </div>
+  );
+}
+
+interface FieldSectionProps {
+  field: AnnotationMetadataField;
+  onCommit: (next: string | null) => void;
+}
+
+function FieldSection({ field, onCommit }: FieldSectionProps) {
+  const [query, setQuery] = useState<string>("");
+  useEffect(() => {
+    setQuery("");
+  }, [field.key]);
+
+  const uniqueSuggestions = useMemo(() => {
+    const seen = new Set<string>();
+    const out: string[] = [];
+    for (const s of field.suggestions) {
+      const v = (s || "").trim();
+      if (!v) continue;
+      const k = v.toLowerCase();
+      if (seen.has(k)) continue;
+      seen.add(k);
+      out.push(v);
+    }
+    return out;
+  }, [field.suggestions]);
+
+  const filtered = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    return uniqueSuggestions
+      .filter((s) => !q || s.toLowerCase().includes(q))
+      .slice(0, 30);
+  }, [uniqueSuggestions, query]);
+
+  const showCreate =
+    query.trim().length > 0 &&
+    !uniqueSuggestions.some(
+      (s) => s.toLowerCase() === query.trim().toLowerCase(),
+    );
+
+  const commit = (v: string) => {
+    const trimmed = v.trim();
+    onCommit(trimmed ? trimmed : null);
+  };
+
+  return (
+    <Command shouldFilter={false}>
+      <CommandInput
+        autoFocus
+        placeholder={field.placeholder ?? field.label}
+        value={query}
+        onValueChange={setQuery}
+        onKeyDown={(e) => {
+          if (e.key === "Enter") {
+            e.preventDefault();
+            commit(query);
+          }
+        }}
+      />
+      <CommandList className="max-h-52">
+        {filtered.length === 0 && !showCreate && !field.currentValue && (
+          <CommandEmpty>No previous values.</CommandEmpty>
+        )}
+        <CommandGroup>
+          {field.currentValue && (
+            <CommandItem
+              onSelect={() => commit("")}
+              className="text-xs text-muted-foreground"
+            >
+              Clear value
+            </CommandItem>
+          )}
+          {filtered.map((s) => {
+            const isCurrent =
+              !!field.currentValue &&
+              s.toLowerCase() === field.currentValue.toLowerCase();
+            return (
+              <CommandItem key={s} onSelect={() => commit(s)}>
+                <span className="flex-1 truncate">{s}</span>
+                {isCurrent && (
+                  <Check
+                    className="h-3.5 w-3.5 text-primary shrink-0"
+                    aria-label="Current value"
+                  />
+                )}
+              </CommandItem>
+            );
+          })}
+          {showCreate && (
+            <CommandItem onSelect={() => commit(query)}>
+              <Plus className="h-3 w-3 mr-2" />
+              Use &quot;{query.trim()}&quot;
+            </CommandItem>
+          )}
+        </CommandGroup>
+      </CommandList>
+    </Command>
   );
 }
