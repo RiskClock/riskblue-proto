@@ -510,20 +510,17 @@ export const FileViewerModal = ({
     await onAddPlan({ type, name, bbox_pct });
   }, [onAddPlan, floorPlans, floorPlanOverrides, savePlanEdit, computeCenteredBboxPct]);
 
-  // "Place Unit Floor Plan BBox" — creates a new unit_floor_plan on the current
-  // page keyed to an existing unit reference (typically a Detail from another
-  // page of the same file). The user is dropped into edit mode so they can
-  // resize/reposition the bbox over the unit region shown on the level plan.
-  const handlePlaceUnitBbox = useCallback(
-    async (refId: string) => {
-      if (!onAddPlan) return;
+  // "Place Unit Floor Plan Marker" — enter placement mode on the given level
+  // plan. Subsequent canvas clicks inside the level bbox place lightweight
+  // indicator dots (not linked to any specific unit reference). Existing
+  // dots can be removed by clicking them.
+  const handleStartUnitMarkerPlacement = useCallback(
+    async (planId: string) => {
       const prev = editingPlanRef.current;
       if (prev) await savePlanEdit();
-      const bbox_pct = computeCenteredBboxPct();
-      pendingNewPlanRef.current = { name: refId, type: "unit_floor_plan" };
-      await onAddPlan({ type: "unit_floor_plan", name: refId, bbox_pct });
+      setPlacingMarkerPlanId(planId);
     },
-    [onAddPlan, savePlanEdit, computeCenteredBboxPct],
+    [savePlanEdit],
   );
 
   // Once the parent has committed the new plan, floorPlans will contain it.
