@@ -583,6 +583,7 @@ export const OverlayLayer = ({
           <div
             key={c.id}
             data-export-kind="circle"
+            className={draggable ? "overlay-draggable" : undefined}
             data-color={c.color}
             data-cx={c.cx}
             data-cy={c.cy}
