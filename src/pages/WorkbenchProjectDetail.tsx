@@ -4705,6 +4705,7 @@ export default function WorkbenchProjectDetail() {
           projectName={project?.name || "Project"}
           enabledClassNames={enabledCols}
           consolidations={consolidations || []}
+          aliasMap={aliasMap}
         />
 
         <SpatialArchitectModal
