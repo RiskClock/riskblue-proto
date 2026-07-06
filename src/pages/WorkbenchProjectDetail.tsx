@@ -284,6 +284,12 @@ export default function WorkbenchProjectDetail() {
   const [textSheet, setTextSheet] = useState<{ id: string; label: string } | null>(null);
   const [clearOpen, setClearOpen] = useState(false);
   const [clearing, setClearing] = useState(false);
+  // Typed-confirmation state for destructive Clear All when manual data exists.
+  const [clearConfirmText, setClearConfirmText] = useState("");
+  // Typed-confirmation state for Scout re-run over existing survey data.
+  const [scoutConfirmOpen, setScoutConfirmOpen] = useState(false);
+  const [scoutConfirmText, setScoutConfirmText] = useState("");
+  const scoutRerunAfterConfirmRef = useRef<null | (() => void)>(null);
   const [running, setRunning] = useState<"extract" | "triage" | "analyze" | null>(null);
   const [promptClass, setPromptClass] = useState<string | null>(null);
   const [expandedFiles, setExpandedFiles] = useState<Set<string>>(new Set());
