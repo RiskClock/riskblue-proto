@@ -5429,7 +5429,7 @@ function InstancesReportModal({
               bbox: [bx / 100, by / 100, bw / 100, bh / 100] as [number, number, number, number],
               coordSpace: "normalized" as const,
               page: pageIdx,
-              color: "#2563eb",
+              color: awpClassColor("Level Floor Plan"),
               label: space,
               shape: "rect" as const,
             });
