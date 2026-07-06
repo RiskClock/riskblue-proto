@@ -27,6 +27,7 @@ import InternalViewerTest from "./pages/InternalViewerTest";
 import CheckoutReturn from "./pages/CheckoutReturn";
 import ThreatReportDownload from "./pages/ThreatReportDownload";
 import NotFound from "./pages/NotFound";
+import OAuthConsent from "./pages/OAuthConsent";
 import { Loader2 } from "lucide-react";
 import { ExportProvider } from "./contexts/ExportContext";
 import { ExportProgressPanel } from "./components/export/ExportProgressPanel";
@@ -86,6 +87,7 @@ const App = () => (
             <Route path="/setup-account" element={<SetupAccount />} />
             <Route path="/credits/return" element={<CheckoutReturn />} />
             <Route path="/projects/:projectId/export/:exportId" element={<ThreatReportDownload />} />
+            <Route path="/.lovable/oauth/consent" element={<OAuthConsent />} />
             <Route path="/" element={<Navigate to="/projects" />} />
             <Route path="*" element={<NotFound />} />
             </Routes>
