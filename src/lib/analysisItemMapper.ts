@@ -80,8 +80,9 @@ const WATER_SYSTEM_NAME_MAP: Record<string, string> = {
   "Hot Domestic Water": "Domestic Hot Water",
   "Hot Water Return": "Domestic Hot Water",
   
-  // Domestic Cold Water (consolidated)
+  // Cold Water (consolidated; renamed from "Domestic Cold Water")
   "Cold Water": "Cold Water",
+  "Domestic Cold Water": "Cold Water",
   "Cold Domestic Water": "Cold Water",
   "Domestic Cold Water: Main City Entry": "Cold Water",
   "Domestic Cold Water: Main Entry": "Cold Water",
