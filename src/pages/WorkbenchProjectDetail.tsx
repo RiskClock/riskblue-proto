@@ -5709,7 +5709,7 @@ function InstancesReportModal({
           bboxOverlays.push({
             id: `unit-bbox-${pageKey}-${up.unitLabel}`,
             nx: bx / 100, ny: by / 100, nw: bw / 100, nh: bh / 100,
-            color: "#ea580c", label: up.unitLabel, shape: "rect" as const,
+            color: awpClassColor("Unit Floor Plan"), label: up.unitLabel, shape: "rect" as const,
           });
         }
       }
