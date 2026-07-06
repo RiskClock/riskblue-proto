@@ -3311,7 +3311,7 @@ export default function WorkbenchProjectDetail() {
                 <Button
                   type="button"
                   variant="outline"
-                  onClick={() => setClearOpen(true)}
+                  onClick={openClearAllDialog}
                   disabled={!requestId || phaseRunning}
                 >
                   Clear All
