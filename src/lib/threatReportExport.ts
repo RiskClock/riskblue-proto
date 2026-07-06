@@ -600,16 +600,28 @@ export async function runThreatReportExport(
               tableHeaderCell("Count", 2000),
             ],
           }),
-          ...payload.overviewClasses.map(
-            (c) =>
-              new TableRow({
+          ...payload.overviewClasses.flatMap((c) => {
+            const mainRow = new TableRow({
+              children: [
+                tableBodyCell(c.idPrefix, 2000, { mono: true }),
+                tableBodyCell(c.name, 5360),
+                tableBodyCell(String(c.count), 2000),
+              ],
+            });
+            const subRows = (c.breakdown ?? []).map((b) => {
+              const label = Object.entries(b.attributes)
+                .map(([k, v]) => `${k}: ${v}`)
+                .join(" · ");
+              return new TableRow({
                 children: [
-                  tableBodyCell(c.idPrefix, 2000, { mono: true }),
-                  tableBodyCell(c.name, 5360),
-                  tableBodyCell(String(c.count), 2000),
+                  tableBodyCell("", 2000),
+                  tableBodyCell(`    ↳ ${label}`, 5360, { italics: true }),
+                  tableBodyCell(String(b.count), 2000),
                 ],
-              }),
-          ),
+              });
+            });
+            return [mainRow, ...subRows];
+          }),
         ],
       }),
     );
