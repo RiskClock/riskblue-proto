@@ -672,22 +672,49 @@ export async function runThreatReportExport(
       );
     } else {
       const showUnit = sp.rows.some((r) => !!r.unitName);
-      // Hug Class / Unit / Annotation ID; give Instance ID + Source the slack.
-      const cols = showUnit
-        ? [
-            ["Instance ID", 2700],
-            ["Class", 1300],
-            ["Unit", 900],
-            ["Annotation ID", 1200],
-            ["Source", 3260],
-          ]
-        : [
-            ["Instance ID", 2900],
-            ["Class", 1500],
-            ["Annotation ID", 1400],
-            ["Source", 3560],
-          ];
-      const widths = cols.map(([, w]) => w as number);
+      const isDcwOrFsName = (n: string) => {
+        const s = (n || "").toLowerCase();
+        return s.includes("domestic cold water") || s.includes("fire suppression");
+      };
+      const showDiameter = sp.rows.some((r) => isDcwOrFsName(r.awpClassName));
+      // Column widths (twips): baseline layouts, then trim proportionally to
+      // make room for the extra Pipe Diameter column when present.
+      type Col = [string, number];
+      let cols: Col[];
+      if (showUnit && showDiameter) {
+        cols = [
+          ["Instance ID", 2400],
+          ["Class", 1200],
+          ["Unit", 800],
+          ["Pipe Diameter", 1100],
+          ["Annotation ID", 1100],
+          ["Source", 2760],
+        ];
+      } else if (showUnit) {
+        cols = [
+          ["Instance ID", 2700],
+          ["Class", 1300],
+          ["Unit", 900],
+          ["Annotation ID", 1200],
+          ["Source", 3260],
+        ];
+      } else if (showDiameter) {
+        cols = [
+          ["Instance ID", 2600],
+          ["Class", 1400],
+          ["Pipe Diameter", 1200],
+          ["Annotation ID", 1300],
+          ["Source", 2860],
+        ];
+      } else {
+        cols = [
+          ["Instance ID", 2900],
+          ["Class", 1500],
+          ["Annotation ID", 1400],
+          ["Source", 3560],
+        ];
+      }
+      const widths = cols.map(([, w]) => w);
       docChildren.push(
         new Table({
           width: { size: 9360, type: WidthType.DXA },
@@ -695,23 +722,46 @@ export async function runThreatReportExport(
           rows: [
             new TableRow({
               tableHeader: true,
-              children: cols.map(([lbl, w]) => tableHeaderCell(lbl as string, w as number)),
+              children: cols.map(([lbl, w]) => tableHeaderCell(lbl, w)),
             }),
             ...sp.rows.map((r) => {
-              const cells = showUnit
-                ? [
-                    tableBodyCell(r.instanceId, 2700, { mono: true }),
-                    tableBodyCell(r.awpClassName, 1300),
-                    tableBodyCell(r.unitName ?? "—", 900),
-                    tableBodyCell(r.annotationBaseId, 1200, { mono: true, muted: true }),
-                    tableBodyCell(`${r.fileName} · Page ${r.pageIndex}`, 3260, { muted: true }),
-                  ]
-                : [
-                    tableBodyCell(r.instanceId, 2900, { mono: true }),
-                    tableBodyCell(r.awpClassName, 1500),
-                    tableBodyCell(r.annotationBaseId, 1400, { mono: true, muted: true }),
-                    tableBodyCell(`${r.fileName} · Page ${r.pageIndex}`, 3560, { muted: true }),
-                  ];
+              const diameterCell = isDcwOrFsName(r.awpClassName)
+                ? (r.pipeDiameter ?? "—")
+                : "—";
+              let cells;
+              if (showUnit && showDiameter) {
+                cells = [
+                  tableBodyCell(r.instanceId, 2400, { mono: true }),
+                  tableBodyCell(r.awpClassName, 1200),
+                  tableBodyCell(r.unitName ?? "—", 800),
+                  tableBodyCell(diameterCell, 1100),
+                  tableBodyCell(r.annotationBaseId, 1100, { mono: true, muted: true }),
+                  tableBodyCell(`${r.fileName} · Page ${r.pageIndex}`, 2760, { muted: true }),
+                ];
+              } else if (showUnit) {
+                cells = [
+                  tableBodyCell(r.instanceId, 2700, { mono: true }),
+                  tableBodyCell(r.awpClassName, 1300),
+                  tableBodyCell(r.unitName ?? "—", 900),
+                  tableBodyCell(r.annotationBaseId, 1200, { mono: true, muted: true }),
+                  tableBodyCell(`${r.fileName} · Page ${r.pageIndex}`, 3260, { muted: true }),
+                ];
+              } else if (showDiameter) {
+                cells = [
+                  tableBodyCell(r.instanceId, 2600, { mono: true }),
+                  tableBodyCell(r.awpClassName, 1400),
+                  tableBodyCell(diameterCell, 1200),
+                  tableBodyCell(r.annotationBaseId, 1300, { mono: true, muted: true }),
+                  tableBodyCell(`${r.fileName} · Page ${r.pageIndex}`, 2860, { muted: true }),
+                ];
+              } else {
+                cells = [
+                  tableBodyCell(r.instanceId, 2900, { mono: true }),
+                  tableBodyCell(r.awpClassName, 1500),
+                  tableBodyCell(r.annotationBaseId, 1400, { mono: true, muted: true }),
+                  tableBodyCell(`${r.fileName} · Page ${r.pageIndex}`, 3560, { muted: true }),
+                ];
+              }
               return new TableRow({ children: cells });
             }),
           ],
