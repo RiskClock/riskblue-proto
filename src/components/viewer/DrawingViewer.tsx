@@ -238,6 +238,7 @@ export const DrawingViewer = forwardRef<DrawingViewerApi, DrawingViewerProps>(
           shape: ov.shape ?? "circle",
           color: ov.color,
           label: ov.label,
+          variant: ov.variant,
         });
         byPage.set(p.pageNum, arr);
       }

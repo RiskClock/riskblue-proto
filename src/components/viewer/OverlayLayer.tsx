@@ -59,6 +59,8 @@ interface CircleInfo {
   color: string;
   label?: string;
   hovered: boolean;
+  /** Dot variant: filled disc, no border, no label. */
+  isDot?: boolean;
 }
 
 interface LabelCandidate {
@@ -143,24 +145,44 @@ function generateCandidates(
 
 const OVERLAP_PENALTY = 100_000;
 const CIRCLE_PENALTY = 100_000;
+const RECT_PENALTY = 50_000;
+
+interface RectInfo {
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+}
 
 function candidateCost(
   cand: LabelCandidate,
   selfIdx: number,
   positions: LabelCandidate[],
   circles: CircleInfo[],
+  rects: RectInfo[],
 ): number {
   // Prefer labels horizontally centered with the annotation circle.
   const self = circles[selfIdx];
   const labelCx = cand.x + cand.w / 2;
+  const labelCy = cand.y + cand.h / 2;
   const horizontalOffset = self ? Math.abs(labelCx - self.cx) : 0;
-  let cost = cand.leader + horizontalOffset * 0.5;
+  // Direction bias: prefer above and left over below and right.
+  // dy > 0 → label below the circle (penalize); dx > 0 → to the right (penalize lightly).
+  const dy = self ? labelCy - self.cy : 0;
+  const dx = self ? labelCx - self.cx : 0;
+  const belowPenalty = Math.max(0, dy) * 1.5; // strong: prefer above
+  const rightPenalty = Math.max(0, dx) * 0.75; // mild: prefer left
+  let cost = cand.leader + horizontalOffset * 0.5 + belowPenalty + rightPenalty;
   for (let j = 0; j < positions.length; j++) {
     if (j === selfIdx) continue;
     if (rectsOverlap(cand, positions[j])) cost += OVERLAP_PENALTY;
   }
   for (const c of circles) {
     if (rectIntersectsCircle(cand, c)) cost += CIRCLE_PENALTY;
+  }
+  // Avoid overlapping bbox rectangles (floor-plan bounding boxes etc.)
+  for (const r of rects) {
+    if (rectsOverlap(cand, r)) cost += RECT_PENALTY;
   }
   return cost;
 }
@@ -173,6 +195,7 @@ function candidateCost(
 function optimizePlacements(
   candidatesPerLabel: LabelCandidate[][],
   circles: CircleInfo[],
+  rects: RectInfo[],
 ): LabelCandidate[] {
   // Initialize with shortest-leader candidate
   const positions: LabelCandidate[] = candidatesPerLabel.map(
@@ -183,9 +206,9 @@ function optimizePlacements(
     let improved = false;
     for (let i = 0; i < positions.length; i++) {
       let bestCand = positions[i];
-      let bestCost = candidateCost(bestCand, i, positions, circles);
+      let bestCost = candidateCost(bestCand, i, positions, circles, rects);
       for (const cand of candidatesPerLabel[i]) {
-        const cost = candidateCost(cand, i, positions, circles);
+        const cost = candidateCost(cand, i, positions, circles, rects);
         if (cost < bestCost - 0.01) {
           bestCost = cost;
           bestCand = cand;
@@ -224,9 +247,11 @@ export const OverlayLayer = ({
           o.rect.nw * pageSize.width,
           o.rect.nh * pageSize.height,
         );
-        // Static minimum diameter floor (in page CSS px) so very tiny bboxes
-        // remain visible at fit-to-page scale. Scales with zoom naturally.
-        const diameter = Math.max(MIN_CIRCLE_DIAMETER_CSS, bboxSidePx * 1.5);
+        // Dot variant: fixed small filled disc, no border, no label.
+        const isDot = o.variant === "dot";
+        const diameter = isDot
+          ? Math.max(10, MIN_CIRCLE_DIAMETER_CSS * 0.55)
+          : Math.max(MIN_CIRCLE_DIAMETER_CSS, bboxSidePx * 1.5);
 
         return {
           id: o.id,
@@ -234,8 +259,9 @@ export const OverlayLayer = ({
           cy,
           r: diameter / 2,
           color,
-          label: o.label,
+          label: isDot ? undefined : o.label,
           hovered: hoveredId === o.id,
+          isDot,
         };
       });
   }, [overlays, pageSize.width, pageSize.height, defaultColor, hoveredId]);
@@ -256,6 +282,12 @@ export const OverlayLayer = ({
       }));
   }, [overlays, pageSize.width, pageSize.height, defaultColor, hoveredId]);
 
+  // Rect footprints in page-CSS space, used for label placement avoidance.
+  const rectFootprints: RectInfo[] = useMemo(
+    () => rects.map((r) => ({ x: r.x, y: r.y, w: r.w, h: r.h })),
+    [rects],
+  );
+
   // Label sizing in unscaled page CSS px (constant in document space).
   const fontPx = LABEL_FONT_PX;
   const padX = LABEL_PAD_X;
@@ -272,7 +304,7 @@ export const OverlayLayer = ({
     const candidatesPerLabel = labeled.map((c, i) =>
       generateCandidates(c, widths[i], labelH, gap, pageSize),
     );
-    const positions = optimizePlacements(candidatesPerLabel, circles);
+    const positions = optimizePlacements(candidatesPerLabel, circles, rectFootprints);
     return positions.map((p, i) => ({
       ...p,
       id: labeled[i].id,
@@ -280,7 +312,7 @@ export const OverlayLayer = ({
       text: labeled[i].label!,
     }));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [circles, pageSize.width, pageSize.height, fontPx, padX, labelH, gap, charPx]);
+  }, [circles, rectFootprints, pageSize.width, pageSize.height, fontPx, padX, labelH, gap, charPx]);
 
   return (
     <div
@@ -334,22 +366,38 @@ export const OverlayLayer = ({
 
       {circles.map((c) => {
         const clickable = !!onOverlayClick;
-        const style: CSSProperties = {
-          position: "absolute",
-          left: c.cx - c.r,
-          top: c.cy - c.r,
-          width: c.r * 2,
-          height: c.r * 2,
-          borderRadius: "9999px",
-          borderColor: c.color,
-          borderWidth: c.hovered ? 3.5 : 2.5,
-          borderStyle: "solid",
-          backgroundColor: withAlpha(c.color, c.hovered ? 0.45 : 0.35),
-          boxShadow: `0 0 0 1px rgba(255,255,255,0.85)`,
-          boxSizing: "border-box",
-          pointerEvents: clickable ? "auto" : "none",
-          cursor: clickable ? "pointer" : undefined,
-        };
+        // Translucent border (50%) + light translucent fill (20%). Hover
+        // slightly stronger. Dot variant: filled disc, no border.
+        const style: CSSProperties = c.isDot
+          ? {
+              position: "absolute",
+              left: c.cx - c.r,
+              top: c.cy - c.r,
+              width: c.r * 2,
+              height: c.r * 2,
+              borderRadius: "9999px",
+              backgroundColor: withAlpha(c.color, c.hovered ? 0.85 : 0.7),
+              boxShadow: `0 0 0 1px rgba(255,255,255,0.85)`,
+              boxSizing: "border-box",
+              pointerEvents: clickable ? "auto" : "none",
+              cursor: clickable ? "pointer" : undefined,
+            }
+          : {
+              position: "absolute",
+              left: c.cx - c.r,
+              top: c.cy - c.r,
+              width: c.r * 2,
+              height: c.r * 2,
+              borderRadius: "9999px",
+              borderColor: withAlpha(c.color, 0.5),
+              borderWidth: c.hovered ? 3.5 : 2.5,
+              borderStyle: "solid",
+              backgroundColor: withAlpha(c.color, c.hovered ? 0.35 : 0.2),
+              boxShadow: `0 0 0 1px rgba(255,255,255,0.85)`,
+              boxSizing: "border-box",
+              pointerEvents: clickable ? "auto" : "none",
+              cursor: clickable ? "pointer" : undefined,
+            };
 
         const stop = (e: { stopPropagation: () => void }) => e.stopPropagation();
         return (
@@ -384,7 +432,7 @@ export const OverlayLayer = ({
               style={{
                 width: r.w,
                 height: r.h,
-                borderColor: r.color,
+                borderColor: withAlpha(r.color, 0.5),
                 borderWidth: r.hovered ? 3 : 2,
                 borderStyle: "solid",
                 backgroundColor: "transparent",
@@ -393,6 +441,7 @@ export const OverlayLayer = ({
                 boxShadow: `0 0 0 1px rgba(255,255,255,0.6)`,
               }}
             />
+
             {r.label ? (
               <div
                 className="absolute font-bold whitespace-nowrap pointer-events-none"

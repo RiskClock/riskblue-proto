@@ -91,6 +91,11 @@ const isDiameterEnabledClass = (name: string): boolean => {
   return DIAMETER_ENABLED_MATCHERS.some((m) => n.includes(m));
 };
 
+// Sentinel awp_class_name used for lightweight "unit floor plan" indicator
+// dots placed inside a level-plan bbox. These are not tied to any specific
+// unit reference and are excluded from the normal detections lists.
+const UNIT_MARKER_CLASS = "__unit_marker__";
+
 interface FileViewerModalProps {
   isOpen: boolean;
   onClose: () => void;
