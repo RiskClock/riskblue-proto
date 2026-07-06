@@ -5387,7 +5387,9 @@ function InstancesReportModal({
             coordSpace: "normalized" as const,
             page: pageIdx,
             color: awpClassColor(r.awpClassName),
-            label: r.instanceId,
+            label: r.pipeDiameter
+              ? `${r.instanceId} (${r.pipeDiameter})`
+              : r.instanceId,
             shape: "circle" as const,
           };
         });
