@@ -480,6 +480,7 @@ export const DrawingViewer = forwardRef<DrawingViewerApi, DrawingViewerProps>(
                         : undefined
                     }
                     onOverlayClick={onOverlayClick}
+                    onOverlayDrag={onOverlayDrag}
                     onRenderedSizeChange={onActivePageRenderedSizeChange}
                     editorBbox={editorBbox ?? null}
                     onEditorBboxChange={onEditorBboxChange}
