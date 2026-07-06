@@ -1810,6 +1810,41 @@ export type Database = {
           },
         ]
       }
+      project_class_aliases: {
+        Row: {
+          alias: string
+          awp_class_name: string
+          created_at: string
+          id: string
+          project_id: string
+          updated_at: string
+        }
+        Insert: {
+          alias: string
+          awp_class_name: string
+          created_at?: string
+          id?: string
+          project_id: string
+          updated_at?: string
+        }
+        Update: {
+          alias?: string
+          awp_class_name?: string
+          created_at?: string
+          id?: string
+          project_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "project_class_aliases_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       project_collaborators: {
         Row: {
           company: string
