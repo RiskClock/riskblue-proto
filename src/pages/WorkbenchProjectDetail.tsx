@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useMemo, useRef, useState } from "react";
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
@@ -68,6 +68,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { FileViewerModal } from "@/components/wizard/FileViewerModal";
+import { ClassAliasModal } from "@/components/workbench/ClassAliasModal";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
   parseSurveyFloorPlans,
@@ -771,6 +772,79 @@ export default function WorkbenchProjectDetail() {
   useEffect(() => {
     requestIdRef.current = requestId ?? null;
   }, [requestId]);
+
+  // Per-project AWP class display aliases. Alias replaces the canonical
+  // class name in headers, tooltips, and the Threat Report.
+  const [aliasMap, setAliasMap] = useState<Record<string, string>>({});
+  const [aliasEditingClass, setAliasEditingClass] = useState<string | null>(null);
+  useEffect(() => {
+    if (!projectId) return;
+    let cancelled = false;
+    (async () => {
+      const { data, error } = await supabase
+        .from("project_class_aliases" as any)
+        .select("awp_class_name, alias")
+        .eq("project_id", projectId);
+      if (cancelled || error || !data) return;
+      const map: Record<string, string> = {};
+      for (const r of data as any[]) {
+        if (r?.alias) map[r.awp_class_name] = r.alias as string;
+      }
+      setAliasMap(map);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [projectId]);
+
+  const displayClassName = useCallback(
+    (name: string) => aliasMap[name] || name,
+    [aliasMap],
+  );
+
+  const saveClassAlias = useCallback(
+    async (awpClassName: string, alias: string) => {
+      if (!projectId) return;
+      if (!alias) {
+        const { error } = await supabase
+          .from("project_class_aliases" as any)
+          .delete()
+          .eq("project_id", projectId)
+          .eq("awp_class_name", awpClassName);
+        if (error) {
+          toast({
+            variant: "destructive",
+            title: "Could not remove alias",
+            description: getUserFriendlyError(error),
+          });
+          return;
+        }
+        setAliasMap((prev) => {
+          const next = { ...prev };
+          delete next[awpClassName];
+          return next;
+        });
+        return;
+      }
+      const { error } = await supabase
+        .from("project_class_aliases" as any)
+        .upsert(
+          { project_id: projectId, awp_class_name: awpClassName, alias },
+          { onConflict: "project_id,awp_class_name" },
+        );
+      if (error) {
+        toast({
+          variant: "destructive",
+          title: "Could not save alias",
+          description: getUserFriendlyError(error),
+        });
+        return;
+      }
+      setAliasMap((prev) => ({ ...prev, [awpClassName]: alias }));
+    },
+    [projectId, toast],
+  );
+
 
   useEffect(() => {
     if (!projectId || requestId || pageInfoRows.length > 0) return;
@@ -3667,7 +3741,9 @@ export default function WorkbenchProjectDetail() {
                         </TableHead>
                         {enabledCols.map((name) => {
                           const opt = optionByName.get(name);
-                          const label = opt?.idPrefix || name;
+                          const alias = aliasMap[name];
+                          const label = alias || opt?.idPrefix || name;
+                          const tooltipName = alias ? `${alias} (${name})` : name;
                           const classHasTriage = (triage || []).some(
                             (t) => t.awp_class_name === name,
                           );
@@ -3687,7 +3763,7 @@ export default function WorkbenchProjectDetail() {
                                       {label}
                                     </button>
                                   </TooltipTrigger>
-                                  <TooltipContent side="bottom">{name} — click to view prompt</TooltipContent>
+                                  <TooltipContent side="bottom">{tooltipName} — click to view prompt</TooltipContent>
                                 </Tooltip>
                                 <DropdownMenu>
                                   <DropdownMenuTrigger asChild>
@@ -3711,6 +3787,11 @@ export default function WorkbenchProjectDetail() {
                                       onClick={() => runPipeline("analyze", [name])}
                                     >
                                       Analyze
+                                    </DropdownMenuItem>
+                                    <DropdownMenuItem
+                                      onClick={() => setAliasEditingClass(name)}
+                                    >
+                                      Alias…
                                     </DropdownMenuItem>
                                     <DropdownMenuItem
                                       disabled={phaseRunning}
@@ -4052,6 +4133,17 @@ export default function WorkbenchProjectDetail() {
 
           </div>
         </main>
+
+        <ClassAliasModal
+          open={!!aliasEditingClass}
+          awpClassName={aliasEditingClass ?? ""}
+          currentAlias={aliasEditingClass ? aliasMap[aliasEditingClass] ?? null : null}
+          onClose={() => setAliasEditingClass(null)}
+          onSave={async (alias) => {
+            if (!aliasEditingClass) return;
+            await saveClassAlias(aliasEditingClass, alias);
+          }}
+        />
 
 
 
@@ -4613,6 +4705,7 @@ export default function WorkbenchProjectDetail() {
           projectName={project?.name || "Project"}
           enabledClassNames={enabledCols}
           consolidations={consolidations || []}
+          aliasMap={aliasMap}
         />
 
         <SpatialArchitectModal
@@ -4941,6 +5034,7 @@ function InstancesReportModal({
   projectName,
   enabledClassNames,
   consolidations,
+  aliasMap,
 }: {
   open: boolean;
   onOpenChange: (v: boolean) => void;
@@ -4962,7 +5056,12 @@ function InstancesReportModal({
     instance_number: number | null;
     member_annotation_ids: string[];
   }>;
+  aliasMap: Record<string, string>;
 }) {
+  const displayClassName = useCallback(
+    (name: string) => aliasMap[name] || name,
+    [aliasMap],
+  );
   const enabledClassSet = useMemo(
     () => new Set(enabledClassNames || []),
     [enabledClassNames],
@@ -6105,7 +6204,7 @@ function InstancesReportModal({
           else combos.set(key, { attributes: attrs, count: 1 });
         }
         return {
-          name: c.name,
+          name: displayClassName(c.name),
           idPrefix: optionByName.get(c.name)?.idPrefix || "",
           count: overviewTotals.get(c.name) || 0,
           breakdown: Array.from(combos.values()).sort((a, b) => b.count - a.count),
@@ -6114,19 +6213,31 @@ function InstancesReportModal({
       const summary = {
         spaces: spaceList,
         classes: classCols.map((c) => ({
-          name: c.name,
+          name: displayClassName(c.name),
           idPrefix: optionByName.get(c.name)?.idPrefix || "",
         })),
         matrix: Object.fromEntries(
           spaceList.map((s) => [
             s,
             Object.fromEntries(
-              classCols.map((c) => [c.name, summaryMatrix.get(s)?.get(c.name) || 0]),
+              classCols.map((c) => [
+                displayClassName(c.name),
+                summaryMatrix.get(s)?.get(c.name) || 0,
+              ]),
             ),
           ]),
         ),
       };
-      const spacesData = spaceList.map((s) => computeSpaceExportData(s));
+      const spacesData = spaceList.map((s) => {
+        const sp = computeSpaceExportData(s);
+        return {
+          ...sp,
+          rows: sp.rows.map((r) => ({
+            ...r,
+            awpClassName: displayClassName(r.awpClassName),
+          })),
+        };
+      });
       const payload: ThreatReportPayload = {
         projectId,
         analysisRequestId: requestId ?? null,
