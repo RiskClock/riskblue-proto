@@ -4697,7 +4697,7 @@ function InstancesReportModal({
       setLoading(true);
       const { data } = await supabase
         .from("drawing_instances" as any)
-        .select("id, awp_class_name, file_id, page_index, instance_number, nx, ny, created_at")
+        .select("id, awp_class_name, file_id, page_index, instance_number, nx, ny, created_at, metadata")
         .eq("analysis_request_id", requestId)
         .order("awp_class_name")
         .order("created_at", { ascending: true });
