@@ -5387,7 +5387,9 @@ function InstancesReportModal({
             coordSpace: "normalized" as const,
             page: pageIdx,
             color: awpClassColor(r.awpClassName),
-            label: r.instanceId,
+            label: r.pipeDiameter
+              ? `${r.instanceId} (${r.pipeDiameter})`
+              : r.instanceId,
             shape: "circle" as const,
           };
         });
@@ -5427,7 +5429,7 @@ function InstancesReportModal({
               bbox: [bx / 100, by / 100, bw / 100, bh / 100] as [number, number, number, number],
               coordSpace: "normalized" as const,
               page: pageIdx,
-              color: "#2563eb",
+              color: awpClassColor("Level Floor Plan"),
               label: space,
               shape: "rect" as const,
             });
@@ -5440,7 +5442,7 @@ function InstancesReportModal({
               bbox: [bx / 100, by / 100, bw / 100, bh / 100] as [number, number, number, number],
               coordSpace: "normalized" as const,
               page: pageIdx,
-              color: "#ea580c",
+              color: awpClassColor("Unit Floor Plan"),
               label: up.unitLabel,
               shape: "rect" as const,
             });
@@ -5698,7 +5700,7 @@ function InstancesReportModal({
           bboxOverlays.push({
             id: `lvl-bbox-${pageKey}`,
             nx: bx / 100, ny: by / 100, nw: bw / 100, nh: bh / 100,
-            color: "#2563eb", label: space, shape: "rect" as const,
+            color: awpClassColor("Level Floor Plan"), label: space, shape: "rect" as const,
           });
         }
         for (const up of unitPlans) {
@@ -5707,7 +5709,7 @@ function InstancesReportModal({
           bboxOverlays.push({
             id: `unit-bbox-${pageKey}-${up.unitLabel}`,
             nx: bx / 100, ny: by / 100, nw: bw / 100, nh: bh / 100,
-            color: "#ea580c", label: up.unitLabel, shape: "rect" as const,
+            color: awpClassColor("Unit Floor Plan"), label: up.unitLabel, shape: "rect" as const,
           });
         }
       }

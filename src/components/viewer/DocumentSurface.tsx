@@ -22,6 +22,7 @@ interface DocumentSurfaceProps {
   viewScale?: number;
   onCanvasClick?: (nx: number, ny: number) => void;
   onOverlayClick?: (overlayId: string) => void;
+  onOverlayDrag?: (overlayId: string, nx: number, ny: number) => void;
   onRenderedSizeChange?: (size: { width: number; height: number }) => void;
   /** When set, renders a bounding-box editor on top of the page. */
   editorBbox?: EditorBbox | null;
@@ -64,6 +65,7 @@ export const DocumentSurface = ({
   viewScale,
   onCanvasClick,
   onOverlayClick,
+  onOverlayDrag,
   onRenderedSizeChange,
   editorBbox,
   onEditorBboxChange,
@@ -268,6 +270,7 @@ export const DocumentSurface = ({
           hoveredId={hoveredOverlayId}
           viewScale={viewScale}
           onOverlayClick={onOverlayClick}
+          onOverlayDrag={onOverlayDrag}
         />
       )}
       {renderEditor()}

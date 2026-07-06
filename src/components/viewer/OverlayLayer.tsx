@@ -1,4 +1,4 @@
-import { CSSProperties, useMemo } from "react";
+import { CSSProperties, PointerEvent as ReactPointerEvent, useMemo, useRef, useState } from "react";
 import type { NormalizedOverlay } from "./viewerGeometry";
 import { readableTextOn } from "@/lib/awpColor";
 
@@ -12,6 +12,12 @@ interface OverlayLayerProps {
   defaultColor?: string;
   /** When provided, clicking an overlay invokes this with its id. */
   onOverlayClick?: (id: string) => void;
+  /**
+   * When provided, dot overlays become draggable. Fires on pointer-up with
+   * the new normalized (0..1) position. A pointer-up with no significant
+   * movement still routes through onOverlayClick.
+   */
+  onOverlayDrag?: (id: string, nx: number, ny: number) => void;
 }
 
 const MIN_CIRCLE_DIAMETER_CSS = 24;
@@ -231,10 +237,24 @@ export const OverlayLayer = ({
   viewScale = 1,
   defaultColor = "hsl(var(--destructive))",
   onOverlayClick,
+  onOverlayDrag,
 }: OverlayLayerProps) => {
-  // viewScale is no longer used to size markers/labels — they scale with the
-  // page transform naturally. Kept in the signature for backward compatibility.
-  void viewScale;
+  // viewScale IS used below to translate raw client-px pointer deltas into
+  // page-CSS units when dragging draggable dot overlays.
+  // (Sizes/labels themselves scale naturally with the page transform.)
+
+  // Local drag state for the currently dragged dot. When null, no drag active.
+  // `dx`/`dy` are cumulative deltas in page-CSS px since pointerdown.
+  const [drag, setDrag] = useState<null | {
+    id: string;
+    startClientX: number;
+    startClientY: number;
+    dx: number;
+    dy: number;
+    moved: boolean;
+  }>(null);
+  const dragRef = useRef(drag);
+  dragRef.current = drag;
 
   const circles: CircleInfo[] = useMemo(() => {
     return overlays
@@ -366,21 +386,33 @@ export const OverlayLayer = ({
 
       {circles.map((c) => {
         const clickable = !!onOverlayClick;
-        // Translucent border (50%) + light translucent fill (20%). Hover
-        // slightly stronger. Dot variant: filled disc, no border.
+        const draggable = c.isDot && !!onOverlayDrag;
+        const isDragging = drag?.id === c.id;
+        // Draggable dots: no white halo, 50% fill opacity (per spec).
+        // Non-draggable dots keep the legacy halo + stronger fill.
+        const dotBaseAlpha = draggable ? 0.5 : (c.hovered ? 0.85 : 0.7);
         const style: CSSProperties = c.isDot
           ? {
               position: "absolute",
-              left: c.cx - c.r,
-              top: c.cy - c.r,
+              left: c.cx - c.r + (isDragging ? drag!.dx : 0),
+              top: c.cy - c.r + (isDragging ? drag!.dy : 0),
               width: c.r * 2,
               height: c.r * 2,
               borderRadius: "9999px",
-              backgroundColor: withAlpha(c.color, c.hovered ? 0.85 : 0.7),
-              boxShadow: `0 0 0 1px rgba(255,255,255,0.85)`,
+              backgroundColor: withAlpha(c.color, dotBaseAlpha),
+              boxShadow: draggable
+                ? undefined
+                : `0 0 0 1px rgba(255,255,255,0.85)`,
               boxSizing: "border-box",
-              pointerEvents: clickable ? "auto" : "none",
-              cursor: clickable ? "pointer" : undefined,
+              pointerEvents: clickable || draggable ? "auto" : "none",
+              cursor: draggable
+                ? isDragging
+                  ? "grabbing"
+                  : "grab"
+                : clickable
+                  ? "pointer"
+                  : undefined,
+              touchAction: draggable ? "none" : undefined,
             }
           : {
               position: "absolute",
@@ -400,6 +432,57 @@ export const OverlayLayer = ({
             };
 
         const stop = (e: { stopPropagation: () => void }) => e.stopPropagation();
+
+        const DRAG_THRESHOLD = 4; // CSS px, in client space
+        const onPointerDown = (e: ReactPointerEvent<HTMLDivElement>) => {
+          e.stopPropagation();
+          if (!draggable) return;
+          (e.currentTarget as HTMLDivElement).setPointerCapture(e.pointerId);
+          setDrag({
+            id: c.id,
+            startClientX: e.clientX,
+            startClientY: e.clientY,
+            dx: 0,
+            dy: 0,
+            moved: false,
+          });
+        };
+        const onPointerMove = (e: ReactPointerEvent<HTMLDivElement>) => {
+          if (!draggable) return;
+          const cur = dragRef.current;
+          if (!cur || cur.id !== c.id) return;
+          const rawDx = e.clientX - cur.startClientX;
+          const rawDy = e.clientY - cur.startClientY;
+          // Translate client-px delta into page-CSS px (accounting for zoom).
+          const s = viewScale || 1;
+          const dx = rawDx / s;
+          const dy = rawDy / s;
+          const moved =
+            cur.moved ||
+            Math.hypot(rawDx, rawDy) > DRAG_THRESHOLD;
+          setDrag({ ...cur, dx, dy, moved });
+        };
+        const onPointerUp = (e: ReactPointerEvent<HTMLDivElement>) => {
+          e.stopPropagation();
+          const cur = dragRef.current;
+          if (draggable && cur && cur.id === c.id) {
+            try {
+              (e.currentTarget as HTMLDivElement).releasePointerCapture(e.pointerId);
+            } catch { /* ignore */ }
+            if (cur.moved) {
+              const newCx = c.cx + cur.dx;
+              const newCy = c.cy + cur.dy;
+              const nx = Math.max(0, Math.min(1, newCx / pageSize.width));
+              const ny = Math.max(0, Math.min(1, newCy / pageSize.height));
+              setDrag(null);
+              onOverlayDrag!(c.id, nx, ny);
+              return;
+            }
+            setDrag(null);
+          }
+          if (clickable) onOverlayClick!(c.id);
+        };
+
         return (
           <div
             key={c.id}
@@ -409,19 +492,25 @@ export const OverlayLayer = ({
             data-cy={c.cy}
             data-radius={c.r}
             style={style}
-            onPointerDown={clickable ? stop : undefined}
-            onPointerUp={clickable ? stop : undefined}
+            onPointerDown={
+              draggable ? onPointerDown : clickable ? stop : undefined
+            }
+            onPointerMove={draggable ? onPointerMove : undefined}
+            onPointerUp={
+              draggable ? onPointerUp : clickable ? stop : undefined
+            }
             onClick={
-              clickable
+              !draggable && clickable
                 ? (e) => {
                     e.stopPropagation();
                     onOverlayClick!(c.id);
                   }
-                : undefined
+                : (e) => e.stopPropagation()
             }
           />
         );
       })}
+
 
       {/* Rectangle overlays — outline only, label pinned top-left. */}
       {rects.map((r) => {
