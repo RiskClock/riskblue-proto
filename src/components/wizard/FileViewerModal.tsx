@@ -754,7 +754,41 @@ export const FileViewerModal = ({
   // ---- User-initiated actions ---------------------------------------------
   const handleCanvasClick = async (nx: number, ny: number) => {
     if (Date.now() < suppressCanvasClickUntilRef.current) return;
-    if (!sidebarEnabled || !selectedClass) return;
+    if (!sidebarEnabled) return;
+    // Unit-marker placement mode: insert a lightweight dot inside the
+    // selected level bbox instead of a normal detection.
+    if (placingMarkerPlanId) {
+      const plan = (floorPlans ?? []).find(
+        (p) => p.plan_id === placingMarkerPlanId,
+      );
+      const bb = plan
+        ? getEffectiveBbox(plan, effectiveFloorPlanOverrides)
+        : null;
+      if (!bb) return;
+      const [bx, by, bw, bh] = bb;
+      const nxPct = nx * 100;
+      const nyPct = ny * 100;
+      // Enforce placement inside the level bbox.
+      if (
+        nxPct < bx ||
+        nxPct > bx + bw ||
+        nyPct < by ||
+        nyPct > by + bh
+      ) {
+        return;
+      }
+      const row = await dbInsert({
+        awp_class_name: UNIT_MARKER_CLASS,
+        nx,
+        ny,
+        page_index: effectivePage,
+      });
+      if (!row) return;
+      setInstances((prev) => [...prev, row]);
+      blurActive();
+      return;
+    }
+    if (!selectedClass) return;
     const row = await dbInsert({
       awp_class_name: selectedClass,
       nx,
@@ -777,6 +811,17 @@ export const FileViewerModal = ({
 
   const handleOverlayClick = async (overlayId: string) => {
     if (!sidebarEnabled) return;
+    // Unit-marker dot: click always deletes, regardless of placement mode.
+    if (overlayId.startsWith("um-")) {
+      const id = overlayId.slice(3);
+      const inst = instances.find((i) => i.id === id);
+      if (!inst) return;
+      const ok = await dbDelete(inst.id);
+      if (!ok) return;
+      setInstances((prev) => prev.filter((i) => i.id !== inst.id));
+      blurActive();
+      return;
+    }
     const instId = overlayId.startsWith("inst-") ? overlayId.slice(5) : overlayId;
     const inst = instances.find((i) => i.id === instId);
     if (!inst) return;
