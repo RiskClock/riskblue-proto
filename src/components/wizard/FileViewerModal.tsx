@@ -965,7 +965,7 @@ export const FileViewerModal = ({
       typeof (inst.metadata as any).pipe_diameter === "string"
         ? ((inst.metadata as any).pipe_diameter as string).trim()
         : "";
-    return diameter ? `${base} · ${diameter}` : base;
+    return diameter ? `${base} (${diameter})` : base;
   };
 
   // ---- Overlays ----------------------------------------------------------
