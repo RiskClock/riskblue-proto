@@ -1,4 +1,4 @@
-import { CSSProperties, useMemo } from "react";
+import { CSSProperties, useMemo, useRef, useState } from "react";
 import type { NormalizedOverlay } from "./viewerGeometry";
 import { readableTextOn } from "@/lib/awpColor";
 
@@ -12,6 +12,12 @@ interface OverlayLayerProps {
   defaultColor?: string;
   /** When provided, clicking an overlay invokes this with its id. */
   onOverlayClick?: (id: string) => void;
+  /**
+   * When provided, dot overlays become draggable. Fires on pointer-up with
+   * the new normalized (0..1) position. A pointer-up with no significant
+   * movement still routes through onOverlayClick.
+   */
+  onOverlayDrag?: (id: string, nx: number, ny: number) => void;
 }
 
 const MIN_CIRCLE_DIAMETER_CSS = 24;
