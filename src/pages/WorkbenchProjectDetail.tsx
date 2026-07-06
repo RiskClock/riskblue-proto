@@ -5442,7 +5442,7 @@ function InstancesReportModal({
               bbox: [bx / 100, by / 100, bw / 100, bh / 100] as [number, number, number, number],
               coordSpace: "normalized" as const,
               page: pageIdx,
-              color: "#ea580c",
+              color: awpClassColor("Unit Floor Plan"),
               label: up.unitLabel,
               shape: "rect" as const,
             });
