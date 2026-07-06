@@ -1518,42 +1518,57 @@ export const FileViewerModal = ({
           if (!metadataDialog) return null;
           const inst = instances.find((i) => i.id === metadataDialog.instanceId);
           if (!inst) return null;
-          const current =
-            inst.metadata &&
-            typeof inst.metadata === "object" &&
-            typeof (inst.metadata as any).pipe_diameter === "string"
-              ? ((inst.metadata as any).pipe_diameter as string).trim() || null
-              : null;
-          // Suggestions scoped per annotation type (per user preference).
-          const suggestions = Array.from(
-            new Set(
-              instances
-                .filter((i) => i.awp_class_name === inst.awp_class_name)
-                .map((i) => {
-                  const m = i.metadata as any;
-                  return m && typeof m.pipe_diameter === "string"
-                    ? m.pipe_diameter.trim()
-                    : "";
-                })
-                .filter(Boolean),
-            ),
+          const defs = metaFieldsForClass(inst.awp_class_name);
+          if (defs.length === 0) return null;
+          const meta =
+            inst.metadata && typeof inst.metadata === "object"
+              ? (inst.metadata as Record<string, any>)
+              : {};
+          const sameClass = instances.filter(
+            (i) => i.awp_class_name === inst.awp_class_name,
           );
+          const fields = defs.map((d) => {
+            const cur =
+              typeof meta[d.key] === "string" ? (meta[d.key] as string).trim() : "";
+            const suggestions = Array.from(
+              new Set(
+                sameClass
+                  .map((i) => {
+                    const m = (i.metadata as any) || {};
+                    return typeof m[d.key] === "string"
+                      ? (m[d.key] as string).trim()
+                      : "";
+                  })
+                  .filter(Boolean),
+              ),
+            );
+            return {
+              key: d.key,
+              label: d.label,
+              placeholder: d.placeholder,
+              currentValue: cur || null,
+              suggestions,
+            };
+          });
           const n = numberByInstanceId.get(inst.id) ?? 0;
           const prefix = prefixByClass.get(inst.awp_class_name) || "AWP";
           const marker = `${prefix}-${String(n).padStart(3, "0")}`;
+          const titleSuffix = defs.length > 1 ? "attributes" : defs[0].label.toLowerCase();
           return (
             <AnnotationMetadataPopover
               open
               anchor={metadataDialog.anchor}
-              title={`${marker} · pipe diameter`}
-              currentValue={current}
-              suggestions={suggestions}
+              title={`${marker} · ${titleSuffix}`}
+              fields={fields}
               onClose={closeMetadataDialog}
-              onCommit={async (next) => {
+              onCommit={async (key, next) => {
                 const buildMeta = (base: Record<string, any> | null) => {
-                  if (next) return { ...(base || {}), pipe_diameter: next };
                   const rest = { ...(base || {}) };
-                  delete (rest as any).pipe_diameter;
+                  if (next) {
+                    rest[key] = next;
+                  } else {
+                    delete rest[key];
+                  }
                   return Object.keys(rest).length ? rest : null;
                 };
                 const nextMeta = buildMeta(inst.metadata);
