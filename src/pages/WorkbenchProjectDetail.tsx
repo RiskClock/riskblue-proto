@@ -5700,7 +5700,7 @@ function InstancesReportModal({
           bboxOverlays.push({
             id: `lvl-bbox-${pageKey}`,
             nx: bx / 100, ny: by / 100, nw: bw / 100, nh: bh / 100,
-            color: "#2563eb", label: space, shape: "rect" as const,
+            color: awpClassColor("Level Floor Plan"), label: space, shape: "rect" as const,
           });
         }
         for (const up of unitPlans) {
