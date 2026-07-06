@@ -4697,7 +4697,7 @@ function InstancesReportModal({
       setLoading(true);
       const { data } = await supabase
         .from("drawing_instances" as any)
-        .select("id, awp_class_name, file_id, page_index, instance_number, nx, ny, created_at")
+        .select("id, awp_class_name, file_id, page_index, instance_number, nx, ny, created_at, metadata")
         .eq("analysis_request_id", requestId)
         .order("awp_class_name")
         .order("created_at", { ascending: true });
@@ -4864,6 +4864,7 @@ function InstancesReportModal({
       pageIndex: number;
       nx: number;
       ny: number;
+      pipeDiameter: string | null;
       // Stable key per logical instance — used to de-duplicate the same
       // consolidated riser appearing across multiple pages. For unit-expanded
       // rows, the (level, unit) pair is folded into the key so each
@@ -4890,6 +4891,11 @@ function InstancesReportModal({
       const base = `${prefix}${String(num).padStart(3, "0")}`;
       const fileName = fileNameById.get(inst.file_id) || "";
       const pairs = pairsForPage(fileName, inst.page_index, Number(inst.nx) || 0, Number(inst.ny) || 0);
+      const diameter =
+        inst.metadata && typeof inst.metadata === "object" &&
+        typeof (inst.metadata as any).pipe_diameter === "string"
+          ? ((inst.metadata as any).pipe_diameter as string).trim() || null
+          : null;
       const common = {
         annotationBaseId: base,
         awpClassName: inst.awp_class_name,
@@ -4898,6 +4904,7 @@ function InstancesReportModal({
         pageIndex: inst.page_index,
         nx: Number(inst.nx) || 0,
         ny: Number(inst.ny) || 0,
+        pipeDiameter: diameter,
       };
       if (pairs.length === 0) {
         rows.push({
@@ -4960,6 +4967,7 @@ function InstancesReportModal({
           pageIndex: m.page_index,
           nx: Number(m.nx) || 0,
           ny: Number(m.ny) || 0,
+          pipeDiameter: null,
           logicalKey: `cons::${groupKey}`,
         });
       } else {
@@ -4975,6 +4983,7 @@ function InstancesReportModal({
             pageIndex: member.page_index,
             nx: Number(member.nx) || 0,
             ny: Number(member.ny) || 0,
+            pipeDiameter: null,
             logicalKey: `cons::${groupKey}::${k}`,
           });
         }
@@ -5311,6 +5320,14 @@ function InstancesReportModal({
     const pageKeys = Array.from(pageKeySet);
 
     const showUnitCol = rows.some((r) => !!r.unitName);
+    // Show the pipe-diameter column whenever the space contains any DCW or
+    // Fire Suppression rows (matches the annotation classes that carry the
+    // pipe-diameter metadata).
+    const isDcwOrFsName = (n: string) => {
+      const s = (n || "").toLowerCase();
+      return s.includes("domestic cold water") || s.includes("fire suppression");
+    };
+    const showDiameterCol = rows.some((r) => isDcwOrFsName(r.awpClassName));
 
     // Build tab entries (one per file+page).
     type TabEntry = {
@@ -5472,6 +5489,9 @@ function InstancesReportModal({
                   <TableHead className={`${compactHead} bg-background font-semibold`}>Instance ID</TableHead>
                   <TableHead className={`${compactHead} bg-background font-semibold`}>Class</TableHead>
                   {showUnitCol && <TableHead className={`${compactHead} bg-background font-semibold`}>Unit</TableHead>}
+                  {showDiameterCol && (
+                    <TableHead className={`${compactHead} bg-background font-semibold`}>Pipe Diameter</TableHead>
+                  )}
                   <TableHead className={`${compactHead} bg-background font-semibold`}>Annotation ID</TableHead>
                   <TableHead className={`${compactHead} bg-background font-semibold`}>Source</TableHead>
                 </TableRow>
@@ -5483,6 +5503,11 @@ function InstancesReportModal({
                     <TableCell className={compactCell}>{r.awpClassName}</TableCell>
                     {showUnitCol && (
                       <TableCell className={compactCell}>{r.unitName ?? "—"}</TableCell>
+                    )}
+                    {showDiameterCol && (
+                      <TableCell className={compactCell}>
+                        {isDcwOrFsName(r.awpClassName) ? (r.pipeDiameter ?? "—") : "—"}
+                      </TableCell>
                     )}
                     <TableCell className={`${compactCell} font-mono text-muted-foreground`}>
                       {r.annotationBaseId}
@@ -5639,12 +5664,15 @@ function InstancesReportModal({
           nx = Math.max(0.005, Math.min(0.995, nx + offset));
           ny = Math.max(0.005, Math.min(0.995, ny + offset));
         }
+        const label = r.pipeDiameter
+          ? `${r.instanceId} (${r.pipeDiameter})`
+          : r.instanceId;
         return {
           id: `${r.instanceId}-${i}`,
           nx,
           ny,
           color: awpClassColor(r.awpClassName),
-          label: r.instanceId,
+          label,
           shape: "circle" as const,
         };
       });
@@ -5744,6 +5772,7 @@ function InstancesReportModal({
         annotationBaseId: r.annotationBaseId,
         fileName: fileNameById.get(r.fileId) || "",
         pageIndex: r.pageIndex,
+        pipeDiameter: r.pipeDiameter ?? null,
       })),
       units,
       pages,

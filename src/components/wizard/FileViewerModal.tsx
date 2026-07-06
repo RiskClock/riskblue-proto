@@ -91,6 +91,11 @@ const isDiameterEnabledClass = (name: string): boolean => {
   return DIAMETER_ENABLED_MATCHERS.some((m) => n.includes(m));
 };
 
+// Sentinel awp_class_name used for lightweight "unit floor plan" indicator
+// dots placed inside a level-plan bbox. These are not tied to any specific
+// unit reference and are excluded from the normal detections lists.
+const UNIT_MARKER_CLASS = "__unit_marker__";
+
 interface FileViewerModalProps {
   isOpen: boolean;
   onClose: () => void;
@@ -332,6 +337,12 @@ export const FileViewerModal = ({
     | null
   >(null);
   const [focusNamePlanId, setFocusNamePlanId] = useState<string | null>(null);
+  // When set, canvas clicks add unit-plan indicator dots inside the given
+  // level plan's bbox instead of creating detection markers. Cleared via a
+  // "Done" button or by dismissing the mode.
+  const [placingMarkerPlanId, setPlacingMarkerPlanId] = useState<string | null>(
+    null,
+  );
   // Metadata popover for DCW / Fire Suppression annotations (pipe diameter).
   const [metadataDialog, setMetadataDialog] = useState<null | {
     instanceId: string;
@@ -373,6 +384,7 @@ export const FileViewerModal = ({
       setEditingPlan(null);
       setConfirmExit(null);
       setConfirmDelete(null);
+      setPlacingMarkerPlanId(null);
     }
   }, [isOpen]);
   useEffect(() => {
@@ -499,20 +511,17 @@ export const FileViewerModal = ({
     await onAddPlan({ type, name, bbox_pct });
   }, [onAddPlan, floorPlans, floorPlanOverrides, savePlanEdit, computeCenteredBboxPct]);
 
-  // "Place Unit Floor Plan BBox" — creates a new unit_floor_plan on the current
-  // page keyed to an existing unit reference (typically a Detail from another
-  // page of the same file). The user is dropped into edit mode so they can
-  // resize/reposition the bbox over the unit region shown on the level plan.
-  const handlePlaceUnitBbox = useCallback(
-    async (refId: string) => {
-      if (!onAddPlan) return;
+  // "Place Unit Floor Plan Marker" — enter placement mode on the given level
+  // plan. Subsequent canvas clicks inside the level bbox place lightweight
+  // indicator dots (not linked to any specific unit reference). Existing
+  // dots can be removed by clicking them.
+  const handleStartUnitMarkerPlacement = useCallback(
+    async (planId: string) => {
       const prev = editingPlanRef.current;
       if (prev) await savePlanEdit();
-      const bbox_pct = computeCenteredBboxPct();
-      pendingNewPlanRef.current = { name: refId, type: "unit_floor_plan" };
-      await onAddPlan({ type: "unit_floor_plan", name: refId, bbox_pct });
+      setPlacingMarkerPlanId(planId);
     },
-    [onAddPlan, savePlanEdit, computeCenteredBboxPct],
+    [savePlanEdit],
   );
 
   // Once the parent has committed the new plan, floorPlans will contain it.
@@ -743,7 +752,41 @@ export const FileViewerModal = ({
   // ---- User-initiated actions ---------------------------------------------
   const handleCanvasClick = async (nx: number, ny: number) => {
     if (Date.now() < suppressCanvasClickUntilRef.current) return;
-    if (!sidebarEnabled || !selectedClass) return;
+    if (!sidebarEnabled) return;
+    // Unit-marker placement mode: insert a lightweight dot inside the
+    // selected level bbox instead of a normal detection.
+    if (placingMarkerPlanId) {
+      const plan = (floorPlans ?? []).find(
+        (p) => p.plan_id === placingMarkerPlanId,
+      );
+      const bb = plan
+        ? getEffectiveBbox(plan, effectiveFloorPlanOverrides)
+        : null;
+      if (!bb) return;
+      const [bx, by, bw, bh] = bb;
+      const nxPct = nx * 100;
+      const nyPct = ny * 100;
+      // Enforce placement inside the level bbox.
+      if (
+        nxPct < bx ||
+        nxPct > bx + bw ||
+        nyPct < by ||
+        nyPct > by + bh
+      ) {
+        return;
+      }
+      const row = await dbInsert({
+        awp_class_name: UNIT_MARKER_CLASS,
+        nx,
+        ny,
+        page_index: effectivePage,
+      });
+      if (!row) return;
+      setInstances((prev) => [...prev, row]);
+      blurActive();
+      return;
+    }
+    if (!selectedClass) return;
     const row = await dbInsert({
       awp_class_name: selectedClass,
       nx,
@@ -766,6 +809,17 @@ export const FileViewerModal = ({
 
   const handleOverlayClick = async (overlayId: string) => {
     if (!sidebarEnabled) return;
+    // Unit-marker dot: click always deletes, regardless of placement mode.
+    if (overlayId.startsWith("um-")) {
+      const id = overlayId.slice(3);
+      const inst = instances.find((i) => i.id === id);
+      if (!inst) return;
+      const ok = await dbDelete(inst.id);
+      if (!ok) return;
+      setInstances((prev) => prev.filter((i) => i.id !== inst.id));
+      blurActive();
+      return;
+    }
     const instId = overlayId.startsWith("inst-") ? overlayId.slice(5) : overlayId;
     const inst = instances.find((i) => i.id === instId);
     if (!inst) return;
@@ -909,7 +963,7 @@ export const FileViewerModal = ({
       typeof (inst.metadata as any).pipe_diameter === "string"
         ? ((inst.metadata as any).pipe_diameter as string).trim()
         : "";
-    return diameter ? `${base} · ${diameter}` : base;
+    return diameter ? `${base} (${diameter})` : base;
   };
 
   // ---- Overlays ----------------------------------------------------------
@@ -993,7 +1047,33 @@ export const FileViewerModal = ({
   }, [floorPlans, floorPlanOverrides, currentPage, editingPlan]);
 
 
-  const overlays = [...detectionOverlays, ...instanceOverlays, ...floorPlanOverlays];
+  // Unit-plan indicator dots inside a level bbox. Not tied to any specific
+  // unit reference. Filled dot, no border, no label. Click to delete.
+  const unitMarkerOverlays: OverlayInput[] = useMemo(() => {
+    const uc = awpClassColor("Unit Floor Plan");
+    return instances
+      .filter(
+        (i) =>
+          i.awp_class_name === UNIT_MARKER_CLASS &&
+          i.file_id === parentFileId &&
+          i.page_index === effectivePage,
+      )
+      .map((i) => ({
+        id: `um-${i.id}`,
+        bbox: [i.nx, i.ny, 0, 0] as [number, number, number, number],
+        coordSpace: "normalized" as const,
+        page: singlePageOnly ? currentPage : sheetId ? 1 : i.page_index,
+        color: uc,
+        variant: "dot" as const,
+      }));
+  }, [instances, effectivePage, sheetId, singlePageOnly, currentPage, parentFileId]);
+
+  const overlays = [
+    ...detectionOverlays,
+    ...instanceOverlays,
+    ...floorPlanOverlays,
+    ...unitMarkerOverlays,
+  ];
 
   // For the sidebar: instances for THIS file, on the current page, grouped by class.
   const instancesByClassThisFile = useMemo(() => {
@@ -1032,8 +1112,24 @@ export const FileViewerModal = ({
         <div className="flex flex-1 gap-4 overflow-hidden min-h-0">
           <div
             ref={viewerContainerRef}
-            className="flex-1 border rounded-lg overflow-hidden bg-muted/30 min-h-0"
+            className="flex-1 border rounded-lg overflow-hidden bg-muted/30 min-h-0 relative"
           >
+            {placingMarkerPlanId && (
+              <div className="absolute top-2 left-1/2 -translate-x-1/2 z-20 flex items-center gap-2 rounded-md border bg-background/95 shadow-md px-3 py-1.5 text-xs">
+                <span>
+                  Placing unit floor plan markers — click inside the level bbox.
+                </span>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="secondary"
+                  className="h-6 px-2 text-[11px]"
+                  onClick={() => setPlacingMarkerPlanId(null)}
+                >
+                  Done
+                </Button>
+              </div>
+            )}
             <DrawingViewer
               source={source}
               layout="single-page"
@@ -1124,7 +1220,7 @@ export const FileViewerModal = ({
                     onEditFloors={onEditFloors}
                     onEditLevelUnits={onEditLevelUnits}
                     onSaveLevelUnits={onSaveLevelUnits}
-                    onPlaceUnitBbox={onAddPlan ? handlePlaceUnitBbox : undefined}
+                    onPlaceUnitBbox={sidebarEnabled ? handleStartUnitMarkerPlacement : undefined}
                     instancesOnPage={Array.from(instancesByClassThisFile.values()).flat()}
                     numberByInstanceId={numberByInstanceId}
                     instanceLabel={instanceLabel}
@@ -2159,10 +2255,10 @@ const LevelUnitsSection = ({
         </div>
       )}
 
-      {onPlaceUnitBbox && effUnits.length > 0 && (
+      {onPlaceUnitBbox && (
         <PlaceUnitBboxControl
-          units={Array.from(new Set(effUnits))}
-          onPlace={(ref) => void onPlaceUnitBbox(ref)}
+          planId={fp.plan_id}
+          onPlace={() => void onPlaceUnitBbox(fp.plan_id)}
         />
       )}
     </div>
@@ -2170,55 +2266,23 @@ const LevelUnitsSection = ({
 };
 
 interface PlaceUnitBboxControlProps {
-  units: string[];
-  onPlace: (refId: string) => void;
+  planId: string;
+  onPlace: () => void;
 }
 
-const PlaceUnitBboxControl = ({ units, onPlace }: PlaceUnitBboxControlProps) => {
-  const [open, setOpen] = useState(false);
+const PlaceUnitBboxControl = ({ onPlace }: PlaceUnitBboxControlProps) => {
   return (
     <div className="pt-1">
-      {open ? (
-        <div className="rounded-md border bg-popover">
-          <div className="px-2 py-1 text-[10px] font-medium text-muted-foreground border-b flex items-center justify-between">
-            <span>Pick a unit ref</span>
-            <button
-              type="button"
-              onClick={() => setOpen(false)}
-              className="hover:text-foreground"
-              aria-label="Cancel"
-            >
-              <XIcon className="h-3 w-3" />
-            </button>
-          </div>
-          <div className="max-h-40 overflow-y-auto overscroll-contain">
-            {units.map((u) => (
-              <button
-                key={u}
-                type="button"
-                onClick={() => {
-                  setOpen(false);
-                  onPlace(u);
-                }}
-                className="w-full text-left px-2 py-1 text-xs hover:bg-muted/50"
-              >
-                {u}
-              </button>
-            ))}
-          </div>
-        </div>
-      ) : (
-        <Button
-          type="button"
-          size="sm"
-          variant="outline"
-          className="h-6 px-2 text-[11px] gap-1"
-          onClick={() => setOpen(true)}
-        >
-          <Plus className="h-3 w-3" />
-          Place Unit Floor Plan BBox
-        </Button>
-      )}
+      <Button
+        type="button"
+        size="sm"
+        variant="outline"
+        className="h-6 px-2 text-[11px] gap-1"
+        onClick={onPlace}
+      >
+        <Plus className="h-3 w-3" />
+        Place Unit Floor Plan Marker
+      </Button>
     </div>
   );
 };

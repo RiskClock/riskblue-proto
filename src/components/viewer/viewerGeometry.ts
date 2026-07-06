@@ -54,6 +54,12 @@ export interface OverlayInput {
   label?: string;
   /** Defaults to 'rect' when omitted. */
   shape?: OverlayShape;
+  /**
+   * Optional rendering variant. "dot" = small filled disc, no border, no
+   * label, no leader line. Used for lightweight markers such as unit-plan
+   * region indicators placed inside a level-plan bbox.
+   */
+  variant?: "dot";
 }
 
 export interface NormalizedOverlay {
@@ -63,6 +69,7 @@ export interface NormalizedOverlay {
   shape: OverlayShape;
   color?: string;
   label?: string;
+  variant?: "dot";
 }
 
 /** Detect whether a 4-tuple looks like [x, y, w, h] (all <= 1) vs [x1, y1, x2, y2]. */
