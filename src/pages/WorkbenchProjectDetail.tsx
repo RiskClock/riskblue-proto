@@ -286,6 +286,14 @@ export default function WorkbenchProjectDetail() {
   const [clearing, setClearing] = useState(false);
   // Typed-confirmation state for destructive Clear All when manual data exists.
   const [clearConfirmText, setClearConfirmText] = useState("");
+  // Pre-flight counts of what Clear All will destroy, fetched when the dialog opens.
+  const [clearCounts, setClearCounts] = useState<{
+    drawing_instances: number;
+    annotation_consolidations: number;
+    manual_floor_plans: number;
+    surveyed_files: number;
+    loading: boolean;
+  } | null>(null);
   // Typed-confirmation state for Scout re-run over existing survey data.
   const [scoutConfirmOpen, setScoutConfirmOpen] = useState(false);
   const [scoutConfirmText, setScoutConfirmText] = useState("");
