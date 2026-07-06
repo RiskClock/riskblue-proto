@@ -1049,7 +1049,33 @@ export const FileViewerModal = ({
   }, [floorPlans, floorPlanOverrides, currentPage, editingPlan]);
 
 
-  const overlays = [...detectionOverlays, ...instanceOverlays, ...floorPlanOverlays];
+  // Unit-plan indicator dots inside a level bbox. Not tied to any specific
+  // unit reference. Filled dot, no border, no label. Click to delete.
+  const unitMarkerOverlays: OverlayInput[] = useMemo(() => {
+    const uc = awpClassColor("Unit Floor Plan");
+    return instances
+      .filter(
+        (i) =>
+          i.awp_class_name === UNIT_MARKER_CLASS &&
+          i.file_id === parentFileId &&
+          i.page_index === effectivePage,
+      )
+      .map((i) => ({
+        id: `um-${i.id}`,
+        bbox: [i.nx, i.ny, 0, 0] as [number, number, number, number],
+        coordSpace: "normalized" as const,
+        page: singlePageOnly ? currentPage : sheetId ? 1 : i.page_index,
+        color: uc,
+        variant: "dot" as const,
+      }));
+  }, [instances, effectivePage, sheetId, singlePageOnly, currentPage, parentFileId]);
+
+  const overlays = [
+    ...detectionOverlays,
+    ...instanceOverlays,
+    ...floorPlanOverlays,
+    ...unitMarkerOverlays,
+  ];
 
   // For the sidebar: instances for THIS file, on the current page, grouped by class.
   const instancesByClassThisFile = useMemo(() => {
