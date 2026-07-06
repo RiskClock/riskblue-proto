@@ -1111,8 +1111,24 @@ export const FileViewerModal = ({
         <div className="flex flex-1 gap-4 overflow-hidden min-h-0">
           <div
             ref={viewerContainerRef}
-            className="flex-1 border rounded-lg overflow-hidden bg-muted/30 min-h-0"
+            className="flex-1 border rounded-lg overflow-hidden bg-muted/30 min-h-0 relative"
           >
+            {placingMarkerPlanId && (
+              <div className="absolute top-2 left-1/2 -translate-x-1/2 z-20 flex items-center gap-2 rounded-md border bg-background/95 shadow-md px-3 py-1.5 text-xs">
+                <span>
+                  Placing unit floor plan markers — click inside the level bbox.
+                </span>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="secondary"
+                  className="h-6 px-2 text-[11px]"
+                  onClick={() => setPlacingMarkerPlanId(null)}
+                >
+                  Done
+                </Button>
+              </div>
+            )}
             <DrawingViewer
               source={source}
               layout="single-page"
