@@ -68,10 +68,13 @@ const Auth = () => {
     }
   }, [toast]);
 
-  // Redirect to projects if already authenticated
+  // Redirect to `next` (if safe) or /projects if already authenticated
   useEffect(() => {
     if (!loading && user) {
-      navigate("/projects");
+      const params = new URLSearchParams(window.location.search);
+      const next = params.get("next");
+      const safe = next && next.startsWith("/") && !next.startsWith("//") ? next : "/projects";
+      navigate(safe);
     }
   }, [user, loading, navigate]);
 
