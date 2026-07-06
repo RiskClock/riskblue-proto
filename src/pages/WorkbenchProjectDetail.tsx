@@ -802,7 +802,12 @@ export default function WorkbenchProjectDetail() {
             source_type: requestSourceType,
             storage_path: typeof r.storage_path === "string" ? r.storage_path : null,
             mime_type: typeof r.mime_type === "string" ? r.mime_type : null,
-            page_count: Number.isFinite(Number(r.page_count)) ? Number(r.page_count) : null,
+            // Same null-cache guard as the project-level cache above — only trust
+            // positive integers so a half-written cache entry can't stick as `0`.
+            page_count:
+              typeof r.page_count === "number" && Number.isFinite(r.page_count) && r.page_count > 0
+                ? r.page_count
+                : null,
           })) as PageInfoRow[];
         if (cachedRows.length > 0) {
           hasCachedRows = true;
