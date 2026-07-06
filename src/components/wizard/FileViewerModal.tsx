@@ -808,25 +808,27 @@ export const FileViewerModal = ({
         const type = eff?.type ?? p.type;
         return type === "level_floor_plan";
       });
-      const containingPlan =
-        levelPlans.find((p) => {
-          const bb = getEffectiveBbox(p, effectiveFloorPlanOverrides);
+      // Pick the SMALLEST level bbox that contains the marker's ORIGINAL
+      // position. Smallest wins so overlapping/nested level bboxes (e.g. L8
+      // stacked inside L9) don't misattribute the marker. If no level bbox
+      // contains it, reject the drag rather than falling back arbitrarily —
+      // that fallback was transferring markers to the wrong level.
+      const px = inst.nx * 100;
+      const py = inst.ny * 100;
+      const containingPlan = levelPlans
+        .map((p) => ({ p, bb: getEffectiveBbox(p, effectiveFloorPlanOverrides) }))
+        .filter(({ bb }) => {
           if (!bb) return false;
           const [bx, by, bw, bh] = bb;
-          const px = inst.nx * 100;
-          const py = inst.ny * 100;
           return px >= bx && px <= bx + bw && py >= by && py <= by + bh;
-        }) || levelPlans[0];
-      let clampedNx = nx;
-      let clampedNy = ny;
-      if (containingPlan) {
-        const bb = getEffectiveBbox(containingPlan, effectiveFloorPlanOverrides);
-        if (bb) {
-          const [bx, by, bw, bh] = bb;
-          clampedNx = Math.max(bx / 100, Math.min((bx + bw) / 100, nx));
-          clampedNy = Math.max(by / 100, Math.min((by + bh) / 100, ny));
-        }
-      }
+        })
+        .sort((a, b) => a.bb![2] * a.bb![3] - b.bb![2] * b.bb![3])[0]?.p;
+      if (!containingPlan) return;
+      const bb = getEffectiveBbox(containingPlan, effectiveFloorPlanOverrides);
+      if (!bb) return;
+      const [bx, by, bw, bh] = bb;
+      const clampedNx = Math.max(bx / 100, Math.min((bx + bw) / 100, nx));
+      const clampedNy = Math.max(by / 100, Math.min((by + bh) / 100, ny));
       // Optimistic local update.
       setInstances((prev) =>
         prev.map((i) =>
