@@ -57,6 +57,7 @@ export interface ThreatReportSpace {
     fileName: string;
     pageIndex: number;
     pipeDiameter?: string | null;
+    pipeType?: string | null;
   }>;
   units: Array<{ name: string; pageIdxs: number[]; count?: number }>;
   pages: ThreatReportPageRef[];
@@ -953,49 +954,77 @@ export async function runThreatReportExport(
       );
     } else {
       const showUnit = sp.rows.some((r) => !!r.unitName);
-      const isDcwOrFsName = (n: string) => {
-        const s = (n || "").toLowerCase();
-        return s.includes("domestic cold water") || s.includes("fire suppression");
-      };
-      const showDiameter = sp.rows.some((r) => isDcwOrFsName(r.awpClassName));
-      // Column widths (twips): baseline layouts, then trim proportionally to
-      // make room for the extra Pipe Diameter column when present.
+      // Show attribute columns whenever any row in this space carries that
+      // attribute — no class-name gating (mirrors the on-screen threat report).
+      const showType = sp.rows.some((r) => !!(r.pipeType && r.pipeType.trim()));
+      const showDiameter = sp.rows.some(
+        (r) => !!(r.pipeDiameter && r.pipeDiameter.trim()),
+      );
+
+      // Fixed table width = 9360 twips (US Letter, 1" margins).
+      // Base columns: Instance ID, Class, Annotation ID, Source.
+      // Optional: Unit, Type, Pipe Diameter.
       type Col = [string, number];
-      let cols: Col[];
-      if (showUnit && showDiameter) {
-        cols = [
-          ["Instance ID", 2400],
-          ["Class", 1200],
-          ["Unit", 800],
-          ["Pipe Diameter", 1100],
-          ["Annotation ID", 1100],
-          ["Source", 2760],
-        ];
-      } else if (showUnit) {
-        cols = [
-          ["Instance ID", 2700],
-          ["Class", 1300],
-          ["Unit", 900],
-          ["Annotation ID", 1200],
-          ["Source", 3260],
-        ];
-      } else if (showDiameter) {
-        cols = [
-          ["Instance ID", 2600],
-          ["Class", 1400],
-          ["Pipe Diameter", 1200],
-          ["Annotation ID", 1300],
-          ["Source", 2860],
-        ];
-      } else {
-        cols = [
-          ["Instance ID", 2900],
-          ["Class", 1500],
-          ["Annotation ID", 1400],
-          ["Source", 3560],
-        ];
+      const cols: Col[] = [];
+      cols.push(["Instance ID", 0]);
+      cols.push(["Class", 0]);
+      if (showUnit) cols.push(["Unit", 0]);
+      if (showType) cols.push(["Type", 0]);
+      if (showDiameter) cols.push(["Pipe Diameter", 0]);
+      cols.push(["Annotation ID", 0]);
+      cols.push(["Source", 0]);
+
+      // Weight-based widths so the total always sums to 9360.
+      const weightFor = (label: string): number => {
+        switch (label) {
+          case "Instance ID": return 26;
+          case "Class": return 14;
+          case "Unit": return 9;
+          case "Type": return 11;
+          case "Pipe Diameter": return 12;
+          case "Annotation ID": return 13;
+          case "Source": return 30;
+          default: return 10;
+        }
+      };
+      const totalW = 9360;
+      const totalWeight = cols.reduce((s, [lbl]) => s + weightFor(lbl), 0);
+      let assigned = 0;
+      for (let i = 0; i < cols.length; i++) {
+        if (i === cols.length - 1) {
+          cols[i][1] = totalW - assigned;
+        } else {
+          const w = Math.round((weightFor(cols[i][0]) / totalWeight) * totalW);
+          cols[i][1] = w;
+          assigned += w;
+        }
       }
       const widths = cols.map(([, w]) => w);
+
+      const cellOptsFor = (
+        label: string,
+      ): { mono?: boolean; muted?: boolean } => {
+        if (label === "Instance ID") return { mono: true };
+        if (label === "Annotation ID") return { mono: true, muted: true };
+        if (label === "Source") return { muted: true };
+        return {};
+      };
+      const valueFor = (
+        label: string,
+        r: ThreatReportSpace["rows"][number],
+      ): string => {
+        switch (label) {
+          case "Instance ID": return r.instanceId;
+          case "Class": return r.awpClassName;
+          case "Unit": return r.unitName ?? "-";
+          case "Type": return (r.pipeType && r.pipeType.trim()) || "-";
+          case "Pipe Diameter": return (r.pipeDiameter && r.pipeDiameter.trim()) || "-";
+          case "Annotation ID": return r.annotationBaseId;
+          case "Source": return `${r.fileName} · Page ${r.pageIndex}`;
+          default: return "-";
+        }
+      };
+
       docChildren.push(
         new Table({
           width: { size: 9360, type: WidthType.DXA },
@@ -1005,46 +1034,14 @@ export async function runThreatReportExport(
               tableHeader: true,
               children: cols.map(([lbl, w]) => tableHeaderCell(lbl, w)),
             }),
-            ...sp.rows.map((r) => {
-              const diameterCell = isDcwOrFsName(r.awpClassName)
-                ? (r.pipeDiameter ?? "-")
-                : "-";
-              let cells;
-              if (showUnit && showDiameter) {
-                cells = [
-                  tableBodyCell(r.instanceId, 2400, { mono: true }),
-                  tableBodyCell(r.awpClassName, 1200),
-                  tableBodyCell(r.unitName ?? "-", 800),
-                  tableBodyCell(diameterCell, 1100),
-                  tableBodyCell(r.annotationBaseId, 1100, { mono: true, muted: true }),
-                  tableBodyCell(`${r.fileName} · Page ${r.pageIndex}`, 2760, { muted: true }),
-                ];
-              } else if (showUnit) {
-                cells = [
-                  tableBodyCell(r.instanceId, 2700, { mono: true }),
-                  tableBodyCell(r.awpClassName, 1300),
-                  tableBodyCell(r.unitName ?? "-", 900),
-                  tableBodyCell(r.annotationBaseId, 1200, { mono: true, muted: true }),
-                  tableBodyCell(`${r.fileName} · Page ${r.pageIndex}`, 3260, { muted: true }),
-                ];
-              } else if (showDiameter) {
-                cells = [
-                  tableBodyCell(r.instanceId, 2600, { mono: true }),
-                  tableBodyCell(r.awpClassName, 1400),
-                  tableBodyCell(diameterCell, 1200),
-                  tableBodyCell(r.annotationBaseId, 1300, { mono: true, muted: true }),
-                  tableBodyCell(`${r.fileName} · Page ${r.pageIndex}`, 2860, { muted: true }),
-                ];
-              } else {
-                cells = [
-                  tableBodyCell(r.instanceId, 2900, { mono: true }),
-                  tableBodyCell(r.awpClassName, 1500),
-                  tableBodyCell(r.annotationBaseId, 1400, { mono: true, muted: true }),
-                  tableBodyCell(`${r.fileName} · Page ${r.pageIndex}`, 3560, { muted: true }),
-                ];
-              }
-              return new TableRow({ children: cells });
-            }),
+            ...sp.rows.map(
+              (r) =>
+                new TableRow({
+                  children: cols.map(([lbl, w]) =>
+                    tableBodyCell(valueFor(lbl, r), w, cellOptsFor(lbl)),
+                  ),
+                }),
+            ),
           ],
         }),
       );

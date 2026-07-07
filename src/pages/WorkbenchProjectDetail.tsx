@@ -6506,6 +6506,7 @@ function InstancesReportModal({
         fileName: fileNameById.get(r.fileId) || "",
         pageIndex: r.pageIndex,
         pipeDiameter: r.pipeDiameter ?? null,
+        pipeType: r.pipeType ?? null,
       })),
       units,
       pages,
