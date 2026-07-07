@@ -6391,7 +6391,9 @@ function InstancesReportModal({
         }
         // Unit-marker dots for this file/page - only render on level-plan pages
         // (i.e. when we matched a level bbox for this space).
-        if (matchedLevel) {
+        if (matchedLevel?.bbox) {
+          const [bx, by, bw, bh] = matchedLevel.bbox;
+          const x0 = bx / 100, y0 = by / 100, x1 = (bx + bw) / 100, y1 = (by + bh) / 100;
           const uColor = awpClassColor("Unit Floor Plan");
           for (const inst of instances) {
             if (inst.awp_class_name !== "__unit_marker__") continue;
@@ -6399,6 +6401,7 @@ function InstancesReportModal({
             const inx = Number(inst.nx);
             const iny = Number(inst.ny);
             if (!Number.isFinite(inx) || !Number.isFinite(iny)) continue;
+            if (inx < x0 || inx > x1 || iny < y0 || iny > y1) continue;
             unitMarkerOverlays.push({
               id: `um-${inst.id}`,
               nx: inx,
