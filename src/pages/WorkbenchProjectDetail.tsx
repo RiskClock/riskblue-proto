@@ -5610,10 +5610,10 @@ function InstancesReportModal({
           key: `${c.name}::${t}`,
           canonicalName: c.name,
           displayName:
-          displayName:
             t === "(untyped)" ? base : `${base} ${t}`,
           displayPrefix:
             t === "(untyped)" ? basePrefix : `${basePrefix}-${shortToken(t)}`,
+
 
           typeGroup: t,
         }));
