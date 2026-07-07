@@ -250,8 +250,10 @@ function candidateCost(
   circles: CircleInfo[],
   rects: RectInfo[],
   anchors: Anchor[],
+  ownerIds: (string | null)[],
 ): number {
   const self = anchors[selfIdx];
+  const ownerId = ownerIds[selfIdx];
   const labelCx = cand.x + cand.w / 2;
   const labelCy = cand.y + cand.h / 2;
   const horizontalOffset = self ? Math.abs(labelCx - self.cx) : 0;
@@ -266,6 +268,7 @@ function candidateCost(
     if (rectsOverlap(cand, positions[j])) cost += OVERLAP_PENALTY;
   }
   for (const c of circles) {
+    if (c.id === ownerId) continue;
     if (rectIntersectsCircle(cand, c)) cost += CIRCLE_PENALTY;
   }
   for (const r of rects) {
@@ -279,6 +282,7 @@ function optimizePlacements(
   circles: CircleInfo[],
   rects: RectInfo[],
   anchors: Anchor[],
+  ownerIds: (string | null)[],
 ): LabelCandidate[] {
   const positions: LabelCandidate[] = candidatesPerLabel.map(
     (cands) => cands.reduce((best, c) => (c.leader < best.leader ? c : best), cands[0]),
@@ -288,9 +292,9 @@ function optimizePlacements(
     let improved = false;
     for (let i = 0; i < positions.length; i++) {
       let bestCand = positions[i];
-      let bestCost = candidateCost(bestCand, i, positions, circles, rects, anchors);
+      let bestCost = candidateCost(bestCand, i, positions, circles, rects, anchors, ownerIds);
       for (const cand of candidatesPerLabel[i]) {
-        const cost = candidateCost(cand, i, positions, circles, rects, anchors);
+        const cost = candidateCost(cand, i, positions, circles, rects, anchors, ownerIds);
         if (cost < bestCost - 0.01) {
           bestCost = cost;
           bestCand = cand;
@@ -302,6 +306,28 @@ function optimizePlacements(
       }
     }
     if (!improved) break;
+  }
+
+  // Hard-filter pass: any label still intersecting a non-owner circle is
+  // swapped for the smallest-leader candidate that touches zero non-owner
+  // circles (if one exists). This guarantees labels never fully occlude
+  // another annotation's dot even in crowded regions.
+  for (let i = 0; i < positions.length; i++) {
+    const ownerId = ownerIds[i];
+    const hits = (cand: LabelCandidate) => {
+      for (const c of circles) {
+        if (c.id === ownerId) continue;
+        if (rectIntersectsCircle(cand, c)) return true;
+      }
+      return false;
+    };
+    if (!hits(positions[i])) continue;
+    let best: LabelCandidate | null = null;
+    for (const cand of candidatesPerLabel[i]) {
+      if (hits(cand)) continue;
+      if (!best || cand.leader < best.leader) best = cand;
+    }
+    if (best) positions[i] = best;
   }
   return positions;
 }
