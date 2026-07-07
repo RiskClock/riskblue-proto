@@ -28,7 +28,7 @@ import { X as XIcon } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { getUserFriendlyError } from "@/lib/errorHandling";
-import { awpClassColor, readableTextOn, softBgFrom } from "@/lib/awpColor";
+import { awpClassColor, awpClassColorForType, readableTextOn, softBgFrom } from "@/lib/awpColor";
 
 
 import {
