@@ -916,9 +916,20 @@ export const FileViewerModal = ({
       : null;
     if (!bb) return;
     const [bx, by, bw, bh] = bb;
-    // Start at the center of the level bbox, nudge if that spot is taken.
-    let nx = (bx + bw / 2) / 100;
-    let ny = (by + bh / 2) / 100;
+    // Bbox is in percentages (0..100) of the page; markers use normalized 0..1.
+    const x0 = bx / 100;
+    const y0 = by / 100;
+    const x1 = (bx + bw) / 100;
+    const y1 = (by + bh) / 100;
+    // Shrink the allowed area by a margin so the visible circle stays inside
+    // the level bbox even at bbox corners.
+    const margin = Math.min(0.012, (x1 - x0) * 0.1, (y1 - y0) * 0.1);
+    const ix0 = x0 + margin;
+    const iy0 = y0 + margin;
+    const ix1 = Math.max(ix0, x1 - margin);
+    const iy1 = Math.max(iy0, y1 - margin);
+    const cx = (ix0 + ix1) / 2;
+    const cy = (iy0 + iy1) / 2;
     const existing = instances.filter(
       (i) =>
         i.awp_class_name === UNIT_MARKER_CLASS &&
@@ -926,16 +937,22 @@ export const FileViewerModal = ({
         i.page_index === effectivePage,
     );
     const tooClose = (a: number, b: number) => Math.abs(a - b) < 0.006;
-    let attempts = 0;
-    while (
-      attempts < 32 &&
-      existing.some((i) => tooClose(i.nx, nx) && tooClose(i.ny, ny))
-    ) {
-      const step = 0.012;
-      const angle = attempts * (Math.PI / 4);
-      nx = Math.max(bx / 100, Math.min((bx + bw) / 100, nx + Math.cos(angle) * step));
-      ny = Math.max(by / 100, Math.min((by + bh) / 100, ny + Math.sin(angle) * step));
-      attempts++;
+    const collides = (nx: number, ny: number) =>
+      existing.some((i) => tooClose(i.nx, nx) && tooClose(i.ny, ny));
+    // Spiral candidates around the center of the level bbox; always clamped
+    // inside the inner rect so the marker cannot escape the level bbox.
+    const step = 0.014;
+    let nx = cx;
+    let ny = cy;
+    for (let attempts = 0; attempts < 96; attempts++) {
+      // Golden-angle spiral for even coverage.
+      const angle = attempts * 2.399963;
+      const radius = step * Math.sqrt(attempts);
+      const candX = Math.max(ix0, Math.min(ix1, cx + Math.cos(angle) * radius));
+      const candY = Math.max(iy0, Math.min(iy1, cy + Math.sin(angle) * radius));
+      nx = candX;
+      ny = candY;
+      if (!collides(nx, ny)) break;
     }
     const row = await dbInsert({
       awp_class_name: UNIT_MARKER_CLASS,
