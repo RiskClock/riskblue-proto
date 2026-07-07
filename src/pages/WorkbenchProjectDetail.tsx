@@ -6001,14 +6001,10 @@ function InstancesReportModal({
     const pageKeys = Array.from(pageKeySet);
 
     const showUnitCol = rows.some((r) => !!r.unitName);
-    // Show the pipe-diameter column whenever the space contains any DCW or
-    // Fire Suppression rows (matches the annotation classes that carry the
-    // pipe-diameter metadata).
-    const isDcwOrFsName = (n: string) => {
-      const s = (n || "").toLowerCase();
-      return s.includes("domestic cold water") || s.includes("fire suppression");
-    };
-    const showDiameterCol = rows.some((r) => isDcwOrFsName(r.awpClassName));
+    // Show attribute columns whenever any row in this space carries that
+    // attribute — no class-name gating (class names may be renamed).
+    const showDiameterCol = rows.some((r) => !!(r.pipeDiameter && r.pipeDiameter.trim()));
+    const showTypeCol = rows.some((r) => !!(r.pipeType && r.pipeType.trim()));
 
     // Build tab entries (one per file+page).
     type TabEntry = {
@@ -6199,6 +6195,9 @@ function InstancesReportModal({
                   <TableHead className={`${compactHead} bg-background font-semibold`}>Instance ID</TableHead>
                   <TableHead className={`${compactHead} bg-background font-semibold`}>Class</TableHead>
                   {showUnitCol && <TableHead className={`${compactHead} bg-background font-semibold`}>Unit</TableHead>}
+                  {showTypeCol && (
+                    <TableHead className={`${compactHead} bg-background font-semibold`}>Type</TableHead>
+                  )}
                   {showDiameterCol && (
                     <TableHead className={`${compactHead} bg-background font-semibold`}>Pipe Diameter</TableHead>
                   )}
@@ -6214,10 +6213,11 @@ function InstancesReportModal({
                     {showUnitCol && (
                       <TableCell className={compactCell}>{r.unitName ?? "-"}</TableCell>
                     )}
+                    {showTypeCol && (
+                      <TableCell className={compactCell}>{r.pipeType ?? "-"}</TableCell>
+                    )}
                     {showDiameterCol && (
-                      <TableCell className={compactCell}>
-                        {isDcwOrFsName(r.awpClassName) ? (r.pipeDiameter ?? "-") : "-"}
-                      </TableCell>
+                      <TableCell className={compactCell}>{r.pipeDiameter ?? "-"}</TableCell>
                     )}
                     <TableCell className={`${compactCell} font-mono text-muted-foreground`}>
                       {r.annotationBaseId}
@@ -6242,10 +6242,9 @@ function InstancesReportModal({
                 <div key={u.name} className="flex items-baseline gap-1.5 truncate">
                   <span className="truncate">
                     {u.name.replace(/^Template\s*-\s*/, "")}
-                    {u.count > 1 ? ` (×${u.count})` : ""}
-                  </span>
-                  <span className="text-muted-foreground shrink-0">
-                    · {u.pages.map((p) => `p${p.pageIdx}`).join(", ")}
+                    {" "}
+                    ({u.pages.map((p) => `p${p.pageIdx}`).join(", ")})
+                    {u.count > 1 ? ` x${u.count}` : ""}
                   </span>
                 </div>
               ))}
