@@ -6351,7 +6351,7 @@ function InstancesReportModal({
           pageIdx,
           bucket,
           parentPath,
-          overlays: [...bboxOverlays, ...annOverlays],
+          overlays: [...bboxOverlays, ...unitMarkerOverlays, ...annOverlays],
           tabLabel,
         },
         tier,
