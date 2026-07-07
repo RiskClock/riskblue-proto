@@ -404,6 +404,7 @@ async function renderPageWithMarkers(
     // Draw leader lines first (behind circles/labels).
     ctx.lineWidth = Math.max(1, Math.round(canvas.width * 0.0009));
     for (let i = 0; i < circles.length; i++) {
+      if (!circles[i].label) continue;
       const c = circles[i];
       const p = positions[i];
       const labelCx = p.x + p.w / 2;
