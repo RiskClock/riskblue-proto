@@ -878,21 +878,23 @@ export const OverlayLayer = ({
           data-h={p.h}
           data-font-px={fontPx}
           data-opacity={LABEL_OPACITY}
-          className="absolute font-bold whitespace-nowrap pointer-events-none text-center"
+          className="absolute font-bold pointer-events-none text-center"
           style={{
             left: p.x,
             top: p.y,
             width: p.w,
             height: p.h,
-            lineHeight: `${p.h}px`,
+            lineHeight: `${Math.round(fontPx * 1.25)}px`,
             fontSize: fontPx,
             paddingLeft: padX,
             paddingRight: padX,
+            paddingTop: Math.max(0, (p.h - Math.round(fontPx * 1.25) * p.text.split("\n").length) / 2),
             boxSizing: "border-box",
             borderRadius: 3,
             backgroundColor: p.color,
             color: readableTextOn(p.color),
             opacity: LABEL_OPACITY,
+            whiteSpace: "pre",
           }}
         >
           {p.text}
