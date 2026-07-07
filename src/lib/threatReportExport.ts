@@ -1029,12 +1029,11 @@ export async function runThreatReportExport(
       );
       for (const u of sp.units) {
         const cleaned = u.name.replace(/^Template\s*-\s*/, "");
-        const mult = (u.count ?? 1) > 1 ? ` (×${u.count})` : "";
+        const pages = u.pageIdxs.map((p) => `p${p}`).join(", ");
+        const count = u.count ?? 1;
+        const mult = count > 1 ? ` x${count}` : "";
         docChildren.push(
-          para([
-            text(`${cleaned}${mult}`),
-            text(`  ·  ${u.pageIdxs.map((p) => `p${p}`).join(", ")}`, { color: "6B7280" }),
-          ]),
+          para([text(`${cleaned} (${pages})${mult}`)]),
         );
       }
     }
