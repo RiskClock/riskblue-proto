@@ -1764,9 +1764,12 @@ const DetectionsPanel = ({
                         const planLabel = containingPlan
                           ? getEffectiveLabel(containingPlan, floorPlanOverrides)
                           : null;
+                        const iMeta = (i.metadata && typeof i.metadata === "object" ? (i.metadata as any) : {}) as Record<string, any>;
+                        const iPipeType = typeof iMeta.pipe_type === "string" ? iMeta.pipe_type.trim() : "";
+                        const dotColor = awpClassColorForType(c.name, iPipeType);
                         return (
                           <div key={i.id} className="flex items-center gap-2 text-[11px]">
-                            <span className="h-2 w-2 rounded-full shrink-0" style={{ backgroundColor: color }} />
+                            <span className="h-2 w-2 rounded-full shrink-0" style={{ backgroundColor: dotColor }} />
                             <span className="flex-1 min-w-0 font-mono truncate">
                               {instanceLabel(i)}
                               {i.page_index !== effectivePage ? ` (p.${i.page_index})` : ""}
