@@ -453,6 +453,7 @@ async function renderPageWithMarkers(
     ctx.textBaseline = "middle";
     ctx.textAlign = "left";
     for (let i = 0; i < circles.length; i++) {
+      if (!circles[i].label) continue;
       const c = circles[i];
       const p = positions[i];
       ctx.globalAlpha = 0.85;
