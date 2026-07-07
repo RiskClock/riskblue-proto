@@ -54,7 +54,7 @@ export const LocationDetailsModal = ({
   const [didInitialFit, setDidInitialFit] = useState(false);
 
   // Source priority (preserved from prior implementation):
-  //  1. Analysis source file (storage path in `drive-analysis-files`) — bbox-aware
+  //  1. Analysis source file (storage path in `drive-analysis-files`) - bbox-aware
   //  2. Custom uploaded drawing (URL or storage path in `awp-drawings`)
   //  3. Static mapped drawing (Vite-imported public asset, path begins with `/`)
   const rawDrawingUrl: string | undefined =
@@ -88,7 +88,7 @@ export const LocationDetailsModal = ({
       return { kind: "url", url };
     }
     if (url.startsWith("/")) {
-      // Vite/public asset — the dev/prod server serves it directly.
+      // Vite/public asset - the dev/prod server serves it directly.
       return { kind: "url", url };
     }
     if (url.startsWith("http")) {
@@ -138,7 +138,7 @@ export const LocationDetailsModal = ({
           };
 
           if (!isPdf) {
-            // Image — no bbox resolution required.
+            // Image - no bbox resolution required.
             if (!cancelled) {
               setResolvedSource(source);
               setResolveLoading(false);
@@ -146,7 +146,7 @@ export const LocationDetailsModal = ({
             return;
           }
 
-          // PDF — download once to resolve bbox + page metadata for the overlay.
+          // PDF - download once to resolve bbox + page metadata for the overlay.
           // The shared viewer will download/raster the same blob; both go through
           // the storage cache so the overhead is acceptable. (Alternatively we
           // could expose per-page metadata from the viewer, but keeping the

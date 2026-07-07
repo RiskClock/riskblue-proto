@@ -426,7 +426,7 @@ export const ProcoreConnectionDialog = ({
                 <div className="space-y-2">
                   <label className="text-sm font-medium">
                     Select a Folder
-                    <span className="text-muted-foreground font-normal ml-1">(optional — defaults to entire project)</span>
+                    <span className="text-muted-foreground font-normal ml-1">(optional - defaults to entire project)</span>
                   </label>
                   {loadingFolders ? (
                     <div className="flex items-center gap-2 text-sm text-muted-foreground">

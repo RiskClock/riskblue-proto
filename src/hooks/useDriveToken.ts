@@ -51,7 +51,7 @@ export function useDriveToken() {
 
       const data = await response.json();
 
-      // "Not connected" sentinel — 200 OK with needs_reauth flag
+      // "Not connected" sentinel - 200 OK with needs_reauth flag
       if (data?.needs_reauth === true || data?.connected === false) {
         setDriveToken(null);
         setNeedsReauth(true);

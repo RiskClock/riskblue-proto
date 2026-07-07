@@ -116,7 +116,7 @@ async function uploadWithRetry(
         .upload(path, blob, { contentType, upsert: true });
       if (!error) return;
       lastErr = error;
-      // Don't retry 4xx (other than 429) — likely auth/permission issue.
+      // Don't retry 4xx (other than 429) - likely auth/permission issue.
       const status = (error as any)?.statusCode || (error as any)?.status;
       if (status && status >= 400 && status < 500 && status !== 429) break;
     } catch (e) {
@@ -673,7 +673,7 @@ export async function runThreatReportExport(
     logoBytes = null;
   }
 
-  // Project title: "{Project} Project" — omit "Project" suffix if the name
+  // Project title: "{Project} Project" - omit "Project" suffix if the name
   // already ends with the word "project" (case-insensitive).
   const trimmedName = (payload.projectName || "").trim();
   const endsWithProject = /\bproject\s*$/i.test(trimmedName);
@@ -769,7 +769,7 @@ export async function runThreatReportExport(
     ["Prepared By", "RiskBlue"],
     ["Report Date", payload.reportDate],
     ["Document Version", "V1"],
-    ["Source Drawings", payload.sourceDrawings.join("; ") || "—"],
+    ["Source Drawings", payload.sourceDrawings.join("; ") || "-"],
   ];
   docChildren.push(
     new Table({
@@ -955,14 +955,14 @@ export async function runThreatReportExport(
             }),
             ...sp.rows.map((r) => {
               const diameterCell = isDcwOrFsName(r.awpClassName)
-                ? (r.pipeDiameter ?? "—")
-                : "—";
+                ? (r.pipeDiameter ?? "-")
+                : "-";
               let cells;
               if (showUnit && showDiameter) {
                 cells = [
                   tableBodyCell(r.instanceId, 2400, { mono: true }),
                   tableBodyCell(r.awpClassName, 1200),
-                  tableBodyCell(r.unitName ?? "—", 800),
+                  tableBodyCell(r.unitName ?? "-", 800),
                   tableBodyCell(diameterCell, 1100),
                   tableBodyCell(r.annotationBaseId, 1100, { mono: true, muted: true }),
                   tableBodyCell(`${r.fileName} · Page ${r.pageIndex}`, 2760, { muted: true }),
@@ -971,7 +971,7 @@ export async function runThreatReportExport(
                 cells = [
                   tableBodyCell(r.instanceId, 2700, { mono: true }),
                   tableBodyCell(r.awpClassName, 1300),
-                  tableBodyCell(r.unitName ?? "—", 900),
+                  tableBodyCell(r.unitName ?? "-", 900),
                   tableBodyCell(r.annotationBaseId, 1200, { mono: true, muted: true }),
                   tableBodyCell(`${r.fileName} · Page ${r.pageIndex}`, 3260, { muted: true }),
                 ];
@@ -1031,7 +1031,7 @@ export async function runThreatReportExport(
         para(
           [
             text(`${pr.tabLabel}`, { bold: true, size: 20 }),
-            text(`  —  ${pr.fileName} · Page ${pr.pageIdx}`, { size: 18, color: "6B7280" }),
+            text(`  -  ${pr.fileName} · Page ${pr.pageIdx}`, { size: 18, color: "6B7280" }),
           ],
           { spacing: { before: 240, after: 80 } },
         ),
@@ -1074,7 +1074,7 @@ export async function runThreatReportExport(
 
   const doc = new Document({
     creator: "RiskBlue",
-    title: `Threat Report — ${payload.projectName}`,
+    title: `Threat Report - ${payload.projectName}`,
     styles: {
       default: { document: { run: { font: "Calibri", size: 22 } } },
     },

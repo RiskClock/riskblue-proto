@@ -28,7 +28,7 @@ interface ClassAliasModalProps {
   awpClassName: string;
   currentAlias: string | null;
   currentAliasPrefix: string | null;
-  /** All classes visible/known in this project — used for uniqueness checks. */
+  /** All classes visible/known in this project - used for uniqueness checks. */
   allClasses: ClassAliasModalClass[];
   /** Existing alias entries in this project, keyed by canonical class name. */
   existingAliases: Record<string, ClassAliasEntry>;
@@ -163,7 +163,7 @@ export function ClassAliasModal({
               </p>
             )}
             <p className="text-[11px] text-muted-foreground">
-              Only affects how the class label is shown — existing instance
+              Only affects how the class label is shown - existing instance
               IDs keep the original prefix.
             </p>
           </div>

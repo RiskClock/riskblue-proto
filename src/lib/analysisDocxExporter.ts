@@ -91,7 +91,7 @@ function yieldToBrowser(): Promise<void> {
 }
 
 // ---------------------------------------------------------------------------
-// Overlay helpers — kept identical to viewer logic.
+// Overlay helpers - kept identical to viewer logic.
 // ---------------------------------------------------------------------------
 
 interface OverlayRow {
@@ -178,7 +178,7 @@ function parseOverlayCandidates(resultText: string): OverlayRow[] {
       let aiBBox: OverlayRow["aiBBox"] = undefined;
       if (bboxCol !== -1) {
         const bboxStr = cells[bboxCol] || "";
-        const bboxMatch = bboxStr.match(/\(?\s*(\d+)[,\s]+(\d+)\s*\)?\s*(?:→|->|—|–)\s*\(?\s*(\d+)[,\s]+(\d+)\s*\)?/);
+        const bboxMatch = bboxStr.match(/\(?\s*(\d+)[,\s]+(\d+)\s*\)?\s*(?:→|->|-|–)\s*\(?\s*(\d+)[,\s]+(\d+)\s*\)?/);
         if (bboxMatch) {
           aiBBox = {
             x1: parseInt(bboxMatch[1], 10),
@@ -284,7 +284,7 @@ async function findSourceFile(
 }
 
 // ---------------------------------------------------------------------------
-// Page geometry — US Letter, 1" margins, 96 DPI.
+// Page geometry - US Letter, 1" margins, 96 DPI.
 //   Content area = 6.5" × 9" = 624 × 864 px.
 // ---------------------------------------------------------------------------
 
@@ -570,7 +570,7 @@ async function renderDrawingImage(
     }
 
     // Draw a thin black border around the final image so it has a clear
-    // visual boundary in the DOCX. Only the drawing is bordered — never the
+    // visual boundary in the DOCX. Only the drawing is bordered - never the
     // detection table.
     drawImageBorder(finalCanvas);
 
@@ -683,7 +683,7 @@ export async function generateAnalysisDocx(
     total: totalDetections,
   });
 
-  // 5. Build export rows — yield between detections so the UI stays responsive.
+  // 5. Build export rows - yield between detections so the UI stays responsive.
   const rows: InstanceExportRow[] = [];
   const categoryCache: Record<string, string> = {};
   const controlsCache: Record<string, string[]> = {};
@@ -729,7 +729,7 @@ export async function generateAnalysisDocx(
       totalDetections,
       displayId: instance.id,
       displayName: instance.name,
-      floor: instance.floor || "—",
+      floor: instance.floor || "-",
       type,
       className: awpClassName,
       areaSqft: instance.area_sqft,
@@ -800,9 +800,9 @@ export async function generateAnalysisDocx(
       ? `${Math.round(row.pipeDiameterMM!)} mm (${(row.pipeDiameterMM! / 25.4).toFixed(1)}″)`
       : row.areaSqft > 0
         ? String(row.areaSqft)
-        : "—";
+        : "-";
 
-    const controlsValue = row.controls.length > 0 ? row.controls.join(", ") : "—";
+    const controlsValue = row.controls.length > 0 ? row.controls.join(", ") : "-";
 
     const tableElement = new DocxTable({
       width: { size: 9360, type: WidthType.DXA },

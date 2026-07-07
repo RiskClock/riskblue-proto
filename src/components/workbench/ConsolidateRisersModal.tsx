@@ -96,7 +96,7 @@ export function ConsolidateRisersModal({
         existing[r.awp_class_name] = list;
       }
       // Auto-suggest groupings for classes with no saved groups: cluster by
-      // proximity of (nx, ny) across pages — annotations within 0.05 normalized
+      // proximity of (nx, ny) across pages - annotations within 0.05 normalized
       // distance go into the same group.
       for (const c of spannableClasses) {
         if (existing[c.name]?.length) continue;

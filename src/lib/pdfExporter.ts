@@ -67,13 +67,13 @@ export async function generatePdfFromElement(
 
     let drawW: number, drawH: number, drawX: number, drawY: number;
     if (coverAspect > pageAspect) {
-      // Image wider than page — fit height, crop width
+      // Image wider than page - fit height, crop width
       drawH = pageHeight;
       drawW = pageHeight * coverAspect;
       drawX = -(drawW - pageWidth) / 2;
       drawY = 0;
     } else {
-      // Image taller than page — fit width, crop height
+      // Image taller than page - fit width, crop height
       drawW = pageWidth;
       drawH = pageWidth / coverAspect;
       drawX = 0;

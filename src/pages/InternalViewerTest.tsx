@@ -36,7 +36,7 @@ interface TestCase {
 const TEST_CASES: TestCase[] = [
   {
     id: "lower-level",
-    label: "Multi-page PDF — Lower Level",
+    label: "Multi-page PDF - Lower Level",
     description: "Single-page architectural PDF, no overlays. Validates basic pan/zoom.",
     fileName: "A2.01-LOWER-LEVEL-Rev.18.pdf",
     source: {
@@ -49,7 +49,7 @@ const TEST_CASES: TestCase[] = [
   },
   {
     id: "ground-floor-overlays",
-    label: "PDF with normalized overlays — Ground Floor",
+    label: "PDF with normalized overlays - Ground Floor",
     description:
       "Validates overlay alignment. Three normalized [x,y,w,h] boxes drawn on page 1.",
     fileName: "A2.02-GROUND-FLOOR-Rev.19.pdf",
@@ -100,7 +100,7 @@ export default function InternalViewerTest() {
       <AppHeader />
 
       <div className="container mx-auto py-8 max-w-3xl">
-        <h1 className="text-2xl font-semibold mb-1">Drawing Viewer — QA Harness</h1>
+        <h1 className="text-2xl font-semibold mb-1">Drawing Viewer - QA Harness</h1>
         <div className="mb-6">
           <h2 className="text-lg font-semibold">FileViewerModal test cases</h2>
           <p className="text-sm text-muted-foreground">
@@ -138,7 +138,7 @@ export default function InternalViewerTest() {
           fileId={active.id}
           fileName={active.fileName}
           mimeType="application/pdf"
-          accessToken="" // unused — sourceOverride takes precedence
+          accessToken="" // unused - sourceOverride takes precedence
           detections={active.detections}
           sourceOverride={active.source}
         />

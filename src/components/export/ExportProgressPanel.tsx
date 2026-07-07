@@ -64,8 +64,8 @@ function ExportRow({ exp, onCancel, onDismiss }: ExportRowProps) {
     : isComplete
       ? "Exported"
       : isCancelled
-        ? "Export cancelled —"
-        : "Export failed —";
+        ? "Export cancelled -"
+        : "Export failed -";
 
   const statusText = isActive
     ? exp.detail || "Working…"

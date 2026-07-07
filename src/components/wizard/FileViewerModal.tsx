@@ -216,9 +216,9 @@ interface FileViewerModalProps {
   }) => Promise<void> | void;
   /** AWP class names that have risk_element_results for this file. */
   riskElementClasses?: string[];
-  /** @deprecated — assignments are no longer used. Kept for API compat. */
+  /** @deprecated - assignments are no longer used. Kept for API compat. */
   annotationAssignments?: Record<string, string>;
-  /** @deprecated — assignments are no longer used. Kept for API compat. */
+  /** @deprecated - assignments are no longer used. Kept for API compat. */
   onAssignAnnotation?: (className: string, planId: string | null) => Promise<void> | void;
 }
 
@@ -362,7 +362,7 @@ export const FileViewerModal = ({
   );
   // When a user just added a plan, we remember its (name, type) here so the
   // effect below can find the resulting plan_id once the parent re-renders
-  // with the new floorPlans array — then automatically enter edit mode +
+  // with the new floorPlans array - then automatically enter edit mode +
   // focus/select the name input.
   const pendingNewPlanRef = useRef<
     | {
@@ -410,7 +410,7 @@ export const FileViewerModal = ({
   );
 
   // Reset editor state when modal closes or page changes. Do NOT reset
-  // activeTab here — we want it preserved across modal opens.
+  // activeTab here - we want it preserved across modal opens.
   useEffect(() => {
     if (!isOpen) {
       setEditingPlan(null);
@@ -589,7 +589,7 @@ export const FileViewerModal = ({
 
 
   // Reset history on open. Selected class is re-synced from localStorage.
-  // Expansion state is NOT reset — it should persist across modal opens
+  // Expansion state is NOT reset - it should persist across modal opens
   // (and, when a parent provides expandedClasses, across page sessions too).
   const wasOpenRef = useRef(false);
   useEffect(() => {
@@ -831,7 +831,7 @@ export const FileViewerModal = ({
 
   const handleOverlayDrag = useCallback(
     async (overlayId: string, nx: number, ny: number) => {
-      // Annotation circles (DCW / FS etc.) — free-position drag, no clamp.
+      // Annotation circles (DCW / FS etc.) - free-position drag, no clamp.
       if (overlayId.startsWith("inst-")) {
         const id = overlayId.slice(5);
         const inst = instances.find((i) => i.id === id);
@@ -868,7 +868,7 @@ export const FileViewerModal = ({
       // Pick the SMALLEST level bbox that contains the marker's ORIGINAL
       // position. Smallest wins so overlapping/nested level bboxes (e.g. L8
       // stacked inside L9) don't misattribute the marker. If no level bbox
-      // contains it, reject the drag rather than falling back arbitrarily —
+      // contains it, reject the drag rather than falling back arbitrarily -
       // that fallback was transferring markers to the wrong level.
       const px = inst.nx * 100;
       const py = inst.ny * 100;
@@ -1059,7 +1059,7 @@ export const FileViewerModal = ({
 
   // ---- Numbering: persistent per AWP class --------------------------------
   // IDs are stored on each row (instance_number). Deleting does NOT renumber
-  // — gaps remain and the next added marker continues past the highest ID.
+  // - gaps remain and the next added marker continues past the highest ID.
   // Fallback for rows that haven't been backfilled yet: append in created_at
   // order after the highest stored number.
   const prefixByClass = useMemo(() => {
@@ -1725,7 +1725,7 @@ const DetectionsPanel = ({
                     className="h-3.5 w-3.5 shrink-0"
                   />
                   <span className="h-2 w-2 rounded-full shrink-0" style={{ backgroundColor: color }} />
-                  <span className="font-mono text-xs text-muted-foreground shrink-0">{c.prefix ?? "—"}</span>
+                  <span className="font-mono text-xs text-muted-foreground shrink-0">{c.prefix ?? "-"}</span>
                   <span className="flex-1 min-w-0 truncate" title={c.name}>{c.name}</span>
                   <span className="text-xs tabular-nums text-muted-foreground shrink-0">{total}</span>
                   <button
@@ -1917,7 +1917,7 @@ const FloorPlansPanel = ({
 
 
   // Compute per-plan annotation membership purely by bbox containment of the
-  // marker's center point. There are no manual assignments — the report
+  // marker's center point. There are no manual assignments - the report
   // generator does the same calculation at output time.
   const annotationsByPlan = new Map<string, DrawingInstanceRow[]>();
   const orphaned: DrawingInstanceRow[] = [];
@@ -1972,7 +1972,7 @@ const FloorPlansPanel = ({
   return (
     <div className="h-full flex flex-col min-h-0">
       <div className="flex-1 min-h-0 overflow-y-auto p-2 space-y-2">
-        {/* Orphaned bucket — markers whose center falls outside every plan bbox. */}
+        {/* Orphaned bucket - markers whose center falls outside every plan bbox. */}
         {orphaned.length > 0 && (
           <div className="border border-dashed rounded-md p-2 space-y-1 bg-muted/20">
             <div className="text-[11px] font-medium text-muted-foreground">

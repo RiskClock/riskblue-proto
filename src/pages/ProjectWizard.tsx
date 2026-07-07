@@ -217,7 +217,7 @@ const ProjectWizardContent = () => {
         analysisRequest = created as any;
       }
 
-      // Existing file names — skip duplicates so re-uploads don't error or overwrite.
+      // Existing file names - skip duplicates so re-uploads don't error or overwrite.
       const { data: existingFiles } = await supabase
         .from("analysis_request_files")
         .select("name")

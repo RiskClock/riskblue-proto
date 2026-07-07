@@ -90,7 +90,7 @@ const phaseLabels: Record<string, string> = {
 };
 
 const formatRelative = (iso: string | null): string => {
-  if (!iso) return "—";
+  if (!iso) return "-";
   const diffMs = Date.now() - new Date(iso).getTime();
   const m = Math.floor(diffMs / 60000);
   if (m < 1) return "just now";
@@ -124,7 +124,7 @@ const statusLabels: Record<string, string> = {
 };
 
 const formatBytes = (bytes: number | null): string => {
-  if (!bytes) return "—";
+  if (!bytes) return "-";
   if (bytes < 1024) return `${bytes} B`;
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
   if (bytes < 1024 * 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
@@ -436,7 +436,7 @@ export default function InternalWorkbench() {
         .select("id");
       if (error) throw error;
       if (!data || data.length === 0) {
-        throw new Error("Delete affected 0 rows — you may not have permission to delete this project.");
+        throw new Error("Delete affected 0 rows - you may not have permission to delete this project.");
       }
       toast({ title: "Project deleted", description: `"${deleteTarget.name}" was removed.` });
       setDeleteTarget(null);
@@ -688,7 +688,7 @@ export default function InternalWorkbench() {
 }
 
 // ---------------------------------------------------------------------------
-// ChecklistGroup — compact multi-select used in the Filter popover.
+// ChecklistGroup - compact multi-select used in the Filter popover.
 // ---------------------------------------------------------------------------
 function ChecklistGroup({
   options,

@@ -386,7 +386,7 @@ export const ProcoreExportDialog = ({
                       />
                     </div>
                   ) : (
-                    <p className="text-xs text-muted-foreground">No folders found — file will be uploaded to root.</p>
+                    <p className="text-xs text-muted-foreground">No folders found - file will be uploaded to root.</p>
                   )}
                 </div>
               )}

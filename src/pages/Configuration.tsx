@@ -654,7 +654,7 @@ function ControlEditModal({ awp, controls, currentIds, pendingChange, onAddContr
     <Dialog open onOpenChange={(open) => { if (!open) onClose(); }}>
       <DialogContent className="max-w-lg">
         <DialogHeader>
-          <DialogTitle>Edit Controls — {awp.name}</DialogTitle>
+          <DialogTitle>Edit Controls - {awp.name}</DialogTitle>
         </DialogHeader>
         <div className="space-y-4">
           <div className="flex flex-wrap gap-1.5">

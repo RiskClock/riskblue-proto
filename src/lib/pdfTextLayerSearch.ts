@@ -93,7 +93,7 @@ function collectExactMatchesOnPage(items: PdfTextItem[], normTag: string): PdfTe
   return matches;
 }
 
-/** Last-resort substring fallback (no occurrence support — used only when zero exact matches). */
+/** Last-resort substring fallback (no occurrence support - used only when zero exact matches). */
 function findSubstringFallback(items: PdfTextItem[], normTag: string): PdfTextItem | null {
   if (normTag.length <= 15) return null;
   let bestLen = 0;

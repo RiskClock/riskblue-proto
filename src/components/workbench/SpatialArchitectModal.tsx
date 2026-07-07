@@ -379,7 +379,7 @@ export function SpatialArchitectModal({
               </span>
             ) : status === "failed" ? (
               <span className="text-destructive truncate" title={error ?? undefined}>
-                Failed — {error ?? "unknown error"} (previous results preserved)
+                Failed - {error ?? "unknown error"} (previous results preserved)
               </span>
             ) : status === "complete" ? (
               <span className="text-muted-foreground">
@@ -387,7 +387,7 @@ export function SpatialArchitectModal({
               </span>
             ) : (
               <span className="text-muted-foreground">
-                Not run yet — click Build Spatial Model to analyze drawings.
+                Not run yet - click Build Spatial Model to analyze drawings.
               </span>
             )}
           </div>

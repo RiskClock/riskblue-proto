@@ -64,7 +64,7 @@ export function useProcoreToken() {
       if (!response.ok) {
         console.error("Procore token refresh error:", data);
         if (data?.needs_reauth === true) {
-          console.log("[useProcoreToken] Refresh failed with needs_reauth — prompting reconnect");
+          console.log("[useProcoreToken] Refresh failed with needs_reauth - prompting reconnect");
           setProcoreToken(null);
           setNeedsReauth(true);
         }

@@ -228,7 +228,7 @@ export const MitigationControlsStep = ({
                           return (
                             <div key={idx} className="flex items-center justify-between p-2 bg-muted/30 rounded border border-border/50 text-sm">
                               <div className="flex items-center gap-2">
-                                <span><span className="text-muted-foreground">{item.id}</span> — {item.areaName || item.name}</span>
+                                <span><span className="text-muted-foreground">{item.id}</span> - {item.areaName || item.name}</span>
                                 {item.fileName && (
                                   <Button
                                     variant="ghost"
@@ -269,7 +269,7 @@ export const MitigationControlsStep = ({
                           return (
                             <div key={idx} className="flex items-center justify-between p-2 bg-muted/30 rounded border border-border/50 text-sm">
                               <div className="flex items-center gap-2">
-                                <span><span className="text-muted-foreground">{item.id}</span> — {item.areaName || item.name}</span>
+                                <span><span className="text-muted-foreground">{item.id}</span> - {item.areaName || item.name}</span>
                                 {item.fileName && (
                                   <Button
                                     variant="ghost"
@@ -305,7 +305,7 @@ export const MitigationControlsStep = ({
                       <div className="grid gap-2 pl-6">
                         {processes.map((item, idx) => (
                           <div key={idx} className="flex items-center justify-between p-2 bg-muted/30 rounded border border-border/50 text-sm">
-                            <span><span className="text-muted-foreground">{item.id}</span> — {item.areaName || item.name}</span>
+                            <span><span className="text-muted-foreground">{item.id}</span> - {item.areaName || item.name}</span>
                             <div className="flex gap-1">
                               {item.floor && <Badge variant="outline" className="text-xs">{item.floor}</Badge>}
                             </div>

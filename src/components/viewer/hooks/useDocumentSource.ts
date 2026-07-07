@@ -6,10 +6,10 @@ import { supabase } from "@/integrations/supabase/client";
  * Resolves a logical source descriptor into a Blob (for PDFs) or an image URL.
  *
  * Supported descriptors:
- *  - { kind: 'blob', blob }                          — already in memory
- *  - { kind: 'url', url }                            — direct URL (http(s) or data:)
- *  - { kind: 'drive', fileId, accessToken, mimeType? } — Google Drive
- *  - { kind: 'supabase-storage', bucket, path }      — Supabase storage signed URL
+ *  - { kind: 'blob', blob }                          - already in memory
+ *  - { kind: 'url', url }                            - direct URL (http(s) or data:)
+ *  - { kind: 'drive', fileId, accessToken, mimeType? } - Google Drive
+ *  - { kind: 'supabase-storage', bucket, path }      - Supabase storage signed URL
  */
 
 export type DocumentSourceDescriptor =
@@ -102,7 +102,7 @@ function descriptorKey(d: DocumentSourceDescriptor): string | null {
   if (d.kind === "supabase-storage") return `ss:${d.bucket}:${d.path}`;
   if (d.kind === "url") return `url:${d.url}`;
   if (d.kind === "drive") return `drive:${d.fileId}`;
-  return null; // blob — not cacheable
+  return null; // blob - not cacheable
 }
 
 function readCache(key: string): BlobCacheEntry | null {
@@ -129,7 +129,7 @@ function writeCache(key: string, entry: BlobCacheEntry) {
 /**
  * Idle-time prefetch: download a descriptor's blob into the module-level LRU
  * cache so a subsequent useDocumentSource(descriptor) call hits cache and
- * resolves immediately. Safe to call repeatedly — no-op when already cached.
+ * resolves immediately. Safe to call repeatedly - no-op when already cached.
  * Errors are swallowed (best-effort warming).
  */
 export async function prewarmDocumentSource(
@@ -169,7 +169,7 @@ export async function prewarmDocumentSource(
     }
     if (blob) writeCache(cacheKey, { blob, mime: mimeType, ts: Date.now() });
   } catch {
-    // best-effort — ignore
+    // best-effort - ignore
   }
 }
 

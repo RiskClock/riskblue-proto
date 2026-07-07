@@ -305,7 +305,7 @@ export const SharePointConnectionDialog = ({
                 <div className="space-y-2">
                   <label className="text-sm font-medium">
                     Select a Folder
-                    <span className="text-muted-foreground font-normal ml-1">(optional — defaults to entire library)</span>
+                    <span className="text-muted-foreground font-normal ml-1">(optional - defaults to entire library)</span>
                   </label>
                   {loadingFolders ? (
                     <div className="flex items-center gap-2 text-sm text-muted-foreground">

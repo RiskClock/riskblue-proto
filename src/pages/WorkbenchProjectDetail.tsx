@@ -252,7 +252,7 @@ function formatSpaceBadge(spaces: string[]): string {
 }
 
 function formatDuration(ms: number): string {
-  if (!Number.isFinite(ms) || ms <= 0) return "—";
+  if (!Number.isFinite(ms) || ms <= 0) return "-";
   if (ms < 1000) return `${Math.round(ms)}ms`;
   const s = ms / 1000;
   if (s < 60) return `${s.toFixed(s < 10 ? 1 : 0)}s`;
@@ -514,7 +514,7 @@ export default function WorkbenchProjectDetail() {
   }, [activeFileFloorPlansByPage, activeFloorPlanOverrides]);
 
   // File-wide level-plan overrides (units arrays) are computed after the
-  // `rows` query is declared below — see `activeFileAllLevelPlanOverrides`.
+  // `rows` query is declared below - see `activeFileAllLevelPlanOverrides`.
 
 
 
@@ -922,7 +922,7 @@ export default function WorkbenchProjectDetail() {
             source_type: requestSourceType,
             storage_path: typeof r.storage_path === "string" ? r.storage_path : null,
             mime_type: typeof r.mime_type === "string" ? r.mime_type : null,
-            // Same null-cache guard as the project-level cache above — only trust
+            // Same null-cache guard as the project-level cache above - only trust
             // positive integers so a half-written cache entry can't stick as `0`.
             page_count:
               typeof r.page_count === "number" && Number.isFinite(r.page_count) && r.page_count > 0
@@ -1195,7 +1195,7 @@ export default function WorkbenchProjectDetail() {
 
   // File-wide unit floor plans (both survey-parsed and user-added on any page
   // of the active file). Merging across sheets is required because a level
-  // plan on page N can reference a Detail added on page M — each sheet stores
+  // plan on page N can reference a Detail added on page M - each sheet stores
   // its own __added_unit_plans array.
   const activeFileAllUnitPlans = useMemo<ParsedFloorPlan[]>(() => {
     const deleted = getDeletedPlanIds(activeFloorPlanOverrides);
@@ -1379,7 +1379,7 @@ export default function WorkbenchProjectDetail() {
               existingPaths.add(dir ? `${dir}/${item.name}` : item.name);
             }
           } catch {
-            // ignore — fall back to skipping prewarm for this directory
+            // ignore - fall back to skipping prewarm for this directory
           }
         }),
       );
@@ -1438,7 +1438,7 @@ export default function WorkbenchProjectDetail() {
     refetchInterval: 3000,
   });
 
-  // In-flight pipeline jobs — used to show per-cell spinners during triage
+  // In-flight pipeline jobs - used to show per-cell spinners during triage
   // (and later analyze) without waiting for the final results row to land.
   const { data: pipelineJobs } = useQuery({
     queryKey: ["workbench-jobs", requestId],
@@ -1552,7 +1552,7 @@ export default function WorkbenchProjectDetail() {
   }, [awpOptions]);
 
   // Spannable classes (Configuration > "Can Span Multiple Spaces") that actually
-  // have annotations in this analysis request — used to gate the
+  // have annotations in this analysis request - used to gate the
   // "Consolidate Risers" pre-report step.
   const spannableClassesWithAnnotations = useMemo<
     { name: string; idPrefix: string | null }[]
@@ -1704,7 +1704,7 @@ export default function WorkbenchProjectDetail() {
     return m;
   }, [triage, instanceRows, enabledColSet]);
 
-  // Total annotations per page (sheet) — triage + user/analysis instances.
+  // Total annotations per page (sheet) - triage + user/analysis instances.
   // Key = `${parentFileId}::${pageIndex}` and `sheet:${sheetId}` for triage.
   // Only counts classes that are currently enabled as columns.
   const pageTotalLookup = useMemo(() => {
@@ -2707,7 +2707,7 @@ export default function WorkbenchProjectDetail() {
         } as any)
         .eq("id", requestId);
 
-      // Audit trail — always logged (safeguard against silent data loss).
+      // Audit trail - always logged (safeguard against silent data loss).
       void logActivity("workbench_clear_all", projectId ?? undefined, {
         analysis_request_id: requestId,
         destroyed: audit,
@@ -2871,7 +2871,7 @@ export default function WorkbenchProjectDetail() {
       });
     } catch (error: any) {
       const message = getUserFriendlyError(error);
-      // Reconcile the DB row — if the edge function crashed or timed out before
+      // Reconcile the DB row - if the edge function crashed or timed out before
       // it could mark itself failed, the row would stay `running` forever and
       // the modal would keep spinning. Force it to `failed` here so the UI
       // matches the toast the user just saw.
@@ -2938,7 +2938,7 @@ export default function WorkbenchProjectDetail() {
       const children: any[] = [
         new Paragraph({
           heading: HeadingLevel.HEADING_1,
-          children: [new TextRun({ text: `RiskBlue Workbench Export — ${projectName}`, bold: true })],
+          children: [new TextRun({ text: `RiskBlue Workbench Export - ${projectName}`, bold: true })],
         }),
         new Paragraph({
           children: [
@@ -3138,7 +3138,7 @@ export default function WorkbenchProjectDetail() {
 
         <main className="flex-1 overflow-auto">
           <div className="container mx-auto px-6 pt-4 pb-6 space-y-4">
-            {/* Action toolbar — the Agents row lives further below in the
+            {/* Action toolbar - the Agents row lives further below in the
                 page (Scout · Vulnerability Radar · Spatial Architect · Unify
                 Riser · Threat Report · Clear All · Renumber IDs · 🐛). */}
 
@@ -3155,7 +3155,7 @@ export default function WorkbenchProjectDetail() {
                     // request, require typed confirmation before overwriting.
                     // Re-running Scout replaces survey_raw_response, which the
                     // whole Workbench UI (floor plans, spaces, threat report)
-                    // reads from — an accidental re-run silently destroys work.
+                    // reads from - an accidental re-run silently destroys work.
                     const filesWithSurvey = (rows?.files ?? []).filter(
                       (f) => (f as any).survey_raw_response && String((f as any).survey_raw_response).trim().length > 0,
                     );
@@ -3478,7 +3478,7 @@ export default function WorkbenchProjectDetail() {
 
               </div>
 
-              {/* Raw response modal — shown when a file is picked from the Scout debug list. */}
+              {/* Raw response modal - shown when a file is picked from the Scout debug list. */}
               <Dialog
                 open={!!surveyResponseModal}
                 onOpenChange={(open) => !open && setSurveyResponseModal(null)}
@@ -3497,7 +3497,7 @@ export default function WorkbenchProjectDetail() {
                 </DialogContent>
               </Dialog>
 
-              {/* Scout debug modal — lists files with raw responses; pick one to view. */}
+              {/* Scout debug modal - lists files with raw responses; pick one to view. */}
               <Dialog open={scoutDebugOpen} onOpenChange={setScoutDebugOpen}>
                 <DialogContent className="max-w-[640px] w-[640px] max-h-[80vh] flex flex-col">
                   <DialogHeader>
@@ -3537,7 +3537,7 @@ export default function WorkbenchProjectDetail() {
                                     </div>
                                     <div className="text-[11px] text-muted-foreground">
                                       {hasResponse
-                                        ? `${updatedAt ? new Date(updatedAt).toLocaleString() : "—"} · ${raw.length.toLocaleString()} chars`
+                                        ? `${updatedAt ? new Date(updatedAt).toLocaleString() : "-"} · ${raw.length.toLocaleString()} chars`
                                         : "No response yet"}
                                     </div>
                                     {tokens ? (
@@ -3685,7 +3685,7 @@ export default function WorkbenchProjectDetail() {
                                   {error || parseError ? (
                                     <span className="text-destructive">Error: {error || parseError}</span>
                                   ) : hasResp ? (
-                                    `${status ?? "—"} · ${updatedAt ? new Date(updatedAt).toLocaleString() : "—"} · ${displayText.length.toLocaleString()} chars`
+                                    `${status ?? "-"} · ${updatedAt ? new Date(updatedAt).toLocaleString() : "-"} · ${displayText.length.toLocaleString()} chars`
                                   ) : (
                                     status === "running" ? "Running…" : "No response yet"
                                   )}
@@ -3795,7 +3795,7 @@ export default function WorkbenchProjectDetail() {
                                       {label}
                                     </button>
                                   </TooltipTrigger>
-                                  <TooltipContent side="bottom">{tooltipName} — click to view prompt</TooltipContent>
+                                  <TooltipContent side="bottom">{tooltipName} - click to view prompt</TooltipContent>
                                 </Tooltip>
                                 <DropdownMenu>
                                   <DropdownMenuTrigger asChild>
@@ -3883,17 +3883,17 @@ export default function WorkbenchProjectDetail() {
                               <span className="font-medium tabular-nums">{cnt}</span>
                             ) : (
                               <span className="text-muted-foreground">
-                                {scoreKnown ? "" : "—"}
+                                {scoreKnown ? "" : "-"}
                               </span>
                             );
                           const title = !clickable
                             ? undefined
                             : override === "include"
-                              ? "Manually included — click to clear"
+                              ? "Manually included - click to clear"
                               : override === "exclude"
-                                ? "Manually excluded — click to clear"
+                                ? "Manually excluded - click to clear"
                                 : hasScore
-                                  ? `Triage: ${score}%${cnt > 0 ? ` · ${cnt}` : ""} — click to ${cnt > 0 ? "exclude" : "include"}`
+                                  ? `Triage: ${score}%${cnt > 0 ? ` · ${cnt}` : ""} - click to ${cnt > 0 ? "exclude" : "include"}`
                                   : cnt > 0
                                     ? "Click to exclude"
                                     : "Click to include";
@@ -3921,7 +3921,7 @@ export default function WorkbenchProjectDetail() {
                               <span className="inline-flex items-center justify-center w-full">
                                 {override === "exclude" ? (
                                   <span className="line-through text-muted-foreground">
-                                    {cnt > 0 ? cnt : "—"}
+                                    {cnt > 0 ? cnt : "-"}
                                   </span>
                                 ) : (
                                   inner
@@ -3933,7 +3933,7 @@ export default function WorkbenchProjectDetail() {
 
                         return (
                           <Fragment key={row.id}>
-                            {/* File-level row — matches first table */}
+                            {/* File-level row - matches first table */}
                             <TableRow
                               className="group h-8 cursor-pointer"
                               onClick={() => {
@@ -3993,7 +3993,7 @@ export default function WorkbenchProjectDetail() {
                               <TableCell className="py-1" />
                             </TableRow>
 
-                            {/* Per-page sub-rows (only when multi-page AND expanded) — matches first table */}
+                            {/* Per-page sub-rows (only when multi-page AND expanded) - matches first table */}
                             {!singlePage && isExpanded && count > 0 &&
                               Array.from({ length: count }, (_, i) => i + 1).map((p) => {
                                 const pagePlans =
@@ -4067,7 +4067,7 @@ export default function WorkbenchProjectDetail() {
                                               {cnt}
                                             </span>
                                           ) : (
-                                            <span className="text-muted-foreground">—</span>
+                                            <span className="text-muted-foreground">-</span>
                                           )}
                                         </TableCell>
                                       );
@@ -4203,7 +4203,7 @@ export default function WorkbenchProjectDetail() {
 
 
 
-        {/* Drawing modal — single sheet */}
+        {/* Drawing modal - single sheet */}
         {activeSheet && sheetSource && (
           <FileViewerModal
             isOpen={!!activeSheet}
@@ -4249,7 +4249,7 @@ export default function WorkbenchProjectDetail() {
           />
         )}
 
-        {/* Parent file modal — full multi-page PDF with page navigation */}
+        {/* Parent file modal - full multi-page PDF with page navigation */}
         {activeFile && fileSource && (
           <FileViewerModal
             isOpen={!!activeFile}
@@ -4590,7 +4590,7 @@ export default function WorkbenchProjectDetail() {
           </DialogContent>
         </Dialog>
 
-        {/* Scout re-run confirmation — protects existing survey_raw_response
+        {/* Scout re-run confirmation - protects existing survey_raw_response
             from silent overwrite. */}
         <Dialog
           open={scoutConfirmOpen}
@@ -4716,7 +4716,7 @@ export default function WorkbenchProjectDetail() {
                   </div>
                 ) : (
                   <div className="text-sm text-muted-foreground">
-                    No manual annotations or floor plans present — safe to clear.
+                    No manual annotations or floor plans present - safe to clear.
                   </div>
                 )}
               </div>
@@ -4795,7 +4795,7 @@ export default function WorkbenchProjectDetail() {
 }
 
 // ---------------------------------------------------------------------------
-// AwpPromptModal — shows prompt content + opens source Google Doc
+// AwpPromptModal - shows prompt content + opens source Google Doc
 // ---------------------------------------------------------------------------
 function AwpPromptModal({
   className,
@@ -4913,7 +4913,7 @@ function AwpPromptModal({
 }
 
 // ---------------------------------------------------------------------------
-// SpaceHierarchyModal — pretty-printed JSON viewer with copy
+// SpaceHierarchyModal - pretty-printed JSON viewer with copy
 // ---------------------------------------------------------------------------
 function SpaceHierarchyModal({
   open,
@@ -4981,7 +4981,7 @@ function SpaceHierarchyModal({
 
 
 // ---------------------------------------------------------------------------
-// ExtractedTextBody — shows file extracted text without page line-break headers
+// ExtractedTextBody - shows file extracted text without page line-break headers
 // ---------------------------------------------------------------------------
 function ExtractedTextBody({ fileId, sheetId }: { fileId?: string; sheetId?: string }) {
   const [text, setText] = useState<string | null>(null);
@@ -5071,7 +5071,7 @@ function ExtractedTextBody({ fileId, sheetId }: { fileId?: string; sheetId?: str
 }
 
 // ---------------------------------------------------------------------------
-// InstancesReportModal — translates annotations to per-space instance IDs
+// InstancesReportModal - translates annotations to per-space instance IDs
 // ---------------------------------------------------------------------------
 function InstancesReportModal({
   open,
@@ -5204,7 +5204,7 @@ function InstancesReportModal({
   // Resolve per-annotation (level, unit?) pairs.
   //
   // When the annotation's page has unit floor plans, use bbox containment to
-  // attribute the annotation to the SPECIFIC unit it sits inside — never every
+  // attribute the annotation to the SPECIFIC unit it sits inside - never every
   // unit on the page. A single unit on the page is auto-attributed. If no unit
   // bbox contains the point, the annotation is dropped (→ Unassigned).
   //
@@ -5259,7 +5259,7 @@ function InstancesReportModal({
       }
       return out;
     }
-    // No unit plans on this page — try level plan bbox containment next.
+    // No unit plans on this page - try level plan bbox containment next.
     // If multiple level plans share a page (e.g. 2nd Floor + 3rd Floor),
     // attribute to the one whose bbox contains the point. If none contains
     // it, drop to Unassigned. Single-level page auto-attributes.
@@ -5314,7 +5314,7 @@ function InstancesReportModal({
       ny: number;
       pipeDiameter: string | null;
       pipeType: string | null;
-      // Stable key per logical instance — used to de-duplicate the same
+      // Stable key per logical instance - used to de-duplicate the same
       // consolidated riser appearing across multiple pages. For unit-expanded
       // rows, the (level, unit) pair is folded into the key so each
       // (level, unit) expansion counts as its own logical instance.
@@ -5500,7 +5500,7 @@ function InstancesReportModal({
   const classCols = useMemo(() => {
     const map = new Map<string, string>();
     // Include every enabled class (Asset/Water System) so zero-count rows
-    // still appear in Overview/Summary — 0 is meaningful information.
+    // still appear in Overview/Summary - 0 is meaningful information.
     for (const name of enabledClassNames || []) {
       const cat = optionByName.get(name)?.category;
       if (cat === "Asset" || cat === "Water System") map.set(name, cat);
@@ -5610,7 +5610,7 @@ function InstancesReportModal({
           key: `${c.name}::${t}`,
           canonicalName: c.name,
           displayName:
-            t === "(untyped)" ? `${base} — (untyped)` : `${base} — ${t}`,
+            t === "(untyped)" ? `${base} - (untyped)` : `${base} - ${t}`,
           displayPrefix:
             t === "(untyped)" ? basePrefix : `${basePrefix}-${shortToken(t)}`,
           typeGroup: t,
@@ -5681,7 +5681,7 @@ function InstancesReportModal({
   const compactHead = "h-7 py-1 text-xs";
 
   const renderOverview = () => {
-    const sourceDrawings = fileGroups.map((g) => g.file.name).join("; ") || "—";
+    const sourceDrawings = fileGroups.map((g) => g.file.name).join("; ") || "-";
     const today = new Date();
     const reportDate = today.toLocaleDateString("en-US", {
       month: "long",
@@ -5819,7 +5819,7 @@ function InstancesReportModal({
   const renderSpaceDetail = (space: string) => {
     const rows = instancesForSpace(space);
     const label = space === "__unassigned__" ? "Unassigned" : space;
-    // Units assigned to this level — derived from pageUnitPlansMap so we can
+    // Units assigned to this level - derived from pageUnitPlansMap so we can
     // honor the +/- picker count (a unit added twice → count = 2).
     const unitInfo = new Map<string, { count: number; pageIdxs: Set<number> }>();
     if (space !== "__unassigned__") {
@@ -5986,7 +5986,7 @@ function InstancesReportModal({
           qualifier = matchingUnit?.unitLabel ?? unitPlans[0].unitLabel;
         }
 
-        // Bbox overlays — outline level + connected unit floor plans on the page.
+        // Bbox overlays - outline level + connected unit floor plans on the page.
         const bboxOverlays: any[] = [];
         if (space !== "__unassigned__") {
           for (const lp of levelPlans) {
@@ -6072,11 +6072,11 @@ function InstancesReportModal({
                     <TableCell className={`${compactCell} font-mono`}>{r.instanceId}</TableCell>
                     <TableCell className={compactCell}>{r.awpClassName}</TableCell>
                     {showUnitCol && (
-                      <TableCell className={compactCell}>{r.unitName ?? "—"}</TableCell>
+                      <TableCell className={compactCell}>{r.unitName ?? "-"}</TableCell>
                     )}
                     {showDiameterCol && (
                       <TableCell className={compactCell}>
-                        {isDcwOrFsName(r.awpClassName) ? (r.pipeDiameter ?? "—") : "—"}
+                        {isDcwOrFsName(r.awpClassName) ? (r.pipeDiameter ?? "-") : "-"}
                       </TableCell>
                     )}
                     <TableCell className={`${compactCell} font-mono text-muted-foreground`}>
@@ -6359,7 +6359,7 @@ function InstancesReportModal({
       );
       // Cold Water and Hot Water are split into per-Type virtual classes so
       // the Overview and Summary matrix show a separate row/column for each
-      // type value (e.g. "Cold Water — Potable", "Cold Water — (untyped)").
+      // type value (e.g. "Cold Water - Potable", "Cold Water - (untyped)").
       // Every other class stays as a single row with a size/type breakdown.
       const isTypedClassName = (n: string) =>
         /(^|\s)(cold|hot)\s*water(\s|$)/i.test(n);
@@ -6405,7 +6405,7 @@ function InstancesReportModal({
           .map((t) => ({
             key: `${c.name}::${t}`,
             canonicalName: c.name,
-            displayName: t === "(untyped)" ? `${base} — (untyped)` : `${base} — ${t}`,
+            displayName: t === "(untyped)" ? `${base} - (untyped)` : `${base} - ${t}`,
             typeGroup: t,
             idPrefix: t === "(untyped)" ? basePrefix : `${basePrefix}-${t}`,
           }));
@@ -6632,7 +6632,7 @@ function InstancesReportModal({
 }
 
 // ---------------------------------------------------------------------------
-// PreparingReportModal — shown while threat report export is generating.
+// PreparingReportModal - shown while threat report export is generating.
 // ---------------------------------------------------------------------------
 function PreparingReportModal({
   open,
@@ -6685,7 +6685,7 @@ function PreparingReportModal({
 }
 
 // ---------------------------------------------------------------------------
-// TabbedPagesBlock — renders multiple (file, page) sources as tabs over a
+// TabbedPagesBlock - renders multiple (file, page) sources as tabs over a
 // single DrawingPageBlock. The parent PDF is downloaded once per file and
 // page navigation happens inside DrawingViewer (same approach as the drawing
 // modal), so switching between pages of the same file is instant.
@@ -6762,7 +6762,7 @@ function TabbedPagesBlock({
 
 
 // ---------------------------------------------------------------------------
-// DrawingPageBlock — renders a single drawing page in the Instances Report
+// DrawingPageBlock - renders a single drawing page in the Instances Report
 // with a docked header (file name + Download button) and a non-interactive
 // DrawingViewer. The Download button rasterizes the page (including markers)
 // to PNG via html2canvas.

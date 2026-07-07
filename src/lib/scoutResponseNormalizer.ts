@@ -1,7 +1,7 @@
 // Normalizes a Scout agent raw response. Older runs persisted each Gemini
 // chunk separated by "--- pages X-Y ---" markers; this concatenates the
 // parsed arrays from each chunk into a single JSON array (no merging,
-// dedupe, or sorting). Newer runs already store a clean JSON array — those
+// dedupe, or sorting). Newer runs already store a clean JSON array - those
 // pass through (re-pretty-printed).
 
 function stripFence(s: string): string {

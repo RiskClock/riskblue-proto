@@ -35,7 +35,7 @@ const Auth = () => {
 
   // Surface a one-time warning when AuthContext forced a sign-out due to a
   // cross-tab / cross-session swap of the active user.
-  // (toast is from useToast() declared later in this component — re-use it.)
+  // (toast is from useToast() declared later in this component - re-use it.)
   
   // Request access modal state
   const [showRequestModal, setShowRequestModal] = useState(false);
@@ -410,7 +410,7 @@ const Auth = () => {
             </form>
           ) : (
             <p className="text-muted-foreground py-4">
-              Thanks — our team will review your request and follow up shortly.
+              Thanks - our team will review your request and follow up shortly.
             </p>
           )}
         </DialogContent>

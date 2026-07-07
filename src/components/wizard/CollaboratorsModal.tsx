@@ -440,7 +440,7 @@ export const CollaboratorsModal = ({
                               </div>
                             </TableCell>
                             <TableCell className="py-1 px-2 text-sm text-muted-foreground truncate w-[180px]">
-                              {collab.email || "—"}
+                              {collab.email || "-"}
                             </TableCell>
                             {/* Issue 11: Fixed width for Account Type cells */}
                             <TableCell className="py-1 px-2 w-[140px] min-w-[140px]">

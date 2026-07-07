@@ -22,7 +22,7 @@ import {
  * Components MUST NOT independently subscribe to or derive analysis_requests
  * status. Use the returned `state` object everywhere (button labels, badges,
  * progress panels). For list views (queue rows), use the pure
- * `deriveAnalysisUiState` helper instead — do not instantiate this hook per row.
+ * `deriveAnalysisUiState` helper instead - do not instantiate this hook per row.
  */
 export interface AnalysisRequestRow extends AnalysisRowLike {
   id: string;
@@ -68,7 +68,7 @@ export function useAnalysisRequestState(requestId: string | null | undefined): A
   const queryKey = useMemo(() => ["analysis-request-row", requestId], [requestId]);
   const [realtimeReady, setRealtimeReady] = useState(false);
 
-  // Local pending start tracking — captures the run id seen at click time so
+  // Local pending start tracking - captures the run id seen at click time so
   // we can detect when the DB has moved on to a newer run.
   const localPendingRef = useRef<{ priorRunId: string | null; clickedAt: number } | null>(null);
   const [localPendingTick, setLocalPendingTick] = useState(0);
@@ -114,7 +114,7 @@ export function useAnalysisRequestState(requestId: string | null | undefined): A
     setLocalPendingTick((t) => t + 1);
   }, []);
 
-  // Realtime subscription — single channel per requestId
+  // Realtime subscription - single channel per requestId
   useEffect(() => {
     if (!requestId) return;
     setRealtimeReady(false);
@@ -232,7 +232,7 @@ export function useAnalysisRequestState(requestId: string | null | undefined): A
     },
   });
 
-  // Realtime invalidation for counts — exact run-scoped key.
+  // Realtime invalidation for counts - exact run-scoped key.
   useEffect(() => {
     if (!requestId || !effectiveRunId) return;
     const channel: RealtimeChannel = supabase
@@ -303,7 +303,7 @@ export function useAnalysisRequestState(requestId: string | null | undefined): A
     } else if (derivedUiState === "starting" || derivedUiState === "extracting") {
       // keep
     } else if (phase === "dispatching_analyze") {
-      // Keep "Preparing Analysis" — do not override with stale triage/analyze counts.
+      // Keep "Preparing Analysis" - do not override with stale triage/analyze counts.
       uiState = "preparing_analysis";
     } else if (triageActive > 0) {
       uiState = "triaging";

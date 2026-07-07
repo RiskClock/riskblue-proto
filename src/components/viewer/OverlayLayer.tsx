@@ -75,7 +75,7 @@ interface LabelCandidate {
   y: number;
   w: number;
   h: number;
-  ax: number; // anchor x on target edge (for leader — circles only)
+  ax: number; // anchor x on target edge (for leader - circles only)
   ay: number; // anchor y on target edge
   leader: number; // base leader length (0 for rects → no leader)
 }
@@ -603,7 +603,7 @@ export const OverlayLayer = ({
 
       {circles.map((c) => {
         const clickable = !!onOverlayClick;
-        // Any circle overlay is draggable when a drag handler is wired up —
+        // Any circle overlay is draggable when a drag handler is wired up -
         // annotation circles as well as dots. Click still fires when the
         // pointer barely moves (< DRAG_THRESHOLD).
         const draggable = !!onOverlayDrag;
@@ -733,7 +733,7 @@ export const OverlayLayer = ({
       })}
 
 
-      {/* Rectangle overlays — outline only. Labels are placed by the optimizer below. */}
+      {/* Rectangle overlays - outline only. Labels are placed by the optimizer below. */}
       {rects.map((r) => (
         <div key={r.id} style={{ position: "absolute", left: r.x, top: r.y }}>
           <div
