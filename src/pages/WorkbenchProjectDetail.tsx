@@ -5337,7 +5337,7 @@ function InstancesReportModal({
       const prefix = opt?.idPrefix || inst.awp_class_name.slice(0, 3).toUpperCase();
       const category = opt?.category || "Other";
       const num = inst.instance_number ?? 0;
-      const base = `${prefix}${String(num).padStart(3, "0")}`;
+      const padded = String(num).padStart(3, "0");
       const fileName = fileNameById.get(inst.file_id) || "";
       const pairs = pairsForPage(fileName, inst.page_index, Number(inst.nx) || 0, Number(inst.ny) || 0);
       const md =
@@ -5352,6 +5352,9 @@ function InstancesReportModal({
         typeof md.pipe_type === "string"
           ? (md.pipe_type as string).trim() || null
           : null;
+      // When a Type value is present (CW/HW), fold it into the acronym:
+      // "CW-Potable-001". Otherwise fall back to the compact "CW001" form.
+      const base = pipeType ? `${prefix}-${pipeType}-${padded}` : `${prefix}${padded}`;
       const common = {
         annotationBaseId: base,
         awpClassName: inst.awp_class_name,
