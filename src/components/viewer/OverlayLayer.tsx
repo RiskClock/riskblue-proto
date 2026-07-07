@@ -350,23 +350,34 @@ function candidateCost(
   return cost;
 }
 
+/** Small deterministic PRNG so the optimizer produces stable layouts. */
+function mulberry32(seed: number) {
+  let a = seed >>> 0;
+  return () => {
+    a = (a + 0x6D2B79F5) >>> 0;
+    let t = a;
+    t = Math.imul(t ^ (t >>> 15), t | 1);
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
 function optimizePlacements(
   candidatesPerLabel: LabelCandidate[][],
   circles: CircleInfo[],
   rects: RectInfo[],
   anchors: Anchor[],
   ownerIds: (string | null)[],
+  rand: () => number,
 ): LabelCandidate[] {
   const runOnce = (seed: LabelCandidate[]): { positions: LabelCandidate[]; totalCost: number } => {
     const positions = seed.slice();
     const maxIters = 20;
     for (let iter = 0; iter < maxIters; iter++) {
       let improved = false;
-      // Shuffle traversal order each iteration so we don't get stuck in a
-      // greedy local minimum where the first-placed labels lock everyone else.
       const order = positions.map((_, i) => i);
       for (let i = order.length - 1; i > 0; i--) {
-        const j = Math.floor(Math.random() * (i + 1));
+        const j = Math.floor(rand() * (i + 1));
         [order[i], order[j]] = [order[j], order[i]];
       }
       for (const i of order) {
@@ -393,26 +404,20 @@ function optimizePlacements(
     return { positions, totalCost: total };
   };
 
-  // Restart 1: shortest-leader initial seed (existing behavior).
   const seedShort = candidatesPerLabel.map(
     (cands) => cands.reduce((best, c) => (c.leader < best.leader ? c : best), cands[0]),
   );
   let best = runOnce(seedShort);
 
-  // Restart 2 & 3: random seeds so we can escape crowded local minima.
   for (let r = 0; r < 3; r++) {
     const seed = candidatesPerLabel.map(
-      (cands) => cands[Math.floor(Math.random() * cands.length)],
+      (cands) => cands[Math.floor(rand() * cands.length)],
     );
     const attempt = runOnce(seed);
     if (attempt.totalCost < best.totalCost) best = attempt;
   }
   const positions = best.positions;
 
-  // Hard-filter pass: any label still intersecting a non-owner circle is
-  // swapped for the smallest-leader candidate that touches zero non-owner
-  // circles (if one exists). This guarantees labels never fully occlude
-  // another annotation's dot even in crowded regions.
   for (let i = 0; i < positions.length; i++) {
     const ownerId = ownerIds[i];
     const hits = (cand: LabelCandidate) => {
@@ -432,6 +437,7 @@ function optimizePlacements(
   }
   return positions;
 }
+
 
 
 export const OverlayLayer = ({
@@ -510,70 +516,115 @@ export const OverlayLayer = ({
   const padX = LABEL_PAD_X;
   const labelH = LABEL_H;
   const gap = LABEL_GAP;
-  const charPx = fontPx * 0.62;
+  // Slightly generous per-character width so clamped labels near the page
+  // edge don't visually spill past their computed rect.
+  const charPx = fontPx * 0.72;
+
+  // Layout keys omit hover/drag state so the placement optimizer doesn't
+  // recompute (and reshuffle labels) on every hover or pan.
+  const circleLayoutKey = useMemo(
+    () =>
+      circles
+        .map((c) => `${c.id}:${Math.round(c.cx)}:${Math.round(c.cy)}:${Math.round(c.r)}:${c.label ?? ""}`)
+        .join("|"),
+    [circles],
+  );
+  const rectLayoutKey = useMemo(
+    () =>
+      rects
+        .map((r) => `${r.id}:${Math.round(r.x)}:${Math.round(r.y)}:${Math.round(r.w)}:${Math.round(r.h)}:${r.label ?? ""}`)
+        .join("|"),
+    [rects],
+  );
+
 
   const placedLabels: PlacedLabel[] = useMemo(() => {
     const labeledCircles = circles.filter((c) => !!c.label);
     const labeledRects = rects.filter((r) => !!r.label);
     if (labeledCircles.length === 0 && labeledRects.length === 0) return [];
 
-    const items: {
-      id: string;
-      color: string;
-      text: string;
-      kind: "circle" | "rect";
-      anchor: Anchor;
-      width: number;
-    }[] = [];
-    for (const c of labeledCircles) {
-      items.push({
-        id: c.id,
-        color: c.color,
-        text: c.label!,
-        kind: "circle",
-        anchor: { cx: c.cx, cy: c.cy },
-        width: Math.ceil(c.label!.length * charPx) + padX * 2,
-      });
+    // Deterministic seed so identical inputs yield identical layouts (no
+    // reshuffling as the user pans/zooms or hovers).
+    const seedKey = [
+      Math.round(pageSize.width),
+      Math.round(pageSize.height),
+      labeledCircles.length,
+      labeledRects.length,
+      ...labeledCircles.slice(0, 24).map((c) => `${c.id}:${Math.round(c.cx)}:${Math.round(c.cy)}`),
+      ...labeledRects.slice(0, 24).map((r) => `${r.id}:${Math.round(r.x)}:${Math.round(r.y)}`),
+    ].join("|");
+    let h = 2166136261;
+    for (let i = 0; i < seedKey.length; i++) {
+      h ^= seedKey.charCodeAt(i);
+      h = Math.imul(h, 16777619);
     }
-    for (const r of labeledRects) {
-      items.push({
-        id: r.id,
-        color: r.color,
-        text: r.label!,
-        kind: "rect",
-        // Anchor near top-left so the above/left bias attracts labels there.
-        anchor: { cx: r.x, cy: r.y },
-        width: Math.ceil(r.label!.length * charPx) + padX * 2,
-      });
-    }
+    const rand = mulberry32(h);
 
-    const candidatesPerLabel: LabelCandidate[][] = items.map((it, i) => {
-      if (it.kind === "circle") {
-        const c = labeledCircles[i];
-        return generateCircleCandidates(c, it.width, labelH, gap, pageSize);
-      }
-      const r = labeledRects[i - labeledCircles.length];
-      return generateRectCandidates(r, it.width, labelH, gap, pageSize);
-    });
-
-    const anchors = items.map((it) => it.anchor);
-    const ownerIds = items.map((it) => (it.kind === "circle" ? it.id : null));
-    const positions = optimizePlacements(
-      candidatesPerLabel,
-      circles,
-      rectFootprints,
-      anchors,
-      ownerIds,
-    );
-    return positions.map((p, i) => ({
-      ...p,
-      id: items[i].id,
-      color: items[i].color,
-      text: items[i].text,
-      kind: items[i].kind,
+    // ---- Pass 1: place bbox (rect) labels first, treating them as fixed
+    // obstacles for the circle-label pass.
+    const rectItems = labeledRects.map((r) => ({
+      id: r.id,
+      color: r.color,
+      text: r.label!,
+      anchor: { cx: r.x, cy: r.y } as Anchor,
+      width: Math.ceil(r.label!.length * charPx) + padX * 2 + 4,
     }));
+    const rectCands: LabelCandidate[][] = rectItems.map((it, i) =>
+      generateRectCandidates(labeledRects[i], it.width, labelH, gap, pageSize),
+    );
+    const rectAnchors = rectItems.map((it) => it.anchor);
+    const rectOwners = rectItems.map(() => null as string | null);
+    const rectPositions =
+      rectItems.length > 0
+        ? optimizePlacements(rectCands, [], rectFootprints, rectAnchors, rectOwners, rand)
+        : [];
+
+    // ---- Pass 2: place circle labels, with rect footprints AND the just-
+    // placed rect labels as fixed obstacles.
+    const circleItems = labeledCircles.map((c) => ({
+      id: c.id,
+      color: c.color,
+      text: c.label!,
+      anchor: { cx: c.cx, cy: c.cy } as Anchor,
+      width: Math.ceil(c.label!.length * charPx) + padX * 2 + 4,
+    }));
+    const circleCands: LabelCandidate[][] = circleItems.map((it, i) =>
+      generateCircleCandidates(labeledCircles[i], it.width, labelH, gap, pageSize),
+    );
+    const circleAnchors = circleItems.map((it) => it.anchor);
+    const circleOwners = circleItems.map((it) => it.id);
+    const rectObstaclesForCircles: RectInfo[] = [
+      ...rectFootprints,
+      ...rectPositions.map((p) => ({ x: p.x, y: p.y, w: p.w, h: p.h })),
+    ];
+    const circlePositions =
+      circleItems.length > 0
+        ? optimizePlacements(circleCands, circles, rectObstaclesForCircles, circleAnchors, circleOwners, rand)
+        : [];
+
+    const out: PlacedLabel[] = [];
+    for (let i = 0; i < circleItems.length; i++) {
+      out.push({
+        ...circlePositions[i],
+        id: circleItems[i].id,
+        color: circleItems[i].color,
+        text: circleItems[i].text,
+        kind: "circle",
+      });
+    }
+    for (let i = 0; i < rectItems.length; i++) {
+      out.push({
+        ...rectPositions[i],
+        id: rectItems[i].id,
+        color: rectItems[i].color,
+        text: rectItems[i].text,
+        kind: "rect",
+      });
+    }
+    return out;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [circles, rects, rectFootprints, pageSize.width, pageSize.height, fontPx, padX, labelH, gap, charPx]);
+  }, [circleLayoutKey, rectLayoutKey, pageSize.width, pageSize.height, fontPx, padX, labelH, gap, charPx]);
+
 
   return (
     <div
