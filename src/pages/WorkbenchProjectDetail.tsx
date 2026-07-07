@@ -5722,34 +5722,34 @@ function InstancesReportModal({
         </div>
         <div>
           <h3 className="text-base font-bold mb-2">Assets at Risk Detections</h3>
-          {classCols.length === 0 ? (
+          {overviewEntries.length === 0 ? (
             <div className="text-sm text-muted-foreground">No detections yet.</div>
           ) : (
             <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-2">
-              {classCols.map((c) => {
-                const prefix = displayPrefix(c.name);
-                return (
-                  <div
-                    key={c.name}
-                    className="border rounded overflow-hidden text-center"
-                  >
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <div className="bg-sky-900 text-white text-xs font-semibold py-1 cursor-help">
-                          {prefix}
-                        </div>
-                      </TooltipTrigger>
-                      <TooltipContent>{c.name}</TooltipContent>
-                    </Tooltip>
-                    <div className="py-2 text-2xl font-bold text-sky-700 tabular-nums">
-                      {overviewTotals.get(c.name) || 0}
-                    </div>
-                    <div className="text-[11px] text-muted-foreground pb-2 px-1">{c.name}</div>
+              {overviewEntries.map((e) => (
+                <div
+                  key={e.key}
+                  className="border rounded overflow-hidden text-center"
+                >
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <div className="bg-sky-900 text-white text-xs font-semibold py-1 cursor-help">
+                        {e.displayPrefix}
+                      </div>
+                    </TooltipTrigger>
+                    <TooltipContent>{e.displayName}</TooltipContent>
+                  </Tooltip>
+                  <div className="py-2 text-2xl font-bold text-sky-700 tabular-nums">
+                    {overviewEntryTotals.get(e.key) || 0}
                   </div>
-                );
-              })}
+                  <div className="text-[11px] text-muted-foreground pb-2 px-1">
+                    {e.displayName}
+                  </div>
+                </div>
+              ))}
             </div>
           )}
+
           <p className="text-[11px] text-muted-foreground mt-2">
             Note: Detection totals are derived from the occurrence tables that follow. The
             per-space pages retain the original table + drawing evidence format.
