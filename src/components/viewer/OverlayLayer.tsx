@@ -24,9 +24,10 @@ const MIN_CIRCLE_DIAMETER_CSS = 24;
 
 // Label sizing in unscaled page CSS px. These scale naturally with the page
 // transform, so markers/labels grow when zooming in and shrink when zooming out.
-const LABEL_FONT_PX = 11;
-const LABEL_PAD_X = 6;
-const LABEL_H = 18;
+// Sizes are 30% smaller than the previous baseline (font 11 → 8, pad 6 → 4, h 18 → 13).
+const LABEL_FONT_PX = 8;
+const LABEL_PAD_X = 4;
+const LABEL_H = 13;
 const LABEL_GAP = 0;
 const LABEL_OPACITY = 0.7;
 
@@ -120,8 +121,8 @@ function generateCircleCandidates(
   gap: number,
   bounds: { width: number; height: number },
 ): LabelCandidate[] {
-  const directions = 24;
-  const rings = 4;
+  const directions = 32;
+  const rings = 6;
   const out: LabelCandidate[] = [];
   for (let ring = 0; ring < rings; ring++) {
     const dist = c.r + gap + ring * Math.max(6, labelH * 0.5);
@@ -249,8 +250,10 @@ function candidateCost(
   circles: CircleInfo[],
   rects: RectInfo[],
   anchors: Anchor[],
+  ownerIds: (string | null)[],
 ): number {
   const self = anchors[selfIdx];
+  const ownerId = ownerIds[selfIdx];
   const labelCx = cand.x + cand.w / 2;
   const labelCy = cand.y + cand.h / 2;
   const horizontalOffset = self ? Math.abs(labelCx - self.cx) : 0;
@@ -265,6 +268,7 @@ function candidateCost(
     if (rectsOverlap(cand, positions[j])) cost += OVERLAP_PENALTY;
   }
   for (const c of circles) {
+    if (c.id === ownerId) continue;
     if (rectIntersectsCircle(cand, c)) cost += CIRCLE_PENALTY;
   }
   for (const r of rects) {
@@ -278,6 +282,7 @@ function optimizePlacements(
   circles: CircleInfo[],
   rects: RectInfo[],
   anchors: Anchor[],
+  ownerIds: (string | null)[],
 ): LabelCandidate[] {
   const positions: LabelCandidate[] = candidatesPerLabel.map(
     (cands) => cands.reduce((best, c) => (c.leader < best.leader ? c : best), cands[0]),
@@ -287,9 +292,9 @@ function optimizePlacements(
     let improved = false;
     for (let i = 0; i < positions.length; i++) {
       let bestCand = positions[i];
-      let bestCost = candidateCost(bestCand, i, positions, circles, rects, anchors);
+      let bestCost = candidateCost(bestCand, i, positions, circles, rects, anchors, ownerIds);
       for (const cand of candidatesPerLabel[i]) {
-        const cost = candidateCost(cand, i, positions, circles, rects, anchors);
+        const cost = candidateCost(cand, i, positions, circles, rects, anchors, ownerIds);
         if (cost < bestCost - 0.01) {
           bestCost = cost;
           bestCand = cand;
@@ -301,6 +306,28 @@ function optimizePlacements(
       }
     }
     if (!improved) break;
+  }
+
+  // Hard-filter pass: any label still intersecting a non-owner circle is
+  // swapped for the smallest-leader candidate that touches zero non-owner
+  // circles (if one exists). This guarantees labels never fully occlude
+  // another annotation's dot even in crowded regions.
+  for (let i = 0; i < positions.length; i++) {
+    const ownerId = ownerIds[i];
+    const hits = (cand: LabelCandidate) => {
+      for (const c of circles) {
+        if (c.id === ownerId) continue;
+        if (rectIntersectsCircle(cand, c)) return true;
+      }
+      return false;
+    };
+    if (!hits(positions[i])) continue;
+    let best: LabelCandidate | null = null;
+    for (const cand of candidatesPerLabel[i]) {
+      if (hits(cand)) continue;
+      if (!best || cand.leader < best.leader) best = cand;
+    }
+    if (best) positions[i] = best;
   }
   return positions;
 }
@@ -338,11 +365,11 @@ export const OverlayLayer = ({
         );
         const isDot = o.variant === "dot";
         // Detection annotation circles are intentionally small (30% of the
-        // previous size) so they don't obscure the drawing. Unit-marker dots
-        // keep their original size.
+        // previous size, then bumped 30% larger on request) so they don't
+        // obscure the drawing. Unit-marker dots keep their original size.
         const diameter = isDot
           ? Math.max(10, MIN_CIRCLE_DIAMETER_CSS * 0.55)
-          : Math.max(MIN_CIRCLE_DIAMETER_CSS, bboxSidePx * 1.5) * 0.3;
+          : Math.max(MIN_CIRCLE_DIAMETER_CSS, bboxSidePx * 1.5) * 0.39;
 
         return {
           id: o.id,
@@ -428,11 +455,13 @@ export const OverlayLayer = ({
     });
 
     const anchors = items.map((it) => it.anchor);
+    const ownerIds = items.map((it) => (it.kind === "circle" ? it.id : null));
     const positions = optimizePlacements(
       candidatesPerLabel,
       circles,
       rectFootprints,
       anchors,
+      ownerIds,
     );
     return positions.map((p, i) => ({
       ...p,
@@ -468,10 +497,20 @@ export const OverlayLayer = ({
           const startInset = c ? 1 : 0;
           const x1 = p.ax - ux * startInset;
           const y1 = p.ay - uy * startInset;
-          const ex = Math.max(p.x, Math.min(labelCx, p.x + p.w));
-          const ey = Math.max(p.y, Math.min(labelCy, p.y + p.h));
-          const x2 = ex + ux * 1;
-          const y2 = ey + uy * 1;
+          // Terminate the leader at the label rectangle's edge (not its
+          // center), so a label sitting close to its circle still shows a
+          // visible connector rather than a stub buried under the label.
+          const halfW = p.w / 2;
+          const halfH = p.h / 2;
+          const tX = Math.abs(ux) > 1e-6 ? halfW / Math.abs(ux) : Infinity;
+          const tY = Math.abs(uy) > 1e-6 ? halfH / Math.abs(uy) : Infinity;
+          const tEdge = Math.min(tX, tY);
+          const x2 = labelCx - ux * tEdge;
+          const y2 = labelCy - uy * tEdge;
+          // If the circle+label are so close the edge point lies past the
+          // circle anchor, skip drawing the tiny/negative leader.
+          const leaderLen = Math.hypot(x2 - x1, y2 - y1);
+          if (leaderLen < 0.5) return null;
           return (
             <line
               key={`leader-${p.id}-${idx}`}

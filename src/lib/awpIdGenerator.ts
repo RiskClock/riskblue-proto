@@ -62,7 +62,8 @@ const LEGACY_CLASS_TO_PREFIX_MAP: Record<string, string> = {
   // Water Systems
   "Cold Water": "CW",
   "Domestic Cold Water": "CW",
-  "Domestic Hot Water": "DHW",
+  "Hot Water": "HW",
+  "Domestic Hot Water": "HW",
   "Sump Pits, Storm Drains and Drainages": "SPSDD",
   "Fire Suppression System": "FS",
   "Temporary Water Run": "TWR",

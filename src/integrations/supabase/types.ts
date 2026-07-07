@@ -1813,6 +1813,7 @@ export type Database = {
       project_class_aliases: {
         Row: {
           alias: string
+          alias_prefix: string | null
           awp_class_name: string
           created_at: string
           id: string
@@ -1821,6 +1822,7 @@ export type Database = {
         }
         Insert: {
           alias: string
+          alias_prefix?: string | null
           awp_class_name: string
           created_at?: string
           id?: string
@@ -1829,6 +1831,7 @@ export type Database = {
         }
         Update: {
           alias?: string
+          alias_prefix?: string | null
           awp_class_name?: string
           created_at?: string
           id?: string

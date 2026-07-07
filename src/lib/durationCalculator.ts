@@ -44,6 +44,7 @@ export const calculateWaterSystemDuration = (
         }
         break;
       
+      case "Hot Water":
       case "Domestic Hot Water":
       case "Main City Water Supply":
       case "Hydronics":
@@ -53,6 +54,7 @@ export const calculateWaterSystemDuration = (
           endDate = parseISO(construction_end_date);
         }
         break;
+
       
       case "Temporary Water Run":
         if (interior_start_date && interior_end_date) {
@@ -327,12 +329,13 @@ export const calculateSystemOrAssetDates = (
         endDate = parseISO(construction_end_date);
         calculatedFrom = "MEP start (+120 days) to Construction end";
       }
-    } else if (name === "Domestic Hot Water" || name === "Main City Water Supply" || name === "Hydronics" || name === "Fire Suppression System") {
+    } else if (name === "Hot Water" || name === "Domestic Hot Water" || name === "Main City Water Supply" || name === "Hydronics" || name === "Fire Suppression System") {
       if (mep_end_date) {
         startDate = parseISO(mep_end_date);
         endDate = parseISO(construction_end_date);
         calculatedFrom = "MEP end to Construction end";
       }
+
     } else if (name === "Temporary Water Run") {
       if (interior_start_date && interior_end_date) {
         startDate = parseISO(interior_start_date);

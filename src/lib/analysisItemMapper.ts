@@ -75,10 +75,12 @@ const WATER_SYSTEM_NAME_MAP: Record<string, string> = {
   "Storm Drain": "Sump Pit, Storm Drain & Drainage",
   "Stormwater": "Sump Pit, Storm Drain & Drainage",
   
-  // Domestic Hot Water
-  "Domestic Hot Water": "Domestic Hot Water",
-  "Hot Domestic Water": "Domestic Hot Water",
-  "Hot Water Return": "Domestic Hot Water",
+  // Hot Water (renamed from "Domestic Hot Water")
+  "Hot Water": "Hot Water",
+  "Domestic Hot Water": "Hot Water",
+  "Hot Domestic Water": "Hot Water",
+  "Hot Water Return": "Hot Water",
+
   
   // Cold Water (consolidated; renamed from "Domestic Cold Water")
   "Cold Water": "Cold Water",
@@ -153,8 +155,9 @@ export function mapToWaterSystemName(analysisName: string): string | null {
   
   // Hot water
   if (lowerName.includes("hot") && (lowerName.includes("domestic") || lowerName.includes("water"))) {
-    return "Domestic Hot Water";
+    return "Hot Water";
   }
+
   
   // Other systems
   if (lowerName.includes("temporary") && lowerName.includes("water")) return "Temporary Water Run";
