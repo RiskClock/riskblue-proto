@@ -219,23 +219,42 @@ async function renderPageWithMarkers(
     const radius = Math.max(9, Math.round(canvas.width * 0.0104));
     const padX = 6;
     const padY = 3;
-    const labelH = labelSize + padY * 2;
+    const lineH = labelSize + 2; // per-line height
     const gap = 2;
 
-    type Circle = { id: string; cx: number; cy: number; r: number; color: string; label: string };
-    const circles: Circle[] = circleOverlays.map((o) => ({
-      id: o.id,
-      cx: Math.round(o.nx * canvas.width),
-      cy: Math.round(o.ny * canvas.height),
-      r: radius,
-      color: o.color,
-      label: o.label ?? "",
-    }));
+    type Circle = {
+      id: string;
+      cx: number;
+      cy: number;
+      r: number;
+      color: string;
+      label: string;
+      lines: string[];
+    };
+    const circles: Circle[] = circleOverlays.map((o) => {
+      const raw = o.label ?? "";
+      const lines = raw ? raw.split("\n") : [];
+      return {
+        id: o.id,
+        cx: Math.round(o.nx * canvas.width),
+        cy: Math.round(o.ny * canvas.height),
+        r: radius,
+        color: o.color,
+        label: raw,
+        lines,
+      };
+    });
 
     type Cand = { x: number; y: number; w: number; h: number; ax: number; ay: number; leader: number };
-    const widths = circles.map(
-      (c) => Math.ceil(ctx.measureText(c.label).width) + padX * 2,
-    );
+    const widths = circles.map((c) => {
+      if (c.lines.length === 0) return padX * 2;
+      const maxW = Math.max(...c.lines.map((ln) => Math.ceil(ctx.measureText(ln).width)));
+      return maxW + padX * 2;
+    });
+    const heights = circles.map((c) => {
+      const n = Math.max(1, c.lines.length);
+      return n * lineH + padY * 2;
+    });
 
     const bounds = { width: canvas.width, height: canvas.height };
     const rectsOverlap = (
