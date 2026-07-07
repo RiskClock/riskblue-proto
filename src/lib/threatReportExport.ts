@@ -970,8 +970,8 @@ export async function runThreatReportExport(
       cols.push(["Class", 0]);
       if (showUnit) cols.push(["Unit", 0]);
       if (showType) cols.push(["Type", 0]);
-      if (showDiameter) cols.push(["Pipe Diameter", 0]);
       cols.push(["Annotation ID", 0]);
+      if (showDiameter) cols.push(["Pipe Diameter", 0]);
       cols.push(["Source", 0]);
 
       // Weight-based widths so the total always sums to 9360.
@@ -981,8 +981,8 @@ export async function runThreatReportExport(
           case "Class": return 14;
           case "Unit": return 9;
           case "Type": return 11;
-          case "Pipe Diameter": return 12;
           case "Annotation ID": return 13;
+          case "Pipe Diameter": return 12;
           case "Source": return 30;
           default: return 10;
         }

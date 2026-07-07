@@ -6198,10 +6198,10 @@ function InstancesReportModal({
                   {showTypeCol && (
                     <TableHead className={`${compactHead} bg-background font-semibold`}>Type</TableHead>
                   )}
+                  <TableHead className={`${compactHead} bg-background font-semibold`}>Annotation ID</TableHead>
                   {showDiameterCol && (
                     <TableHead className={`${compactHead} bg-background font-semibold`}>Pipe Diameter</TableHead>
                   )}
-                  <TableHead className={`${compactHead} bg-background font-semibold`}>Annotation ID</TableHead>
                   <TableHead className={`${compactHead} bg-background font-semibold`}>Source</TableHead>
                 </TableRow>
               </thead>
@@ -6216,12 +6216,12 @@ function InstancesReportModal({
                     {showTypeCol && (
                       <TableCell className={compactCell}>{r.pipeType ?? "-"}</TableCell>
                     )}
-                    {showDiameterCol && (
-                      <TableCell className={compactCell}>{r.pipeDiameter ?? "-"}</TableCell>
-                    )}
                     <TableCell className={`${compactCell} font-mono text-muted-foreground`}>
                       {r.annotationBaseId}
                     </TableCell>
+                    {showDiameterCol && (
+                      <TableCell className={compactCell}>{r.pipeDiameter ?? "-"}</TableCell>
+                    )}
                     <TableCell className={`${compactCell} text-muted-foreground`}>
                       {fileNameById.get(r.fileId)} · Page {r.pageIndex}
                     </TableCell>
