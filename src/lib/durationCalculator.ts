@@ -44,6 +44,7 @@ export const calculateWaterSystemDuration = (
         }
         break;
       
+      case "Hot Water":
       case "Domestic Hot Water":
       case "Main City Water Supply":
       case "Hydronics":
@@ -53,6 +54,7 @@ export const calculateWaterSystemDuration = (
           endDate = parseISO(construction_end_date);
         }
         break;
+
       
       case "Temporary Water Run":
         if (interior_start_date && interior_end_date) {
