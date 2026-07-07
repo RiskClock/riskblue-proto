@@ -218,18 +218,50 @@ export function SpatialArchitectModal({
     setLevels((prev) => prev.filter((l) => l.uid !== uid));
   };
 
+  // When set, the effect below scrolls that row into view and focuses its
+  // Level Name input on the next render. Cleared after use.
+  const pendingFocusUidRef = useRef<string | null>(null);
+
   const addLevel = () => {
-    setLevels((prev) => [
-      ...prev,
-      {
-        uid: `lvl-new-${Date.now()}`,
-        name: "",
-        space_index: prev.length,
-        matched_sources: [],
-        extra: {},
-      },
-    ]);
+    const uid = `lvl-new-${Date.now()}`;
+    setLevels((prev) => {
+      const maxIdx = prev.reduce(
+        (acc, l) => (typeof l.space_index === "number" && l.space_index > acc ? l.space_index : acc),
+        Number.NEGATIVE_INFINITY,
+      );
+      const nextIdx = Number.isFinite(maxIdx) ? (maxIdx as number) + 1 : 0;
+      return [
+        ...prev,
+        {
+          uid,
+          name: "",
+          space_index: nextIdx,
+          matched_sources: [],
+          extra: {},
+        },
+      ];
+    });
+    pendingFocusUidRef.current = uid;
   };
+
+  // After a new level is appended, scroll it into view and focus its name input.
+  useEffect(() => {
+    const uid = pendingFocusUidRef.current;
+    if (!uid) return;
+    if (!levels.some((l) => l.uid === uid)) return;
+    pendingFocusUidRef.current = null;
+    // Wait a frame so the row is in the DOM.
+    requestAnimationFrame(() => {
+      const row = document.querySelector<HTMLElement>(
+        `[data-level-uid="${uid}"]`,
+      );
+      if (!row) return;
+      row.scrollIntoView({ behavior: "smooth", block: "center" });
+      const input = row.querySelector<HTMLInputElement>('input[data-level-name-input="1"]');
+      input?.focus();
+    });
+  }, [levels]);
+
 
   const addPage = (
     uid: string,
