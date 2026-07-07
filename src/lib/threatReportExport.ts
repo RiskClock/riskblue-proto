@@ -229,7 +229,7 @@ async function renderPageWithMarkers(
       cy: Math.round(o.ny * canvas.height),
       r: radius,
       color: o.color,
-      label: o.label,
+      label: o.label ?? "",
     }));
 
     type Cand = { x: number; y: number; w: number; h: number; ax: number; ay: number; leader: number };
