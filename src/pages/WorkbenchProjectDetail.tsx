@@ -6042,7 +6042,28 @@ function InstancesReportModal({
             });
           }
         }
-        const overlaysAll = [...bboxOverlays, ...overlays];
+        // Unit-plan indicator dots (mirrors FileViewerModal). Show them when
+        // this page is being shown as a level plan for the space.
+        const unitMarkerOverlays: any[] = [];
+        if (space !== "__unassigned__" && tier === 0) {
+          const uColor = awpClassColor("Unit Floor Plan");
+          for (const inst of instances) {
+            if (inst.awp_class_name !== "__unit_marker__") continue;
+            if (inst.file_id !== fileId || inst.page_index !== pageIdx) continue;
+            const inx = Number(inst.nx);
+            const iny = Number(inst.ny);
+            if (!Number.isFinite(inx) || !Number.isFinite(iny)) continue;
+            unitMarkerOverlays.push({
+              id: `um-${inst.id}`,
+              bbox: [inx, iny, 0, 0] as [number, number, number, number],
+              coordSpace: "normalized" as const,
+              page: pageIdx,
+              color: uColor,
+              shape: "circle" as const,
+            });
+          }
+        }
+        const overlaysAll = [...bboxOverlays, ...unitMarkerOverlays, ...overlays];
 
         const corePart = qualifier ? `p${pageIdx} · ${qualifier}` : `p${pageIdx}`;
         const tabLabel = showFileInTab ? `${shortName} · ${corePart}` : corePart;
