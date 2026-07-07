@@ -641,15 +641,22 @@ export const OverlayLayer = ({
         {placedLabels.filter((p) => p.kind === "circle").map((p, idx) => {
           const labelCx = p.x + p.w / 2;
           const labelCy = p.y + p.h / 2;
-          const dx = labelCx - p.ax;
-          const dy = labelCy - p.ay;
+          // Always resolve anchor from the live circle by id — never trust
+          // p.ax/p.ay if the corresponding circle has moved since the layout
+          // was memoized, and never draw a leader to a phantom (0,0) anchor
+          // if the circle is missing (skip instead).
+          const c = circles.find((c) => c.id === p.id);
+          if (!c) return null;
+          const ax = c.cx;
+          const ay = c.cy;
+          const dx = labelCx - ax;
+          const dy = labelCy - ay;
           const len = Math.hypot(dx, dy) || 1;
           const ux = dx / len;
           const uy = dy / len;
-          const c = circles.find((c) => c.id === p.id);
-          const startInset = c ? 1 : 0;
-          const x1 = p.ax - ux * startInset;
-          const y1 = p.ay - uy * startInset;
+          // Start the leader on the circle's edge (radius offset toward label).
+          const x1 = ax + ux * c.r;
+          const y1 = ay + uy * c.r;
           // Terminate the leader at the label rectangle's edge (not its
           // center), so a label sitting close to its circle still shows a
           // visible connector rather than a stub buried under the label.
@@ -660,10 +667,23 @@ export const OverlayLayer = ({
           const tEdge = Math.min(tX, tY);
           const x2 = labelCx - ux * tEdge;
           const y2 = labelCy - uy * tEdge;
-          // If the circle+label are so close the edge point lies past the
-          // circle anchor, skip drawing the tiny/negative leader.
           const leaderLen = Math.hypot(x2 - x1, y2 - y1);
           if (leaderLen < 0.5) return null;
+          if (import.meta.env.DEV) {
+            const off =
+              x1 < -2 || y1 < -2 || x1 > pageSize.width + 2 || y1 > pageSize.height + 2;
+            if (off) {
+              // eslint-disable-next-line no-console
+              console.warn("[OverlayLayer] leader anchor off-page", {
+                id: p.id,
+                text: p.text,
+                circle: { cx: c.cx, cy: c.cy, r: c.r },
+                pAxAy: { ax: p.ax, ay: p.ay },
+                pageSize,
+                x1, y1, x2, y2,
+              });
+            }
+          }
           return (
             <line
               key={`leader-${p.id}-${idx}`}
