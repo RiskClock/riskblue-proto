@@ -1184,6 +1184,57 @@ export default function WorkbenchProjectDetail() {
     return out;
   }, [rows?.sheets, activePageView?.file.id]);
 
+  // File-wide level floor plans (both survey-parsed and user-added on any
+  // page of the active file). Added level plans live in `__added_unit_plans`
+  // (misnamed array — also holds level_floor_plan entries) and in override-
+  // only floor-plan entries; merging across sheets is required so that
+  // `Referenced in` on a unit-plan can find level plans from other pages.
+  const activeFileAllLevelPlans = useMemo<ParsedFloorPlan[]>(() => {
+    const deleted = getDeletedPlanIds(activeFloorPlanOverrides);
+    const out: ParsedFloorPlan[] = [];
+    const seen = new Set<string>();
+    for (const plans of activeFileFloorPlansByPage.values()) {
+      for (const p of plans) {
+        const materialized = materializeFloorPlan(p, activeFloorPlanOverrides);
+        if (materialized.type !== "level_floor_plan") continue;
+        if (deleted.has(p.plan_id) || seen.has(materialized.plan_id)) continue;
+        seen.add(materialized.plan_id);
+        out.push(materialized);
+      }
+    }
+    const activeFileId = activePageView?.file.id;
+    for (const s of rows?.sheets ?? []) {
+      if (!activeFileId || s.parent_file_id !== activeFileId) continue;
+      const ovr = s.floor_plan_overrides as Record<string, any> | null;
+      if (!ovr) continue;
+      const sheetDeleted = getDeletedPlanIds(ovr);
+      const sheetKnownIds = new Set<string>();
+      for (const entry of getAddedUnitPlans(ovr)) {
+        sheetKnownIds.add(entry.plan_id);
+        const parsed = materializeFloorPlan(addedUnitPlanToParsed(entry), ovr);
+        if (parsed.type !== "level_floor_plan") continue;
+        if (sheetDeleted.has(parsed.plan_id) || deleted.has(parsed.plan_id)) continue;
+        if (seen.has(parsed.plan_id)) continue;
+        seen.add(parsed.plan_id);
+        out.push(parsed);
+      }
+      for (const parsed of overrideOnlyFloorPlans(ovr, s.page_index, sheetKnownIds, sheetDeleted)) {
+        if (parsed.type !== "level_floor_plan") continue;
+        if (deleted.has(parsed.plan_id) || seen.has(parsed.plan_id)) continue;
+        seen.add(parsed.plan_id);
+        out.push(parsed);
+      }
+    }
+    return out;
+  }, [
+    activeFileFloorPlansByPage,
+    activeFloorPlanOverrides,
+    activePageView?.file.id,
+    rows?.sheets,
+  ]);
+
+
+
   // File-wide unit floor plans (both survey-parsed and user-added on any page
   // of the active file). Merging across sheets is required because a level
   // plan on page N can reference a Detail added on page M - each sheet stores
