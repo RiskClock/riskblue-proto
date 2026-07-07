@@ -24,9 +24,12 @@ const MIN_CIRCLE_DIAMETER_CSS = 24;
 
 // Label sizing in unscaled page CSS px. These scale naturally with the page
 // transform, so markers/labels grow when zooming in and shrink when zooming out.
-const LABEL_FONT_PX = 11;
-const LABEL_PAD_X = 6;
-const LABEL_H = 18;
+// Label sizing in unscaled page CSS px. These scale naturally with the page
+// transform, so markers/labels grow when zooming in and shrink when zooming out.
+// Sizes are 30% smaller than the previous baseline (font 11 → 8, pad 6 → 4, h 18 → 13).
+const LABEL_FONT_PX = 8;
+const LABEL_PAD_X = 4;
+const LABEL_H = 13;
 const LABEL_GAP = 0;
 const LABEL_OPACITY = 0.7;
 
