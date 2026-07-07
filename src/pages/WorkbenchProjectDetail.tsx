@@ -5227,7 +5227,13 @@ function InstancesReportModal({
             bbox: [number, number, number, number] | null;
           }
         | null = null;
-      if (unitPlans.length === 1) {
+      // Only auto-attribute to the single unit plan when no level plans
+      // exist on this page. If the page also has level plans, we need bbox
+      // containment to disambiguate; otherwise every marker on the page
+      // (including ones sitting on the level plan) would be misattributed
+      // to the lone unit.
+      const levelPlansOnPage = pageLevelPlansMap.get(key) || [];
+      if (unitPlans.length === 1 && levelPlansOnPage.length === 0) {
         matched = unitPlans[0];
       } else if (typeof nx === "number" && typeof ny === "number") {
         for (const up of unitPlans) {
@@ -5241,23 +5247,25 @@ function InstancesReportModal({
           }
         }
       }
-      if (!matched) return [];
-      const lwc =
-        matched.levelsWithCounts && matched.levelsWithCounts.length > 0
-          ? matched.levelsWithCounts
-          : matched.levels.map((l) => ({ level: l, count: 1 }));
-      if (lwc.length === 0) return [];
-      const out: Array<{ level: string; unit?: string }> = [];
-      for (const { level, count } of lwc) {
-        const n = Math.max(1, count | 0);
-        for (let i = 0; i < n; i++) {
-          // When a unit appears N>1 times on a level, suffix every instance
-          // (including the first) so the IDs read as "1H (1)", "1H (2)", ...
-          const unit = n <= 1 ? matched.unitLabel : `${matched.unitLabel} (${i + 1})`;
-          out.push({ level, unit });
+      if (matched) {
+        const lwc =
+          matched.levelsWithCounts && matched.levelsWithCounts.length > 0
+            ? matched.levelsWithCounts
+            : matched.levels.map((l) => ({ level: l, count: 1 }));
+        if (lwc.length === 0) return [];
+        const out: Array<{ level: string; unit?: string }> = [];
+        for (const { level, count } of lwc) {
+          const n = Math.max(1, count | 0);
+          for (let i = 0; i < n; i++) {
+            const unit = n <= 1 ? matched.unitLabel : `${matched.unitLabel} (${i + 1})`;
+            out.push({ level, unit });
+          }
         }
+        return out;
       }
-      return out;
+      // No unit bbox contained the marker - fall through to level-plan
+      // containment below so markers on the level plan (outside every unit
+      // detail) still land on the right level instead of being Unassigned.
     }
     // No unit plans on this page - try level plan bbox containment next.
     // If multiple level plans share a page (e.g. 2nd Floor + 3rd Floor),
