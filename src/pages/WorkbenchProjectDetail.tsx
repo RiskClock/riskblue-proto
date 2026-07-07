@@ -5617,7 +5617,7 @@ function InstancesReportModal({
           ) : (
             <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-2">
               {classCols.map((c) => {
-                const prefix = optionByName.get(c.name)?.idPrefix || c.name.slice(0, 3).toUpperCase();
+                const prefix = displayPrefix(c.name);
                 return (
                   <div
                     key={c.name}
