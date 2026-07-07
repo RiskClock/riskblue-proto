@@ -5550,6 +5550,113 @@ function InstancesReportModal({
     return m;
   }, [expanded, levelNames]);
 
+  // Per-Type split entries used by both the Threat Report preview modal
+  // (Overview tiles + Summary matrix) and the DOCX export payload. Cold
+  // Water / Hot Water classes expand into one entry per distinct Type value
+  // (with a "(untyped)" bucket); every other class stays as-is.
+  type OverviewEntry = {
+    key: string;
+    canonicalName: string;
+    displayName: string;
+    displayPrefix: string;
+    typeGroup: string | null;
+  };
+  const isTypedClassName = useCallback(
+    (n: string) => /(^|\s)(cold|hot)\s*water(\s|$)/i.test(n),
+    [],
+  );
+  const overviewEntries = useMemo<OverviewEntry[]>(() => {
+    const typeOf = (r: (typeof expanded)[number]) =>
+      r.pipeType && r.pipeType.trim() ? r.pipeType.trim() : "(untyped)";
+    return classCols.flatMap((c) => {
+      const base = displayClassName(c.name);
+      const basePrefix = displayPrefix(c.name);
+      if (!isTypedClassName(c.name)) {
+        return [{
+          key: c.name,
+          canonicalName: c.name,
+          displayName: base,
+          displayPrefix: basePrefix,
+          typeGroup: null,
+        }];
+      }
+      const types = new Set<string>();
+      for (const r of expanded) {
+        if (r.awpClassName !== c.name) continue;
+        if (r.category !== "Asset" && r.category !== "Water System") continue;
+        types.add(typeOf(r));
+      }
+      if (types.size === 0) {
+        return [{
+          key: c.name,
+          canonicalName: c.name,
+          displayName: base,
+          displayPrefix: basePrefix,
+          typeGroup: null,
+        }];
+      }
+      // Short type token for the acronym pill (e.g. "Potable" -> "P",
+      // "Non-Potable" -> "NP"). Falls back to first letters when the value
+      // has no obvious initials.
+      const shortToken = (t: string) => {
+        if (t === "(untyped)") return "?";
+        const parts = t.split(/[\s\-_/]+/).filter(Boolean);
+        if (parts.length >= 2) return parts.map((p) => p[0]).join("").toUpperCase().slice(0, 3);
+        return t.slice(0, 2).toUpperCase();
+      };
+      return Array.from(types)
+        .sort((a, b) => a.localeCompare(b))
+        .map((t) => ({
+          key: `${c.name}::${t}`,
+          canonicalName: c.name,
+          displayName:
+            t === "(untyped)" ? `${base} — (untyped)` : `${base} — ${t}`,
+          displayPrefix:
+            t === "(untyped)" ? basePrefix : `${basePrefix}-${shortToken(t)}`,
+          typeGroup: t,
+        }));
+    });
+  }, [classCols, expanded, displayClassName, displayPrefix, isTypedClassName]);
+
+  const entryKeyForRow = useCallback(
+    (r: (typeof expanded)[number]) =>
+      isTypedClassName(r.awpClassName)
+        ? `${r.awpClassName}::${r.pipeType && r.pipeType.trim() ? r.pipeType.trim() : "(untyped)"}`
+        : r.awpClassName,
+    [isTypedClassName],
+  );
+
+  const overviewEntryTotals = useMemo(() => {
+    const m = new Map<string, number>();
+    const seen = new Set<string>();
+    for (const r of expanded) {
+      if (r.category !== "Asset" && r.category !== "Water System") continue;
+      const key = entryKeyForRow(r);
+      if (r.logicalKey.startsWith("cons::")) {
+        const dedup = `${key}::${r.annotationBaseId}`;
+        if (seen.has(dedup)) continue;
+        seen.add(dedup);
+      }
+      m.set(key, (m.get(key) || 0) + 1);
+    }
+    return m;
+  }, [expanded, entryKeyForRow]);
+
+  const summaryEntryMatrix = useMemo(() => {
+    const m = new Map<string, Map<string, number>>();
+    for (const r of expanded) {
+      if (r.category !== "Asset" && r.category !== "Water System") continue;
+      const space =
+        r.spaceName && levelNames.has(r.spaceName) ? r.spaceName : "__unassigned__";
+      const key = entryKeyForRow(r);
+      const inner = m.get(space) || new Map<string, number>();
+      inner.set(key, (inner.get(key) || 0) + 1);
+      m.set(space, inner);
+    }
+    return m;
+  }, [expanded, levelNames, entryKeyForRow]);
+
+
   const instancesForSpace = (space: string) =>
     expanded
       .filter((r) =>
@@ -5615,34 +5722,34 @@ function InstancesReportModal({
         </div>
         <div>
           <h3 className="text-base font-bold mb-2">Assets at Risk Detections</h3>
-          {classCols.length === 0 ? (
+          {overviewEntries.length === 0 ? (
             <div className="text-sm text-muted-foreground">No detections yet.</div>
           ) : (
             <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-2">
-              {classCols.map((c) => {
-                const prefix = displayPrefix(c.name);
-                return (
-                  <div
-                    key={c.name}
-                    className="border rounded overflow-hidden text-center"
-                  >
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <div className="bg-sky-900 text-white text-xs font-semibold py-1 cursor-help">
-                          {prefix}
-                        </div>
-                      </TooltipTrigger>
-                      <TooltipContent>{c.name}</TooltipContent>
-                    </Tooltip>
-                    <div className="py-2 text-2xl font-bold text-sky-700 tabular-nums">
-                      {overviewTotals.get(c.name) || 0}
-                    </div>
-                    <div className="text-[11px] text-muted-foreground pb-2 px-1">{c.name}</div>
+              {overviewEntries.map((e) => (
+                <div
+                  key={e.key}
+                  className="border rounded overflow-hidden text-center"
+                >
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <div className="bg-sky-900 text-white text-xs font-semibold py-1 cursor-help">
+                        {e.displayPrefix}
+                      </div>
+                    </TooltipTrigger>
+                    <TooltipContent>{e.displayName}</TooltipContent>
+                  </Tooltip>
+                  <div className="py-2 text-2xl font-bold text-sky-700 tabular-nums">
+                    {overviewEntryTotals.get(e.key) || 0}
                   </div>
-                );
-              })}
+                  <div className="text-[11px] text-muted-foreground pb-2 px-1">
+                    {e.displayName}
+                  </div>
+                </div>
+              ))}
             </div>
           )}
+
           <p className="text-[11px] text-muted-foreground mt-2">
             Note: Detection totals are derived from the occurrence tables that follow. The
             per-space pages retain the original table + drawing evidence format.
@@ -5660,18 +5767,18 @@ function InstancesReportModal({
           <TableHeader>
             <TableRow className={compactRow}>
               <TableHead className={`${compactHead} sticky left-0 bg-background`}>Space</TableHead>
-              {classCols.map((c) => (
+              {overviewEntries.map((e) => (
                 <TableHead
-                  key={c.name}
+                  key={e.key}
                   className={`${compactHead} text-center whitespace-nowrap`}
                 >
                   <Tooltip>
                     <TooltipTrigger asChild>
                       <span className="cursor-help inline-block">
-                        {displayPrefix(c.name)}
+                        {e.displayPrefix}
                       </span>
                     </TooltipTrigger>
-                    <TooltipContent>{c.name}</TooltipContent>
+                    <TooltipContent>{e.displayName}</TooltipContent>
                   </Tooltip>
                 </TableHead>
               ))}
@@ -5679,7 +5786,7 @@ function InstancesReportModal({
           </TableHeader>
           <TableBody>
             {spaceList.map((space) => {
-              const inner = summaryMatrix.get(space);
+              const inner = summaryEntryMatrix.get(space);
               const label = space === "__unassigned__" ? "Unassigned" : space;
               return (
                 <TableRow key={space} className={compactRow}>
@@ -5688,11 +5795,11 @@ function InstancesReportModal({
                   >
                     {label}
                   </TableCell>
-                  {classCols.map((c) => {
-                    const val = inner?.get(c.name) || 0;
+                  {overviewEntries.map((e) => {
+                    const val = inner?.get(e.key) || 0;
                     return (
                       <TableCell
-                        key={c.name}
+                        key={e.key}
                         className={`${compactCell} text-center tabular-nums ${val === 0 ? "opacity-50" : ""}`}
                       >
                         {val}
@@ -5701,6 +5808,7 @@ function InstancesReportModal({
                   })}
                 </TableRow>
               );
+
             })}
           </TableBody>
         </Table>
