@@ -322,6 +322,30 @@ function candidateCost(
   for (const r of rects) {
     if (rectsOverlap(cand, r)) cost += RECT_PENALTY;
   }
+
+  // Leader-line collision penalties (circle-owned labels only). A leader is
+  // drawn from the owner circle centroid toward the label rectangle. Two
+  // separate penalties keep the optimizer from placing labels/leaders on top
+  // of other annotations' leaders:
+  //   • label rect sitting across another annotation's leader
+  //   • this candidate's own leader crossing another leader
+  if (self && ownerId) {
+    const myLeader = leaderEndpoints(cand, self);
+    for (let j = 0; j < positions.length; j++) {
+      if (j === selfIdx) continue;
+      const otherOwner = ownerIds[j];
+      if (!otherOwner) continue; // rects have no leader
+      const otherAnchor = anchors[j];
+      if (!otherAnchor) continue;
+      const otherLeader = leaderEndpoints(positions[j], otherAnchor);
+      if (rectIntersectsSegment(cand, otherLeader.a, otherLeader.b)) {
+        cost += LABEL_ON_LEADER_PENALTY;
+      }
+      if (segmentsIntersect(myLeader.a, myLeader.b, otherLeader.a, otherLeader.b)) {
+        cost += LEADER_CROSS_PENALTY;
+      }
+    }
+  }
   return cost;
 }
 
