@@ -5089,6 +5089,7 @@ function InstancesReportModal({
   enabledClassNames,
   consolidations,
   aliasMap,
+  aliasPrefixMap,
 }: {
   open: boolean;
   onOpenChange: (v: boolean) => void;
@@ -5111,11 +5112,22 @@ function InstancesReportModal({
     member_annotation_ids: string[];
   }>;
   aliasMap: Record<string, string>;
+  aliasPrefixMap: Record<string, string>;
 }) {
   const displayClassName = useCallback(
     (name: string) => aliasMap[name] || name,
     [aliasMap],
   );
+  const displayPrefix = useCallback(
+    (name: string) =>
+      aliasPrefixMap[name] ||
+      optionByName.get(name)?.idPrefix ||
+      name.slice(0, 3).toUpperCase(),
+    [aliasPrefixMap, optionByName],
+  );
+  // Silence unused-var lint when displayPrefix isn't referenced yet.
+  void displayPrefix;
+
   const enabledClassSet = useMemo(
     () => new Set(enabledClassNames || []),
     [enabledClassNames],
