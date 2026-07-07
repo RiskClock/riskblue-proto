@@ -316,6 +316,7 @@ async function renderPageWithMarkers(
 
     const genCandidates = (c: Circle, w: number, h: number): Cand[] => {
       const out: Cand[] = [];
+      const fallback: Cand[] = [];
       const directions = 32;
       const rings = 6;
       for (let ring = 0; ring < rings; ring++) {
@@ -335,10 +336,18 @@ async function renderPageWithMarkers(
           const ex = Math.max(lx, Math.min(c.cx, lx + w));
           const ey = Math.max(ly, Math.min(c.cy, ly + h));
           const leader = Math.hypot(ex - ax, ey - ay);
-          out.push({ x: lx, y: ly, w, h, ax, ay, leader });
+          const cand = { x: lx, y: ly, w, h, ax, ay, leader };
+          // Clamping to canvas bounds can push a label back on top of its own
+          // anchor circle when the circle sits near an edge. Reject those so
+          // the optimizer never picks a position that overlaps its own dot.
+          if (rectIntersectsCircle(cand, c)) {
+            fallback.push(cand);
+          } else {
+            out.push(cand);
+          }
         }
       }
-      return out;
+      return out.length > 0 ? out : fallback;
     };
 
     const candidatesPerLabel = circles.map((c, i) => genCandidates(c, widths[i], heights[i]));
