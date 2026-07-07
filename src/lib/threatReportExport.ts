@@ -484,7 +484,13 @@ async function renderPageWithMarkers(
       ctx.stroke();
       ctx.globalAlpha = 1;
       ctx.fillStyle = readableTextOn(c.color);
-      ctx.fillText(c.label, p.x + padX, p.y + p.h / 2 + 1);
+      // Render each line stacked vertically inside the pill.
+      const n = c.lines.length || 1;
+      const firstY = p.y + padY + lineH / 2;
+      for (let li = 0; li < c.lines.length; li++) {
+        ctx.fillText(c.lines[li], p.x + padX, firstY + li * lineH + 1);
+      }
+      void n;
     }
   }
 
