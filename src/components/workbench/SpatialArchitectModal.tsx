@@ -460,6 +460,7 @@ export function SpatialArchitectModal({
               levels.map((l, i) => (
                 <div
                   key={l.uid}
+                  data-level-uid={l.uid}
                   className="grid grid-cols-[minmax(0,1fr)_70px_minmax(0,1.6fr)_96px] items-start gap-2 px-3 py-2"
                 >
                   <Input
@@ -467,7 +468,9 @@ export function SpatialArchitectModal({
                     onChange={(e) => updateLevel(l.uid, { name: e.target.value })}
                     placeholder="e.g. Level 2, Ground, P1"
                     className="h-8 text-sm"
+                    data-level-name-input="1"
                   />
+
                   <Input
                     type="number"
                     value={l.space_index ?? ""}
