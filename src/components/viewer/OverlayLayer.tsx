@@ -562,15 +562,26 @@ export const OverlayLayer = ({
 
     // ---- Pass 1: place bbox (rect) labels first, treating them as fixed
     // obstacles for the circle-label pass.
+    const lineH = Math.round(fontPx * 1.25);
+    const heightFor = (text: string) => {
+      const lines = text.split("\n").length;
+      return lines <= 1 ? labelH : labelH + (lines - 1) * lineH;
+    };
+    const widthFor = (text: string) => {
+      const longest = text.split("\n").reduce((m, s) => Math.max(m, s.length), 0);
+      return Math.ceil(longest * charPx) + padX * 2 + 4;
+    };
+
     const rectItems = labeledRects.map((r) => ({
       id: r.id,
       color: r.color,
       text: r.label!,
       anchor: { cx: r.x, cy: r.y } as Anchor,
-      width: Math.ceil(r.label!.length * charPx) + padX * 2 + 4,
+      width: widthFor(r.label!),
+      height: heightFor(r.label!),
     }));
     const rectCands: LabelCandidate[][] = rectItems.map((it, i) =>
-      generateRectCandidates(labeledRects[i], it.width, labelH, gap, pageSize),
+      generateRectCandidates(labeledRects[i], it.width, it.height, gap, pageSize),
     );
     const rectAnchors = rectItems.map((it) => it.anchor);
     const rectOwners = rectItems.map(() => null as string | null);
@@ -586,10 +597,11 @@ export const OverlayLayer = ({
       color: c.color,
       text: c.label!,
       anchor: { cx: c.cx, cy: c.cy } as Anchor,
-      width: Math.ceil(c.label!.length * charPx) + padX * 2 + 4,
+      width: widthFor(c.label!),
+      height: heightFor(c.label!),
     }));
     const circleCands: LabelCandidate[][] = circleItems.map((it, i) =>
-      generateCircleCandidates(labeledCircles[i], it.width, labelH, gap, pageSize),
+      generateCircleCandidates(labeledCircles[i], it.width, it.height, gap, pageSize),
     );
     const circleAnchors = circleItems.map((it) => it.anchor);
     const circleOwners = circleItems.map((it) => it.id);
@@ -866,21 +878,23 @@ export const OverlayLayer = ({
           data-h={p.h}
           data-font-px={fontPx}
           data-opacity={LABEL_OPACITY}
-          className="absolute font-bold whitespace-nowrap pointer-events-none text-center"
+          className="absolute font-bold pointer-events-none text-center"
           style={{
             left: p.x,
             top: p.y,
             width: p.w,
             height: p.h,
-            lineHeight: `${p.h}px`,
+            lineHeight: `${Math.round(fontPx * 1.25)}px`,
             fontSize: fontPx,
             paddingLeft: padX,
             paddingRight: padX,
+            paddingTop: Math.max(0, (p.h - Math.round(fontPx * 1.25) * p.text.split("\n").length) / 2),
             boxSizing: "border-box",
             borderRadius: 3,
             backgroundColor: p.color,
             color: readableTextOn(p.color),
             opacity: LABEL_OPACITY,
+            whiteSpace: "pre",
           }}
         >
           {p.text}
