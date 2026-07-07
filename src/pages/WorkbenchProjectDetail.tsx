@@ -6476,9 +6476,9 @@ function InstancesReportModal({
       }
 
       const overviewClasses = classEntries.map((e) => {
-        // Per-attribute breakdown. Typed entries already carry the Type value
-        // in the row itself, so their breakdown splits by pipe size only. All
-        // other classes keep the combined (pipe_size, type) breakdown.
+        // Per-attribute breakdown. Typed entries already carry Type + Diameter
+        // in the row itself, so their breakdown is empty. Other classes keep
+        // the combined (pipe_size, type) breakdown.
         const combos = new Map<
           string,
           { attributes: Record<string, string>; count: number }
@@ -6492,20 +6492,17 @@ function InstancesReportModal({
             if (seenCons.has(dedup)) continue;
             seenCons.add(dedup);
           }
+          if (e.typeGroup) continue; // typed entry: no extra breakdown needed
           const attrs: Record<string, string> = {};
-          if (e.typeGroup) {
-            if (r.pipeDiameter) attrs["Pipe size"] = r.pipeDiameter;
-            if (Object.keys(attrs).length === 0) continue;
-          } else {
-            if (r.pipeDiameter) attrs["Pipe size"] = r.pipeDiameter;
-            if (r.pipeType) attrs["Type"] = r.pipeType;
-            if (Object.keys(attrs).length === 0) continue;
-          }
+          if (r.pipeDiameter) attrs["Pipe size"] = r.pipeDiameter;
+          if (r.pipeType) attrs["Type"] = r.pipeType;
+          if (Object.keys(attrs).length === 0) continue;
           const key = JSON.stringify(attrs);
           const cur = combos.get(key);
           if (cur) cur.count += 1;
           else combos.set(key, { attributes: attrs, count: 1 });
         }
+
         return {
           name: e.displayName,
           idPrefix: e.idPrefix,
