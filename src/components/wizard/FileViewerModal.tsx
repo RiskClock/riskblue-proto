@@ -1917,25 +1917,27 @@ const FloorPlansPanel = ({
     unitKeys.add(norm(unit.plan_id));
     unitKeys.delete("");
 
-    const matches: { name: string; page: number }[] = [];
-    const seen = new Set<string>();
+    const counts = new Map<string, { name: string; page: number; count: number }>();
     for (const lvl of allLevelPlans) {
       const localOvr = overrides[lvl.plan_id];
       const fileOvr = allLevelPlanOverrides?.[lvl.plan_id];
       const effUnits: string[] =
         localOvr?.units ?? fileOvr?.units ?? lvl.referenced_unit_ids ?? [];
-      const hasMatch = effUnits.some((u) => unitKeys.has(norm(u)));
-      if (!hasMatch) continue;
+      const matchCount = effUnits.reduce(
+        (n, u) => n + (unitKeys.has(norm(u)) ? 1 : 0),
+        0,
+      );
+      if (matchCount <= 0) continue;
       const nameOvr = typeof localOvr?.name === "string" ? localOvr.name : null;
       const name = (nameOvr ?? lvl.reference_id ?? lvl.plan_id ?? "").trim() || "Level";
       const key = `${name}::${lvl.page_number}`;
-      if (seen.has(key)) continue;
-      seen.add(key);
-      matches.push({ name, page: lvl.page_number });
+      const existing = counts.get(key);
+      if (existing) existing.count += matchCount;
+      else counts.set(key, { name, page: lvl.page_number, count: matchCount });
     }
-    return matches
+    return Array.from(counts.values())
       .sort((a, b) => a.page - b.page || a.name.localeCompare(b.name))
-      .map((m) => `${m.name} (p${m.page})`);
+      .map((m) => `${m.name} (p${m.page})${m.count > 1 ? ` x${m.count}` : ""}`);
   };
 
 
