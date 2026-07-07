@@ -18,6 +18,7 @@
 import * as pdfjsLib from "pdfjs-dist";
 import pdfjsWorker from "pdfjs-dist/build/pdf.worker.min.mjs?url";
 import { supabase } from "@/integrations/supabase/client";
+import { readableTextOn } from "@/lib/awpColor";
 import riskblueLogoUrl from "@/assets/logo-riskblue.png";
 
 if (!pdfjsLib.GlobalWorkerOptions.workerSrc) {
