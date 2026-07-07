@@ -6407,9 +6407,10 @@ function InstancesReportModal({
           .map((t) => ({
             key: `${c.name}::${t}`,
             canonicalName: c.name,
-            displayName: t === "(untyped)" ? `${base} - (untyped)` : `${base} - ${t}`,
+            displayName: t === "(untyped)" ? base : `${base} ${t}`,
             typeGroup: t,
             idPrefix: t === "(untyped)" ? basePrefix : `${basePrefix}-${t}`,
+
           }));
       });
 
