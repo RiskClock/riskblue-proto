@@ -219,23 +219,42 @@ async function renderPageWithMarkers(
     const radius = Math.max(9, Math.round(canvas.width * 0.0104));
     const padX = 6;
     const padY = 3;
-    const labelH = labelSize + padY * 2;
+    const lineH = labelSize + 2; // per-line height
     const gap = 2;
 
-    type Circle = { id: string; cx: number; cy: number; r: number; color: string; label: string };
-    const circles: Circle[] = circleOverlays.map((o) => ({
-      id: o.id,
-      cx: Math.round(o.nx * canvas.width),
-      cy: Math.round(o.ny * canvas.height),
-      r: radius,
-      color: o.color,
-      label: o.label ?? "",
-    }));
+    type Circle = {
+      id: string;
+      cx: number;
+      cy: number;
+      r: number;
+      color: string;
+      label: string;
+      lines: string[];
+    };
+    const circles: Circle[] = circleOverlays.map((o) => {
+      const raw = o.label ?? "";
+      const lines = raw ? raw.split("\n") : [];
+      return {
+        id: o.id,
+        cx: Math.round(o.nx * canvas.width),
+        cy: Math.round(o.ny * canvas.height),
+        r: radius,
+        color: o.color,
+        label: raw,
+        lines,
+      };
+    });
 
     type Cand = { x: number; y: number; w: number; h: number; ax: number; ay: number; leader: number };
-    const widths = circles.map(
-      (c) => Math.ceil(ctx.measureText(c.label).width) + padX * 2,
-    );
+    const widths = circles.map((c) => {
+      if (c.lines.length === 0) return padX * 2;
+      const maxW = Math.max(...c.lines.map((ln) => Math.ceil(ctx.measureText(ln).width)));
+      return maxW + padX * 2;
+    });
+    const heights = circles.map((c) => {
+      const n = Math.max(1, c.lines.length);
+      return n * lineH + padY * 2;
+    });
 
     const bounds = { width: canvas.width, height: canvas.height };
     const rectsOverlap = (
@@ -295,12 +314,12 @@ async function renderPageWithMarkers(
       b: { x: cand.x + cand.w / 2, y: cand.y + cand.h / 2 },
     });
 
-    const genCandidates = (c: Circle, w: number): Cand[] => {
+    const genCandidates = (c: Circle, w: number, h: number): Cand[] => {
       const out: Cand[] = [];
       const directions = 32;
       const rings = 6;
       for (let ring = 0; ring < rings; ring++) {
-        const dist = c.r + gap + ring * Math.max(6, labelH * 0.5);
+        const dist = c.r + gap + ring * Math.max(6, h * 0.5);
         for (let i = 0; i < directions; i++) {
           const angle = -Math.PI / 2 + (i * 2 * Math.PI) / directions;
           const cos = Math.cos(angle);
@@ -308,21 +327,21 @@ async function renderPageWithMarkers(
           const labelCx = c.cx + cos * dist;
           const labelCy = c.cy + sin * dist;
           let lx = labelCx - w / 2;
-          let ly = labelCy - labelH / 2;
+          let ly = labelCy - h / 2;
           lx = Math.max(2, Math.min(bounds.width - w - 2, lx));
-          ly = Math.max(2, Math.min(bounds.height - labelH - 2, ly));
+          ly = Math.max(2, Math.min(bounds.height - h - 2, ly));
           const ax = c.cx + cos * c.r;
           const ay = c.cy + sin * c.r;
           const ex = Math.max(lx, Math.min(c.cx, lx + w));
-          const ey = Math.max(ly, Math.min(c.cy, ly + labelH));
+          const ey = Math.max(ly, Math.min(c.cy, ly + h));
           const leader = Math.hypot(ex - ax, ey - ay);
-          out.push({ x: lx, y: ly, w, h: labelH, ax, ay, leader });
+          out.push({ x: lx, y: ly, w, h, ax, ay, leader });
         }
       }
       return out;
     };
 
-    const candidatesPerLabel = circles.map((c, i) => genCandidates(c, widths[i]));
+    const candidatesPerLabel = circles.map((c, i) => genCandidates(c, widths[i], heights[i]));
 
     const OVERLAP_PENALTY = 100_000;
     const CIRCLE_PENALTY = 100_000;
@@ -465,7 +484,13 @@ async function renderPageWithMarkers(
       ctx.stroke();
       ctx.globalAlpha = 1;
       ctx.fillStyle = readableTextOn(c.color);
-      ctx.fillText(c.label, p.x + padX, p.y + p.h / 2 + 1);
+      // Render each line stacked vertically inside the pill.
+      const n = c.lines.length || 1;
+      const firstY = p.y + padY + lineH / 2;
+      for (let li = 0; li < c.lines.length; li++) {
+        ctx.fillText(c.lines[li], p.x + padX, firstY + li * lineH + 1);
+      }
+      void n;
     }
   }
 
