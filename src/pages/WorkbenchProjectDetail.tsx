@@ -5550,6 +5550,113 @@ function InstancesReportModal({
     return m;
   }, [expanded, levelNames]);
 
+  // Per-Type split entries used by both the Threat Report preview modal
+  // (Overview tiles + Summary matrix) and the DOCX export payload. Cold
+  // Water / Hot Water classes expand into one entry per distinct Type value
+  // (with a "(untyped)" bucket); every other class stays as-is.
+  type OverviewEntry = {
+    key: string;
+    canonicalName: string;
+    displayName: string;
+    displayPrefix: string;
+    typeGroup: string | null;
+  };
+  const isTypedClassName = useCallback(
+    (n: string) => /(^|\s)(cold|hot)\s*water(\s|$)/i.test(n),
+    [],
+  );
+  const overviewEntries = useMemo<OverviewEntry[]>(() => {
+    const typeOf = (r: (typeof expanded)[number]) =>
+      r.pipeType && r.pipeType.trim() ? r.pipeType.trim() : "(untyped)";
+    return classCols.flatMap((c) => {
+      const base = displayClassName(c.name);
+      const basePrefix = displayPrefix(c.name);
+      if (!isTypedClassName(c.name)) {
+        return [{
+          key: c.name,
+          canonicalName: c.name,
+          displayName: base,
+          displayPrefix: basePrefix,
+          typeGroup: null,
+        }];
+      }
+      const types = new Set<string>();
+      for (const r of expanded) {
+        if (r.awpClassName !== c.name) continue;
+        if (r.category !== "Asset" && r.category !== "Water System") continue;
+        types.add(typeOf(r));
+      }
+      if (types.size === 0) {
+        return [{
+          key: c.name,
+          canonicalName: c.name,
+          displayName: base,
+          displayPrefix: basePrefix,
+          typeGroup: null,
+        }];
+      }
+      // Short type token for the acronym pill (e.g. "Potable" -> "P",
+      // "Non-Potable" -> "NP"). Falls back to first letters when the value
+      // has no obvious initials.
+      const shortToken = (t: string) => {
+        if (t === "(untyped)") return "?";
+        const parts = t.split(/[\s\-_/]+/).filter(Boolean);
+        if (parts.length >= 2) return parts.map((p) => p[0]).join("").toUpperCase().slice(0, 3);
+        return t.slice(0, 2).toUpperCase();
+      };
+      return Array.from(types)
+        .sort((a, b) => a.localeCompare(b))
+        .map((t) => ({
+          key: `${c.name}::${t}`,
+          canonicalName: c.name,
+          displayName:
+            t === "(untyped)" ? `${base} — (untyped)` : `${base} — ${t}`,
+          displayPrefix:
+            t === "(untyped)" ? basePrefix : `${basePrefix}-${shortToken(t)}`,
+          typeGroup: t,
+        }));
+    });
+  }, [classCols, expanded, displayClassName, displayPrefix, isTypedClassName]);
+
+  const entryKeyForRow = useCallback(
+    (r: (typeof expanded)[number]) =>
+      isTypedClassName(r.awpClassName)
+        ? `${r.awpClassName}::${r.pipeType && r.pipeType.trim() ? r.pipeType.trim() : "(untyped)"}`
+        : r.awpClassName,
+    [isTypedClassName],
+  );
+
+  const overviewEntryTotals = useMemo(() => {
+    const m = new Map<string, number>();
+    const seen = new Set<string>();
+    for (const r of expanded) {
+      if (r.category !== "Asset" && r.category !== "Water System") continue;
+      const key = entryKeyForRow(r);
+      if (r.logicalKey.startsWith("cons::")) {
+        const dedup = `${key}::${r.annotationBaseId}`;
+        if (seen.has(dedup)) continue;
+        seen.add(dedup);
+      }
+      m.set(key, (m.get(key) || 0) + 1);
+    }
+    return m;
+  }, [expanded, entryKeyForRow]);
+
+  const summaryEntryMatrix = useMemo(() => {
+    const m = new Map<string, Map<string, number>>();
+    for (const r of expanded) {
+      if (r.category !== "Asset" && r.category !== "Water System") continue;
+      const space =
+        r.spaceName && levelNames.has(r.spaceName) ? r.spaceName : "__unassigned__";
+      const key = entryKeyForRow(r);
+      const inner = m.get(space) || new Map<string, number>();
+      inner.set(key, (inner.get(key) || 0) + 1);
+      m.set(space, inner);
+    }
+    return m;
+  }, [expanded, levelNames, entryKeyForRow]);
+
+
   const instancesForSpace = (space: string) =>
     expanded
       .filter((r) =>
