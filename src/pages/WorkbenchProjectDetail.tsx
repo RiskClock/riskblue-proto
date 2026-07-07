@@ -5767,18 +5767,18 @@ function InstancesReportModal({
           <TableHeader>
             <TableRow className={compactRow}>
               <TableHead className={`${compactHead} sticky left-0 bg-background`}>Space</TableHead>
-              {classCols.map((c) => (
+              {overviewEntries.map((e) => (
                 <TableHead
-                  key={c.name}
+                  key={e.key}
                   className={`${compactHead} text-center whitespace-nowrap`}
                 >
                   <Tooltip>
                     <TooltipTrigger asChild>
                       <span className="cursor-help inline-block">
-                        {displayPrefix(c.name)}
+                        {e.displayPrefix}
                       </span>
                     </TooltipTrigger>
-                    <TooltipContent>{c.name}</TooltipContent>
+                    <TooltipContent>{e.displayName}</TooltipContent>
                   </Tooltip>
                 </TableHead>
               ))}
@@ -5786,7 +5786,7 @@ function InstancesReportModal({
           </TableHeader>
           <TableBody>
             {spaceList.map((space) => {
-              const inner = summaryMatrix.get(space);
+              const inner = summaryEntryMatrix.get(space);
               const label = space === "__unassigned__" ? "Unassigned" : space;
               return (
                 <TableRow key={space} className={compactRow}>
@@ -5795,11 +5795,11 @@ function InstancesReportModal({
                   >
                     {label}
                   </TableCell>
-                  {classCols.map((c) => {
-                    const val = inner?.get(c.name) || 0;
+                  {overviewEntries.map((e) => {
+                    const val = inner?.get(e.key) || 0;
                     return (
                       <TableCell
-                        key={c.name}
+                        key={e.key}
                         className={`${compactCell} text-center tabular-nums ${val === 0 ? "opacity-50" : ""}`}
                       >
                         {val}
@@ -5808,6 +5808,7 @@ function InstancesReportModal({
                   })}
                 </TableRow>
               );
+
             })}
           </TableBody>
         </Table>
