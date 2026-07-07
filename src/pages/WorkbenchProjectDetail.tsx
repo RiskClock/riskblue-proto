@@ -6001,14 +6001,10 @@ function InstancesReportModal({
     const pageKeys = Array.from(pageKeySet);
 
     const showUnitCol = rows.some((r) => !!r.unitName);
-    // Show the pipe-diameter column whenever the space contains any DCW or
-    // Fire Suppression rows (matches the annotation classes that carry the
-    // pipe-diameter metadata).
-    const isDcwOrFsName = (n: string) => {
-      const s = (n || "").toLowerCase();
-      return s.includes("domestic cold water") || s.includes("fire suppression");
-    };
-    const showDiameterCol = rows.some((r) => isDcwOrFsName(r.awpClassName));
+    // Show attribute columns whenever any row in this space carries that
+    // attribute — no class-name gating (class names may be renamed).
+    const showDiameterCol = rows.some((r) => !!(r.pipeDiameter && r.pipeDiameter.trim()));
+    const showTypeCol = rows.some((r) => !!(r.pipeType && r.pipeType.trim()));
 
     // Build tab entries (one per file+page).
     type TabEntry = {
