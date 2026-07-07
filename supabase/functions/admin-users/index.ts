@@ -431,7 +431,7 @@ async function actionCreate(body: any, actor: { id: string | null; email: string
       );
       await sendEmail({
         to: email,
-        subject: "Welcome to RiskBlue — set up your account",
+        subject: "Welcome to RiskBlue - set up your account",
         html,
       });
     }
@@ -461,7 +461,7 @@ async function actionUpdate(body: any, actor: { id: string | null; email: string
   if (typeof body.company === "string") updates.company = body.company.trim() || null;
   if (typeof body.is_wmsv === "boolean") updates.account_type = body.is_wmsv ? "wmsv" : "standard";
 
-  // Credits are NOT written through the plain profile update — they go through
+  // Credits are NOT written through the plain profile update - they go through
   // admin_adjust_credits() so a row is logged in credit_transactions.
   let newCreditsBalance: number | undefined;
   if (body.credits !== undefined && body.credits !== null && body.credits !== "") {

@@ -254,7 +254,7 @@ async function refreshProcoreToken(
   }
 }
 
-// Main copy logic — runs synchronously
+// Main copy logic - runs synchronously
 async function copyFiles(
   analysisRequestId: string,
   supabaseUrl: string,
@@ -336,7 +336,7 @@ async function copyFiles(
     );
     console.log(`Found ${files.length} files to copy`);
 
-    // Insert file records — infer MIME from filename for files Procore tags as octet-stream
+    // Insert file records - infer MIME from filename for files Procore tags as octet-stream
     const fileRecords = files.map(({ file, relativePath }) => ({
       analysis_request_id: analysisRequestId,
       drive_file_id: `procore:${file.id}`,
@@ -423,7 +423,7 @@ async function copyFiles(
 
     console.log(`Completed copying ${copiedCount}/${files.length} Procore files`);
 
-    // Auto-trigger split phase (bounded — no downstream agents).
+    // Auto-trigger split phase (bounded - no downstream agents).
     if (copiedCount > 0) {
       try {
         const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
@@ -506,7 +506,7 @@ serve(async (req) => {
       );
     }
 
-    // Run copy synchronously — ensures logs are captured and errors propagate
+    // Run copy synchronously - ensures logs are captured and errors propagate
     await copyFiles(analysisRequestId, supabaseUrl, supabaseServiceKey);
 
     return new Response(

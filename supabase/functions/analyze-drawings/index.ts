@@ -74,7 +74,7 @@ function isRasterFallback(resultText: string): boolean {
 }
 
 // ---------------------------------------------------------------------------
-// Upload helper — downloads from storage and uploads fresh bytes to OpenAI
+// Upload helper - downloads from storage and uploads fresh bytes to OpenAI
 // ---------------------------------------------------------------------------
 
 async function uploadPdfToOpenAI(params: {
@@ -308,7 +308,7 @@ serve(async (req) => {
     }
     if (!analysisRunId) {
       console.warn(
-        `[analyze-drawings] MISSING analysisRunId in request body — request=${analysisRequestId} file=${fileId} sheet=${sheetId ?? "-"} class=${awpClassName}. Will derive from analysis_requests row.`,
+        `[analyze-drawings] MISSING analysisRunId in request body - request=${analysisRequestId} file=${fileId} sheet=${sheetId ?? "-"} class=${awpClassName}. Will derive from analysis_requests row.`,
       );
     }
 
@@ -370,7 +370,7 @@ serve(async (req) => {
     const resolved = resolveAnalysisRunId(analysisRunId, currentDbRunId);
     if (resolved.kind === "mismatch") {
       console.warn(
-        `[analyze-drawings] run mismatch — job=${analysisRunId} current=${resolved.currentDbRunId}; aborting`,
+        `[analyze-drawings] run mismatch - job=${analysisRunId} current=${resolved.currentDbRunId}; aborting`,
       );
       return new Response(
         JSON.stringify({ error: "Superseded by a newer analysis run", currentRunId: resolved.currentDbRunId }),
@@ -379,7 +379,7 @@ serve(async (req) => {
     }
     if (resolved.kind === "none") {
       console.error(
-        `[analyze-drawings] FATAL: no analysisRunId in body and none on request row — refusing to write orphaned result. request=${analysisRequestId} file=${fileId} class=${awpClassName}`,
+        `[analyze-drawings] FATAL: no analysisRunId in body and none on request row - refusing to write orphaned result. request=${analysisRequestId} file=${fileId} class=${awpClassName}`,
       );
       return new Response(
         JSON.stringify({ error: "No analysis_run_id available; refusing to write orphaned result" }),
@@ -434,7 +434,7 @@ serve(async (req) => {
       name: sheetRecord.name || parentFileRecord.name,
     } : {}) };
 
-    // Mark as processing — analysisRunId is guaranteed non-null at this point.
+    // Mark as processing - analysisRunId is guaranteed non-null at this point.
     //
     // NOTE: We deliberately do NOT use PostgREST `.upsert(..., { onConflict })` here
     // because the unique indexes on analysis_results are PARTIAL:
@@ -444,7 +444,7 @@ serve(async (req) => {
     // which Postgres rejects with "no unique or exclusion constraint matching the
     // ON CONFLICT specification". The error was being silently swallowed (no
     // `.throwOnError()`), the row was never created, and the final UPDATE then
-    // matched 0 rows — leaving the analysis_results table empty even though the
+    // matched 0 rows - leaving the analysis_results table empty even though the
     // job was marked complete. We now do an explicit select → insert/update.
     {
       let existQ = adminSupabase
@@ -546,14 +546,14 @@ serve(async (req) => {
       : "drive-analysis-files";
 
     // ------------------------------------------------------------------
-    // Resolve OpenAI file ID — reuse cached or upload fresh
+    // Resolve OpenAI file ID - reuse cached or upload fresh
     // ------------------------------------------------------------------
 
     let openaiFileId: string;
     let usedCacheHit: boolean;
 
     if (suppliedOpenaiFileId) {
-      // Client supplied a pre-uploaded file_id — skip upload entirely
+      // Client supplied a pre-uploaded file_id - skip upload entirely
       openaiFileId = suppliedOpenaiFileId;
       usedCacheHit = true;
       console.log(`[analyze-drawings] Using client-supplied openaiFileId=${openaiFileId} for file ${fileId}`);
@@ -629,7 +629,7 @@ serve(async (req) => {
           .update({
             status: "failed",
             error_message: isInvalidFileError(apiResult.httpStatus, apiResult.parsedError)
-              ? "Cached OpenAI file was rejected — re-analyze to re-upload"
+              ? "Cached OpenAI file was rejected - re-analyze to re-upload"
               : errMsg,
           })
       );
@@ -640,10 +640,10 @@ serve(async (req) => {
     }
 
     // ------------------------------------------------------------------
-    // Raster fallback detection — auto re-upload and retry (once)
+    // Raster fallback detection - auto re-upload and retry (once)
     // ------------------------------------------------------------------
     if (isRasterFallback(apiResult.resultText) && usedCacheHit) {
-      console.warn(`[analyze-drawings] Raster fallback detected for file ${fileId} sheet ${sheetId ?? "-"} (${fileRecord.name}) — cache hit returned stale file. Re-uploading PDF bytes and retrying.`);
+      console.warn(`[analyze-drawings] Raster fallback detected for file ${fileId} sheet ${sheetId ?? "-"} (${fileRecord.name}) - cache hit returned stale file. Re-uploading PDF bytes and retrying.`);
 
       // Invalidate the stale cached file on the unit (sheet or parent)
       await invalidateUnitCache();
@@ -712,7 +712,7 @@ serve(async (req) => {
         .single();
       if ((cur as any)?.analysis_run_id && (cur as any).analysis_run_id !== analysisRunId) {
         console.warn(
-          `[analyze-drawings] post-API run mismatch — discarding result for file ${fileId}/${awpClassName}`,
+          `[analyze-drawings] post-API run mismatch - discarding result for file ${fileId}/${awpClassName}`,
         );
         return new Response(
           JSON.stringify({ error: "Superseded by a newer analysis run" }),
@@ -721,7 +721,7 @@ serve(async (req) => {
       }
     }
 
-    // Store result — also stamp analysis_run_id to repair any prior orphaned
+    // Store result - also stamp analysis_run_id to repair any prior orphaned
     // upsert that may have left the row with a NULL run id.
     // We require .select() back so we can verify a row was actually written;
     // historically a silent 0-row UPDATE here let the worker mark the job

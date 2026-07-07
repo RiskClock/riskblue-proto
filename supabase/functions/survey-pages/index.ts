@@ -1,4 +1,4 @@
-// survey-pages — uploads ONE PDF to Gemini Files API, creates a STERILE
+// survey-pages - uploads ONE PDF to Gemini Files API, creates a STERILE
 // reusable explicit context cache (PDF only, no instructions), and runs the
 // survey via cachedContent + dynamic systemInstruction.  Cache is persisted
 // onto the analysis_request_files row so downstream agents (Identify Risk
@@ -209,7 +209,7 @@ Deno.serve(async (req) => {
           pollCount++;
         }
 
-        // Sterile, multi-purpose context cache — PDF only.
+        // Sterile, multi-purpose context cache - PDF only.
         let cacheName: string | null = null;
         let cacheExpiresAt: string | null = null;
         try {
@@ -324,7 +324,7 @@ Deno.serve(async (req) => {
 
         // Simple concatenation: append each chunk's parsed JSON array into
         // one combined array. No merging by file_name, no dedupe, no
-        // sorting — downstream consumers can do that if needed.
+        // sorting - downstream consumers can do that if needed.
         const combined: any[] = [];
         for (const c of allChunks) {
           if (c.parsed) combined.push(...c.parsed);

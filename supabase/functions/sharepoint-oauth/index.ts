@@ -205,9 +205,9 @@ serve(async (req) => {
       const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
       const tokenExpiry = new Date(Date.now() + (expires_in || 3600) * 1000).toISOString();
 
-      // Encryption is REQUIRED — refuse to store plaintext tokens
+      // Encryption is REQUIRED - refuse to store plaintext tokens
       if (!ENCRYPTION_KEY) {
-        console.error("DRIVE_TOKEN_ENCRYPTION_KEY not configured — refusing to store SharePoint tokens");
+        console.error("DRIVE_TOKEN_ENCRYPTION_KEY not configured - refusing to store SharePoint tokens");
         return new Response(
           "Server misconfigured: token encryption key missing. Please contact support.",
           { status: 500 }
@@ -228,7 +228,7 @@ serve(async (req) => {
         upsertData.access_token = "ENCRYPTED";
         upsertData.refresh_token = null;
       } catch (err) {
-        console.error("Encryption failed — refusing to store SharePoint tokens in plaintext:", err);
+        console.error("Encryption failed - refusing to store SharePoint tokens in plaintext:", err);
         return new Response(
           "Failed to encrypt tokens. Please try again or contact support.",
           { status: 500 }
@@ -310,9 +310,9 @@ serve(async (req) => {
 
       const newExpiry = new Date(Date.now() + (refreshData.expires_in || 3600) * 1000).toISOString();
 
-      // Encryption is REQUIRED — refuse to persist plaintext tokens
+      // Encryption is REQUIRED - refuse to persist plaintext tokens
       if (!ENCRYPTION_KEY) {
-        console.error("DRIVE_TOKEN_ENCRYPTION_KEY not configured — refusing to persist refreshed SharePoint token");
+        console.error("DRIVE_TOKEN_ENCRYPTION_KEY not configured - refusing to persist refreshed SharePoint token");
         return new Response(
           JSON.stringify({ error: "Server misconfigured: token encryption key missing" }),
           { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
@@ -326,7 +326,7 @@ serve(async (req) => {
         updateData.is_encrypted = true;
         updateData.access_token = "ENCRYPTED";
       } catch (err) {
-        console.error("Failed to encrypt refreshed SharePoint token — refusing plaintext fallback:", err);
+        console.error("Failed to encrypt refreshed SharePoint token - refusing plaintext fallback:", err);
         return new Response(
           JSON.stringify({ error: "Failed to encrypt refreshed token" }),
           { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
@@ -338,7 +338,7 @@ serve(async (req) => {
           updateData.encrypted_refresh_token = await encryptToken(refreshData.refresh_token, ENCRYPTION_KEY);
           updateData.refresh_token = null;
         } catch (err) {
-          console.error("Failed to encrypt rotated SharePoint refresh token — refusing plaintext fallback:", err);
+          console.error("Failed to encrypt rotated SharePoint refresh token - refusing plaintext fallback:", err);
           return new Response(
             JSON.stringify({ error: "Failed to encrypt rotated refresh token" }),
             { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }

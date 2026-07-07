@@ -1,5 +1,5 @@
 // One-shot setup: sets tax_code on credit pack products so they're eligible
-// for Stripe full compliance handling. Idempotent — running it twice is safe.
+// for Stripe full compliance handling. Idempotent - running it twice is safe.
 //
 // Invoke from the dashboard or CLI when products change. Internal-only.
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
@@ -10,7 +10,7 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
-// All credit packs are "general digital goods" — Stripe tax code txcd_10000000.
+// All credit packs are "general digital goods" - Stripe tax code txcd_10000000.
 // See https://docs.stripe.com/tax/tax-codes
 const DIGITAL_GOODS_TAX_CODE = "txcd_10000000";
 

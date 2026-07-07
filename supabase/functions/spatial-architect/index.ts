@@ -1,6 +1,6 @@
-// spatial-architect — thin normalizer over Scout's per-page output.
+// spatial-architect - thin normalizer over Scout's per-page output.
 // Reads each file's survey_raw_response (Scout JSON) plus optional per-sheet
-// survey_result, asks Gemini (native @google/genai SDK with GEMINI_API_KEY —
+// survey_result, asks Gemini (native @google/genai SDK with GEMINI_API_KEY -
 // same key used by Scout and Risk Radar) to deduplicate level names, assign
 // numeric space_index, and surface unit floor-plan templates with the levels
 // each template applies to. Result is stored on
@@ -23,7 +23,7 @@ const json = (body: unknown, status = 200) =>
     headers: { ...corsHeaders, "Content-Type": "application/json" },
   });
 
-// Zod schema — `units` is `.default([])` so legacy parsers that ignore the
+// Zod schema - `units` is `.default([])` so legacy parsers that ignore the
 // field still work, and downstream code never sees `undefined`.
 const SpatialSchema = z.object({
   project_name: z.string().default(""),
@@ -72,8 +72,8 @@ Rules:
 1. Deduplicate level names: "Level 2", "L2", "2nd Floor", "Second Floor" all collapse to ONE canonical name. Prefer short labels like "L02", "L05", "P1", "P2", "Ground", "Roof", "Mezzanine".
 2. Assign a numeric space_index: parking/sub-grade levels are NEGATIVE (P3=-3, P2=-2, P1=-1), ground=0, L1=1, L2=2, etc. Roof/penthouse get the highest numbers.
 3. For each canonical level, list every (file_name, page_number) that depicts that level (level plans, RCPs, etc.) in matched_sources.
-4. CRITICAL — applies_to_levels: every spatial_records entry whose space_category is NOT a physical storey (anything other than "Contiguous Storey" / "Level" — including "Spatial Template", "Unit", "Template", amenity rooms, suites, townhouse units) MUST populate applies_to_levels with the canonical level names where that template/unit physically exists. If a suite is named "Suite 2A" or "Template - Suite 2A", it belongs to "Level 2". If a townhouse plan is "Suite TH2A (GF)" / "Suite TH2A (2F)", they belong to "Ground Level" and "Level 2" respectively. Amenities like "2nd Floor Amenity" belong to "Level 2". Physical levels (Contiguous Storey) leave applies_to_levels empty.
-5. You may ALSO emit unit_templates entries for typical-unit plans that repeat across many residential levels (e.g. "Typical Unit A — applies to L05-L20"). Populate applies_to_levels there too.
+4. CRITICAL - applies_to_levels: every spatial_records entry whose space_category is NOT a physical storey (anything other than "Contiguous Storey" / "Level" - including "Spatial Template", "Unit", "Template", amenity rooms, suites, townhouse units) MUST populate applies_to_levels with the canonical level names where that template/unit physically exists. If a suite is named "Suite 2A" or "Template - Suite 2A", it belongs to "Level 2". If a townhouse plan is "Suite TH2A (GF)" / "Suite TH2A (2F)", they belong to "Ground Level" and "Level 2" respectively. Amenities like "2nd Floor Amenity" belong to "Level 2". Physical levels (Contiguous Storey) leave applies_to_levels empty.
+5. You may ALSO emit unit_templates entries for typical-unit plans that repeat across many residential levels (e.g. "Typical Unit A - applies to L05-L20"). Populate applies_to_levels there too.
 6. Do NOT invent levels or units that Scout did not surface.
 7. space_category values: use "Contiguous Storey" for floors, "Spatial Template" for suites/amenities/units that live within a level.
 
@@ -183,7 +183,7 @@ Deno.serve(async (req) => {
         .from("analysis_requests")
         .update({
           space_hierarchy_status: "failed",
-          space_hierarchy_error: "No Scout output available — run Scout first.",
+          space_hierarchy_error: "No Scout output available - run Scout first.",
           space_hierarchy_updated_at: new Date().toISOString(),
         } as any)
         .eq("id", analysisRequestId);
@@ -239,7 +239,7 @@ Deno.serve(async (req) => {
       } systemPromptChars=${systemPrompt.length}`,
     );
 
-    // Watchdog — if the model call hangs and the edge runtime is about to be
+    // Watchdog - if the model call hangs and the edge runtime is about to be
     // killed (~150s wall on Supabase), mark the row failed FIRST so the UI
     // doesn't stay stuck on "Running…" forever.
     const WATCHDOG_MS = 120_000;
@@ -247,7 +247,7 @@ Deno.serve(async (req) => {
     const watchdog = setTimeout(async () => {
       watchdogFired = true;
       console.error(
-        `[spatial-architect] watchdog firing at ${WATCHDOG_MS}ms — marking request failed`,
+        `[spatial-architect] watchdog firing at ${WATCHDOG_MS}ms - marking request failed`,
       );
       try {
         await admin
@@ -335,7 +335,7 @@ Deno.serve(async (req) => {
 
     // Only overwrite space_hierarchy_json when the run succeeded. On failure
     // (parse error, 503, etc.), preserve the previously-saved hierarchy so the
-    // user's level list doesn't disappear — just surface the status/error.
+    // user's level list doesn't disappear - just surface the status/error.
     if (parsed) {
       await admin
         .from("analysis_requests")

@@ -1,4 +1,4 @@
-// identify-risk-elements — runs per-class risk-element extraction against an
+// identify-risk-elements - runs per-class risk-element extraction against an
 // uploaded PDF using the sterile Gemini explicit context cache created during
 // survey-pages.  Each class prompt is passed at execution time as
 // systemInstruction; the cache stays neutral so multiple agents can share it.
@@ -244,7 +244,7 @@ Deno.serve(async (req) => {
                 /cache|cached|model|mismatch|not\s*found|invalid/i.test(msg);
               if (!looksLikeCacheError) throw err;
               console.warn(
-                `[identify-risk-elements][cache-retry] file=${fileName} class=${className} error=${msg} — rebuilding cache and retrying`,
+                `[identify-risk-elements][cache-retry] file=${fileName} class=${className} error=${msg} - rebuilding cache and retrying`,
               );
               const rebuilt = await rebuildCache({
                 ai, admin, fileId, fileName, bucket, storagePath, model: GEMINI_MODEL,
@@ -273,7 +273,7 @@ Deno.serve(async (req) => {
             );
             if (!cachedTokens || cachedTokens === 0) {
               console.warn(
-                `[identify-risk-elements][cache-miss] file=${fileName} class=${className} — cachedContentTokenCount is 0/absent. Verify cachedContent="${usedCache}" was accepted.`,
+                `[identify-risk-elements][cache-miss] file=${fileName} class=${className} - cachedContentTokenCount is 0/absent. Verify cachedContent="${usedCache}" was accepted.`,
               );
             }
             return {

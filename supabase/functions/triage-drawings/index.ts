@@ -136,7 +136,7 @@ Deno.serve(async (req) => {
     // Sheet normalization is ON BY DEFAULT for all new analyses. A PDF parent
     // must be split into sheet rows first; triage/extract must be called with
     // sheetId, not fileId. If we ever receive a file-level call for a PDF
-    // parent under normalization, fail fast — calling pdfParse on a full
+    // parent under normalization, fail fast - calling pdfParse on a full
     // combined PDF would OOM the worker (WORKER_RESOURCE_LIMIT).
     if (!sheetRecord && fileRecord) {
       const f = fileRecord as any;
@@ -389,7 +389,7 @@ Deno.serve(async (req) => {
     }
 
     const sheetLabel = sheetRecord
-      ? `${fileRecord?.name ?? "document"} — Page ${sheetRecord.page_index}`
+      ? `${fileRecord?.name ?? "document"} - Page ${sheetRecord.page_index}`
       : (drawingName || fileRecord.name);
 
     const roleInstructions = `

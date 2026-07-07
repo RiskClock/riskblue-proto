@@ -17,7 +17,7 @@ import {
 } from "https://deno.land/std@0.224.0/assert/mod.ts";
 import { resolveAnalysisRunId } from "./run-id.ts";
 
-Deno.test("body run id present — uses body, not flagged as backfill", () => {
+Deno.test("body run id present - uses body, not flagged as backfill", () => {
   const r = resolveAnalysisRunId("run-A", "run-A");
   assertEquals(r.kind, "ok");
   if (r.kind === "ok") {
@@ -26,7 +26,7 @@ Deno.test("body run id present — uses body, not flagged as backfill", () => {
   }
 });
 
-Deno.test("body run id missing, db run id present — backfills from DB", () => {
+Deno.test("body run id missing, db run id present - backfills from DB", () => {
   const r = resolveAnalysisRunId(null, "run-B");
   assertEquals(r.kind, "ok");
   if (r.kind === "ok") {
@@ -35,19 +35,19 @@ Deno.test("body run id missing, db run id present — backfills from DB", () => 
   }
 });
 
-Deno.test("body run id undefined, db run id present — backfills from DB", () => {
+Deno.test("body run id undefined, db run id present - backfills from DB", () => {
   const r = resolveAnalysisRunId(undefined, "run-B");
   assertEquals(r.kind, "ok");
   if (r.kind === "ok") assertEquals(r.runId, "run-B");
 });
 
-Deno.test("body run id mismatches DB run id — flagged as superseded", () => {
+Deno.test("body run id mismatches DB run id - flagged as superseded", () => {
   const r = resolveAnalysisRunId("run-OLD", "run-NEW");
   assertEquals(r.kind, "mismatch");
   if (r.kind === "mismatch") assertEquals(r.currentDbRunId, "run-NEW");
 });
 
-Deno.test("no body, no DB run id — refuses (would orphan analysis_results)", () => {
+Deno.test("no body, no DB run id - refuses (would orphan analysis_results)", () => {
   const r = resolveAnalysisRunId(null, null);
   assertEquals(r.kind, "none");
 });

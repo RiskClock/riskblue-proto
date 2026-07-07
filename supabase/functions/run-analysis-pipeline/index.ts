@@ -94,7 +94,7 @@ async function shouldStop(
 }
 
 // ---------------------------------------------------------------------------
-// Monotonic progress tracker — safe for concurrent workers
+// Monotonic progress tracker - safe for concurrent workers
 // ---------------------------------------------------------------------------
 function createProgressTracker(
   admin: ReturnType<typeof createClient>,
@@ -378,7 +378,7 @@ async function runPool<T>(
 // ---------------------------------------------------------------------------
 // ---------------------------------------------------------------------------
 // SPLIT PHASE (sheet normalization v1)
-// Counts pages per parent PDF (via pdf-lib structural load — no rendering),
+// Counts pages per parent PDF (via pdf-lib structural load - no rendering),
 // stamps expected_page_count, and enqueues bounded split_pdf_chunk jobs.
 // Then polls the analysis_pipeline_jobs queue until all chunk jobs are
 // terminal. Idempotent: re-running upserts sheet rows by (parent, page_index)
@@ -424,7 +424,7 @@ async function runSplitPhase(params: {
   const bucket =
     sourceType === "manual_upload" ? "uploaded-drawings" : "drive-analysis-files";
 
-  // Count pages and enqueue chunk jobs (sequential — small N parents, page
+  // Count pages and enqueue chunk jobs (sequential - small N parents, page
   // count is a structural-only pdf-lib load which is fast).
   type ChunkRow = {
     analysis_request_id: string;
@@ -743,7 +743,7 @@ Deno.serve(async (req) => {
     }
 
     if (action === "stop") {
-      // Set the stop flag and DO NOT reset it here — running invocation(s) poll
+      // Set the stop flag and DO NOT reset it here - running invocation(s) poll
       // this on each item dispatch and exit on their own. The next pipeline
       // start resets the flag.
       await admin
@@ -892,8 +892,8 @@ Deno.serve(async (req) => {
 
     // ---- Phase-aware cleanup
     if (phaseOverride === "summarize" || phaseOverride === "split" || isResumeExtract) {
-      // summarize: internal worker re-invocation — keep analyze results intact.
-      // split: lightweight prep run — must not wipe any data.
+      // summarize: internal worker re-invocation - keep analyze results intact.
+      // split: lightweight prep run - must not wipe any data.
       // resume extract: keep already-extracted sheets + downstream artifacts.
     } else {
       // Cancel any stale pending/processing jobs from PRIOR runs (different
@@ -923,7 +923,7 @@ Deno.serve(async (req) => {
           : null;
 
       if (phaseOverride === "analyze") {
-        // Analyze button: wipe analyze results (regardless of run id — preserved-run
+        // Analyze button: wipe analyze results (regardless of run id - preserved-run
         // means existing rows are this same run). Keep triage + extract intact.
         let analyzeDel = admin.from("analysis_results")
           .delete()
@@ -997,7 +997,7 @@ Deno.serve(async (req) => {
     // (stored for record-keeping)
     if (enabledAwpClasses) {
       const enabledSet = new Set(enabledAwpClasses);
-      // We'll compute this after fetching prompts — for now mark intent
+      // We'll compute this after fetching prompts - for now mark intent
       modelUpdates._enabledIntent = true;
     }
 
@@ -1011,7 +1011,7 @@ Deno.serve(async (req) => {
       }
     }
 
-    // Return 202 immediately — pipeline runs in background
+    // Return 202 immediately - pipeline runs in background
     const promise = runPipeline({
       admin,
       supabaseUrl,
@@ -1164,7 +1164,7 @@ async function runPipeline(params: PipelineParams) {
       : PHASE_ORDER.length - 1;
     const runPhase = (phase: string) => {
       const i = PHASE_ORDER.indexOf(phase);
-      // Split is a prerequisite for extract — run whenever extract or later
+      // Split is a prerequisite for extract - run whenever extract or later
       // runs. Also runs when override is explicitly "split".
       if (phase === "split") {
         if (phaseOverride === "split") return true;
@@ -1184,7 +1184,7 @@ async function runPipeline(params: PipelineParams) {
 
     // Helper for stopped cleanup
     async function handleStopped() {
-      console.log("[pipeline] Stop requested — halting");
+      console.log("[pipeline] Stop requested - halting");
       await admin
         .from("analysis_requests")
         .update({
@@ -1198,7 +1198,7 @@ async function runPipeline(params: PipelineParams) {
 
     // Helper: write idle/ready state after a bounded phase finishes cleanly.
     async function writeIdleAfterPhase(phaseLabel: string) {
-      console.log(`[pipeline] bounded run finished after ${phaseLabel} — writing idle state`);
+      console.log(`[pipeline] bounded run finished after ${phaseLabel} - writing idle state`);
       await admin
         .from("analysis_requests")
         .update({
@@ -1217,7 +1217,7 @@ async function runPipeline(params: PipelineParams) {
     // analysis_requests.sheet_normalization_enabled remains as an emergency
     // rollback override (set to false to skip normalization for non-PDF flows
     // or legacy debugging). Every PDF parent is normalized into 1..N sheet
-    // rows; the parent file is then a container only — extract/triage/analyze
+    // rows; the parent file is then a container only - extract/triage/analyze
     // never run against parent PDFs.
     const { data: reqRow0 } = await admin
       .from("analysis_requests")
@@ -1290,7 +1290,7 @@ async function runPipeline(params: PipelineParams) {
       });
       if (badParents.length > 0) {
         const names = badParents.map((p: any) => p.name).join(", ");
-        const msg = `Sheet normalization produced no sheets for: ${names}. Aborting — PDFs are never analyzed at the parent level.`;
+        const msg = `Sheet normalization produced no sheets for: ${names}. Aborting - PDFs are never analyzed at the parent level.`;
         console.error(`[pipeline] ${msg}`);
         await admin
           .from("analysis_requests")
@@ -1332,7 +1332,7 @@ async function runPipeline(params: PipelineParams) {
 
     // Sheet-mode for the run: enabled when normalization is on AND we have
     // any sheets. In that mode, PDF parents are excluded from legacy
-    // file-level processing — they are containers only.
+    // file-level processing - they are containers only.
     const useSheets = sheetFlagOn && sheets.length > 0;
 
     // When sheet-mode is active, strip PDF parents from `files` so legacy
@@ -1413,7 +1413,7 @@ async function runPipeline(params: PipelineParams) {
           return;
         }
       } else {
-        console.log(`[pipeline] Phase 1: nothing to extract — skipping`);
+        console.log(`[pipeline] Phase 1: nothing to extract - skipping`);
       }
 
       // Re-load sheets so subsequent phases see the freshly-extracted text.
@@ -1537,7 +1537,7 @@ async function runPipeline(params: PipelineParams) {
       }
 
       // NOTE: We intentionally do NOT pre-insert placeholder triage rows.
-      // The triage worker is the SOLE writer of analysis_triage_results — it
+      // The triage worker is the SOLE writer of analysis_triage_results - it
       // upserts the final row (success or failure) once the model returns.
       // Spinner UX is driven by analysis_pipeline_jobs status instead.
 
@@ -1605,7 +1605,7 @@ async function runPipeline(params: PipelineParams) {
           await writeIdleAfterPhase("triage");
           return;
         }
-        console.log("[pipeline] Phase 2: no triage items — proceeding inline to analyze");
+        console.log("[pipeline] Phase 2: no triage items - proceeding inline to analyze");
       } else {
         // Worker finalizes triage and (when allowed by pipeline_phase_override)
         // re-invokes pipeline with phaseOverride='analyze'. For override='triage'
@@ -1654,7 +1654,7 @@ async function runPipeline(params: PipelineParams) {
 
       interface WorkItem {
         fileId: string;          // parent file id (always set)
-        sheetId: string | null;  // sheet id when useSheets — analyze-drawings will upload only the per-sheet PDF artifact
+        sheetId: string | null;  // sheet id when useSheets - analyze-drawings will upload only the per-sheet PDF artifact
         unitName: string;        // parent name (sheet-mode appends sheet number/page)
         awpClassName: string;
         promptContent: string | null;
@@ -1731,7 +1731,7 @@ async function runPipeline(params: PipelineParams) {
           if (override === "exclude") continue;
 
           // Strict eligibility: include override OR per-sheet score >= 50.
-          // No `sheet_role === "analysis_sheet"` fallback — the canonical
+          // No `sheet_role === "analysis_sheet"` fallback - the canonical
           // rule is the 50% score threshold.
           let eligible = override === "include";
           if (
@@ -1751,8 +1751,8 @@ async function runPipeline(params: PipelineParams) {
           const parentName = parentFile?.name || sh.name;
           const pageNum = typeof sh.page_index === "number" ? sh.page_index + 1 : 0;
           const sheetLabel = sh.sheet_number
-            ? `${parentName} — ${sh.sheet_number}`
-            : `${parentName} — p${pageNum}`;
+            ? `${parentName} - ${sh.sheet_number}`
+            : `${parentName} - p${pageNum}`;
 
           workQueue.push({
             fileId: sh.parent_file_id,
@@ -1947,7 +1947,7 @@ async function runPipeline(params: PipelineParams) {
         // bbox/page resolution still works.
         const sheetPageNum = item.acceptedPages[0];
         const pageEvidenceInstruction = useSheets
-          ? `\n\n[Single-sheet PDF]\nThis PDF contains a single drawing sheet from a larger parent document. For each finding you report, include:\n  - "PDF Page" — set to ${sheetPageNum ?? 1} (the page number in the parent PDF this sheet was extracted from).\n  - "Sheet Number" — the printed sheet number from the title block, if visible (optional).\n  - "Evidence/Location" — a brief note on where on the sheet the evidence is (e.g. plan view, schedule, title block).`
+          ? `\n\n[Single-sheet PDF]\nThis PDF contains a single drawing sheet from a larger parent document. For each finding you report, include:\n  - "PDF Page" - set to ${sheetPageNum ?? 1} (the page number in the parent PDF this sheet was extracted from).\n  - "Sheet Number" - the printed sheet number from the title block, if visible (optional).\n  - "Evidence/Location" - a brief note on where on the sheet the evidence is (e.g. plan view, schedule, title block).`
           : "";
         const finalPrompt = item.contextText
           ? `${promptContent}${pageEvidenceInstruction}\n\n[Supporting context from related sheets in the same document; use only as reference, do NOT count instances from these excerpts]\n${item.contextText}`
@@ -2047,7 +2047,7 @@ async function runPipeline(params: PipelineParams) {
       // Kick the worker once now so it doesn't wait for the next cron tick.
       // IMPORTANT: await the dispatch so the edge runtime doesn't cancel the
       // in-flight request when this handler returns. We don't await the body
-      // (worker may take 50s) — just the initial connection.
+      // (worker may take 50s) - just the initial connection.
       const workerSecret = Deno.env.get("ANALYSIS_WORKER_SECRET");
       if (workerSecret) {
         try {
@@ -2062,7 +2062,7 @@ async function runPipeline(params: PipelineParams) {
             },
             signal: kickController.signal,
           }).catch(() => {
-            // Aborting after 2s is expected — worker keeps running on its
+            // Aborting after 2s is expected - worker keeps running on its
             // own edge instance. We just needed to ensure the request was
             // sent before this function exits.
           });
@@ -2088,7 +2088,7 @@ async function runPipeline(params: PipelineParams) {
             .eq("id", analysisRequestId);
           return;
         }
-        // No work and no failures — flag this run as "no eligible drawings".
+        // No work and no failures - flag this run as "no eligible drawings".
         // Frontend uses this marker (and only this marker) to render
         // "No Eligible Drawings Found" instead of the normal complete state.
         try {
@@ -2125,11 +2125,11 @@ async function runPipeline(params: PipelineParams) {
     // Only run when this is a full pipeline run (no override) or when the worker
     // explicitly re-invoked us with phaseOverride='summarize'.
     if (phaseOverride && phaseOverride !== "summarize") {
-      console.log(`[pipeline] phaseOverride=${phaseOverride} — skipping summarize + completion email`);
+      console.log(`[pipeline] phaseOverride=${phaseOverride} - skipping summarize + completion email`);
       return;
     }
 
-    // Mark phase=summarizing but keep status=processing — the UI must not
+    // Mark phase=summarizing but keep status=processing - the UI must not
     // see status=complete until summarization actually finishes (or is
     // explicitly skipped because there are no results to summarize).
     console.log("[pipeline] Phases 1-3 complete, starting background summarize");
@@ -2182,7 +2182,7 @@ async function runPipeline(params: PipelineParams) {
               : {},
           );
           if (result.ok && Array.isArray(result.data?.instances)) {
-            // Persist summary_data merge — guarded by run id so a newer run's
+            // Persist summary_data merge - guarded by run id so a newer run's
             // summary_data isn't clobbered by stale results.
             const { data: reqMeta } = await admin
               .from("analysis_requests")
@@ -2208,7 +2208,7 @@ async function runPipeline(params: PipelineParams) {
               await q;
             }
           } else if (result.status === 409) {
-            console.warn(`[pipeline] summarize superseded for ${awpClassName} — aborting summary phase`);
+            console.warn(`[pipeline] summarize superseded for ${awpClassName} - aborting summary phase`);
             return;
           } else {
             console.warn(

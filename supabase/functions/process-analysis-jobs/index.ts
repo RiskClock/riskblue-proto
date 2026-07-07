@@ -8,7 +8,7 @@ import { PDFDocument } from "https://esm.sh/pdf-lib@1.17.1";
 import * as mupdf from "npm:mupdf@1.3.0";
 
 // Render a single PDF page (0-based index) from an already-opened MuPDF
-// Document to a PNG Uint8Array. Scale ~1.0 ≈ 72 DPI — good enough for
+// Document to a PNG Uint8Array. Scale ~1.0 ≈ 72 DPI - good enough for
 // downstream OpenAI vision; keeps memory low on big sheets.
 function renderPageFromDocToPng(
   doc: any,
@@ -81,7 +81,7 @@ Deno.serve(async (req) => {
 
   const jobs = (claimed as any[]) || [];
   if (jobs.length === 0) {
-    // Nothing to do — but still check finalization for any "analyzing" requests
+    // Nothing to do - but still check finalization for any "analyzing" requests
     // whose jobs all completed between cron ticks.
     await checkFinalizeAll(admin, supabaseUrl, serviceKey);
     return json({ claimed: 0, finalized_check: true });
@@ -212,7 +212,7 @@ async function runJob(
     (reqRow as any).analysis_run_id !== job.analysis_run_id
   ) {
     console.warn(
-      `[worker] job ${job.id} run_id mismatch (job=${job.analysis_run_id}, current=${(reqRow as any).analysis_run_id}) — cancelling stale job`,
+      `[worker] job ${job.id} run_id mismatch (job=${job.analysis_run_id}, current=${(reqRow as any).analysis_run_id}) - cancelling stale job`,
     );
     await updateJobGuarded(admin, job, {
       status: "cancelled",
@@ -298,7 +298,7 @@ async function runJob(
       await updateProgress(admin, job.analysis_request_id, job.analysis_run_id);
 
       if (tokens && tokens > 0) {
-        // Increment analyze_tokens_used atomically via select+update — but only
+        // Increment analyze_tokens_used atomically via select+update - but only
         // if the run is still current.
         const { data: cur } = await admin
           .from("analysis_requests")
@@ -331,7 +331,7 @@ async function runJob(
     const attempts = job.attempts; // already incremented by claim RPC
     const maxAttempts = job.max_attempts ?? 3;
 
-    // Permanent: parent analysis_request was deleted — never retry, mark cancelled.
+    // Permanent: parent analysis_request was deleted - never retry, mark cancelled.
     if (httpStatus === 404 || /Analysis request not found/i.test(msg)) {
       await updateJobGuarded(admin, job, {
         status: "cancelled",
@@ -342,7 +342,7 @@ async function runJob(
       return;
     }
 
-    // Permanent: parent PDF exceeds the analyze size cap — retrying will not help.
+    // Permanent: parent PDF exceeds the analyze size cap - retrying will not help.
     // Surface the original size-cap message verbatim so the UI summary is actionable.
     if (httpStatus === 413 || /too large for analyze/i.test(msg)) {
       const cleanMsg =
@@ -384,7 +384,7 @@ async function runJob(
 }
 
 // ---------------------------------------------------------------------------
-// Live progress updater — recounts terminal jobs and writes to request row
+// Live progress updater - recounts terminal jobs and writes to request row
 // so the UI's realtime subscription animates the count as work completes.
 // ---------------------------------------------------------------------------
 async function updateProgress(
@@ -393,7 +393,7 @@ async function updateProgress(
   runId: string | null,
 ) {
   try {
-    // Verify the run is still current; otherwise skip — we don't want stale
+    // Verify the run is still current; otherwise skip - we don't want stale
     // workers overwriting progress for a newer run.
     if (runId) {
       const { data: cur } = await admin
@@ -502,7 +502,7 @@ async function maybeFinalize(
 
   if ((pendingCount ?? 0) > 0) return;
 
-  // Safety: zero analyze jobs visible (cron raced with pipeline insert) — skip.
+  // Safety: zero analyze jobs visible (cron raced with pipeline insert) - skip.
   if ((totalCount ?? 0) === 0) {
     console.warn(`[worker] maybeFinalize: no analyze jobs visible yet for ${requestId}; skipping`);
     return;
@@ -548,7 +548,7 @@ async function maybeFinalize(
 
   console.log(`[worker] finalizing request ${requestId} (run=${runId})`);
 
-  // Counts for terminal-state semantics — scoped to this run
+  // Counts for terminal-state semantics - scoped to this run
   const { count: completeJobs } = await buildQ(["complete"]);
   const { count: failedJobs } = await buildQ(["failed"]);
   const { count: cancelledJobs } = await buildQ(["cancelled"]);
@@ -571,7 +571,7 @@ async function maybeFinalize(
 
   // All failed (no completes) -> stop with error, no summarize.
   // If every failure is the same permanent oversize error, surface that
-  // verbatim — retrying won't help and the user needs the actionable copy.
+  // verbatim - retrying won't help and the user needs the actionable copy.
   if ((completeJobs ?? 0) === 0 && (failedJobs ?? 0) > 0) {
     let userMsg = `All ${failedJobs} analysis items failed. Please try again in a few minutes.`;
     try {
@@ -588,7 +588,7 @@ async function maybeFinalize(
         .filter(Boolean);
       const oversize = msgs.filter((m) => /too large for analyze/i.test(m));
       if (msgs.length > 0 && oversize.length === msgs.length) {
-        // All failures share the same permanent cause — show the first one.
+        // All failures share the same permanent cause - show the first one.
         userMsg = oversize[0].slice(0, 1000);
       }
     } catch (e) {
@@ -614,7 +614,7 @@ async function maybeFinalize(
 
   const phaseOverride = (cur as any)?.pipeline_phase_override ?? null;
 
-  // Bounded run: 'analyze' (or 'triage', defensive) stops here as idle — no summarize.
+  // Bounded run: 'analyze' (or 'triage', defensive) stops here as idle - no summarize.
   if (phaseOverride === "analyze" || phaseOverride === "triage") {
     let q = admin.from("analysis_requests").update({
       status: "started",
@@ -677,7 +677,7 @@ async function fireAndForgetSummarize(
 
 // ---------------------------------------------------------------------------
 // Periodic safety net: any analyzing requests with all jobs terminal but
-// not finalized (e.g. cron ran with no jobs to claim) — finalize them.
+// not finalized (e.g. cron ran with no jobs to claim) - finalize them.
 // ---------------------------------------------------------------------------
 async function checkFinalizeAll(
   admin: ReturnType<typeof createClient>,
@@ -756,7 +756,7 @@ async function checkFinalizeAll(
 // page range, writes one single-page PDF per page to storage, upserts a row in
 // analysis_request_sheets keyed by (parent_file_id, page_index) for idempotency.
 // Single-page parents and non-PDF files should be handled by the pipeline (no
-// chunk job enqueued) — but defensively we no-op any chunk we can't handle.
+// chunk job enqueued) - but defensively we no-op any chunk we can't handle.
 // ---------------------------------------------------------------------------
 async function runSplitPdfChunk(
   admin: ReturnType<typeof createClient>,
@@ -929,7 +929,7 @@ async function runSplitPdfChunkInner(
       }
 
       const pageNumber = pageIndex + 1;
-      const sheetName = `${baseName} — p${pageNumber}.pdf`;
+      const sheetName = `${baseName} - p${pageNumber}.pdf`;
       const storagePath = `${sheetPrefix}/page-${String(pageNumber).padStart(4, "0")}.pdf`;
       const pngStoragePath = `${sheetPrefix}/page-${String(pageNumber).padStart(4, "0")}.png`;
 
@@ -946,7 +946,7 @@ async function runSplitPdfChunkInner(
         );
         if (upErr) throw new Error(`upload: ${upErr.message}`);
 
-        // PNG render — best effort. Skip on huge pages or when mupdf failed
+        // PNG render - best effort. Skip on huge pages or when mupdf failed
         // to open, to avoid OOM-killing the worker isolate.
         let pngPathToStore: string | null = null;
         if (mupdfDoc && bytes.byteLength <= PNG_SKIP_BYTES) {
@@ -1063,7 +1063,7 @@ async function persistSplitProgress(
       if (expected != null && (doneCount ?? 0) >= expected) {
         split_status = "split";
       } else {
-        // No chunks pending but didn't reach expected count — mark with errors
+        // No chunks pending but didn't reach expected count - mark with errors
         split_status = expected != null ? "split_partial" : "split";
       }
     }
@@ -1080,7 +1080,7 @@ async function persistSplitProgress(
 // ---------------------------------------------------------------------------
 // TRIAGE JOB HANDLER (Phase 2 via queue)
 // Calls triage-drawings using internal service-role auth + worker secret.
-// triage-drawings already upserts analysis_triage_results — we just track the
+// triage-drawings already upserts analysis_triage_results - we just track the
 // job lifecycle (retry / token accumulation / finalize transition).
 // ---------------------------------------------------------------------------
 async function runTriageJob(
@@ -1119,7 +1119,7 @@ async function runTriageJob(
   }
 
   // Early-exit: if any sibling sheet of the same parent file + AWP class has
-  // already scored >=100, the file is conclusively positive — no need to triage
+  // already scored >=100, the file is conclusively positive - no need to triage
   // the remaining pages. Mark this job complete (without an inserted triage row;
   // the existing 100% sibling already qualifies the file for Phase 3).
   try {
@@ -1141,7 +1141,7 @@ async function runTriageJob(
       });
       return;
     }
-  } catch { /* non-fatal — proceed with triage */ }
+  } catch { /* non-fatal - proceed with triage */ }
 
   // Fetch file name for displayName
   let drawingName: string | null = null;
@@ -1358,7 +1358,7 @@ async function updateTriageProgress(
 }
 
 // ---------------------------------------------------------------------------
-// Triage finalizer — when all triage jobs are terminal, transition into Phase 3
+// Triage finalizer - when all triage jobs are terminal, transition into Phase 3
 // by re-invoking run-analysis-pipeline with phaseOverride='analyze'.
 // ---------------------------------------------------------------------------
 async function dispatchAnalyzeWhenTriageComplete(
@@ -1394,7 +1394,7 @@ async function dispatchAnalyzeWhenTriageComplete(
   if ((pendingCount ?? 0) > 0) return;
 
   // Safety: if there are zero triage jobs at all (e.g. cron tick raced with
-  // pipeline insert), do NOT finalize — wait for jobs to land.
+  // pipeline insert), do NOT finalize - wait for jobs to land.
   const { count: anyCount } = await buildQ([]);
   if ((anyCount ?? 0) === 0) {
     console.warn(`[worker] dispatchAnalyzeWhenTriageComplete: no triage jobs visible yet for ${requestId}; skipping`);
