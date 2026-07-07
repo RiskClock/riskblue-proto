@@ -913,7 +913,7 @@ export async function runThreatReportExport(
 
     if (sp.rows.length === 0) {
       docChildren.push(
-        para([text("No objects found in this space.", { italics: true, color: "6B7280" })]),
+        para([text("No instances found in this space.", { italics: true, color: "6B7280" })]),
       );
     } else {
       const showUnit = sp.rows.some((r) => !!r.unitName);
