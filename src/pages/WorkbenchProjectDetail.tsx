@@ -5125,8 +5125,8 @@ function InstancesReportModal({
       name.slice(0, 3).toUpperCase(),
     [aliasPrefixMap, optionByName],
   );
-  // Silence unused-var lint when displayPrefix isn't referenced yet.
-  void displayPrefix;
+
+
 
   const enabledClassSet = useMemo(
     () => new Set(enabledClassNames || []),
