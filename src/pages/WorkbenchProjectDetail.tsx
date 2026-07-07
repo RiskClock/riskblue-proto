@@ -6042,7 +6042,28 @@ function InstancesReportModal({
             });
           }
         }
-        const overlaysAll = [...bboxOverlays, ...overlays];
+        // Unit-plan indicator dots (mirrors FileViewerModal). Show them when
+        // this page is being shown as a level plan for the space.
+        const unitMarkerOverlays: any[] = [];
+        if (space !== "__unassigned__" && tier === 0) {
+          const uColor = awpClassColor("Unit Floor Plan");
+          for (const inst of instances) {
+            if (inst.awp_class_name !== "__unit_marker__") continue;
+            if (inst.file_id !== fileId || inst.page_index !== pageIdx) continue;
+            const inx = Number(inst.nx);
+            const iny = Number(inst.ny);
+            if (!Number.isFinite(inx) || !Number.isFinite(iny)) continue;
+            unitMarkerOverlays.push({
+              id: `um-${inst.id}`,
+              bbox: [inx, iny, 0, 0] as [number, number, number, number],
+              coordSpace: "normalized" as const,
+              page: pageIdx,
+              color: uColor,
+              shape: "circle" as const,
+            });
+          }
+        }
+        const overlaysAll = [...bboxOverlays, ...unitMarkerOverlays, ...overlays];
 
         const corePart = qualifier ? `p${pageIdx} · ${qualifier}` : `p${pageIdx}`;
         const tabLabel = showFileInTab ? `${shortName} · ${corePart}` : corePart;
@@ -6288,6 +6309,11 @@ function InstancesReportModal({
           : unitPlans[0] || null;
 
       const bboxOverlays: any[] = [];
+      // Unit-plan indicator dots stored as `__unit_marker__` rows in
+      // drawing_instances. FileViewerModal renders these inside the level
+      // bbox to show where each unit floor plan is referenced. Mirror them
+      // on the threat-report level page so the same pink dots appear.
+      const unitMarkerOverlays: any[] = [];
       if (space !== "__unassigned__") {
         if (matchedLevel?.bbox) {
           const [bx, by, bw, bh] = matchedLevel.bbox;
@@ -6305,6 +6331,25 @@ function InstancesReportModal({
             nx: bx / 100, ny: by / 100, nw: bw / 100, nh: bh / 100,
             color: awpClassColor("Unit Floor Plan"), label: up.unitLabel, shape: "rect" as const,
           });
+        }
+        // Unit-marker dots for this file/page - only render on level-plan pages
+        // (i.e. when we matched a level bbox for this space).
+        if (matchedLevel) {
+          const uColor = awpClassColor("Unit Floor Plan");
+          for (const inst of instances) {
+            if (inst.awp_class_name !== "__unit_marker__") continue;
+            if (inst.file_id !== fileId || inst.page_index !== pageIdx) continue;
+            const inx = Number(inst.nx);
+            const iny = Number(inst.ny);
+            if (!Number.isFinite(inx) || !Number.isFinite(iny)) continue;
+            unitMarkerOverlays.push({
+              id: `um-${inst.id}`,
+              nx: inx,
+              ny: iny,
+              color: uColor,
+              shape: "circle" as const,
+            });
+          }
         }
       }
 
@@ -6327,7 +6372,7 @@ function InstancesReportModal({
           pageIdx,
           bucket,
           parentPath,
-          overlays: [...bboxOverlays, ...annOverlays],
+          overlays: [...bboxOverlays, ...unitMarkerOverlays, ...annOverlays],
           tabLabel,
         },
         tier,
