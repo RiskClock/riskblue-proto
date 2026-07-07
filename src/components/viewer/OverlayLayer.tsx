@@ -516,7 +516,27 @@ export const OverlayLayer = ({
   const padX = LABEL_PAD_X;
   const labelH = LABEL_H;
   const gap = LABEL_GAP;
-  const charPx = fontPx * 0.62;
+  // Slightly generous per-character width so clamped labels near the page
+  // edge don't visually spill past their computed rect.
+  const charPx = fontPx * 0.72;
+
+  // Layout keys omit hover/drag state so the placement optimizer doesn't
+  // recompute (and reshuffle labels) on every hover or pan.
+  const circleLayoutKey = useMemo(
+    () =>
+      circles
+        .map((c) => `${c.id}:${Math.round(c.cx)}:${Math.round(c.cy)}:${Math.round(c.r)}:${c.label ?? ""}`)
+        .join("|"),
+    [circles],
+  );
+  const rectLayoutKey = useMemo(
+    () =>
+      rects
+        .map((r) => `${r.id}:${Math.round(r.x)}:${Math.round(r.y)}:${Math.round(r.w)}:${Math.round(r.h)}:${r.label ?? ""}`)
+        .join("|"),
+    [rects],
+  );
+
 
   const placedLabels: PlacedLabel[] = useMemo(() => {
     const labeledCircles = circles.filter((c) => !!c.label);
