@@ -499,54 +499,10 @@ export default function WorkbenchProjectDetail() {
 
 
 
-  const activeFileAllLevelPlans = useMemo<ParsedFloorPlan[]>(() => {
-    const deleted = getDeletedPlanIds(activeFloorPlanOverrides);
-    const out: ParsedFloorPlan[] = [];
-    const seen = new Set<string>();
-    for (const plans of activeFileFloorPlansByPage.values()) {
-      for (const p of plans) {
-        const materialized = materializeFloorPlan(p, activeFloorPlanOverrides);
-        if (materialized.type === "level_floor_plan" && !deleted.has(p.plan_id)) {
-          if (seen.has(materialized.plan_id)) continue;
-          seen.add(materialized.plan_id);
-          out.push(materialized);
-        }
-      }
-    }
-    // Merge user-added level plans stored across every sheet of the same file.
-    // These live in `__added_unit_plans` (misnomer - the array also holds
-    // level_floor_plan entries) and in override-only floor-plan entries.
-    const activeFileId = activePageView?.file.id;
-    for (const s of rows?.sheets ?? []) {
-      if (!activeFileId || s.parent_file_id !== activeFileId) continue;
-      const ovr = s.floor_plan_overrides as Record<string, any> | null;
-      if (!ovr) continue;
-      const sheetDeleted = getDeletedPlanIds(ovr);
-      const sheetKnownIds = new Set<string>();
-      for (const entry of getAddedUnitPlans(ovr)) {
-        sheetKnownIds.add(entry.plan_id);
-        const parsed = materializeFloorPlan(addedUnitPlanToParsed(entry), ovr);
-        if (parsed.type !== "level_floor_plan") continue;
-        if (sheetDeleted.has(parsed.plan_id) || deleted.has(parsed.plan_id)) continue;
-        if (seen.has(parsed.plan_id)) continue;
-        seen.add(parsed.plan_id);
-        out.push(parsed);
-      }
-      for (const parsed of overrideOnlyFloorPlans(ovr, s.page_index, sheetKnownIds, sheetDeleted)) {
-        if (parsed.type !== "level_floor_plan") continue;
-        if (deleted.has(parsed.plan_id)) continue;
-        if (seen.has(parsed.plan_id)) continue;
-        seen.add(parsed.plan_id);
-        out.push(parsed);
-      }
-    }
-    return out;
-  }, [
-    activeFileFloorPlansByPage,
-    activeFloorPlanOverrides,
-    activePageView?.file.id,
-    rows?.sheets,
-  ]);
+  // `activeFileAllLevelPlans` is declared later (after `rows`) so it can merge
+  // added level-plan entries persisted in other sheets of the same file.
+
+
 
   // File-wide level-plan overrides (units arrays) are computed after the
   // `rows` query is declared below - see `activeFileAllLevelPlanOverrides`.
