@@ -541,13 +541,29 @@ export async function runThreatReportExport(
   const exportId = (inserted as any).id as string;
   const folder = `${payload.projectId}/threat-reports/${exportId}`;
 
-  // 2) Collect unique pages and rasterize.
+  // 2) Collect unique (page, overlay-set) pairs and rasterize. The cache key
+  // must include a signature of the overlays because two spaces can point at
+  // the same underlying PDF page (e.g. one physical sheet showing two levels)
+  // but need different bbox/marker overlays rendered on top.
+  const overlaySignature = (overlays: ThreatReportPageRef["overlays"]) => {
+    // Small deterministic signature - stable across identical overlay sets.
+    return overlays
+      .map(
+        (o) =>
+          `${o.shape ?? "circle"}|${o.id}|${o.nx.toFixed(4)},${o.ny.toFixed(4)}|${(o.nw ?? 0).toFixed(4)}x${(o.nh ?? 0).toFixed(4)}|${o.color}|${o.label ?? ""}`,
+      )
+      .sort()
+      .join("~");
+  };
+  const renderKeyFor = (pr: ThreatReportPageRef) =>
+    `${pr.bucket}::${pr.parentPath}::${pr.pageIdx}::${overlaySignature(pr.overlays)}`;
+
   const pageRefs: ThreatReportPageRef[] = [];
   const pageRefIndex = new Map<string, number>();
   for (const space of payload.spaces) {
     for (const pr of space.pages) {
       if (!pr.parentPath) continue;
-      const key = `${pr.bucket}::${pr.parentPath}::${pr.pageIdx}`;
+      const key = renderKeyFor(pr);
       if (pageRefIndex.has(key)) continue;
       pageRefIndex.set(key, pageRefs.length);
       pageRefs.push(pr);
@@ -568,7 +584,7 @@ export async function runThreatReportExport(
       total: pageRefs.length,
     });
     const pdf = await loadPdf(pr.bucket, pr.parentPath!, pdfCache);
-    const key = `${pr.bucket}::${pr.parentPath}::${pr.pageIdx}`;
+    const key = renderKeyFor(pr);
     if (!pdf) {
       renderedByKey.set(key, null);
     } else {
