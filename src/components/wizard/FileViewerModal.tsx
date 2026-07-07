@@ -1917,18 +1917,25 @@ const FloorPlansPanel = ({
     unitKeys.add(norm(unit.plan_id));
     unitKeys.delete("");
 
-    const pages = new Set<number>();
+    const matches: { name: string; page: number }[] = [];
+    const seen = new Set<string>();
     for (const lvl of allLevelPlans) {
       const localOvr = overrides[lvl.plan_id];
       const fileOvr = allLevelPlanOverrides?.[lvl.plan_id];
       const effUnits: string[] =
         localOvr?.units ?? fileOvr?.units ?? lvl.referenced_unit_ids ?? [];
       const hasMatch = effUnits.some((u) => unitKeys.has(norm(u)));
-      if (hasMatch) pages.add(lvl.page_number);
+      if (!hasMatch) continue;
+      const nameOvr = typeof localOvr?.name === "string" ? localOvr.name : null;
+      const name = (nameOvr ?? lvl.reference_id ?? lvl.plan_id ?? "").trim() || "Level";
+      const key = `${name}::${lvl.page_number}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      matches.push({ name, page: lvl.page_number });
     }
-    return Array.from(pages)
-      .sort((a, b) => a - b)
-      .map((p) => `Page ${p}`);
+    return matches
+      .sort((a, b) => a.page - b.page || a.name.localeCompare(b.name))
+      .map((m) => `${m.name} (p${m.page})`);
   };
 
 
