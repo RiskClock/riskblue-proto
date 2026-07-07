@@ -6354,14 +6354,19 @@ function InstancesReportModal({
       const rawOverlays = rowsForSpace.filter(
         (r) => r.fileId === fileId && r.pageIndex === pageIdx,
       );
-      // Collapse markers that share the exact same (nx, ny) into a single
-      // overlay whose label lists all instance IDs on separate lines.
+      // Collapse markers that share the same source annotation OR the exact
+      // same (nx, ny). This mirrors the in-app threat report visualization:
+      // when a unit floor plan is placed multiple times in a level, every
+      // duplicate of a single source annotation collapses to one marker
+      // whose label lists all instance IDs on separate lines.
       const groupsByPos = new Map<string, typeof rawOverlays>();
       for (const r of rawOverlays) {
-        const k = `${(r.nx ?? 0).toFixed(4)}::${(r.ny ?? 0).toFixed(4)}`;
-        const arr = groupsByPos.get(k) ?? [];
+        const baseKey = r.annotationBaseId
+          ? `ann::${r.annotationBaseId}`
+          : `pos::${(r.nx ?? 0).toFixed(4)}::${(r.ny ?? 0).toFixed(4)}`;
+        const arr = groupsByPos.get(baseKey) ?? [];
         arr.push(r);
-        groupsByPos.set(k, arr);
+        groupsByPos.set(baseKey, arr);
       }
       const annOverlays = Array.from(groupsByPos.values()).map((group) => {
         const r = group[0];

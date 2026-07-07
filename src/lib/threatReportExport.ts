@@ -229,7 +229,7 @@ async function renderPageWithMarkers(
       cy: Math.round(o.ny * canvas.height),
       r: radius,
       color: o.color,
-      label: o.label,
+      label: o.label ?? "",
     }));
 
     type Cand = { x: number; y: number; w: number; h: number; ax: number; ay: number; leader: number };
@@ -404,6 +404,7 @@ async function renderPageWithMarkers(
     // Draw leader lines first (behind circles/labels).
     ctx.lineWidth = Math.max(1, Math.round(canvas.width * 0.0009));
     for (let i = 0; i < circles.length; i++) {
+      if (!circles[i].label) continue;
       const c = circles[i];
       const p = positions[i];
       const labelCx = p.x + p.w / 2;
@@ -452,6 +453,7 @@ async function renderPageWithMarkers(
     ctx.textBaseline = "middle";
     ctx.textAlign = "left";
     for (let i = 0; i < circles.length; i++) {
+      if (!circles[i].label) continue;
       const c = circles[i];
       const p = positions[i];
       ctx.globalAlpha = 0.85;
@@ -541,13 +543,29 @@ export async function runThreatReportExport(
   const exportId = (inserted as any).id as string;
   const folder = `${payload.projectId}/threat-reports/${exportId}`;
 
-  // 2) Collect unique pages and rasterize.
+  // 2) Collect unique (page, overlay-set) pairs and rasterize. The cache key
+  // must include a signature of the overlays because two spaces can point at
+  // the same underlying PDF page (e.g. one physical sheet showing two levels)
+  // but need different bbox/marker overlays rendered on top.
+  const overlaySignature = (overlays: ThreatReportPageRef["overlays"]) => {
+    // Small deterministic signature - stable across identical overlay sets.
+    return overlays
+      .map(
+        (o) =>
+          `${o.shape ?? "circle"}|${o.id}|${o.nx.toFixed(4)},${o.ny.toFixed(4)}|${(o.nw ?? 0).toFixed(4)}x${(o.nh ?? 0).toFixed(4)}|${o.color}|${o.label ?? ""}`,
+      )
+      .sort()
+      .join("~");
+  };
+  const renderKeyFor = (pr: ThreatReportPageRef) =>
+    `${pr.bucket}::${pr.parentPath}::${pr.pageIdx}::${overlaySignature(pr.overlays)}`;
+
   const pageRefs: ThreatReportPageRef[] = [];
   const pageRefIndex = new Map<string, number>();
   for (const space of payload.spaces) {
     for (const pr of space.pages) {
       if (!pr.parentPath) continue;
-      const key = `${pr.bucket}::${pr.parentPath}::${pr.pageIdx}`;
+      const key = renderKeyFor(pr);
       if (pageRefIndex.has(key)) continue;
       pageRefIndex.set(key, pageRefs.length);
       pageRefs.push(pr);
@@ -568,7 +586,7 @@ export async function runThreatReportExport(
       total: pageRefs.length,
     });
     const pdf = await loadPdf(pr.bucket, pr.parentPath!, pdfCache);
-    const key = `${pr.bucket}::${pr.parentPath}::${pr.pageIdx}`;
+    const key = renderKeyFor(pr);
     if (!pdf) {
       renderedByKey.set(key, null);
     } else {
@@ -897,7 +915,7 @@ export async function runThreatReportExport(
 
     if (sp.rows.length === 0) {
       docChildren.push(
-        para([text("No objects found in this space.", { italics: true, color: "6B7280" })]),
+        para([text("No instances found in this space.", { italics: true, color: "6B7280" })]),
       );
     } else {
       const showUnit = sp.rows.some((r) => !!r.unitName);
@@ -1013,19 +1031,18 @@ export async function runThreatReportExport(
       );
       for (const u of sp.units) {
         const cleaned = u.name.replace(/^Template\s*-\s*/, "");
-        const mult = (u.count ?? 1) > 1 ? ` (×${u.count})` : "";
+        const pages = u.pageIdxs.map((p) => `p${p}`).join(", ");
+        const count = u.count ?? 1;
+        const mult = count > 1 ? ` x${count}` : "";
         docChildren.push(
-          para([
-            text(`${cleaned}${mult}`),
-            text(`  ·  ${u.pageIdxs.map((p) => `p${p}`).join(", ")}`, { color: "6B7280" }),
-          ]),
+          para([text(`${cleaned} (${pages})${mult}`)]),
         );
       }
     }
 
     // Drawings for this space.
     for (const pr of sp.pages) {
-      const key = `${pr.bucket}::${pr.parentPath}::${pr.pageIdx}`;
+      const key = renderKeyFor(pr);
       const rendered = renderedByKey.get(key);
       docChildren.push(
         para(
