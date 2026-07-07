@@ -6242,10 +6242,9 @@ function InstancesReportModal({
                 <div key={u.name} className="flex items-baseline gap-1.5 truncate">
                   <span className="truncate">
                     {u.name.replace(/^Template\s*-\s*/, "")}
-                    {u.count > 1 ? ` (×${u.count})` : ""}
-                  </span>
-                  <span className="text-muted-foreground shrink-0">
-                    · {u.pages.map((p) => `p${p.pageIdx}`).join(", ")}
+                    {" "}
+                    ({u.pages.map((p) => `p${p.pageIdx}`).join(", ")})
+                    {u.count > 1 ? ` x${u.count}` : ""}
                   </span>
                 </div>
               ))}
