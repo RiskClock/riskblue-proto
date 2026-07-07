@@ -155,8 +155,9 @@ export function mapToWaterSystemName(analysisName: string): string | null {
   
   // Hot water
   if (lowerName.includes("hot") && (lowerName.includes("domestic") || lowerName.includes("water"))) {
-    return "Domestic Hot Water";
+    return "Hot Water";
   }
+
   
   // Other systems
   if (lowerName.includes("temporary") && lowerName.includes("water")) return "Temporary Water Run";
