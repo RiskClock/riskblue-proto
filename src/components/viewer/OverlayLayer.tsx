@@ -124,6 +124,7 @@ function generateCircleCandidates(
   const directions = 48;
   const rings = 10;
   const out: LabelCandidate[] = [];
+  const fallback: LabelCandidate[] = [];
   for (let ring = 0; ring < rings; ring++) {
     const dist = c.r + gap + ring * Math.max(6, labelH * 0.6);
     for (let i = 0; i < directions; i++) {
@@ -141,10 +142,20 @@ function generateCircleCandidates(
       const ex = Math.max(lx, Math.min(c.cx, lx + labelW));
       const ey = Math.max(ly, Math.min(c.cy, ly + labelH));
       const leader = Math.hypot(ex - ax, ey - ay);
-      out.push({ x: lx, y: ly, w: labelW, h: labelH, ax, ay, leader });
+      const cand = { x: lx, y: ly, w: labelW, h: labelH, ax, ay, leader };
+      // Clamping to bounds can push the label back on top of its own anchor
+      // circle (when the circle sits near a page edge). Drop those candidates
+      // so the optimizer never chooses a position that overlaps its own dot.
+      if (rectIntersectsCircle(cand, c)) {
+        fallback.push(cand);
+      } else {
+        out.push(cand);
+      }
     }
   }
-  return out;
+  // If every position was rejected (very tight corner), fall back to the
+  // least-bad clamped candidates rather than returning an empty list.
+  return out.length > 0 ? out : fallback;
 }
 
 
