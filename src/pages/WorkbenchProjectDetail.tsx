@@ -3768,8 +3768,14 @@ export default function WorkbenchProjectDetail() {
                         {enabledCols.map((name) => {
                           const opt = optionByName.get(name);
                           const alias = aliasMap[name];
-                          const label = alias || opt?.idPrefix || name;
-                          const tooltipName = alias ? `${alias} (${name})` : name;
+                          const aliasPrefix = aliasPrefixMap[name];
+                          // Prefer the per-project acronym override, then the
+                          // per-project display alias, then the canonical
+                          // short prefix.
+                          const label = aliasPrefix || alias || opt?.idPrefix || name;
+                          const tooltipName = alias
+                            ? `${alias} (${name})`
+                            : name;
                           const classHasTriage = (triage || []).some(
                             (t) => t.awp_class_name === name,
                           );
