@@ -350,23 +350,34 @@ function candidateCost(
   return cost;
 }
 
+/** Small deterministic PRNG so the optimizer produces stable layouts. */
+function mulberry32(seed: number) {
+  let a = seed >>> 0;
+  return () => {
+    a = (a + 0x6D2B79F5) >>> 0;
+    let t = a;
+    t = Math.imul(t ^ (t >>> 15), t | 1);
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
 function optimizePlacements(
   candidatesPerLabel: LabelCandidate[][],
   circles: CircleInfo[],
   rects: RectInfo[],
   anchors: Anchor[],
   ownerIds: (string | null)[],
+  rand: () => number,
 ): LabelCandidate[] {
   const runOnce = (seed: LabelCandidate[]): { positions: LabelCandidate[]; totalCost: number } => {
     const positions = seed.slice();
     const maxIters = 20;
     for (let iter = 0; iter < maxIters; iter++) {
       let improved = false;
-      // Shuffle traversal order each iteration so we don't get stuck in a
-      // greedy local minimum where the first-placed labels lock everyone else.
       const order = positions.map((_, i) => i);
       for (let i = order.length - 1; i > 0; i--) {
-        const j = Math.floor(Math.random() * (i + 1));
+        const j = Math.floor(rand() * (i + 1));
         [order[i], order[j]] = [order[j], order[i]];
       }
       for (const i of order) {
@@ -393,26 +404,20 @@ function optimizePlacements(
     return { positions, totalCost: total };
   };
 
-  // Restart 1: shortest-leader initial seed (existing behavior).
   const seedShort = candidatesPerLabel.map(
     (cands) => cands.reduce((best, c) => (c.leader < best.leader ? c : best), cands[0]),
   );
   let best = runOnce(seedShort);
 
-  // Restart 2 & 3: random seeds so we can escape crowded local minima.
   for (let r = 0; r < 3; r++) {
     const seed = candidatesPerLabel.map(
-      (cands) => cands[Math.floor(Math.random() * cands.length)],
+      (cands) => cands[Math.floor(rand() * cands.length)],
     );
     const attempt = runOnce(seed);
     if (attempt.totalCost < best.totalCost) best = attempt;
   }
   const positions = best.positions;
 
-  // Hard-filter pass: any label still intersecting a non-owner circle is
-  // swapped for the smallest-leader candidate that touches zero non-owner
-  // circles (if one exists). This guarantees labels never fully occlude
-  // another annotation's dot even in crowded regions.
   for (let i = 0; i < positions.length; i++) {
     const ownerId = ownerIds[i];
     const hits = (cand: LabelCandidate) => {
@@ -432,6 +437,7 @@ function optimizePlacements(
   }
   return positions;
 }
+
 
 
 export const OverlayLayer = ({
