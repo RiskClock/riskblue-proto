@@ -1901,17 +1901,30 @@ const FloorPlansPanel = ({
 }: FloorPlansPanelProps) => {
 
   // For a unit floor plan, list the pages of level plans that reference it.
+  // Level plans reference units by human-readable identifier. Match against
+  // the unit's effective name (user override wins over reference_id), its
+  // reference_id, AND its plan_id — all case-insensitively / trimmed — so a
+  // level plan whose `referenced_unit_ids` was captured as "detail 22" still
+  // matches a unit whose reference_id is "Detail 22".
   const findReferencingLevels = (unit: ParsedFloorPlan): string[] => {
-    const key = unitPlanRefKey(unit);
+    const norm = (s: string | null | undefined) => (s ?? "").trim().toLowerCase();
+    const unitOvr = overrides[unit.plan_id];
+    const unitKeys = new Set<string>();
+    const overrideName = typeof unitOvr?.name === "string" ? unitOvr.name : null;
+    if (overrideName) unitKeys.add(norm(overrideName));
+    unitKeys.add(norm(unitPlanRefKey(unit)));
+    unitKeys.add(norm(unit.reference_id));
+    unitKeys.add(norm(unit.plan_id));
+    unitKeys.delete("");
+
     const pages = new Set<number>();
     for (const lvl of allLevelPlans) {
       const localOvr = overrides[lvl.plan_id];
       const fileOvr = allLevelPlanOverrides?.[lvl.plan_id];
-      const effUnits =
-        localOvr?.units ?? fileOvr?.units ?? lvl.referenced_unit_ids;
-      if (effUnits.includes(key)) {
-        pages.add(lvl.page_number);
-      }
+      const effUnits: string[] =
+        localOvr?.units ?? fileOvr?.units ?? lvl.referenced_unit_ids ?? [];
+      const hasMatch = effUnits.some((u) => unitKeys.has(norm(u)));
+      if (hasMatch) pages.add(lvl.page_number);
     }
     return Array.from(pages)
       .sort((a, b) => a - b)
