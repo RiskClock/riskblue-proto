@@ -1041,7 +1041,7 @@ export async function runThreatReportExport(
 
     // Drawings for this space.
     for (const pr of sp.pages) {
-      const key = `${pr.bucket}::${pr.parentPath}::${pr.pageIdx}`;
+      const key = renderKeyFor(pr);
       const rendered = renderedByKey.get(key);
       docChildren.push(
         para(
