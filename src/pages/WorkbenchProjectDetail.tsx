@@ -5568,6 +5568,21 @@ function InstancesReportModal({
   const overviewEntries = useMemo<OverviewEntry[]>(() => {
     const typeOf = (r: (typeof expanded)[number]) =>
       r.pipeType && r.pipeType.trim() ? r.pipeType.trim() : "(untyped)";
+    const diameterOf = (r: (typeof expanded)[number]) =>
+      r.pipeDiameter && r.pipeDiameter.trim() ? r.pipeDiameter.trim() : "(no size)";
+    // Numeric-aware diameter sort ("15mm" < "22mm" < "76mm" < "(no size)").
+    const diameterSortKey = (d: string) => {
+      if (d === "(no size)") return Number.POSITIVE_INFINITY;
+      const m = d.match(/-?\d+(\.\d+)?/);
+      return m ? parseFloat(m[0]) : Number.POSITIVE_INFINITY;
+    };
+    // Short type token for the acronym pill (e.g. "Potable" -> "P").
+    const shortToken = (t: string) => {
+      if (t === "(untyped)") return "?";
+      const parts = t.split(/[\s\-_/]+/).filter(Boolean);
+      if (parts.length >= 2) return parts.map((p) => p[0]).join("").toUpperCase().slice(0, 3);
+      return t.slice(0, 2).toUpperCase();
+    };
     return classCols.flatMap((c) => {
       const base = displayClassName(c.name);
       const basePrefix = displayPrefix(c.name);
@@ -5580,13 +5595,16 @@ function InstancesReportModal({
           typeGroup: null,
         }];
       }
-      const types = new Set<string>();
+      // Build unique (type, diameter) combos for this class.
+      const combos = new Map<string, { type: string; diameter: string }>();
       for (const r of expanded) {
         if (r.awpClassName !== c.name) continue;
         if (r.category !== "Asset" && r.category !== "Water System") continue;
-        types.add(typeOf(r));
+        const type = typeOf(r);
+        const diameter = diameterOf(r);
+        combos.set(`${type}::${diameter}`, { type, diameter });
       }
-      if (types.size === 0) {
+      if (combos.size === 0) {
         return [{
           key: c.name,
           canonicalName: c.name,
@@ -5595,39 +5613,36 @@ function InstancesReportModal({
           typeGroup: null,
         }];
       }
-      // Short type token for the acronym pill (e.g. "Potable" -> "P",
-      // "Non-Potable" -> "NP"). Falls back to first letters when the value
-      // has no obvious initials.
-      const shortToken = (t: string) => {
-        if (t === "(untyped)") return "?";
-        const parts = t.split(/[\s\-_/]+/).filter(Boolean);
-        if (parts.length >= 2) return parts.map((p) => p[0]).join("").toUpperCase().slice(0, 3);
-        return t.slice(0, 2).toUpperCase();
-      };
-      return Array.from(types)
-        .sort((a, b) => a.localeCompare(b))
-        .map((t) => ({
-          key: `${c.name}::${t}`,
-          canonicalName: c.name,
-          displayName:
-            t === "(untyped)" ? base : `${base} ${shortToken(t)}`,
-          displayPrefix:
-            t === "(untyped)" ? basePrefix : `${basePrefix}-${shortToken(t)}`,
-
-
-
-          typeGroup: t,
-        }));
+      return Array.from(combos.values())
+        .sort((a, b) => {
+          const t = a.type.localeCompare(b.type);
+          if (t !== 0) return t;
+          return diameterSortKey(a.diameter) - diameterSortKey(b.diameter);
+        })
+        .map(({ type, diameter }) => {
+          const typeLabel = type === "(untyped)" ? "" : ` ${shortToken(type)}`;
+          const typePrefix = type === "(untyped)" ? "" : `-${shortToken(type)}`;
+          return {
+            key: `${c.name}::${type}::${diameter}`,
+            canonicalName: c.name,
+            displayName: `${base}${typeLabel} ${diameter}`.replace(/\s+/g, " ").trim(),
+            displayPrefix: `${basePrefix}${typePrefix} ${diameter}`.replace(/\s+/g, " ").trim(),
+            typeGroup: type,
+          };
+        });
     });
   }, [classCols, expanded, displayClassName, displayPrefix, isTypedClassName]);
 
   const entryKeyForRow = useCallback(
-    (r: (typeof expanded)[number]) =>
-      isTypedClassName(r.awpClassName)
-        ? `${r.awpClassName}::${r.pipeType && r.pipeType.trim() ? r.pipeType.trim() : "(untyped)"}`
-        : r.awpClassName,
+    (r: (typeof expanded)[number]) => {
+      if (!isTypedClassName(r.awpClassName)) return r.awpClassName;
+      const type = r.pipeType && r.pipeType.trim() ? r.pipeType.trim() : "(untyped)";
+      const diameter = r.pipeDiameter && r.pipeDiameter.trim() ? r.pipeDiameter.trim() : "(no size)";
+      return `${r.awpClassName}::${type}::${diameter}`;
+    },
     [isTypedClassName],
   );
+
 
   const overviewEntryTotals = useMemo(() => {
     const m = new Map<string, number>();
@@ -6360,20 +6375,27 @@ function InstancesReportModal({
       const sourceDrawings = Array.from(
         new Set(fileGroups.map((g) => g.file.name)),
       );
-      // Cold Water and Hot Water are split into per-Type virtual classes so
-      // the Overview and Summary matrix show a separate row/column for each
-      // type value (e.g. "Cold Water - Potable", "Cold Water - (untyped)").
-      // Every other class stays as a single row with a size/type breakdown.
+      // Cold Water and Hot Water are split into per (Type, Diameter) virtual
+      // classes so the Overview and Summary matrix show a separate row/column
+      // for each combination (e.g. "Cold Water Potable 22mm").
       const isTypedClassName = (n: string) =>
         /(^|\s)(cold|hot)\s*water(\s|$)/i.test(n);
       const typeGroupOf = (r: (typeof expanded)[number]) =>
         r.pipeType && r.pipeType.trim() ? r.pipeType.trim() : "(untyped)";
+      const diameterOf = (r: (typeof expanded)[number]) =>
+        r.pipeDiameter && r.pipeDiameter.trim() ? r.pipeDiameter.trim() : "(no size)";
+      const diameterSortKey = (d: string) => {
+        if (d === "(no size)") return Number.POSITIVE_INFINITY;
+        const m = d.match(/-?\d+(\.\d+)?/);
+        return m ? parseFloat(m[0]) : Number.POSITIVE_INFINITY;
+      };
 
       type ClassEntry = {
         key: string;
         canonicalName: string;
         displayName: string;
         typeGroup: string | null;
+        diameter: string | null;
         idPrefix: string;
       };
       const classEntries: ClassEntry[] = classCols.flatMap((c) => {
@@ -6385,40 +6407,53 @@ function InstancesReportModal({
             canonicalName: c.name,
             displayName: base,
             typeGroup: null,
+            diameter: null,
             idPrefix: basePrefix,
           }];
         }
-        const types = new Set<string>();
+        const combos = new Map<string, { type: string; diameter: string }>();
         for (const r of expanded) {
           if (r.awpClassName !== c.name) continue;
           if (r.category !== "Asset" && r.category !== "Water System") continue;
-          types.add(typeGroupOf(r));
+          const t = typeGroupOf(r);
+          const d = diameterOf(r);
+          combos.set(`${t}::${d}`, { type: t, diameter: d });
         }
-        if (types.size === 0) {
+        if (combos.size === 0) {
           return [{
             key: c.name,
             canonicalName: c.name,
             displayName: base,
             typeGroup: null,
+            diameter: null,
             idPrefix: basePrefix,
           }];
         }
-        return Array.from(types)
-          .sort((a, b) => a.localeCompare(b))
-          .map((t) => ({
-            key: `${c.name}::${t}`,
-            canonicalName: c.name,
-            displayName: t === "(untyped)" ? base : `${base} ${t}`,
-            typeGroup: t,
-            idPrefix: t === "(untyped)" ? basePrefix : `${basePrefix}-${t}`,
-
-          }));
+        return Array.from(combos.values())
+          .sort((a, b) => {
+            const t = a.type.localeCompare(b.type);
+            if (t !== 0) return t;
+            return diameterSortKey(a.diameter) - diameterSortKey(b.diameter);
+          })
+          .map(({ type, diameter }) => {
+            const typeLabel = type === "(untyped)" ? "" : ` ${type}`;
+            const typePrefix = type === "(untyped)" ? "" : `-${type}`;
+            return {
+              key: `${c.name}::${type}::${diameter}`,
+              canonicalName: c.name,
+              displayName: `${base}${typeLabel} ${diameter}`.replace(/\s+/g, " ").trim(),
+              typeGroup: type,
+              diameter,
+              idPrefix: `${basePrefix}${typePrefix} ${diameter}`.replace(/\s+/g, " ").trim(),
+            };
+          });
       });
 
       const entryKeyForRow = (r: (typeof expanded)[number]) =>
         isTypedClassName(r.awpClassName)
-          ? `${r.awpClassName}::${typeGroupOf(r)}`
+          ? `${r.awpClassName}::${typeGroupOf(r)}::${diameterOf(r)}`
           : r.awpClassName;
+
 
       // Counts per entry key (with consolidated dedupe) and per (space, entry).
       const countsPerKey = new Map<string, number>();
@@ -6441,9 +6476,9 @@ function InstancesReportModal({
       }
 
       const overviewClasses = classEntries.map((e) => {
-        // Per-attribute breakdown. Typed entries already carry the Type value
-        // in the row itself, so their breakdown splits by pipe size only. All
-        // other classes keep the combined (pipe_size, type) breakdown.
+        // Per-attribute breakdown. Typed entries already carry Type + Diameter
+        // in the row itself, so their breakdown is empty. Other classes keep
+        // the combined (pipe_size, type) breakdown.
         const combos = new Map<
           string,
           { attributes: Record<string, string>; count: number }
@@ -6457,20 +6492,17 @@ function InstancesReportModal({
             if (seenCons.has(dedup)) continue;
             seenCons.add(dedup);
           }
+          if (e.typeGroup) continue; // typed entry: no extra breakdown needed
           const attrs: Record<string, string> = {};
-          if (e.typeGroup) {
-            if (r.pipeDiameter) attrs["Pipe size"] = r.pipeDiameter;
-            if (Object.keys(attrs).length === 0) continue;
-          } else {
-            if (r.pipeDiameter) attrs["Pipe size"] = r.pipeDiameter;
-            if (r.pipeType) attrs["Type"] = r.pipeType;
-            if (Object.keys(attrs).length === 0) continue;
-          }
+          if (r.pipeDiameter) attrs["Pipe size"] = r.pipeDiameter;
+          if (r.pipeType) attrs["Type"] = r.pipeType;
+          if (Object.keys(attrs).length === 0) continue;
           const key = JSON.stringify(attrs);
           const cur = combos.get(key);
           if (cur) cur.count += 1;
           else combos.set(key, { attributes: attrs, count: 1 });
         }
+
         return {
           name: e.displayName,
           idPrefix: e.idPrefix,
