@@ -339,11 +339,11 @@ export const OverlayLayer = ({
         );
         const isDot = o.variant === "dot";
         // Detection annotation circles are intentionally small (30% of the
-        // previous size) so they don't obscure the drawing. Unit-marker dots
-        // keep their original size.
+        // previous size, then bumped 30% larger on request) so they don't
+        // obscure the drawing. Unit-marker dots keep their original size.
         const diameter = isDot
           ? Math.max(10, MIN_CIRCLE_DIAMETER_CSS * 0.55)
-          : Math.max(MIN_CIRCLE_DIAMETER_CSS, bboxSidePx * 1.5) * 0.3;
+          : Math.max(MIN_CIRCLE_DIAMETER_CSS, bboxSidePx * 1.5) * 0.39;
 
         return {
           id: o.id,
